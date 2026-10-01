@@ -1,7 +1,4 @@
----
-title: Commands
-weight: 2
----
+# Commands
 
 Every command below is a surface onto the same plugin registry and the same SQLite store,
 and every one of them works today. A subcommand whose plugin was compiled out (for example
@@ -33,7 +30,7 @@ build never blocks the host.
 
 There is no flag that cannot be made permanent. `rtok proxy --port 8791` and
 `[proxy] port = 8791` are the same setting reached two ways, and `rtok config show --sources`
-reports which layer won. See [Configuration](../reference/configuration) for the precedence
+reports which layer won. See [Configuration](config.md) for the precedence
 chain.
 
 ## Shortening and getting it back
