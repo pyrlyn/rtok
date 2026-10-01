@@ -3,8 +3,9 @@
 //! `research.md`, a `YYYY-MM-DD` date, a test/bench name, or prose naming a source ("X
 //! claims/measured/reports Y %"). No `Measurement` row = no saving, in code or
 //! prose (`AGENTS.md`) — this is that rule for the docs. Also: a README integration-target
-//! count must equal `ls tests/*.rs`. `docs/report.md` is skipped (T22.0, out of scope);
-//! `EXEMPT_FIGURES` covers the "10 ms" fail-open budget.
+//! count must equal `ls tests/*.rs`. `docs/report.md` is skipped (T22.0, out of scope), as are
+//! the `docs/ru/` and `docs/uk/` translations; `EXEMPT_FIGURES` covers the "10 ms" fail-open
+//! budget.
 
 use regex::Regex;
 use std::ffi::OsStr;
@@ -14,6 +15,9 @@ use std::path::{Path, PathBuf};
 /// The fail-open hook budget (D1) — a design limit, not a measurement, so it needs no citation.
 const EXEMPT_FIGURES: &[&str] = &["10 ms"];
 const SKIP_FILES: &[&str] = &["docs/report.md"];
+/// Translations mirror the English docs, which are linted; their prose cannot match the English
+/// evidence words, so the locale trees are skipped.
+const SKIP_DIRS: &[&str] = &["docs/ru/", "docs/uk/"];
 
 #[derive(PartialEq, Clone, Copy)]
 enum Kind {
@@ -179,7 +183,9 @@ fn public_numbers_cite_their_evidence() {
     let mut violations = Vec::new();
     for rel in markdown_targets(&root) {
         let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if SKIP_FILES.contains(&rel_str.as_str()) {
+        if SKIP_FILES.contains(&rel_str.as_str())
+            || SKIP_DIRS.iter().any(|d| rel_str.starts_with(d))
+        {
             continue;
         }
         let text = fs::read_to_string(root.join(&rel)).unwrap_or_else(|e| panic!("{rel_str}: {e}"));

@@ -1,7 +1,8 @@
 # Contributing
 
-Repository prose is English. Read [`AGENTS.md`](AGENTS.md) before changing
-code — layout, plugin surfaces, and the fail-open / measurement invariants.
+Repository prose is English (except the `docs/ru/` and `docs/uk/` translations). Read
+[`AGENTS.md`](AGENTS.md) before changing code — layout, plugin surfaces, and the fail-open /
+measurement invariants.
 
 ## Checks
 
