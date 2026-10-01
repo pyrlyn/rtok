@@ -338,35 +338,6 @@ skills     = true                     # архівувати тіла skills п�
 [plugins.proxy]
 enabled = true                        # плагін proxy (фіксація використання); сам сервер — це [proxy]
 
-#### `[plugins.proxy.semantic_cache]` — кеш відповідей, що вмикається явно (P31)
-
-Типово вимкнено до Gate P31 (нуль хибних влучань на наборі P9). Коли ввімкнено (T31.2), проксі може
-віддати попередню відповідь, коли нормалізований промпт достатньо схожий; хибне влучання — це неправильна відповідь, тому
-це лишається явно ввімкнюваним. Змінна середовища: `RTOK_PLUGINS_PROXY_SEMANTIC_CACHE_ENABLED=true`.
-
-| Ключ | Типово | Значення |
-|-----|---------|---------|
-| `enabled` | `false` | Головний перемикач; коли вимкнено, байти проксі лишаються ідентичними |
-| `threshold` | `0.99` | Нижня межа косинусної подібності для семантичного рівня |
-| `ttl_s` | `300` | TTL запису в секундах |
-| `max_messages` | `1` | Пропускати кеш, коли довжина `messages` перевищує це |
-| `require_empty_tools` | `true` | Не кешувати ходи з непорожнім `tools[]` |
-| `embed_backend` | `"hash"` | `"hash"` = лише прямий рівень до появи embeddings P29 |
-| `cache_by_model` | `true` | Розділяти записи кешу за моделлю |
-| `cache_by_provider` | `true` | Розділяти записи кешу за провайдером |
-
-```toml
-[plugins.proxy.semantic_cache]
-enabled = false
-threshold = 0.99
-ttl_s = 300
-max_messages = 1
-require_empty_tools = true
-embed_backend = "hash"
-cache_by_model = true
-cache_by_provider = true
-```
-
 [plugins.inject]
 enabled       = true
 budget_tokens = 800                   # на хід, усі вставлення разом (рішення D5)
@@ -419,6 +390,35 @@ enabled = true                        # екстрактивні зведенн�
 [plugins.wasm]
 enabled = false                      # типово вимкнено; жоден .wasm не завантажується до хоста T32.2 + feature `wasm-host`
 dir     = "~/.rtok/plugins"          # шукати *.wasm на один рівень углиб; D6 — цей репозиторій ніколи не вендорить сторонніх плагінів
+```
+
+### `[plugins.proxy.semantic_cache]` — кеш відповідей, що вмикається явно (P31)
+
+Типово вимкнено до Gate P31 (нуль хибних влучань на наборі P9). Коли ввімкнено (T31.2), проксі може
+віддати попередню відповідь, коли нормалізований промпт достатньо схожий; хибне влучання — це неправильна відповідь, тому
+це лишається явно ввімкнюваним. Змінна середовища: `RTOK_PLUGINS_PROXY_SEMANTIC_CACHE_ENABLED=true`.
+
+| Ключ | Типово | Значення |
+|-----|---------|---------|
+| `enabled` | `false` | Головний перемикач; коли вимкнено, байти проксі лишаються ідентичними |
+| `threshold` | `0.99` | Нижня межа косинусної подібності для семантичного рівня |
+| `ttl_s` | `300` | TTL запису в секундах |
+| `max_messages` | `1` | Пропускати кеш, коли довжина `messages` перевищує це |
+| `require_empty_tools` | `true` | Не кешувати ходи з непорожнім `tools[]` |
+| `embed_backend` | `"hash"` | `"hash"` = лише прямий рівень до появи embeddings P29 |
+| `cache_by_model` | `true` | Розділяти записи кешу за моделлю |
+| `cache_by_provider` | `true` | Розділяти записи кешу за провайдером |
+
+```toml
+[plugins.proxy.semantic_cache]
+enabled = false
+threshold = 0.99
+ttl_s = 300
+max_messages = 1
+require_empty_tools = true
+embed_backend = "hash"
+cache_by_model = true
+cache_by_provider = true
 ```
 
 

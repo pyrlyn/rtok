@@ -337,35 +337,6 @@ skills     = true                     # archive skill bodies outside keep_turns 
 [plugins.proxy]
 enabled = true                        # the proxy plugin (usage capture); the server itself is [proxy]
 
-#### `[plugins.proxy.semantic_cache]` — явно включаемый кеш ответов (P31)
-
-По умолчанию выключен до прохождения Gate P31 (ноль ложных попаданий на наборе P9). Когда он включён (T31.2), прокси может
-отдать предыдущий ответ, если нормализованный промпт достаточно похож; ложное попадание означает неверный ответ, поэтому
-он остаётся включаемым явно. Окружение: `RTOK_PLUGINS_PROXY_SEMANTIC_CACHE_ENABLED=true`.
-
-| Ключ | По умолчанию | Значение |
-|-----|---------|---------|
-| `enabled` | `false` | Главный переключатель; при выключенном байты прокси остаются идентичными |
-| `threshold` | `0.99` | Нижний порог косинусного сходства для семантического уровня |
-| `ttl_s` | `300` | TTL записи в секундах |
-| `max_messages` | `1` | Пропускать кеш, когда длина `messages` превышает это значение |
-| `require_empty_tools` | `true` | Не кешировать ходы с непустым `tools[]` |
-| `embed_backend` | `"hash"` | `"hash"` = только прямой уровень до появления эмбеддингов P29 |
-| `cache_by_model` | `true` | Разделять записи кеша по модели |
-| `cache_by_provider` | `true` | Разделять записи кеша по провайдеру |
-
-```toml
-[plugins.proxy.semantic_cache]
-enabled = false
-threshold = 0.99
-ttl_s = 300
-max_messages = 1
-require_empty_tools = true
-embed_backend = "hash"
-cache_by_model = true
-cache_by_provider = true
-```
-
 [plugins.inject]
 enabled       = true
 budget_tokens = 800                   # per turn, all injections together (decision D5)
@@ -418,6 +389,35 @@ enabled = true                        # extractive summaries of archived tool ou
 [plugins.wasm]
 enabled = false                      # off by default; no .wasm loaded until T32.2 host + `wasm-host` feature
 dir     = "~/.rtok/plugins"          # scan one level for *.wasm; D6 — this repo never vendors third-party plugins
+```
+
+### `[plugins.proxy.semantic_cache]` — явно включаемый кеш ответов (P31)
+
+По умолчанию выключен до прохождения Gate P31 (ноль ложных попаданий на наборе P9). Когда он включён (T31.2), прокси может
+отдать предыдущий ответ, если нормализованный промпт достаточно похож; ложное попадание означает неверный ответ, поэтому
+он остаётся включаемым явно. Окружение: `RTOK_PLUGINS_PROXY_SEMANTIC_CACHE_ENABLED=true`.
+
+| Ключ | По умолчанию | Значение |
+|-----|---------|---------|
+| `enabled` | `false` | Главный переключатель; при выключенном байты прокси остаются идентичными |
+| `threshold` | `0.99` | Нижний порог косинусного сходства для семантического уровня |
+| `ttl_s` | `300` | TTL записи в секундах |
+| `max_messages` | `1` | Пропускать кеш, когда длина `messages` превышает это значение |
+| `require_empty_tools` | `true` | Не кешировать ходы с непустым `tools[]` |
+| `embed_backend` | `"hash"` | `"hash"` = только прямой уровень до появления эмбеддингов P29 |
+| `cache_by_model` | `true` | Разделять записи кеша по модели |
+| `cache_by_provider` | `true` | Разделять записи кеша по провайдеру |
+
+```toml
+[plugins.proxy.semantic_cache]
+enabled = false
+threshold = 0.99
+ttl_s = 300
+max_messages = 1
+require_empty_tools = true
+embed_backend = "hash"
+cache_by_model = true
+cache_by_provider = true
 ```
 
 
