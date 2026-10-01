@@ -19,6 +19,16 @@ Do not invent metrics or A/B wins in docs. Numbers in the README and
 (`research.md`, bench results). User guides: [`docs/getting-started.md`](docs/getting-started.md)
 and the rest of `docs/`.
 
+## Documentation translations
+
+English docs in `docs/` are the source of truth. Russian and Ukrainian translations live in
+`docs/ru/` and `docs/uk/` under the same relative path and file name (front matter adds
+`lang: ru` / `lang: uk`). Any change to an English doc must update the matching `docs/ru/` and
+`docs/uk/` translations in the same change, without waiting for a separate request. New English
+docs get translations too, and removing an English doc removes its translations. These two
+directories are the only place non-English prose is allowed. `AGENTS.md` carries the one-line
+form of this rule (its 350-token budget is enforced by `tests/host_docs.rs`).
+
 ## Expanded rules (from `AGENTS.md`)
 
 - Hook contract: read `research.md` §3 before any hook task. Hook input is
