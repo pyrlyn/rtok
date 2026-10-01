@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/static/logo-wordmark-dark.svg">
-  <img src="site/static/logo-wordmark.svg" alt="rtok" width="200">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-wordmark-dark.svg">
+  <img src="assets/logo-wordmark.svg" alt="rtok" width="200">
 </picture>
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=listepo_rtok&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=listepo_rtok) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=listepo_rtok&metric=coverage)](https://sonarcloud.io/component_measures?id=listepo_rtok&metric=coverage) [![Tests](https://img.shields.io/sonar/tests/listepo_rtok?server=https%3A%2F%2Fsonarcloud.io&compact_message)](https://sonarcloud.io/component_measures?id=listepo_rtok&metric=tests)

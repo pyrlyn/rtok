@@ -42,9 +42,8 @@ strip = true
 # stages the copies here before every build.
 data = "target/pypi/rtok_cli.data"
 # The sdist is cargo's package list (the whole crate); carry the staged plugins/skills so a
-# wheel built from it still has them, and drop the docs site's images.
+# wheel built from it still has them, and drop the docs images.
 include = [{ path = "target/pypi/rtok_cli.data/**/*", format = "sdist" }]
 exclude = [
-  { path = "site/**/*", format = "sdist" },
   { path = "docs/assets/**/*", format = "sdist" },
 ]

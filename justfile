@@ -1,12 +1,11 @@
 # rtok — `just check` is the gate every task must pass (plan T0.7, D16).
-# Tools are pinned in mise.toml; override CARGO/CLIFF/HUGO if mise is already activated.
+# Tools are pinned in mise.toml; override CARGO/CLIFF if mise is already activated.
 
 cargo := env("CARGO", "mise exec -- cargo")
 cache := env("CARGO_CACHE", "mise exec -- cargo-cache")
 cliff := env("CLIFF", "mise exec -- git-cliff")
 # cargo-dist is not in mise.toml (compiling it on every `mise install` is slow); mise fetches it on demand.
 dist := env("DIST", "mise x cargo:cargo-dist@0.32.0 -- dist")
-hugo := env("HUGO", "mise exec -- hugo --source site")
 jscpd := env("JSCPD", "mise exec -- jscpd")
 oxlint := env("OXLINT", "mise exec -- oxlint")
 oxfmt := env("OXFMT", "mise exec -- oxfmt")
@@ -172,14 +171,6 @@ release level="patch" *flags:
 # regenerate CHANGELOG.md from git history (git-cliff, config in cliff.toml)
 changelog:
     {{cliff}} -o CHANGELOG.md
-
-# build the docs site into site/public (fails on a broken link or missing mount)
-site:
-    {{hugo}} --minify --panicOnWarning
-
-# docs site at http://localhost:1313 with live reload
-site-serve:
-    {{hugo}} server --buildDrafts
 
 # Slint WASM UI, then API+UI on host:port (T60.7 profile + wasm-opt; T81 shares the script with CI)
 web host="127.0.0.1" port="3333": web-bundle

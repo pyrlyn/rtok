@@ -4,22 +4,13 @@ Layout/density only. Brand colors, F icons, and IBM Plex Mono stay fixed.
 
 ## Shared breakpoints
 
-| Token | Range | Site CSS | Slint `RtokTheme` |
-|-------|-------|----------|-------------------|
-| `sm` / mobile | &lt; 640px | `--rtok-bp-sm` | `bp-sm` |
-| `md` / tablet | 640–1023px | `--rtok-bp-md` | `bp-md` |
-| `lg` / desktop | 1024–1439px | — | (≥ `bp-md`) |
-| `xl` / wide | 1440–1919px | `--rtok-bp-lg` | `bp-lg` |
-| `2xl` / ultrawide+TV | ≥ 1920px (to ~3840) | `--rtok-bp-xl` | `bp-xl` |
-
-## Site (`site/assets/css/custom.css`)
-
-- Hero shot fluid: full bleed + smaller radius/shadow on mobile; `min(100%, 1280px)` from lg; `min(100%, 1440px)` on 2xl.
-- Feature grid capped ~1320–1400px centered.
-- Prose/subtitle max-width ~42rem; docs tables keep horizontal scroll with tighter `td/th` min-width on narrow.
-- Coarse pointer: feature icon hit area ≥ 44px.
-- `.rtok-home-hero` uses `env(safe-area-inset-*)`.
-- OLED: keep near-black `#06101A`; `@media (dynamic-range: high)` left alone.
+| Token | Range | Slint `RtokTheme` |
+|-------|-------|-------------------|
+| `sm` / mobile | &lt; 640px | `bp-sm` |
+| `md` / tablet | 640–1023px | `bp-md` |
+| `lg` / desktop | 1024–1439px | (≥ `bp-md`) |
+| `xl` / wide | 1440–1919px | `bp-lg` |
+| `2xl` / ultrawide+TV | ≥ 1920px (to ~3840) | `bp-xl` |
 
 ## Slint webui (`theme.slint` + `app.slint`)
 
