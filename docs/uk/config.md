@@ -1,0 +1,627 @@
+---
+lang: uk
+---
+
+# Конфігурація
+
+Один файл, `~/.rtok/config.toml`, містить усі налаштування rtok. **Кожен прапорець CLI — це ключ
+конфігурації**, тож усе, що можна передати в командному рядку, можна й зробити постійним, а
+`rtok config show --sources` завжди скаже, звідки взялося значення.
+
+Статус: T12.1–T12.2 виконано — кожна таблиця нижче є типізованим розділом у `config/mod.rs` (невідомий
+ключ = помилка), `config/default.toml` вбудовано в бінарник, і `rtok config init` записує його дослівно,
+`core.inject_budget_tokens` перенесено до `plugins.inject.budget_tokens`, а нашарування
+(user < project < env < flags, на основі `figment`) разом із `config show [--sources] [--json]` і
+`config get <key>` уже працюють. `config set`/`validate` і тест покриття прапорців з'являться в T12.3–T12.4.
+
+## Пріоритет
+
+Від найнижчого до найвищого. Пізніші рівні перевизначають попередні ключ за ключем.
+
+1. **Вбудовані типові значення** — значення з довідкового файлу нижче (`config/default.toml`,
+   вбудованого в бінарник).
+2. **Файл користувача** — `~/.rtok/config.toml` (каталог можна перевизначити через `RTOK_HOME`; файл —
+   через `RTOK_CONFIG=<path>` або `--config <path>`).
+3. **Файл проєкту** — `<git root>/.rtok.toml`, якщо він є. Та сама схема; зазвичай лише
+   `[plugins.read] allow_paths`, `[plugins.cmd] rules`, `[plugins.inject] modes`.
+4. **Файли `.env`** — рядки `RTOK_*` (ті самі назви, що й на рівні змінних середовища) з найближчого
+   `.env` у робочому каталозі або вище, потім із `~/.rtok/.env`; файл проєкту перемагає.
+   Вони лише розбираються, але ніколи не експортуються: команди, запущені через `rtok run`, їх не успадковують, а інші
+   ключі в `.env` проєкту ігноруються. Про некоректний файл повідомляється в stderr, і він пропускається.
+5. **Змінні середовища** — `RTOK_<SECTION>_<KEY>` у верхньому snake case, наприклад `RTOK_PROXY_PORT=8791`,
+   `RTOK_PLUGINS_CMD_REWRITE=false`, `RTOK_STATS_SINCE=7d`. Списки розділяються комами.
+   Наявні короткі назви лишаються псевдонімами: `RTOK_UPSTREAM`, `RTOK_OPENAI_UPSTREAM`.
+6. **Прапорці командного рядка** — `rtok proxy --port 8791`.
+
+Правила:
+
+- Позиційні аргументи окремого виклику (`hook <event>`, `expand <id>`, `run -- <cmd>`,
+  `setup <host>`, `memory import <file>`, `--save-baseline <name>`) не є налаштуваннями й не мають ключа. Усе
+  інше має.
+- Прапорець `--foo-bar` підкоманди `baz` ↔ ключ `baz.foo_bar`. Налаштування плагінів живуть у
+  `plugins.<id>.<key>`.
+- Невідомі ключі — це помилка в `rtok config validate` і попередження (у stderr, один раз) деінде.
+  Хуки ніколи не падають через проблеми з конфігурацією: вони записують це в лог і використовують типові значення (fail open).
+- Шляхи приймають `~`. Відносні шляхи відраховуються від файлу, у якому вони записані.
+- Тривалості: `30d`, `12h`, `15m`. Розміри: прості цілі числа в байтах або токенах, як зазначено в назві.
+
+## `rtok config`
+
+| Команда | Що робить |
+|---------|------|
+| `rtok config show [--sources] [--json]` | фактична конфігурація після всіх рівнів; `--sources` позначає кожен ключ як `default / user / project / env / flag` |
+| `rtok config init [--force]` | записує довідковий файл (нижче) у `~/.rtok/config.toml`; без `--force` ніколи не перезаписує |
+| `rtok config validate [path]` | розбирає файл, відхиляє невідомі ключі й значення поза діапазоном із номерами рядків; у разі помилки код виходу 1 |
+| `rtok config path` | виводить визначений шлях до файлу користувача (і до файлу проєкту, якщо є) |
+| `rtok config get <key>` | виводить одне фактичне значення, наприклад `rtok config get proxy.port` |
+| `rtok config set <key> <value>` | редагує файл користувача на місці, зберігаючи коментарі (використовує `toml_edit`) |
+
+Облікові дані ніколи не виводяться: `otel.headers` (містить ключі прийому OTLP) після задання показується як `<redacted>`
+у `show`, `get`, `set` і `rtok report` — його джерело все одно показується. Щоб побачити значення, прочитайте
+сам файл.
+
+## Довідковий файл
+
+Це дослівний `config/default.toml`. Кожне показане значення — типове; свіжий
+`rtok config init` записує саме це. Логування налаштовується лише в `[log]` (D26). `core.log_file` / `log_level` / `log_to_db`
+зі старого файлу ще один раз завантажуються з попередженням і переносяться до
+`[log]`; `rtok config validate` відхиляє ці ключі, бо їх немає в довідковій
+схемі.
+
+```toml
+# Конфігурація rtok. Кожен прапорець CLI має тут ключ; прапорці та змінні середовища RTOK_* мають пріоритет.
+# Пріоритет: типові значення < цей файл < <git root>/.rtok.toml < env < прапорці.
+# Документація: docs/config.md. Перевірка: `rtok config validate`. Звідки взялося значення: `rtok config show --sources`.
+
+[core]
+enabled     = true                    # false = простий проксі (без бізнес-логіки); HTTP працює до завершення процесу
+db_path     = "~/.rtok/rtok.db"       # один файл SQLite, WAL (рішення D8)
+archive_dir = "~/.rtok/archive"       # сирі дані для `rtok expand <id>` (рішення D4)
+session_env = "CLAUDE_SESSION_ID"     # змінна середовища, з якої береться id сесії, коли його немає в stdin
+call_io_inline_bytes = 65536          # тіла MCP/API, більші за це, ідуть в архів (хуки ніколи не архівують)
+hook_max_input_bytes = 8388608        # обмеження stdin для rtok hook <event> (8 MiB); понад нього — вихід із кодом 0 без змін, без архівування й гешування (T201)
+retain_calls_days    = 30             # 0 = зберігати `calls` назавжди
+
+[log]                                 # власний лог rtok (D26); його читає `rtok logs`
+path      = "~/.rtok/logs/rtok.log"   # ротовані копії лежать поруч: rtok.log.1 … .5
+max_bytes = 1048576                   # ротація понад 1 MiB (validate: ≥ 1024)
+files     = 5                         # скільки поколінь зберігати; старіші видаляються, ніколи не архівуються (validate: ≤ 20)
+lines     = 200                       # що друкує `rtok logs`, коли --lines не задано
+level     = "info"                    # error | warn | info | debug
+to_db     = true                      # також записувати рядок `logs` для `rtok otel`
+tspin     = "auto"                    # `rtok logs` через tailspin: auto = термінал і tspin у PATH | always | off (T225.1)
+
+[estimator]                           # символів на токен для кожного класу, евристика (точність ще не виміряно); `rtok stats --calibrate` переписує
+code  = 3.5
+prose = 4.2
+json  = 3.0
+cjk   = 1.0
+
+# ── інтерфейси ──────────────────────────────────────────────────────────────
+
+[hook]                                # rtok hook <event>
+host      = "claude"                  # claude | cursor | copilot | devin | cline — зіставлення полів даних (T10.1, T46.3, T87, T94)
+max_ms    = 10                        # м'який бюджет; понад нього подія логується як повільна
+fail_open = true                      # будь-яка помилка → `{}` і код виходу 0; false лише для налагодження
+
+[agents]                              # реєстр агентів rtok (T282, D34)
+enabled    = true                     # false = хуки пропускають register/touch/end агента й надсилання повідомлень (облік сесій не змінюється)
+idle       = "30m"                    # вікно `live()`: немає `ended_at`, а `last_seen` у межах цього проміжку від поточного моменту
+push_bytes = 1024                     # оформлені повідомлення, що надсилаються на кожен UserPromptSubmit/PostToolUse; решта → "and N more" (T288)
+
+[mcp]                                 # rtok mcp
+tools                   = []          # [] = усі інструменти ввімкнених плагінів; інакше список дозволених; `expand` завжди лишається в переліку (D4)
+max_description_tokens  = 60          # перевіряється тестом (T4.1)
+max_result_chars        = 20000       # понад це — head/tail + id архіву
+
+[proxy]                               # rtok proxy
+enabled         = true                # false = простий зворотний проксі (в обхід compress/обліку); НЕ зупиняє HTTP
+bind            = "127.0.0.1"
+port            = 8790
+mode            = "passthrough"       # passthrough | compress
+upstream        = "https://api.anthropic.com"      # RTOK_UPSTREAM; ланцюжок за іншим проксі для A/B
+openai_upstream = "https://api.openai.com"         # RTOK_OPENAI_UPSTREAM (D11)
+gemini_upstream = "https://generativelanguage.googleapis.com"  # RTOK_GEMINI_UPSTREAM (T51.3)
+timeout_s       = 600                 # тайм-аут запиту до upstream
+include_usage   = true                # потокова передача OpenAI: додати stream_options.include_usage, якщо його немає (T11.2)
+context_management = false            # лише Anthropic /v1/messages: додати правку clear_tool_uses + бета-заголовок (T51.2, вмикається явно)
+dry_run         = false               # --dry-run: вивести фактичні налаштування [proxy] і вийти, не обслуговуючи запити
+# TLS: кореневі сертифікати Mozilla webpki (`use_preconfigured_tls`). Корпоративні CA: SSL_CERT_FILE (PEM, curl). Див. «TLS і корпоративні CA».
+
+[proxy.tools_rewrite]                 # T59.5; вимкнено: байти запиту лишаються ідентичними
+enabled = false
+max_description_tokens = 60           # 0 = без обрізання; за межею речення; оцінювач Class::Prose
+allow = []                            # порожньо = зберігати всі назви, яких немає в deny
+deny = []                             # прибрати ці назви з tools[]; подальші виклики все одно пересилаються
+
+# ── Batch / Flex / маршрутизація (заплановано — бінарник ще не завантажує; див. docs/batch-flex.md) ──
+# Якщо скопіювати це в ~/.rtok/config.toml, `rtok config validate` не пройде, доки ключі не з'являться.
+# [proxy.batch]
+# enabled = true                      # fallback уже сьогодні пересилає шляхи Batch
+# observe = true                      # записувати створення/опитування/результати (заплановано)
+# parse_results = false               # розгортати використання з результатів Batch у журнал обліку (заплановано)
+#
+# [proxy.flex]
+# enabled = false                     # prepare може задавати service_tier = "flex" (заплановано)
+# force = false                       # перезаписувати service_tier клієнта
+# fallback = "none"                   # none | default на Flex 429 (TODO)
+#
+# [proxy.routing]
+# enabled = false                     # маршрутизація моделей/рівнів D9 (заплановано)
+# sticky = true                       # закріпити upstream для прив'язки кешу промптів (I-84)
+# default_model = ""                  # порожньо = лишити модель клієнта
+
+[web]                                 # rtok web (ті самі дані, що й у rtok tui)
+host = "127.0.0.1"                    # --host
+port = 3333                           # --port
+
+[tui]                                 # rtok tui (ті самі дані, що й у rtok web)
+tab       = ""                        # "" = перша вкладка       (--tab <page>)
+tick_secs = 2                         # частота повторного читання моделі, як 2-секундний такт у web (--tick-secs)
+
+[ui]                                  # власні рядки rtok у терміналі; канали й --json лишаються простими
+emoji = true                          # емодзі перед рядками статусу/попереджень/помилок (RTOK_UI_EMOJI)
+color = true                          # розфарбовувати їх; діють NO_COLOR/CLICOLOR_FORCE (RTOK_UI_COLOR)
+
+[stats]                               # rtok stats
+since           = "30d"
+format          = "table"             # table | json      (--json)
+plugin          = ""                  # "" = усі         (--plugin <id>)
+transcripts_dir = "~/.claude/projects"
+codex_dir       = "~/.codex/sessions" # логи Codex CLI → ще один рядок `api` (T49.2); сховища OpenCode, Cursor і Copilot CLI не містять кількості токенів (перевірено 2026-09-17), тож їх не читають
+calibrate_samples = 30                # на клас          (--calibrate)
+baseline        = ""                  # типова назва для --compare; "" = немає
+price           = false               # показувати вартість у USD для кожної моделі (--price)
+# рядки USD за MTok для --price (T49.1). Джерела, отримано 2026-09-17:
+# Anthropic claude-sonnet-5 / claude-haiku-4-5: https://platform.claude.com/docs/en/about-claude/pricing
+# (вхід / запис у кеш на 5m / читання з кешу / вихід). OpenAI gpt-5 / gpt-5-mini:
+# https://platform.openai.com/docs/pricing (вхід із коротким контекстом / кешований вхід /
+# вихід; окремої ціни запису немає, тож cache_write = input). Моделі без рядка
+# виводять `-`, а не здогадку; додавайте власні датовані рядки так само.
+[stats.prices."claude-sonnet-5"]
+input = 2.0
+cache_write = 2.5
+cache_read = 0.2
+output = 10.0
+[stats.prices."claude-haiku-4-5"]
+input = 1.0
+cache_write = 1.25
+cache_read = 0.1
+output = 5.0
+[stats.prices."gpt-5"]
+input = 1.25
+cache_write = 1.25
+cache_read = 0.125
+output = 10.0
+[stats.prices."gpt-5-mini"]
+input = 0.25
+cache_write = 0.25
+cache_read = 0.025
+output = 2.0
+
+[report]                              # rtok report (D24: відображає операторську модель, нічого не обчислює)
+format = "md"                         # md; html (T22.2), pdf (T22.3), --ai (T22.4)
+out    = ""                           # "" = stdout     (--out <path>)
+since  = "30d"                        # наскільки далеко в минуле читає звіт
+ai     = false                        # відображення у формі для моделі замість --format (--ai)
+budget_tokens = 8000                  # --ai відкидає цілі розділи понад це (T22.4)
+
+[bench]                               # rtok bench
+tasks    = "bench/tasks.toml"
+runs     = 3
+dry_run  = false
+timeout_s = 900                       # на один запуск задачі
+suite    = ""                         # "" = шість задач T9.1; "graph" = T68.9 з MCP і без
+[bench.configs]                       # назва = файл налаштувань, що передається в `claude --settings`
+a = "bench/configs/legacy.json"
+b = "bench/configs/rtok.json"
+
+[doctor]                              # rtok doctor
+settings_path   = "~/.claude/settings.json"
+claude_json     = "~/.claude.json"
+mcp_json        = ".mcp.json"
+probe_timeout_ms = 500                # на кожну перевірку /health вузла проксі
+mcp_timeout_ms  = 15000               # на tools/list кожного MCP-сервера (сервери uvx/npx запускаються повільно)
+instruction_warn_tokens = 1000        # --instructions: позначати файли, більші за це
+instructions    = false               # типово запускати аудит інструкцій (--instructions)
+
+[setup]                               # rtok agents install / remove <host>
+dry_run      = false
+yes          = false                  # потрібно для --replace
+backup       = true                   # <name>.bak-<ts> поруч із кожним файлом, перш ніж setup і remove його змінять
+backup_files = 5                      # скільки поколінь .bak-* зберігати на файл; старіші видаляються (0 = зберігати всі)
+hook_timeout_s = 5                    # тайм-аут, що записується в кожен запис хука
+modes        = []                     # наприклад ["terse", "yagni"]   (--mode)
+mcp          = true                   # також зареєструвати MCP-сервер   (--mcp)
+proxy        = false                  # також задати base URL           (--proxy)
+[setup.claude]
+settings_path = "~/.claude/settings.json"
+[setup.cursor]
+hooks_path    = "~/.cursor/hooks.json"  # сьогодні лише beforeShellExecution (T10.11 підключає PostToolUse)
+[setup.codex]
+config_path   = "~/.codex/config.toml"
+[setup.opencode]
+config_path   = "~/.config/opencode/opencode.json"
+[setup.kilo]
+config_path   = "~/.config/kilo/kilo.json"      # kilo.jsonc об'єднує сам Kilo, rtok його ніколи не переписує
+[setup.pi]
+extensions_path = "~/.pi/agent/extensions"
+tools           = false                     # pi.registerTool для read/search/graph/memory (T70.3)
+[setup.omp]
+extensions_path = "~/.omp/agent/extensions" # oh my pi: сюди створюється посилання на plugins/pi (T92)
+mcp_path        = "~/.omp/agent/mcp.json"
+[setup.zcode]
+config_path   = "~/.zcode/cli/config.json"
+[setup.kimi]
+config_path   = "~/.kimi-code/config.toml"  # mcp.json читається поруч
+[setup.copilot]
+dir           = "~/.copilot"                # mcp-config.json, hooks/rtok.json
+[setup.commandcode]
+dir           = "~/.commandcode"            # settings.json (ключ hooks), mcp.json
+[setup.aider]
+config_path   = "~/.aider.conf.yml"         # openai-api-base → rtok proxy (--proxy)
+[setup.windsurf]
+config_path   = "~/.codeium/windsurf/mcp_config.json"
+[setup.zed]
+config_path   = "~/.config/zed/settings.json"
+[setup.cline]
+hooks_path = "~/Documents/Cline/Hooks"
+mcp_path = "~/.cline/data/settings/cline_mcp_settings.json" # CLI; розширення використовує файл налаштувань у globalStorage VS Code
+[setup.gemini]
+dir = "~/.gemini" # settings.json (hooks, mcpServers)
+[setup.codewhale]
+dir = "~/.codewhale" # config.toml ([[hooks.hooks]]), mcp.json (mcpServers)
+[setup.mimo]
+config_path   = "~/.config/mimocode/mimocode.json" # mcp (у форматі форку OpenCode)
+[setup.antigravity]
+plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: сюди створюється посилання на plugins/antigravity
+cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # сюди готує файли agy plugin install; лише читання
+[setup.devin]
+config_path   = "~/.config/devin/config.json"  # mcp_config.json читається поруч; Windows: %APPDATA%\devin\
+
+[expand]                              # rtok expand <id>
+max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)
+max_rate  = 0.05                      # стеля повторних читань; понад неї звіт позначає стиснення з втратами (T22.5)
+
+[filter]                              # rtok filter --stdin (T10.2)
+cmd = ""                              # підказка сімейства команди, коли викликач його знає (--cmd)
+
+[worktree]                            # rtok worktree add | claim | remove | list | gc
+root = ""                             # де `rtok worktree add` створює worktree; "" = найближчий `_worktrees/` над основним checkout, інакше поруч із ним
+
+[otel]                                # експорт OpenTelemetry (D19); вимкнено, доки не визначено endpoint
+endpoint      = ""                    # базова URL-адреса OTLP/HTTP, наприклад "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
+headers       = ""                    # "k=v,k2=v2", наприклад "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
+service_name  = "rtok"                # service.name ресурсу
+content       = true                  # gen_ai.input/output.messages, аргументи й результати інструментів у спанах
+content_bytes = 65536                 # на атрибут; понад це — rtok.archive.id → `rtok expand <id>`
+flush_secs    = 5                     # інтервал скидання для proxy / mcp і тайм-аут POST
+
+# ── плагіни ─────────────────────────────────────────────────────────────────
+
+[plugins.measure]
+enabled = true
+
+[plugins.cmd]
+enabled  = true
+rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
+shell    = ""                         # "" = $SHELL
+rules    = "~/.rtok/rules.toml"       # додаткові правила фільтрування; якщо немає → вбудований rules/default.toml
+rules_dir = "~/.rtok/rules.d"         # drop-in-файли: кожен *.toml об'єднується після rules у порядку назв (T50.2)
+trailer_min_lines = 40                # додавати `[rtok <id> · N lines · expand …]` понад це
+fail_tail_lines   = 80                # ненульовий код виходу → останні N рядків дослівно
+never_wrap = ["rtok", "sudo"]         # список заборонених перших слів; heredoc, `&`, -i завжди пропускаються
+
+[plugins.read]
+enabled          = true
+default_mode     = "full"             # full | lines | map | signatures
+max_chars        = 20000              # понад це — head/tail + id архіву
+native_max_bytes = 32768              # поріг відмови для PreToolUse(Read); ніколи не нижче за це
+advice           = true               # false = ніколи не відмовляти нативному Read
+allow_paths      = []                 # додаткові корені поза cwd
+search_max       = 50
+search_max_bytes = 1048576             # пошук пропускає файли, більші за це (T55.5)
+tree_depth       = 2
+delta            = true               # T58.1: змінене повторне читання → unified diff щодо останнього архіву (7.3 % байтів Read, 2026-09-18, `rtok stats --since 90d`)
+delta_max_ratio  = 0.6                # повний файл, коли diff не менший за цю частку
+
+[plugins.archive]
+enabled    = true
+keep_turns = 4                        # ніколи не торкатися останніх N ходів
+min_tokens = 1500                     # переписувати лише результати інструментів понад це (оцінка)
+head_lines = 8
+tail_lines = 4
+tiers      = false                    # багаторівневе завантаження, вмикається явно (типово вимкнено); специфікація поведінки OpenViking L0/L1/L2 — AGPL-3.0, rtok не вендорить, не лінкує й не запускає її як підпроцес (D6); відкриває нативну реалізацію в T33.2
+live_blobs = false                    # зменшувати вкладені дампи JSON + блоки data: у блоках користувача, ніколи results/system/tools/останні 2 ходи (T51.1, вмикається явно)
+skills     = true                     # архівувати тіла skills поза keep_turns (T61.2); вимикається через skills = false
+
+[plugins.proxy]
+enabled = true                        # плагін proxy (фіксація використання); сам сервер — це [proxy]
+
+#### `[plugins.proxy.semantic_cache]` — кеш відповідей, що вмикається явно (P31)
+
+Типово вимкнено до Gate P31 (нуль хибних влучань на наборі P9). Коли ввімкнено (T31.2), проксі може
+віддати попередню відповідь, коли нормалізований промпт достатньо схожий; хибне влучання — це неправильна відповідь, тому
+це лишається явно ввімкнюваним. Змінна середовища: `RTOK_PLUGINS_PROXY_SEMANTIC_CACHE_ENABLED=true`.
+
+| Ключ | Типово | Значення |
+|-----|---------|---------|
+| `enabled` | `false` | Головний перемикач; коли вимкнено, байти проксі лишаються ідентичними |
+| `threshold` | `0.99` | Нижня межа косинусної подібності для семантичного рівня |
+| `ttl_s` | `300` | TTL запису в секундах |
+| `max_messages` | `1` | Пропускати кеш, коли довжина `messages` перевищує це |
+| `require_empty_tools` | `true` | Не кешувати ходи з непорожнім `tools[]` |
+| `embed_backend` | `"hash"` | `"hash"` = лише прямий рівень до появи embeddings P29 |
+| `cache_by_model` | `true` | Розділяти записи кешу за моделлю |
+| `cache_by_provider` | `true` | Розділяти записи кешу за провайдером |
+
+```toml
+[plugins.proxy.semantic_cache]
+enabled = false
+threshold = 0.99
+ttl_s = 300
+max_messages = 1
+require_empty_tools = true
+embed_backend = "hash"
+cache_by_model = true
+cache_by_provider = true
+```
+
+[plugins.inject]
+enabled       = true
+budget_tokens = 800                   # на хід, усі вставлення разом (рішення D5)
+modes_dir     = "~/.rtok/modes"
+modes         = []                    # те саме, що й [setup].modes; setup записує сюди
+
+[plugins.guard]
+enabled      = true
+window_turns = 8
+deny_grep_glob = false           # вмикається явно: відмовляти нативним Grep/Glob, спрямовувати до MCP search/tree (T50.4)
+skills = false                   # вмикається явно (Claude Code): відмовляти Skill, чий SKILL.md перевищує skill_max_bytes, із його картою + `expand <id>` (T62.1)
+skill_max_bytes = 8192           # тіла такого розміру або менші завантажуються цілком; так само будь-який skill з allowed-tools / model / context / agent у frontmatter
+
+[plugins.memory]
+enabled        = true
+recall_titles  = 5                    # SessionStart: останні N заголовків + id
+recall_tokens  = 200
+prompt_recall  = 5                    # UserPromptSubmit: 0 = вимкнено; N = ранжовані заголовки на хід (T69.5)
+checkpoint_tokens = 400               # PreCompact → SessionStart(compact)
+search_limit   = 5
+sync_tokens    = 300                  # rtok memory sync: блок у CLAUDE.md / AGENTS.md (T69.6)
+startup_recall = true                 # SessionStart(startup) відновлює найновішу нотатку session:* (T71.2)
+handoff        = true                 # MCP-інструмент T59.6 для зведення субагента
+spawn_brief        = true             # T130: зведення-вказівник для SubagentStart
+spawn_brief_tokens = 300              # T130: бюджет токенів для брифу під час запуску
+
+[plugins.memory.embed]
+enabled    = false                    # P29: якщо false — лише FTS5; векторний пошук вмикається явно
+provider   = "local"                  # "local" | "openai"
+model      = "all-MiniLM-L6-v2"
+dimensions = 384
+hybrid     = true                     # коли ввімкнено: RRF(fts5, knn); false = лише knn
+
+[plugins.graph]
+enabled    = true
+max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"
+map_tokens = 0                        # обмеження карти репозиторію на SessionStart (частка D5 поряд із memory.recall_tokens); 0 = вимкнено, доки не пройде A/B P7
+body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
+auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
+backend    = "tags"                   # tags | lsp: бекенд індексу; типово tags; lsp запускає rust-analyzer/clangd/tsserver з PATH (P30)
+watch      = "off"                    # off | notify: фонове переіндексування всередині `rtok mcp` (P8d)
+
+[plugins.toon]
+enabled  = true
+min_rows = 5
+
+[plugins.compress]
+enabled = true                        # екстрактивні зведення заархівованого виводу інструментів; працює лише в proxy.mode = "compress"
+
+[plugins.wasm]
+enabled = false                      # типово вимкнено; жоден .wasm не завантажується до хоста T32.2 + feature `wasm-host`
+dir     = "~/.rtok/plugins"          # шукати *.wasm на один рівень углиб; D6 — цей репозиторій ніколи не вендорить сторонніх плагінів
+```
+
+
+
+### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
+
+Ці таблиці документують задумані pass-through для Batch, переписування Flex `service_tier` і
+параметри маршрутизації моделей/sticky. **Вони ще не розбираються** — якщо додати їх до робочого файлу конфігурації,
+`rtok config validate` не пройде, доки не з'являться відповідні поля `Config`. Fallback
+проксі вже пересилає невідомі шляхи (зокрема `/v1/batches` і
+`/v1/messages/batches`) без `Wire`; вставлення Flex і переписування для маршрутизації — це майбутня робота над
+`prepare` / політиками. Повна семантика: [`docs/batch-flex.md`](batch-flex.md).
+
+#### `[proxy.batch]`
+
+| Ключ | Тип | Типово (задумано) | Значення |
+|-----|------|--------------------|---------|
+| `enabled` | bool | `true` | Головний перемикач; сьогодні fallback axum завжди пересилає шляхи Batch |
+| `observe` | bool | `true` | Записувати створення/опитування/результати Batch як окремі рядки журналу обліку (**заплановано**) |
+| `parse_results` | bool | `false` | Якщо true, розбирати файли/потоки результатів у рядки `usage` (**заплановано**) |
+
+```toml
+# Заплановано — сьогодні не завантажується
+[proxy.batch]
+enabled = true
+observe = true
+parse_results = false
+```
+
+#### `[proxy.flex]`
+
+| Ключ | Тип | Типово (задумано) | Значення |
+|-----|------|--------------------|---------|
+| `enabled` | bool | `false` | Якщо true, `prepare` може задавати OpenAI `service_tier = "flex"`, коли клієнт його не вказав |
+| `force` | bool | `false` | Перезаписувати `service_tier`, заданий клієнтом |
+| `fallback` | string | `"none"` | `none` або `default` — поведінка на Flex `429` resource-unavailable (**TODO**) |
+
+```toml
+# Заплановано — сьогодні не завантажується
+[proxy.flex]
+enabled = false
+force = false
+fallback = "none"
+```
+
+#### `[proxy.routing]`
+
+| Ключ | Тип | Типово (задумано) | Значення |
+|-----|------|--------------------|---------|
+| `enabled` | bool | `false` | Маршрутизація моделей / рівнів (D9); вимкнено, доки немає політики + Check вимірювання |
+| `sticky` | bool | `true` | Віддавати перевагу одному upstream заради прив'язки кешу промптів провайдера (I-84); не стосується Batch проти Flex |
+| `default_model` | string | `""` | Порожньо = лишити `model` клієнта; інакше — запасна ціль переписування |
+
+```toml
+# Заплановано — сьогодні не завантажується
+[proxy.routing]
+enabled = false
+sticky = true
+default_model = ""
+```
+
+### Ціни для статистики (`[stats.prices]`)
+
+`rtok stats --price` оцінює рядки `usage` з проксі в USD: кожну складову за її
+рядком `$` за MTok, `cost` — їхня сума, `saved` — скільки заощадили читання з кешу порівняно
+з ціною некешованого входу, — єдина економія, яку можна обчислити лише з рядків `usage`.
+Модель без рядка виводить `-` в обох доларових стовпцях (кількість її токенів
+однаково виводиться); додайте власний датований рядок, а не вгадуйте. Постачені
+рядки взято зі сторінок цін провайдерів 2026-09-17 (джерела в
+`config/default.toml`); перевірте їх знову, якщо ваш рахунок не збігається. `stats.price`
+типово вмикає показ `--price` (`RTOK_STATS_PRICE=true` теж працює).
+
+### Хост WASM-плагінів (`[plugins.wasm]`)
+
+Плагіни `.wasm` поза деревом (P32, рішення D6). Цей репозиторій пише кожен плагін каталогу з
+нуля й **ніколи не вендорить сторонні блоби `.wasm`** — оператори встановлюють їх у
+`plugins.wasm.dir` на своїй машині. Типово `enabled = false`: збірки з дерева й типова
+конфігурація не завантажують WASM. Хост Wasmi і Cargo feature `wasm-host` з'являться в T32.2; доти
+прапорець видно в `rtok config show --sources`, але завантажувача немає.
+
+### Бекенди графа (`[plugins.graph]`)
+
+`backend = "lsp"` спрямовує `symbol` / `callers` / `impact` / `outline` / `explore` через
+мовний сервер із `PATH` замість індексу tags. Покрокове налаштування для
+Rust (rust-analyzer) і Dart (Dart SDK): `docs/lsp.md`.
+
+### Вивід у терміналі (`[ui]`)
+
+Власні рядки rtok для людини за терміналом — `ok …`, `… started` / `… stopped`, `warning: …`,
+`Error: …`, підсумок `graph index`, `--help` — типово мають емодзі й колір:
+✅ успіх (зелений), 💡 статус (блакитний), ⚠️ попередження (жовтий), ❌ помилка (червоний).
+
+```toml
+[ui]
+emoji = false   # RTOK_UI_EMOJI=false
+color = false   # RTOK_UI_COLOR=false
+```
+
+- **Емодзі** потребують `emoji = true` *і* термінала на відповідному потоці.
+- **Колір** потребує `color = true` *і* потоку, що приймає колір: термінал, `NO_COLOR`
+  не задано, `TERM` не `dumb` — або `CLICOLOR_FORCE` / `FORCE_COLOR`, що примусово вмикають його для каналу.
+  `color = false` також вимикає кольори diff, слів стану й рівнів логу.
+- Те, що читають агенти, ніколи не змінюється: JSON хуків і MCP, відфільтрований вивід команд, `--json` і
+  все, що записується в канал чи файл, лишаються простими, байт у байт.
+- Колір `--help` вирішує сам clap (термінал, `NO_COLOR`, `CLICOLOR_FORCE`): довідка виводиться
+  ще до читання конфігурації.
+
+## TLS і корпоративні CA
+
+`rtok proxy` і експорт OpenTelemetry використовують одну спільну клієнтську конфігурацію rustls: кореневі сертифікати Mozilla
+через `webpki-roots`, передані в reqwest через `use_preconfigured_tls`. Вони
+не використовують верифікатор macOS Security.framework. Корпоративні чи приватні CA:
+задайте `SSL_CERT_FILE` як шлях до пакета PEM (угода curl). Ці сертифікати
+доповнюють набір Mozilla. Якщо змінну задано, відсутній, порожній або
+нерозбірний файл зупиняє запуск із шляхом у повідомленні про помилку (як у curl).
+Якщо не задано, використовуються лише кореневі сертифікати Mozilla. `rtok hook` ніколи не відкриває TLS.
+
+## OpenTelemetry
+
+`[otel]` вмикає експортер (`docs/otel.md`). Вимкнено, доки `endpoint` або
+`OTEL_EXPORTER_OTLP_ENDPOINT` не вкаже колектор; на шляху хука нічого не виконується.
+
+## Таблиця відповідності (прапорці → ключі)
+
+| Підкоманда | Прапорець | Ключ |
+|-----------|------|-----|
+| глобальний | `--config <path>` | (обирає файл; не ключ) |
+| глобальний | `RTOK_HOME` | (обирає каталог; лише змінна середовища, не прапорець clap) |
+| читання | `--json` | `stats.format` для `stats`; в інших випадках — дія (сторінка `web::model` як JSON, а не збережений ключ). Для `stats`, `info`, `config show`, `doctor`, `plugins`, `agents list`, `agents sessions`, `agents whoami`, `agents show`, `agents inbox`, `logs`, `demon status`, `otel status` |
+| `hook` | `--host` | `hook.host` |
+| `proxy` | `--port`, `--upstream`, `--mode`, `--dry-run` | `proxy.port`, `proxy.upstream`, `proxy.mode`, `proxy.dry_run` |
+| `web` | `--host`, `--port` | `web.host`, `web.port` (`rtok dashboard` — застаріле написання) |
+| `tui` | `--tab`, `--tick-secs` | `tui.tab`, `tui.tick_secs` |
+| `stats` | `--since`, `--plugin`, `--compare`, `--calibrate`, `--cache`, `--price` | `stats.since`, `stats.format`, `stats.plugin`, `stats.baseline`, (`--calibrate`, `--cache` — дії; їхній параметр — `stats.calibrate_samples`), `stats.price` (`stats.prices.*` — це дані) |
+| `report` | `--format`, `--out`, `--since`, `--ai` | `report.format`, `report.out`, `report.since`, `report.ai` (`report.budget_tokens` обмежує `--ai`) |
+| `bench` | `--tasks`, `--runs`, `--dry-run`, `--timeout`, `--suite` | `bench.*` |
+| `doctor` | `--instructions` | `doctor.instructions` |
+| `agents install` | `--dry-run`, `--yes`, `--mode`, `--mcp`, `--proxy`, `--remove`, `--replace`, `--cli`, `--desktop`, `--all` | `setup.*` (`--remove`, `--replace`, `--cli`, `--desktop`, `--all` — дії) |
+| `agents remove` | `--dry-run` | `setup.dry_run` (сама команда — це дія `--remove`) |
+| `agents list` | — | читає конфігурації хостів і `<bin> --version` (`--json` — див. рядок «читання») |
+| `agents whoami` | — | читає `RTOK_AGENT_ID` і знаходить його через сховище (T283); без ключа, без `setup.*` (`--json` — див. рядок «читання») |
+| `agents sessions` | `--all` | (дія: також перелічує завершені сесії; live чи idle визначає `agents.idle`) |
+| `agents show` | — | знаходить префікс id через сховище (T284); live чи idle визначає `agents.idle` (`--json` — див. рядок «читання») |
+| `agents status` | — | записує текст статусу агента, що викликає (`RTOK_AGENT_ID`), ≤ 120 символів (T284); без ключа |
+| `agents send` | `--all-live` | для окремого виклику (без ключа, без `setup.*`): одне повідомлення кожному живому агенту проєкту викликача (T287); що вважати «живим», вирішує `[agents] idle` |
+| `agents inbox` | `--unread` | для окремого виклику (без ключа, без `setup.*`): які рядки показує одне читання (T287); `--json` — див. рядок «читання» |
+| `expand` | `--lines`, `--grep` (регулярний вираз, із запасним буквальним пошуком; збіги виводяться як `N:line`), `--context N` (рядки навколо кожного збігу grep, вікна об'єднуються через `--`) | для окремого виклику (без ключа); `expand.max_lines` обмежує; `expand.max_rate` — стеля для звіту (T22.5) |
+| `filter` | `--cmd` | `filter.cmd` |
+| `config init`, `config set`, `memory import`, `graph index` | `--dry-run` | (дія: показує зміну як git diff і нічого не записує) |
+| `memory export` | `--project` | для окремого виклику (без ключа): звужує один дамп до нотаток проєкту |
+
+Тест покриття (T12.4) обходить дерево команд clap і падає, якщо непозиційний прапорець
+з'являється без ключа в `config/default.toml`, тож ця таблиця не може непомітно розійтися з кодом.
+
+## Приклади змінних середовища
+
+```bash
+RTOK_PROXY_MODE=compress rtok proxy
+RTOK_PLUGINS_READ_ALLOW_PATHS=/opt/src,/srv/lib rtok mcp
+RTOK_PLUGINS_WASM_ENABLED=true rtok config show --sources
+RTOK_STATS_SINCE=7d rtok stats
+RTOK_CONFIG=./ci-config.toml rtok bench --dry-run
+```
+
+## Налагоджувальний лог (`RUST_LOG`)
+
+`[log]` — це лог оператора: файл із налаштованим рівнем плюс рядки `logs`. Для налагодження
+є другий потік, лише в stderr, за фасадом `log` і `env_logger` (T225). Він вимкнений,
+доки не задано `RUST_LOG`, тож типово жоден запуск хука, `mcp` чи `proxy` не виводить нічого нового:
+
+```bash
+RUST_LOG=rtok=debug rtok stats                       # argv, потім кожен рядок [log] у момент запису
+RUST_LOG=rtok::log=info rtok proxy                   # лише віддзеркалений потік [log]
+RUST_LOG=rtok=debug RUST_LOG_STYLE=never rtok mcp    # без кольору; stdout лишається каналом MCP
+```
+
+Віддзеркалення ігнорує `[log] level`: файл зберігає `info`, а stderr показує те, що запитує `RUST_LOG`.
+Змінна називається `RUST_LOG`, а не `RTOK_LOG`: назви `RTOK_<SECTION>_<KEY>` належать
+рівню змінних середовища вище, і `RTOK_LOG` конфліктувала б із таблицею `[log]`.
+
+`just logs [flags]` відкриває файл у [tailspin](https://github.com/bensadeh/tailspin) (`tspin`,
+закріплений у `mise.toml`), який підсвічує рівні, дати, числа й шляхи; `just logs -f` стежить
+за ним. Налагоджувальний потік передається каналом так само: `RUST_LOG=rtok=debug rtok stats 2>&1 >/dev/null | tspin`.
+
+`rtok logs` і `rtok logs watch` самі використовують tailspin (T225.1). З типовим `[log] tspin = "auto"`
+пронумеровані рядки проходять через `tspin --print`, коли stdout — термінал, а `tspin`
+є в `PATH`; `"always"` робить так і для каналу, `"off"` зберігає власні кольори rtok. Без `tspin`
+вивід лишається таким, як був. `rtok logs export` і `--json` ніколи через нього не проходять.
+
+## Чому один файл, а не лише прапорці
+
+Хуки запускає хост із фіксованим командним рядком; єдиний спосіб їх налаштувати — це
+файл. Проксі й MCP-сервер працюють годинами; перезапускати їх заради зміни прапорця —
+це регресія. А бенчмарку потрібні дві повні відтворювані конфігурації — тобто по файлу
+на конфігурацію, а не історія оболонки.
+
+## Застарілі ключі
+
+`[dashboard]` переноситься до `[web]` (T21.3). `core.inject_budget_tokens` переноситься до
+`plugins.inject.budget_tokens` (T12.1). `core.log_file` / `log_level` / `log_to_db` переносяться до
+`[log].path` / `level` / `to_db` (T24.5, D26). Кожен виводить одне попередження під час завантаження, а потім
+відкидається; `rtok config validate` відхиляє їх, бо їх немає в довідковій схемі.
+
+`setup.restart_prompt_timeout_seconds` вилучено (T138): запитання про перезапуск після встановлення — це
+підтвердження `inquire`, яке чекає на відповідь (Enter, Esc або Ctrl-C означають «ні»). Файл, який досі задає
+цей ключ, отримує попередження про невідомий ключ під час завантаження й помилку від `rtok config validate`.
