@@ -80,7 +80,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T384 | todo | P2 | 2 | 30% | |
 | T385 | todo | P1 | 5 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T387 | todo | P2 | 3 | 40% | |
+| T387 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T390 | todo | P2 | 3 | 40% | |
@@ -1697,6 +1697,8 @@ Check: golden fixtures for each wrapper form and each new rule; `rtok stats` bef
 `done.md` records T52.5 as done (refs 96/105, recall 0.914), but its tags query `(type_identifier) @name @reference.type` is not in `src/plugins/read/outline.rs`: commit `c217b8f2` ("ci: auto-revert ef6c6ff") removed it on 2026-09-17. `tests/graph_truth.rs` still guards the old floor (`ref_recall >= 0.30`) and `research.md` §2 still shows 0.351 / 0.305.
 
 Done means: the type-position and scoped-call reference queries from `cfbee166` are back (adapted to today's code), `graph_truth` measures the new reference recall, its floor rises to just under the measured value, and `research.md` §2 and `src/plugins/graph/PLAN.md` "Known misses" are updated. The T52.5 entry in `done.md` gets a dated note that it was reverted and re-landed under T387.
+
+Plan: re-apply the code hunks of `cfbee166` (`src/plugins/read/outline.rs`, `src/plugins/graph/index.rs`, tests) onto today's code; find why `ef6c6ff` failed main CI and fix that cause, so the query does not get reverted again. Re-measure `tests/graph_truth.rs` reference recall and raise its floor to just under it. Update `research.md` §2 (table and T68.6 note), `src/plugins/graph/PLAN.md` "Known misses", and add a dated note to T52.5 in `done.md`.
 
 Check: `tests/graph_truth.rs` passes with the raised floor; the new recall is in §2 with a date; `just check`.
 
