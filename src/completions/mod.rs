@@ -13,6 +13,7 @@ use clap::{Arg, Command, ValueEnum, ValueHint};
 use clap_complete::Generator;
 
 pub mod install;
+pub mod picker;
 
 /// Shells `rtok completions` writes for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -24,6 +25,16 @@ pub enum Shell {
     Elvish,
     // `cmd.exe` through Clink (a Lua argmatcher)
     Clink,
+}
+
+impl Shell {
+    /// The name `rtok completions <shell>` takes.
+    pub fn name(self) -> String {
+        let v = self
+            .to_possible_value()
+            .expect("every shell is a listed value");
+        v.get_name().to_string()
+    }
 }
 
 /// Write the completion script for `shell` to `w`.
