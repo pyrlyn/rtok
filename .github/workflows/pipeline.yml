@@ -3,6 +3,8 @@
 # parallel; `gate` passes only when both succeeded.
 # Anything downstream (deploy, release, publish) must `needs: gate`. Draft pull requests skip
 # every job, the gate included, until marked ready. Secrets are passed explicitly.
+# Docs-only pull requests (`docs-only` in .github/infra.yml): `changes` tells ci.yml to run
+# only its `docs` job, infra's ci.yml skips its scans, and `gate` still reports success.
 # Shared workflows: https://github.com/pyrlyn/infra/blob/main/docs/reusable-workflows.md
 name: pipeline
 
@@ -24,9 +26,24 @@ permissions:
   contents: read
 
 jobs:
+  # infra's config action on .github/infra.yml: `docs-only` is "true" when docs-only applies to
+  # this event and every changed file is documentation (fails open: "false" when unsure).
+  changes:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs-only: ${{ steps.config.outputs.docs-only }}
+    steps:
+      - id: config
+        uses: pyrlyn/infra/.github/actions/config@aa8f6f3f6654b5fd4c42803e544e27bf076bb5c7 # ci/docs-only (pyrlyn/infra#33)
+
   ci:
+    needs: changes
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: ./.github/workflows/ci.yml
+    with:
+      docs-only: ${{ needs.changes.outputs.docs-only == 'true' }}
     # ci.yml's jobs request these (e.g. revert-on-failure); a called workflow cannot exceed them.
     permissions:
       contents: write
@@ -35,7 +52,7 @@ jobs:
 
   pipeline:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    uses: pyrlyn/infra/.github/workflows/ci.yml@0603d0ae610af9f792c5caf925041292a857e480 # main
+    uses: pyrlyn/infra/.github/workflows/ci.yml@aa8f6f3f6654b5fd4c42803e544e27bf076bb5c7 # ci/docs-only (pyrlyn/infra#33)
     # The union every nested job asks for, validated up front even for disabled checks.
     permissions:
       contents: read
@@ -47,15 +64,16 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   gate:
-    needs: [ci, pipeline]
+    needs: [changes, ci, pipeline]
     # always(): ci.yml cancels the run on its first failure, and a skipped gate would read as
     # passing, so the gate still runs and reports the failed or cancelled need.
     # Skipped on draft PRs like every other job, so a draft never leaves a green `gate` behind.
+    # On a docs-only PR the skipped jobs live inside `ci` and `pipeline`, which still succeed.
     if: >-
       always()
       && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     steps:
-      - uses: pyrlyn/infra/.github/actions/gate@0603d0ae610af9f792c5caf925041292a857e480 # main
+      - uses: pyrlyn/infra/.github/actions/gate@aa8f6f3f6654b5fd4c42803e544e27bf076bb5c7 # ci/docs-only (pyrlyn/infra#33)
         with:
           needs: ${{ toJSON(needs) }}
