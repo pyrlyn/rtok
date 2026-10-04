@@ -176,6 +176,15 @@ pypi-build *flags:
 pypi-publish *flags:
     tools/pypi-publish.sh {{flags}}
 
+# CI's `docs` job runs only this on a docs-only pull request (`docs-only` in .github/infra.yml);
+# `just test` runs the same tests otherwise.
+# the tests that validate Markdown (plan.md/todo.md ids and Check: lines, ideas.md, docs/, ...)
+docs-check:
+    {{cargo}} test -p rtok --test plan_unique_ids --test ideas_md --test docs_structure \
+        --test host_docs --test site_pages --test public_numbers --test toolchain_rows \
+        --test plugin_plans --test report --test agents_doc --test agents_worktrees \
+        --test stats_model
+
 # T9.5: execute every README bash fence marked `# check`.
 readme-check:
     python3 -c 'import re; from pathlib import Path; print("".join(block[len("# check\\n"):] for block in re.findall(r"```bash\\n(.*?)\\n```", Path("README.md").read_text(), re.S) if block.startswith("# check\\n")), end="")' | bash -euo pipefail
