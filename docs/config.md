@@ -327,6 +327,7 @@ enabled          = true
 default_mode     = "full"             # full | lines | map | signatures
 max_chars        = 20000              # above this, head/tail + archive id
 native_max_bytes = 32768              # PreToolUse(Read) deny threshold; never below this
+range_max_lines = 300              # T383: a native Read with limit 1..=N passes the hook; 0 = unranged only
 advice           = true               # false = never deny native Read
 allow_paths      = []                 # extra roots outside cwd
 search_max       = 50

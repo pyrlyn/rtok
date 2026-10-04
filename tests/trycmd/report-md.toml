@@ -195,6 +195,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.read.languages | [] | default |
 | plugins.read.max_chars | 20000 | default |
 | plugins.read.native_max_bytes | 32768 | default |
+| plugins.read.range_max_lines | 300 | default |
 | plugins.read.search_max | 50 | default |
 | plugins.read.search_max_bytes | 1048576 | default |
 | plugins.read.tree_depth | 2 | default |
@@ -292,7 +293,7 @@ Every effective key with its origin — the `config show --sources` page.
 | web.port | 3333 | default |
 | worktree.root |  | default |
 
-246 keys.
+247 keys.
 
 ## Doctor
 

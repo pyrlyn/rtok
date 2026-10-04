@@ -88,6 +88,9 @@ pub struct Report {
     /// T136: whole-file Reads an outline could have answered. Absent when none.
     #[serde(default, skip_serializing_if = "ReadWholeRow::is_empty")]
     pub read_whole: ReadWholeRow,
+    /// T383: native Reads the read hook denied, and what followed. Absent when none.
+    #[serde(default, skip_serializing_if = "ReadDenyRow::is_empty")]
+    pub read_deny: ReadDenyRow,
     /// T65.1: tool_result bytes whose SHA-256 matches an earlier result in the
     /// same session. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "RepeatRow::is_empty")]
@@ -171,6 +174,24 @@ pub struct ReadWholeRow {
 }
 
 impl ReadWholeRow {
+    fn is_empty(&self) -> bool {
+        self.calls == 0
+    }
+}
+
+/// T383: native `Read`s the read hook denied. `tokens` is the estimated size of the deny
+/// reasons (the cost side of the net per deny). `then_mcp` / `then_native`: denies whose
+/// path was read through rtok's MCP `read` / again by a native `Read` within the next
+/// [`DENY_FOLLOW_CALLS`] tool calls; the rest were abandoned or went elsewhere.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadDenyRow {
+    pub calls: u64,
+    pub tokens: u64,
+    pub then_mcp: u64,
+    pub then_native: u64,
+}
+
+impl ReadDenyRow {
     fn is_empty(&self) -> bool {
         self.calls == 0
     }
@@ -527,6 +548,13 @@ impl Report {
                 d.calls - d.edited,
                 pct(plain, d.result_bytes),
                 d.edited
+            ));
+        }
+        if self.read_deny.calls > 0 {
+            let d = &self.read_deny;
+            s.push_str(&format!(
+                "read deny calls {}  tokens {}  then rtok read {}  then native Read {}\n",
+                d.calls, d.tokens, d.then_mcp, d.then_native
             ));
         }
         if !self.repeat_reads.is_empty() {
@@ -1098,6 +1126,7 @@ fn fold_session(
     }
     fold_read_delta(&mut report.read_delta, parsed);
     fold_read_whole(&mut report.read_whole, parsed, replay);
+    fold_read_deny(&mut report.read_deny, parsed);
     fold_repeat(&mut report.repeat, parsed);
     fold_repeat_reads(&mut report.repeat_reads, parsed);
     fold_expand_after(&mut report.expand_after, parsed);
@@ -1438,6 +1467,59 @@ fn fold_read_whole(row: &mut ReadWholeRow, parsed: &Parsed, rp: Replay) {
             row.edited_bytes += bytes;
         }
     }
+}
+
+/// How many tool calls after a deny count as "what the agent did next".
+const DENY_FOLLOW_CALLS: usize = 3;
+
+/// T383: see [`ReadDenyRow`]. The result text is the hook's reason, possibly behind a host
+/// prefix, so it is matched by substring; without the `read` plugin there is no hook to match.
+fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
+    let results: BTreeMap<&str, &str> = parsed
+        .tool_results
+        .iter()
+        .map(|r| (r.tool_use_id.as_str(), r.content.as_str()))
+        .collect();
+    for (i, u) in parsed.tool_uses.iter().enumerate() {
+        let Some(text) = results.get(u.id.as_str()) else {
+            continue;
+        };
+        if u.name != "Read" || !is_read_deny(text) {
+            continue;
+        }
+        row.calls += 1;
+        row.tokens += est_tokens(text.len() as u64);
+        let Some(path) = tool_path(&u.input) else {
+            continue;
+        };
+        let next = parsed.tool_uses[i + 1..]
+            .iter()
+            .take(DENY_FOLLOW_CALLS)
+            .find(|n| {
+                (n.name == "Read" || is_rtok_mcp_read(&n.name))
+                    && tool_path(&n.input).is_some_and(|p| same_path(p, path))
+            });
+        match next {
+            Some(n) if n.name == "Read" => row.then_native += 1,
+            Some(_) => row.then_mcp += 1,
+            None => {}
+        }
+    }
+}
+
+fn is_rtok_mcp_read(name: &str) -> bool {
+    mcp_group(name) == Some("rtok") && name.ends_with("__read")
+}
+
+#[cfg(feature = "read")]
+fn is_read_deny(content: &str) -> bool {
+    use crate::plugins::read::hook::{DELTA_REASON, REASON};
+    content.contains(REASON) || content.contains(DELTA_REASON)
+}
+
+#[cfg(not(feature = "read"))]
+fn is_read_deny(_content: &str) -> bool {
+    false
 }
 
 #[cfg(feature = "read")]
@@ -2210,6 +2292,59 @@ mod tests {
             table.contains("read whole calls 2  bytes 80000  50.0% of Read  50.0% of results  not edited 1 bytes 25.0% of results  edited after 1"),
             "{table}"
         );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// T383: denied Reads are counted with the size of their reasons; each is classed by what
+    /// the agent did within the next three calls — an rtok `read` of the path, a native
+    /// `Read` of it, or neither (here: the path comes four calls too late).
+    #[cfg(feature = "read")]
+    #[test]
+    fn read_deny_counts_denies_and_what_followed() {
+        use crate::plugins::read::hook::REASON;
+        let dir = tempfile_dir();
+        let deny = format!("PreToolUse:Read hook error: {REASON}");
+        let call = |id: &str, name: &str, input: Value| json!({"type":"assistant","message":{"id":format!("m{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]}});
+        let result = |id: &str, body: &str| json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":body}]}});
+        let lines = [
+            call("t1", "Read", json!({"file_path":"src/a.rs"})),
+            result("t1", &deny),
+            call("t2", "mcp__rtok__read", json!({"path":"/proj/src/a.rs"})),
+            result("t2", "body"),
+            call("t3", "Read", json!({"file_path":"src/b.rs"})),
+            result("t3", &deny),
+            call("t4", "Read", json!({"file_path":"src/b.rs","limit":50})),
+            result("t4", "body"),
+            call("t5", "Read", json!({"file_path":"src/c.rs"})),
+            result("t5", &deny),
+            call("t6", "Bash", json!({"command":"ls"})),
+            call("t7", "Bash", json!({"command":"ls"})),
+            call("t8", "Bash", json!({"command":"ls"})),
+            call("t9", "mcp__rtok__read", json!({"path":"src/c.rs"})),
+            result("t9", "body"),
+            call("t10", "Read", json!({"file_path":"src/d.rs"})),
+            result("t10", "fine"),
+        ];
+        let r = write_and_collect(&dir, "deny.jsonl", &lines);
+        let d = &r.read_deny;
+        let tokens = est_tokens(deny.len() as u64);
+        assert_eq!(
+            (d.calls, d.tokens, d.then_mcp, d.then_native),
+            (3, 3 * tokens, 1, 1)
+        );
+        let table = r.to_table();
+        assert!(
+            table.contains(&format!(
+                "read deny calls 3  tokens {}  then rtok read 1  then native Read 1",
+                3 * tokens
+            )),
+            "{table}"
+        );
+        fs::remove_dir_all(&dir).ok();
+        let dir = tempfile_dir();
+        let none = write_and_collect(&dir, "empty.jsonl", &[]);
+        assert!(!none.to_table().contains("read deny"));
+        assert!(!serde_json::to_string(&none).unwrap().contains("read_deny"));
         fs::remove_dir_all(&dir).ok();
     }
 

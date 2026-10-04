@@ -9,7 +9,8 @@
 //! (`output`/`stdout` → `tool_response`) so guard/read caches populate.
 //! [`crate::hooks::types::HookInput::adapt_cursor`] performs that map when
 //! `[hook] host` is `cursor` (also `--host cursor`).
-//! Cursor `hooks.json` is `{version, hooks.before|afterShellExecution[].command}`.
+//! Cursor `hooks.json` is `{version, hooks.<event>[].command}`; the events come from
+//! [`super::hook_events`] (T390).
 
 use std::path::{Path, PathBuf};
 
@@ -17,6 +18,7 @@ use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
 use serde_json::{Value, json};
 
+use super::hook_events;
 use super::plugin::HostPlugin;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
@@ -120,16 +122,20 @@ impl Agent for Cursor {
     }
 }
 
+/// The installer's rtok events, one per table row; several host events may share one
+/// (`afterShellExecution` and `postToolUse` both run `PostToolUse`).
+fn rtok_events() -> impl Iterator<Item = &'static str> {
+    hook_events::installed("cursor").map(|(_, rtok_event)| rtok_event)
+}
+
+#[cfg(test)]
 fn pre_cmd() -> String {
     hook_cmd(&super::rtok_hook_bin(), "PreToolUse", None)
 }
 
+#[cfg(test)]
 fn post_cmd() -> String {
     hook_cmd(&super::rtok_hook_bin(), "PostToolUse", None)
-}
-
-fn compact_cmd() -> String {
-    hook_cmd(&super::rtok_hook_bin(), "PreCompact", None)
 }
 
 /// T250.3: a bare `rtok` off Windows resolves at hook time ([`super::hook_resolver`]). Cursor
@@ -237,14 +243,10 @@ pub fn offer_plugin(cfg: &Config, remove: bool) -> Result<String> {
 fn insert_ours(root: &mut Value) -> String {
     let hooks = object_at(root, "hooks");
     let mut added = Vec::new();
-    let pre = pre_cmd();
-    let post = post_cmd();
-    let compact = compact_cmd();
-    for (event, cmd) in [
-        ("beforeShellExecution", pre.as_str()),
-        ("afterShellExecution", post.as_str()),
-        ("preCompact", compact.as_str()),
-    ] {
+    let bin = super::rtok_hook_bin();
+    for (event, rtok_event) in hook_events::installed("cursor") {
+        let cmd = hook_cmd(&bin, rtok_event, None);
+        let cmd = cmd.as_str();
         let arr = array_at(hooks, event);
         // T242.5: an rtok hook written by another binary path is rewritten in its slot.
         let mut found = false;
@@ -275,11 +277,7 @@ fn insert_ours(root: &mut Value) -> String {
 /// `{command}` for the rtok event this Cursor event runs — goes; an edited one is asked about.
 fn strip_ours(apply: &Apply, path: &Path, root: &mut Value) -> String {
     let (mut removed, mut kept) = (Vec::new(), Vec::new());
-    for (event, rtok_event) in [
-        ("beforeShellExecution", "PreToolUse"),
-        ("afterShellExecution", "PostToolUse"),
-        ("preCompact", "PreCompact"),
-    ] {
+    for (event, rtok_event) in hook_events::installed("cursor") {
         let Some(arr) = root
             .pointer_mut(&format!("/hooks/{event}"))
             .and_then(Value::as_array_mut)
@@ -318,7 +316,7 @@ fn is_ours(entry: &Value) -> bool {
     };
     // The events `insert_ours` writes (`beforeShellExecution` etc. are the
     // Cursor-side names; these are the `rtok hook <event>` spellings).
-    for event in ["PreToolUse", "PostToolUse", "PreCompact"] {
+    for event in rtok_events() {
         let suffix = format!(" hook {event} --host cursor");
         if let Some(bin) = cmd.strip_suffix(&suffix)
             && super::is_rtok_bin(super::unquote_bin(bin))
@@ -327,9 +325,7 @@ fn is_ours(entry: &Value) -> bool {
         }
     }
     // The T250.3 resolver, whose `exec rtok <args>;` only an rtok entry carries.
-    ["PreToolUse", "PostToolUse", "PreCompact"]
-        .iter()
-        .any(|event| cmd.contains(&format!("exec rtok hook {event} --host cursor;")))
+    rtok_events().any(|event| cmd.contains(&format!("exec rtok hook {event} --host cursor;")))
 }
 
 #[cfg(test)]
@@ -492,7 +488,9 @@ mod tests {
         assert!(raw.contains("\"version\""));
         assert!(raw.contains(&json!(pre_cmd()).to_string()));
         assert!(raw.contains(&json!(post_cmd()).to_string()));
-        assert!(raw.contains(&json!(compact_cmd()).to_string()));
+        assert!(raw.contains(
+            &json!(hook_cmd(&super::super::rtok_hook_bin(), "PreCompact", None)).to_string()
+        ));
         assert!(raw.contains("afterShellExecution"));
         assert!(raw.contains("preCompact"));
         let _ = fs::remove_dir_all(dir);
@@ -582,6 +580,43 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// T390: the installer writes exactly the table's installer rows — `beforeSubmitPrompt` and
+    /// `sessionEnd` among them — and a repeat install or a remove leaves nothing of ours.
+    #[test]
+    fn installer_writes_the_table_events_and_remove_strips_them() {
+        let dir = tmp("table-events");
+        let path = dir.join("hooks.json");
+        let c = cfg(path.clone(), false);
+        run(&c, false).unwrap();
+        let root: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let mut written: Vec<&str> = root["hooks"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut want: Vec<&str> = hook_events::installed("cursor").map(|(e, _)| e).collect();
+        written.sort_unstable();
+        want.sort_unstable();
+        assert_eq!(written, want, "{root}");
+        for (event, rtok_event) in [
+            ("beforeSubmitPrompt", "UserPromptSubmit"),
+            ("sessionEnd", "SessionEnd"),
+        ] {
+            assert_eq!(
+                root["hooks"][event][0]["command"],
+                hook_cmd(&super::super::rtok_hook_bin(), rtok_event, None),
+                "{event}"
+            );
+        }
+        assert_eq!(run(&c, false).unwrap(), NO_CHANGES);
+        let report = run(&c, true).unwrap();
+        assert!(report.contains("- sessionEnd"), "{report}");
+        assert!(report.contains("- beforeSubmitPrompt"), "{report}");
+        assert!(!fs::read_to_string(&path).unwrap().contains("rtok hook"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn pre_compact_writes_a_checkpoint_note() {
         let dir = tmp("precompact");
@@ -633,14 +668,9 @@ mod tests {
     }
 
     /// Each Cursor event in `plugins/cursor/hooks/hooks.json` → the rtok event it runs.
-    const PLUGIN_EVENTS: [(&str, &str); 6] = [
-        ("beforeShellExecution", "PreToolUse"),
-        ("afterShellExecution", "PostToolUse"),
-        ("sessionStart", "SessionStart"),
-        ("preCompact", "PreCompact"),
-        ("afterMCPExecution", "AfterMCPExecution"),
-        ("postToolUse", "PostToolUse"),
-    ];
+    fn plugin_events() -> impl Iterator<Item = (&'static str, &'static str)> {
+        hook_events::for_host("cursor").map(|e| (e.host_event, e.rtok_event))
+    }
 
     /// T250.3: the plugin's hook lines are the installer's own resolver, sessionStart alone
     /// carrying the missing-rtok note — one source for both surfaces.
@@ -648,7 +678,7 @@ mod tests {
     #[test]
     fn plugin_hooks_are_the_installer_resolver() {
         let doc: Value = serde_json::from_slice(&plugin_hooks()).unwrap();
-        for (event, rtok_event) in PLUGIN_EVENTS {
+        for (event, rtok_event) in plugin_events() {
             let note = (event == "sessionStart").then_some(MISSING_RTOK_NOTE);
             assert_eq!(
                 doc["hooks"][event][0]["command"],
@@ -672,7 +702,7 @@ mod tests {
     fn windows_copy_writes_back_the_bare_lines() {
         let fixed = windows_copy(Path::new("hooks/hooks.json"), plugin_hooks());
         let doc: Value = serde_json::from_slice(&fixed).unwrap();
-        for (event, rtok_event) in PLUGIN_EVENTS {
+        for (event, rtok_event) in plugin_events() {
             assert_eq!(
                 doc["hooks"][event][0]["command"],
                 format!("rtok hook {rtok_event} --host cursor"),

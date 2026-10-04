@@ -76,7 +76,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T380 | todo | P2 | 3 | 30% | |
 | T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
-| T383 | todo | P1 | 2 | 40% | |
 | T384 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.2 | todo | P2 | 3 | 20% | |
@@ -92,10 +91,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T387 | todo | P2 | 3 | 40% | |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
-| T390 | todo | P2 | 3 | 40% | |
+| T390.1 | todo | P3 | 2 | 0% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -106,6 +104,11 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
 | T400 | todo | P2 | 2 | 40% | |
+| T401 | todo | P3 | 4 | 20% | |
+| T402 | todo | P3 | 2 | 20% | |
+| T403 | todo | P3 | 3 | 10% | |
+| T404 | todo | P3 | 3 | 10% | |
+| T405 | todo | P3 | 3 | 10% | |
 
 
 
@@ -1659,14 +1662,6 @@ Done means:
 
 Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
 
-### T383. Let a ranged native `Read` through the read hook, and measure every deny
-
-From `research.md` §29 (T355). The hook denies a native `Read` unless `limit <= GATE_MAX_LINES` (`src/plugins/read/hook.rs`, `GATE_MAX_LINES = 5`). Over 77 sessions it denied 984 calls; 687 (70 %) were already ranged, and the net is about −780 tokens per deny plus one or two turns. T355 left the narrowing as "separate task, not approved yet"; this is that task.
-
-Done means: a `Read` with `limit` up to 300 lines passes; an unranged read and a wider range are still denied with today's reason. Every deny writes a `Measurement` row (`plugin: "read"`, kind `deny`) with the denied range and what the agent did next, so `rtok stats --plugin read` shows the net per deny from data instead of the §29 estimate. The 300-line limit is one config key with a `default.toml` and `docs/config.md` row.
-
-Check: hook unit tests for limit 5, 300, 301 and none; a store fixture shows the `deny` rows in `rtok stats --plugin read`; `rtok config validate` accepts the key; `just check`.
-
 ### T384. The read deny names the exact MCP tool so no ToolSearch turn follows
 
 From `research.md` §29.2: 541 of 984 denies (55 %) were followed by a `ToolSearch` before the first rtok MCP call, because the deny text says `rtok read` while the host keeps rtok's schemas deferred. That is one more turn per deny.
@@ -1778,14 +1773,6 @@ Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just
 
 Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
 
-### T387. Re-land T52.5 type-position references (lost to an auto-revert)
-
-`done.md` records T52.5 as done (refs 96/105, recall 0.914), but its tags query `(type_identifier) @name @reference.type` is not in `src/plugins/read/outline.rs`: commit `c217b8f2` ("ci: auto-revert ef6c6ff") removed it on 2026-09-17. `tests/graph_truth.rs` still guards the old floor (`ref_recall >= 0.30`) and `research.md` §2 still shows 0.351 / 0.305.
-
-Done means: the type-position and scoped-call reference queries from `cfbee166` are back (adapted to today's code), `graph_truth` measures the new reference recall, its floor rises to just under the measured value, and `research.md` §2 and `src/plugins/graph/PLAN.md` "Known misses" are updated. The T52.5 entry in `done.md` gets a dated note that it was reverted and re-landed under T387.
-
-Check: `tests/graph_truth.rs` passes with the raised floor; the new recall is in §2 with a date; `just check`.
-
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
@@ -1802,13 +1789,13 @@ Done means: a `[stats.prices."claude-fable-5-1"]` row (and any other current Cla
 
 Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/config.md` lists the row; `just check`.
 
-### T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest
+### T390.1. Move the remaining installer event lists onto the hook-event table
 
-From `research.md` §27.1 and §27.3 (T291): Cursor's plugin manifest (`plugins/cursor/hooks/hooks.json`) registers only `beforeShellExecution`, `afterShellExecution`, `sessionStart`, `preCompact`, `afterMCPExecution` and `postToolUse`, although `src/hooks/types.rs` already maps `beforeSubmitPrompt` and `sessionEnd`. `done.md` claims `beforeSubmitPrompt` was registered; the file never contained it. So per-turn memory recall and session-end checkpoints do not run on Cursor.
+T390 put Cursor, Copilot and Gemini on `src/agents/hook_events.rs` and drift-tests every `plugins/*/hooks/hooks.json` against it. These installers still keep their own event lists: ZCode (`ZCODE_ENTRIES`), Devin, Kimi, Command Code (`EVENTS`), Cline (`EVENTS`, file names) and Claude (`ENTRIES`, read from its own manifest). Command Code and Cline ship script hooks (`plugins/*/hooks/rtok-hook`), not a `hooks.json`.
 
-Done means: Cursor's manifest and installer carry `beforeSubmitPrompt` and `sessionEnd`, failing open. Skip `subagentStart` (its Cursor output schema has no context field, §23). A drift test compares every `plugins/*/hooks/hooks.json` and every installer's event list against one event table in code. The T291–T294 cards that exist only on branch `plan-memory` (commit `d706e3cb`), and decision D35, are copied into `done.md` and the decision table, since that work shipped.
+Done means: each of those installers reads its events from the table (rows added per host), and the drift test also covers the script-hook plugins, so no host has an event list outside the table.
 
-Check: the drift test fails on a manifest missing an event; a Cursor hook fixture for both new events; `just check`.
+Check: the drift test fails when any of those manifests or installer lists disagrees with the table; `just check`.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
@@ -1898,7 +1885,7 @@ Check: dated sources in §10.1, §23 and §26.
 
 The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
 
-- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (see T387).
+- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
 - §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
 - §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
 - §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
@@ -1906,6 +1893,46 @@ The research sweep (2026-10-04) found statements that shipped work made false. F
 - `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
 
 Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
+
+### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
+
+Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
+
+Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
+
+Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
+
+### T402. Measure how much tool output a structured schema would shrink
+
+Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. No number says how much tool output is prose a schema could replace.
+
+Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
+
+Check: the dated §16 row; the build task filed or the card closed with its number.
+
+### T403. A/B a path and identifier dictionary in proxy requests
+
+Promoted from I-110 (Ivan, 2026-10-04). From `research.md` §16.3 #8: repeated long paths and identifiers could be replaced with short codes plus one legend per request. It may cost answer quality and must not break the prompt cache.
+
+Done means: first measure, from stored requests, how many bytes repeated paths and identifiers take (§16 row). If above 1 % of input, build it behind a proxy flag (off by default) with a byte-stable legend (cache-safe) and run an A/B on the bench set with a pass-rate gate; the flag turns on only if pass rate holds and tokens fall.
+
+Check: the dated measurement row; if built, the A/B row and a byte-stability test for the legend.
+
+### T404. Evaluate a local draft model that the cloud model only verifies
+
+Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
+
+Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
+
+Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
+
+### T405. Task-board extras for the agent task tools
+
+Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F19, F20: a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20).
+
+Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
+
+Check: each sub-task carries its own Check.
 
 ## Reference
 
@@ -1950,6 +1977,7 @@ Claim a `todo` row before work: set Status to `in progress` and Agent to `Provid
 | D32 | **An optional resident hook process (T178).** `rtok hook --serve` answers `rtok-hook`, a std-only client, over a Unix socket (Windows: a named pipe); `rtok demon` supervises it as the service `hook`, or the hook starts it detached, rate-limited by a lock file. This supersedes D1's "no daemon on the hook path" and D22's "nothing in it is on the hook path" for the `hook` service only. Without it everything works as today: the client runs `rtok hook` when the resident is absent or refuses (another version or config environment), and prints `{}` when it does not answer within 50 ms. | Process start is ~11 ms of the ~14 ms Claude Code waits per hook (research.md §19); a fresh process cannot meet the 10 ms budget. |
 | D33 | **rtok's MCP lives in each agent's own config, not in its plugins (T275, amends D21 for MCP).** Install and update always write the config entry `rtok`; only `remove` takes it out, and a plugin no longer suppresses or strips it. Where an agent would show a plugin server next to the config entry (Claude Code and Desktop, Cursor, Copilot, Codex, VS Code, ZCode, Kimi, Grok; `research.md` §25), the rtok plugin ships no MCP server and keeps its hooks, skills and agents. Gemini keeps both, since settings.json wins over an extension's same-name server. Same-name entries across one agent's files are left to the agent to merge. Hooks keep D21 unchanged. |
 | D34 | **rtok gives every agent session its own id and owns its worktrees the same way on every host (T281–T290, creator request 2026-09-27).** The agent id is a random UUIDv4 issued by rtok per host session (sub-agents get their own, with a parent), shown as its first 8 hex chars; any unique prefix of 4+ chars is accepted. Not UUIDv7: its leading hex is a timestamp, so agents started within the same minute would share the short id (found 2026-09-27; `started_at` keeps the order). The host's session id is kept alongside but never used as the identity: it collides across hosts and is missing on several (`research.md` §26). A worktree is bound to one agent by the git lock reason `<owner> \| <task-id> \| <date> \| agent <uuid>` (the old 3-field form stays valid) and a store row; the lock is the source of truth. Every host gets the same root, naming, lock, list, remove and gc: Claude Code redirects its own worktrees through `WorktreeCreate`/`WorktreeRemove` (T159), hosts with a post-create script adopt theirs (T289), all others use the skill and the MCP tools. Messages between agents and from the user are local, capped, framed as information from another agent and never as instructions. |
+| D35 | **Smart memory is on by default for every agent, from one event module (T291–T293, creator 2026-09-27).** `prompt_recall` (5), `startup_recall`, `handoff` and `spawn_brief` default on. This overrides the T131 gate that would have left `spawn_brief` off until a measured net saving. Bodies stay out of the always-on prompt; the index names `mem_get`. One module under `src/agents/` generates every host manifest from that host's event-name map; a host with no equivalent event is MCP-only for it. Hook path stays sync, ≤10 ms, fail-open, no LLM and no vector read (D13). SQLite stays the only store (D8). A later private-repo sync is outside this repo; T294 only makes an export row able to carry a tombstone. Evidence: `research.md` §27. T390 shipped the table (`src/agents/hook_events.rs`) and a manifest drift test in place of generating the manifests. |
 | D36 | **Agent junk deletes only what has evidence; history and credentials are never cleared by default (T338, T339).** `rtok agents junk clear` deletes a path only when `research.md` §22 documents it (official docs or source), when it carries a valid `CACHEDIR.TAG`, or when the user names it in `[agents.junk] extra`; platform cache roots and Electron subfolders without a §22 row are listed read-only with their size, never cleared. Credentials and token files are never read for expiry or deleted. Session history and snapshots are `never` for default and `--include review` runs; `--kind sessions` removes a whole session unit only on hosts whose §22 row documents it and its index; `stale_session_days` defaults to 30. Creator approved (C for T338, C for T339, 30 days) on 2026-10-03. | `research.md` §22.1, §22.2: hosts refresh tokens and prune their own sessions (Claude Code, Gemini: 30 days), sessions share trees with memory and indexes, and undocumented paths (Cursor) sit next to chat history. |
 
 ### Architecture
