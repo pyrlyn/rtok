@@ -8233,6 +8233,19 @@ Execution, PR 2 (2026-10-03, Claude Code / sonnet-5): on top of T285 PR 2. (1) `
 
 Result (2026-10-03, Claude Code / sonnet-5): PR 1 is #482 (the CLI); PR 2 is this one. MCP `worktree_remove` removes the linked agent's own clean worktree (with its branch once merged), refuses a dirty or unmerged one (`keep_branch` removes an unmerged clean one and keeps the branch), another agent's lock and the cwd, never forces, and releases the claim. The CLI and MCP share `remove::for_agent`; the claim-release warning on the CLI is now unstyled, like `claim::remember`'s. About 57 more description tokens in the MCP listing (18 to 19 tools). Stacks on #676 (T285 PR 2).
 
+### T412. `rtok worktree remove`: report a removal whose branch delete failed, and test the refusal edges
+
+Creator request 2026-10-04: check that `rtok worktree remove` / `gc` are as safe as `git worktree remove` + `git branch -d`, catch errors, and handle unmerged work. A live run over a scratch repository (merged, squash-merged, squash then edited, unmerged, dirty, untracked, ignored-only, detached, foreign-locked, fetch failing) matched every refusal, with exit 1 on each. One defect: when `git worktree remove` succeeds and `git branch -D` then fails (the branch is checked out in a second worktree), `detach` returns the error, so `remove` prints `Error:` and exits 1 for a worktree that is gone and skips releasing its claim, and `gc` reports `failed, kept`. Nothing is lost (the branch stays); the report is wrong.
+
+Execution plan:
+1. `src/worktree/remove.rs` `detach`: a failed branch delete after a successful removal is an `Ok` note, `removed; branch kept: <git's message>`.
+2. `tests/worktree.rs`: the refusal edges no test covers — a detached HEAD with unmerged commits is refused even with `--keep-branch`; a dirty worktree is refused with `--keep-branch`; `--keep-branch` keeps a merged branch; a worktree whose only extra files are ignored (`target/`) is removed; a branch checked out in a second worktree: the first is removed, exit 0, the note names the kept branch, the claim is released; an unreachable `origin` warns and judges against the local base.
+3. Verify: the new test fails on `main` before step 1 and passes after; `cargo nextest run --test worktree`; `just check`.
+
+Check: the tests above green; `just check`.
+
+Result (2026-10-04, Claude Code / claude-opus-5-5): `detach` reports a branch git refuses to delete as `removed; branch kept: <git's message>`, so `remove` exits 0, releases the claim, and `gc` no longer says `failed, kept` for a removed worktree. New test `remove_guards_commits_and_reports_a_branch_it_could_not_delete` covers the edges listed in step 2; it failed on `main` at the second-worktree case and passes with the fix. Note for manual cleanup: `git branch -d` refuses squash-merged branches, so `--keep-branch` plus `git branch -d` leaves them behind; plain `rtok worktree remove` deletes them because its merged check is squash-aware.
+
 ### T287. Messages between agents and the user: `rtok agents send`, `rtok agents inbox`, MCP `agent_send`, `agent_inbox`
 
 Depends on T282, T283. The creator wants to reach any running agent by its id from the terminal, and agents to reach each other over MCP.
