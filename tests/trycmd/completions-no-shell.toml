@@ -1,0 +1,11 @@
+bin.name = "rtok"
+args = "completions"
+status.code = 1
+
+# trycmd gives the child no terminal, so the picker is refused instead of waiting for input.
+[env]
+inherit = false
+
+[env.add]
+HOME = "target/tmp/t408-completions-no-shell"
+RTOK_HOME = "target/tmp/t408-completions-no-shell"

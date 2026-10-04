@@ -73,9 +73,16 @@ Shell completions and the man page are generated from the same clap tree as
 rtok completions bash > ~/.bash_completion.d/rtok   # or zsh, fish, powershell, elvish
 rtok completions clink > %LOCALAPPDATA%\clink\rtok.lua  # cmd.exe through Clink
 rtok completions --install                           # to $SHELL's own directory; --uninstall undoes it
+rtok completions                                     # in a terminal: pick the shells, checked = installed
+rtok completions --list                              # shell, installed yes/no, file; for scripts
 rtok man | man -l -                                  # or save as manpath/rtok.1
 rtok man --dir ~/.local/share/man/man1               # rtok.1 plus rtok-<command>.1 for every subcommand
 ```
+
+The picker lists every shell with its completions pre-checked when they are installed.
+Space toggles, Enter installs the newly checked shells and removes the unchecked ones,
+Esc or Ctrl-C changes nothing. Without a terminal, `rtok completions` with no shell fails
+instead of waiting; use `--list` to read the state.
 
 Release archives also carry them pre-built in `share/`: `share/man/man1/*.1` and
 `share/completions/` (`rtok.bash`, `_rtok`, `rtok.fish`, `rtok.ps1`, `rtok.elv`, `rtok.lua`).

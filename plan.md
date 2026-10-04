@@ -107,7 +107,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
-| T408 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5-5 |
 
 
 
@@ -1916,22 +1915,6 @@ Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F
 Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
 
 Check: each sub-task carries its own Check.
-
-### T408. Interactive shell picker for rtok completions
-
-Ivan, 2026-10-04: `rtok completions` should show a select of the shells it supports, marking which already have completions installed and which do not. Selecting an item installs it; deselecting removes it. Docs and tests included.
-
-Done means:
-
-- `rtok completions` with no shell and no flags, when stdin and stdout are terminals, opens a multi-select of every supported shell. A shell is pre-checked when its completions are installed now, found through the same paths `--install` and `--uninstall` use. On confirm it installs the newly checked shells, uninstalls the unchecked shells that were installed, leaves the rest untouched, and prints one line per change (the lines `--install`/`--uninstall` print) or a "no changes" line. Esc or Ctrl-C changes nothing and exits 0.
-- Without a terminal and without a shell or flag it fails at once with a message naming `rtok completions <shell>` and `--install`; it never waits for input. `rtok completions <shell>`, `--install` and `--uninstall` stay byte-identical.
-- `rtok completions --list` prints one line per shell: name, installed yes or no, and the path, so the state is scriptable.
-- The prompt crate is linked only for this command; a prompt failure falls back to the error above and never touches a file.
-- Docs: `README.md`, the clap help and the man page describe the picker and `--list`.
-
-Check: unit tests for the status helper (temp `Places`), the planner (install-only, uninstall-only, mixed, no-op) and the apply step with a fake prompt (files appear and vanish under a temp `Places`, cancel changes nothing); trycmd cases for `--list` and the no-terminal error; the existing completions goldens unchanged; `just check`.
-
-Plan: (1) `install.rs`: `Places::script` stays the one path owner; add `status(shell, places)` (installed when the script file exists, as `uninstall` removes exactly that file) and `all_status`. (2) New `src/completions/picker.rs`: pure `plan(installed, chosen) -> Changes`, `Prompt` trait with `inquire::MultiSelect` as the real implementation (`default-features = false`, `crossterm` only: the version `rtok tui` already links), and `run(places, cmd, prompt)` applying the plan and returning the report lines. (3) `cli.rs`: a `--list` flag, `shell` no longer required by clap; the handler picks list, picker (both streams terminals) or a plain error. (4) Tests as in Check; `ALLOW_KEYS` gets `completions.list`. (5) README, `tests/trycmd/README.md`, `toolchain.md`, `rust.md` row for `inquire`.
 
 ## Reference
 

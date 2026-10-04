@@ -225,17 +225,25 @@ enum Cmd {
         #[command(subcommand)]
         action: ArchiveCmd,
     },
-    /// Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
+    /// Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
+    ///
+    /// With a shell, prints its script. With `--install` or `--uninstall`, writes or removes the
+    /// script in that shell's per-user completions directory (default shell: `$SHELL`). With
+    /// nothing, in a terminal, opens a list of the shells: the ones with completions installed
+    /// are checked; checking one installs it, unchecking removes it. `--list` shows the same
+    /// state without a terminal.
     Completions {
         /// Shell to complete for (with `--install`/`--uninstall`: default `$SHELL`)
-        #[arg(required_unless_present_any = ["install", "uninstall"])]
         shell: Option<crate::completions::Shell>,
         /// Write the script to the shell's per-user completions directory
-        #[arg(long, conflicts_with = "uninstall")]
+        #[arg(long, conflicts_with_all = ["uninstall", "list"])]
         install: bool,
         /// Remove what `--install` wrote
-        #[arg(long)]
+        #[arg(long, conflicts_with = "list")]
         uninstall: bool,
+        /// Print each shell, whether its completions are installed (yes/no) and the file
+        #[arg(long, conflicts_with = "shell")]
+        list: bool,
     },
     /// Print the man page (roff), or write every page with `--dir`
     Man {
@@ -1875,9 +1883,14 @@ pub fn run() -> Result<()> {
             shell,
             install,
             uninstall,
+            list,
         } => {
             use crate::completions::install::{self as inst, Places};
-            let lines = if install || uninstall {
+            use crate::completions::picker;
+            use std::io::IsTerminal;
+            let lines = if list {
+                picker::list(&Places::from_env()?)
+            } else if install || uninstall {
                 let places = Places::from_env()?;
                 let shell = places.pick(shell)?;
                 if install {
@@ -1888,8 +1901,14 @@ pub fn run() -> Result<()> {
             } else if let Some(shell) = shell {
                 crate::completions::generate(shell, Cli::command(), &mut io::stdout());
                 Vec::new()
+            } else if io::stdin().is_terminal() && io::stdout().is_terminal() {
+                picker::run(&Places::from_env()?, Cli::command(), picker::ask_terminal)?
             } else {
-                unreachable!("clap requires a shell without --install/--uninstall")
+                // Never wait for input that cannot come (pipes, CI, agents).
+                anyhow::bail!(
+                    "no shell named and no terminal for the picker; run `rtok completions <shell>` \
+                     to print a script, `rtok completions --install` to write one, or `--list` for the state"
+                )
             };
             for line in lines {
                 println!("{line}");
