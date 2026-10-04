@@ -9,5 +9,5 @@ import { hasIcon } from "./Icon";
 // The sidebar looks an icon up by page id and silently renders an empty slot when the SVG is
 // missing, so a new page would ship without one unless this fails (T407).
 test("every page has a sidebar icon", () => {
-    expect(PAGES.map((p) => p.id).filter((id) => !hasIcon(id))).toEqual([]);
+  expect(PAGES.map((p) => p.id).filter((id) => !hasIcon(id))).toEqual([]);
 });
