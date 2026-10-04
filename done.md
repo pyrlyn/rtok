@@ -8159,6 +8159,14 @@ Execution, PR 2 (2026-10-03, Claude Code / sonnet-5): on top of T286 PR 2. (1) `
 
 Result (2026-10-03, Claude Code / sonnet-5): PR 1 is #472, PR 2 is this one. MCP `agent_send` and `agent_inbox` work for the linked agent only: nothing names the sender or the inbox owner. A message is delivered framed, as the CLI frames it, and read once. Two deviations from the card: `agent_inbox` defaults `unread_only` to true (a limited page of the oldest messages would otherwise be old read ones), and `limit` defaults to 20, at most 100. About 79 more description tokens in the MCP listing. Stacks on #680 (T286 PR 2).
 
+### T406. Isolate trycmd cases from the agent session env
+
+From an rtok agent shell, `cargo test --test cli_trycmd` failed cases 6 and 10 of `tests/trycmd/agents-messages.trycmd`: the session's `RTOK_AGENT_ID` (exported through `CLAUDE_ENV_FILE`, T283) reached the `rtok` binary under test, so `agents inbox` read the caller's queue instead of failing. trycmd 1.2.1 has no harness-wide env removal, its `TestCases::env` default overrides a case's own `[env.add]`, and `unsafe_code = "forbid"` rules out `remove_var`.
+
+Done: `tests/cli_trycmd.rs` lists the session env (`SESSION_ENV`: `RTOK_AGENT_ID`, `RTOK_CONFIG`, `CLAUDE_ENV_FILE`); when any of it is set, the `cli` test reruns itself in a child of the test binary with those vars removed and asserts the child passed. A case that sets one of them still gets its own value. `CLAUDE_ENV_FILE` is in the list because `hook.toml` runs `rtok hook`, which appends to that file.
+
+Check: `cargo test --test cli_trycmd` with `RTOK_AGENT_ID` set passes; `just check` green (2392 tests).
+
 ### T284. See what every agent is doing: ids, worktree and activity in `rtok agents sessions`, `rtok agents show`
 
 Depends on T282, T283. `rtok agents sessions` (`src/cli.rs:579`) already lists sessions with host, model and tokens; it gains the agent id, where the agent works and what it is doing, instead of a second listing command (no duplicated logic).
