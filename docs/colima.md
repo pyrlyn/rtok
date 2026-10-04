@@ -1,7 +1,7 @@
 # Colima (containers without Docker Desktop)
 
 Agents and local scripts should use this **mise-pinned** stack instead of Docker Desktop.
-It is ~Docker-compatible (Docker Engine API via Colima). It is **not** Podman.
+It is Docker-compatible (the Docker Engine API, served by Colima). It is **not** Podman.
 
 ## Stack
 
