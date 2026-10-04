@@ -76,7 +76,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T380 | todo | P2 | 3 | 30% | |
 | T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
-| T384 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.2 | todo | P2 | 3 | 20% | |
 | T385.3 | todo | P1 | 3 | 20% | |
@@ -1661,14 +1660,6 @@ Done means:
 - Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
 
 Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
-
-### T384. The read deny names the exact MCP tool so no ToolSearch turn follows
-
-From `research.md` §29.2: 541 of 984 denies (55 %) were followed by a `ToolSearch` before the first rtok MCP call, because the deny text says `rtok read` while the host keeps rtok's schemas deferred. That is one more turn per deny.
-
-Done means: the deny reason carries the host's exact tool name (`mcp__rtok__read` on Claude Code, the matching name per host) and, where the host defers MCP schemas, the one-line select hint that loads it. If a host setting can keep `read` non-deferred, `rtok doctor` names it. Measure the ToolSearch-after-deny share again over a dated window and record it in §29.
-
-Check: a unit test per host for the deny text; the §29 share re-measured with a date; `just check`.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 

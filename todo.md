@@ -70,7 +70,6 @@
 - T380. `rtok-` prefix on every shipped skill, and the prefix as the third ownership mark
 - T381. `rtok config init` must not freeze today's defaults into the user's file
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
-- T384. The read deny names the exact MCP tool so no ToolSearch turn follows
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.2. Per-lane policy table
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`

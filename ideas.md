@@ -140,6 +140,7 @@ that v0.1 does not schedule.
 | I-110 | Path and identifier dictionary (`research.md` §16.3 #8) | `proxy` / `read` | **promoted T403** — Replace repeated long paths and identifiers with short codes plus one legend per request. | Needs an A/B: short codes may cost answer quality and break the prompt cache. |
 | I-111 | Speculative local draft (`research.md` §16.3 #10) | `proxy` | **promoted T404** — A local model drafts output that the cloud model only verifies, cutting cloud output tokens. | Needs a local model and a quality gate; output tokens are the larger cost on Fable (§2). |
 | I-112 | beads, Task Master, Claude Code task list (`research.md` §28.4 F8, F9, F11, F19, F20) | `project` (I-103) | **promoted T405** — Extras for the I-103 task tools: a `task` field on agent messages (F8); conflict and parallel markers (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` (F19); a task board page via `dashboard_page` (F20). | Only after I-103 exists and the §28.5 decisions are made. |
+| I-113 | Mark rtok `read` always-loaded in `tools/list` (`research.md` §29.4) | `mcp` / `read` | Claude Code loads an MCP tool up front when its `_meta` carries `"anthropic/alwaysLoad": true`, so rtok `read` would need no `ToolSearch` turn after a deny and no select hint, at the price of that one tool's schema in every request. Needs a `meta` field on the SDK's `ToolDef` and a version check on the host. | After the T384 baseline is re-measured post-release: worth it only if the `ToolSearch` share stays high. |
 
 ---
 

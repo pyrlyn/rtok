@@ -25,8 +25,11 @@ Five MCP tools instead of seventy-eight, and no per-turn banner.
   diff is below `delta_max_ratio` of the file (default 0.6). Measured 2026-09-18
   (`rtok stats --since 90d`, 959 sessions): 593 such re-reads, **7.3 %** of Read bytes.
 - PreToolUse(Read) advice: native `Read` of a file > 32 K that was not edited in the last
-  5 tool calls is denied with "use rtok read; before Edit run native Read(limit=1)". After an
-  Edit of a file already in the read cache, the deny points at `read(mode=diff)` instead.
+  5 tool calls is denied with "use rtok read; before Edit run native Read(limit=1)", where
+  `rtok read` is the host's exact MCP tool name (T384: `mcp__rtok__read` plus the
+  `ToolSearch select:` line that loads it on Claude Code, `mcp_rtok_read` on Gemini CLI; any
+  other host keeps `rtok read`). After an Edit of a file already in the read cache, the deny
+  points at `read(mode=diff)` instead.
   Never for files under 32 K, and never for a native `Read` with `limit` 1..=`range_max_lines`
   (300; T127, T383): the host's `Edit` wants a native `Read` first and an MCP `read` does not
   count, so a ranged Read is the edit gate. Every deny records a `read`/`deny` cost row.

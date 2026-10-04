@@ -183,12 +183,16 @@ impl ReadWholeRow {
 /// reasons (the cost side of the net per deny). `then_mcp` / `then_native`: denies whose
 /// path was read through rtok's MCP `read` / again by a native `Read` within the next
 /// [`DENY_FOLLOW_CALLS`] tool calls; the rest were abandoned or went elsewhere.
+/// `then_toolsearch` (T384): denies followed by a `ToolSearch` before any other `Read` or rtok MCP
+/// call in that window, the extra turn a deny that names the exact tool is meant to remove.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReadDenyRow {
     pub calls: u64,
     pub tokens: u64,
     pub then_mcp: u64,
     pub then_native: u64,
+    #[serde(default)]
+    pub then_toolsearch: u64,
 }
 
 impl ReadDenyRow {
@@ -553,8 +557,8 @@ impl Report {
         if self.read_deny.calls > 0 {
             let d = &self.read_deny;
             s.push_str(&format!(
-                "read deny calls {}  tokens {}  then rtok read {}  then native Read {}\n",
-                d.calls, d.tokens, d.then_mcp, d.then_native
+                "read deny calls {}  tokens {}  then rtok read {}  then native Read {}  then ToolSearch {}\n",
+                d.calls, d.tokens, d.then_mcp, d.then_native, d.then_toolsearch
             ));
         }
         if !self.repeat_reads.is_empty() {
@@ -1489,16 +1493,21 @@ fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
         }
         row.calls += 1;
         row.tokens += est_tokens(text.len() as u64);
+        let window = parsed.tool_uses[i + 1..].iter().take(DENY_FOLLOW_CALLS);
+        if window
+            .clone()
+            .take_while(|n| n.name != "Read" && mcp_group(&n.name) != Some("rtok"))
+            .any(|n| n.name == "ToolSearch")
+        {
+            row.then_toolsearch += 1;
+        }
         let Some(path) = tool_path(&u.input) else {
             continue;
         };
-        let next = parsed.tool_uses[i + 1..]
-            .iter()
-            .take(DENY_FOLLOW_CALLS)
-            .find(|n| {
-                (n.name == "Read" || is_rtok_mcp_read(&n.name))
-                    && tool_path(&n.input).is_some_and(|p| same_path(p, path))
-            });
+        let next = window.into_iter().find(|n| {
+            (n.name == "Read" || is_rtok_mcp_read(&n.name))
+                && tool_path(&n.input).is_some_and(|p| same_path(p, path))
+        });
         match next {
             Some(n) if n.name == "Read" => row.then_native += 1,
             Some(_) => row.then_mcp += 1,
@@ -1538,8 +1547,7 @@ fn has_outline(_path: &str) -> bool {
 /// archive/cmd trailer.
 #[cfg(feature = "read")]
 fn has_rtok_marker(content: &str) -> bool {
-    content.contains("use rtok read")
-        || content.contains("file changed since last read")
+    is_read_deny(content)
         || content.contains("unchanged since ")
         || content.starts_with("[archived ")
         || content.contains("[rtok ")
@@ -2317,7 +2325,11 @@ mod tests {
             result("t4", "body"),
             call("t5", "Read", json!({"file_path":"src/c.rs"})),
             result("t5", &deny),
-            call("t6", "Bash", json!({"command":"ls"})),
+            call(
+                "t6",
+                "ToolSearch",
+                json!({"query":"select:mcp__rtok__read"}),
+            ),
             call("t7", "Bash", json!({"command":"ls"})),
             call("t8", "Bash", json!({"command":"ls"})),
             call("t9", "mcp__rtok__read", json!({"path":"src/c.rs"})),
@@ -2329,13 +2341,29 @@ mod tests {
         let d = &r.read_deny;
         let tokens = est_tokens(deny.len() as u64);
         assert_eq!(
-            (d.calls, d.tokens, d.then_mcp, d.then_native),
-            (3, 3 * tokens, 1, 1)
+            (
+                d.calls,
+                d.tokens,
+                d.then_mcp,
+                d.then_native,
+                d.then_toolsearch
+            ),
+            (3, 3 * tokens, 1, 1, 1)
         );
+        // T384: the pre-T384 reason and a Claude Code deny that names the exact tool both count.
+        assert!(is_read_deny(
+            "use rtok read; before Edit run native Read(limit=1) — it satisfies the edit gate"
+        ));
+        assert!(is_read_deny(
+            "file changed since last read; use mcp__rtok__read(mode=diff) vs ab12cd34"
+        ));
+        assert!(has_rtok_marker(&format!(
+            "use mcp__rtok__read (ToolSearch select:mcp__rtok__read loads it); {REASON}"
+        )));
         let table = r.to_table();
         assert!(
             table.contains(&format!(
-                "read deny calls 3  tokens {}  then rtok read 1  then native Read 1",
+                "read deny calls 3  tokens {}  then rtok read 1  then native Read 1  then ToolSearch 1",
                 3 * tokens
             )),
             "{table}"
