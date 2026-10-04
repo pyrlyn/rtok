@@ -107,6 +107,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
+| T409 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5-5 |
 
 
 
@@ -1915,6 +1916,16 @@ Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F
 Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
 
 Check: each sub-task carries its own Check.
+
+### T409. No plan ids in user-visible output
+
+Why: the creator asked to remove task names from the shell output (2026-10-04). `--help`, the man page, the generated completion scripts, `rtok config init` and some runtime messages print internal plan ids (`T70.2`, `D21`, `I-101`, `§16`) that mean nothing to a user.
+
+Done means: no clap doc comment, `about`, arg help, runtime message or `config/default.toml` comment prints a plan id; developer-only traceability moves to plain `//` comments; a guard test renders every `--help`, the man page, every completion script and the config template and fails on a plan-id match; the trycmd goldens match the new text.
+
+Check: `just check`; the guard test in `tests/no_plan_ids.rs`.
+
+Plan: (1) write the guard test first and list what it catches; (2) strip ids from clap doc comments in `src/cli.rs` and other clap structs, moving each id into a `//` line where it still helps a developer; (3) strip ids from runtime messages and `config/default.toml`; (4) regenerate goldens with `TRYCMD=overwrite` and read the diff, restoring `v[..]` wildcards; (5) `just check`.
 
 ## Reference
 
