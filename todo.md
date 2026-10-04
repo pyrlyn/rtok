@@ -56,6 +56,17 @@
 - T348. Investigate: `--agent` means an agent id, a host, or both
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
+- T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
+- T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
+- T370. SessionStart repo map ranked by file-level personalized PageRank
+- T371. Git co-change pairs feed `impact` and the repo map
+- T372. Link tests to sources by naming convention in `affected_from_paths`
+- T373. `rrf_merge` breaks score ties by note id
+- T374. Memory notes linked to files: recall boosted by the files in play
+- T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
+- T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
+- T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
+- T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T380. `rtok-` prefix on every shipped skill, and the prefix as the third ownership mark
 - T381. `rtok config init` must not freeze today's defaults into the user's file
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
