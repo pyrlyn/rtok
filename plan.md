@@ -78,7 +78,20 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T382 | todo | P2 | 2 | 30% | |
 | T383 | todo | P1 | 2 | 40% | |
 | T384 | todo | P2 | 2 | 30% | |
-| T385 | todo | P1 | 5 | 20% | |
+| T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
+| T385.1 | todo | P1 | 3 | 30% | |
+| T385.2 | todo | P2 | 3 | 20% | |
+| T385.3 | todo | P1 | 3 | 20% | |
+| T385.4 | todo | P2 | 3 | 20% | |
+| T385.5 | todo | P2 | 3 | 20% | |
+| T385.6 | todo | P2 | 3 | 20% | |
+| T385.7 | todo | P3 | 4 | 10% | |
+| T385.8 | todo | P2 | 2 | 20% | |
+| T385.9 | todo | P3 | 5 | 10% | |
+| T385.10 | todo | P3 | 4 | 10% | |
+| T385.11 | todo | P3 | 4 | 10% | |
+| T385.12 | todo | P3 | 3 | 20% | |
+| T385.13 | todo | P3 | 2 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
 | T387 | todo | P2 | 3 | 40% | |
 | T388 | todo | P2 | 2 | 40% | |
@@ -1682,7 +1695,87 @@ From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 
 
 Also: a cross-session read-dedup measurement from `calls` (optimization.md §5, "measure first"). Related ideas: I-84, I-85, I-86, I-101, I-102, I-21. The optimization doc's own ids (T250–T259) collide with `done.md`; use T385.x.
 
+Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id order (T385.3, T385.8 and T385.13 are measurements and may run in parallel with the build steps). Boundaries from `docs/batch-flex.md` hold throughout: never convert a live agent turn into a Batch job, never rewrite Batch JSONL, everything lives under `src/proxy/`.
+
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
+
+### T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
+
+optimization.md §2.2–§2.3 L0–L1. Config structs for `[proxy.lanes]` (and the empty `[proxy.batch]`, `[proxy.flex]`, `[proxy.routing]` tables later steps fill), defaults keeping today's bytes. A classifier assigns each request a lane — `agent`, `bulk`, `batch`, `files`, `embeddings`, `meta`, `internal` — by path first, then an explicit `x-rtok-lane` header (stripped before forwarding) or a `/lane/<name>/` path prefix; no heuristics until measured. The lane is written to the ledger (`calls.kind` or `call_io` metadata; no schema change if `kind` suffices).
+
+Check: integration test — each lane path gets its tag, `/v1/messages` still matches the Anthropic wire and `/v1/messages/batches` does not, the header never reaches the upstream; proxy bytes identical with default config; config goldens; `just check`.
+
+### T385.2. Per-lane policy table
+
+optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
+
+Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
+
+### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
+
+optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
+
+Check: one dated `research.md` row per setting.
+
+### T385.4. Batch observe and `parse_results` into `usage`
+
+optimization.md §2.2 L3 (roadmap S2/S3). Tag Batch create/poll/list/cancel/results calls on the `batch` lane; with `parse_results = true`, parse result lines into `usage` rows. Fail open on malformed lines.
+
+Check: fixture result streams (Anthropic and OpenAI) produce the expected `usage` rows; a malformed line is skipped, not fatal; `just check`.
+
+### T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
+
+optimization.md §2.2 L4 (roadmap S4). Inject `service_tier = "flex"` only on `bulk`/`internal` (never silently on `agent`), OpenAI only (Anthropic has no Flex tier). On `429 Resource Unavailable`: retry policy `none` / `backoff` / `default` (retry with `service_tier = "auto"`). Cite the OpenAI Flex docs with the date checked.
+
+Check: mock upstream — omit/force/respect matrix and each 429 policy; `just check`.
+
+### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
+
+optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
+
+Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
+
+### T385.7. Per-lane upstream and in-flight cap
+
+optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
+
+Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
+
+### T385.8. P28 Phase 1: measure what LLM compression could save
+
+optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
+
+Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
+
+### T385.9. P28 Phase 2: async compressor on the `internal` lane
+
+optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
+
+Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
+
+### T385.10. Routing for `internal` and `bulk` calls
+
+optimization.md §4.2 (D9, I-101). Route `internal` and opted-in `bulk` calls to a cheaper model or provider per the policy table; the `agent` lane is not routed.
+
+Check: dollars per lane before/after from `stats --price` on fixtures; `just check`.
+
+### T385.11. Deferred tool schemas and thinking replay
+
+optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas and replayed thinking blocks, only where the measurement in each idea shows a saving (I-86 was rejected at 0.03 % — re-measure before building).
+
+Check: per-wire tests and a dated bench row; `just check`.
+
+### T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+
+optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
+
+Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+
+### T385.13. Measure cross-session read duplication
+
+optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
+
+Check: the dated `research.md` row.
 
 ### T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
 

@@ -73,6 +73,19 @@
 - T383. Let a ranged native `Read` through the read hook, and measure every deny
 - T384. The read deny names the exact MCP tool so no ToolSearch turn follows
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
+- T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
+- T385.2. Per-lane policy table
+- T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
+- T385.4. Batch observe and `parse_results` into `usage`
+- T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
+- T385.6. Per-lane cache-hit ledger and a replay byte-stability test
+- T385.7. Per-lane upstream and in-flight cap
+- T385.8. P28 Phase 1: measure what LLM compression could save
+- T385.9. P28 Phase 2: async compressor on the `internal` lane
+- T385.10. Routing for `internal` and `bulk` calls
+- T385.11. Deferred tool schemas and thinking replay
+- T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+- T385.13. Measure cross-session read duplication
 - T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
 - T387. Re-land T52.5 type-position references (lost to an auto-revert)
 - T388. `doctor` reports the real MCP Tool Search state
