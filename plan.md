@@ -92,7 +92,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T386 | todo | P2 | 2 | 30% | |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
-| T390.1 | todo | P3 | 2 | 0% | |
+| T390.1 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5-5 |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -1787,6 +1787,8 @@ T390 put Cursor, Copilot and Gemini on `src/agents/hook_events.rs` and drift-tes
 Done means: each of those installers reads its events from the table (rows added per host), and the drift test also covers the script-hook plugins, so no host has an event list outside the table.
 
 Check: the drift test fails when any of those manifests or installer lists disagrees with the table; `just check`.
+
+Plan: add a matcher column to `HOOK_EVENTS` and rows for ZCode, Devin, Kimi, Command Code and Cline (Claude's rows gain matchers too); each installer reads its entries from the table in the order it writes them today, so host configs stay byte-for-byte. Claude's own list is already read from `plugins/claude/hooks/hooks.json`, which the drift test covers, so it stays; its shared `ENTRIES` const goes (Kimi was its only non-test user) and a unit test pins `claude_entries()` to the Claude rows. Cline's five per-event link descriptors take their file name from the table. `tests/hook_manifests.rs` also covers Devin's `hooks.json`, Kimi's `kimi.plugin.json` and the Command Code and Cline script hooks (the table's events must be ones the dispatcher knows). Creator decision 2026-10-04: remove Cursor's `beforeSubmitPrompt` (its output is only `{continue, user_message}`, https://cursor.com/docs/hooks, so nothing reaches the model; `sessionStart` registers the agent): drop the row, the `plugins/cursor/hooks/hooks.json` entry and the installer write, keep the installer stripping a `beforeSubmitPrompt` entry written by the T390 build on reinstall and uninstall (test), remove the Cursor-only `UserPromptSubmit` special cases in `src/hooks/mod.rs`, update the T390 test and `src/agents/cursor/README.md`, and make the drift test assert it is absent.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
