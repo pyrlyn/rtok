@@ -25,7 +25,8 @@ use rtok_agent_sdk::NO_CHANGES;
 use serde_json::{Value, json};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, value};
 
-use super::claude::{ENTRIES, is_ours, show};
+use super::claude::{is_ours, show};
+use super::hook_events;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
 
@@ -233,6 +234,12 @@ fn load(path: &Path) -> Result<DocumentMut> {
         .with_context(|| path.display().to_string())
 }
 
+/// Kimi's `(event, matcher)` pairs: Claude's list minus `SubagentStart`, whose hook output Kimi
+/// discards (the `kimi` rows of [`hook_events`]).
+fn entries() -> Vec<(&'static str, &'static str)> {
+    hook_events::entries("kimi")
+}
+
 fn table_is_ours(t: &Table, event: &str, matcher: &str) -> bool {
     t.get("event").and_then(Item::as_str) == Some(event)
         && t.get("matcher").and_then(Item::as_str).unwrap_or("") == matcher
@@ -241,11 +248,12 @@ fn table_is_ours(t: &Table, event: &str, matcher: &str) -> bool {
             .is_some_and(|c| is_ours(c, event))
 }
 
-/// Add an rtok `[[hooks]]` table per `ENTRIES` pair and bring the existing ones up to date
+/// Add an rtok `[[hooks]]` table per [`entries`] pair and bring the existing ones up to date
 /// (T242.5, T242.1's rule): an rtok table on another binary path or timeout is rewritten in
-/// place, and one on a pair `ENTRIES` no longer lists (a changed matcher) is dropped. Foreign
+/// place, and one on a pair [`entries`] no longer lists (a changed matcher) is dropped. Foreign
 /// tables are never touched.
 fn insert_ours(doc: &mut DocumentMut, timeout: u64) -> Result<String> {
+    let entries = entries();
     let hooks = doc
         .entry("hooks")
         .or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
@@ -267,7 +275,7 @@ fn insert_ours(doc: &mut DocumentMut, timeout: u64) -> Result<String> {
             .get("command")
             .and_then(Item::as_str)
             .is_some_and(|c| is_ours(c, event));
-        let keep = !ours || ENTRIES.iter().any(|&(e, m)| e == event && m == matcher);
+        let keep = !ours || entries.contains(&(event, matcher));
         if !keep {
             lines.push(format!("- [[hooks]] {event}{}", show(matcher)));
         }
@@ -276,7 +284,7 @@ fn insert_ours(doc: &mut DocumentMut, timeout: u64) -> Result<String> {
     let removed = lines.len();
     let bin = super::rtok_hook_bin();
     let (mut added, mut updated) = (0usize, 0usize);
-    for &(event, matcher) in ENTRIES {
+    for &(event, matcher) in &entries {
         let cmd = format!("{bin} hook {event}");
         let mut found = false;
         for t in hooks
@@ -324,7 +332,7 @@ fn insert_ours(doc: &mut DocumentMut, timeout: u64) -> Result<String> {
 }
 
 /// Remove rtok's `[[hooks]]` tables (T246.6). One still as [`insert_ours`] writes it — on a
-/// pair `ENTRIES` lists, exactly `event`, `matcher` (when set), `command` and `timeout` — goes;
+/// pair [`entries`] lists, exactly `event`, `matcher` (when set), `command` and `timeout` — goes;
 /// one the user changed goes only as [`rtok_agent_sdk::keep_edited`] decides.
 fn strip_ours(
     apply: &rtok_agent_sdk::Apply,
@@ -347,7 +355,7 @@ fn strip_ours(
         }
         let matcher = t.get("matcher").and_then(Item::as_str).unwrap_or("");
         let keys = if t.contains_key("matcher") { 4 } else { 3 };
-        let unchanged = ENTRIES.contains(&(event, matcher))
+        let unchanged = entries().contains(&(event, matcher))
             && t.len() == keys
             && t.get("timeout").and_then(Item::as_integer) == Some(timeout as i64);
         let at = || format!("[[hooks]] {event}{} in {}", show(matcher), path.display());
@@ -516,7 +524,7 @@ mod tests {
     }
 
     /// `plugins/kimi/kimi.plugin.json` (T85) is the installer's hooks in Kimi's plugin shape:
-    /// same entries in the same order, same default timeout. A new `ENTRIES` row fails here
+    /// same entries in the same order, same default timeout. A new `kimi` row of [`hook_events`] fails here
     /// until the manifest follows. It ships no MCP server of its own (T275/D33):
     /// `mcpServers.rtok` is written by `rtok agents install kimi` into `mcp.json` directly.
     #[test]
@@ -525,9 +533,9 @@ mod tests {
             serde_json::from_str(include_str!("../../../plugins/kimi/kimi.plugin.json")).unwrap();
         assert_eq!(m["name"], NAME);
         let timeout = Config::default().setup.hook_timeout_s;
-        let want: Vec<_> = ENTRIES
-            .iter()
-            .map(|&(event, matcher)| {
+        let want: Vec<_> = entries()
+            .into_iter()
+            .map(|(event, matcher)| {
                 let mut h = json!({"event": event, "command": format!("rtok hook {event}"), "timeout": timeout});
                 if !matcher.is_empty() {
                     h["matcher"] = json!(matcher);

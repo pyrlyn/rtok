@@ -320,9 +320,6 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
         return Ok(copilot_output(&parsed));
     }
     if cursor {
-        if input.hook_event_name == "UserPromptSubmit" {
-            return Ok(br#"{"continue":true}"#.to_vec());
-        }
         let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
         return Ok(cursor_output(&parsed));
     }
@@ -556,11 +553,6 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
             }
             inject_event(input, cx, &registry, agent.as_deref())
         }
-        // Cursor's `beforeSubmitPrompt` output is only `{continue, user_message}` and has no
-        // context field (https://cursor.com/docs/hooks), so injecting would spend the budget
-        // and settle pushed messages that never reach the model. The event still registers the
-        // agent and records the call above.
-        "UserPromptSubmit" if cx.config.hook.host == "cursor" => HookOutput::default(),
         "UserPromptSubmit" | "PostCompact" | "SubagentStart" => {
             inject_event(input, cx, &registry, agent.as_deref())
         }
@@ -1537,11 +1529,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// T390: Cursor's `beforeSubmitPrompt` output has only `continue` and `user_message`, so
-    /// the hook answers `{"continue":true}` with no injected context, yet still registers the
-    /// agent; `sessionEnd` (stdin names it in camelCase) ends that agent row.
+    /// T390: `sessionEnd` (stdin names it in camelCase) ends the agent row. T390.1: the
+    /// `beforeSubmitPrompt` hook an upgraded T390 install still has registered stays harmless,
+    /// still answering with valid JSON.
     #[test]
-    fn cursor_prompt_and_session_end_hooks_follow_cursors_output_schema() {
+    fn cursor_session_end_hook_ends_the_agent_and_a_stale_prompt_hook_fails_open() {
         let dir = unique_dir("rtok-hook-t390-cursor");
         let mut cfg = cursor_cfg(&dir);
         cfg.plugins.inject.modes = vec!["nudges".into()];
@@ -1558,7 +1550,7 @@ mod tests {
                 "attachments": [],
             }),
         );
-        assert_eq!(json(prompt), serde_json::json!({"continue": true}));
+        assert!(json(prompt).is_object());
 
         let host_id = Runtime::open(cfg.clone(), "irrelevant")
             .unwrap()

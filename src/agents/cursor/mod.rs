@@ -122,10 +122,21 @@ impl Agent for Cursor {
     }
 }
 
-/// The installer's rtok events, one per table row; several host events may share one
-/// (`afterShellExecution` and `postToolUse` both run `PostToolUse`).
+/// `(host event, rtok event)` rows an earlier build wrote and this one no longer does: the T390
+/// build registered `beforeSubmitPrompt`, whose output has no context field (T390.1). Install
+/// and remove still recognise and take back an entry of ours there, so an upgraded user is not
+/// left with a dead hook.
+const RETIRED: &[(&str, &str)] = &[("beforeSubmitPrompt", "UserPromptSubmit")];
+
+/// What the installer writes plus what it still takes back.
+fn owned() -> impl Iterator<Item = (&'static str, &'static str)> {
+    hook_events::installed("cursor").chain(RETIRED.iter().copied())
+}
+
+/// The rtok events of [`owned`]; several host events may share one (`afterShellExecution` and
+/// `postToolUse` both run `PostToolUse`).
 fn rtok_events() -> impl Iterator<Item = &'static str> {
-    hook_events::installed("cursor").map(|(_, rtok_event)| rtok_event)
+    owned().map(|(_, rtok_event)| rtok_event)
 }
 
 #[cfg(test)]
@@ -244,6 +255,22 @@ fn insert_ours(root: &mut Value) -> String {
     let hooks = object_at(root, "hooks");
     let mut added = Vec::new();
     let bin = super::rtok_hook_bin();
+    for &(event, _) in RETIRED {
+        let Some(arr) = hooks.get_mut(event).and_then(Value::as_array_mut) else {
+            continue;
+        };
+        let before = arr.len();
+        arr.retain(|e| !is_ours(e));
+        if arr.len() == before {
+            continue;
+        }
+        added.push(format!("- {event}"));
+        if arr.is_empty()
+            && let Some(map) = hooks.as_object_mut()
+        {
+            map.remove(event);
+        }
+    }
     for (event, rtok_event) in hook_events::installed("cursor") {
         let cmd = hook_cmd(&bin, rtok_event, None);
         let cmd = cmd.as_str();
@@ -277,7 +304,7 @@ fn insert_ours(root: &mut Value) -> String {
 /// `{command}` for the rtok event this Cursor event runs — goes; an edited one is asked about.
 fn strip_ours(apply: &Apply, path: &Path, root: &mut Value) -> String {
     let (mut removed, mut kept) = (Vec::new(), Vec::new());
-    for (event, rtok_event) in hook_events::installed("cursor") {
+    for (event, rtok_event) in owned() {
         let Some(arr) = root
             .pointer_mut(&format!("/hooks/{event}"))
             .and_then(Value::as_array_mut)
@@ -580,8 +607,9 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T390: the installer writes exactly the table's installer rows — `beforeSubmitPrompt` and
-    /// `sessionEnd` among them — and a repeat install or a remove leaves nothing of ours.
+    /// T390: the installer writes exactly the table's installer rows — `sessionEnd` among
+    /// them, `beforeSubmitPrompt` not (T390.1) — and a repeat install or a remove leaves
+    /// nothing of ours.
     #[test]
     fn installer_writes_the_table_events_and_remove_strips_them() {
         let dir = tmp("table-events");
@@ -599,21 +627,58 @@ mod tests {
         written.sort_unstable();
         want.sort_unstable();
         assert_eq!(written, want, "{root}");
-        for (event, rtok_event) in [
-            ("beforeSubmitPrompt", "UserPromptSubmit"),
-            ("sessionEnd", "SessionEnd"),
-        ] {
-            assert_eq!(
-                root["hooks"][event][0]["command"],
-                hook_cmd(&super::super::rtok_hook_bin(), rtok_event, None),
-                "{event}"
-            );
-        }
+        assert!(root["hooks"].get("beforeSubmitPrompt").is_none(), "{root}");
+        assert_eq!(
+            root["hooks"]["sessionEnd"][0]["command"],
+            hook_cmd(&super::super::rtok_hook_bin(), "SessionEnd", None)
+        );
         assert_eq!(run(&c, false).unwrap(), NO_CHANGES);
         let report = run(&c, true).unwrap();
         assert!(report.contains("- sessionEnd"), "{report}");
-        assert!(report.contains("- beforeSubmitPrompt"), "{report}");
         assert!(!fs::read_to_string(&path).unwrap().contains("rtok hook"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T390.1: a `beforeSubmitPrompt` entry the T390 build wrote is taken back on reinstall and
+    /// on remove, and a foreign hook on that event survives both.
+    #[test]
+    fn a_beforesubmitprompt_entry_from_the_t390_build_is_removed() {
+        let stale = || {
+            json!({"hooks": {"beforeSubmitPrompt": [
+                {"command": "audit.sh"},
+                {"command": hook_cmd(&super::super::rtok_hook_bin(), "UserPromptSubmit", None)}
+            ]}})
+        };
+        let mut root = stale();
+        let out = insert_ours(&mut root);
+        assert!(out.contains("- beforeSubmitPrompt"), "{out}");
+        assert_eq!(
+            root["hooks"]["beforeSubmitPrompt"],
+            json!([{"command": "audit.sh"}])
+        );
+
+        let dir = tmp("stale-prompt");
+        let path = dir.join("hooks.json");
+        fs::write(&path, serde_json::to_string(&stale()).unwrap()).unwrap();
+        let c = cfg(path.clone(), false);
+        let report = run(&c, true).unwrap();
+        assert!(report.contains("- beforeSubmitPrompt"), "{report}");
+        let left = fs::read_to_string(&path).unwrap();
+        assert!(!left.contains("rtok hook"), "{left}");
+        assert!(left.contains("audit.sh"), "{left}");
+
+        // Only entry: reinstall drops the whole event key rather than leaving `[]` behind.
+        fs::write(
+            &path,
+            json!({"hooks": {"beforeSubmitPrompt": [
+                {"command": hook_cmd(&super::super::rtok_hook_bin(), "UserPromptSubmit", None)}
+            ]}})
+            .to_string(),
+        )
+        .unwrap();
+        run(&c, false).unwrap();
+        let root: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(root["hooks"].get("beforeSubmitPrompt").is_none(), "{root}");
         let _ = fs::remove_dir_all(dir);
     }
 

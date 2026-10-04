@@ -4,8 +4,8 @@
 
 //! The Command Code plugin tree is the install source `rtok agents install commandcode`
 //! links from: one `rtok-hook` script (event from its own link name) plus `mcp.sh`.
-//! Every event the installer writes must be one `adapt_commandcode` knows, and the
-//! script must fail open with an empty PATH and no binary.
+//! The script must fail open with an empty PATH and no binary; the events it serves are held
+//! to the `hook_events` table by `tests/hook_manifests.rs`.
 //!
 //! POSIX scripts (`arg0`, executable bits). Windows CI does not run them.
 
@@ -44,16 +44,6 @@ fn hook_script_is_executable_and_fails_open_without_rtok() {
         assert!(err.contains("ketch install pyrlyn/rtok"), "{event}: {err}");
     }
     let _ = std::fs::remove_dir_all(&home);
-}
-
-#[test]
-fn every_installed_event_maps_to_a_known_claude_event() {
-    for &(_, claude) in rtok::agents::commandcode::EVENTS {
-        assert!(
-            ["PreToolUse", "PostToolUse", "SessionStart", "SessionEnd"].contains(&claude),
-            "{claude}"
-        );
-    }
 }
 
 #[test]

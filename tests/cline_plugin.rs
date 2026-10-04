@@ -7,8 +7,8 @@
 //! Check: `plugins/cline/hooks/rtok-hook` is executable, fails open without `rtok`
 //! on `PATH` (`{}`, exit 0, no stderr; T174/T250: the ketch hint runs once, on
 //! `TaskStart`, in Cline's own `context` shape), takes its event from its own
-//! file name, and every event name the installer links (T96: one link per event
-//! into `~/Documents/Cline/Hooks/`) is one `adapt_cline` knows.
+//! file name. The event names the installer links (T96: one link per event into
+//! `~/Documents/Cline/Hooks/`) are held to `adapt_cline` by `tests/hook_manifests.rs`.
 
 #![cfg(unix)]
 
@@ -17,26 +17,12 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 
-use rtok::hooks::types::HookInput;
-
 mod common;
 
 /// The one script T96 links once per event (`PreToolUse`, `PostToolUse`, …).
 fn hook() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("plugins/cline/hooks/rtok-hook")
 }
-
-/// Event file names the installer links the hook as. Each must survive
-/// `adapt_cline` as something a plugin can act on — never `Noop`.
-/// (T94 `cline_event`: tool events → tool events, lifecycle → session/prompt
-/// starts and ends; `agent_error`, `agent_abort` and unknowns are no-ops.)
-const LINKED_EVENTS: &[&str] = &[
-    "PreToolUse",
-    "PostToolUse",
-    "TaskStart",
-    "UserPromptSubmit",
-    "SessionEnd",
-];
 
 #[test]
 fn hook_script_is_executable_posix_sh() {
@@ -130,16 +116,4 @@ fn run_hook(
             child.wait_with_output()
         })
         .expect("run hook")
-}
-
-#[test]
-fn every_linked_event_is_one_adapt_cline_knows() {
-    for event in LINKED_EVENTS {
-        let mut input = HookInput::default();
-        input.adapt_cline(event);
-        assert_ne!(
-            input.hook_event_name, "Noop",
-            "{event}: installer-linked names must not be no-ops"
-        );
-    }
 }

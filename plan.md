@@ -92,7 +92,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T386 | todo | P2 | 2 | 30% | |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
-| T390.1 | todo | P3 | 2 | 0% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -1779,14 +1778,6 @@ From `research.md` §8 and §9.3: Fable is 39 % of the bill in §9.3, but `confi
 Done means: a `[stats.prices."claude-fable-5-1"]` row (and any other current Claude 5 model ids the transcripts use) with input, output, cache-write and cache-read rates, each from Anthropic's pricing page with the date checked. §2's assumption is replaced by the real rate, or §8 says why a rate is still missing.
 
 Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/config.md` lists the row; `just check`.
-
-### T390.1. Move the remaining installer event lists onto the hook-event table
-
-T390 put Cursor, Copilot and Gemini on `src/agents/hook_events.rs` and drift-tests every `plugins/*/hooks/hooks.json` against it. These installers still keep their own event lists: ZCode (`ZCODE_ENTRIES`), Devin, Kimi, Command Code (`EVENTS`), Cline (`EVENTS`, file names) and Claude (`ENTRIES`, read from its own manifest). Command Code and Cline ship script hooks (`plugins/*/hooks/rtok-hook`), not a `hooks.json`.
-
-Done means: each of those installers reads its events from the table (rows added per host), and the drift test also covers the script-hook plugins, so no host has an event list outside the table.
-
-Check: the drift test fails when any of those manifests or installer lists disagrees with the table; `just check`.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
