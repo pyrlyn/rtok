@@ -76,7 +76,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T380 | todo | P2 | 3 | 30% | |
 | T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
-| T383 | todo | P1 | 2 | 40% | |
+| T383 | in progress | P1 | 2 | 5% | Claude Code / claude-sonnet-5-5 |
 | T384 | todo | P2 | 2 | 30% | |
 | T385 | todo | P1 | 5 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
@@ -1652,6 +1652,8 @@ Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agen
 From `research.md` §29 (T355). The hook denies a native `Read` unless `limit <= GATE_MAX_LINES` (`src/plugins/read/hook.rs`, `GATE_MAX_LINES = 5`). Over 77 sessions it denied 984 calls; 687 (70 %) were already ranged, and the net is about −780 tokens per deny plus one or two turns. T355 left the narrowing as "separate task, not approved yet"; this is that task.
 
 Done means: a `Read` with `limit` up to 300 lines passes; an unranged read and a wider range are still denied with today's reason. Every deny writes a `Measurement` row (`plugin: "read"`, kind `deny`) with the denied range and what the agent did next, so `rtok stats --plugin read` shows the net per deny from data instead of the §29 estimate. The 300-line limit is one config key with a `default.toml` and `docs/config.md` row.
+
+Plan: `config::Read` gains `range_max_lines` (default 300; `config/default.toml` and `docs/config.md` rows). `hook.rs` replaces `GATE_MAX_LINES` with it; a missing or zero `limit` is unranged. Every deny (both reasons) records `Measurement { plugin: "read", kind: "deny", before_bytes: 0, after_bytes: reason bytes }`, a cost row and never a saving claim (the T131 pattern). `measure::stats` gains a `read_deny` row beside T136's `read_whole`: denies, their tokens, and how many were followed within the next 3 calls of the session by an rtok `read` of the same path versus a native `Read`; `rtok stats --plugin read` prints it. Files: `src/plugins/read/hook.rs`, `src/config/mod.rs`, `config/default.toml`, `docs/config.md`, `src/measure/stats.rs`, goldens that move.
 
 Check: hook unit tests for limit 5, 300, 301 and none; a store fixture shows the `deny` rows in `rtok stats --plugin read`; `rtok config validate` accepts the key; `just check`.
 
