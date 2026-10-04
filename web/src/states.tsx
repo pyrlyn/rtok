@@ -5,7 +5,7 @@
 import type { ReactNode } from "react";
 
 // The four states every page shares; pages pick one instead of drawing their own.
-function Panel({ children, ...aria }: { children: ReactNode; role: string; "aria-busy"?: true }) {
+function Panel({ children, ...aria }: { children: ReactNode; role: string }) {
     return (
         <div {...aria} className="glass flex flex-col gap-1 p-4 text-xs">
             {children}
@@ -15,17 +15,19 @@ function Panel({ children, ...aria }: { children: ReactNode; role: string; "aria
 
 export function Loading() {
     return (
-        <Panel role="status" aria-busy>
-            <span className="sr-only">Loading</span>
-            {[3 / 4, 1, 1 / 2].map((w) => (
-                <div
-                    key={w}
-                    aria-hidden="true"
-                    className="h-4 animate-pulse rounded-sm bg-surface-3"
-                    style={{ width: `${w * 100}%` }}
-                />
-            ))}
-        </Panel>
+        // A grey skeleton did not read as "loading" (T407); `flex-1` centres the spinner in
+        // `<main>`, and inside a panel the padding keeps it from collapsing.
+        <div
+            role="status"
+            aria-busy
+            className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-xs text-fg-muted"
+        >
+            <span
+                aria-hidden="true"
+                className="size-6 animate-spin rounded-full border-2 border-surface-3 border-t-accent"
+            />
+            Loading…
+        </div>
     );
 }
 

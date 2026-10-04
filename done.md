@@ -959,6 +959,14 @@ Result (2026-10-03, Claude Code / sonnet-5): seven pages on the `/ws` snapshot. 
 
 Not done and why: (1) there is no structured data for stats, graph, hosts, config, services and worktrees on the wire, only text, so the pages depend on the Rust line formats staying as they are (the parsers and fixtures pin them; a format change shows up in `other lines`, not as a crash); a structured contract would be a server task. (2) The `sample` source (`web/src/api/sample.ts`) had no data for these six pages and a config/hosts text off the real format, so it now carries the same made-up fixtures the stories use; real data only exists against `rtok web`. (3) Service restart/start and worktree gc/clean are CLI-only today, so the pages name the command instead of offering a button. (4) The sessions, doctor and logs pages are T310.7 and still show the placeholder. (5) The worktree list drops the owner and seen columns on the list (they are in the detail panel) and the design's separate mobile card list is replaced by the narrower column set.
 
+### T407. Web: centred loading spinner and the missing sidebar icons
+
+Requested by the creator (2026-10-04). While a screen waited for its first snapshot the web UI showed only a grey skeleton panel, which did not read as "loading"; and seven of the fourteen sidebar entries (`stats`, `graph`, `hosts`, `config`, `services`, `worktrees`, `usage`) had no icon, because `Icon` found none under `web/assets/icons/`.
+
+Done: `Loading` (`web/src/states.tsx`) is a spinner with a "Loading…" label centred in the content area, still `role="status"` with `aria-busy`, so `WithSnapshot`, `Hosts` and `DataTable` all get it; the global reduced-motion rule stops the spin. A closed socket still shows only Offline; a reconnect passes through `connecting`, which shows the spinner. Seven new SVGs follow the existing style (24×24, `currentColor` stroke 1.75, round caps), and `web/src/ui/Icon.test.ts` fails when a `PAGES` id has no icon.
+
+Check: the icon test failed before the SVGs landed; `npm test` (167 tests) and typecheck green; the sidebar with all fourteen icons and the centred spinner checked in the browser on the Vite dev server; `just check` green.
+
 ### T310.9. Serve the SPA from `rtok web`
 
 Embed `web/dist` in the binary (hashed assets, precompressed, SPA fallback, CSP), keep `RTOK_WEB_PKG`-style dev override for a local `dist`, build the SPA in CI and release before cargo. Rewrite `tests/web.rs`, `tests/web_e2e.rs`, `tests/release_bundle.rs` and `tests/surface_parity.rs` for the SPA (parity reads the SPA's page list).
