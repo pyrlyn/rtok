@@ -70,3 +70,21 @@
 - T380. `rtok-` prefix on every shipped skill, and the prefix as the third ownership mark
 - T381. `rtok config init` must not freeze today's defaults into the user's file
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
+- T383. Let a ranged native `Read` through the read hook, and measure every deny
+- T384. The read deny names the exact MCP tool so no ToolSearch turn follows
+- T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
+- T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
+- T387. Re-land T52.5 type-position references (lost to an auto-revert)
+- T388. `doctor` reports the real MCP Tool Search state
+- T389. Price row for Fable 5.1 in `[stats.prices]`
+- T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest
+- T391. Junk map: the five missing hosts and VS Code `CachedData`
+- T392. Warn when the same skill is listed twice or loaded more than once
+- T393. `doctor` shows the saving a 120-character skill description cap would give
+- T394. Run the paid live benches and record them
+- T395. One real session as one OpenTelemetry trace in SigNoz and Maple
+- T396. Verify the usage readers against real files
+- T397. Re-measure numbers that shipped fixes made stale
+- T398. Probe editors on a `worktree.useRelativePaths` worktree
+- T399. Re-check host docs for three open host questions
+- T400. Fix stale and broken statements in `research.md` and related docs

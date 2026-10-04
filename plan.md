@@ -76,6 +76,24 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T380 | todo | P2 | 3 | 30% | |
 | T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
+| T383 | todo | P1 | 2 | 40% | |
+| T384 | todo | P2 | 2 | 30% | |
+| T385 | todo | P1 | 5 | 20% | |
+| T386 | todo | P2 | 2 | 30% | |
+| T387 | todo | P2 | 3 | 40% | |
+| T388 | todo | P2 | 2 | 40% | |
+| T389 | todo | P2 | 1 | 30% | |
+| T390 | todo | P2 | 3 | 40% | |
+| T391 | todo | P3 | 2 | 30% | |
+| T392 | todo | P2 | 3 | 30% | |
+| T393 | todo | P3 | 1 | 40% | |
+| T394 | todo | P2 | 2 | 20% | |
+| T395 | todo | P3 | 2 | 20% | |
+| T396 | todo | P3 | 2 | 20% | |
+| T397 | todo | P3 | 2 | 30% | |
+| T398 | todo | P3 | 1 | 30% | |
+| T399 | todo | P3 | 1 | 30% | |
+| T400 | todo | P2 | 2 | 40% | |
 
 
 
@@ -1628,6 +1646,180 @@ Done means:
 - Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
 
 Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
+
+### T383. Let a ranged native `Read` through the read hook, and measure every deny
+
+From `research.md` §29 (T355). The hook denies a native `Read` unless `limit <= GATE_MAX_LINES` (`src/plugins/read/hook.rs`, `GATE_MAX_LINES = 5`). Over 77 sessions it denied 984 calls; 687 (70 %) were already ranged, and the net is about −780 tokens per deny plus one or two turns. T355 left the narrowing as "separate task, not approved yet"; this is that task.
+
+Done means: a `Read` with `limit` up to 300 lines passes; an unranged read and a wider range are still denied with today's reason. Every deny writes a `Measurement` row (`plugin: "read"`, kind `deny`) with the denied range and what the agent did next, so `rtok stats --plugin read` shows the net per deny from data instead of the §29 estimate. The 300-line limit is one config key with a `default.toml` and `docs/config.md` row.
+
+Check: hook unit tests for limit 5, 300, 301 and none; a store fixture shows the `deny` rows in `rtok stats --plugin read`; `rtok config validate` accepts the key; `just check`.
+
+### T384. The read deny names the exact MCP tool so no ToolSearch turn follows
+
+From `research.md` §29.2: 541 of 984 denies (55 %) were followed by a `ToolSearch` before the first rtok MCP call, because the deny text says `rtok read` while the host keeps rtok's schemas deferred. That is one more turn per deny.
+
+Done means: the deny reason carries the host's exact tool name (`mcp__rtok__read` on Claude Code, the matching name per host) and, where the host defers MCP schemas, the one-line select hint that loads it. If a host setting can keep `read` non-deferred, `rtok doctor` names it. Measure the ToolSearch-after-deny share again over a dated window and record it in §29.
+
+Check: a unit test per host for the deny text; the §29 share re-measured with a date; `just check`.
+
+### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
+
+From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
+
+1. Lane classifier and a `calls.kind` tag (P1).
+2. Per-lane policy: bulk and batch bodies stay byte-identical in `compress` mode.
+3. Defaults bench for `compress` mode, context editing, skills and `live_blobs`, with a dated `research.md` row (`tools_rewrite` stays in T124).
+4. Batch observe, with `parse_results` into `usage`.
+5. Flex on bulk and internal lanes, with a 429 policy.
+6. Per-lane cache-hit ledger and a replay byte-stability test.
+7. Isolation: per-lane upstream and an in-flight cap.
+8. P28 Phase 1 measurement.
+9. P28 Phase 2 async compressor on the `internal` lane.
+10. Routing for internal and bulk calls (I-101's quality gate applies).
+11. Deferred tool schemas and thinking replay (I-85, I-86 evidence first).
+12. `rtok batch` CLI and a lane breakdown in `rtok report`.
+
+Also: a cross-session read-dedup measurement from `calls` (optimization.md §5, "measure first"). Related ideas: I-84, I-85, I-86, I-101, I-102, I-21. The optimization doc's own ids (T250–T259) collide with `done.md`; use T385.x.
+
+Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
+
+### T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
+
+From `research.md` §15.3 (T50.1 default-rule families): `mise` is the largest family still on `Rule::default()` (37 rows, 41,423 after-bytes), then `sqlite3` (8,556 B), `awk` (4,954 B), `just` (4,018 B) and `df` (3,451 B). `cmd_stem` is the basename of argv[0], so `mise exec -- cargo test` is never filtered as `cargo`.
+
+Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just <recipe>` resolve to the inner command's formatter or rule when the inner command is visible on the line. Rules or formatters for `sqlite3`, `df` and `awk` land only where a golden fixture beats `Rule::default()`. The `bash_default` top-20 is re-measured and recorded in §15.3 with a date.
+
+Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
+
+### T387. Re-land T52.5 type-position references (lost to an auto-revert)
+
+`done.md` records T52.5 as done (refs 96/105, recall 0.914), but its tags query `(type_identifier) @name @reference.type` is not in `src/plugins/read/outline.rs`: commit `c217b8f2` ("ci: auto-revert ef6c6ff") removed it on 2026-09-17. `tests/graph_truth.rs` still guards the old floor (`ref_recall >= 0.30`) and `research.md` §2 still shows 0.351 / 0.305.
+
+Done means: the type-position and scoped-call reference queries from `cfbee166` are back (adapted to today's code), `graph_truth` measures the new reference recall, its floor rises to just under the measured value, and `research.md` §2 and `src/plugins/graph/PLAN.md` "Known misses" are updated. The T52.5 entry in `done.md` gets a dated note that it was reverted and re-landed under T387.
+
+Check: `tests/graph_truth.rs` passes with the raised floor; the new recall is in §2 with a date; `just check`.
+
+### T388. `doctor` reports the real MCP Tool Search state
+
+From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
+
+Done means: `doctor` reads `ENABLE_TOOL_SEARCH` from the environment and from Claude Code settings `env`, and prints `enabled`, `disabled` or `unknown (heuristic: ANTHROPIC_BASE_URL set)` with the source. The `tools_rewrite` advice uses the refined state. Cite the Claude Code docs page and date for the variable in `research.md` §3.
+
+Check: unit tests for base URL set with and without the override; `just check`.
+
+### T389. Price row for Fable 5.1 in `[stats.prices]`
+
+From `research.md` §8 and §9.3: Fable is 39 % of the bill in §9.3, but `config/default.toml` ships prices only for `claude-sonnet-5`, `claude-haiku-4-5`, `gpt-5` and `gpt-5-mini`, so `rtok stats --price` leaves the main workload model unpriced. §2's cost split assumes output = 5 × input "until known".
+
+Done means: a `[stats.prices."claude-fable-5-1"]` row (and any other current Claude 5 model ids the transcripts use) with input, output, cache-write and cache-read rates, each from Anthropic's pricing page with the date checked. §2's assumption is replaced by the real rate, or §8 says why a rate is still missing.
+
+Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/config.md` lists the row; `just check`.
+
+### T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest
+
+From `research.md` §27.1 and §27.3 (T291): Cursor's plugin manifest (`plugins/cursor/hooks/hooks.json`) registers only `beforeShellExecution`, `afterShellExecution`, `sessionStart`, `preCompact`, `afterMCPExecution` and `postToolUse`, although `src/hooks/types.rs` already maps `beforeSubmitPrompt` and `sessionEnd`. `done.md` claims `beforeSubmitPrompt` was registered; the file never contained it. So per-turn memory recall and session-end checkpoints do not run on Cursor.
+
+Done means: Cursor's manifest and installer carry `beforeSubmitPrompt` and `sessionEnd`, failing open. Skip `subagentStart` (its Cursor output schema has no context field, §23). A drift test compares every `plugins/*/hooks/hooks.json` and every installer's event list against one event table in code. The T291–T294 cards that exist only on branch `plan-memory` (commit `d706e3cb`), and decision D35, are copied into `done.md` and the decision table, since that work shipped.
+
+Check: the drift test fails on a manifest missing an event; a Cursor hook fixture for both new events; `just check`.
+
+### T391. Junk map: the five missing hosts and VS Code `CachedData`
+
+From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
+
+Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
+
+Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
+
+### T392. Warn when the same skill is listed twice or loaded more than once
+
+Ivan, 2026-10-04: warn when a skill is loaded more than once or exists as a duplicate. On the creator's machine `~/.claude/skills/worktrees` (a stale personal copy) and rtok's `worktrees` skill had the same name; today `doctor`'s skill audit silently keeps one row per `(source, name)` (`audit_from` in `src/doctor.rs`), and nothing notices a skill body loaded twice in one session (`src/plugins/guard/skill.rs` does not track it).
+
+Done means:
+
+- Static duplicates: `rtok doctor` warns once per skill name reachable from more than one root or plugin (user root, project root, `~/.agents/skills` mirror, plugin skills). It names every path, says whether the bodies are identical or differ, and the description tokens the extra listing costs per request. Two roots that resolve to the same real path stay one listing, as today.
+- Repeat loads: the Skill hook records each load per session; a second load of the same skill since the last compaction gets a warning (the guard's deny reason or added context, per host capability) saying it is already in context and when it was loaded. `rtok stats` (or `doctor`) reports repeat loads per skill from transcripts, with the tokens they cost.
+- Advice only for static duplicates: rtok never deletes a skill it does not own (the T380 ownership rules apply).
+
+Check: a `Vfs` doctor fixture with a duplicate name in two roots (same and different bodies); a hook test for a second load in one session and a load after compaction; `just check`.
+
+### T393. `doctor` shows the saving a 120-character skill description cap would give
+
+From `research.md` §10.4: descriptions over 120 characters cost about 1.3 K tokens per request for 66 skills. `doctor` flags only `desc > 200` and `body > 8192` (`skill_row` in `src/doctor.rs`) and prints no saving.
+
+Done means: the skills section adds one line, "descriptions over 120 chars: N skills, ≈ X tokens/request recoverable", using the same token estimate as the rest of the audit; the per-row flag threshold matches the 120-character guidance rtok's own skills follow. Advice only.
+
+Check: a doctor fixture with one long and one short description shows the line; `just check`.
+
+### T394. Run the paid live benches and record them
+
+From `research.md` §3 (coaching nudges A/B) and §2 (A/B bench T9.2, `graph` T68.9): every live arm is unrun ("No live token, cache, or USD rows … the gate is do not enable"; T68.9 "Live API clause remains open"). Gate P9 and P8b clause 4 stay open until they run. Needs the creator's session and API spend: an agent sandbox cannot run them (OAuth expired).
+
+Done means: one dated row per suite in §2 (nudges off/on, T9.2 legacy vs rtok, T68.9 graph MCP vs native) with the command, `claude --version`, mean input/cache/output tokens, `stats --price` cost and pass rate. Nudges become default-on only if cost per passed task falls and the pass rate holds; otherwise the row says "stays off". Gate P9 and P8b clause 4 close or fail on these rows.
+
+Check: the rows are in §2 and `docs/comparison.md`; the gates are marked.
+
+### T395. One real session as one OpenTelemetry trace in SigNoz and Maple
+
+From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real Claude Code session (hooks, MCP and proxy) exported as a single trace with an `invoke_agent` root and `chat {model}` spans, checked in SigNoz and Maple. `roadmap.md` says these clauses are Gate P18, but P18 in `done.md` has no such clause, so the item is orphaned. Needs a SigNoz or Maple account.
+
+Done means: the `docs/otel.md` recipe for each backend is run with the proxy in front of a live session; the trace shape and `rtok_tokens_total` are recorded in §2 with a date, or the clause is dropped explicitly with the reason.
+
+Check: dated rows in §2 for both backends, or the dropped clause in `roadmap.md`.
+
+### T396. Verify the usage readers against real files
+
+From `research.md` §30 (T358.3, T358.4): the Kilo and Gemini CLI readers are "not run on real data"; Copilot CLI `inputTokens` vs its `tokenDetails` block disagree and are marked unverified; whether a resumed Copilot session writes a second shutdown with run-only or cumulative totals is unverified (the reader sums them); pi forked-session id copying is unverified. Grok's `signals.json` reader waits on the creator accepting observed keys as a source (§30.7) — ask when claiming.
+
+Done means: each reader runs once on a real file from a machine with that host; the Copilot resume semantics are confirmed or the reader stops summing duplicate shutdowns; each `unverified` tag in §30 is resolved or kept with a date.
+
+Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
+
+### T397. Re-measure numbers that shipped fixes made stale
+
+From `research.md` §2 and §19, three numbers predate the fix they describe:
+
+- Graph cold index: T59.3 (200 files per transaction) required a re-run next to the old 172 ms for 3,000 files and a revert if slower; §2 still carries the placeholder.
+- The T241 `replay_bench` row: it says the `cmd` trailer "is not counted" (fixed by T247) and that `search` "records no row" (changed by T300).
+- Hook cancellations: §19.4 and §19.6 found ten cancelled rtok hooks before T178 and validated the lock-wait fix only synthetically.
+
+Done means: each is re-run on current `main` (`cargo test --release --test graph_bench -- --ignored`, `replay_bench`, the §19.1 jq query over a post-T178 window) and the dated result replaces the stale text; T59.3's batch size is kept or reverted on its number.
+
+Check: three dated rows in `research.md`.
+
+### T398. Probe editors on a `worktree.useRelativePaths` worktree
+
+From `research.md` §18.2 (T157): every non-interactive reader opens a relative-link worktree, but VS Code, Zed, Cursor and lazygit are untested, so the setting stays opt-in. It is the setting that would have prevented the 18 GB orphaned `graph-perf` worktree.
+
+Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
+
+Check: the §18.2 table has four dated rows.
+
+### T399. Re-check host docs for three open host questions
+
+From `research.md`:
+
+- §10.6: which hosts besides Claude Code and Cursor honour `disable-model-invocation` in a skill (OpenCode, Copilot, Gemini, Codex are "not documented"); `doctor`'s skill advice relies on it.
+- §23: Grok and Antigravity subagent-start hooks rest on missing docs; re-read for an output schema or an `invoke_subagent` hook.
+- §26: Devin, Command Code and Cline are "unverified; probe pending" for hook ancestry but are not in T281's host list; and on Windows only the cwd rule applies (`rtok-sys` returns no ancestors), which no doc records.
+
+Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
+
+Check: dated sources in §10.1, §23 and §26.
+
+### T400. Fix stale and broken statements in `research.md` and related docs
+
+The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
+
+- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (see T387).
+- §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
+- §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
+- §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
+- §22–§28: T283.3 shipped (line "Not shipped yet: (b)"); T330.1 no longer "PR #651, open"; host counts (22, not 17 or 21; plain host names, not autolinked URLs).
+- `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
+
+Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
 
 ## Reference
 
