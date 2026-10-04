@@ -3,6 +3,10 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! Clap tree. `tests/config_coverage.rs` walks [`Cli::command`] (plan T12.4).
+//!
+//! Plan ids sit in plain `//` lines above the `///` they belong to: clap turns doc comments
+//! into help, man pages and completion scripts, and users never see plan ids (T409,
+//! `tests/no_plan_ids.rs`).
 
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
@@ -42,7 +46,7 @@ enum Cmd {
         /// Overlay `[hook] host` (`claude` | `cursor` | `copilot` | `devin` | `cline`)
         #[arg(long)]
         host: Option<String>,
-        // T178, D32 (plain comment: clap prints doc comments)
+        // T178, D32
         /// Run the resident hook process `rtok-hook` talks to
         #[arg(long, hide = true, conflicts_with_all = ["event", "host"])]
         serve: bool,
@@ -51,14 +55,14 @@ enum Cmd {
     Mcp {
         #[command(subcommand)]
         action: Option<McpCmd>,
-        // T70.3 (plain comment: clap prints doc comments)
+        // T70.3
         /// Call one listed tool and print the text result (pi `registerTool` shim)
         #[arg(long, value_name = "TOOL")]
         call: Option<String>,
         /// JSON arguments for `--call`
         #[arg(long, value_name = "ARGS")]
         json: Option<String>,
-        // T283.1 (plain comment: clap prints doc comments)
+        // T283.1
         /// The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays `[hook] host` so
         /// the process can find its rtok agent
         #[arg(long, value_name = "HOST")]
@@ -91,7 +95,7 @@ enum Cmd {
         #[arg(long)]
         port: Option<u16>,
     },
-    // D23 (plain comment: clap prints doc comments)
+    // D23
     /// Terminal UI over the same data as `rtok web` (one model, two renderings)
     Tui {
         /// Start on this tab (a page name both surfaces carry)
@@ -148,7 +152,7 @@ enum Cmd {
     },
     /// Inspect hooks, MCP servers and the proxy chain
     Doctor {
-        // T7.2 (plain comment: clap prints doc comments)
+        // T7.2
         /// Also run the instruction-file audit
         #[arg(long)]
         instructions: bool,
@@ -193,7 +197,7 @@ enum Cmd {
     Setup(SetupArgs),
     /// Execute a command, archive its raw output, print the filtered version
     Run {
-        // T127 (plain comment: clap prints doc comments)
+        // T127
         /// Sub-agent id from PreToolUse; scopes the dedup pointer
         #[arg(long, value_name = "ID")]
         agent: Option<String>,
@@ -225,7 +229,7 @@ enum Cmd {
         #[arg(long)]
         context: Option<u32>,
     },
-    // T70.2 (plain comment: clap prints doc comments)
+    // T70.2
     /// The archive live zone (`rtok archive rewrite` — pi `context` carrier)
     #[cfg(feature = "archive")]
     Archive {
@@ -273,7 +277,7 @@ enum Cmd {
         #[command(subcommand)]
         action: GraphCmd,
     },
-    // T70.5 (plain comment: clap prints doc comments)
+    // T70.5
     /// Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
     #[cfg(feature = "guard")]
     Guard {
@@ -309,7 +313,7 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    // D24 (plain comment: clap prints doc comments)
+    // D24
     /// The operator model as one document: Markdown, HTML and PDF
     Report {
         /// Output format
@@ -321,7 +325,7 @@ enum Cmd {
         /// How far back the report reads (`30d`, `24h`)
         #[arg(long)]
         since: Option<String>,
-        // T22.4 (plain comment: clap prints doc comments)
+        // T22.4
         /// Model-shaped rendering of the same document instead of `--format`
         #[arg(long)]
         ai: bool,
@@ -374,7 +378,7 @@ enum DemonCmd {
 enum OtelCmd {
     /// Post rows past the watermarks to the endpoint, once
     Flush {
-        // T143 (plain comment: clap prints doc comments)
+        // T143
         /// Hook-spawned only. Coalesces concurrent hook flushes to at most one
         /// running + one queued process instead of one per `Stop`/`SessionEnd` event.
         /// A manual `rtok otel flush` never passes this — it always flushes.
@@ -446,7 +450,7 @@ enum MemoryCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    // T69.1 (plain comment: clap prints doc comments)
+    // T69.1
     /// Retire a note: a tombstone — never recalled or searched, body kept
     Retire {
         id: i32,
@@ -454,13 +458,13 @@ enum MemoryCmd {
         #[arg(long)]
         superseded_by: Option<i32>,
     },
-    // T69.1 (plain comment: clap prints doc comments)
+    // T69.1
     /// Pin a note so it leads SessionStart recall
     Pin { id: i32 },
-    // T69.1 (plain comment: clap prints doc comments)
+    // T69.1
     /// Drop a note back to newest-first recall order
     Unpin { id: i32 },
-    // T69.1 (plain comment: clap prints doc comments)
+    // T69.1
     /// Save a replacement (title, body) for a note and retire the old row
     Revise {
         id: i32,
@@ -471,7 +475,7 @@ enum MemoryCmd {
         #[arg(long)]
         body: String,
     },
-    // T69.6 (plain comment: clap prints doc comments)
+    // T69.6
     /// Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block
     Sync {
         /// CLAUDE.md or AGENTS.md
@@ -490,7 +494,7 @@ enum MemoryCmd {
         #[arg(long)]
         force: bool,
     },
-    // T69.4 (plain comment: clap prints doc comments)
+    // T69.4
     /// Notes live/pinned/retired, recall and MCP call counts
     Status {
         /// Only notes of this project
@@ -621,19 +625,19 @@ enum GraphCmd {
     /// List unreferenced private definitions (skips pub, trait impls, tests, macros)
     Dead {
         path: Option<PathBuf>,
-        // T60.1 (plain comment: clap prints doc comments)
+        // T60.1
         /// JSON rows instead of `path:line kind name` lines (uncapped)
         #[arg(long)]
         json: bool,
     },
-    // T68.3 (plain comment: clap prints doc comments)
+    // T68.3
     /// Index health for the current or given root
     Status {
         path: Option<PathBuf>,
         #[arg(long)]
         json: bool,
     },
-    // T68.4 (plain comment: clap prints doc comments)
+    // T68.4
     /// Symbol impact or call paths to a target
     Impact {
         name: String,
@@ -643,7 +647,7 @@ enum GraphCmd {
         to: Option<String>,
         path: Option<PathBuf>,
     },
-    // T329.2 (plain comment: clap prints doc comments)
+    // T329.2
     /// The project registry: list, add, remove, select
     Projects {
         #[command(subcommand)]
@@ -830,7 +834,7 @@ enum AgentCmd {
         #[command(subcommand)]
         action: JunkCmd,
     },
-    // T283, D34 (plain comment: clap prints doc comments)
+    // T283, D34
     /// This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
     Whoami {
         /// JSON instead of the text lines
@@ -850,7 +854,7 @@ enum AgentCmd {
         /// The status text; empty clears it
         text: String,
     },
-    // T287 (plain comment: clap prints doc comments)
+    // T287
     /// Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
     Send {
         /// Recipient's rtok agent id (any unique prefix); with `--all-live`, the text instead
@@ -861,7 +865,7 @@ enum AgentCmd {
         #[arg(long)]
         all_live: bool,
     },
-    // T287 (plain comment: clap prints doc comments)
+    // T287
     /// Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
     /// id that agent's queue (marks nothing)
     Inbox {
@@ -918,11 +922,11 @@ struct RemoveArgs {
     /// Print what would be removed and exit
     #[arg(long)]
     dry_run: bool,
-    // T141 (plain comment: clap prints doc comments)
+    // T141
     /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
-    // T246 (plain comment: clap prints doc comments)
+    // T246
     /// Also remove rtok entries you changed, without asking
     #[arg(long)]
     yes: bool,
@@ -944,15 +948,15 @@ struct UpdateArgs {
     /// All variants (the default when neither `--cli` nor `--desktop` is given)
     #[arg(long)]
     all: bool,
-    // T141 (plain comment: clap prints doc comments)
+    // T141
     /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
-    // T279 (plain comment: clap prints doc comments)
+    // T279
     /// Reinstall the plugin even when it is already at the available version
     #[arg(long)]
     force: bool,
-    // T279 (plain comment: clap prints doc comments)
+    // T279
     /// Compare against this install source instead of the one on record
     #[arg(long, value_enum)]
     source: Option<SourceArg>,
@@ -1037,7 +1041,7 @@ struct SetupArgs {
     /// All variants (the default when neither `--cli` nor `--desktop` is given)
     #[arg(long)]
     all: bool,
-    // T141 (plain comment: clap prints doc comments)
+    // T141
     /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
@@ -1088,7 +1092,7 @@ enum ConfigCmd {
     /// Print one key's effective value
     Get {
         key: String,
-        // T228 (plain comment: clap prints doc comments)
+        // T228
         /// JSON `{key,value,source}` instead of the bare value
         #[arg(long)]
         json: bool,
