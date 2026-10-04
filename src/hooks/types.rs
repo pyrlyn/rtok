@@ -487,6 +487,7 @@ fn cursor_event<'a>(cli: &'a str, stdin: &'a str) -> &'a str {
     match name {
         "sessionStart" => "SessionStart",
         "beforeSubmitPrompt" => "UserPromptSubmit",
+        "sessionEnd" => "SessionEnd",
         "postToolUse" | "PostToolUse" | "afterShellExecution" => "PostToolUse",
         "preToolUse" | "PreToolUse" | "beforeShellExecution" => "PreToolUse",
         "afterMCPExecution" => "AfterMCPExecution",

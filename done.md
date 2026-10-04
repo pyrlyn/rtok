@@ -1191,7 +1191,24 @@ Done when:
 
 **Result (2026-09-18).** Commit `45c4531`. Cursor `sessionStart` and `beforeSubmitPrompt` hooks registered in `plugins/cursor/hooks/hooks.json`; `src/agents/cursor/mod.rs` dispatches to `rtok hook SessionStart` / `UserPromptSubmit`; host table re-blessed.
 
+**Correction (2026-10-04).** The `beforeSubmitPrompt` half of this result was never true: `plugins/cursor/hooks/hooks.json` carried only `sessionStart` among the two until T390 registered `beforeSubmitPrompt` and `sessionEnd` (`research.md` §27.1). Cursor gives `beforeSubmitPrompt` no context field (https://cursor.com/docs/hooks), so even registered it injects nothing there.
+
 **Check:** cargo test relevant areas pass (700/702 lib; skill_listing, memory_status, web_wasm pass)
+
+---
+
+### T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest
+
+From `research.md` §27.1 and §27.3 (T291): Cursor's plugin manifest (`plugins/cursor/hooks/hooks.json`) registers only `beforeShellExecution`, `afterShellExecution`, `sessionStart`, `preCompact`, `afterMCPExecution` and `postToolUse`, although `src/hooks/types.rs` already maps `beforeSubmitPrompt` and `sessionEnd`. `done.md` claims `beforeSubmitPrompt` was registered; the file never contained it. So per-turn memory recall and session-end checkpoints do not run on Cursor.
+
+Done means: Cursor's manifest and installer carry `beforeSubmitPrompt` and `sessionEnd`, failing open. Skip `subagentStart` (its Cursor output schema has no context field, §23). A drift test compares every `plugins/*/hooks/hooks.json` and every installer's event list against one event table in code. The T291–T294 cards that exist only on branch `plan-memory` (commit `d706e3cb`), and decision D35, are copied into `done.md` and the decision table, since that work shipped.
+
+Plan: one event table in code (host, host event, `rtok hook` subcommand) that every installer's `insert_ours` and every `plugins/*/hooks/hooks.json` is checked against by a drift test (`tests/hook_manifests.rs`). Add `beforeSubmitPrompt` and `sessionEnd` to `plugins/cursor/hooks/hooks.json` and to `src/agents/cursor/mod.rs`, failing open. Copy the T291–T294 cards from `plan-memory` (`d706e3cb`) into `done.md` and D35 into the decision table. If the drift test pushes past 300 LOC, it becomes T390.1.
+
+Check: the drift test fails on a manifest missing an event; a Cursor hook fixture for both new events; `just check`.
+
+**Result (2026-10-04).** `src/agents/hook_events.rs` is the one table (host, host event, `rtok hook` event, whether the installer writes it) for Cursor, Copilot, Gemini and the plugin-only Claude, Codex, Grok and ZCode manifests. The Cursor, Copilot and Gemini installers read their lists from it; Cursor's `insert_ours`, `strip_ours` and `is_ours` now cover `beforeSubmitPrompt` and `sessionEnd`, both also in `plugins/cursor/hooks/hooks.json` in the plugin's fail-open resolver form. `cursor_event` maps `sessionEnd` to `SessionEnd` (it passed through unmapped, so the hook did nothing). Cursor's `beforeSubmitPrompt` output has no context field (https://cursor.com/docs/hooks), so the hook answers `{"continue":true}` and injects nothing, leaving per-turn recall unavailable on Cursor; `sessionEnd` writes the session note and ends the agent row. `subagentStart` stays unregistered. `tests/hook_manifests.rs` fails when any `plugins/*/hooks/hooks.json` disagrees with the table; `cursor_prompt_and_session_end_hooks_follow_cursors_output_schema` (`src/hooks/mod.rs`) is the hook fixture for both events. T291–T294 and D35 are recorded from branch `plan-memory` (`d706e3cb`), and the false 2026-09-18 claim under T70.7 carries a correction. The other installers' lists are T390.1.
+
 
 ---
 
@@ -1235,6 +1252,62 @@ Status: done 2026-09-28
 Model: Claude Code / claude-opus-5-5
 
 ---
+
+### T291. One event module registers memory hooks for every agent
+
+Memory already runs in one place at runtime: `inject_event` (`src/hooks/mod.rs`) for `SessionStart`, `UserPromptSubmit` and `SubagentStart`, and `hooks::dispatch` for `SessionEnd` (`checkpoint::save_session`). What is split is the install list. `claude::ENTRIES` (`src/agents/claude/mod.rs`) is one list; Cursor, Copilot, Gemini and ZCode each keep another, and `plugins/*/hooks/hooks.json` is written by hand. Cursor's manifest has `sessionStart` and `preCompact` and omits `beforeSubmitPrompt`, `sessionEnd` and `subagentStart`, so `remember:`, per-turn recall and the session note never fire there. `cursor_event` already maps `beforeSubmitPrompt` → `UserPromptSubmit` and does not map `sessionEnd` or `subagentStart` (`src/hooks/types.rs`). Cursor's own docs list all three events (https://cursor.com/docs/hooks, fetched 2026-09-27). On Cursor cloud agents `sessionStart` is deferred and `sessionEnd` is the IDE session, so those two stay unwired there; the module records that and does not grow a second memory path.
+
+Plan:
+1. Worktree `_worktrees/rtok-T291`.
+2. One module under `src/agents/` owns the canonical events (`UserPromptSubmit`, `SessionStart`, `SessionEnd`, `PreCompact`, `SubagentStart`) and each host's name map. `cursor_event`, `claude_event` and `gemini_event` become the inverse of that table. A `create` (or the table the installers already call) is the only function that emits a host manifest. Install still goes through `rtok-agent-sdk` (D28).
+3. Generate `plugins/*/hooks/hooks.json` and each installer list from that table. A drift test fails when a manifest is edited by hand.
+4. Cursor's manifest and installer gain `beforeSubmitPrompt`, `sessionEnd` and `subagentStart`, fail-open, same command shape as `sessionStart`. `cursor_event` maps the last two.
+5. A host with no equivalent event (ZCode has no distinct session-end; Gemini and Kimi have no subagent event; Cursor cloud agents have no IDE `sessionEnd`) is a row on the module: MCP-only for that event. `SessionEnd` stays in `hooks::dispatch`. `SubagentStart` stays in `inject_event`. Hook path stays synchronous, ≤10 ms, fail-open, no LLM, no vector read (D13). SQLite stays the only store (D8).
+
+Check: a fixture per host asserts the generated manifest contains every event that host's map names, and omits the ones the module marks MCP-only; a Cursor `beforeSubmitPrompt` / `sessionEnd` / `subagentStart` payload reaches `prompt_submit`, `save_session` and `subagent_start`; `just check`.
+
+**Result (2026-10-04).** Closed into T390. Shipped there: the one hook-event table `src/agents/hook_events.rs` (host, host event, `rtok hook` event) read by the Cursor, Copilot and Gemini installers, Cursor's `beforeSubmitPrompt` and `sessionEnd` in `plugins/cursor/hooks/hooks.json` and `src/agents/cursor/mod.rs`, `cursor_event`'s `sessionEnd` mapping, and `tests/hook_manifests.rs`, which fails when a `plugins/*/hooks/hooks.json` disagrees with the table. Not built: generating each manifest from the table (the drift test replaces it) and Cursor `subagentStart` (its output has no context field, `research.md` §23). The other installers' lists move onto the table in T390.1.
+
+### T292. Smart memory is on by default
+
+Creator 2026-09-27 (D35) overrode the T131 gate. `prompt_recall`, `startup_recall`, `handoff` and `spawn_brief` are off in both `config/default.toml` and `Memory` (`src/config/mod.rs`), so the hooks from T291 still inject nothing. `prompt_recall` is a count; on means 5, the same title count as `recall_titles`.
+
+Plan:
+1. Worktree `_worktrees/rtok-T292`. Depends on T291 so the events exist to fire.
+2. Set `prompt_recall = 5`, `startup_recall = true`, `handoff = true`, `spawn_brief = true` in `config/default.toml` and the `Memory` defaults. Leave `recall_tokens` 200, `checkpoint_tokens` 400, `spawn_brief_tokens` 300, inject `budget_tokens` 800. Leave `[plugins.memory.embed] enabled = false`.
+3. `prompt_recall` injects id and title only. `startup_recall` restores the newest `session:*` note inside 400 tokens. `spawn_brief` stays inside 300. Measurement rows for those four kinds still write. An empty or failing measurement does not flip the flags back.
+4. Tests that pin the old off defaults (`prompt_recall_is_off_by_default`, the startup-off half of the session-end test) expect the new defaults and cover an explicit off. Schema drift stays green.
+
+Check: `rtok config show` on a fresh config prints the four flags on; a hook fixture with defaults injects titles on `UserPromptSubmit` and a session note on startup; the same fixture with the flags set false injects neither; `just check`.
+
+**Result (2026-10-04).** `prompt_recall = 5`, `startup_recall`, `handoff` and `spawn_brief` default on in `config/default.toml` (`[plugins.memory]`) and in the `Memory` struct (`src/config/mod.rs`), inside the existing token budgets.
+
+### T293. Recall names the fetch; bodies stay behind `mem_get`
+
+SessionStart recall is already on and already title-only (`recall_tokens` 200, up to 5 lines). On this machine `rtok memory status` showed 125 live notes, 235 recalls, and `mem_get` called 0 times (2026-09-27), so the titles never become a memory the model can use. claude-mem's index works because each line shows the retrieval cost and names the tool that fetches the body (https://docs.claude-mem.ai/progressive-disclosure, fetched 2026-09-27). The diagram token counts on that page are the vendor's illustrations.
+
+Plan:
+1. Worktree `_worktrees/rtok-T293`. Independent of T291; land before or with T292 so the newly-on paths use the same line shape.
+2. `recall` and `prompt_recall` stay inside their budgets and still contain no bodies. Each title line gains an estimated body-token count. One line says these are titles, and names `mem_search` for the turn and `mem_get` for a matching id.
+3. Zero notes for the resolved project inject one line naming that project key, inside the 200-token cap.
+4. `mem_get` writes a `Measurement` (bytes and estimated tokens) and returns the verbatim body, retired prefix included (D4). The tool description points at the index. No truncation, no new tool, no embedding call.
+
+Check: a fixture with three notes asserts the injected text has ids, titles and token counts and does not contain a body secret; an empty project asserts the one-line key; `mem_get` records one `memory` measurement and returns the full body; `just check`.
+
+**Result (2026-10-04).** The recall index carries a body token estimate and names `mem_get` (`INDEX_GUIDE` in `src/plugins/memory/mod.rs`); `mem_get` records one `mem_get` measurement row and returns the full body (tests in the same file).
+
+### T294. Export rows that can carry a tombstone
+
+A later sync lives in a private repo. That repo was not in the local tree or in `gh repo list` / `gh search` on 2026-09-27 (the only cloud-sync hit was Fern in `listepo/budget-app`, a different product). This repo does not grow a protocol (D8). `export.rs` writes `{kind, title, body, project}` and drops `id`, timestamps, `retired`, `superseded_by` and `pinned`, so a replicator cannot apply a tombstone.
+
+Plan:
+1. Worktree `_worktrees/rtok-T294`.
+2. Export and import round-trip `id`, `ts`, `retired`, `superseded_by` and `pinned` beside the fields already written. Old lines still import. `checkpoint:*` and `session:*` rows stay out. A retired row stays a tombstone. SQLite remains the source of truth.
+3. No HTTP client, no hub, no cursor protocol. When the private repo's task is named, its identity and conflict rules get a row in `research.md` §27; they do not change this export until the creator says so.
+
+Check: a round-trip fixture keeps a tombstone and a pin, an old three-field line still imports, and a `checkpoint:` row is absent from the file; `just check`.
+
+**Result (2026-10-04).** `memory export` rows carry `id`, `ts`, `retired`, `superseded_by` and `pinned`, so a retired note travels as a tombstone and import writes `retired` back: `src/plugins/memory/export.rs` (`export_round_trips_tombstone_and_pin`) over `Store::list_export_notes` and `Store::insert_portable_note_if_absent` in `src/store/mod.rs`.
 
 ## T68.10 — `[plugins.graph]` exclude, include and extension map
 

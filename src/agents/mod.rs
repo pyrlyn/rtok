@@ -24,6 +24,7 @@ pub mod cursor;
 pub mod devin;
 pub mod gemini;
 pub mod grok;
+pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
 pub mod junk_map;
