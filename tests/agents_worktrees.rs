@@ -200,9 +200,11 @@ fn walk(host: &str) -> Result<Shape, String> {
         return Err(format!("{host}: reply {out} / inbox {mine}"));
     }
     Ok(Shape {
+        // The root comes from `$HOME` as spelled (`/var/…` on macOS, not `/private/var/…`);
+        // dunce: the server reports paths without the `\\?\` prefix std adds on Windows.
         path: path
-            // dunce: the server reports paths without the `\\?\` prefix std adds on Windows.
-            .strip_prefix(dunce::canonicalize(&tmp).unwrap())
+            .strip_prefix(&tmp)
+            .or_else(|_| path.strip_prefix(dunce::canonicalize(&tmp).unwrap()))
             .unwrap()
             .display()
             .to_string()
@@ -240,7 +242,7 @@ fn every_host_gets_the_same_worktree_rule_lock_and_row() {
     for (host, shape) in &shapes[1..] {
         assert_eq!(shape.as_ref().unwrap(), want, "{host} differs from {first}");
     }
-    assert_eq!(want.path, "_worktrees/rtok-t1");
+    assert_eq!(want.path, ".rtok/worktrees/rtok-t1");
     assert_eq!(want.branch, "t1-x");
 }
 

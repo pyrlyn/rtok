@@ -43,7 +43,8 @@ struct Payload {
     worktree_path: String,
 }
 
-/// `Some(path)` for a create (what the host reads from stdout), `None` for a remove.
+/// `Some(path)` for a create (what the host reads from stdout), `None` for a remove or while
+/// worktrees are off.
 pub fn run(event: &str, stdin: impl Read, cfg: &Config) -> Result<Option<String>> {
     let max = u64::from(cfg.core.hook_max_input_bytes);
     let mut buf = Vec::new();
@@ -53,6 +54,9 @@ pub fn run(event: &str, stdin: impl Read, cfg: &Config) -> Result<Option<String>
         "{event} payload is over {max} bytes"
     );
     let payload: Payload = serde_json::from_slice(&buf).context("bad payload")?;
+    if !cfg.worktree.enabled {
+        return without_rtok(event, &payload);
+    }
     let store = Store::open(&cfg.core.db_path).ok();
     if event == "WorktreeCreate" {
         let path = create(&payload, cfg, store.as_ref())?;
@@ -60,6 +64,18 @@ pub fn run(event: &str, stdin: impl Read, cfg: &Config) -> Result<Option<String>
     }
     let note = remove(&payload, store.as_ref())?;
     eprintln!("rtok: {}: {note}", payload.worktree_path);
+    Ok(None)
+}
+
+/// `[worktree] enabled = false` (T410): what the host does without rtok. A create prints no
+/// path, so `worktree.sh` makes the host's own worktree; a remove is a plain
+/// `git worktree remove`, never `--force`, so a dirty worktree stays and the host says why.
+fn without_rtok(event: &str, p: &Payload) -> Result<Option<String>> {
+    let path = Path::new(&p.worktree_path);
+    if event == "WorktreeRemove" && path.is_dir() {
+        ensure!(!p.cwd.is_empty(), "payload has no cwd");
+        git::remove(Path::new(&p.cwd), path)?;
+    }
     Ok(None)
 }
 
@@ -80,7 +96,7 @@ fn create(p: &Payload, cfg: &Config, store: Option<&Store>) -> Result<PathBuf> {
     }
     let agent = session_agent(store, p);
     let owner = agent.is_none().then(|| HOST.to_string());
-    let root = claim::configured_root(&cfg.worktree.root);
+    let root = &cfg.worktree.root;
     let auto_add = cfg.plugins.graph.auto_add_projects;
     let plan = claim::add(
         store,

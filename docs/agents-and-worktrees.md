@@ -40,7 +40,7 @@ Raw `git worktree` records no owner, age or size. `rtok worktree` gives each wor
 | `rtok worktree remove <path\|task>` | `worktree_remove` | removes your own clean worktree and its merged branch; refuses a dirty one, an unmerged branch, someone else's lock and the one you stand in; never forces |
 | `rtok worktree gc`, `clean` | — | sweep finished worktrees, delete idle build caches; dry runs until `--yes`; a live agent's worktree is kept |
 
-The owner is `<host> / <model>` of the agent unless a CLI call passes `--owner`; an MCP call never does. The root is `[worktree] root`, else the nearest `_worktrees/` above the main checkout.
+The owner is `<host> / <model>` of the agent unless a CLI call passes `--owner`; an MCP call never does. The root is `[worktree] root`, `~/.rtok/worktrees` by default. With `[worktree] enabled = false` rtok leaves worktrees alone: every `rtok worktree` command (`list` too) says they are not enabled, MCP lists no `worktree_*` tool, and Claude's `WorktreeCreate`/`WorktreeRemove` hooks do what Claude does without rtok.
 
 ### Worktrees a host makes itself
 

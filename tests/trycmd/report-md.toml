@@ -291,9 +291,10 @@ Every effective key with its origin — the `config show --sources` page.
 | ui.emoji | true | default |
 | web.host | 127.0.0.1 | default |
 | web.port | 3333 | default |
-| worktree.root |  | default |
+| worktree.enabled | true | default |
+| worktree.root | ~/.rtok/worktrees | default |
 
-247 keys.
+248 keys.
 
 ## Doctor
 

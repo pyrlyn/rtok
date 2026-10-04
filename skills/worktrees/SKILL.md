@@ -17,7 +17,7 @@ No `rtok`? `ketch install pyrlyn/rtok`; meanwhile `git worktree add --lock --rea
 
 MCP `worktree_add` (task, slug) or `rtok worktree add <task> [slug] --owner "<provider> / <model>"`
 — the CLI runs inside the repository; both give the path and bind your agent id, which you
-quote when you report. One location (`_worktrees/<repo>-<task>`, never `/tmp`), one name (branch
+quote when you report. One location (`[worktree] root`, `~/.rtok/worktrees/<repo>-<task>` by default, never `/tmp`), one name (branch
 `<task>[-<slug>]` off a fresh `origin/<default>`, no upstream, so a bare `git push` cannot
 reach `main`), one owner (lock `<owner> | <task> | <date>`).
 A host-made worktree (Cursor, Codex, Kilo, Devin, Grok, MiMo, omp, Antigravity): `worktree_adopt`

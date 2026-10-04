@@ -423,6 +423,11 @@ impl Server {
                 listed.push(Listed { plugin: id, def });
             }
         }
+        // T410: with worktrees off the tools are not offered at all, rather than offered and
+        // refused, so a model never plans around them.
+        if !cfg.worktree.enabled {
+            listed.retain(|t| !t.def.name.starts_with("worktree_"));
+        }
         if !cfg.mcp.tools.is_empty() {
             // `expand` stays listed whatever the allow-list says: D4 losslessness.
             listed.retain(|t| {

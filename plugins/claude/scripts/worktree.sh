@@ -30,7 +30,8 @@ field() {
 case "$event" in
 WorktreeCreate)
   if [ -n "$bin" ]; then
-    # An rtok too old to know the event prints `{}`: anything but a path falls through.
+    # Anything but a path falls through: an rtok too old to know the event prints `{}`, and
+    # `[worktree] enabled = false` prints nothing so the host gets its own worktree.
     if out=$(printf '%s' "$input" | "$bin" hook WorktreeCreate); then
       case "$out" in
       /* | [A-Za-z]:*)
@@ -38,8 +39,9 @@ WorktreeCreate)
         exit 0
         ;;
       esac
+    else
+      echo "rtok: rtok worktree add failed; creating a plain worktree" >&2
     fi
-    echo "rtok: rtok worktree add failed; creating a plain worktree" >&2
   fi
   # printf: a POSIX sed ends its output with a newline, and tr -c would turn it into a dash.
   name=$(printf '%s' "$(field name)" | tr -c 'A-Za-z0-9._-' '-')

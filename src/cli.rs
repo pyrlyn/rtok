@@ -1366,6 +1366,14 @@ pub fn run() -> Result<()> {
                 print!("{}", report.to_console());
             }
         }
+        // One gate for every subcommand, `list` included (T410).
+        Cmd::Worktree { .. }
+            if !Config::load_with(config_file.as_deref(), None)?
+                .worktree
+                .enabled =>
+        {
+            bail!(crate::worktree::DISABLED)
+        }
         Cmd::Worktree {
             action:
                 WorktreeCmd::Add {
@@ -1381,7 +1389,7 @@ pub fn run() -> Result<()> {
             let store = crate::store::Store::open(&cfg.core.db_path).ok();
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
             let cwd = std::env::current_dir()?;
-            let root = claim::configured_root(&cfg.worktree.root);
+            let root = &cfg.worktree.root;
             let plan = claim::add(
                 store.as_ref(),
                 &cwd,

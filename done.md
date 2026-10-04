@@ -5834,6 +5834,16 @@ Check result: `cargo nextest run --lib --test worktree --test cli_trycmd --test 
 Deviations: the temp-directory refusal is skipped when the main checkout itself is under the temp directory (a scratch clone or test fixture is no worse off with its worktrees beside it). The error messages are covered by the unit table and the fixture, not by `trycmd` (they carry machine paths). The first landing (#160) was auto-reverted when main's CI hit the T143 flake that T161 fixed; re-landed unchanged except that the fixture's `[worktree] root` assertion now compares path components (Windows prints `\wt\rtok-t2`).
 Model: Claude Code / claude-fable-5-1
 
+### T410. Worktrees in `~/.rtok/worktrees` by default, and a switch to turn them off
+
+Why: the creator asked (2026-10-04) for one default home for worktrees instead of discovering `_worktrees/` above the repository, and for a way to turn rtok's worktree handling off entirely.
+
+Done means: with `[worktree] root` unset, worktrees go to `~/.rtok/worktrees/<repo>-<task>` (the `~/.rtok` part follows `RTOK_HOME`); the `_worktrees/` discovery is gone and an explicit empty `root` is refused. `[worktree] enabled` (default `true`): when `false`, every `rtok worktree` command, `list` included, fails with "worktrees are not enabled; set `[worktree] enabled = true` in ~/.rtok/config.toml", `rtok mcp` lists no `worktree_*` tool (a call answers `unknown tool`), and Claude's `WorktreeCreate`/`WorktreeRemove` hooks do what Claude does without rtok: a create prints no path so `plugins/claude/scripts/worktree.sh` makes `.claude/worktrees/<name>` on `worktree-<name>`, a remove is a plain `git worktree remove` (never forced). The launcher now warns "rtok worktree add failed" only when rtok exits non-zero.
+
+Check: `just check`.
+
+Result: `src/config/mod.rs` (`enabled`, default root), `src/worktree/add.rs` (`root_for` removed, root is a plain path), `src/worktree/claim.rs` (`configured_root` removed), gates in `src/cli.rs`, `src/mcp.rs`, `src/worktree/host.rs`; docs in `config/default.toml`, `docs/config.md`, `docs/agents-and-worktrees.md`, `README.md`, `skills/worktrees/SKILL.md`. Tests: `add::tests` (a `_worktrees/` beside the repository no longer wins; empty root refused; default root), `tests/worktree.rs` (`disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools`; the list test keeps `$HOME` out of the listed worktree, since the gate loads the config first; the launcher test gains the disabled create/remove case; the add and hook tests expect `$HOME/.rtok/worktrees`), `tests/agents_worktrees.rs` path; `config-init`, `config-show`, `report-md` goldens follow the new key (248 keys). Worktrees the Claude desktop app makes for its own sessions follow the app's "worktree location" setting, not `[worktree] root`.
+
 ## T159 — Claude Code `WorktreeCreate`/`WorktreeRemove` hooks route through `rtok worktree`
 
 Depends on T156 (the real payloads), T158 (create) and T153 (remove). A skill is advice an agent may skip; the host's own worktree hooks are the only place where the rules cannot be skipped: `claude --worktree`, the desktop app and sub-agent `isolation: worktree` all create worktrees without asking the agent, which is where the `agent-<hex>` directories and reason-less locks come from (`research.md` §18.1, §18.3).

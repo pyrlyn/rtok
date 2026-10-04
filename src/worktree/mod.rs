@@ -16,6 +16,10 @@ pub mod list;
 pub mod origin;
 pub mod remove;
 
+/// What every `rtok worktree …` command answers while `[worktree] enabled = false` (T410).
+pub const DISABLED: &str =
+    "worktrees are not enabled; set `[worktree] enabled = true` in ~/.rtok/config.toml";
+
 /// A `render::table` with one free-text note appended per line (after a `note` header),
 /// so the table itself still ends right-aligned. `gc` and `clean` print their verdicts this way.
 pub(crate) fn noted_table<'a>(

@@ -297,7 +297,8 @@ max_rate  = 0.05                      # re-read ceiling; above it the report fla
 cmd = ""                              # command family hint when the caller knows it (--cmd)
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
-root = ""                             # where `rtok worktree add` creates worktrees; "" = the nearest `_worktrees/` above the main checkout, else one next to it
+enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
+root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
 
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
 endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
