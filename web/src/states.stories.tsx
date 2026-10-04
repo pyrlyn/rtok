@@ -14,4 +14,6 @@ export const EmptyState: Story = {
     render: () => <Empty title="No calls yet" hint="Run an agent with rtok installed." />,
 };
 export const ErrorBanner: Story = { render: () => <ErrorState message="store will not open" /> };
-export const OfflineBanner: Story = { render: () => <Offline /> };
+export const OfflineScreen: Story = {
+    render: () => <Offline connecting={false} onReconnect={() => {}} />,
+};

@@ -3,9 +3,9 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import logo from "../assets/logo.svg";
-import { useConnection, useSnapshot } from "./api/query";
+import { useConnection, useReconnect, useSnapshot } from "./api/query";
 import { Orb } from "./Orb";
 import { PAGES, type Page } from "./pages";
 import { Empty, ErrorState, Offline } from "./states";
@@ -23,6 +23,12 @@ export function Shell() {
     const title = PAGES.find((p) => `/${p.id}` === pathname)?.id ?? "not found";
     const heading = useRef<HTMLHeadingElement>(null);
     const mounted = useRef(false);
+    const reconnect = useReconnect();
+    // Latched: the socket's own retries pass through `connecting`, which must not flash the
+    // shell back in until a link is actually open.
+    const [offline, setOffline] = useState(false);
+    if (connection === "closed" && !offline) setOffline(true);
+    if (connection === "open" && offline) setOffline(false);
 
     useEffect(() => {
         document.title = `${title} · rtok`;
@@ -31,6 +37,9 @@ export function Shell() {
         if (mounted.current) heading.current?.focus();
         mounted.current = true;
     }, [title]);
+
+    if (offline)
+        return <Offline connecting={connection === "connecting"} onReconnect={reconnect} />;
 
     return (
         <>
@@ -82,7 +91,6 @@ export function Shell() {
                         tabIndex={-1}
                         className="flex min-w-0 flex-1 flex-col gap-3 px-3 pt-1 pb-24 outline-none md:pb-6"
                     >
-                        {connection === "closed" && <Offline />}
                         {data?.error && <ErrorState message={data.error} />}
                         <Outlet />
                     </main>

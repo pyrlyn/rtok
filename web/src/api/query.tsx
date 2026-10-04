@@ -35,6 +35,7 @@ export const DOCTOR_TIMEOUT_MS = 30_000;
 export interface Api {
     open(): void;
     close(): void;
+    reconnect(): void;
     expand(id: string): Promise<string>;
     set(request: SetRequest): Promise<void>;
     project(request: ProjectRequest): Promise<void>;
@@ -153,6 +154,11 @@ export function createApi(
             connection?.close();
             connection = null;
         },
+        // The socket's own backoff can be seconds away; the offline screen's button skips it.
+        reconnect() {
+            connection?.close();
+            connection = connect({ onState, onFrame });
+        },
         expand(id) {
             return new Promise<string>((resolve, reject) => {
                 const entry: PendingExpand = {
@@ -222,6 +228,11 @@ export const useConnection = (): ConnectionState =>
     useQuery<ConnectionState>(pushed(connectionKey)).data ?? "connecting";
 
 export const useServerMessage = () => useQuery<string>(pushed(messageKey)).data;
+
+export function useReconnect(): () => void {
+    const api = useApi();
+    return () => api.reconnect();
+}
 
 export function useSetMutation() {
     const api = useApi();

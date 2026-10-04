@@ -5,7 +5,7 @@
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { useConnection, useSnapshot } from "../api/query";
+import { useSnapshot } from "../api/query";
 import type { Snapshot } from "../api/snapshot.gen";
 import { Loading } from "../states";
 import { Chip } from "../ui/Chip";
@@ -16,12 +16,10 @@ import { Pill } from "../ui/Pill";
 import { compact, pct } from "./format";
 import type { CheckState } from "./model";
 
-/** Renders `children` once a snapshot exists; the shell already shows the offline banner. */
+/** Renders `children` once a snapshot exists; while offline the shell renders no page at all. */
 export function WithSnapshot({ children }: { children: (snap: Snapshot) => ReactNode }) {
-    const connection = useConnection();
     const { data } = useSnapshot();
-    if (data) return children(data);
-    return connection === "closed" ? null : <Loading />;
+    return data ? children(data) : <Loading />;
 }
 
 export function Toolbar({ children }: { children: ReactNode }) {

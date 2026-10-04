@@ -110,6 +110,40 @@ describe("shared states", () => {
         mount(server("closed"));
         expect(await screen.findByText("Offline")).toBeTruthy();
         expect(screen.queryByText("Loading")).toBeNull();
+        expect(screen.queryByRole("navigation")).toBeNull();
+    });
+
+    // First link closes; the button's link then pushes `next` (T407).
+    const flaky = (next: (h: Parameters<Connect>[0]) => void) => {
+        let links = 0;
+        const connect: Connect = (h) => {
+            links += 1;
+            if (links === 1) h.onState("closed");
+            else next(h);
+            return { send: () => true, close: () => {} };
+        };
+        return { connect, links: () => links };
+    };
+
+    test("Reconnect opens a new link and stays offline while it connects", async () => {
+        const s = flaky((h) => h.onState("connecting"));
+        mount(s.connect);
+        fireEvent.click(await screen.findByRole("button", { name: "Reconnect" }));
+        expect(s.links()).toBe(2);
+        const busy = await screen.findByRole("button", { name: "Reconnecting…" });
+        expect((busy as HTMLButtonElement).disabled).toBe(true);
+        expect(screen.queryByRole("navigation")).toBeNull();
+    });
+
+    test("an open link after Reconnect brings the screens back", async () => {
+        const s = flaky((h) => {
+            h.onState("open");
+            h.onFrame({ type: "snapshot", snapshot: sampleSnapshot });
+        });
+        mount(s.connect);
+        fireEvent.click(await screen.findByRole("button", { name: "Reconnect" }));
+        expect(await screen.findByRole("navigation", { name: "Admin screens" })).toBeTruthy();
+        expect(screen.queryByText("Offline")).toBeNull();
     });
 
     test("error banner carries the snapshot error", async () => {
