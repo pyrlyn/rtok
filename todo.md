@@ -57,3 +57,4 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T381. `rtok config init` must not freeze today's defaults into the user's file
+- T382. Installed plugin version in `rtok agents list` and on the web Hosts page
