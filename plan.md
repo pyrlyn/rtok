@@ -83,7 +83,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T387 | todo | P2 | 3 | 40% | |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
-| T390 | todo | P2 | 3 | 40% | |
+| T390 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -1721,6 +1721,8 @@ Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/confi
 From `research.md` §27.1 and §27.3 (T291): Cursor's plugin manifest (`plugins/cursor/hooks/hooks.json`) registers only `beforeShellExecution`, `afterShellExecution`, `sessionStart`, `preCompact`, `afterMCPExecution` and `postToolUse`, although `src/hooks/types.rs` already maps `beforeSubmitPrompt` and `sessionEnd`. `done.md` claims `beforeSubmitPrompt` was registered; the file never contained it. So per-turn memory recall and session-end checkpoints do not run on Cursor.
 
 Done means: Cursor's manifest and installer carry `beforeSubmitPrompt` and `sessionEnd`, failing open. Skip `subagentStart` (its Cursor output schema has no context field, §23). A drift test compares every `plugins/*/hooks/hooks.json` and every installer's event list against one event table in code. The T291–T294 cards that exist only on branch `plan-memory` (commit `d706e3cb`), and decision D35, are copied into `done.md` and the decision table, since that work shipped.
+
+Plan: one event table in code (host, host event, `rtok hook` subcommand) that every installer's `insert_ours` and every `plugins/*/hooks/hooks.json` is checked against by a drift test (`tests/hook_manifests.rs`). Add `beforeSubmitPrompt` and `sessionEnd` to `plugins/cursor/hooks/hooks.json` and to `src/agents/cursor/mod.rs`, failing open. Copy the T291–T294 cards from `plan-memory` (`d706e3cb`) into `done.md` and D35 into the decision table. If the drift test pushes past 300 LOC, it becomes T390.1.
 
 Check: the drift test fails on a manifest missing an event; a Cursor hook fixture for both new events; `just check`.
 
