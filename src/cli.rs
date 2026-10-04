@@ -589,6 +589,12 @@ enum WorktreeCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Your agent, where new worktrees go, the worktree you are in and the ones you hold
+    Whoami {
+        /// JSON instead of the text lines
+        #[arg(long)]
+        json: bool,
+    },
     /// Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
     Gc {
         /// Apply; without it this is a dry run that changes nothing
@@ -1482,6 +1488,22 @@ pub fn run() -> Result<()> {
                 print_json(&done)?;
             } else {
                 println!("{}: {}", done.path, done.note);
+            }
+        }
+        Cmd::Worktree {
+            action: WorktreeCmd::Whoami { json },
+        } => {
+            use crate::worktree::{claim, whoami};
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let store = crate::store::Store::open(&cfg.core.db_path).ok();
+            // An unknown `RTOK_AGENT_ID` still leaves the root and the cwd worth printing.
+            let agent = claim::caller(store.as_ref(), None).ok().flatten();
+            let cwd = std::env::current_dir()?;
+            let me = whoami::run(&cwd, &cfg.worktree.root, agent.as_ref(), store.as_ref());
+            if json {
+                print_json(&me)?;
+            } else {
+                print!("{}", whoami::to_text(&me));
             }
         }
         Cmd::Worktree {

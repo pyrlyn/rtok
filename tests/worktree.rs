@@ -1068,6 +1068,68 @@ fn disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools() {
     assert_eq!(inventory(&work).unwrap().len(), 1);
 }
 
+/// T411: `worktree whoami` names the caller, the root, the worktree the cwd is in and the
+/// worktrees bound to the caller, by lock or by claim, but not another agent's.
+#[test]
+fn whoami_shows_the_root_and_only_the_caller_s_worktrees() {
+    let tmp = rtok::testutil::tmp_dir("worktree-whoami");
+    let work = origin_clone(&tmp, "rtok");
+    let (store, ids) = agents(&tmp, &["sess-me", "sess-other"]);
+    let (me, other) = (ids[0].as_str(), ids[1].as_str());
+    let as_me = |cwd: &Path, args: &[&str]| rtok_as(&tmp, cwd, Some(me), args, b"");
+    let add = as_me(&work, &["worktree", "add", "t1", "--owner", "me"]);
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let locked = std::path::PathBuf::from(String::from_utf8_lossy(&add.stdout).trim_end());
+    // Unlocked worktrees held through claim rows: one mine, one another agent's.
+    let (claimed, foreign) = (tmp.join("claimed"), tmp.join("foreign"));
+    for (dir, branch, agent) in [(&claimed, "c", me), (&foreign, "f", other)] {
+        let path = dir.to_str().unwrap();
+        run(&work, &["worktree", "add", "-q", "-b", branch, path]);
+        store.claim_worktree(path, agent, branch).unwrap();
+    }
+
+    let out = as_me(&claimed, &["worktree", "whoami", "--json"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let real = |p: &serde_json::Value| Path::new(p.as_str().unwrap()).canonicalize().unwrap();
+    assert_eq!(v["agent"], me);
+    assert_eq!(
+        Path::new(v["root"].as_str().unwrap()),
+        tmp.join(".rtok/worktrees")
+    );
+    assert_eq!(real(&v["here"]), claimed.canonicalize().unwrap());
+    let mut held: Vec<std::path::PathBuf> = v["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| real(&w["path"]))
+        .collect();
+    held.sort();
+    let mut want = vec![
+        locked.canonicalize().unwrap(),
+        claimed.canonicalize().unwrap(),
+    ];
+    want.sort();
+    assert_eq!(held, want);
+
+    let out = as_me(&work, &["worktree", "whoami"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains(&format!("agent: {} (claude)\n", &me[..8])),
+        "{text}"
+    );
+    assert!(text.contains("here: -\n"), "{text}");
+    assert_eq!(text.matches("worktree: ").count(), 2, "{text}");
+}
+
 /// T286 PR 2: MCP `worktree_remove` for the linked agent: a merged clean worktree goes with
 /// its branch; an unmerged one is refused until `keep_branch`; another agent's lock and a
 /// call that names nothing are refused.

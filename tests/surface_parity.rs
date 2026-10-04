@@ -491,6 +491,11 @@ const EXEMPT: &[(&str, &str)] = &[
          identity call, not a shared model page",
     ),
     (
+        "worktree whoami",
+        "prints the caller's agent, worktree root and held worktrees (T411); a one-row \
+         identity call like `agents whoami`, not a shared model page",
+    ),
+    (
         "agents send",
         "writes message rows for one agent or this project's live agents (T287)",
     ),
@@ -637,6 +642,7 @@ const JSON_READERS: &[&str] = &[
     "otel status",
     "memory status",
     "worktree list",
+    "worktree whoami",
     "agents usage",
     "graph status",
     "graph dead",
