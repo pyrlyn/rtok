@@ -3,6 +3,10 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! Clap tree. `tests/config_coverage.rs` walks [`Cli::command`] (plan T12.4).
+//!
+//! Plan ids sit in plain `//` lines above the `///` they belong to: clap turns doc comments
+//! into help, man pages and completion scripts, and users never see plan ids (T409,
+//! `tests/no_plan_ids.rs`).
 
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
@@ -42,7 +46,8 @@ enum Cmd {
         /// Overlay `[hook] host` (`claude` | `cursor` | `copilot` | `devin` | `cline`)
         #[arg(long)]
         host: Option<String>,
-        /// Run the resident hook process `rtok-hook` talks to (T178, D32)
+        // T178, D32
+        /// Run the resident hook process `rtok-hook` talks to
         #[arg(long, hide = true, conflicts_with_all = ["event", "host"])]
         serve: bool,
     },
@@ -50,14 +55,16 @@ enum Cmd {
     Mcp {
         #[command(subcommand)]
         action: Option<McpCmd>,
-        /// Call one listed tool and print the text result (pi `registerTool` shim, T70.3)
+        // T70.3
+        /// Call one listed tool and print the text result (pi `registerTool` shim)
         #[arg(long, value_name = "TOOL")]
         call: Option<String>,
         /// JSON arguments for `--call`
         #[arg(long, value_name = "ARGS")]
         json: Option<String>,
+        // T283.1
         /// The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays `[hook] host` so
-        /// the process can find its rtok agent (T283.1)
+        /// the process can find its rtok agent
         #[arg(long, value_name = "HOST")]
         host: Option<String>,
         /// Foreign stdio MCP server to wrap losslessly (`rtok mcp -- npx some-server`)
@@ -88,7 +95,8 @@ enum Cmd {
         #[arg(long)]
         port: Option<u16>,
     },
-    /// Terminal UI over the same data as `rtok web` (D23: one model, two renderings)
+    // D23
+    /// Terminal UI over the same data as `rtok web` (one model, two renderings)
     Tui {
         /// Start on this tab (a page name both surfaces carry)
         #[arg(long)]
@@ -144,7 +152,8 @@ enum Cmd {
     },
     /// Inspect hooks, MCP servers and the proxy chain
     Doctor {
-        /// Also run the instruction-file audit (T7.2)
+        // T7.2
+        /// Also run the instruction-file audit
         #[arg(long)]
         instructions: bool,
         /// JSON instead of the table
@@ -188,7 +197,8 @@ enum Cmd {
     Setup(SetupArgs),
     /// Execute a command, archive its raw output, print the filtered version
     Run {
-        /// Sub-agent id from PreToolUse; scopes the dedup pointer (T127)
+        // T127
+        /// Sub-agent id from PreToolUse; scopes the dedup pointer
         #[arg(long, value_name = "ID")]
         agent: Option<String>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -219,7 +229,8 @@ enum Cmd {
         #[arg(long)]
         context: Option<u32>,
     },
-    /// The archive live zone (`rtok archive rewrite` — pi `context` carrier, T70.2)
+    // T70.2
+    /// The archive live zone (`rtok archive rewrite` — pi `context` carrier)
     #[cfg(feature = "archive")]
     Archive {
         #[command(subcommand)]
@@ -274,7 +285,8 @@ enum Cmd {
         #[command(subcommand)]
         action: GraphCmd,
     },
-    /// Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path, T70.5)
+    // T70.5
+    /// Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
     #[cfg(feature = "guard")]
     Guard {
         #[command(subcommand)]
@@ -309,7 +321,8 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// The operator model as one document (D24): Markdown, HTML and PDF
+    // D24
+    /// The operator model as one document: Markdown, HTML and PDF
     Report {
         /// Output format
         #[arg(long, value_enum, default_value = "md")]
@@ -320,7 +333,8 @@ enum Cmd {
         /// How far back the report reads (`30d`, `24h`)
         #[arg(long)]
         since: Option<String>,
-        /// Model-shaped rendering of the same document instead of `--format` (T22.4)
+        // T22.4
+        /// Model-shaped rendering of the same document instead of `--format`
         #[arg(long)]
         ai: bool,
     },
@@ -372,7 +386,8 @@ enum DemonCmd {
 enum OtelCmd {
     /// Post rows past the watermarks to the endpoint, once
     Flush {
-        /// T143: hook-spawned only. Coalesces concurrent hook flushes to at most one
+        // T143
+        /// Hook-spawned only. Coalesces concurrent hook flushes to at most one
         /// running + one queued process instead of one per `Stop`/`SessionEnd` event.
         /// A manual `rtok otel flush` never passes this — it always flushes.
         #[arg(long, hide = true)]
@@ -443,18 +458,22 @@ enum MemoryCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Retire a note: a tombstone — never recalled or searched, body kept (T69.1)
+    // T69.1
+    /// Retire a note: a tombstone — never recalled or searched, body kept
     Retire {
         id: i32,
         /// The replacement note id this one is superseded by
         #[arg(long)]
         superseded_by: Option<i32>,
     },
-    /// Pin a note so it leads SessionStart recall (T69.1)
+    // T69.1
+    /// Pin a note so it leads SessionStart recall
     Pin { id: i32 },
-    /// Drop a note back to newest-first recall order (T69.1)
+    // T69.1
+    /// Drop a note back to newest-first recall order
     Unpin { id: i32 },
-    /// Save a replacement (title, body) for a note and retire the old row (T69.1)
+    // T69.1
+    /// Save a replacement (title, body) for a note and retire the old row
     Revise {
         id: i32,
         /// The replacement title
@@ -464,7 +483,8 @@ enum MemoryCmd {
         #[arg(long)]
         body: String,
     },
-    /// Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block (T69.6)
+    // T69.6
+    /// Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block
     Sync {
         /// CLAUDE.md or AGENTS.md
         #[arg(long, default_value = "CLAUDE.md")]
@@ -482,7 +502,8 @@ enum MemoryCmd {
         #[arg(long)]
         force: bool,
     },
-    /// Notes live/pinned/retired, recall and MCP call counts (T69.4)
+    // T69.4
+    /// Notes live/pinned/retired, recall and MCP call counts
     Status {
         /// Only notes of this project
         #[arg(long)]
@@ -612,17 +633,20 @@ enum GraphCmd {
     /// List unreferenced private definitions (skips pub, trait impls, tests, macros)
     Dead {
         path: Option<PathBuf>,
-        /// JSON rows instead of `path:line kind name` lines (T60.1, uncapped)
+        // T60.1
+        /// JSON rows instead of `path:line kind name` lines (uncapped)
         #[arg(long)]
         json: bool,
     },
-    /// Index health for the current or given root (T68.3)
+    // T68.3
+    /// Index health for the current or given root
     Status {
         path: Option<PathBuf>,
         #[arg(long)]
         json: bool,
     },
-    /// Symbol impact or call paths to a target (T68.4)
+    // T68.4
+    /// Symbol impact or call paths to a target
     Impact {
         name: String,
         #[arg(long, default_value_t = 2)]
@@ -631,7 +655,8 @@ enum GraphCmd {
         to: Option<String>,
         path: Option<PathBuf>,
     },
-    /// The project registry: list, add, remove, select (T329.2)
+    // T329.2
+    /// The project registry: list, add, remove, select
     Projects {
         #[command(subcommand)]
         action: Option<ProjectsCmd>,
@@ -817,7 +842,8 @@ enum AgentCmd {
         #[command(subcommand)]
         action: JunkCmd,
     },
-    /// This session's own rtok agent id (T283, D34): `RTOK_AGENT_ID`, resolved through the store
+    // T283, D34
+    /// This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
     Whoami {
         /// JSON instead of the text lines
         #[arg(long)]
@@ -836,7 +862,8 @@ enum AgentCmd {
         /// The status text; empty clears it
         text: String,
     },
-    /// Send a message to an agent (T287): `send <id-prefix> <text|->` or `send --all-live <text|->`
+    // T287
+    /// Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
     Send {
         /// Recipient's rtok agent id (any unique prefix); with `--all-live`, the text instead
         to: Option<String>,
@@ -846,7 +873,8 @@ enum AgentCmd {
         #[arg(long)]
         all_live: bool,
     },
-    /// Read messages (T287): your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
+    // T287
+    /// Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
     /// id that agent's queue (marks nothing)
     Inbox {
         /// An agent's rtok id (any unique prefix); omitted: `RTOK_AGENT_ID`
@@ -902,10 +930,12 @@ struct RemoveArgs {
     /// Print what would be removed and exit
     #[arg(long)]
     dry_run: bool,
-    /// Skip closing/reopening a running desktop app around the write (T141)
+    // T141
+    /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
-    /// Also remove rtok entries you changed, without asking (T246)
+    // T246
+    /// Also remove rtok entries you changed, without asking
     #[arg(long)]
     yes: bool,
 }
@@ -926,13 +956,16 @@ struct UpdateArgs {
     /// All variants (the default when neither `--cli` nor `--desktop` is given)
     #[arg(long)]
     all: bool,
-    /// Skip closing/reopening a running desktop app around the write (T141)
+    // T141
+    /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
-    /// Reinstall the plugin even when it is already at the available version (T279)
+    // T279
+    /// Reinstall the plugin even when it is already at the available version
     #[arg(long)]
     force: bool,
-    /// Compare against this install source instead of the one on record (T279)
+    // T279
+    /// Compare against this install source instead of the one on record
     #[arg(long, value_enum)]
     source: Option<SourceArg>,
     /// List outdated plugins only (same output as `agents outdated`)
@@ -1016,7 +1049,8 @@ struct SetupArgs {
     /// All variants (the default when neither `--cli` nor `--desktop` is given)
     #[arg(long)]
     all: bool,
-    /// Skip closing/reopening a running desktop app around the write (T141)
+    // T141
+    /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
 }
@@ -1066,7 +1100,8 @@ enum ConfigCmd {
     /// Print one key's effective value
     Get {
         key: String,
-        /// JSON `{key,value,source}` instead of the bare value (T228)
+        // T228
+        /// JSON `{key,value,source}` instead of the bare value
         #[arg(long)]
         json: bool,
     },

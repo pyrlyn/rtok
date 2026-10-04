@@ -32,7 +32,7 @@ rtok/-web(1)
 Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)
 .TP
 rtok/-tui(1)
-Terminal UI over the same data as `rtok web` (D23: one model, two renderings)
+Terminal UI over the same data as `rtok web` (one model, two renderings)
 .TP
 rtok/-stats(1)
 Measurements from session logs and the proxy
@@ -62,7 +62,7 @@ rtok/-expand(1)
 Print an archived payload
 .TP
 rtok/-archive(1)
-The archive live zone (`rtok archive rewrite` — pi `context` carrier, T70.2)
+The archive live zone (`rtok archive rewrite` — pi `context` carrier)
 .TP
 rtok/-completions(1)
 Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
@@ -83,7 +83,7 @@ rtok/-graph(1)
 Symbol index (`rtok graph index`)
 .TP
 rtok/-guard(1)
-Duplicate/-call verdict (`rtok guard check` — pi / OpenCode plugin path, T70.5)
+Duplicate/-call verdict (`rtok guard check` — pi / OpenCode plugin path)
 .TP
 rtok/-demon(1)
 Keep `rtok proxy` (or `mcp` / `web`) running in the background
@@ -95,7 +95,7 @@ rtok/-logs(1)
 rtok/*(Aqs own log (`rtok logs` prints, `rtok logs export` strips numbering and colour)
 .TP
 rtok/-report(1)
-The operator model as one document (D24): Markdown, HTML and PDF
+The operator model as one document: Markdown, HTML and PDF
 .SH VERSION
 v[..] ([..])
 .SH "SEE ALSO"

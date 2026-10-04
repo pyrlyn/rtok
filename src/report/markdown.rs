@@ -136,7 +136,7 @@ ledger).\n"
     let _ = writeln!(
         s,
         "\n## Expand\n\nHow often a live-zone pointer had to be expanded (`archive_decisions` \
-rows, T5.4).\n"
+rows).\n"
     );
     if exp.decisions == 0 {
         let _ = writeln!(s, "No rows in window.");

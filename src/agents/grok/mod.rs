@@ -54,7 +54,7 @@ impl Agent for Grok {
             "plugin" => Support::Offer("--yes"),
             "mcp" => Support::Yes,
             "hooks" => Support::No(
-                "Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second (D21)",
+                "Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second set",
             ),
             _ => Support::No(
                 "Grok Build providers live in its own settings tables; setup does not edit them",
@@ -165,7 +165,7 @@ fn compat_claude(cfg: &Config, key: &str) -> bool {
 /// second set. Behind `--yes` like the offer line — guidance counts as a change only then.
 fn hooks_note(cfg: &Config) -> String {
     if covered(cfg, "hooks") && apply(cfg).yes {
-        "hooks: covered by rtok's Claude hooks ([compat.claude] hooks); no second set (D21)".into()
+        "hooks: covered by rtok's Claude hooks ([compat.claude] hooks); no second set".into()
     } else {
         NO_CHANGES.into()
     }
@@ -209,8 +209,7 @@ fn plugin_offer_windows_note(windows: bool) -> Option<&'static str> {
 pub fn register_mcp(cfg: &Config) -> Result<String> {
     if covered(cfg, "mcp") {
         return Ok(if apply(cfg).yes {
-            "mcp: covered by rtok's Claude MCP ([compat.claude] mcps); no second server (D21)"
-                .into()
+            "mcp: covered by rtok's Claude MCP ([compat.claude] mcps); no second server".into()
         } else {
             NO_CHANGES.into()
         });

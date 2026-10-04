@@ -56,7 +56,7 @@ svg.chart{background:#fafafa;margin:1rem 0}
 </table>
 <p>Busts: 18446744073709551615 over 18446744073709551615 turns in 1 session(s).</p>
 <h2 id="expand">Expand</h2>
-<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows, T5.4).</p>
+<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows).</p>
 <p><code>rtok expand</code> froze 9223372036854775807 of 9223372036854775807 live-zone pointers (100.0%). Expanded: <code>ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff</code>.</p>
 <h2 id="config">Config</h2>
 <p>Every effective key with its origin — the <code>config show --sources</code> page.</p>

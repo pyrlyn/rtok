@@ -1,4 +1,4 @@
-Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block (T69.6)
+Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block
 
 Usage: rtok memory sync [OPTIONS]
 

@@ -11,22 +11,22 @@ target/tmp/t60-2-config-init.toml
 +
 +[core]
 +enabled     = true                    # false = plain proxy (no business logic); HTTP stays up until process exit
-+db_path     = "~/.rtok/rtok.db"       # one SQLite file, WAL (decision D8)
-+archive_dir = "~/.rtok/archive"       # raw payloads for `rtok expand <id>` (decision D4)
++db_path     = "~/.rtok/rtok.db"       # one SQLite file, WAL
++archive_dir = "~/.rtok/archive"       # raw payloads for `rtok expand <id>`
 +session_env = "CLAUDE_SESSION_ID"     # env var consulted for the session id when stdin has none
 +call_io_inline_bytes = 65536          # MCP/API bodies larger than this go to archive (hooks never archive)
-+hook_max_input_bytes = 8388608        # rtok hook <event> stdin cap (8 MiB); over it, exits 0 unmodified, no archiving or hashing (T201)
++hook_max_input_bytes = 8388608        # rtok hook <event> stdin cap (8 MiB); over it, exits 0 unmodified, no archiving or hashing
 +retain_calls_days    = 30             # 0 = keep `calls` forever
-+retain_hook_bodies_days = 3           # hook stdin bodies cleared after N days, rows kept; 0 = as long as `calls` (T352)
++retain_hook_bodies_days = 3           # hook stdin bodies cleared after N days, rows kept; 0 = as long as `calls`
 +
-+[log]                                 # rtok's own log (D26); `rtok logs` reads it
++[log]                                 # rtok's own log; `rtok logs` reads it
 +path      = "~/.rtok/logs/rtok.log"   # rotated siblings live beside it: rtok.log.1 … .5
 +max_bytes = 1048576                   # rotate past 1 MiB (validate: ≥ 1024)
 +files     = 5                         # generations kept; older ones are deleted, never archived (validate: ≤ 20)
 +lines     = 200                       # what `rtok logs` prints when --lines is not given
 +level     = "info"                    # error | warn | info | debug
 +to_db     = true                      # also write a `logs` row for `rtok otel`
-+tspin     = "auto"                    # `rtok logs` through tailspin: auto = terminal and tspin on PATH | always | off (T225.1)
++tspin     = "auto"                    # `rtok logs` through tailspin: auto = terminal and tspin on PATH | always | off
 +
 +[estimator]                           # chars per token per class, ±15 %; `rtok stats --calibrate` rewrites
 +code  = 3.5
@@ -37,15 +37,15 @@ target/tmp/t60-2-config-init.toml
 +# ── surfaces ────────────────────────────────────────────────────────────────
 +
 +[hook]                                # rtok hook <event>
-+host      = "claude"                  # claude | cursor | copilot | devin | cline — payload field mapping (T10.1, T46.3, T87, T94)
++host      = "claude"                  # claude | cursor | copilot | devin | cline — payload field mapping
 +max_ms    = 10                        # soft budget; over it, the event is logged as slow
 +fail_open = true                      # any error → `{}` and exit 0; false only for debugging
 +
-+[agents]                              # the rtok agent registry (T282, D34)
++[agents]                              # the rtok agent registry
 +enabled = true                        # false = hooks skip agent register/touch/end (session bookkeeping is unaffected)
 +idle    = "30m"                       # `live()`'s window: no `ended_at` and `last_seen` within this of now
 +
-+[agents.usage]                        # rtok agents usage (T358)
++[agents.usage]                        # rtok agents usage
 +source = "logs"                       # logs = the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI); rtok = what passed through rtok; both
 +hosts  = []                           # [] = every host; else host ids, e.g. ["claude", "codex"]
 +since  = ""                           # "" = all time; a date (2026-09-01, whole days in tz) or a duration (30d)
@@ -54,7 +54,7 @@ target/tmp/t60-2-config-init.toml
 +by     = "agent"                      # agent | model: what the middle table groups by
 +tz     = ""                           # IANA zone for day and month boundaries; "" = the system zone
 +
-+[agents.usage.dirs]                   # where `rtok agents usage` reads each host's own records (T358.3); Claude Code and Codex use [stats] transcripts_dir / codex_dir
++[agents.usage.dirs]                   # where `rtok agents usage` reads each host's own records; Claude Code and Codex use [stats] transcripts_dir / codex_dir
 +opencode = ["~/.local/share/opencode"] # the opencode*.db files in it; an untouched default follows $XDG_DATA_HOME
 +kilo     = ["~/.local/share/kilo"]     # the kilo*.db files in it; an untouched default follows $XDG_DATA_HOME
 +copilot  = ["~/.copilot/session-state"] # */events.jsonl; an untouched default follows $COPILOT_HOME
@@ -67,8 +67,8 @@ target/tmp/t60-2-config-init.toml
 +antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 +
 +[mcp]                                 # rtok mcp
-+tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
-+max_description_tokens  = 60          # enforced by a test (T4.1)
++tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed
++max_description_tokens  = 60          # enforced by a test
 +max_result_chars        = 20000       # above this, head/tail + archive id
 +
 +[proxy]                               # rtok proxy
@@ -77,27 +77,27 @@ target/tmp/t60-2-config-init.toml
 +port            = 8790
 +mode            = "passthrough"       # passthrough | compress
 +upstream        = "https://api.anthropic.com"      # RTOK_UPSTREAM; chain behind another proxy for A/B
-+openai_upstream = "https://api.openai.com"         # RTOK_OPENAI_UPSTREAM (D11)
-+gemini_upstream = "https://generativelanguage.googleapis.com"  # RTOK_GEMINI_UPSTREAM (T51.3)
++openai_upstream = "https://api.openai.com"         # RTOK_OPENAI_UPSTREAM
++gemini_upstream = "https://generativelanguage.googleapis.com"  # RTOK_GEMINI_UPSTREAM
 +timeout_s       = 600                 # upstream request timeout
-+include_usage   = true                # OpenAI streaming: add stream_options.include_usage when missing (T11.2)
-+context_management = false            # Anthropic /v1/messages only: add clear_tool_uses edit + beta header (T51.2, opt-in)
++include_usage   = true                # OpenAI streaming: add stream_options.include_usage when missing
++context_management = false            # Anthropic /v1/messages only: add clear_tool_uses edit + beta header (opt-in)
 +dry_run         = false               # --dry-run: print effective [proxy] settings and exit, don't serve
 +
-+[proxy.tools_rewrite]                 # T59.5; off: request bytes stay identical
++[proxy.tools_rewrite]                 # off: request bytes stay identical
 +enabled = false
 +max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
 +allow = []                            # empty = keep all names not in deny
 +deny = []                             # drop these names from tools[]; later calls still forward
 +
-+[proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
++[proxy.lanes]                         # tag each request's lane in the ledger (calls.kind); bytes stay identical
 +enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
 +
-+[proxy.batch]                         # no keys yet (T385.4)
++[proxy.batch]                         # no keys yet
 +
-+[proxy.flex]                          # no keys yet (T385.5)
++[proxy.flex]                          # no keys yet
 +
-+[proxy.routing]                       # no keys yet (D9)
++[proxy.routing]                       # no keys yet
 +
 +[web]                                 # rtok web (same data as rtok tui)
 +host = "127.0.0.1"                    # --host
@@ -127,7 +127,7 @@ target/tmp/t60-2-config-init.toml
 +calibrate_samples = 30                # per class        (--calibrate)
 +baseline        = ""                  # default name for --compare; "" = none
 +price           = false               # show per-model USD costs (--price)
-+# USD per MTok rows for --price (T49.1). Sources, fetched 2026-09-17:
++# USD per MTok rows for --price. Sources, fetched 2026-09-17:
 +# Anthropic claude-sonnet-5 / claude-haiku-4-5: https://platform.claude.com/docs/en/about-claude/pricing
 +# (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 +# https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -154,19 +154,19 @@ target/tmp/t60-2-config-init.toml
 +cache_read = 0.025
 +output = 2.0
 +
-+[report]                              # rtok report (D24: renders the operator model, computes nothing)
-+format = "md"                         # md; html (T22.2), pdf (T22.3), --ai (T22.4)
++[report]                              # rtok report (renders the operator model, computes nothing)
++format = "md"                         # md; html, pdf, --ai
 +out    = ""                           # "" = stdout     (--out <path>)
 +since  = "30d"                        # how far back the report reads
 +ai     = false                        # model-shaped rendering instead of --format (--ai)
-+budget_tokens = 8000                  # --ai drops whole sections past this (T22.4)
++budget_tokens = 8000                  # --ai drops whole sections past this
 +
 +[bench]                               # rtok bench
 +tasks    = "bench/tasks.toml"
 +runs     = 3
 +dry_run  = false
 +timeout_s = 900                       # per task run
-+suite    = ""                         # "" = T9.1 six tasks; "graph" = T68.9 with/without MCP
++suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP
 +[bench.configs]                       # name = settings file passed to `claude --settings`
 +a = "bench/configs/legacy.json"
 +b = "bench/configs/rtok.json"
@@ -179,7 +179,7 @@ target/tmp/t60-2-config-init.toml
 +mcp_timeout_ms  = 15000               # per MCP server tools/list (uvx/npx servers start slowly)
 +instruction_warn_tokens = 1000        # --instructions: flag files above this
 +instructions    = false               # run the instruction audit by default (--instructions)
-+tools_rewrite_min_desc_tokens = 2000 # when [proxy.tools_rewrite] is suggested (T59.5)
++tools_rewrite_min_desc_tokens = 2000 # when [proxy.tools_rewrite] is suggested
 +
 +[setup]                               # rtok agents install / remove <host>
 +dry_run      = false
@@ -202,9 +202,9 @@ target/tmp/t60-2-config-init.toml
 +config_path   = "~/.config/kilo/kilo.json"      # kilo.jsonc is merged by Kilo, never rewritten
 +[setup.pi]
 +extensions_path = "~/.pi/agent/extensions"
-+tools           = false                     # pi.registerTool for read/search/graph/memory (T70.3)
++tools           = false                     # pi.registerTool for read/search/graph/memory
 +[setup.omp]
-+extensions_path = "~/.omp/agent/extensions" # oh my pi: plugins/pi is linked here (T92)
++extensions_path = "~/.omp/agent/extensions" # oh my pi: plugins/pi is linked here
 +mcp_path        = "~/.omp/agent/mcp.json"
 +[setup.zcode]
 +config_path   = "~/.zcode/cli/config.json"
@@ -240,15 +240,15 @@ target/tmp/t60-2-config-init.toml
 +
 +[expand]                              # rtok expand <id>
 +max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
-+max_rate  = 0.05                      # re-read ceiling; above it the report flags lossy compression (T22.5)
++max_rate  = 0.05                      # re-read ceiling; above it the report flags lossy compression
 +
-+[filter]                              # rtok filter --stdin (T10.2)
++[filter]                              # rtok filter --stdin
 +cmd = ""                              # command family hint when the caller knows it (--cmd)
 +
 +[worktree]                            # rtok worktree add | list | gc
 +root = ""                             # where `rtok worktree add` creates worktrees; "" = the nearest `_worktrees/` above the main checkout, else one next to it
 +
-+[otel]                                # OpenTelemetry export (D19); off until endpoint resolves
++[otel]                                # OpenTelemetry export; off until endpoint resolves
 +endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 +headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
 +service_name  = "rtok"                # resource service.name
@@ -266,7 +266,7 @@ target/tmp/t60-2-config-init.toml
 +rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 +shell    = ""                         # "" = $SHELL
 +rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
-+rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order (T50.2)
++rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
 +trailer_min_lines = 40                # add `[rtok <id> · N lines · expand …]` above this
 +fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 +never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
@@ -277,13 +277,13 @@ target/tmp/t60-2-config-init.toml
 +default_mode     = "full"             # full | lines | map | signatures
 +max_chars        = 20000              # above this, head/tail + archive id
 +native_max_bytes = 32768              # PreToolUse(Read) deny threshold; never below this
-+range_max_lines = 300              # T383: a native Read with limit 1..=N passes the hook; 0 = unranged only
++range_max_lines = 300              # a native Read with limit 1..=N passes the hook; 0 = unranged only
 +advice           = true               # false = never deny native Read
 +allow_paths      = []                 # extra roots outside cwd
 +search_max       = 50
-+search_max_bytes = 1048576             # search skips files larger than this (T55.5)
++search_max_bytes = 1048576             # search skips files larger than this
 +tree_depth       = 2
-+delta            = true               # T58.1: changed re-read → unified diff vs last archive
++delta            = true               # changed re-read → unified diff vs last archive
 +delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
 +
 +[plugins.archive]
@@ -292,9 +292,9 @@ target/tmp/t60-2-config-init.toml
 +min_tokens = 1500                     # only rewrite tool results above this (estimated)
 +head_lines = 8
 +tail_lines = 4
-+tiers      = false                    # optional L0/L1/L2 depth (OpenViking spec, AGPL-3.0 — rtok does not vendor/link/subprocess; native impl T33.2)
-+live_blobs = false                    # shrink nested JSON dumps + data: blobs in user blocks, never results/system/tools/last-2-turns (T51.1, opt-in)
-+skills     = false                    # opt-in skill body archiving outside the live zone (T61.2)
++tiers      = false                    # optional L0/L1/L2 depth (OpenViking spec, AGPL-3.0 — rtok does not vendor/link/subprocess; native implementation)
++live_blobs = false                    # shrink nested JSON dumps + data: blobs in user blocks, never results/system/tools/last-2-turns (opt-in)
++skills     = false                    # opt-in skill body archiving outside the live zone
 +
 +[plugins.proxy]
 +enabled = true                        # the proxy plugin (usage capture); the server itself is [proxy]
@@ -311,27 +311,27 @@ target/tmp/t60-2-config-init.toml
 +
 +[plugins.inject]
 +enabled       = true
-+budget_tokens = 800                   # per turn, all injections together (decision D5)
++budget_tokens = 800                   # per turn, all injections together
 +modes_dir     = "~/.rtok/modes"
 +modes         = []                    # same as [setup].modes; setup writes here
 +
 +[plugins.guard]
 +enabled      = true
 +window_turns = 8
-+deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree (T50.4)
++deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree
 +
 +[plugins.memory]
 +enabled        = true
 +recall_titles  = 5                    # SessionStart: last N titles + ids
 +recall_tokens  = 200
-+prompt_recall  = 5                    # UserPromptSubmit: 0 = off; N = ranked titles per turn (T69.5)
++prompt_recall  = 5                    # UserPromptSubmit: 0 = off; N = ranked titles per turn
 +checkpoint_tokens = 400               # PreCompact → SessionStart(compact)
 +search_limit   = 5
-+sync_tokens    = 300                  # rtok memory sync: CLAUDE.md / AGENTS.md block (T69.6)
-+startup_recall = true                 # SessionStart(startup) restores newest session:* note (T71.2)
-+handoff        = true                 # T59.6 sub-agent digest MCP tool
-+spawn_brief        = true             # T130: SubagentStart pointer digest
-+spawn_brief_tokens = 300              # T130: token budget for the spawn brief
++sync_tokens    = 300                  # rtok memory sync: CLAUDE.md / AGENTS.md block
++startup_recall = true                 # SessionStart(startup) restores newest session:* note
++handoff        = true                 # sub-agent digest MCP tool
++spawn_brief        = true             # SubagentStart pointer digest
++spawn_brief_tokens = 300              # token budget for the spawn brief
 +
 +[plugins.memory.embed]
 +enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
@@ -343,17 +343,17 @@ target/tmp/t60-2-config-init.toml
 +[plugins.graph]
 +enabled    = true
 +max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
-+map_tokens = 0                        # SessionStart repo map cap (D5 share next to memory.recall_tokens); 0 = off
++map_tokens = 0                        # SessionStart repo map cap (counts toward the injection budget next to memory.recall_tokens); 0 = off
 +body_lines = 40                       # symbol(): source lines shown per definition
 +auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
 +backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
 +watch      = "off"                    # off | notify (P8d): background re-index inside `rtok mcp`
-+auto_link_references = true           # T329.8: follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
-+reference_depth = 3                   # T329.8: reference levels followed from the project (A -> B is 1); reaching it is shown and logged
-+max_auto_projects = 20                # T329.8: most projects references may add to the registry; reaching it is shown and logged
-+exclude    = []                       # gitignore-style paths dropped from the walk (T68.10)
-+include    = []                       # gitignore-style paths forced back in (T68.10)
-+extensions = {}                       # ext = "grammar" remap for custom suffixes (T68.10)
++auto_link_references = true           # follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
++reference_depth = 3                   # reference levels followed from the project (A -> B is 1); reaching it is shown and logged
++max_auto_projects = 20                # most projects references may add to the registry; reaching it is shown and logged
++exclude    = []                       # gitignore-style paths dropped from the walk
++include    = []                       # gitignore-style paths forced back in
++extensions = {}                       # ext = "grammar" remap for custom suffixes
 +
 +[plugins.toon]
 +enabled  = true

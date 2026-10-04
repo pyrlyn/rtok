@@ -31,11 +31,10 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --call <TOOL>    Call one listed tool and print the text result (pi `registerTool` shim,
-                       T70.3)
+      --call <TOOL>    Call one listed tool and print the text result (pi `registerTool` shim)
       --json <ARGS>    JSON arguments for `--call`
       --host <HOST>    The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays
-                       `[hook] host` so the process can find its rtok agent (T283.1)
+                       `[hook] host` so the process can find its rtok agent
   -h, --help           Print help
 
 $ rtok proxy --help
@@ -63,7 +62,7 @@ Options:
   -h, --help           Print help
 
 $ rtok tui --help
-Terminal UI over the same data as `rtok web` (D23: one model, two renderings)
+Terminal UI over the same data as `rtok web` (one model, two renderings)
 
 Usage: rtok tui [OPTIONS]
 
@@ -111,7 +110,7 @@ Usage: rtok doctor [OPTIONS]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --instructions   Also run the instruction-file audit (T7.2)
+      --instructions   Also run the instruction-file audit
       --json           JSON instead of the table
       --fix            Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a
                        checklist, a pipe the diff; --yes writes without asking
@@ -150,14 +149,12 @@ Commands:
   usage      Tokens and estimated cost per agent and month (or day), from the agents' logs or rtok
   junk       Junk and agent folders: `list` shows rtok's and every installed host's folders with
              sizes, `clear` removes rtok's own junk
-  whoami     This session's own rtok agent id (T283, D34): `RTOK_AGENT_ID`, resolved through the
-             store
+  whoami     This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
   show       One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status
   status     Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars
-  send       Send a message to an agent (T287): `send <id-prefix> <text|->` or `send --all-live
-             <text|->`
-  inbox      Read messages (T287): your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
-             id that agent's queue (marks nothing)
+  send       Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
+  inbox      Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id
+             that agent's queue (marks nothing)
   help       Print this message or the help of the given subcommand(s)
 
 Options:
@@ -187,7 +184,7 @@ Options:
       --desktop        Only the desktop app (`cursor`/`opencode` have CLI and desktop; default is
                        all)
       --all            All variants (the default when neither `--cli` nor `--desktop` is given)
-      --no-restart     Skip closing/reopening a running desktop app around the write (T141)
+      --no-restart     Skip closing/reopening a running desktop app around the write
   -h, --help           Print help
 
 $ rtok agents uninstall --help
@@ -202,8 +199,8 @@ Arguments:
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --dry-run        Print what would be removed and exit
-      --no-restart     Skip closing/reopening a running desktop app around the write (T141)
-      --yes            Also remove rtok entries you changed, without asking (T246)
+      --no-restart     Skip closing/reopening a running desktop app around the write
+      --yes            Also remove rtok entries you changed, without asking
   -h, --help           Print help
 
 $ rtok agents update --help
@@ -220,11 +217,10 @@ Options:
       --cli              Only the CLI app (default is all)
       --desktop          Only the desktop app (default is all)
       --all              All variants (the default when neither `--cli` nor `--desktop` is given)
-      --no-restart       Skip closing/reopening a running desktop app around the write (T141)
+      --no-restart       Skip closing/reopening a running desktop app around the write
       --force            Reinstall the plugin even when it is already at the available version
-                         (T279)
-      --source <SOURCE>  Compare against this install source instead of the one on record (T279)
-                         [possible values: github, local, marketplace]
+      --source <SOURCE>  Compare against this install source instead of the one on record [possible
+                         values: github, local, marketplace]
       --check            List outdated plugins only (same output as `agents outdated`)
   -h, --help             Print help
 
@@ -387,7 +383,7 @@ Options:
   -h, --help           Print help
 
 $ rtok agents whoami --help
-This session's own rtok agent id (T283, D34): `RTOK_AGENT_ID`, resolved through the store
+This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
 
 Usage: rtok agents whoami [OPTIONS]
 
@@ -422,7 +418,7 @@ Options:
   -h, --help           Print help
 
 $ rtok agents send --help
-Send a message to an agent (T287): `send <id-prefix> <text|->` or `send --all-live <text|->`
+Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
 
 Usage: rtok agents send [OPTIONS] [TO] [TEXT]
 
@@ -436,8 +432,8 @@ Options:
   -h, --help           Print help
 
 $ rtok agents inbox --help
-Read messages (T287): your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id that
-agent's queue (marks nothing)
+Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id that agent's
+queue (marks nothing)
 
 Usage: rtok agents inbox [OPTIONS] [ID]
 
@@ -459,7 +455,7 @@ Arguments:
   [COMMAND]...  
 
 Options:
-      --agent <ID>     Sub-agent id from PreToolUse; scopes the dedup pointer (T127)
+      --agent <ID>     Sub-agent id from PreToolUse; scopes the dedup pointer
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
   -h, --help           Print help
 
@@ -492,7 +488,7 @@ Options:
   -h, --help               Print help
 
 $ rtok archive --help
-The archive live zone (`rtok archive rewrite` — pi `context` carrier, T70.2)
+The archive live zone (`rtok archive rewrite` — pi `context` carrier)
 
 Usage: rtok archive [OPTIONS] <COMMAND>
 
@@ -628,7 +624,7 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           JSON `{key,value,source}` instead of the bare value (T228)
+      --json           JSON `{key,value,source}` instead of the bare value
   -h, --help           Print help
 
 $ rtok config validate --help
@@ -665,12 +661,12 @@ Usage: rtok memory [OPTIONS] <COMMAND>
 Commands:
   import  Import `{kind,title,body}` JSONL; dedupe by body sha256
   export  Print every note but session checkpoints as the JSONL `import` reads
-  retire  Retire a note: a tombstone — never recalled or searched, body kept (T69.1)
-  pin     Pin a note so it leads SessionStart recall (T69.1)
-  unpin   Drop a note back to newest-first recall order (T69.1)
-  revise  Save a replacement (title, body) for a note and retire the old row (T69.1)
-  sync    Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block (T69.6)
-  status  Notes live/pinned/retired, recall and MCP call counts (T69.4)
+  retire  Retire a note: a tombstone — never recalled or searched, body kept
+  pin     Pin a note so it leads SessionStart recall
+  unpin   Drop a note back to newest-first recall order
+  revise  Save a replacement (title, body) for a note and retire the old row
+  sync    Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block
+  status  Notes live/pinned/retired, recall and MCP call counts
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -701,7 +697,7 @@ Options:
   -h, --help               Print help
 
 $ rtok memory retire --help
-Retire a note: a tombstone — never recalled or searched, body kept (T69.1)
+Retire a note: a tombstone — never recalled or searched, body kept
 
 Usage: rtok memory retire [OPTIONS] <ID>
 
@@ -714,7 +710,7 @@ Options:
   -h, --help                           Print help
 
 $ rtok memory pin --help
-Pin a note so it leads SessionStart recall (T69.1)
+Pin a note so it leads SessionStart recall
 
 Usage: rtok memory pin [OPTIONS] <ID>
 
@@ -726,7 +722,7 @@ Options:
   -h, --help           Print help
 
 $ rtok memory unpin --help
-Drop a note back to newest-first recall order (T69.1)
+Drop a note back to newest-first recall order
 
 Usage: rtok memory unpin [OPTIONS] <ID>
 
@@ -738,7 +734,7 @@ Options:
   -h, --help           Print help
 
 $ rtok memory revise --help
-Save a replacement (title, body) for a note and retire the old row (T69.1)
+Save a replacement (title, body) for a note and retire the old row
 
 Usage: rtok memory revise [OPTIONS] --title <TITLE> --body <BODY> <ID>
 
@@ -759,9 +755,9 @@ Usage: rtok graph [OPTIONS] <COMMAND>
 Commands:
   index     Walk a tree and insert definitions + references
   dead      List unreferenced private definitions (skips pub, trait impls, tests, macros)
-  status    Index health for the current or given root (T68.3)
-  impact    Symbol impact or call paths to a target (T68.4)
-  projects  The project registry: list, add, remove, select (T329.2)
+  status    Index health for the current or given root
+  impact    Symbol impact or call paths to a target
+  projects  The project registry: list, add, remove, select
   affected  Tests that reach files changed in git (`git diff --name-only`)
   help      Print this message or the help of the given subcommand(s)
 
@@ -792,11 +788,11 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           JSON rows instead of `path:line kind name` lines (T60.1, uncapped)
+      --json           JSON rows instead of `path:line kind name` lines (uncapped)
   -h, --help           Print help
 
 $ rtok graph status --help
-Index health for the current or given root (T68.3)
+Index health for the current or given root
 
 Usage: rtok graph status [OPTIONS] [PATH]
 
@@ -809,7 +805,7 @@ Options:
   -h, --help           Print help
 
 $ rtok graph impact --help
-Symbol impact or call paths to a target (T68.4)
+Symbol impact or call paths to a target
 
 Usage: rtok graph impact [OPTIONS] <NAME> [PATH]
 
@@ -836,7 +832,7 @@ Options:
   -h, --help           Print help
 
 $ rtok guard --help
-Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path, T70.5)
+Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
 
 Usage: rtok guard [OPTIONS] <COMMAND>
 
@@ -1009,7 +1005,7 @@ Options:
   -h, --help           Print help
 
 $ rtok report --help
-The operator model as one document (D24): Markdown, HTML and PDF
+The operator model as one document: Markdown, HTML and PDF
 
 Usage: rtok report [OPTIONS]
 
@@ -1018,7 +1014,7 @@ Options:
       --format <FORMAT>  Output format [default: md] [possible values: md, html, pdf]
       --out <PATH>       Write to this path instead of stdout
       --since <SINCE>    How far back the report reads (`30d`, `24h`)
-      --ai               Model-shaped rendering of the same document instead of `--format` (T22.4)
+      --ai               Model-shaped rendering of the same document instead of `--format`
   -h, --help             Print help
 
 $ rtok worktree --help
