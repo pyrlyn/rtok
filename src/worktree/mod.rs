@@ -15,6 +15,7 @@ pub mod host;
 pub mod list;
 pub mod origin;
 pub mod remove;
+pub mod whoami;
 
 /// What every `rtok worktree …` command answers while `[worktree] enabled = false` (T410).
 pub const DISABLED: &str =

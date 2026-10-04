@@ -1031,6 +1031,7 @@ Commands:
   remove  Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
           merged, release the claim; refuses dirty, foreign-locked or current worktrees
   list    Every worktree and orphan with its owner, state, source and build-cache bytes
+  whoami  Your agent, where new worktrees go, the worktree you are in and the ones you hold
   gc      Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
   clean   Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without
           `--yes`
@@ -1048,6 +1049,16 @@ Usage: rtok worktree list [OPTIONS]
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --json           JSON instead of the table
+  -h, --help           Print help
+
+$ rtok worktree whoami --help
+Your agent, where new worktrees go, the worktree you are in and the ones you hold
+
+Usage: rtok worktree whoami [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           JSON instead of the text lines
   -h, --help           Print help
 
 $ rtok worktree gc --help

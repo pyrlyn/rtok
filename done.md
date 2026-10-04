@@ -5844,6 +5844,16 @@ Check: `just check`.
 
 Result: `src/config/mod.rs` (`enabled`, default root), `src/worktree/add.rs` (`root_for` removed, root is a plain path), `src/worktree/claim.rs` (`configured_root` removed), gates in `src/cli.rs`, `src/mcp.rs`, `src/worktree/host.rs`; docs in `config/default.toml`, `docs/config.md`, `docs/agents-and-worktrees.md`, `README.md`, `skills/worktrees/SKILL.md`. Tests: `add::tests` (a `_worktrees/` beside the repository no longer wins; empty root refused; default root), `tests/worktree.rs` (`disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools`; the list test keeps `$HOME` out of the listed worktree, since the gate loads the config first; the launcher test gains the disabled create/remove case; the add and hook tests expect `$HOME/.rtok/worktrees`), `tests/agents_worktrees.rs` path; `config-init`, `config-show`, `report-md` goldens follow the new key (248 keys). Worktrees the Claude desktop app makes for its own sessions follow the app's "worktree location" setting, not `[worktree] root`.
 
+### T411. `rtok worktree whoami`, and a shorter worktrees skill
+
+Why: the creator asked (2026-10-04) that for worktree work an agent learns where it stands from `rtok worktree whoami` instead of `rtok agents whoami`, and that the `worktrees` skill say so and drop what rtok already enforces. `rtok agents whoami` stays for the agent registry.
+
+Done means: `rtok worktree whoami [--json]` prints the caller's agent (`RTOK_AGENT_ID`, short id and host), the `[worktree] root`, the linked worktree the cwd is in, and the repository's worktrees bound to the agent by lock or by claim row; no size scans; outside a repository only agent and root; behind the `[worktree] enabled` gate. The skill starts with it and keeps only create, finish and never.
+
+Check: `just check`.
+
+Result: `src/worktree/whoami.rs`, `WorktreeCmd::Whoami` in `src/cli.rs`; gates in `tests/surface_parity.rs` (EXEMPT, JSON reader), `docs/config.md`, `README.md`, `help-subcommands.trycmd` and the completion goldens; `tests/worktree.rs` `whoami_shows_the_root_and_only_the_caller_s_worktrees` (a locked and a claimed worktree of the caller, not another agent's claim; `here` follows the cwd; text form). `skills/worktrees/SKILL.md` went from 342 to 206 words; the creator's `~/.claude/skills/worktrees/SKILL.md` carries the same text. `just check`: 2440 passed.
+
 ## T159 — Claude Code `WorktreeCreate`/`WorktreeRemove` hooks route through `rtok worktree`
 
 Depends on T156 (the real payloads), T158 (create) and T153 (remove). A skill is advice an agent may skip; the host's own worktree hooks are the only place where the rules cannot be skipped: `claude --worktree`, the desktop app and sub-agent `isolation: worktree` all create worktrees without asking the agent, which is where the `agent-<hex>` directories and reason-less locks come from (`research.md` §18.1, §18.3).
