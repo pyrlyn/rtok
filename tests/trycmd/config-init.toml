@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,350 @@
+@@ -0,0 +1,351 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -268,6 +268,7 @@ target/tmp/t60-2-config-init.toml
 +default_mode     = "full"             # full | lines | map | signatures
 +max_chars        = 20000              # above this, head/tail + archive id
 +native_max_bytes = 32768              # PreToolUse(Read) deny threshold; never below this
++range_max_lines = 300              # T383: a native Read with limit 1..=N passes the hook; 0 = unranged only
 +advice           = true               # false = never deny native Read
 +allow_paths      = []                 # extra roots outside cwd
 +search_max       = 50
