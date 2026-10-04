@@ -1472,7 +1472,8 @@ Done means:
 - Existing files: `rtok doctor` (or `rtok config validate`) lists each explicit key whose value differs from the current default. It is a note, not an error, and names the key, the value, the default and the line. Nothing is rewritten automatically: rtok cannot tell a stale default from a deliberate choice, so the user decides.
 - Stale docs fixed in the same change: `src/plugins/toon/AGENTS.md` ("Stays `default_on: false` until …", while `default_on` has been `true` since T127) and `research.md` §16.1 table row "JSON tables → TOON (off by default)".
 - Tests: `tests/trycmd/config-init.toml` re-blessed; a unit test checks that every default in `DEFAULT_TOML` is commented out and that parsing it yields `Config::default()`; a doctor fixture with `toon` pinned off shows the note.
-- Verify: `just check`; `rtok config init --dry-run` on a scratch home shows only commented values.
+
+Check: the `DEFAULT_TOML` unit test (every default commented out, parsing yields `Config::default()`), the re-blessed `tests/trycmd/config-init.toml` and the doctor fixture with `toon` pinned off pass; `rtok config init --dry-run` on a scratch home shows only commented values; `just check`.
 
 ## Reference
 
