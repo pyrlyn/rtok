@@ -94,6 +94,11 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
 | T400 | todo | P2 | 2 | 40% | |
+| T401 | todo | P3 | 4 | 20% | |
+| T402 | todo | P3 | 2 | 20% | |
+| T403 | todo | P3 | 3 | 10% | |
+| T404 | todo | P3 | 3 | 10% | |
+| T405 | todo | P3 | 3 | 10% | |
 
 
 
@@ -1820,6 +1825,46 @@ The research sweep (2026-10-04) found statements that shipped work made false. F
 - `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
 
 Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
+
+### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
+
+Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
+
+Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
+
+Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
+
+### T402. Measure how much tool output a structured schema would shrink
+
+Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. No number says how much tool output is prose a schema could replace.
+
+Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
+
+Check: the dated §16 row; the build task filed or the card closed with its number.
+
+### T403. A/B a path and identifier dictionary in proxy requests
+
+Promoted from I-110 (Ivan, 2026-10-04). From `research.md` §16.3 #8: repeated long paths and identifiers could be replaced with short codes plus one legend per request. It may cost answer quality and must not break the prompt cache.
+
+Done means: first measure, from stored requests, how many bytes repeated paths and identifiers take (§16 row). If above 1 % of input, build it behind a proxy flag (off by default) with a byte-stable legend (cache-safe) and run an A/B on the bench set with a pass-rate gate; the flag turns on only if pass rate holds and tokens fall.
+
+Check: the dated measurement row; if built, the A/B row and a byte-stability test for the legend.
+
+### T404. Evaluate a local draft model that the cloud model only verifies
+
+Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
+
+Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
+
+Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
+
+### T405. Task-board extras for the agent task tools
+
+Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F19, F20: a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20).
+
+Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
+
+Check: each sub-task carries its own Check.
 
 ## Reference
 

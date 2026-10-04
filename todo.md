@@ -88,3 +88,8 @@
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T399. Re-check host docs for three open host questions
 - T400. Fix stale and broken statements in `research.md` and related docs
+- T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
+- T402. Measure how much tool output a structured schema would shrink
+- T403. A/B a path and identifier dictionary in proxy requests
+- T404. Evaluate a local draft model that the cloud model only verifies
+- T405. Task-board extras for the agent task tools
