@@ -7,7 +7,8 @@
 //! Cases are hermetic by construction: `--help` / `--version` never load `Config`,
 //! `bench --dry-run` reads only the `--config` fixture plus `bench/tasks.toml`, and
 //! `config show` reads the same `--config` fixture with a cleared env (`[env]
-//! inherit = false`), so ambient `RTOK_*` never leaks into the layering.
+//! inherit = false`), so ambient `RTOK_*` never leaks into the layering. An agent
+//! session's own env ([`SESSION_ENV`]) is stripped from every case (T406).
 //! Insta stays out of here: it covers structured renderings
 //! (`tests/compress_snapshot.rs`), trycmd covers the binary's stdout.
 
@@ -18,8 +19,30 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 
+/// What an rtok agent session puts into its own shell: `RTOK_AGENT_ID` arrives through
+/// `CLAUDE_ENV_FILE` (T283). Inherited by the binary under test, it turns the "not inside an
+/// agent session" cases into the caller's own inbox, and a `hook` case could append to the
+/// live session's env file (T406).
+const SESSION_ENV: [&str; 3] = ["RTOK_AGENT_ID", "RTOK_CONFIG", "CLAUDE_ENV_FILE"];
+
 #[test]
 fn cli() {
+    // trycmd 1.2.1 cannot remove a var for every case, its `TestCases::env` default would
+    // override a case's own `[env.add]`, and `unsafe_code = "forbid"` rules out `remove_var`:
+    // rerun this test in a child of the test binary without the session env instead (T406).
+    if SESSION_ENV.iter().any(|k| std::env::var_os(k).is_some()) {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+        child.args(["cli", "--exact", "--nocapture"]);
+        for key in SESSION_ENV {
+            child.env_remove(key);
+        }
+        let status = child.status().expect("rerun `cli` without the session env");
+        assert!(
+            status.success(),
+            "trycmd cases failed without the session env: {status}"
+        );
+        return;
+    }
     let cases = trycmd::TestCases::new();
     cases
         .case("tests/trycmd/*.toml")
