@@ -775,6 +775,8 @@ section! {
         default_mode: String = s("full"),
         max_chars: u32 = 20000,
         native_max_bytes: u64 = 32768,
+        /// T383: a native `Read` with `limit` 1..=this passes the read-advice hook.
+        range_max_lines: u32 = 300,
         advice: bool = true,
         allow_paths: Vec<PathBuf> = Vec::new(),
         search_max: u32 = 50,

@@ -148,6 +148,7 @@ plugins.read.enabled = true
 plugins.read.languages = []
 plugins.read.max_chars = 20000
 plugins.read.native_max_bytes = 32768
+plugins.read.range_max_lines = 300
 plugins.read.search_max = 50
 plugins.read.search_max_bytes = 1048576
 plugins.read.tree_depth = 2
