@@ -74,7 +74,6 @@
 - T384. The read deny names the exact MCP tool so no ToolSearch turn follows
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
-- T387. Re-land T52.5 type-position references (lost to an auto-revert)
 - T388. `doctor` reports the real MCP Tool Search state
 - T389. Price row for Fable 5.1 in `[stats.prices]`
 - T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest

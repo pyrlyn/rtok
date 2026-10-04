@@ -80,7 +80,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T384 | todo | P2 | 2 | 30% | |
 | T385 | todo | P1 | 5 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T387 | todo | P2 | 3 | 40% | |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T390 | todo | P2 | 3 | 40% | |
@@ -1692,14 +1691,6 @@ Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just
 
 Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
 
-### T387. Re-land T52.5 type-position references (lost to an auto-revert)
-
-`done.md` records T52.5 as done (refs 96/105, recall 0.914), but its tags query `(type_identifier) @name @reference.type` is not in `src/plugins/read/outline.rs`: commit `c217b8f2` ("ci: auto-revert ef6c6ff") removed it on 2026-09-17. `tests/graph_truth.rs` still guards the old floor (`ref_recall >= 0.30`) and `research.md` §2 still shows 0.351 / 0.305.
-
-Done means: the type-position and scoped-call reference queries from `cfbee166` are back (adapted to today's code), `graph_truth` measures the new reference recall, its floor rises to just under the measured value, and `research.md` §2 and `src/plugins/graph/PLAN.md` "Known misses" are updated. The T52.5 entry in `done.md` gets a dated note that it was reverted and re-landed under T387.
-
-Check: `tests/graph_truth.rs` passes with the raised floor; the new recall is in §2 with a date; `just check`.
-
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
@@ -1812,7 +1803,7 @@ Check: dated sources in §10.1, §23 and §26.
 
 The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
 
-- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (see T387).
+- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
 - §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
 - §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
 - §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
