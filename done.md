@@ -2285,6 +2285,18 @@ Check: `reference_capture_matches_the_known_misses` (OnlyTyped/Recv/outer/middle
 Status: done 2026-09-17 · Model: OpenCode / Muse Spark 1.3
 Evidence: T8.8 rescore `cargo test -p rtok --test graph_truth` — defs 40/40 (1.000/1.000), refs 96/105 recall 0.914 (was 32/105, 0.305), overall 136/145 = 0.938; all 9 remaining misses are macro-body call sites (opaque `token_tree`, query-unreachable ceiling); recorded in `research.md` §2. Regression floor in the test raised 0.30 → 0.85.
 Deviation: 7 files (≤3) — the behavior change flips a P30 gate pin, so the gate test, its `docs/lsp.md` line and the `PLAN.md` Known-misses/P30 notes move in the same commit; `plan.md`/`todo.md`/`done.md` moves are bookkeeping.
+Note (2026-10-04): reverted by `c217b8f2` on 2026-09-17 (auto-revert of the unrelated `ef6c6ff`, which swept the stack `2b8c266..ef6c6ff`), re-landed by T387; recall re-measured 0.924 (97/105), floor 0.92.
+
+## T387 — Re-land T52.5 type-position references (lost to an auto-revert)
+
+**T387 Re-land T52.5 type-position references (lost to an auto-revert)** · P2, 3/5 · `src/plugins/read/outline.rs`, `src/plugins/graph/index.rs`, `tests/graph_truth.rs`, `tests/graph_lsp_gate.rs`, `research.md`, `src/plugins/graph/PLAN.md`, `docs/lsp.md`
+
+`done.md` recorded T52.5 as done (refs 96/105, recall 0.914), but its tags query `(type_identifier) @name @reference.type` was not in `src/plugins/read/outline.rs`: commit `c217b8f2` ("ci: auto-revert ef6c6ff") removed it on 2026-09-17.
+
+Done means: the type-position and scoped-call reference queries from `cfbee166` are back (adapted to today's code), `graph_truth` measures the new reference recall, its floor rises to just under the measured value, and `research.md` §2 and `src/plugins/graph/PLAN.md` "Known misses" are updated. The T52.5 entry in `done.md` gets a dated note that it was reverted and re-landed under T387.
+
+Result: re-applied the code and test hunks of `cfbee166` (`RUST_EXTRA_REF`, `TS_CALL_TYPE_REF`, extractor fingerprint, `graph_truth` / `graph_lsp_gate` changes) with three-way merge onto today's code; the only conflicts were the new `RUST_IMPORT` / `JS_IMPORT` (T68.6) and the extra-grammar fingerprint lines, resolved by keeping both with the import queries first. Reference recall 33/105 = 0.314 at HEAD before, 97/105 = 0.924 after (2026-10-04, 464 files; definitions 43/44, sites 140/149 = 0.940); the 8 remaining reference misses are all macro-body arguments. `graph_truth` floor 0.30 → 0.92. CI-failure cause (`gh api` logs, `ef6c6ff` run 2026-09-17): `check (ubuntu-latest)` failed in `agents::tests::list_prints_one_block_per_app_with_kind_name_app_and_config` (`src/agents/mod.rs`), a host-list test unrelated to graph code; `c217b8f2` reverted the whole stack `2b8c266..ef6c6ff`, so T52.5 (`cfbee166`, green on its own diff) was swept out by accident, and there was nothing in its code to fix.
+Status: done 2026-10-04 · Model: Claude Code / claude-sonnet-5-5
 
 ## T48.3 — Cursor plugin MCP goes through the ketch-hint launcher
 
