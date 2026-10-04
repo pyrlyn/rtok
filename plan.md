@@ -79,7 +79,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T383 | todo | P1 | 2 | 40% | |
 | T384 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.1 | in progress | P1 | 3 | 90% | Claude Code / sonnet-5-5 |
 | T385.2 | todo | P2 | 3 | 20% | |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.4 | todo | P2 | 3 | 20% | |
@@ -1698,14 +1697,6 @@ Also: a cross-session read-dedup measurement from `calls` (optimization.md §5, 
 Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id order (T385.3, T385.8 and T385.13 are measurements and may run in parallel with the build steps). Boundaries from `docs/batch-flex.md` hold throughout: never convert a live agent turn into a Batch job, never rewrite Batch JSONL, everything lives under `src/proxy/`.
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
-
-### T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
-
-optimization.md §2.2–§2.3 L0–L1. Config structs for `[proxy.lanes]` (and the empty `[proxy.batch]`, `[proxy.flex]`, `[proxy.routing]` tables later steps fill), defaults keeping today's bytes. A classifier assigns each request a lane — `agent`, `bulk`, `batch`, `files`, `embeddings`, `meta`, `internal` — by path first, then an explicit `x-rtok-lane` header (stripped before forwarding) or a `/lane/<name>/` path prefix; no heuristics until measured. The lane is written to the ledger (`calls.kind` or `call_io` metadata; no schema change if `kind` suffices).
-
-Check: integration test — each lane path gets its tag, `/v1/messages` still matches the Anthropic wire and `/v1/messages/batches` does not, the header never reaches the upstream; proxy bytes identical with default config; config goldens; `just check`.
-
-Execution plan: `src/proxy/lane.rs` (`Lane`, `classify`: structural path first, then prefix, then header; unmarked = `agent`); `[proxy.lanes] enabled` plus empty `[proxy.batch]`/`[proxy.flex]`/`[proxy.routing]` in `src/config/mod.rs`, `config/default.toml`, `docs/config.md`; `handle` strips the marker and prefix, `record` writes `calls.kind` (`api_request` for agent, `api_request:<lane>` otherwise, so no schema change); `otel` in-flight check goes through `lane::is_api_request`; test in `tests/proxy_lanes.rs`; goldens via trycmd.
 
 ### T385.2. Per-lane policy table
 

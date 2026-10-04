@@ -7149,6 +7149,19 @@ Check: `cargo nextest run -p rtok --test proxy_bench --test proxy` 34/34; clippy
 Status: done 2026-09-27
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
+
+optimization.md §2.2–§2.3 L0–L1. Config structs for `[proxy.lanes]` (and the empty `[proxy.batch]`, `[proxy.flex]`, `[proxy.routing]` tables later steps fill), defaults keeping today's bytes. A classifier assigns each request a lane — `agent`, `bulk`, `batch`, `files`, `embeddings`, `meta`, `internal` — by path first, then an explicit `x-rtok-lane` header (stripped before forwarding) or a `/lane/<name>/` path prefix; no heuristics until measured. The lane is written to the ledger (`calls.kind` or `call_io` metadata; no schema change if `kind` suffices).
+
+Check: integration test — each lane path gets its tag, `/v1/messages` still matches the Anthropic wire and `/v1/messages/batches` does not, the header never reaches the upstream; proxy bytes identical with default config; config goldens; `just check`.
+
+Plan: `src/proxy/lane.rs` (`Lane`, `classify`: structural path first, then prefix, then header; unmarked = `agent`); `[proxy.lanes] enabled` plus empty `[proxy.batch]`/`[proxy.flex]`/`[proxy.routing]` in `src/config/mod.rs`, `config/default.toml`, `docs/config.md`; `handle` strips the marker and prefix, `record` writes `calls.kind` (`api_request` for agent, `api_request:<lane>` otherwise, so no schema change); `otel` in-flight check goes through `lane::is_api_request`; test in `tests/proxy_lanes.rs`; goldens via trycmd.
+
+Result: `src/proxy/lane.rs` classifies by path first (Batch, files, embeddings, models/count-tokens on the Anthropic, OpenAI and Gemini surfaces); a sync chat call takes its lane from a `/lane/<name>/` prefix or the `x-rtok-lane` header (prefix wins), unmarked is `agent`. A marker never overrides a path that names its own lane, so `bulk` and `internal` are reachable only on sync wires. `handle` strips both markers before forwarding. The lane goes into `calls.kind`: `api_request` for `agent` (default rows unchanged), `api_request:<lane>` otherwise; the one exact-match consumer (`otel` in-flight) uses `lane::is_api_request`. `[proxy.lanes] enabled = true`; `false` forwards the markers untouched and tags nothing. Empty `[proxy.batch]`, `[proxy.flex]`, `[proxy.routing]` tables wait for T385.4, T385.5, T385.10. Tests: `tests/proxy_lanes.rs` (each lane tagged, the mock upstream rejects any request carrying the marker, prefix stripped with the body intact, lanes off) and unit tests in `lane.rs`.
+
+Status: done 2026-10-04
+Model: Claude Code / sonnet-5-5 (code), opus-5-5 (review)
+
 ### T240. Golden files for rule families without one
 
 `rules/default.toml` has families with no pair in `tests/cmd_golden`: `curl`, `node`, `pnpm`, `sed` (re-list at claim time — any rule `match_cmd` or Rust formatter with no `.in`/`.out`). Their output shape is untested.
