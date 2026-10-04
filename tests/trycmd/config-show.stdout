@@ -162,6 +162,7 @@ proxy.dry_run = false
 proxy.enabled = true
 proxy.gemini_upstream = https://generativelanguage.googleapis.com
 proxy.include_usage = true
+proxy.lanes.enabled = true
 proxy.mode = passthrough
 proxy.openai_upstream = https://api.openai.com
 proxy.port = 8790

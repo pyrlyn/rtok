@@ -282,6 +282,32 @@ section! {
 }
 
 section! {
+    /// `[proxy.lanes]` — request lanes (T385.1): each request is tagged agent, bulk, batch,
+    /// files, embeddings, meta or internal in the ledger (`calls.kind`). Off: every request is
+    /// an untagged `api_request` and the `x-rtok-lane` header and `/lane/<name>/` prefix are
+    /// forwarded as the client sent them.
+    Lanes {
+        enabled: bool = true,
+    }
+}
+
+section! {
+    /// `[proxy.batch]` — provider Batch observe (T385.4). No keys yet: the table exists so a
+    /// later step adds them without a schema break.
+    BatchPolicy {}
+}
+
+section! {
+    /// `[proxy.flex]` — Flex `service_tier` on bulk and internal lanes (T385.5). No keys yet.
+    FlexPolicy {}
+}
+
+section! {
+    /// `[proxy.routing]` — model routing (D9). No keys yet.
+    RoutingPolicy {}
+}
+
+section! {
     /// `[proxy]` — the proxy server itself; the usage-capture plugin is `[plugins.proxy]`.
     Proxy {
         /// When false the HTTP listener stays up but every request is byte-forwarded with
@@ -302,6 +328,10 @@ section! {
         context_management: bool = false,
         dry_run: bool = false,
         tools_rewrite: ToolsRewrite = ToolsRewrite::default(),
+        lanes: Lanes = Lanes::default(),
+        batch: BatchPolicy = BatchPolicy::default(),
+        flex: FlexPolicy = FlexPolicy::default(),
+        routing: RoutingPolicy = RoutingPolicy::default(),
     }
 }
 

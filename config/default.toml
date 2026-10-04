@@ -83,6 +83,15 @@ max_description_tokens = 60           # 0 = no truncate; sentence boundary; esti
 allow = []                            # empty = keep all names not in deny
 deny = []                             # drop these names from tools[]; later calls still forward
 
+[proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
+enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
+
+[proxy.batch]                         # no keys yet (T385.4)
+
+[proxy.flex]                          # no keys yet (T385.5)
+
+[proxy.routing]                       # no keys yet (D9)
+
 [web]                                 # rtok web (same data as rtok tui)
 host = "127.0.0.1"                    # --host
 port = 3333                           # --port

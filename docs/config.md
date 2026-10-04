@@ -152,22 +152,14 @@ max_description_tokens = 60           # 0 = no truncate; sentence boundary; esti
 allow = []                            # empty = keep all names not in deny
 deny = []                             # drop these names from tools[]; later calls still forward
 
-# ── Batch / Flex / routing (planned — not loaded by the binary yet; see docs/batch-flex.md) ──
-# Copying these into ~/.rtok/config.toml will fail `rtok config validate` until the keys ship.
-# [proxy.batch]
-# enabled = true                      # fallback already forwards Batch paths today
-# observe = true                      # record create/poll/results (planned)
-# parse_results = false               # expand Batch result usage into ledger (planned)
-#
-# [proxy.flex]
-# enabled = false                     # prepare may set service_tier = "flex" (planned)
-# force = false                       # overwrite client service_tier
-# fallback = "none"                   # none | default on Flex 429 (TODO)
-#
-# [proxy.routing]
-# enabled = false                     # model/tier routing D9 (planned)
-# sticky = true                       # pin upstream for prompt-cache affinity (I-84)
-# default_model = ""                  # empty = leave client model
+[proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
+enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
+
+[proxy.batch]                         # no keys yet (T385.4)
+
+[proxy.flex]                          # no keys yet (T385.5)
+
+[proxy.routing]                       # no keys yet (D9)
 
 [web]                                 # rtok web (same data as rtok tui)
 host = "127.0.0.1"                    # --host
@@ -446,12 +438,28 @@ cache_by_provider = true
 
 
 
+### `[proxy.lanes]`
+
+Every proxied request is classified into a lane and the lane is written to the ledger
+(`calls.kind`). The path decides first: Batch (`/v1/messages/batches`, `/v1/batches`,
+Gemini `:batchGenerateContent`), `files`, `embeddings` and `meta` (`/v1/models`,
+`count_tokens`) name their own lane. A sync chat call is an `agent` turn unless the caller
+says otherwise with an `x-rtok-lane: bulk|internal` header or a `/lane/<name>/` path prefix
+(`/lane/bulk/v1/messages`). Both are stripped before the request goes upstream. There are
+no heuristics: an unmarked request is `agent`, the lane every request had before lanes.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `enabled` | bool | `true` | `false` records every request as a plain `api_request` and forwards the header and prefix untouched |
+
+The agent lane keeps `calls.kind = api_request`; the others record `api_request:<lane>`
+(`api_request:bulk`, `api_request:batch`, ...). Request bytes are not changed by the lane.
+
 ### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — planned (see `docs/batch-flex.md`)
 
-These tables document the intended Batch pass-through, Flex `service_tier` rewrite, and
-model/sticky routing knobs. **They are not parsed yet** — adding them to a live config file
-fails `rtok config validate` until the corresponding `Config` fields land. The proxy
-fallback already forwards unknown paths (including `/v1/batches` and
+These three tables exist and are empty: an empty `[proxy.batch]` loads, but none has a key
+yet. The keys below are the **intended** ones; adding any of them to a live config file
+still fails `rtok config validate` until the matching step ships. The proxy fallback already forwards unknown paths (including `/v1/batches` and
 `/v1/messages/batches`) without a `Wire`; Flex injection and routing rewrites are future
 `prepare` / policy work. Full semantics: [`docs/batch-flex.md`](batch-flex.md).
 

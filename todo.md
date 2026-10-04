@@ -72,7 +72,6 @@
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 - T384. The read deny names the exact MCP tool so no ToolSearch turn follows
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
-- T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
 - T385.2. Per-lane policy table
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.4. Batch observe and `parse_results` into `usage`

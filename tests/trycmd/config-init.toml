@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,360 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -89,6 +89,15 @@ target/tmp/t60-2-config-init.toml
 +max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
 +allow = []                            # empty = keep all names not in deny
 +deny = []                             # drop these names from tools[]; later calls still forward
++
++[proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
++enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
++
++[proxy.batch]                         # no keys yet (T385.4)
++
++[proxy.flex]                          # no keys yet (T385.5)
++
++[proxy.routing]                       # no keys yet (D9)
 +
 +[web]                                 # rtok web (same data as rtok tui)
 +host = "127.0.0.1"                    # --host
