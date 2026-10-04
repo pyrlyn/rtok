@@ -60,17 +60,17 @@ export function Offline({
     onReconnect: () => void;
 }) {
     return (
-        <main
-            role="status"
-            className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center text-xs"
-        >
+        // axe forbids `role="status"` on `<main>` (aria-allowed-role), so the live region is the text.
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center text-xs">
             <span
                 aria-hidden="true"
                 className="text-fg-subtle [&>svg]:h-20 [&>svg]:w-44"
                 dangerouslySetInnerHTML={{ __html: offlineArt.trim() }}
             />
-            <h1 className="text-base font-bold text-warn-fg">Offline</h1>
-            <p className="max-w-80 text-fg-muted">The connection to rtok was lost.</p>
+            <div role="status" className="flex flex-col items-center gap-4">
+                <h1 className="text-base font-bold text-warn-fg">Offline</h1>
+                <p className="max-w-80 text-fg-muted">The connection to rtok was lost.</p>
+            </div>
             <button
                 type="button"
                 onClick={onReconnect}
