@@ -76,7 +76,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T380 | todo | P2 | 3 | 30% | |
 | T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
-| T384 | todo | P2 | 2 | 30% | |
+| T384 | in progress | P2 | 2 | 30% | Claude Code / sonnet-5-5 |
 | T385 | todo | P1 | 5 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
 | T387 | todo | P2 | 3 | 40% | |
@@ -1653,6 +1653,8 @@ From `research.md` §29.2: 541 of 984 denies (55 %) were followed by a `ToolSear
 Done means: the deny reason carries the host's exact tool name (`mcp__rtok__read` on Claude Code, the matching name per host) and, where the host defers MCP schemas, the one-line select hint that loads it. If a host setting can keep `read` non-deferred, `rtok doctor` names it. Measure the ToolSearch-after-deny share again over a dated window and record it in §29.
 
 Check: a unit test per host for the deny text; the §29 share re-measured with a date; `just check`.
+
+Plan: `src/plugins/read/hook.rs` picks the deny head from `[hook] host` (read inside the deny path only, one config serialization on a rare branch): `claude` names `mcp__rtok__read` and adds `(ToolSearch select:mcp__rtok__read loads it)`, `gemini` names `mcp_rtok_read` (Gemini discovers tools at startup, no hint), any other host keeps `rtok read`. `REASON` shrinks to its stable tail so `measure::stats::is_read_deny` still matches old and new text. A unit test per host. Doctor: `alwaysLoad: true` on a server entry is documented for all server types (https://code.claude.com/docs/en/mcp, read 2026-10-04), so `rtok doctor` gets one advisory line when the Claude `rtok` entry lacks it, with the token cost of loading every rtok tool upfront. Re-measure the ToolSearch-after-deny share over a dated window with the §29 SQL on the local `rtok.db` and add the dated line to §29 as the pre-release baseline.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
