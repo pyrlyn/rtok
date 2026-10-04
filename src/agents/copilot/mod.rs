@@ -17,21 +17,11 @@ use anyhow::{Context, Result};
 use rtok_agent_sdk::{Apply, NO_CHANGES, edit_json};
 use serde_json::{Value, json};
 
+use super::hook_events;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
 
 const NAME: &str = "rtok";
-
-/// Copilot's event names paired with the Claude event `rtok hook` runs for them.
-pub const EVENTS: &[(&str, &str)] = &[
-    ("preToolUse", "PreToolUse"),
-    ("postToolUse", "PostToolUse"),
-    ("userPromptSubmitted", "UserPromptSubmit"),
-    ("sessionStart", "SessionStart"),
-    ("sessionEnd", "SessionEnd"),
-    ("preCompact", "PreCompact"),
-    ("subagentStart", "SubagentStart"),
-];
 
 /// The CLI and the desktop app read the same `~/.copilot` files.
 pub struct Copilot;
@@ -161,7 +151,11 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
             return NO_CHANGES.into();
         }
         *root = want;
-        format!("+ {} ({} events)", path.display(), EVENTS.len())
+        format!(
+            "+ {} ({} events)",
+            path.display(),
+            hook_events::installed("copilot").count()
+        )
     })
 }
 
@@ -176,7 +170,7 @@ const MISSING_RTOK_NOTE: &str =
 /// [`hook_resolver_ps`], `sessionStart` adds [`MISSING_RTOK_NOTE`]); other `bin` stays plain.
 pub fn hooks_doc(bin: &str, timeout: u64) -> Value {
     let mut hooks = serde_json::Map::new();
-    for &(copilot, claude) in EVENTS {
+    for (copilot, claude) in hook_events::installed("copilot") {
         let args = format!("hook {claude} --host copilot");
         let note = (copilot == "sessionStart").then_some(MISSING_RTOK_NOTE);
         let (bash, powershell) = if bin == "rtok" {
