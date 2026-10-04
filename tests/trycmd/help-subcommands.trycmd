@@ -513,19 +513,37 @@ Options:
   -h, --help           Print help
 
 $ rtok completions --help
-Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
+Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows
+cmd)
+
+With a shell, prints its script. With `--install` or `--uninstall`, writes or removes the script in
+that shell's per-user completions directory (default shell: `$SHELL`). With nothing, in a terminal,
+opens a list of the shells: the ones with completions installed are checked; checking one installs
+it, unchecking removes it. `--list` shows the same state without a terminal.
 
 Usage: rtok completions [OPTIONS] [SHELL]
 
 Arguments:
-  [SHELL]  Shell to complete for (with `--install`/`--uninstall`: default `$SHELL`) [possible
-           values: bash, zsh, fish, powershell, elvish, clink]
+  [SHELL]
+          Shell to complete for (with `--install`/`--uninstall`: default `$SHELL`)
+          
+          [possible values: bash, zsh, fish, powershell, elvish, clink]
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --install        Write the script to the shell's per-user completions directory
-      --uninstall      Remove what `--install` wrote
-  -h, --help           Print help
+      --config <PATH>
+          User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+
+      --install
+          Write the script to the shell's per-user completions directory
+
+      --uninstall
+          Remove what `--install` wrote
+
+      --list
+          Print each shell, whether its completions are installed (yes/no) and the file
+
+  -h, --help
+          Print help (see a summary with '-h')
 
 $ rtok man --help
 Print the man page (roff), or write every page with `--dir`

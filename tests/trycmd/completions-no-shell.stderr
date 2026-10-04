@@ -1,0 +1,1 @@
+Error: no shell named and no terminal for the picker; run `rtok completions <shell>` to print a script, `rtok completions --install` to write one, or `--list` for the state

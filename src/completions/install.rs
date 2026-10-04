@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! `rtok completions [<shell>] --install | --uninstall` (T318): the script goes to the shell's
+//! `rtok completions [<shell>] --install | --uninstall | --list` (T318, T408): the script goes to the shell's
 //! standard per-user location. PowerShell also gets one dot-source line in `$PROFILE`; only
 //! that line is added or removed, the rest of the profile stays byte-for-byte.
 
@@ -112,10 +112,7 @@ impl Places {
         match name.and_then(|n| Shell::from_str(n, true).ok()) {
             Some(s) => Ok(s),
             None => {
-                let all: Vec<String> = Shell::value_variants()
-                    .iter()
-                    .filter_map(|s| s.to_possible_value().map(|v| v.get_name().to_string()))
-                    .collect();
+                let all: Vec<String> = Shell::value_variants().iter().map(|s| s.name()).collect();
                 bail!(
                     "cannot tell the shell from $SHELL; name one of: {}",
                     all.join(", ")
@@ -123,6 +120,31 @@ impl Places {
             }
         }
     }
+}
+
+/// One shell's completions as the per-user files hold them now.
+#[derive(Debug, Clone)]
+pub struct Status {
+    pub shell: Shell,
+    /// `None` where the shell has no per-user location here (Clink off Windows).
+    pub path: Option<PathBuf>,
+    pub installed: bool,
+}
+
+/// Every shell's state. Installed means the script exists, the one file [`uninstall`] removes.
+pub fn status(places: &Places) -> Vec<Status> {
+    Shell::value_variants()
+        .iter()
+        .map(|&shell| {
+            let path = places.script(shell).ok().map(|(p, _)| p);
+            let installed = path.as_deref().is_some_and(Path::exists);
+            Status {
+                shell,
+                path,
+                installed,
+            }
+        })
+        .collect()
 }
 
 fn source_line(script: &Path) -> String {

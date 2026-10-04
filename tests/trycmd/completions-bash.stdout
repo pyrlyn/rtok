@@ -1728,7 +1728,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__completions)
-            opts="-h --install --uninstall --config --help bash zsh fish powershell elvish clink"
+            opts="-h --install --uninstall --list --config --help bash zsh fish powershell elvish clink"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

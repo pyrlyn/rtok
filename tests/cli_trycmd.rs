@@ -58,7 +58,9 @@ fn cli() {
             .skip("tests/trycmd/completions-clink.toml")
             .skip("tests/trycmd/completions-fish.toml")
             .skip("tests/trycmd/completions-powershell.toml")
-            .skip("tests/trycmd/completions-zsh.toml");
+            .skip("tests/trycmd/completions-zsh.toml")
+            // `--list` prints per-user paths with the platform separator.
+            .skip("tests/trycmd/completions-list.toml");
     }
 }
 

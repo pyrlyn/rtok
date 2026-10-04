@@ -44,7 +44,7 @@ complete -c rtok -n "__fish_rtok_needs_command" -f -a "run" -d 'Execute a comman
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "filter" -d 'Filter text from stdin without executing'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "expand" -d 'Print an archived payload'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "archive" -d 'The archive live zone (`rtok archive rewrite` — pi `context` carrier)'
-complete -c rtok -n "__fish_rtok_needs_command" -f -a "completions" -d 'Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)'
+complete -c rtok -n "__fish_rtok_needs_command" -f -a "completions" -d 'Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "man" -d 'Print the man page (roff), or write every page with `--dir`'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "plugins" -d 'List plugins: id, enabled, surfaces'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "config" -d 'The one config file'
@@ -449,7 +449,8 @@ complete -c rtok -n "__fish_rtok_using_subcommand archive; and __fish_seen_subco
 complete -c rtok -n "__fish_rtok_using_subcommand completions" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand completions" -l install -d 'Write the script to the shell/'s per-user completions directory'
 complete -c rtok -n "__fish_rtok_using_subcommand completions" -l uninstall -d 'Remove what `--install` wrote'
-complete -c rtok -n "__fish_rtok_using_subcommand completions" -s h -l help -d 'Print help'
+complete -c rtok -n "__fish_rtok_using_subcommand completions" -l list -d 'Print each shell, whether its completions are installed (yes/no) and the file'
+complete -c rtok -n "__fish_rtok_using_subcommand completions" -s h -l help -d 'Print help (see more with /'--help/')'
 complete -c rtok -n "__fish_rtok_using_subcommand man" -l dir -d 'Write `rtok.1` and a page for every subcommand into this directory' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand man" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand man" -s h -l help -d 'Print help'
@@ -685,7 +686,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subc
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "filter" -d 'Filter text from stdin without executing'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "expand" -d 'Print an archived payload'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "archive" -d 'The archive live zone (`rtok archive rewrite` — pi `context` carrier)'
-complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "completions" -d 'Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)'
+complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "completions" -d 'Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "man" -d 'Print the man page (roff), or write every page with `--dir`'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "plugins" -d 'List plugins: id, enabled, surfaces'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats bench doctor worktree info agents setup run filter expand archive completions man plugins config memory graph guard dashboard demon otel logs report help" -f -a "config" -d 'The one config file'

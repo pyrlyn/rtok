@@ -52,6 +52,7 @@ const ALLOW_KEYS: &[&str] = &[
     // `completions --install/--uninstall` (T318): one-shot actions, not settings.
     "completions.install",
     "completions.uninstall",
+    "completions.list",
     "config.init.dry_run",
     "config.set.dry_run",
     "guard.check.host", // overlay `[hook] host` on the plugin CLI path (T70.5)

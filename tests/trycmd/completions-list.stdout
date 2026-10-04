@@ -1,0 +1,6 @@
+bash       no  target/tmp/t408-completions-list/.local/share/bash-completion/completions/rtok
+zsh        no  target/tmp/t408-completions-list/.zfunc/_rtok
+fish       no  target/tmp/t408-completions-list/.config/fish/completions/rtok.fish
+powershell no  target/tmp/t408-completions-list/.config/powershell/rtok.ps1
+elvish     no  target/tmp/t408-completions-list/.config/elvish/lib/rtok.elv
+clink      no  -

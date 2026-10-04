@@ -1,0 +1,11 @@
+bin.name = "rtok"
+args = "completions --list"
+
+# Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false, so nothing is installed
+# and no XDG/ZDOTDIR/LOCALAPPDATA override moves the paths.
+[env]
+inherit = false
+
+[env.add]
+HOME = "target/tmp/t408-completions-list"
+RTOK_HOME = "target/tmp/t408-completions-list"
