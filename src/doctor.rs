@@ -272,6 +272,29 @@ fn tools_rewrite_advice(
     }
 }
 
+/// T384: Claude Code defers MCP tool schemas, so a denied native `Read` costs one `ToolSearch`
+/// turn before rtok's `read` can run. `alwaysLoad: true` on a server entry loads all of that
+/// server's tools up front and is documented for every server type
+/// (https://code.claude.com/docs/en/mcp, read 2026-10-04); the line names it with its price,
+/// since the choice trades those tokens against the extra turns. Nothing when the entry is
+/// absent or already set, or when tool search is off (a custom base URL loads tools up front).
+fn always_load_advice(
+    entry: Option<&Value>,
+    tool_search_off: bool,
+    rtok: Option<&ServerInfo>,
+) -> Option<String> {
+    let entry = entry.filter(|e| e.get("alwaysLoad") != Some(&Value::Bool(true)))?;
+    let rtok = rtok.filter(|s| s.tools > 0)?;
+    if tool_search_off || !entry.is_object() {
+        return None;
+    }
+    Some(format!(
+        "native Read denies cost a ToolSearch turn on Claude Code; \"alwaysLoad\": true on the rtok \
+         MCP entry loads its {} tools (~{} tokens) up front instead",
+        rtok.tools, rtok.desc_tokens
+    ))
+}
+
 /// Every probe runs here: settings and host files are read, MCP servers are spawned and
 /// asked for their tools, proxy hops answer `/health` or do not.
 pub fn page(cfg: &Config) -> Result<Report> {
@@ -315,6 +338,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
         .collect();
     let timeout = Duration::from_millis(cfg.doctor.probe_timeout_ms.max(300));
     let anthropic = anthropic_base(settings.as_ref(), std::env::var("ANTHROPIC_BASE_URL").ok());
+    let mcp_tool_search_off = anthropic.is_some();
     let total_desc_tokens: u32 = mcp.iter().map(|s| s.desc_tokens).sum();
     let proxy_str = proxy_chain(anthropic.clone(), timeout);
     let tools_rewrite_adv = tools_rewrite_advice(
@@ -324,6 +348,16 @@ pub fn page(cfg: &Config) -> Result<Report> {
         total_desc_tokens,
         cfg.proxy.tools_rewrite.enabled,
         cfg.doctor.tools_rewrite_min_desc_tokens,
+    );
+    let mcp_json = read_json(Path::new(&cfg.doctor.mcp_json));
+    let rtok_entry = claude
+        .iter()
+        .chain(mcp_json.iter())
+        .find_map(|v| v.get("mcpServers")?.get("rtok"));
+    let always_load = always_load_advice(
+        rtok_entry,
+        mcp_tool_search_off,
+        mcp.iter().find(|s| s.name == "rtok"),
     );
     Ok(Report {
         hooks_total: hooks.total,
@@ -351,6 +385,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
                 &detected_hosts(settings.as_ref()),
             );
             lines.extend(crate::agents::mcp::doctor_lines(cfg));
+            lines.extend(always_load);
             lines.extend(hook_client_advice(
                 hooks.prefers_client,
                 std::env::var_os("PATH").as_deref(),
@@ -1809,5 +1844,27 @@ mod tests {
         // desc_tokens below threshold — advice should not appear
         let advice = tools_rewrite_advice(true, "8790→api.anthropic.com", 8790, 1500, false, 2000);
         assert!(advice.is_none());
+    }
+
+    /// T384: the advice names `alwaysLoad` with its price, and stays quiet when the entry is
+    /// absent or already set, when tool search is off, or when no tools were listed.
+    #[test]
+    fn always_load_advice_names_the_setting_and_its_price() {
+        let rtok = ServerInfo {
+            name: "rtok".into(),
+            cmd: "rtok".into(),
+            tools: 25,
+            desc_tokens: 1400,
+        };
+        let entry = serde_json::json!({"command": "rtok", "args": ["mcp"]});
+        let line = always_load_advice(Some(&entry), false, Some(&rtok)).unwrap();
+        assert!(line.contains("\"alwaysLoad\": true"), "{line}");
+        assert!(line.contains("25 tools (~1400 tokens)"), "{line}");
+
+        let set = serde_json::json!({"command": "rtok", "alwaysLoad": true});
+        assert!(always_load_advice(Some(&set), false, Some(&rtok)).is_none());
+        assert!(always_load_advice(None, false, Some(&rtok)).is_none());
+        assert!(always_load_advice(Some(&entry), true, Some(&rtok)).is_none());
+        assert!(always_load_advice(Some(&entry), false, None).is_none());
     }
 }

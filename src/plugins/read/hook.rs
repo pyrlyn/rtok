@@ -6,12 +6,42 @@
 
 use rtok_plugin_sdk::{Class, Ctx, Measurement, PreToolDecision, PreToolUse};
 
-/// Also the needle `measure::stats` matches in a transcript to find a denied Read (T383).
-pub(crate) const REASON: &str =
-    "use rtok read; before Edit run native Read(limit=1) — it satisfies the edit gate";
+/// Tail of the first deny, the same for every host: `measure::stats` matches it in a
+/// transcript to find a denied Read (T383), and it also sits inside the pre-T384 text.
+pub(crate) const REASON: &str = "before Edit run native Read(limit=1) — it satisfies the edit gate";
 
 /// Head of the post-edit deny; `measure::stats` matches it like [`REASON`].
-pub(crate) const DELTA_REASON: &str = "file changed since last read; use rtok read(mode=diff)";
+pub(crate) const DELTA_REASON: &str = "file changed since last read; use ";
+
+/// What the deny calls rtok's `read`, and the line that loads it where the host defers MCP
+/// schemas (T384). Without the exact name 55 % of the denies in `research.md` §29.2 were
+/// followed by a `ToolSearch` turn. Byte-stable per host.
+struct ReadTool {
+    name: String,
+    hint: String,
+}
+
+impl ReadTool {
+    /// Fail open: a host not listed keeps the generic `rtok read` and no hint, as before T384.
+    fn of(host: &str) -> Self {
+        let server = rtok_mcp::registry::RTOK.name;
+        let (name, defers) = match host {
+            // `mcp__<server>__<tool>`, tool search on by default
+            // (https://code.claude.com/docs/en/mcp, read 2026-10-04).
+            "claude" => (format!("mcp__{server}__read"), true),
+            // `mcp_{serverName}_{toolName}`, tools discovered at startup, not deferred
+            // (https://geminicli.com/docs/tools/mcp-server/, read 2026-10-04).
+            "gemini" => (format!("mcp_{server}_read"), false),
+            _ => (format!("{server} read"), false),
+        };
+        let hint = if defers {
+            format!(" (ToolSearch select:{name} loads it)")
+        } else {
+            String::new()
+        };
+        Self { name, hint }
+    }
+}
 
 pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
     let cfg = cx.plugin_config::<crate::config::Read>("read");
@@ -35,11 +65,21 @@ pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
         if cfg.delta
             && let Some(id) = last_read_id(cx, path)
         {
-            return Some(deny(cx, format!("{DELTA_REASON} vs {id:.8}")));
+            let t = tool(cx);
+            return Some(deny(
+                cx,
+                format!("{DELTA_REASON}{}(mode=diff) vs {id:.8}{}", t.name, t.hint),
+            ));
         }
         return None;
     }
-    Some(deny(cx, REASON.into()))
+    let t = tool(cx);
+    Some(deny(cx, format!("use {}{}; {REASON}", t.name, t.hint)))
+}
+
+/// Read only on a deny, the rare branch: `config` serializes the whole configuration.
+fn tool(cx: &Ctx) -> ReadTool {
+    ReadTool::of(&cx.config::<crate::config::Hook>("hook").host)
 }
 
 /// Every deny is a cost row, never a saving (T383): the reason is tokens the model reads
@@ -263,6 +303,72 @@ mod tests {
         }
     }
 
+    /// The deny text of a 100 KB native Read on `host`, and what a post-edit re-read says.
+    fn denies_on(host: &str) -> (String, String) {
+        let tag = format!("deny-text-{host}");
+        let (mut c, dir) = crate::testutil::config(&tag);
+        c.hook.host = host.into();
+        let cx = crate::plugin::Runtime::open(c, &tag).unwrap();
+        let p = dir.join("big.txt");
+        fs::write(&p, "x".repeat(100 * 1024)).unwrap();
+        let path = p.to_str().unwrap();
+        let reason = |input: &serde_json::Value| match pre_tool(&ev(input), &Ctx::new(&cx)) {
+            Some(PreToolDecision::Deny { reason }) => reason,
+            other => panic!("{other:?}"),
+        };
+        let first = reason(&json!({"file_path": path}));
+        let abs = dunce::canonicalize(&p).unwrap();
+        let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
+        let id = Ctx::new(&cx).put_archive(b"previous body").unwrap();
+        Ctx::new(&cx).put_read_cache(&key, "h", Some(&id)).unwrap();
+        hook_row(
+            &cx,
+            json!({"hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_input": {"file_path": path}}),
+        );
+        let delta = reason(&json!({"file_path": path}));
+        (first, delta.replace(&format!("{id:.8}"), "ID"))
+    }
+
+    const TAIL: &str = "before Edit run native Read(limit=1) — it satisfies the edit gate";
+
+    /// T384: Claude Code defers MCP schemas, so the deny names the exact tool and the
+    /// `ToolSearch` call that loads it (no extra turn to find it).
+    #[test]
+    fn claude_deny_names_the_tool_and_how_to_load_it() {
+        let (first, delta) = denies_on("claude");
+        assert_eq!(
+            first,
+            format!("use mcp__rtok__read (ToolSearch select:mcp__rtok__read loads it); {TAIL}")
+        );
+        assert_eq!(
+            delta,
+            "file changed since last read; use mcp__rtok__read(mode=diff) vs ID \
+             (ToolSearch select:mcp__rtok__read loads it)"
+        );
+    }
+
+    /// T384: Gemini CLI names MCP tools `mcp_<server>_<tool>` and discovers them at startup.
+    #[test]
+    fn gemini_deny_names_the_tool_without_a_load_hint() {
+        let (first, delta) = denies_on("gemini");
+        assert_eq!(first, format!("use mcp_rtok_read; {TAIL}"));
+        assert_eq!(
+            delta,
+            "file changed since last read; use mcp_rtok_read(mode=diff) vs ID"
+        );
+    }
+
+    /// T384: a host whose tool naming is not known keeps the generic text (fail open).
+    #[test]
+    fn an_unlisted_host_keeps_the_generic_deny() {
+        let (first, delta) = denies_on("copilot");
+        assert_eq!(first, format!("use rtok read; {TAIL}"));
+        assert_eq!(
+            delta,
+            "file changed since last read; use rtok read(mode=diff) vs ID"
+        );
+    }
+
     /// T127/T383: a ranged native Read up to `range_max_lines` passes (limit 1 is the edit
     /// gate); a wider range, no limit and `limit: 0` (unranged for the host) are denied.
     #[test]
@@ -304,7 +410,8 @@ mod tests {
         assert!(pre_tool(&ev(&wide), &Ctx::new(&cx)).is_some());
         let m = &rows()[0];
         assert_eq!((m.kind.as_str(), m.before_bytes), ("deny", 0));
-        assert_eq!(m.after_bytes as usize, REASON.len());
+        let (first, _) = denies_on("claude");
+        assert_eq!(m.after_bytes as usize, first.len());
         assert_eq!(m.est_before, 0);
         assert!(m.est_after > 0);
 
@@ -320,9 +427,10 @@ mod tests {
         let all = rows();
         assert_eq!(all.len(), 2, "the delta reason writes its own row");
         assert!(all.iter().all(|m| m.kind == "deny"));
+        let (_, delta) = denies_on("claude");
         assert_eq!(
             all[1].after_bytes as usize,
-            DELTA_REASON.len() + " vs ".len() + 8
+            delta.replace("ID", "12345678").len()
         );
     }
 
@@ -337,7 +445,7 @@ mod tests {
         let input = json!({"path": p.to_str().unwrap()});
         match pre_tool(&ev(&input), &Ctx::new(&cx)) {
             Some(PreToolDecision::Deny { reason }) => {
-                assert!(reason.contains("rtok read"), "{reason}")
+                assert!(reason.contains(TAIL), "{reason}")
             }
             other => panic!("{other:?}"),
         }
