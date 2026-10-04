@@ -63,22 +63,30 @@ test("expand returns the archived payload of a call", async ({ page }) => {
   await expect(page.getByText(/\d+ lines/)).toBeVisible();
 });
 
-test("offline banner shows when the server stops and clears when it returns", async ({
+test("offline takes the whole screen when the server stops; Reconnect brings it back", async ({
   page,
   rtok,
 }) => {
   await page.goto("/#/overview");
   const connection = page.getByRole("banner").getByText(/^(open|closed|connecting)$/);
   await expect(connection).toHaveText("open");
-  const offline = page.getByRole("main").getByText("Offline", { exact: true });
+  const nav = page.getByRole("navigation", { name: "Admin screens" });
+  const offline = page.getByRole("heading", { name: "Offline", exact: true });
+  const reconnect = page.getByRole("button", { name: "Reconnect", exact: true });
   await expect(offline).toHaveCount(0);
 
   await rtok.stop();
   await expect(offline).toBeVisible();
-  await expect(connection).not.toHaveText("open");
+  // Nothing but the offline screen: no navigation, no header, no stale page (T407).
+  await expect(nav).toHaveCount(0);
+  await expect(connection).toHaveCount(0);
+  await expect(reconnect).toBeEnabled();
 
   await rtok.start();
-  // The client retries with backoff capped at 10 s (web/src/api/ws.ts).
-  await expect(connection).toHaveText("open", { timeout: 20_000 });
+  // Reconnect skips the client's backoff (capped at 10 s, web/src/api/ws.ts). An automatic retry
+  // that lands first hides the button, so the click may never happen; both paths end open.
+  void reconnect.click().catch(() => {});
+  await expect(connection).toHaveText("open", { timeout: 5_000 });
+  await expect(nav).toBeVisible();
   await expect(offline).toHaveCount(0);
 });
