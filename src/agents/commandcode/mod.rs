@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Command Code installer (`rtok agents install commandcode`).
 //!
 //! Command Code (`command-code`, alias `cmd`) keeps user state in `~/.commandcode`:
@@ -152,14 +156,14 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 /// Register `rtok mcp` in the user-scope `mcp.json`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
     let cmd = super::rtok_command();
-    let entry = json!({"command": cmd, "args": ["mcp"]});
+    let entry = json!({"command": cmd, "args": super::mcp_args("commandcode")});
     rtok_agent_sdk::register_server(
         &apply(cfg),
         &mcp_path(cfg),
         "mcpServers",
         "rtok",
         entry,
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "commandcode"),
     )
 }
 
@@ -421,7 +425,10 @@ mod tests {
         assert!(first.starts_with("mcpServers.rtok: "), "{first}");
         assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES);
         let doc: Value = serde_json::from_str(&fs::read_to_string(mcp_path(&c)).unwrap()).unwrap();
-        assert_eq!(doc["mcpServers"]["rtok"]["args"], json!(["mcp"]));
+        assert_eq!(
+            doc["mcpServers"]["rtok"]["args"],
+            json!(["mcp", "--host", "commandcode"])
+        );
         assert_eq!(doc["mcpServers"]["other"]["command"], "x");
         assert!(CommandCode.installed(&c, Kind::Cli).contains(&"mcp"));
         assert_eq!(unregister_mcp(&c).unwrap(), "- mcpServers.rtok");

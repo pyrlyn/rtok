@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Tree-sitter-tags symbol index (plan T8.1).
 
 use std::collections::{BTreeMap, HashSet};
@@ -57,14 +61,9 @@ fn stat_key(md: &std::fs::Metadata) -> (i64, i64) {
     (mtime, md.len() as i64)
 }
 
-/// Canonical absolute path as one string: the index key of a root, and the match key of a
-/// file for `mark_symbols_stale` (T8.3). Rows are scoped to it so one store holds many repos.
-pub fn canon(p: &Path) -> String {
-    dunce::canonicalize(p)
-        .unwrap_or_else(|_| p.to_path_buf())
-        .to_string_lossy()
-        .replace('\\', "/")
-}
+// The index key of a root; defined next to the project registry, which keys on it too and
+// must build without the graph plugin.
+pub use crate::store::canon_root as canon;
 
 /// Incremental index of `root`. Returns how many rows were newly written.
 /// `dry_run` walks and parses exactly as a real run does but writes no rows, so the report

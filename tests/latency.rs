@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T2.2: spawn `rtok hook PreToolUse` 200×; p95 < 10 ms (release).
 //! Gate P17 asks the same of `PostToolUse`, T288 of `UserPromptSubmit`; each prints p50/p95/max under `--nocapture`.
 
@@ -46,7 +50,10 @@ fn p95_under_10ms(event: &str, fixture: &[u8]) {
         let out = spawn();
         samples.push(start.elapsed());
         assert!(out.status.success(), "hook must fail open with exit 0");
-        assert_eq!(out.stdout, b"{}");
+        // SessionStart injects the agent id and the memory line; the others stay `{}`.
+        if event != "SessionStart" {
+            assert_eq!(out.stdout, b"{}");
+        }
     }
 
     samples.sort();
@@ -211,4 +218,14 @@ fn hook_returns_despite_exclusive_lock() {
     );
 
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T329.6: `SessionStart` with a real cwd also upserts the session's project (the
+/// `auto_add_projects` default); the fixture's own cwd does not exist and would skip it.
+#[test]
+fn latency_hook_session_start_with_project_registration_p95_under_10ms() {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
+    v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
+    p95_under_10ms("SessionStart", v.to_string().as_bytes());
 }

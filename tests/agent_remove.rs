@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T10.9: `rtok agents uninstall <host>` (alias `remove`) takes back everything `rtok agents install <host>` wrote,
 //! and both commands copy the host's config files before they touch anything.
 //!
@@ -481,7 +485,11 @@ fn grok_remove_asks_before_taking_an_edited_mcp_entry() {
     rtok(&["agents", "install", "grok"], &cfg, &home);
     let raw = fs::read_to_string(&path).unwrap();
     assert!(raw.contains("[mcp_servers.rtok]"), "{raw}");
-    let edited = raw.replacen("args = [\"mcp\"]", "args = [\"mcp\"]\ntimeout = 30", 1);
+    let edited = raw.replacen(
+        "args = [\"mcp\", \"--host\", \"grok\"]",
+        "args = [\"mcp\", \"--host\", \"grok\"]\ntimeout = 30",
+        1,
+    );
     assert_ne!(edited, raw, "the fixture must actually gain a field: {raw}");
     fs::write(&path, edited).unwrap();
 

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! ZCode installer (`rtok agents install zcode`, plan T46.1).
 //!
 //! Z.ai's ZCode desktop app reads a Claude-compatible hook protocol from
@@ -77,7 +81,7 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 
 /// The `mcp.servers.rtok` entry [`register_mcp`] writes.
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
+    json!({"command": cmd, "args": super::mcp_args("zcode")})
 }
 
 /// `mcp.servers.rtok` → `<abs rtok> mcp`.
@@ -89,7 +93,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         "mcp.servers",
         NAME,
         mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "zcode"),
     )
 }
 

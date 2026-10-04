@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Devin CLI + Desktop (`rtok agents install devin`, plan T89).
 //!
 //! Both surfaces read the same user files. Hooks live under the `"hooks"` key of
@@ -258,7 +262,7 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 }
 
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
+    json!({"command": cmd, "args": super::mcp_args("devin")})
 }
 
 pub fn register_mcp(cfg: &Config) -> Result<String> {
@@ -269,7 +273,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         "mcpServers",
         NAME,
         mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "devin"),
     )
 }
 
@@ -314,7 +318,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(mcp["mcpServers"]["rtok"]["command"], "rtok");
-        assert_eq!(mcp["mcpServers"]["rtok"]["args"], json!(["mcp"]));
+        assert_eq!(
+            mcp["mcpServers"]["rtok"]["args"],
+            json!(["mcp", "--host", "devin"])
+        );
         let second = install(&c);
         assert!(second.iter().all(|l| l == NO_CHANGES), "{second:?}");
     }

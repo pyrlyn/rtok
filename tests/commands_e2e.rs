@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T38.1/T38.5: e2e for the commands without direct coverage — `hook`, `run`,
 //! `expand`, `plugins`, `config`, `bench --dry-run`, `doctor`, `stats` — driven
 //! through `assert_cmd` (plan Working agreement).
@@ -181,6 +185,22 @@ fn run_echo_prints_its_output() {
     let _ = fs::remove_dir_all(&home);
 }
 
+/// T366: a command killed by a signal exits `128 + signal` like a shell, not `1`; a plain
+/// non-zero exit keeps its code. The `kill` targets the test's own `sh` (`$$`).
+#[cfg(unix)]
+#[test]
+fn run_reports_128_plus_the_signal_for_a_killed_command() {
+    let home = tmp("signal");
+    for (script, code) in [
+        ("kill -TERM $$", 143),
+        ("kill -KILL $$", 137),
+        ("exit 7", 7),
+    ] {
+        cmd(&["run", "sh", "-c", script], &home).assert().code(code);
+    }
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn run_long_output_then_expand_round_trips() {
     let home = tmp("expand");
@@ -313,5 +333,199 @@ fn info_counts_error_lines_and_json_parses() {
     assert_eq!(v["proxy"]["port"], 8790);
     assert_eq!(v["otel"]["enabled"], false);
     assert!(v["db"]["bytes"].is_number(), "{v}");
+    let _ = fs::remove_dir_all(&home);
+}
+
+/// T367: every path-taking graph subcommand fails on a missing path, naming it, before walking.
+#[test]
+fn graph_subcommands_reject_a_missing_path() {
+    let home = tmp("graph-missing-home");
+    let missing = home.join("nonexistent");
+    let missing = missing.to_str().unwrap();
+    for args in [
+        vec!["graph", "index", missing],
+        vec!["graph", "dead", missing],
+        vec!["graph", "status", missing],
+        vec!["graph", "impact", "main", missing],
+    ] {
+        let out = cmd(&args, &home).assert().failure().get_output().clone();
+        let err = String::from_utf8_lossy(&out.stderr);
+        // Only the path: the OS error text differs (Windows says "cannot find the file").
+        assert!(err.contains(missing), "{args:?}: {err}");
+        assert!(out.stdout.is_empty(), "{args:?}: {:?}", out.stdout);
+    }
+}
+
+#[test]
+fn graph_index_rejects_a_file_path_and_still_indexes_a_project() {
+    let home = tmp("graph-file-home");
+    let project = tmp("graph-project");
+    let file = project.join("a.rs");
+    fs::write(&file, "fn alpha() {}\n").unwrap();
+    let err = cmd(&["graph", "index", file.to_str().unwrap()], &home)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    assert!(String::from_utf8_lossy(&err).contains("not a directory"));
+    let out = ok(&["graph", "index", project.to_str().unwrap()], &home);
+    assert!(out.contains("indexed 1 files"), "{out}");
+}
+
+/// T362: the first `config validate` on an empty HOME creates the default file like every other
+/// subcommand, while a path the user typed must exist.
+#[test]
+fn config_validate_creates_the_default_file_but_not_an_explicit_one() {
+    let home = tmp("config-validate-fresh");
+    let out = String::from_utf8_lossy(
+        &cmd(&["config", "validate"], &home)
+            .env_remove("RTOK_CONFIG")
+            .assert()
+            .success()
+            .get_output()
+            .stdout,
+    )
+    .into_owned();
+    assert!(
+        out.starts_with("ok ") && out.contains("config.toml"),
+        "{out}"
+    );
+    assert!(home.join("config.toml").exists());
+
+    let missing = home.join("nope.toml");
+    let missing = missing.to_str().unwrap();
+    let out = cmd(&["config", "validate", missing], &home)
+        .env_remove("RTOK_CONFIG")
+        .assert()
+        .failure()
+        .get_output()
+        .clone();
+    assert!(String::from_utf8_lossy(&out.stderr).contains(missing));
+}
+
+/// T331.5: `doctor --fix` is a dry run until `--yes`; then it backs the file up, drops only the
+/// broken hook and keeps every other byte.
+#[cfg(unix)] // POSIX hook paths
+#[test]
+fn doctor_fix_removes_only_the_broken_hook_after_a_backup() {
+    let home = tmp("doctor-fix");
+    let claude = home.join(".claude");
+    fs::create_dir_all(&claude).unwrap();
+    let settings = claude.join("settings.json");
+    let raw = format!(
+        "{{\n  // mine\n  \"hooks\": {{\n    \"Stop\": [\n      {{ \"hooks\": [\n        {{ \"type\": \"command\", \"command\": \"{}/gone.sh\" }},\n        {{ \"type\": \"command\", \"command\": \"echo done\" }}\n      ] }}\n    ]\n  }}\n}}\n",
+        home.display()
+    );
+    fs::write(&settings, &raw).unwrap();
+    let run = |args: &[&str]| {
+        let mut c = cmd(args, &home);
+        c.current_dir(&home);
+        c.assert().get_output().clone()
+    };
+
+    let dry = run(&["doctor", "--fix"]);
+    assert_eq!(dry.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&dry.stdout);
+    assert!(text.contains("dry run: nothing is written"), "{text}");
+    assert!(text.contains("would remove Stop"), "{text}");
+    assert_eq!(fs::read_to_string(&settings).unwrap(), raw);
+
+    let done = run(&["doctor", "--fix", "--yes"]);
+    assert_eq!(done.status.code(), Some(0), "{done:?}");
+    let text = String::from_utf8_lossy(&done.stdout);
+    assert!(text.contains("1 entry removed, 0 left"), "{text}");
+    let after = fs::read_to_string(&settings).unwrap();
+    assert!(
+        after.contains("// mine") && after.contains("echo done"),
+        "{after}"
+    );
+    assert!(!after.contains("gone.sh"), "{after}");
+    let backups: Vec<_> = fs::read_dir(claude.join("_backup")).unwrap().collect();
+    assert_eq!(backups.len(), 1);
+    let bak = backups[0].as_ref().unwrap().path();
+    assert_eq!(fs::read_to_string(bak).unwrap(), raw);
+
+    let again = run(&["doctor", "--fix", "--yes"]);
+    assert!(String::from_utf8_lossy(&again.stdout).contains("nothing to remove"));
+}
+
+/// T331.6: `--only duplicate-mcp` removes the extra copy of a server from the host's JSON and
+/// keeps the rest of the file byte for byte, after a backup.
+#[cfg(unix)] // POSIX command paths
+#[test]
+fn doctor_fix_removes_an_extra_mcp_copy_and_nothing_else() {
+    let home = tmp("doctor-fix-mcp");
+    let json = home.join(".claude.json");
+    let before = "{\n  \"theme\": \"dark\",\n  \"mcpServers\": {\n    \"a\": {\"command\": \"/bin/tool\"},\n    \"b\": {\"command\": \"/bin/tool\"}\n  }\n}\n";
+    fs::write(&json, before).unwrap();
+    let mut c = cmd(
+        &["doctor", "--fix", "--yes", "--only", "duplicate-mcp"],
+        &home,
+    );
+    c.current_dir(&home);
+    let out = c.assert().get_output().clone();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    assert!(text.contains("1 entry removed, 0 left"), "{text}");
+    assert_eq!(
+        fs::read_to_string(&json).unwrap(),
+        "{\n  \"theme\": \"dark\",\n  \"mcpServers\": {\n    \"a\": {\"command\": \"/bin/tool\"}\n  }\n}\n"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
+/// T365: a value `config validate` rejects in the file is rejected the same way when it arrives
+/// through the environment, and the message names that layer.
+#[test]
+fn config_validate_checks_env_overrides_and_names_the_layer() {
+    let home = tmp("config-validate-env");
+    let validate = |level: Option<&str>| {
+        let mut c = cmd(&["config", "validate"], &home);
+        c.env_remove("RTOK_CONFIG").env_remove("RTOK_LOG_LEVEL");
+        if let Some(level) = level {
+            c.env("RTOK_LOG_LEVEL", level);
+        }
+        c.assert().get_output().clone()
+    };
+
+    let clean = validate(None);
+    assert!(clean.status.success());
+    assert!(String::from_utf8_lossy(&clean.stdout).starts_with("ok "));
+
+    let good = validate(Some("debug"));
+    assert!(good.status.success(), "{good:?}");
+
+    let bad = validate(Some("verbose"));
+    assert!(!bad.status.success());
+    let stderr = String::from_utf8_lossy(&bad.stderr);
+    assert!(
+        stderr.contains("env: log.level must be error, warn, info, or debug"),
+        "{stderr}"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
+/// T379: a bad window is blamed on where it came from: the config key, or the flag.
+#[test]
+fn report_since_errors_name_their_source() {
+    let home = tmp("report-since");
+    let cfg = home.join("c.toml");
+    fs::write(&cfg, "[report]\nsince = \"7x\"\n").unwrap();
+    let cfg = cfg.to_str().unwrap();
+    let stderr = |args: &[&str]| {
+        let out = cmd(args, &home).assert().failure().get_output().clone();
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    let from_config = stderr(&["--config", cfg, "report"]);
+    assert!(
+        from_config.contains("report.since") && !from_config.contains("--since"),
+        "{from_config}"
+    );
+    let from_flag = stderr(&["report", "--since", "7x"]);
+    assert!(
+        from_flag.contains("--since") && !from_flag.contains("report.since"),
+        "{from_flag}"
+    );
     let _ = fs::remove_dir_all(&home);
 }

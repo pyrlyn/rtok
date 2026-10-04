@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! MiMo Code installer (`rtok agents install mimo`, plan T186).
 //!
 //! MiMo Code is Xiaomi's terminal coding agent, an OpenCode fork (`mimo`, install via
@@ -44,12 +48,12 @@ fn config_path(cfg: &Config) -> PathBuf {
 
 /// `mcp.rtok` — the local-argv shape confirmed against MiMo's own MCP docs (module doc).
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    register_local_mcp(cfg, &config_path(cfg), "mcp")
+    register_local_mcp(cfg, &config_path(cfg), "mcp", "mimo")
 }
 
 /// Drop `mcp.rtok` (`rtok agents remove mimo`).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    unregister_local_mcp(cfg, &config_path(cfg), "mcp")
+    unregister_local_mcp(cfg, &config_path(cfg), "mcp", "mimo")
 }
 
 impl Agent for Mimo {

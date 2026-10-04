@@ -43,6 +43,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--call=[Call one listed tool and print the text result (pi /`registerTool/` shim, T70.3)]:TOOL:_default' /
 '--json=[JSON arguments for /`--call/`]:ARGS:_default' /
+'--host=[The host this MCP entry belongs to (/`claude/`, /`cursor/`, /`grok/`, …)/: overlays /`/[hook/] host/` so the process can find its rtok agent (T283.1)]:HOST:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '-h[Print help]' /
 '--help[Print help]' /
@@ -155,9 +156,14 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (doctor)
 _arguments "${_arguments_options[@]}" : /
+'*--only=[With --fix/: limit it to these problems (repeatable; default/: all of them)]:ONLY:(broken-hooks duplicate-hooks duplicate-mcp)' /
+'--agent=[Check (and with --fix, repair) the hooks of one host only (an id of /`rtok agents list/`)]:HOST:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--instructions[Also run the instruction-file audit (T7.2)]' /
-'--json[JSON instead of the table]' /
+'(--fix)--json[JSON instead of the table]' /
+'--fix[Clean up broken hooks and duplicate hooks and MCP entries/: a terminal gets a checklist, a pipe the diff; --yes writes without asking]' /
+'--yes[With --fix/: write the changes (a copy goes to /`_backup//` first)]' /
+'--dry-run[With --fix --yes/: print the diffs and write nothing]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0
@@ -196,6 +202,18 @@ _arguments "${_arguments_options[@]}" : /
 '-h[Print help]' /
 '--help[Print help]' /
 ':path -- The worktree:_files' /
+&& ret=0
+;;
+(adopt)
+_arguments "${_arguments_options[@]}" : /
+'--task=[The task id, when the lock and the branch do not name one (a detached HEAD)]:TASK:_default' /
+'--agent=[The rtok agent id (any unique prefix); defaults to /`RTOK_AGENT_ID/`]:AGENT:_default' /
+'--owner=[The owner the lock names, as /`<provider> / <model>/`. Defaults to /`<host> / <model>/` of the agent]:OWNER:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[Print the result as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+'::path -- The worktree, or a directory inside it; defaults to the current directory:_files' /
 && ret=0
 ;;
 (remove)
@@ -257,6 +275,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (claim)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(adopt)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -451,6 +473,23 @@ esac
     ;;
 esac
 ;;
+(usage)
+_arguments "${_arguments_options[@]}" : /
+'--source=[Data source/: /`logs/` (the agents'/'' own session files, the default), /`rtok/` (what passed through rtok) or /`both/`]:SOURCE:_default' /
+'--host=[Only these hosts, comma-separated (/`claude,codex/`)]:IDS:_default' /
+'--since=[From a date (/`2026-09-01/`, whole days in /`--tz/`) or a duration back from now (/`30d/`)]:DATE|DUR:_default' /
+'--until=[Through this date, inclusive]:DATE:_default' /
+'--by=[Middle table grouping/: /`agent/` (the default) or /`model/`]:AGENT|MODEL:_default' /
+'--tz=[IANA time zone for day and month boundaries (default/: the system zone)]:ZONE:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'(--monthly)--daily[Bottom table by day]' /
+'--monthly[Bottom table by month (the default)]' /
+'--unpriced[List the models without a price instead of the tables]' /
+'--json[One JSON document]' /
+'-h[Print help (see more with '/''--help'/'')]' /
+'--help[Print help (see more with '/''--help'/'')]' /
+&& ret=0
+;;
 (junk)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -466,7 +505,17 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-agents-junk-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the text]' /
+'--bytes[Exact byte counts instead of KB/MB/GB]' /
+'--all[Also the hosts that are not installed]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
@@ -487,7 +536,11 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-agents-junk-help-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -604,6 +657,10 @@ _arguments "${_arguments_options[@]}" : /
     ;;
 esac
 ;;
+(usage)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (junk)
 _arguments "${_arguments_options[@]}" : /
 ":: :_rtok__subcmd__agents__subcmd__help__subcmd__junk_commands" /
@@ -616,7 +673,11 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-agents-help-junk-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -811,6 +872,23 @@ esac
     ;;
 esac
 ;;
+(usage)
+_arguments "${_arguments_options[@]}" : /
+'--source=[Data source/: /`logs/` (the agents'/'' own session files, the default), /`rtok/` (what passed through rtok) or /`both/`]:SOURCE:_default' /
+'--host=[Only these hosts, comma-separated (/`claude,codex/`)]:IDS:_default' /
+'--since=[From a date (/`2026-09-01/`, whole days in /`--tz/`) or a duration back from now (/`30d/`)]:DATE|DUR:_default' /
+'--until=[Through this date, inclusive]:DATE:_default' /
+'--by=[Middle table grouping/: /`agent/` (the default) or /`model/`]:AGENT|MODEL:_default' /
+'--tz=[IANA time zone for day and month boundaries (default/: the system zone)]:ZONE:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'(--monthly)--daily[Bottom table by day]' /
+'--monthly[Bottom table by month (the default)]' /
+'--unpriced[List the models without a price instead of the tables]' /
+'--json[One JSON document]' /
+'-h[Print help (see more with '/''--help'/'')]' /
+'--help[Print help (see more with '/''--help'/'')]' /
+&& ret=0
+;;
 (junk)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -826,7 +904,17 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-agents-junk-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the text]' /
+'--bytes[Exact byte counts instead of KB/MB/GB]' /
+'--all[Also the hosts that are not installed]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
@@ -847,7 +935,11 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-agents-junk-help-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -964,6 +1056,10 @@ _arguments "${_arguments_options[@]}" : /
     ;;
 esac
 ;;
+(usage)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (junk)
 _arguments "${_arguments_options[@]}" : /
 ":: :_rtok__subcmd__agents__subcmd__help__subcmd__junk_commands" /
@@ -976,7 +1072,11 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-agents-help-junk-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -1455,6 +1555,116 @@ _arguments "${_arguments_options[@]}" : /
 '::path:_files' /
 && ret=0
 ;;
+(projects)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of a table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+":: :_rtok__subcmd__graph__subcmd__projects_commands" /
+"*::: :->projects" /
+&& ret=0
+
+    case $state in
+    (projects)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-graph-projects-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of a table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':path:_files' /
+&& ret=0
+;;
+(select)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of a table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':project -- Project id or directory:_default' /
+&& ret=0
+;;
+(link)
+_arguments "${_arguments_options[@]}" : /
+'--from=[Link from this project instead of the selected one]:FROM:_default' /
+'--reason=[Why (shown next to the link)]:REASON:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--both[Also link the other way]' /
+'--json[JSON instead of a table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':project -- Project id or directory to link to:_default' /
+&& ret=0
+;;
+(unlink)
+_arguments "${_arguments_options[@]}" : /
+'--from=[Unlink from this project instead of the selected one]:FROM:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--both[Also remove the link the other way]' /
+'--json[JSON instead of a table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':project -- Project id or directory to unlink:_default' /
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of a table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':project -- Project id or directory:_default' /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__graph__subcmd__projects__subcmd__help_commands" /
+"*::: :->help" /
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-graph-projects-help-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(select)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(link)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(unlink)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (affected)
 _arguments "${_arguments_options[@]}" : /
 '(--staged)--since=[Diff against this ref]:SINCE:_default' /
@@ -1492,6 +1702,42 @@ _arguments "${_arguments_options[@]}" : /
 (impact)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
+;;
+(projects)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__graph__subcmd__help__subcmd__projects_commands" /
+"*::: :->projects" /
+&& ret=0
+
+    case $state in
+    (projects)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-graph-help-projects-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(select)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(link)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(unlink)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
 ;;
 (affected)
 _arguments "${_arguments_options[@]}" : /
@@ -1914,6 +2160,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(adopt)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (remove)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -1994,6 +2244,10 @@ _arguments "${_arguments_options[@]}" : /
     ;;
 esac
 ;;
+(usage)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (junk)
 _arguments "${_arguments_options[@]}" : /
 ":: :_rtok__subcmd__help__subcmd__agents__subcmd__junk_commands" /
@@ -2006,7 +2260,11 @@ _arguments "${_arguments_options[@]}" : /
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rtok-help-agents-junk-command-$line[1]:"
         case $line[1] in
-            (clear)
+            (list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(clear)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -2202,6 +2460,42 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(projects)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__help__subcmd__graph__subcmd__projects_commands" /
+"*::: :->projects" /
+&& ret=0
+
+    case $state in
+    (projects)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-help-graph-projects-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(select)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(link)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(unlink)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (affected)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -2349,7 +2643,7 @@ _rtok_commands() {
 'hook:Claude Code hook entry point/: reads the event JSON on stdin, writes JSON to stdout' /
 'mcp:Serve MCP tools over stdio; /`-- <server argv>/` wraps a foreign server instead' /
 'proxy:Local API proxy for ANTHROPIC_BASE_URL' /
-'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + Slint/WASM)' /
+'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (D23/: one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
 'bench:A/B benchmark of host configurations' /
@@ -2390,7 +2684,8 @@ _rtok__subcmd__agents_commands() {
 'list:Every known app/: kind and name, path and version, config files, rtok modules' /
 'info:One host/: the same block /`agents list/` prints, just for that app' /
 'sessions:What is running in this project/: host, provider, model, tokens, start, run time' /
-'junk:Junk rtok owns under its own home/: log siblings and archive payloads past retention' /
+'usage:Tokens and estimated cost per agent and month (or day), from the agents'/'' logs or rtok' /
+'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk' /
 'whoami:This session'/''s own rtok agent id (T283, D34)/: /`RTOK_AGENT_ID/`, resolved through the store' /
 'show:One agent by id prefix/: host, model, ids, parent and sub-agents, cwd, activity, status' /
 'status:Say what this agent (/`RTOK_AGENT_ID/`) is busy with/: plain text, at most 120 chars' /
@@ -2410,7 +2705,8 @@ _rtok__subcmd__agents__subcmd__help_commands() {
 'list:Every known app/: kind and name, path and version, config files, rtok modules' /
 'info:One host/: the same block /`agents list/` prints, just for that app' /
 'sessions:What is running in this project/: host, provider, model, tokens, start, run time' /
-'junk:Junk rtok owns under its own home/: log siblings and archive payloads past retention' /
+'usage:Tokens and estimated cost per agent and month (or day), from the agents'/'' logs or rtok' /
+'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk' /
 'whoami:This session'/''s own rtok agent id (T283, D34)/: /`RTOK_AGENT_ID/`, resolved through the store' /
 'show:One agent by id prefix/: host, model, ids, parent and sub-agents, cwd, activity, status' /
 'status:Say what this agent (/`RTOK_AGENT_ID/`) is busy with/: plain text, at most 120 chars' /
@@ -2443,6 +2739,7 @@ _rtok__subcmd__agents__subcmd__help__subcmd__install_commands() {
 (( $+functions[_rtok__subcmd__agents__subcmd__help__subcmd__junk_commands] )) ||
 _rtok__subcmd__agents__subcmd__help__subcmd__junk_commands() {
     local commands; commands=(
+'list:Folders, junk kinds and sizes per agent, and the space /`agents junk clear/` would free' /
 'clear:List what /`agents junk clear/` would remove; /`--yes/` applies it' /
     )
     _describe -t commands 'rtok agents help junk commands' commands "$@"
@@ -2451,6 +2748,11 @@ _rtok__subcmd__agents__subcmd__help__subcmd__junk_commands() {
 _rtok__subcmd__agents__subcmd__help__subcmd__junk__subcmd__clear_commands() {
     local commands; commands=()
     _describe -t commands 'rtok agents help junk clear commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__agents__subcmd__help__subcmd__junk__subcmd__list_commands] )) ||
+_rtok__subcmd__agents__subcmd__help__subcmd__junk__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok agents help junk list commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__agents__subcmd__help__subcmd__list_commands] )) ||
 _rtok__subcmd__agents__subcmd__help__subcmd__list_commands() {
@@ -2499,6 +2801,11 @@ _rtok__subcmd__agents__subcmd__help__subcmd__update_commands() {
     local commands; commands=()
     _describe -t commands 'rtok agents help update commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__agents__subcmd__help__subcmd__usage_commands] )) ||
+_rtok__subcmd__agents__subcmd__help__subcmd__usage_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok agents help usage commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__agents__subcmd__help__subcmd__whoami_commands] )) ||
 _rtok__subcmd__agents__subcmd__help__subcmd__whoami_commands() {
     local commands; commands=()
@@ -2522,6 +2829,7 @@ _rtok__subcmd__agents__subcmd__install_commands() {
 (( $+functions[_rtok__subcmd__agents__subcmd__junk_commands] )) ||
 _rtok__subcmd__agents__subcmd__junk_commands() {
     local commands; commands=(
+'list:Folders, junk kinds and sizes per agent, and the space /`agents junk clear/` would free' /
 'clear:List what /`agents junk clear/` would remove; /`--yes/` applies it' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -2535,6 +2843,7 @@ _rtok__subcmd__agents__subcmd__junk__subcmd__clear_commands() {
 (( $+functions[_rtok__subcmd__agents__subcmd__junk__subcmd__help_commands] )) ||
 _rtok__subcmd__agents__subcmd__junk__subcmd__help_commands() {
     local commands; commands=(
+'list:Folders, junk kinds and sizes per agent, and the space /`agents junk clear/` would free' /
 'clear:List what /`agents junk clear/` would remove; /`--yes/` applies it' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -2549,6 +2858,16 @@ _rtok__subcmd__agents__subcmd__junk__subcmd__help__subcmd__clear_commands() {
 _rtok__subcmd__agents__subcmd__junk__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'rtok agents junk help help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__agents__subcmd__junk__subcmd__help__subcmd__list_commands] )) ||
+_rtok__subcmd__agents__subcmd__junk__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok agents junk help list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__agents__subcmd__junk__subcmd__list_commands] )) ||
+_rtok__subcmd__agents__subcmd__junk__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok agents junk list commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__agents__subcmd__list_commands] )) ||
 _rtok__subcmd__agents__subcmd__list_commands() {
@@ -2615,6 +2934,11 @@ _rtok__subcmd__agents__subcmd__uninstall_commands() {
 _rtok__subcmd__agents__subcmd__update_commands() {
     local commands; commands=()
     _describe -t commands 'rtok agents update commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__agents__subcmd__usage_commands] )) ||
+_rtok__subcmd__agents__subcmd__usage_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok agents usage commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__agents__subcmd__whoami_commands] )) ||
 _rtok__subcmd__agents__subcmd__whoami_commands() {
@@ -2883,6 +3207,7 @@ _rtok__subcmd__graph_commands() {
 'dead:List unreferenced private definitions (skips pub, trait impls, tests, macros)' /
 'status:Index health for the current or given root (T68.3)' /
 'impact:Symbol impact or call paths to a target (T68.4)' /
+'projects:The project registry/: list, add, remove, select (T329.2)' /
 'affected:Tests that reach files changed in git (/`git diff --name-only/`)' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -2905,6 +3230,7 @@ _rtok__subcmd__graph__subcmd__help_commands() {
 'dead:List unreferenced private definitions (skips pub, trait impls, tests, macros)' /
 'status:Index health for the current or given root (T68.3)' /
 'impact:Symbol impact or call paths to a target (T68.4)' /
+'projects:The project registry/: list, add, remove, select (T329.2)' /
 'affected:Tests that reach files changed in git (/`git diff --name-only/`)' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -2935,6 +3261,42 @@ _rtok__subcmd__graph__subcmd__help__subcmd__index_commands() {
     local commands; commands=()
     _describe -t commands 'rtok graph help index commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__projects_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__projects_commands() {
+    local commands; commands=(
+'add:Register a directory as a project (a known one only refreshes its last-used time)' /
+'select:Make a project the selected one; the page and later the CLI answer for it' /
+'link:Link a project into the selected one'/''s graph scope (indexes it when it never was)' /
+'unlink:Remove a link; an auto link stays removed on re-index' /
+'remove:Drop a project and its index rows; its files are never touched' /
+    )
+    _describe -t commands 'rtok graph help projects commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__add_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph help projects add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__link_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__link_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph help projects link commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__remove_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph help projects remove commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__select_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__select_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph help projects select commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__unlink_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__unlink_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph help projects unlink commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__status_commands] )) ||
 _rtok__subcmd__graph__subcmd__help__subcmd__status_commands() {
     local commands; commands=()
@@ -2949,6 +3311,85 @@ _rtok__subcmd__graph__subcmd__impact_commands() {
 _rtok__subcmd__graph__subcmd__index_commands() {
     local commands; commands=()
     _describe -t commands 'rtok graph index commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects_commands() {
+    local commands; commands=(
+'add:Register a directory as a project (a known one only refreshes its last-used time)' /
+'select:Make a project the selected one; the page and later the CLI answer for it' /
+'link:Link a project into the selected one'/''s graph scope (indexes it when it never was)' /
+'unlink:Remove a link; an auto link stays removed on re-index' /
+'remove:Drop a project and its index rows; its files are never touched' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok graph projects commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__add_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help_commands() {
+    local commands; commands=(
+'add:Register a directory as a project (a known one only refreshes its last-used time)' /
+'select:Make a project the selected one; the page and later the CLI answer for it' /
+'link:Link a project into the selected one'/''s graph scope (indexes it when it never was)' /
+'unlink:Remove a link; an auto link stays removed on re-index' /
+'remove:Drop a project and its index rows; its files are never touched' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok graph projects help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__add_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects help add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__help_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects help help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__link_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__link_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects help link commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__remove_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects help remove commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__select_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__select_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects help select commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__unlink_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__unlink_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects help unlink commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__link_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__link_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects link commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__remove_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects remove commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__select_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__select_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects select commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__projects__subcmd__unlink_commands] )) ||
+_rtok__subcmd__graph__subcmd__projects__subcmd__unlink_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph projects unlink commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__graph__subcmd__status_commands] )) ||
 _rtok__subcmd__graph__subcmd__status_commands() {
@@ -2992,7 +3433,7 @@ _rtok__subcmd__help_commands() {
 'hook:Claude Code hook entry point/: reads the event JSON on stdin, writes JSON to stdout' /
 'mcp:Serve MCP tools over stdio; /`-- <server argv>/` wraps a foreign server instead' /
 'proxy:Local API proxy for ANTHROPIC_BASE_URL' /
-'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + Slint/WASM)' /
+'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (D23/: one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
 'bench:A/B benchmark of host configurations' /
@@ -3031,7 +3472,8 @@ _rtok__subcmd__help__subcmd__agents_commands() {
 'list:Every known app/: kind and name, path and version, config files, rtok modules' /
 'info:One host/: the same block /`agents list/` prints, just for that app' /
 'sessions:What is running in this project/: host, provider, model, tokens, start, run time' /
-'junk:Junk rtok owns under its own home/: log siblings and archive payloads past retention' /
+'usage:Tokens and estimated cost per agent and month (or day), from the agents'/'' logs or rtok' /
+'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk' /
 'whoami:This session'/''s own rtok agent id (T283, D34)/: /`RTOK_AGENT_ID/`, resolved through the store' /
 'show:One agent by id prefix/: host, model, ids, parent and sub-agents, cwd, activity, status' /
 'status:Say what this agent (/`RTOK_AGENT_ID/`) is busy with/: plain text, at most 120 chars' /
@@ -3058,6 +3500,7 @@ _rtok__subcmd__help__subcmd__agents__subcmd__install_commands() {
 (( $+functions[_rtok__subcmd__help__subcmd__agents__subcmd__junk_commands] )) ||
 _rtok__subcmd__help__subcmd__agents__subcmd__junk_commands() {
     local commands; commands=(
+'list:Folders, junk kinds and sizes per agent, and the space /`agents junk clear/` would free' /
 'clear:List what /`agents junk clear/` would remove; /`--yes/` applies it' /
     )
     _describe -t commands 'rtok help agents junk commands' commands "$@"
@@ -3066,6 +3509,11 @@ _rtok__subcmd__help__subcmd__agents__subcmd__junk_commands() {
 _rtok__subcmd__help__subcmd__agents__subcmd__junk__subcmd__clear_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help agents junk clear commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__agents__subcmd__junk__subcmd__list_commands] )) ||
+_rtok__subcmd__help__subcmd__agents__subcmd__junk__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help agents junk list commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__agents__subcmd__list_commands] )) ||
 _rtok__subcmd__help__subcmd__agents__subcmd__list_commands() {
@@ -3113,6 +3561,11 @@ _rtok__subcmd__help__subcmd__agents__subcmd__uninstall_commands() {
 _rtok__subcmd__help__subcmd__agents__subcmd__update_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help agents update commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__agents__subcmd__usage_commands] )) ||
+_rtok__subcmd__help__subcmd__agents__subcmd__usage_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help agents usage commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__agents__subcmd__whoami_commands] )) ||
 _rtok__subcmd__help__subcmd__agents__subcmd__whoami_commands() {
@@ -3258,6 +3711,7 @@ _rtok__subcmd__help__subcmd__graph_commands() {
 'dead:List unreferenced private definitions (skips pub, trait impls, tests, macros)' /
 'status:Index health for the current or given root (T68.3)' /
 'impact:Symbol impact or call paths to a target (T68.4)' /
+'projects:The project registry/: list, add, remove, select (T329.2)' /
 'affected:Tests that reach files changed in git (/`git diff --name-only/`)' /
     )
     _describe -t commands 'rtok help graph commands' commands "$@"
@@ -3281,6 +3735,42 @@ _rtok__subcmd__help__subcmd__graph__subcmd__impact_commands() {
 _rtok__subcmd__help__subcmd__graph__subcmd__index_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help graph index commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__projects_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__projects_commands() {
+    local commands; commands=(
+'add:Register a directory as a project (a known one only refreshes its last-used time)' /
+'select:Make a project the selected one; the page and later the CLI answer for it' /
+'link:Link a project into the selected one'/''s graph scope (indexes it when it never was)' /
+'unlink:Remove a link; an auto link stays removed on re-index' /
+'remove:Drop a project and its index rows; its files are never touched' /
+    )
+    _describe -t commands 'rtok help graph projects commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__add_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help graph projects add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__link_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__link_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help graph projects link commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__remove_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help graph projects remove commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__select_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__select_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help graph projects select commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__unlink_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__unlink_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help graph projects unlink commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__status_commands] )) ||
 _rtok__subcmd__help__subcmd__graph__subcmd__status_commands() {
@@ -3466,6 +3956,7 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
     local commands; commands=(
 'add:Create the worktree for a task/: one location, one name, one locked owner; prints its path' /
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
+'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty, foreign-locked or current worktrees' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -3477,6 +3968,11 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
 _rtok__subcmd__help__subcmd__worktree__subcmd__add_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help worktree add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__adopt_commands] )) ||
+_rtok__subcmd__help__subcmd__worktree__subcmd__adopt_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help worktree adopt commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__claim_commands] )) ||
 _rtok__subcmd__help__subcmd__worktree__subcmd__claim_commands() {
@@ -3795,6 +4291,7 @@ _rtok__subcmd__worktree_commands() {
     local commands; commands=(
 'add:Create the worktree for a task/: one location, one name, one locked owner; prints its path' /
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
+'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty, foreign-locked or current worktrees' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -3807,6 +4304,11 @@ _rtok__subcmd__worktree_commands() {
 _rtok__subcmd__worktree__subcmd__add_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__worktree__subcmd__adopt_commands] )) ||
+_rtok__subcmd__worktree__subcmd__adopt_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree adopt commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__worktree__subcmd__claim_commands] )) ||
 _rtok__subcmd__worktree__subcmd__claim_commands() {
@@ -3828,6 +4330,7 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
     local commands; commands=(
 'add:Create the worktree for a task/: one location, one name, one locked owner; prints its path' /
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
+'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty, foreign-locked or current worktrees' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -3840,6 +4343,11 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
 _rtok__subcmd__worktree__subcmd__help__subcmd__add_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree help add commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__adopt_commands] )) ||
+_rtok__subcmd__worktree__subcmd__help__subcmd__adopt_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree help adopt commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__claim_commands] )) ||
 _rtok__subcmd__worktree__subcmd__help__subcmd__claim_commands() {

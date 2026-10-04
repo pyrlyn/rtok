@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok doctor` (plan T1.4): hooks, MCP servers, proxy chain.
 //!
 //! Since T15.11 the probes live in [`page`] and the text in [`Report::to_text`]: the page is
@@ -17,6 +21,15 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
+
+pub mod checklist;
+mod dupes;
+pub mod fix;
+pub mod hooks;
+mod mcp_dupes;
+mod mcp_fix;
+pub mod probe;
+pub mod web;
 
 /// What `rtok doctor` found, as data.
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -52,6 +65,9 @@ pub struct Report {
     pub tools_rewrite_advice: Option<String>,
     /// Every host variant and the state of each rtok module in it, as `agent setup` prints.
     pub agents: Vec<AgentModules>,
+    /// Hooks that lead nowhere or cannot be checked (T331.1); the list later detectors extend.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub problems: Vec<hooks::Problem>,
 }
 
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -137,6 +153,8 @@ impl Report {
         for (ev, n) in &self.hooks_by_event {
             out.push_str(&format!("  {ev} {n}\n"));
         }
+        out.push_str(&hooks::render(&self.problems));
+        out.push_str(&dupes::render_mcp(&self.problems));
         out.push_str("mcp\n");
         for s in &self.mcp {
             out.push_str(&format!(
@@ -352,7 +370,20 @@ pub fn page(cfg: &Config) -> Result<Report> {
                 })
             })
             .collect(),
+        problems: checks(cfg),
     })
+}
+
+/// Every config finding of this machine: hooks, then duplicate MCP entries.
+fn checks(cfg: &Config) -> Vec<hooks::Problem> {
+    let probes = hooks::Probes {
+        fs: &probe::RealFs,
+        env: &probe::RealEnv,
+        which: &probe::RealWhich,
+    };
+    let (mut problems, plugins) = hooks::check_with_plugins(cfg, &probes);
+    problems.extend(mcp_dupes::check(cfg, &probes, &plugins));
+    problems
 }
 
 /// The std-only fast hook client (T178) that installed hook commands try before `rtok hook`.
@@ -1060,7 +1091,7 @@ fn nonempty(s: Option<String>) -> Option<String> {
 /// than `[stats] since`, or when no Read-class tool ran — doctor stays fail-open
 /// and the deny stays off on no data.
 fn read_share(cfg: &Config) -> Option<ReadShare> {
-    let since = crate::measure::stats::parse_since(&cfg.stats.since).ok()?;
+    let since = crate::measure::stats::parse_since_from(&cfg.stats.since, "stats.since").ok()?;
     let cutoff = std::time::SystemTime::now()
         .checked_sub(since)
         .unwrap_or(std::time::UNIX_EPOCH);
@@ -1214,6 +1245,7 @@ pub(crate) fn report_fixture() -> Report {
         overlaps: Vec::new(),
         tools_rewrite_advice: None,
         agents: Vec::new(),
+        problems: Vec::new(),
     }
 }
 

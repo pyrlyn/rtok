@@ -14,7 +14,7 @@ exist — including rtok's own.
 
 ## Install
 
-macOS on Apple silicon or Intel, and Linux x86-64. The script is POSIX `sh`, so it behaves the
+macOS on Apple silicon, and Linux x86-64. The script is POSIX `sh`, so it behaves the
 same whether your shell is bash or zsh; it puts `rtok` in `~/.cargo/bin`.
 
 ```bash
@@ -328,14 +328,16 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok mcp` | serve read, memory, graph, and expansion tools over stdio |
 | `rtok mcp -- <server argv>` | wrap a foreign stdio MCP server: long `tools/call` text blocks are archived and cut by the `[mcp]` rule, everything else passes byte-for-byte, `rtok expand <id>` returns the raw block |
 | `rtok proxy` | capture API usage; optionally archive older tool results |
-| `rtok web` | local Slint/WASM UI + WebSocket API at `http://127.0.0.1:3333` (default `[web] host`/`port`; `--host`, `--port`; `rtok dashboard` is the deprecated spelling). Open it as `127.0.0.1`/`localhost`: `/ws` refuses cross-site and DNS-name origins |
+| `rtok web` | local React UI (embedded in the binary) + WebSocket API at `http://127.0.0.1:3333` (default `[web] host`/`port`; `--host`, `--port`; `rtok dashboard` is the deprecated spelling). Open it as `127.0.0.1`/`localhost`: `/ws` refuses cross-site and DNS-name origins |
 | `rtok stats` | report transcript and proxy measurements |
+| `rtok agents usage` | tokens and estimated cost per agent and month or day, from the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI, pi, Kimi Code; Droid, Grok, ZCode and Antigravity are listed as unsupported) or what passed through rtok (`--tz`, `--since`, `--daily`, `--unpriced`, `--json`) |
 | `rtok bench` | run the fixed A/B schedule |
 | `rtok doctor` | inspect hooks, MCP servers and the proxy chain |
 | `rtok worktree add <task-id> [<slug>] [--owner "<provider> / <model>"] [--agent <id>]` | create the task's worktree at `<root>/<repo>-<task-id>` on branch `<task-id>[-<slug>]` from a freshly fetched `origin/<default>`, locked with `<owner> \| <task-id> \| <date>[ \| agent <uuid>]`, no upstream; prints the path; binds it to the calling rtok agent (`--agent`, else `RTOK_AGENT_ID`) in the lock and the store, and `--owner` then defaults to `<host> / <model>`; refuses a second worktree for the same task or a root under a temp directory (`[worktree] root`) |
 | `rtok worktree claim <path> [--agent <id>] [--owner <owner>]` | bind an existing worktree to the calling agent: rewrites its lock as v2 only when it has none or the lock is already the caller's (same agent, or an old lock naming `--owner`); never takes another owner's worktree |
+| `rtok worktree adopt [<path>] [--task <id>] [--agent <id>] [--owner <owner>] [--json]` | bind the worktree you are in (made by a host's own tool: Cursor, Codex, Windsurf, Devin, Claude, Kilo, Conductor) to the calling agent; the task is `--task`, else the lock's, else the branch's first `-` segment; a worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only, any other gets the v2 lock like `claim`; never takes another owner's worktree |
 | `rtok worktree remove <path\|task-id> [--agent <id>] [--owner <owner>] [--keep-branch] [--json]` | remove the caller's own worktree: unlock, `git worktree remove` (never `--force`), delete the local branch when merged (squash-aware, against a freshly fetched base), release the claim, and print the `git push origin --delete` hint when a remote branch is left; refuses (exit 1) a worktree with uncommitted or untracked files, one locked by another owner or agent, and the one the command runs from; an unmerged branch is refused unless `--keep-branch`, which keeps it |
-| `rtok worktree list` | every git worktree of the repository with its owner (the lock reason), bound agent (short id + host) and its state (`live` / `idle` / `ended`), else the newest session the hooks saw working there (`seen <host> <id8>`), state, source bytes and tagged build-cache bytes, plus orphans git no longer lists (`--json` with full agent ids); read-only |
+| `rtok worktree list` | every git worktree of the repository with its owner (the lock reason), bound agent (short id + host) and its state (`live` / `idle` / `ended`), else the newest session the hooks saw working there (`seen <host> <id8>`), state, origin (`main`, `cursor`, `codex`, `windsurf`, `claude`, `kilo`, `conductor` or `other`, from where it lives), source bytes and tagged build-cache bytes, plus orphans git no longer lists (`--json` with full agent ids); read-only |
 | `rtok worktree gc [--yes] [--owner <owner>] [--idle 24h]` | dry run by default; removes worktrees that are merged (squash-aware), clean and idle, deletes their local branch, and drops the record of a worktree whose directory was deleted by hand; a lock naming anyone but `--owner` is a hard stop, and so is a lock bound to a live rtok agent; nothing is forced |
 | `rtok worktree clean [<path>…] [--yes] [--idle 24h]` | dry run by default; deletes build caches that carry a valid `CACHEDIR.TAG` and were idle for `--idle`, keeps the worktree and every untagged file; the worktree the command runs from is cleaned only when named; the one deletion `expand` cannot undo — a tagged cache holds no source and the next build recreates it |
 | `rtok run -- <cmd>` | run, archive, and format a command result |
@@ -344,12 +346,15 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok plugins` | list plugins: id, enabled, surfaces |
 | `rtok config show --sources` | show effective configuration and its source |
 | `rtok graph index [path]` | build the symbol index for a tree |
+| `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
 | `rtok memory import <file>` | import notes as JSONL |
 | `rtok memory export [--project <name>]` | print notes as the JSONL `import` reads; session checkpoints stay behind |
 | `rtok memory retire <id> [--superseded-by <id>]` | tombstone a note: never recalled or searched, body kept |
 | `rtok memory pin / unpin <id>` | keep a note at the head of SessionStart recall, or drop it back |
 | `rtok memory revise <id> --title <t> --body <b>` | save a replacement note and retire the old one |
 | `rtok otel flush` / `status` | export the ledgers over OTLP, or report the watermarks |
+
+Agent ids, messages between agents and how worktrees bind to them on every host: [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md).
 
 ## Plugins
 
@@ -484,3 +489,8 @@ You can use this project under **any** of the following licenses, at your choice
 1. [GNU GPLv3](LICENSE): free for open source applications on any platform, including embedded systems.
 2. [Royalty-free License](LICENSE-ROYALTY-FREE.md): free for proprietary desktop, mobile, and web applications, as long as you disclose that your application uses this project. Embedded systems are not covered.
 3. [Commercial license](PRICING.md): for proprietary applications, including embedded systems, without the attribution requirement.
+
+<!-- license-sync:start -->
+Commercial use not covered by the GPLv3 or the Royalty-free License requires a separate paid
+license — see [PRICING.md](PRICING.md).
+<!-- license-sync:end -->

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T242: re-running the installer brings what rtok already wrote up to date — the files
 //! change where they are stale and stay byte-identical where they are current.
 //!
@@ -139,6 +143,11 @@ fn update_rewrites_once_then_is_already_current() {
     assert!(
         is_current_rtok(&root["mcpServers"]["rtok"]["command"]),
         "{after}"
+    );
+    // T283.2: an entry written before `--host` gains it on update.
+    assert_eq!(
+        root["mcpServers"]["rtok"]["args"],
+        serde_json::json!(["mcp", "--host", "windsurf"])
     );
     assert_eq!(root["mcpServers"]["other"]["command"], "other-mcp");
     assert_eq!(backups(&path).len(), 1);

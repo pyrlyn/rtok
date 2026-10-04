@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Flag ↔ key coverage (plan T12.4, decision D12).
 //!
 //! Every clap long flag that is not in the allow-list must exist as a dotted key in
@@ -83,6 +87,9 @@ const ALLOW_KEYS: &[&str] = &[
     "worktree.add.owner",
     // `worktree claim --owner` (T285): the name an old lock carries, per call like `add --owner`.
     "worktree.claim.owner",
+    // `worktree adopt` (T289): per call like `claim` — which task and whose lock.
+    "worktree.adopt.owner",
+    "worktree.adopt.task",
     // `worktree remove` (T286): per call like `claim` — whose old lock, and whether an
     // unmerged branch survives this one removal.
     "worktree.remove.owner",
@@ -95,6 +102,8 @@ const ALLOW_KEYS: &[&str] = &[
     // stored value would delete without anyone typing it, and it must not share `setup.yes`,
     // which confirms a different destructive action (`agents install --replace`).
     "junk.yes",
+    // `agents junk list --bytes` (T330.1): how one call prints sizes, not a stored setting.
+    "junk.bytes",
     // `rtok mcp ping --timeout` (T275.1): one call's wait, default 60s, not a stored setting.
     "mcp.ping.timeout_s",
     // `agents send --all-live` / `agents inbox --unread` (T287): who gets one message and
@@ -105,6 +114,21 @@ const ALLOW_KEYS: &[&str] = &[
     // listing and a one-shot exit status, not stored settings.
     "setup.check",
     "setup.exit_code",
+    // `agents usage --unpriced` (T358.1): which view one call prints, not a stored setting.
+    "agents.usage.unpriced",
+    // `doctor --fix --yes --dry-run --only` (T331.5): same per-call rule as `worktree gc` —
+    // a stored `yes` would rewrite host configs without anyone typing it.
+    "doctor.fix",
+    "doctor.yes",
+    "doctor.dry_run",
+    "doctor.only",
+    // `graph projects link|unlink --from/--both/--reason` (T329.3): which two projects one call
+    // links and why, not stored settings.
+    "graph.projects.link.from",
+    "graph.projects.link.both",
+    "graph.projects.link.reason",
+    "graph.projects.unlink.from",
+    "graph.projects.unlink.both",
 ];
 
 #[test]
@@ -173,10 +197,19 @@ fn config_key(path: &[&str], long: &str) -> String {
         // `rtok agents junk clear` (T182): its own namespace — never `[setup]`, whose
         // `yes` confirms an unrelated destructive action (`agents install --replace`).
         ["agents", "junk", ..] => format!("junk.{name}"),
+        // `rtok agents usage` (T358.1): its own `[agents.usage]` table. `--host` is the `hosts`
+        // list; `--daily` / `--monthly` both set `period`.
+        ["agents", "usage"] => match name {
+            "host" => "agents.usage.hosts".into(),
+            "daily" | "monthly" => "agents.usage.period".into(),
+            other => format!("agents.usage.{other}"),
+        },
         // `rtok agents install|remove` keeps the `[setup]` table it had as `rtok setup`.
         ["agents", ..] => format!("setup.{name}"),
         // `rtok dashboard` is the hidden deprecated spelling of `rtok web`; one table, `[web]`.
         ["dashboard", ..] => format!("web.{name}"),
+        // `rtok mcp --host` (T283.1) overlays `[hook] host`, as `rtok hook --host` does.
+        ["mcp"] if name == "host" => "hook.host".into(),
         ["run", ..] | ["filter", ..] => match name {
             "shell" => "plugins.cmd.shell".into(),
             "no_trailer" => "plugins.cmd.trailer_min_lines".into(),

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Cursor installer (`rtok agents install cursor`) and field mapping (plan T10.1).
 //!
 //! Cursor shell stdin uses top-level `command` and `conversation_id`.
@@ -185,7 +189,13 @@ pub(crate) fn mcp_path(cfg: &Config) -> PathBuf {
 /// Register `rtok mcp` in `~/.cursor/mcp.json` (sibling of `hooks.json`).
 pub fn register_mcp(cfg: &Config) -> Result<String> {
     let cmd = super::rtok_command();
-    rtok_agent_sdk::register_mcp(&apply(cfg), &mcp_path(cfg), "rtok", &cmd, &["mcp"])
+    rtok_agent_sdk::register_mcp(
+        &apply(cfg),
+        &mcp_path(cfg),
+        "rtok",
+        &cmd,
+        &super::mcp_args("cursor"),
+    )
 }
 
 /// Drop `mcpServers.rtok` from `~/.cursor/mcp.json` (`rtok agents remove cursor`).
