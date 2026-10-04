@@ -36,7 +36,7 @@ const IN_FLIGHT_SECS: i64 = 300;
 
 fn in_flight(c: &crate::store::models::Call, now: i64) -> bool {
     c.ms.is_none()
-        && matches!(c.kind.as_str(), "api_request" | "hook")
+        && (crate::proxy::lane::is_api_request(&c.kind) || c.kind == "hook")
         && c.ts > now - IN_FLIGHT_SECS
 }
 

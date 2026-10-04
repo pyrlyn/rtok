@@ -15,7 +15,8 @@
 //! it reports usage on its final `response.completed` event unasked.
 //!
 //! Bookkeeping per request (all fail-open, logged, never alter the response):
-//! one `calls` row (`kind = api_request`, `surface = proxy`) with provider+model
+//! one `calls` row (`kind = api_request`, or `api_request:<lane>` off the agent lane —
+//! T385.1; `surface = proxy`) with provider+model
 //! upserted from the request body; `call_io` with request/response bytes (inline
 //! under `core.call_io_inline_bytes`, else archived); a `tokens` row
 //! (`source = provider`) with the four counters; and one `usage` row whose
@@ -56,6 +57,7 @@ use wire::{API_ANTHROPIC, Wire, WireRequest, api_of, join_upstream};
 pub mod anthropic;
 pub mod cli;
 pub mod gemini;
+pub mod lane;
 pub mod live;
 pub use live::LiveCall;
 pub mod openai_chat;
@@ -215,10 +217,19 @@ async fn proxy(State(state): State<Arc<ProxyState>>, req: Request<Body>) -> Axum
 async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let start = Instant::now();
     let method = req.method().clone();
-    let path = req.uri().path().to_string();
     let query = req.uri().query().map(str::to_string);
     let (parts, body) = req.into_parts();
-    let headers = parts.headers.clone();
+    let mut headers = parts.headers.clone();
+    // The lane marker is for rtok, not the provider: it is read here and never forwarded.
+    // A path prefix is stripped the same way; with lanes off both pass through untouched.
+    let (req_lane, path) = if state.cfg.proxy.lanes.enabled {
+        let c = lane::classify(parts.uri.path(), &headers);
+        let classified = (c.lane, c.path.to_string());
+        headers.remove(lane::HEADER);
+        classified
+    } else {
+        (lane::Lane::Agent, parts.uri.path().to_string())
+    };
 
     let request_body = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(b) => b,
@@ -240,9 +251,10 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         let state_bg = state.clone();
         let path_bg = path.clone();
         let headers_bg = headers.clone();
+        let kind = req_lane.kind();
         let original_body = request_body.clone();
         match tokio::task::spawn_blocking(move || {
-            shape_request(&state_bg, wire, &path_bg, &headers_bg, request_body)
+            shape_request(&state_bg, wire, &path_bg, &headers_bg, kind, request_body)
         })
         .await
         {
@@ -462,10 +474,19 @@ fn shape_request(
     wire: Option<&'static dyn Wire>,
     path: &str,
     headers: &HeaderMap,
+    kind: &str,
     request_body: Bytes,
 ) -> (Bytes, Option<Recorded>, bool) {
     let parsed = serde_json::from_slice::<Value>(&request_body).ok();
-    let recorded = record(state, wire, path, parsed.as_ref(), headers, &request_body);
+    let recorded = record(
+        state,
+        wire,
+        path,
+        parsed.as_ref(),
+        headers,
+        kind,
+        &request_body,
+    );
     // From here on `request_body` is what upstream sees (and what `call_io` records).
     let request_body = if state.mode == "compress" {
         wire.map_or(request_body.clone(), |wire| {
@@ -666,6 +687,7 @@ fn record(
     path: &str,
     body: Option<&Value>,
     headers: &HeaderMap,
+    kind: &str,
     raw: &[u8],
 ) -> Option<Recorded> {
     let session = session_for(wire, body, headers, raw);
@@ -692,7 +714,7 @@ fn record(
         let call_id = state.store.insert_call(
             &session,
             "proxy",
-            "api_request",
+            kind,
             state.host_id,
             provider_id,
             model_id,
