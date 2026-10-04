@@ -14,7 +14,9 @@ use super::{Record, State, claim, git, inventory};
 use crate::store::{AgentDetail, Store};
 
 /// Unlock, remove without `--force`, then delete the branch when `drop_branch`. A failed
-/// removal puts the lock back, so a half-done run never strips another run's protection.
+/// removal puts the lock back, so a half-done run never strips another run's protection. A
+/// branch git will not delete (checked out elsewhere) is reported, not an error: the worktree
+/// is already gone, and an Err would keep its claim and read as `failed, kept` in gc.
 pub fn detach(repo: &Path, record: &Record, drop_branch: bool) -> Result<String> {
     if record.locked.is_some() {
         git::unlock(repo, &record.path)?;
@@ -28,7 +30,9 @@ pub fn detach(repo: &Path, record: &Record, drop_branch: bool) -> Result<String>
     let Some(branch) = record.branch.as_deref().filter(|_| drop_branch) else {
         return Ok("removed; branch kept".into());
     };
-    git::delete_branch(repo, branch)?;
+    if let Err(e) = git::delete_branch(repo, branch) {
+        return Ok(format!("removed; branch kept: {e:#}"));
+    }
     Ok(match git::has_remote_branch(repo, branch) {
         true => format!("removed with its branch; remote left: git push origin --delete {branch}"),
         false => "removed with its branch".into(),

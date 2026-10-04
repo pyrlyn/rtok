@@ -948,6 +948,90 @@ fn remove_takes_only_the_caller_s_own_clean_worktree() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
+/// T412: what `remove` guards beyond `git worktree remove` + `git branch -d`. `--keep-branch`
+/// never lets a detached HEAD's commits or uncommitted files go; ignored build output does not
+/// make a worktree dirty; a merged branch `git branch -D` cannot delete (checked out in a second
+/// worktree) leaves a removal that is reported as done, branch kept, claim released; an
+/// unreachable `origin` is a warning, and the local base still decides.
+#[test]
+fn remove_guards_commits_and_reports_a_branch_it_could_not_delete() {
+    let tmp = rtok::testutil::tmp_dir("worktree-remove-edges");
+    let work = common::git::repo(&tmp);
+    std::fs::write(work.join(".git/info/exclude"), "target/\n").unwrap();
+    let (store, ids) = agents(&tmp, &["sess-me"]);
+    let me = ids[0].as_str();
+    add(
+        &work,
+        "twice",
+        Some(&format!("claude | t1 | 2026-10-04 | agent {me}")),
+    );
+    run(
+        &work,
+        &["worktree", "add", "-q", "-f", "../wt-twice-2", "t-twice"],
+    );
+    for name in ["built", "kept", "dirty"] {
+        add(&work, name, None);
+    }
+    std::fs::create_dir_all(tmp.join("wt-built/target")).unwrap();
+    std::fs::write(tmp.join("wt-built/target/bin"), "x").unwrap();
+    std::fs::write(tmp.join("wt-dirty/a.txt"), "edited").unwrap();
+    run(
+        &work,
+        &["worktree", "add", "-q", "--detach", "../wt-detached"],
+    );
+    commit(&tmp.join("wt-detached"), "d.txt");
+    let twice = tmp.join("wt-twice").canonicalize().unwrap();
+    store
+        .claim_worktree(&twice.display().to_string(), me, "t1")
+        .unwrap();
+    let remove = |args: &[&str]| {
+        let args = [&["worktree", "remove", "--json"][..], args].concat();
+        rtok_as(&tmp, &work, Some(me), &args, b"")
+    };
+    let removed = |args: &[&str]| {
+        let out = remove(args);
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(out.status.success(), "{args:?}: {err}");
+        let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        (v["note"].as_str().unwrap().to_owned(), err)
+    };
+    let branch = |name: &str| !run(&work, &["branch", "--list", name]).is_empty();
+
+    for (path, why) in [
+        ("../wt-detached", "its commits would be lost"),
+        ("../wt-dirty", "uncommitted or untracked"),
+    ] {
+        let out = remove(&[path, "--keep-branch"]);
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.code() == Some(1) && err.contains(why), "{err}");
+        assert!(work.join(path).exists(), "{path}");
+    }
+
+    let (note, _) = removed(&["../wt-built"]);
+    assert_eq!(note, "removed with its branch");
+    assert!(!tmp.join("wt-built").exists() && !branch("t-built"));
+
+    let (note, _) = removed(&["t1"]);
+    assert!(note.starts_with("removed; branch kept: "), "{note}");
+    assert!(note.contains("wt-twice-2"), "{note}");
+    assert!(!twice.exists() && branch("t-twice"));
+    assert!(store.open_worktree_claims().unwrap().is_empty());
+
+    let missing = tmp.join("missing.git");
+    run(
+        &work,
+        &["remote", "set-url", "origin", missing.to_str().unwrap()],
+    );
+    let (note, err) = removed(&["../wt-kept", "--keep-branch"]);
+    assert_eq!(note, "removed; branch kept");
+    assert!(
+        err.contains("judged against the local origin/main"),
+        "{err}"
+    );
+    assert!(!tmp.join("wt-kept").exists() && branch("t-kept"));
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
 /// T285 PR 2: MCP `worktree_add` creates the worktree for the session's linked agent (lock
 /// and claim row name it, as on the CLI) and `worktree_list` shows it bound; a session that
 /// is linked to no agent gets an error and creates nothing.
