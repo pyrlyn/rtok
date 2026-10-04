@@ -264,7 +264,7 @@ fn tools_rewrite_advice(
         && total_desc_tokens >= threshold
     {
         Some(format!(
-            "mcp descriptions ~{} tokens every turn; [proxy.tools_rewrite] enabled = true shortens them (T59.5)",
+            "mcp descriptions ~{} tokens every turn; [proxy.tools_rewrite] enabled = true shortens them",
             total_desc_tokens
         ))
     } else {
@@ -1811,7 +1811,7 @@ mod tests {
         let advice = tools_rewrite_advice(true, "8790→api.anthropic.com", 8790, 2500, false, 2000);
         let advice = advice.expect("all four hold");
         assert!(
-            advice.contains("2500") && advice.contains("T59.5"),
+            advice.contains("2500") && advice.contains("[proxy.tools_rewrite]"),
             "{advice}"
         );
         let local = tools_rewrite_advice(true, "localhost:8790→x:443", 8790, 2500, false, 2000);

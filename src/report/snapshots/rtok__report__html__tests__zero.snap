@@ -36,7 +36,7 @@ svg.chart{background:#fafafa;margin:1rem 0}
 <p>Prompt-cache busts by cause, from the proxy's <code>usage</code> rows (whole ledger).</p>
 <p>No rows in window.</p>
 <h2 id="expand">Expand</h2>
-<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows, T5.4).</p>
+<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows).</p>
 <p>No rows in window.</p>
 <h2 id="config">Config</h2>
 <p>Every effective key with its origin — the <code>config show --sources</code> page.</p>

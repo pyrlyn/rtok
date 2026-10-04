@@ -102,7 +102,7 @@ fn retire_plugin(ledgers: &ReportLedgers, push: Push<'_>) {
                 r.saved.saturating_neg(),
                 "retire-plugin",
                 format!(
-                    "plugin {} net {} est tokens over {} (≤ 0) — D10 says retire, not stack",
+                    "plugin {} net {} est tokens over {} (≤ 0) — retire it rather than stack it",
                     r.plugin,
                     r.saved,
                     count(r.rows, "Measurement row")

@@ -7,7 +7,7 @@ Commands:
   mcp          Serve MCP tools over stdio; `-- <server argv>` wraps a foreign server instead
   proxy        Local API proxy for ANTHROPIC_BASE_URL
   web          Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)
-  tui          Terminal UI over the same data as `rtok web` (D23: one model, two renderings)
+  tui          Terminal UI over the same data as `rtok web` (one model, two renderings)
   stats        Measurements from session logs and the proxy
   bench        A/B benchmark of host configurations
   doctor       Inspect hooks, MCP servers and the proxy chain
@@ -17,18 +17,18 @@ Commands:
   run          Execute a command, archive its raw output, print the filtered version
   filter       Filter text from stdin without executing
   expand       Print an archived payload
-  archive      The archive live zone (`rtok archive rewrite` — pi `context` carrier, T70.2)
+  archive      The archive live zone (`rtok archive rewrite` — pi `context` carrier)
   completions  Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
   man          Print the man page (roff), or write every page with `--dir`
   plugins      List plugins: id, enabled, surfaces
   config       The one config file
   memory       Notes (`mem_save` / import / export)
   graph        Symbol index (`rtok graph index`)
-  guard        Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path, T70.5)
+  guard        Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
   demon        Keep `rtok proxy` (or `mcp` / `web`) running in the background
   otel         OpenTelemetry export (`rtok otel flush | status`)
   logs         rtok's own log (`rtok logs` prints, `rtok logs export` strips numbering and colour)
-  report       The operator model as one document (D24): Markdown, HTML and PDF
+  report       The operator model as one document: Markdown, HTML and PDF
   help         Print this message or the help of the given subcommand(s)
 
 Options:

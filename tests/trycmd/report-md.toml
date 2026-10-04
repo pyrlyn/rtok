@@ -35,7 +35,7 @@ No rows in window.
 
 ## Expand
 
-How often a live-zone pointer had to be expanded (`archive_decisions` rows, T5.4).
+How often a live-zone pointer had to be expanded (`archive_decisions` rows).
 
 No rows in window.
 
@@ -383,7 +383,7 @@ agents
     proxy   not supported: Kimi Code providers are [providers.<name>] tables with their own base_url and keys; setup does not edit them
     plugin  not installed (--yes)
   grok (cli)
-    hooks   not supported: Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second (D21)
+    hooks   not supported: Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second set
     mcp     not installed
     proxy   not supported: Grok Build providers live in its own settings tables; setup does not edit them
     plugin  not installed (--yes)

@@ -46,7 +46,7 @@ Busts: 18446744073709551615 over 18446744073709551615 turns in 1 session(s).
 
 ## Expand
 
-How often a live-zone pointer had to be expanded (`archive_decisions` rows, T5.4).
+How often a live-zone pointer had to be expanded (`archive_decisions` rows).
 
 `rtok expand` froze 9223372036854775807 of 9223372036854775807 live-zone pointers (100.0%). Expanded: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.
 
