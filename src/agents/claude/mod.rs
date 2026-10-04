@@ -24,25 +24,13 @@ use serde_json::{Value, json};
 
 use super::{Agent, Kind, Mode, Support, Variant, apply, mcp, plugin_version};
 
-/// `(event, matcher)` — empty matcher omits the field. `SessionEnd` was missing, so no session
-/// row got `ended_at` and no OTel session root ever shipped (`hooks::dispatch` handles it).
-/// Hosts with a Claude-compatible hook shape (ZCode) take a prefix of this list.
-pub(super) const ENTRIES: &[(&str, &str)] = &[
-    ("PreToolUse", "Bash"),
-    ("PreToolUse", "Read"),
-    ("PreToolUse", "Skill"),
-    ("PostToolUse", "*"),
-    ("UserPromptSubmit", ""),
-    ("SessionStart", ""),
-    ("PreCompact", ""),
-    ("PostCompact", ""),
-    ("SessionEnd", ""),
-];
-
-/// Claude's own list, read from the plugin's `hooks/hooks.json` in file order — the one place
-/// it is written (T262.1), so the GitHub plugin install and the settings-file install cannot
-/// drift. It is [`ENTRIES`] plus `SubagentStart`, the spawn brief's event (T130.2); Kimi takes
-/// `ENTRIES` wholesale and discards a `SubagentStart` hook's output, so it stays out of there.
+/// Claude's own `(event, matcher)` list (empty matcher omits the field), read from the plugin's
+/// `hooks/hooks.json` in file order — the one place it is written (T262.1), so the GitHub plugin
+/// install and the settings-file install cannot drift. `tests/hook_manifests.rs` and
+/// `plugin_tree_matches_the_installer` hold it to the `claude` rows of `hook_events`, which the
+/// other Claude-shaped hosts (Kimi, ZCode, Devin) have their own rows beside. `SubagentStart`
+/// is the spawn brief's event (T130.2); Kimi discards a `SubagentStart` hook's output, so its
+/// rows leave it out.
 fn claude_entries() -> &'static [(&'static str, &'static str)] {
     static LIST: LazyLock<Vec<(&str, &str)>> = LazyLock::new(|| {
         serde_json::from_str::<PluginHooks>(include_str!(
@@ -1417,7 +1405,7 @@ mod tests {
             {"type":"command","command":"/old/store/rtok/v0.1.0/rtok hook PreToolUse","timeout":3}
         ]}]});
         let want = command("rtok", "PreToolUse");
-        let report = insert_ours(&mut hooks, &ENTRIES[..1], "rtok", "timeout", 7);
+        let report = insert_ours(&mut hooks, &claude_entries()[..1], "rtok", "timeout", 7);
         assert_eq!(
             report,
             format!("~ PreToolUse Bash {want}\n1 updates"),
@@ -1430,7 +1418,7 @@ mod tests {
         assert_eq!(hooks["PreToolUse"].as_array().unwrap().len(), 1);
         let before = hooks.clone();
         assert_eq!(
-            insert_ours(&mut hooks, &ENTRIES[..1], "rtok", "timeout", 7),
+            insert_ours(&mut hooks, &claude_entries()[..1], "rtok", "timeout", 7),
             NO_CHANGES
         );
         assert_eq!(hooks, before);
@@ -1482,12 +1470,17 @@ mod tests {
     /// plugins/claude`).
     #[test]
     fn plugin_tree_matches_the_installer() {
+        use crate::agents::hook_events;
         let parse = |s: &str| serde_json::from_str::<Value>(s).unwrap();
         let hooks = parse(include_str!("../../../plugins/claude/hooks/hooks.json"));
         let timeout = Config::default().setup.hook_timeout_s;
-        // T262.1: the file is the list; the shared `ENTRIES` other hosts take must lead it.
-        assert_eq!(claude_entries()[..ENTRIES.len()], *ENTRIES);
+        // T262.1: the file is the list; T390.1: the table's `claude` rows say the same, and
+        // Kimi's rows are those minus `SubagentStart`.
+        assert_eq!(claude_entries(), hook_events::entries("claude"));
         assert!(claude_entries().contains(&("SubagentStart", "")));
+        let mut kimi_expected = claude_entries().to_vec();
+        kimi_expected.retain(|&(event, _)| event != "SubagentStart");
+        assert_eq!(hook_events::entries("kimi"), kimi_expected);
         let mut want = json!({});
         for &(event, matcher) in claude_entries() {
             // T178: prefer the tiny `rtok-hook` client (resident), then `rtok hook`, then

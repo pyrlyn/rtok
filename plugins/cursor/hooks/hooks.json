@@ -21,11 +21,6 @@
         "command": "{ command -v rtok >/dev/null 2>&1 && exec rtok hook PreCompact --host cursor; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PreCompact --host cursor; true; exit 0; }"
       }
     ],
-    "beforeSubmitPrompt": [
-      {
-        "command": "{ command -v rtok >/dev/null 2>&1 && exec rtok hook UserPromptSubmit --host cursor; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook UserPromptSubmit --host cursor; true; exit 0; }"
-      }
-    ],
     "sessionEnd": [
       {
         "command": "{ command -v rtok >/dev/null 2>&1 && exec rtok hook SessionEnd --host cursor; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook SessionEnd --host cursor; true; exit 0; }"
