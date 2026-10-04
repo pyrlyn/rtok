@@ -86,7 +86,6 @@
 - T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
 - T388. `doctor` reports the real MCP Tool Search state
 - T389. Price row for Fable 5.1 in `[stats.prices]`
-- T390.1. Move the remaining installer event lists onto the hook-event table
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
 - T392. Warn when the same skill is listed twice or loaded more than once
 - T393. `doctor` shows the saving a 120-character skill description cap would give
