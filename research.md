@@ -2284,3 +2284,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - Google's Antigravity documentation (https://antigravity.google/docs, read 2026-10-03) says nothing about where Antigravity keeps conversations or token counts. `~/.gemini/antigravity` exists on this machine and holds only an MCP config.
 - Verdict: `unsupported`; named in `skipped` when the directory has content.
+
+## 31. Optimization gaps: proxy lanes, LLM compression, other levers (2026-10-04)
+
+What rtok still lacks for cost and token optimization: a separate lane in `rtok proxy` for everything that is not a live agent turn (Batch, bulk/background sync calls, files, embeddings, rtok's own model calls), the LLM lane of P28, prompt-cache engineering and routing, and a gap table of every remaining token lever against `main`. It consolidates `docs/batch-flex.md`, `docs/model-routing.md`, `docs/llm-soft-compression.md`, §16 of this file and the closed `docs/batch-flex-pass` / `docs/token-saving-next` branches into one ordered plan: [`docs/research/optimization.md`](docs/research/optimization.md).
