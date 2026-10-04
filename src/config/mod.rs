@@ -701,10 +701,13 @@ section! {
 }
 
 section! {
-    /// `[worktree]` — `rtok worktree add` (T158).
+    /// `[worktree]` — `rtok worktree …`, MCP `worktree_*` and Claude's worktree hooks (T158).
     Worktree {
-        /// Where worktrees are created; empty = discover `_worktrees/` from the main checkout.
-        root: PathBuf = PathBuf::new(),
+        /// Off: the commands refuse, MCP lists no `worktree_*` tool and the host hooks do what
+        /// the host does without rtok.
+        enabled: bool = true,
+        /// Where worktrees are created, as `<root>/<repo>-<task>`.
+        root: PathBuf = p("~/.rtok/worktrees"),
     }
 }
 

@@ -244,4 +244,5 @@ ui.color = true
 ui.emoji = true
 web.host = 127.0.0.1
 web.port = 3333
-worktree.root = 
+worktree.enabled = true
+worktree.root = ~/.rtok/worktrees

@@ -38,22 +38,6 @@ fn ident(what: &str, raw: &str) -> Result<String> {
     Ok(id)
 }
 
-/// `root` when configured, else the nearest ancestor of the main checkout that holds
-/// `_worktrees/`, else `_worktrees/` next to it.
-fn root_for(main: &Path, root: Option<&Path>) -> Result<PathBuf> {
-    if let Some(root) = root {
-        return Ok(root.to_path_buf());
-    }
-    let shared = main.ancestors().skip(1).map(|a| a.join("_worktrees"));
-    if let Some(found) = shared.into_iter().find(|dir| dir.is_dir()) {
-        return Ok(found);
-    }
-    let parent = main
-        .parent()
-        .context("the main checkout has no parent directory")?;
-    Ok(parent.join("_worktrees"))
-}
-
 /// Symlinks resolved through the deepest ancestor that exists, the rest appended: a root
 /// that does not exist yet still has to be judged by where it would land.
 fn resolved(path: &Path) -> PathBuf {
@@ -66,7 +50,7 @@ fn resolved(path: &Path) -> PathBuf {
 /// its files while git keeps the (locked, never pruned) record.
 pub fn plan(
     main: &Path,
-    root: Option<&Path>,
+    root: &Path,
     temp: &[PathBuf],
     (task, slug): (&str, Option<&str>),
     (owner, agent): (&str, Option<&str>),
@@ -90,8 +74,11 @@ pub fn plan(
         owner.is_ascii() && round_trips && !owner.contains(['\n', '\r']),
         "--owner `{owner}` must be non-empty ASCII without ` | `, e.g. \"Claude Code / sonnet\""
     );
-    let root = root_for(main, root)?;
-    let (landing, checkout) = (resolved(&root), resolved(main));
+    ensure!(
+        !root.as_os_str().is_empty(),
+        "`[worktree] root` is empty; set it or drop the key for ~/.rtok/worktrees"
+    );
+    let (landing, checkout) = (resolved(root), resolved(main));
     // A repository that itself lives under the temp directory (a test fixture, a scratch
     // clone) is no worse off with its worktrees beside it.
     let purgeable = |t: &PathBuf| landing.starts_with(t) && !checkout.starts_with(t);
@@ -129,7 +116,7 @@ pub(super) fn today() -> Result<String> {
 /// from a stale base is how a finished task gets rebuilt on old code.
 pub fn run(
     cwd: &Path,
-    root: Option<&Path>,
+    root: &Path,
     id: (&str, Option<&str>),
     owner: (&str, Option<&str>),
 ) -> Result<Plan> {
@@ -155,12 +142,7 @@ mod tests {
 
     const OWNER: &str = "Claude Code / sonnet";
 
-    fn plan_in(
-        main: &Path,
-        root: Option<&Path>,
-        id: (&str, Option<&str>),
-        owner: &str,
-    ) -> Result<Plan> {
+    fn plan_in(main: &Path, root: &Path, id: (&str, Option<&str>), owner: &str) -> Result<Plan> {
         plan(
             main,
             root,
@@ -172,39 +154,36 @@ mod tests {
     }
 
     #[test]
-    fn the_nearest_shared_root_wins_and_the_names_follow_the_task() {
+    fn the_root_holds_the_worktree_and_the_names_follow_the_task() {
         let dir = tmp_dir("wt-add");
-        let main = dir.join("apps/rtok");
+        let (main, root) = (dir.join("apps/rtok"), dir.join("home/.rtok/worktrees"));
         std::fs::create_dir_all(&main).unwrap();
-        let next_to_it = plan_in(&main, None, ("T158", Some("Worktree-Add")), OWNER).unwrap();
-        assert_eq!(next_to_it.path, dir.join("apps/_worktrees/rtok-t158"));
-        assert_eq!(next_to_it.branch, "t158-worktree-add");
-        assert_eq!(
-            next_to_it.reason,
-            "Claude Code / sonnet | t158 | 2026-09-22"
-        );
-        let parsed = Owner::parse(&next_to_it.reason).unwrap();
+        // T410: a `_worktrees/` beside the repository no longer pulls the worktree there.
+        std::fs::create_dir_all(dir.join("_worktrees")).unwrap();
+        let p = plan_in(&main, &root, ("T158", Some("Worktree-Add")), OWNER).unwrap();
+        assert_eq!(p.path, root.join("rtok-t158"));
+        assert_eq!(p.branch, "t158-worktree-add");
+        assert_eq!(p.reason, "Claude Code / sonnet | t158 | 2026-09-22");
+        let parsed = Owner::parse(&p.reason).unwrap();
         assert_eq!(
             (parsed.owner.as_str(), parsed.task.as_str()),
             (OWNER, "t158")
         );
 
-        std::fs::create_dir_all(dir.join("_worktrees")).unwrap();
-        let shared = plan_in(&main, None, ("t1", None), OWNER).unwrap();
-        assert_eq!(
-            (shared.path, shared.branch.as_str()),
-            (dir.join("_worktrees/rtok-t1"), "t1")
-        );
-
-        let configured = plan_in(&main, Some(&dir.join("elsewhere")), ("t1", None), OWNER).unwrap();
-        assert_eq!(configured.path, dir.join("elsewhere/rtok-t1"));
-
-        std::fs::create_dir_all(dir.join("_worktrees/rtok-t1")).unwrap();
-        let taken = plan_in(&main, None, ("t1", None), OWNER).unwrap_err();
+        std::fs::create_dir_all(root.join("rtok-t1")).unwrap();
+        let taken = plan_in(&main, &root, ("t1", None), OWNER).unwrap_err();
         assert!(
             taken.to_string().contains("one worktree per task"),
             "{taken}"
         );
+        let empty = plan_in(&main, Path::new(""), ("t2", None), OWNER).unwrap_err();
+        assert!(empty.to_string().contains("is empty"), "{empty}");
+    }
+
+    #[test]
+    fn the_default_root_is_under_the_rtok_home() {
+        let root = crate::config::Config::default().worktree.root;
+        assert_eq!(root, Path::new("~/.rtok/worktrees"));
     }
 
     #[test]
@@ -212,7 +191,7 @@ mod tests {
         let agent = "an-agent-id";
         let p = plan(
             Path::new("/r/rtok"),
-            None,
+            Path::new("/r/_w"),
             &[],
             ("t1", None),
             (OWNER, Some(agent)),
@@ -237,16 +216,22 @@ mod tests {
         #[case] owner: &str,
         #[case] names: &str,
     ) {
-        let err = plan_in(Path::new("/r/rtok"), None, id, owner).unwrap_err();
+        let err = plan_in(Path::new("/r/rtok"), Path::new("/r/_w"), id, owner).unwrap_err();
         assert!(err.to_string().contains(names), "{err}");
     }
 
     #[test]
     fn a_root_under_a_temporary_directory_is_refused_unless_the_repository_is_there_too() {
         let purged = Path::new("/purged/x");
-        let err = plan_in(Path::new("/r/rtok"), Some(purged), ("t1", None), OWNER).unwrap_err();
+        let err = plan_in(Path::new("/r/rtok"), purged, ("t1", None), OWNER).unwrap_err();
         assert!(err.to_string().contains("temporary directory"), "{err}");
-        let scratch = plan_in(Path::new("/purged/session/rtok"), None, ("t1", None), OWNER);
+        let beside = Path::new("/purged/session/_worktrees");
+        let scratch = plan_in(
+            Path::new("/purged/session/rtok"),
+            beside,
+            ("t1", None),
+            OWNER,
+        );
         assert_eq!(
             scratch.unwrap().path,
             Path::new("/purged/session/_worktrees/rtok-t1")

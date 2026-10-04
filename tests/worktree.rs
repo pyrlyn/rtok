@@ -166,7 +166,10 @@ fn list_splits_cache_from_source_and_reports_an_orphan() {
     std::fs::remove_dir_all(work.join(".git/worktrees/wt-orphan")).unwrap();
 
     // From a linked worktree: git resolves the repository, whichever checkout we stand in.
-    let rows = json(&cache, &["worktree", "list", "--json"]);
+    // `$HOME` stays outside it: the `[worktree] enabled` gate loads the config first, and a
+    // fresh `~/.rtok` inside `wt-cache` would make it dirty.
+    let home = tmp.join("home");
+    let rows = json_in(&home, &cache, &["worktree", "list", "--json"]);
     let row = |name: &str| by_name(&rows, name);
     assert_eq!(rows.as_array().unwrap().len(), 4, "{rows}");
     assert_eq!(row("work")["state"], "main");
@@ -465,14 +468,16 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     commit(&tmp.join("other"), "b.txt");
     run(&tmp.join("other"), &["push", "-q", "origin", "main"]);
     let tip = run(&tmp.join("other"), &["rev-parse", "HEAD"]);
-    let root = tmp.join("_worktrees");
-    std::fs::create_dir_all(&root).unwrap();
+    // T410: the default root is `~/.rtok/worktrees`; a `_worktrees/` beside the repository
+    // no longer pulls the worktree there.
+    std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let root = home.join(".rtok/worktrees");
 
     let owner = "Claude Code / sonnet";
-    let out = rtok(
-        &work,
-        &["worktree", "add", "T158", "Worktree-Add", "--owner", owner],
-    );
+    let add = ["worktree", "add", "T158", "Worktree-Add", "--owner", owner];
+    let out = rtok_in(&home, &work, &add, b"");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
     let printed = String::from_utf8_lossy(&out.stdout);
@@ -511,15 +516,18 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     );
     assert!(!added.record.held_against(Some(owner)));
 
-    let again = rtok(&work, &["worktree", "add", "t158", "--owner", owner]);
+    let again = rtok_in(
+        &home,
+        &work,
+        &["worktree", "add", "t158", "--owner", owner],
+        b"",
+    );
     assert!(!again.status.success());
     let err = String::from_utf8_lossy(&again.stderr);
     assert!(err.contains("one worktree per task"), "{err}");
     assert_eq!(inventory(&work).unwrap().len(), 2);
 
-    // `[worktree] root` wins over discovery; `~` expands.
-    let home = tmp.join("home");
-    std::fs::create_dir_all(&home).unwrap();
+    // `[worktree] root` wins over the default; `~` expands.
     std::fs::write(home.join("config.toml"), "[worktree]\nroot = \"~/wt\"\n").unwrap();
     let cfg = home.join("config.toml").display().to_string();
     let out = rtok(
@@ -1011,6 +1019,55 @@ fn mcp_worktree_tools_act_for_the_linked_agent() {
     assert_eq!(inventory(&work).unwrap().len(), 2);
 }
 
+/// T410: `[worktree] enabled = false` turns every `rtok worktree` command, `list` included,
+/// into one error, and MCP no longer offers the `worktree_*` tools.
+#[test]
+fn disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools() {
+    let tmp = rtok::testutil::tmp_dir("worktree-disabled");
+    let work = origin_clone(&tmp, "rtok");
+    std::fs::create_dir_all(tmp.join(".rtok")).unwrap();
+    std::fs::write(
+        tmp.join(".rtok/config.toml"),
+        "[worktree]\nenabled = false\n",
+    )
+    .unwrap();
+    let commands: [&[&str]; 4] = [
+        &["worktree", "list"],
+        &["worktree", "add", "t1", "--owner", "me"],
+        &["worktree", "gc"],
+        &["worktree", "clean"],
+    ];
+    for args in commands {
+        let out = rtok_in(&tmp, &work, args, b"");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !out.status.success() && err.contains("worktrees are not enabled"),
+            "{args:?}: {err}"
+        );
+    }
+    assert!(!tmp.join(".rtok/worktrees").exists());
+
+    let (store, _) = agents(&tmp, &[]);
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let cwd = work.canonicalize().unwrap();
+    let hooks = || {
+        store
+            .register_agent(claude, "sess-off", None, cwd.to_str(), None)
+            .unwrap();
+    };
+    let calls = [
+        ("worktree_list", "{}"),
+        ("worktree_add", r#"{"task":"t1"}"#),
+    ];
+    for (is_err, text) in common::mcp::session(&tmp, &work, hooks, &calls) {
+        assert!(
+            is_err && text.starts_with("unknown tool: worktree_"),
+            "{text}"
+        );
+    }
+    assert_eq!(inventory(&work).unwrap().len(), 1);
+}
+
 /// T286 PR 2: MCP `worktree_remove` for the linked agent: a merged clean worktree goes with
 /// its branch; an unmerged one is refused until `keep_branch`; another agent's lock and a
 /// call that names nothing are refused.
@@ -1102,7 +1159,6 @@ fn origin_clone(tmp: &Path, name: &str) -> std::path::PathBuf {
 fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
     let tmp = rtok::testutil::tmp_dir("worktree-hook-create");
     let work = origin_clone(&tmp, "rtok");
-    std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
     let (store, ids) = agents(&tmp, &["sess-host"]);
     let create = |name: &str| {
         let extra = serde_json::json!({"name": name});
@@ -1116,7 +1172,7 @@ fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
         .unwrap()
         .trim_end()
         .to_string();
-    let want = tmp.join("_worktrees/rtok-bold-oak-a3f2");
+    let want = tmp.join(".rtok/worktrees/rtok-bold-oak-a3f2");
     assert_eq!(
         Path::new(&path).canonicalize().unwrap(),
         want.canonicalize().unwrap()
@@ -1234,12 +1290,32 @@ fn worktree_launcher_creates_a_plain_worktree_when_rtok_cannot() {
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
-    let want = tmp.join("_worktrees/rtok-third");
+    let want = tmp.join(".rtok/worktrees/rtok-third");
     assert!(
         same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &want),
         "{out:?}"
     );
     assert!(!work.join(".claude/worktrees/third").exists());
+
+    // T410: `[worktree] enabled = false` — the real rtok prints no path, so the host's own
+    // worktree with no "failed" warning; its remove is a plain `git worktree remove`.
+    std::fs::write(
+        tmp.join(".rtok/config.toml"),
+        "[worktree]\nenabled = false\n",
+    )
+    .unwrap();
+    let out = launch(&real, "WorktreeCreate", serde_json::json!({"name": "off"}));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success() && !err.contains("failed"), "{err}");
+    let own = work.join(".claude/worktrees/off");
+    assert!(
+        same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &own),
+        "{out:?}"
+    );
+    let path = serde_json::json!({"worktree_path": own});
+    let gone = launch(&real, "WorktreeRemove", path);
+    assert!(gone.status.success() && !own.exists(), "{gone:?}");
+    std::fs::remove_file(tmp.join(".rtok/config.toml")).unwrap();
 
     // Remove: no rtok means plain `git worktree remove`, never forced.
     let none = tmp.join("bin-none");
