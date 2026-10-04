@@ -9,6 +9,14 @@ on:
   # Push to main, non-draft pull requests and the weekly schedule run this through
   # pipeline.yml (`workflow_call`), in parallel with the other checks and behind its `gate` job.
   workflow_call:
+    inputs:
+      docs-only:
+        description: >-
+          The change is documentation only (pipeline.yml's `changes` job, `docs-only` in
+          .github/infra.yml): skip lint, check, windows and spa; `docs` runs instead.
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
 
 # A newer commit on the same ref cancels the previous run. github.workflow names the caller
@@ -35,7 +43,9 @@ jobs:
   # fmt, jscpd, oxlint and pytest do not depend on the OS; clippy here does not see
   # macOS-only `cfg` code, which the macOS test build still compiles.
   lint:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,7 +76,9 @@ jobs:
 
   check:
     # Draft PRs still emit synchronize; skip until ready_for_review.
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
     strategy:
       fail-fast: true
       matrix:
@@ -125,7 +137,9 @@ jobs:
   # `partitions` runners with nextest `--partition count:i/n`. Every shard builds the same
   # test binaries and runs its share; the job still fails if any shard fails.
   windows:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
     strategy:
       fail-fast: true
       matrix:
@@ -162,10 +176,12 @@ jobs:
   # T310.11: the admin SPA in web/ (the `just spa-*` recipes). oxlint and oxfmt already cover
   # web/ in `lint` (`just js` lints every tracked .ts/.tsx), so they are not run twice. The
   # Playwright run against the real binary (T310.10) is a step of the ubuntu `check` job, which
-  # already builds that binary. Like every job in this file it runs on every change:
-  # the pipeline gate has no per-path skip, and a Rust-only change leaves this job warm in cache.
+  # already builds that binary. Like `lint`, `check` and `windows` it runs on every change but a
+  # docs-only one (`docs` below): a Rust-only change leaves this job warm in cache.
   spa:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -200,9 +216,46 @@ jobs:
       - if: failure() && github.event_name == 'pull_request'
         uses: ./.github/actions/cancel-run
 
+  # Docs-only pull requests skip the jobs above; this one still runs the tests that validate the
+  # Markdown (`just docs-check`: plan.md/todo.md ids and Check: lines, ideas.md, docs/ structure,
+  # host docs, public numbers, ...). Also on main and manual runs, which keeps its cache warm;
+  # not on a pull request with code, where `check` runs the same tests.
+  docs:
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && (inputs.docs-only || github.event_name != 'pull_request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    env:
+      # Rust comes from mise below, so the recipe calls cargo directly instead of `mise exec`,
+      # which would also try to install the rest of mise.toml.
+      CARGO: cargo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: just rust
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+      - run: just docs-check
+      - if: failure() && github.event_name == 'pull_request'
+        uses: ./.github/actions/cancel-run
+
   revert-on-failure:
     name: revert-on-failure
-    needs: [lint, check, windows, spa]
+    needs: [lint, check, windows, spa, docs]
     if: >-
       always()
       && github.event_name == 'push'
