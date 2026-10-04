@@ -1475,7 +1475,8 @@ Done means:
 - Migration: `rtok agents install <host>` removes the old `worktrees` install only when the existing rules prove it ours (marker or byte copy); a foreign `worktrees` is left alone and reported once.
 - A test guards the naming: every entry in `SKILLS` except `rtok` starts with `rtok-`.
 - Not ours to change: the creator's global `AGENTS.md` names the `worktrees` skill; the creator updates it after this lands (say so in the PR).
-- Verify: `just check`; an install into a scratch `$HOME` holding a legacy marked `worktrees`, a foreign `worktrees` symlink and a stray `rtok-x` directory shows the expected install, skip and remove lines.
+
+Check: the naming test (every `SKILLS` entry except `rtok` starts with `rtok-`) and the install/remove/migration tests in `tests/skill.rs` and `tests/pi_plugin.rs` pass; an install into a scratch `$HOME` holding a legacy marked `worktrees`, a foreign `worktrees` symlink and a stray `rtok-x` directory shows the expected install, skip and remove lines; `just check`.
 
 ## Reference
 
