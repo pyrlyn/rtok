@@ -320,6 +320,9 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
         return Ok(copilot_output(&parsed));
     }
     if cursor {
+        if input.hook_event_name == "UserPromptSubmit" {
+            return Ok(br#"{"continue":true}"#.to_vec());
+        }
         let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
         return Ok(cursor_output(&parsed));
     }
@@ -553,6 +556,11 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
             }
             inject_event(input, cx, &registry, agent.as_deref())
         }
+        // Cursor's `beforeSubmitPrompt` output is only `{continue, user_message}` and has no
+        // context field (https://cursor.com/docs/hooks), so injecting would spend the budget
+        // and settle pushed messages that never reach the model. The event still registers the
+        // agent and records the call above.
+        "UserPromptSubmit" if cx.config.hook.host == "cursor" => HookOutput::default(),
         "UserPromptSubmit" | "PostCompact" | "SubagentStart" => {
             inject_event(input, cx, &registry, agent.as_deref())
         }
@@ -747,7 +755,7 @@ fn post_tool(
 }
 
 /// Cursor reads a flat object: `{updated_mcp_tool_output}` after an MCP tool,
-/// `{additional_context}` on session/prompt hooks. Anything else (a guard deny, a
+/// `{additional_context}` on `sessionStart`/`postToolUse`. Anything else (a guard deny, a
 /// shell hook with no replacement) keeps the Claude `hookSpecificOutput` shape.
 pub fn cursor_output(out: &HookOutput) -> Vec<u8> {
     let nested = || serde_json::to_vec(out).unwrap_or_else(|_| b"{}".to_vec());
@@ -1526,6 +1534,55 @@ mod tests {
         assert_eq!(hso["hookEventName"], "PreToolUse", "{v}");
         let cmd = hso["updatedInput"]["command"].as_str().unwrap_or("");
         assert!(cmd.contains("git status") && cmd != "git status", "{v}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T390: Cursor's `beforeSubmitPrompt` output has only `continue` and `user_message`, so
+    /// the hook answers `{"continue":true}` with no injected context, yet still registers the
+    /// agent; `sessionEnd` (stdin names it in camelCase) ends that agent row.
+    #[test]
+    fn cursor_prompt_and_session_end_hooks_follow_cursors_output_schema() {
+        let dir = unique_dir("rtok-hook-t390-cursor");
+        let mut cfg = cursor_cfg(&dir);
+        cfg.plugins.inject.modes = vec!["nudges".into()];
+        let run_event = |event: &str, stdin: serde_json::Value| {
+            dispatch_owned_strict(&serde_json::to_vec(&stdin).unwrap(), event, &cfg).unwrap()
+        };
+        let prompt = run_event(
+            "UserPromptSubmit",
+            serde_json::json!({
+                "hook_event_name": "beforeSubmitPrompt",
+                "conversation_id": "sess-cursor-390",
+                "cwd": dir.to_string_lossy(),
+                "prompt": "fix the build",
+                "attachments": [],
+            }),
+        );
+        assert_eq!(json(prompt), serde_json::json!({"continue": true}));
+
+        let host_id = Runtime::open(cfg.clone(), "irrelevant")
+            .unwrap()
+            .host_id()
+            .unwrap();
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        let id = store
+            .register_agent(host_id, "sess-cursor-390", None, None, None)
+            .unwrap();
+        assert_eq!(store.agent_row(&id).unwrap().unwrap().ended_at, None);
+
+        let end = run_event(
+            "SessionEnd",
+            serde_json::json!({
+                "hook_event_name": "sessionEnd",
+                "conversation_id": "sess-cursor-390",
+                "session_id": "sess-cursor-390",
+                "reason": "completed",
+                "duration_ms": 45000,
+            }),
+        );
+        assert_eq!(json(end), serde_json::json!({}));
+        let row = store.agent_row(&id).unwrap().unwrap();
+        assert!(row.ended_at.is_some(), "sessionEnd must end the agent row");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

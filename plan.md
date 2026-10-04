@@ -76,12 +76,24 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T380 | todo | P2 | 3 | 30% | |
 | T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
-| T385 | todo | P1 | 5 | 20% | |
+| T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
+| T385.1 | todo | P1 | 3 | 30% | |
+| T385.2 | todo | P2 | 3 | 20% | |
+| T385.3 | todo | P1 | 3 | 20% | |
+| T385.4 | todo | P2 | 3 | 20% | |
+| T385.5 | todo | P2 | 3 | 20% | |
+| T385.6 | todo | P2 | 3 | 20% | |
+| T385.7 | todo | P3 | 4 | 10% | |
+| T385.8 | todo | P2 | 2 | 20% | |
+| T385.9 | todo | P3 | 5 | 10% | |
+| T385.10 | todo | P3 | 4 | 10% | |
+| T385.11 | todo | P3 | 4 | 10% | |
+| T385.12 | todo | P3 | 3 | 20% | |
+| T385.13 | todo | P3 | 2 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T387 | todo | P2 | 3 | 40% | |
 | T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
-| T390 | todo | P2 | 3 | 40% | |
+| T390.1 | todo | P3 | 2 | 0% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -92,6 +104,11 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
 | T400 | todo | P2 | 2 | 40% | |
+| T401 | todo | P3 | 4 | 20% | |
+| T402 | todo | P3 | 2 | 20% | |
+| T403 | todo | P3 | 3 | 10% | |
+| T404 | todo | P3 | 3 | 10% | |
+| T405 | todo | P3 | 3 | 10% | |
 
 
 
@@ -1664,7 +1681,87 @@ From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 
 
 Also: a cross-session read-dedup measurement from `calls` (optimization.md §5, "measure first"). Related ideas: I-84, I-85, I-86, I-101, I-102, I-21. The optimization doc's own ids (T250–T259) collide with `done.md`; use T385.x.
 
+Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id order (T385.3, T385.8 and T385.13 are measurements and may run in parallel with the build steps). Boundaries from `docs/batch-flex.md` hold throughout: never convert a live agent turn into a Batch job, never rewrite Batch JSONL, everything lives under `src/proxy/`.
+
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
+
+### T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
+
+optimization.md §2.2–§2.3 L0–L1. Config structs for `[proxy.lanes]` (and the empty `[proxy.batch]`, `[proxy.flex]`, `[proxy.routing]` tables later steps fill), defaults keeping today's bytes. A classifier assigns each request a lane — `agent`, `bulk`, `batch`, `files`, `embeddings`, `meta`, `internal` — by path first, then an explicit `x-rtok-lane` header (stripped before forwarding) or a `/lane/<name>/` path prefix; no heuristics until measured. The lane is written to the ledger (`calls.kind` or `call_io` metadata; no schema change if `kind` suffices).
+
+Check: integration test — each lane path gets its tag, `/v1/messages` still matches the Anthropic wire and `/v1/messages/batches` does not, the header never reaches the upstream; proxy bytes identical with default config; config goldens; `just check`.
+
+### T385.2. Per-lane policy table
+
+optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
+
+Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
+
+### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
+
+optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
+
+Check: one dated `research.md` row per setting.
+
+### T385.4. Batch observe and `parse_results` into `usage`
+
+optimization.md §2.2 L3 (roadmap S2/S3). Tag Batch create/poll/list/cancel/results calls on the `batch` lane; with `parse_results = true`, parse result lines into `usage` rows. Fail open on malformed lines.
+
+Check: fixture result streams (Anthropic and OpenAI) produce the expected `usage` rows; a malformed line is skipped, not fatal; `just check`.
+
+### T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
+
+optimization.md §2.2 L4 (roadmap S4). Inject `service_tier = "flex"` only on `bulk`/`internal` (never silently on `agent`), OpenAI only (Anthropic has no Flex tier). On `429 Resource Unavailable`: retry policy `none` / `backoff` / `default` (retry with `service_tier = "auto"`). Cite the OpenAI Flex docs with the date checked.
+
+Check: mock upstream — omit/force/respect matrix and each 429 policy; `just check`.
+
+### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
+
+optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
+
+Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
+
+### T385.7. Per-lane upstream and in-flight cap
+
+optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
+
+Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
+
+### T385.8. P28 Phase 1: measure what LLM compression could save
+
+optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
+
+Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
+
+### T385.9. P28 Phase 2: async compressor on the `internal` lane
+
+optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
+
+Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
+
+### T385.10. Routing for `internal` and `bulk` calls
+
+optimization.md §4.2 (D9, I-101). Route `internal` and opted-in `bulk` calls to a cheaper model or provider per the policy table; the `agent` lane is not routed.
+
+Check: dollars per lane before/after from `stats --price` on fixtures; `just check`.
+
+### T385.11. Deferred tool schemas and thinking replay
+
+optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas and replayed thinking blocks, only where the measurement in each idea shows a saving (I-86 was rejected at 0.03 % — re-measure before building).
+
+Check: per-wire tests and a dated bench row; `just check`.
+
+### T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+
+optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
+
+Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+
+### T385.13. Measure cross-session read duplication
+
+optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
+
+Check: the dated `research.md` row.
 
 ### T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
 
@@ -1673,14 +1770,6 @@ From `research.md` §15.3 (T50.1 default-rule families): `mise` is the largest f
 Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just <recipe>` resolve to the inner command's formatter or rule when the inner command is visible on the line. Rules or formatters for `sqlite3`, `df` and `awk` land only where a golden fixture beats `Rule::default()`. The `bash_default` top-20 is re-measured and recorded in §15.3 with a date.
 
 Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
-
-### T387. Re-land T52.5 type-position references (lost to an auto-revert)
-
-`done.md` records T52.5 as done (refs 96/105, recall 0.914), but its tags query `(type_identifier) @name @reference.type` is not in `src/plugins/read/outline.rs`: commit `c217b8f2` ("ci: auto-revert ef6c6ff") removed it on 2026-09-17. `tests/graph_truth.rs` still guards the old floor (`ref_recall >= 0.30`) and `research.md` §2 still shows 0.351 / 0.305.
-
-Done means: the type-position and scoped-call reference queries from `cfbee166` are back (adapted to today's code), `graph_truth` measures the new reference recall, its floor rises to just under the measured value, and `research.md` §2 and `src/plugins/graph/PLAN.md` "Known misses" are updated. The T52.5 entry in `done.md` gets a dated note that it was reverted and re-landed under T387.
-
-Check: `tests/graph_truth.rs` passes with the raised floor; the new recall is in §2 with a date; `just check`.
 
 ### T388. `doctor` reports the real MCP Tool Search state
 
@@ -1698,13 +1787,13 @@ Done means: a `[stats.prices."claude-fable-5-1"]` row (and any other current Cla
 
 Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/config.md` lists the row; `just check`.
 
-### T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest
+### T390.1. Move the remaining installer event lists onto the hook-event table
 
-From `research.md` §27.1 and §27.3 (T291): Cursor's plugin manifest (`plugins/cursor/hooks/hooks.json`) registers only `beforeShellExecution`, `afterShellExecution`, `sessionStart`, `preCompact`, `afterMCPExecution` and `postToolUse`, although `src/hooks/types.rs` already maps `beforeSubmitPrompt` and `sessionEnd`. `done.md` claims `beforeSubmitPrompt` was registered; the file never contained it. So per-turn memory recall and session-end checkpoints do not run on Cursor.
+T390 put Cursor, Copilot and Gemini on `src/agents/hook_events.rs` and drift-tests every `plugins/*/hooks/hooks.json` against it. These installers still keep their own event lists: ZCode (`ZCODE_ENTRIES`), Devin, Kimi, Command Code (`EVENTS`), Cline (`EVENTS`, file names) and Claude (`ENTRIES`, read from its own manifest). Command Code and Cline ship script hooks (`plugins/*/hooks/rtok-hook`), not a `hooks.json`.
 
-Done means: Cursor's manifest and installer carry `beforeSubmitPrompt` and `sessionEnd`, failing open. Skip `subagentStart` (its Cursor output schema has no context field, §23). A drift test compares every `plugins/*/hooks/hooks.json` and every installer's event list against one event table in code. The T291–T294 cards that exist only on branch `plan-memory` (commit `d706e3cb`), and decision D35, are copied into `done.md` and the decision table, since that work shipped.
+Done means: each of those installers reads its events from the table (rows added per host), and the drift test also covers the script-hook plugins, so no host has an event list outside the table.
 
-Check: the drift test fails on a manifest missing an event; a Cursor hook fixture for both new events; `just check`.
+Check: the drift test fails when any of those manifests or installer lists disagrees with the table; `just check`.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
@@ -1794,7 +1883,7 @@ Check: dated sources in §10.1, §23 and §26.
 
 The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
 
-- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (see T387).
+- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
 - §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
 - §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
 - §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
@@ -1802,6 +1891,46 @@ The research sweep (2026-10-04) found statements that shipped work made false. F
 - `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
 
 Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
+
+### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
+
+Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
+
+Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
+
+Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
+
+### T402. Measure how much tool output a structured schema would shrink
+
+Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. No number says how much tool output is prose a schema could replace.
+
+Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
+
+Check: the dated §16 row; the build task filed or the card closed with its number.
+
+### T403. A/B a path and identifier dictionary in proxy requests
+
+Promoted from I-110 (Ivan, 2026-10-04). From `research.md` §16.3 #8: repeated long paths and identifiers could be replaced with short codes plus one legend per request. It may cost answer quality and must not break the prompt cache.
+
+Done means: first measure, from stored requests, how many bytes repeated paths and identifiers take (§16 row). If above 1 % of input, build it behind a proxy flag (off by default) with a byte-stable legend (cache-safe) and run an A/B on the bench set with a pass-rate gate; the flag turns on only if pass rate holds and tokens fall.
+
+Check: the dated measurement row; if built, the A/B row and a byte-stability test for the legend.
+
+### T404. Evaluate a local draft model that the cloud model only verifies
+
+Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
+
+Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
+
+Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
+
+### T405. Task-board extras for the agent task tools
+
+Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F19, F20: a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20).
+
+Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
+
+Check: each sub-task carries its own Check.
 
 ## Reference
 
@@ -1846,6 +1975,7 @@ Claim a `todo` row before work: set Status to `in progress` and Agent to `Provid
 | D32 | **An optional resident hook process (T178).** `rtok hook --serve` answers `rtok-hook`, a std-only client, over a Unix socket (Windows: a named pipe); `rtok demon` supervises it as the service `hook`, or the hook starts it detached, rate-limited by a lock file. This supersedes D1's "no daemon on the hook path" and D22's "nothing in it is on the hook path" for the `hook` service only. Without it everything works as today: the client runs `rtok hook` when the resident is absent or refuses (another version or config environment), and prints `{}` when it does not answer within 50 ms. | Process start is ~11 ms of the ~14 ms Claude Code waits per hook (research.md §19); a fresh process cannot meet the 10 ms budget. |
 | D33 | **rtok's MCP lives in each agent's own config, not in its plugins (T275, amends D21 for MCP).** Install and update always write the config entry `rtok`; only `remove` takes it out, and a plugin no longer suppresses or strips it. Where an agent would show a plugin server next to the config entry (Claude Code and Desktop, Cursor, Copilot, Codex, VS Code, ZCode, Kimi, Grok; `research.md` §25), the rtok plugin ships no MCP server and keeps its hooks, skills and agents. Gemini keeps both, since settings.json wins over an extension's same-name server. Same-name entries across one agent's files are left to the agent to merge. Hooks keep D21 unchanged. |
 | D34 | **rtok gives every agent session its own id and owns its worktrees the same way on every host (T281–T290, creator request 2026-09-27).** The agent id is a random UUIDv4 issued by rtok per host session (sub-agents get their own, with a parent), shown as its first 8 hex chars; any unique prefix of 4+ chars is accepted. Not UUIDv7: its leading hex is a timestamp, so agents started within the same minute would share the short id (found 2026-09-27; `started_at` keeps the order). The host's session id is kept alongside but never used as the identity: it collides across hosts and is missing on several (`research.md` §26). A worktree is bound to one agent by the git lock reason `<owner> \| <task-id> \| <date> \| agent <uuid>` (the old 3-field form stays valid) and a store row; the lock is the source of truth. Every host gets the same root, naming, lock, list, remove and gc: Claude Code redirects its own worktrees through `WorktreeCreate`/`WorktreeRemove` (T159), hosts with a post-create script adopt theirs (T289), all others use the skill and the MCP tools. Messages between agents and from the user are local, capped, framed as information from another agent and never as instructions. |
+| D35 | **Smart memory is on by default for every agent, from one event module (T291–T293, creator 2026-09-27).** `prompt_recall` (5), `startup_recall`, `handoff` and `spawn_brief` default on. This overrides the T131 gate that would have left `spawn_brief` off until a measured net saving. Bodies stay out of the always-on prompt; the index names `mem_get`. One module under `src/agents/` generates every host manifest from that host's event-name map; a host with no equivalent event is MCP-only for it. Hook path stays sync, ≤10 ms, fail-open, no LLM and no vector read (D13). SQLite stays the only store (D8). A later private-repo sync is outside this repo; T294 only makes an export row able to carry a tombstone. Evidence: `research.md` §27. T390 shipped the table (`src/agents/hook_events.rs`) and a manifest drift test in place of generating the manifests. |
 | D36 | **Agent junk deletes only what has evidence; history and credentials are never cleared by default (T338, T339).** `rtok agents junk clear` deletes a path only when `research.md` §22 documents it (official docs or source), when it carries a valid `CACHEDIR.TAG`, or when the user names it in `[agents.junk] extra`; platform cache roots and Electron subfolders without a §22 row are listed read-only with their size, never cleared. Credentials and token files are never read for expiry or deleted. Session history and snapshots are `never` for default and `--include review` runs; `--kind sessions` removes a whole session unit only on hosts whose §22 row documents it and its index; `stale_session_days` defaults to 30. Creator approved (C for T338, C for T339, 30 days) on 2026-10-03. | `research.md` §22.1, §22.2: hosts refresh tokens and prune their own sessions (Claude Code, Gemini: 30 days), sessions share trees with memory and indexes, and undocumented paths (Cursor) sit next to chat history. |
 
 ### Architecture

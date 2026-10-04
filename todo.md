@@ -71,11 +71,23 @@
 - T381. `rtok config init` must not freeze today's defaults into the user's file
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
+- T385.1. Proxy lane config and classifier, with a `calls.kind` lane tag
+- T385.2. Per-lane policy table
+- T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
+- T385.4. Batch observe and `parse_results` into `usage`
+- T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
+- T385.6. Per-lane cache-hit ledger and a replay byte-stability test
+- T385.7. Per-lane upstream and in-flight cap
+- T385.8. P28 Phase 1: measure what LLM compression could save
+- T385.9. P28 Phase 2: async compressor on the `internal` lane
+- T385.10. Routing for `internal` and `bulk` calls
+- T385.11. Deferred tool schemas and thinking replay
+- T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+- T385.13. Measure cross-session read duplication
 - T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
-- T387. Re-land T52.5 type-position references (lost to an auto-revert)
 - T388. `doctor` reports the real MCP Tool Search state
 - T389. Price row for Fable 5.1 in `[stats.prices]`
-- T390. Cursor registers `beforeSubmitPrompt` and `sessionEnd`; one event table for every host manifest
+- T390.1. Move the remaining installer event lists onto the hook-event table
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
 - T392. Warn when the same skill is listed twice or loaded more than once
 - T393. `doctor` shows the saving a 120-character skill description cap would give
@@ -86,3 +98,8 @@
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T399. Re-check host docs for three open host questions
 - T400. Fix stale and broken statements in `research.md` and related docs
+- T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
+- T402. Measure how much tool output a structured schema would shrink
+- T403. A/B a path and identifier dictionary in proxy requests
+- T404. Evaluate a local draft model that the cloud model only verifies
+- T405. Task-board extras for the agent task tools

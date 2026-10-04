@@ -142,16 +142,22 @@ Largest non-(d) class both before and after the narrower `bash_touches`: `change
 being scored: definition files complete per symbol, reference files a must-appear subset, no line
 numbers. `tests/graph_truth.rs` re-measures on every run.
 
-| Metric | Value |
-|--------|-------|
-| Definitions found | 30 / 30, recall 1.000, precision 1.000 |
-| References found | 40 / 114, recall 0.351 |
-| All sites | 70 / 144, recall 0.486 |
-| Cause of every miss | type positions 64, macro bodies 9, path-qualified calls 1 |
+| Metric | 2026-09-04 (T8.8) | 2026-10-04 (T387, after T52.5 re-land) |
+|--------|-------|-------|
+| Definitions found | 30 / 30, recall 1.000, precision 1.000 | 43 / 44, recall 0.977, precision 1.000 |
+| References found | 40 / 114, recall 0.351 | 97 / 105, recall 0.924 (33 / 105, 0.314 at HEAD before the re-land) |
+| All sites | 70 / 144, recall 0.486 | 140 / 149, recall 0.940 |
+| Cause of every miss | type positions 64, macro bodies 9, path-qualified calls 1 | macro bodies 8, one definition label (`upsert_note`, crates/) |
 
-The reference number is a property of the tree-sitter Rust tags query, not of rtok's storage: it
-captures plain calls, field-expression method calls, macro invocations and `impl` items, nothing
-else. `src/plugins/graph/PLAN.md` lists the constructs under "Known misses".
+The 2026-09-04 reference number was a property of the tree-sitter Rust tags query, not of rtok's
+storage: it captures plain calls, field-expression method calls, macro invocations and `impl`
+items, nothing else. T52.5 added rtok's own `RUST_EXTRA_REF` / `TS_CALL_TYPE_REF` queries
+(type positions, scoped calls, path segments) and measured 0.914 on 2026-09-17, but the
+auto-revert `c217b8f2` removed them the same day: main CI failed on `ef6c6ff` (T51.4) in
+`agents::tests::list_prints_one_block_per_app_with_kind_name_app_and_config`, a host-list test
+unrelated to the graph, and the revert took the whole stack `2b8c266..ef6c6ff` with it,
+including the innocent T52.5 commit; T387 re-landed the queries. Command (2026-10-04): `cargo test -p rtok --test graph_truth -- --nocapture`;
+the test floor is 0.92. `src/plugins/graph/PLAN.md` lists the constructs under "Known misses".
 
 ### `graph` import-edge index time (T68.6, 2026-09-18)
 
@@ -166,7 +172,8 @@ Command: `RTOK_HOME=$(mktemp -d) <bin> graph index <repo>`
 | After | t68.6 release | 172 | 35 017 | 0.922 / 0.325 |
 
 T8.8 `tests/graph_truth.rs` `labelled_symbols_are_found` (2026-09-18, after): definition recall
-1.000, precision 1.000; reference recall 0.305 (floor 0.30). Imports are `kind = import` and
+1.000, precision 1.000; reference recall 0.305 (floor 0.30; the T52.5 queries were reverted at
+that time, see the T387 re-measure above). Imports are `kind = import` and
 are excluded from `symbol_refs`.
 
 ### `graph` extra grammars and index payload size (T52.2, 2026-09-18)
