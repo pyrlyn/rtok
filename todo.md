@@ -101,3 +101,4 @@
 - T403. A/B a path and identifier dictionary in proxy requests
 - T404. Evaluate a local draft model that the cloud model only verifies
 - T405. Task-board extras for the agent task tools
+- T408. Interactive shell picker for rtok completions
