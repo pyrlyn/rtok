@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rtok brand — demo</title>
+  <!-- This page loads only ../dist/legacy/ (the flat rtok build, .rtok-* classes) and the base fonts from ../node_modules/@pyrlyn/brand (run `npm ci` in brand/ first). Open it straight from disk or any static server. -->
+  <link rel="preload" href="../node_modules/@pyrlyn/brand/base/fonts/IBMPlexMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../node_modules/@pyrlyn/brand/dist/base/fonts.css">
+  <link rel="stylesheet" href="../dist/legacy/tokens.css">
+  <link rel="stylesheet" href="../dist/legacy/components.css">
+  <script>
+    // ?theme=dark|light forces a theme (used for screenshots); otherwise prefers-color-scheme decides.
+    const t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  </script>
+  <style>
+    /* Page layout only. Every color, size and radius below is a brand token. */
+    body { margin: 0; }
+    .page { max-width: 1120px; margin: 0 auto; padding: var(--rtok-space-6) var(--rtok-space-5) var(--rtok-space-8); display: grid; gap: var(--rtok-space-6); }
+    header { display: flex; align-items: center; justify-content: space-between; gap: var(--rtok-space-4); flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: var(--rtok-space-3); }
+    .wordmark { font-size: var(--rtok-text-xl); line-height: var(--rtok-leading-xl); font-weight: var(--rtok-weight-bold); letter-spacing: var(--rtok-tracking-wordmark); }
+    .wordmark small { font-size: var(--rtok-text-sm); font-weight: var(--rtok-weight-semibold); letter-spacing: 0; color: var(--rtok-delta-fg); margin-left: var(--rtok-space-2); }
+    h1 { margin: 0; font-size: var(--rtok-text-3xl); line-height: 1.15; font-weight: var(--rtok-weight-bold); letter-spacing: 0.04em; }
+    h2 { margin: 0 0 var(--rtok-space-3); font-size: var(--rtok-text-lg); line-height: var(--rtok-leading-lg); font-weight: var(--rtok-weight-semibold); }
+    p { margin: 0; color: var(--rtok-fg-muted); max-width: 64ch; }
+    .grid { display: grid; gap: var(--rtok-space-4); grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    .swatches { display: grid; gap: var(--rtok-space-2); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .sw { border: 1px solid var(--rtok-border); border-radius: var(--rtok-radius-md); overflow: hidden; background: var(--rtok-surface); }
+    .sw i { display: block; height: 40px; border-bottom: 1px solid var(--rtok-border); }
+    .sw span { display: block; padding: var(--rtok-space-1) var(--rtok-space-2); font-size: var(--rtok-text-2xs); line-height: var(--rtok-leading-2xs); color: var(--rtok-fg-muted); }
+    .sw b { color: var(--rtok-fg); font-weight: var(--rtok-weight-semibold); }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rtok-space-2); }
+    .stack { display: grid; gap: var(--rtok-space-3); }
+    .type > div { display: flex; align-items: baseline; gap: var(--rtok-space-4); border-bottom: 1px solid var(--rtok-border); padding: var(--rtok-space-1) 0; }
+    .type code { width: 80px; flex: none; font-size: var(--rtok-text-2xs); color: var(--rtok-fg-subtle); }
+    .app { display: grid; grid-template-columns: 200px 1fr; gap: var(--rtok-space-4); }
+    @media (max-width: 767.98px) { .app { grid-template-columns: 1fr; } .rtok-nav { width: auto; } }
+    .motion { width: 100%; height: 6px; border-radius: var(--rtok-radius-full); background: var(--rtok-surface-3); overflow: hidden; }
+    .motion i { display: block; height: 100%; width: 30%; background: var(--rtok-accent); border-radius: inherit; transition: width var(--rtok-duration-base) var(--rtok-ease-emphasized); }
+    .motion:hover i { width: 90%; }
+    label { display: grid; gap: var(--rtok-space-1); font-size: var(--rtok-text-2xs); color: var(--rtok-fg-muted); }
+    .scroll { overflow-x: auto; }
+  </style>
+</head>
+<body class="rtok-root">
+<main class="page">
+  <header>
+    <div class="brand">
+      <span class="rtok-mark" aria-hidden="true">
+        <!-- brand/logo/rtok-mark.svg inlined (bitset mark, always on the dark tile) -->
+        <svg viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="6" fill="#06101A"/><g fill="#5CE1FF"><circle cx="9" cy="9" r="1.6"/><circle cx="14" cy="9" r="1.6"/><circle cx="19" cy="9" r="1.6"/><circle cx="24" cy="9" r="1.6"/><circle cx="9" cy="14" r="1.6"/><circle cx="14" cy="14" r="1.6"/><circle cx="19" cy="14" r="1.6"/></g><g fill="#5CE1FF" opacity="0.35"><circle cx="9" cy="19" r="1.6"/><circle cx="14" cy="19" r="1.6"/></g><g fill="#FF6B4A"><circle cx="19" cy="19" r="1.6"/><circle cx="24" cy="19" r="1.6"/><circle cx="9" cy="24" r="1.6"/></g></svg>
+      </span>
+      <span class="wordmark">RTOK<small>Δtok</small></span>
+    </div>
+    <div class="row">
+      <span class="rtok-kicker" id="theme-label">theme</span>
+      <button class="rtok-btn" id="toggle" type="button">Toggle theme</button>
+    </div>
+  </header>
+
+  <section class="stack">
+    <span class="rtok-kicker">Brand system · Bitset B</span>
+    <h1>Fewer tokens, measured.</h1>
+    <p>Blueprint cyan for what is kept, coral for the measured cut, navy canvas, IBM Plex Mono everywhere. This page loads only <code>dist/legacy/</code> and the base fonts from <code>@pyrlyn/brand</code>.</p>
+    <div class="row">
+      <button class="rtok-btn rtok-btn--primary" type="button">Install rtok</button>
+      <button class="rtok-btn" type="button">Read the docs</button>
+      <button class="rtok-btn rtok-btn--ghost" type="button">Ghost</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Semantic colors</h2>
+    <div class="swatches">
+      <div class="sw"><i style="background:var(--rtok-bg)"></i><span><b>bg</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-surface)"></i><span><b>surface</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-surface-2)"></i><span><b>surface-2</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-surface-3)"></i><span><b>surface-3</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-border)"></i><span><b>border</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-border-strong)"></i><span><b>border-strong</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-fg)"></i><span><b>fg</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-fg-muted)"></i><span><b>fg-muted</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-fg-subtle)"></i><span><b>fg-subtle</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-accent)"></i><span><b>accent</b> #5CE1FF</span></div>
+      <div class="sw"><i style="background:var(--rtok-accent-fg)"></i><span><b>accent-fg</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-accent-muted)"></i><span><b>accent-muted</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-delta)"></i><span><b>delta</b> #FF6B4A</span></div>
+      <div class="sw"><i style="background:var(--rtok-delta-fg)"></i><span><b>delta-fg</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-success)"></i><span><b>success</b></span></div>
+      <div class="sw"><i style="background:var(--rtok-warn)"></i><span><b>warn</b></span></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="rtok-card stack type">
+      <span class="rtok-kicker">Type · IBM Plex Mono</span>
+      <div><code>3xl 700</code><span style="font-size:var(--rtok-text-3xl);font-weight:700">Δ 42%</span></div>
+      <div><code>xl 700</code><span style="font-size:var(--rtok-text-xl);font-weight:700">Title</span></div>
+      <div><code>base 600</code><span style="font-size:var(--rtok-text-base);font-weight:600">Heading</span></div>
+      <div><code>sm 400</code><span style="font-size:var(--rtok-text-sm)">Body text 13/20</span></div>
+      <div><code>2xs</code><span style="font-size:var(--rtok-text-2xs);color:var(--rtok-fg-muted)">Caption / meta</span></div>
+    </div>
+    <div class="rtok-card stack">
+      <span class="rtok-kicker">Tokens saved today</span>
+      <span class="rtok-metric">184,392 <span class="rtok-delta">−37.4%</span></span>
+      <div class="row">
+        <span class="rtok-pill rtok-pill--ok">healthy</span>
+        <span class="rtok-pill rtok-pill--warn">slow</span>
+        <span class="rtok-pill rtok-pill--fail">failed</span>
+        <span class="rtok-pill rtok-pill--info">proxy</span>
+        <span class="rtok-pill">idle</span>
+      </div>
+      <div class="motion" title="hover: base duration + emphasized easing"><i></i></div>
+    </div>
+    <div class="rtok-glass stack" style="padding:var(--rtok-space-4)">
+      <span class="rtok-kicker">Controls</span>
+      <div class="row">
+        <button class="rtok-chip" aria-pressed="true" type="button">hooks</button>
+        <button class="rtok-chip" aria-pressed="false" type="button">mcp</button>
+        <button class="rtok-chip" type="button" disabled>proxy</button>
+      </div>
+      <label>Search<input class="rtok-field" placeholder="plugin id…"></label>
+      <label>Budget<input class="rtok-field" aria-invalid="true" value="-12"><span class="rtok-help rtok-help--error">Must be positive</span></label>
+      <div class="row"><button class="rtok-switch" role="switch" aria-checked="true" aria-label="Enabled" type="button"></button><button class="rtok-switch" role="switch" aria-checked="false" aria-label="Disabled" type="button"></button><button class="rtok-btn" disabled type="button">Disabled</button></div>
+    </div>
+  </section>
+
+  <section class="app">
+    <nav class="rtok-nav" aria-label="Demo">
+      <a class="rtok-nav-item" href="#" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><path d="M12 4v2M20 12h-2M12 20v-2M4 12h2"/></svg>Overview</a>
+      <a class="rtok-nav-item" href="#">Sessions</a>
+      <a class="rtok-nav-item" href="#">Calls</a>
+      <a class="rtok-nav-item" href="#">Plugins</a>
+      <a class="rtok-nav-item" href="#">Doctor</a>
+    </nav>
+    <div class="rtok-card scroll" style="padding:0">
+      <table class="rtok-table">
+        <thead><tr><th>Plugin</th><th>Surface</th><th class="rtok-num">Calls</th><th class="rtok-num">Δ tokens</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>cargo-test</td><td>hook</td><td class="rtok-num">1,204</td><td class="rtok-num rtok-delta">−48,210</td><td><span class="rtok-pill rtok-pill--ok">ok</span></td></tr>
+          <tr aria-selected="true"><td>git-diff</td><td>mcp</td><td class="rtok-num">388</td><td class="rtok-num rtok-delta">−12,904</td><td><span class="rtok-pill rtok-pill--info">selected</span></td></tr>
+          <tr><td>read-thin</td><td>proxy</td><td class="rtok-num">97</td><td class="rtok-num rtok-delta">−3,118</td><td><span class="rtok-pill rtok-pill--warn">slow</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+  const root = document.documentElement;
+  const current = () => root.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  const label = document.getElementById("theme-label");
+  const paint = () => { label.textContent = current(); };
+  document.getElementById("toggle").addEventListener("click", () => { root.dataset.theme = current() === "dark" ? "light" : "dark"; paint(); });
+  paint();
+</script>
+</body>
+</html>
