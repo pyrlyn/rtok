@@ -137,7 +137,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
 | T418 | todo | P2 | 3 | 0% | |
-| T419 | todo | P2 | 3 | 0% | |
 | T420 | todo | P1 | 4 | 0% | |
 
 
@@ -2139,14 +2138,6 @@ Check: a story hovers the calls chart and asserts the KPI minis' pointer and sub
 Done: per-plugin timing of SessionStart on a real store shows where the time goes (memory recall, checkpoint restore, agent id, or store open); the slow part is fixed or moved off the hook path; `tests/latency.rs` covers SessionStart with a populated notes store and stays under its p95 bound.
 
 Check: `tests/latency.rs` SessionStart case green; five manual `rtok hook session-start` runs on the rtok repo print no `slow` warning; `just check`.
-
-### T419. Checkpoint prompt quality in the web and TUI statistics
-
-T417 made the checkpoint keep only typed prompts. It saves no tokens — the restore is capped at `checkpoint_tokens`, and on 30 real rtok transcripts (2026-10-05) the capped restore averaged 1775 bytes before and 1903 after — it changes what fills the budget. A `Measurement` row would be summed into the memory plugin's savings, so this is a quality metric, shown apart from savings and never added to them.
-
-Done: each checkpoint write (PreCompact, SessionEnd) stores per session how many prompts the human typed and how many host-injected records were skipped; a repeat write in the same session replaces its counts, like the note. The memory plugin page shows the totals as fields (`checkpoint prompts typed`, `checkpoint host records skipped`) in the web SPA, and the TUI Plugins page shows the selected plugin's fields, which it does not today. No savings total changes.
-
-Check: a unit test writes two checkpoints in one session and one in another and reads back the summed counts; a web model test and a TUI render test show both fields on the memory page; the memory plugin's savings total is the same with and without the counts; `just check`, `just spa-stories`, `just spa-e2e`.
 
 ### T420. `just check` runs only what a change touches; `just full-check` runs everything
 

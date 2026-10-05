@@ -1567,7 +1567,6 @@ impl<'a> Model<'a> {
             .pages()
             .into_iter()
             .map(|(m, enabled, mut page)| {
-                page.fields.extend(config_fields(m.id, self.cfg));
                 if m.id == "memory"
                     && let Some(store) = self.store
                     && let Ok(aggs) = store.memory_note_aggs(None)
@@ -1581,6 +1580,24 @@ impl<'a> Model<'a> {
                     page.fields
                         .push(("notes retired".into(), retired.to_string()));
                 }
+                // Checkpoints are written by `inject`; without it there is nothing to count.
+                #[cfg(feature = "inject")]
+                if m.id == "memory"
+                    && let Some(store) = self.store
+                    && let Ok(rows) =
+                        store.kv_prefix(&crate::plugin::plugin_state_key("memory", ""))
+                {
+                    let (typed, skipped) = crate::plugins::checkpoint::prompt_counts(&rows);
+                    page.fields
+                        .push(("checkpoint prompts typed".into(), typed.to_string()));
+                    page.fields.push((
+                        "checkpoint host records skipped".into(),
+                        skipped.to_string(),
+                    ));
+                }
+                // After the live numbers: the TUI shows these pairs on one line (T419), and
+                // the settings there are the part a narrow terminal may cut.
+                page.fields.extend(config_fields(m.id, self.cfg));
                 PluginPage {
                     id: m.id,
                     enabled,

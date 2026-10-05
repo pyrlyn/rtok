@@ -24,6 +24,11 @@ pub struct Checkpoint {
     pub ids: Vec<String>,
     /// `(tool, bytes)` aligned with [`Self::ids`].
     id_meta: Vec<(String, u64)>,
+    /// User-text records taken as typed prompts over the whole transcript, not just the
+    /// 20 kept (T419). Never rendered: the restore stays byte-identical.
+    pub typed: u64,
+    /// User-text records dropped as host-written (T417's filter), same span as `typed`.
+    pub skipped: u64,
 }
 
 impl Checkpoint {
@@ -106,6 +111,7 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
     let mut paths = BTreeSet::new();
     let mut errors = VecDeque::new();
     let mut skills = Vec::new();
+    let (mut typed, mut skipped) = (0, 0);
     for line in lines {
         let Ok(line) = line else { continue };
         if filter && !worth_parsing(&line) {
@@ -126,11 +132,18 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
         });
         if let Some(s) = skill_body(&v) {
             skills.push(s);
-        } else if let Some(p) = user_prompt(&v) {
-            if prompts.len() == 20 {
-                prompts.pop_front();
+        } else {
+            match user_prompt(&v) {
+                Some(UserText::Typed(p)) => {
+                    typed += 1;
+                    if prompts.len() == 20 {
+                        prompts.pop_front();
+                    }
+                    prompts.push_back(p);
+                }
+                Some(UserText::Host) => skipped += 1,
+                None => {}
             }
-            prompts.push_back(p);
         }
     }
     Checkpoint {
@@ -138,6 +151,8 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
         paths: paths.into_iter().collect(),
         errors: errors.into(),
         skills,
+        typed,
+        skipped,
         ..Default::default()
     }
 }
@@ -199,18 +214,34 @@ fn skill_body(v: &Value) -> Option<(String, u64)> {
 /// records in a live Claude Code transcript are host-injected — task notifications,
 /// sub-agent hand-backs, CI events, skill bodies, the compaction summary — and quoting them
 /// would fill the 20-prompt window with noise that crowds out what the user asked for.
-fn user_prompt(v: &Value) -> Option<String> {
-    if v.get("type").and_then(Value::as_str) != Some("user") || host_injected(v) {
+fn user_prompt(v: &Value) -> Option<UserText> {
+    if v.get("type").and_then(Value::as_str) != Some("user") {
         return None;
     }
     let raw = user_text(v)?;
+    // A tool-result echo has no text block and joins to "": not a prompt of anyone's,
+    // so it must not count as a skipped host record either.
+    if raw.trim().is_empty() {
+        return None;
+    }
+    if host_injected(v) {
+        return Some(UserText::Host);
+    }
     let t = strip_reminders(&raw);
     let t = t.trim();
     if t.is_empty() || HOST_OPENERS.iter().any(|o| t.starts_with(o)) {
-        None
+        Some(UserText::Host)
     } else {
-        Some(t.chars().take(300).collect())
+        Some(UserText::Typed(t.chars().take(300).collect()))
     }
+}
+
+/// What [`user_prompt`] made of a user record that carries text; the split is T419's
+/// quality signal, so a record without text (a tool result) is neither.
+#[derive(Debug, PartialEq, Eq)]
+enum UserText {
+    Typed(String),
+    Host,
 }
 
 /// Record-level marks Claude Code puts on what it injected (checked 2026-10-05): `isMeta`
@@ -335,7 +366,40 @@ fn write(
     // PreCompact/SessionEnd in the same session replaces the checkpoint instead of
     // piling up dead history that nothing reads.
     cx.upsert_note(project, kind, "compact", &cp.render())?;
+    // T419: a quality signal, not a saving, so it stays out of the Measurement ledger; one
+    // row per checkpoint kind, replaced like the note above. Best effort: the stats line
+    // is not worth failing the checkpoint over.
+    let counts = serde_json::json!({ "typed": cp.typed, "skipped": cp.skipped });
+    let _ = cx.plugin_state_set("memory", kind, &counts.to_string());
     Ok(cp)
+}
+
+/// Typed and skipped totals over the plugin-state rows [`write`] left (T419). PreCompact
+/// and SessionEnd of one session each write a row and the later transcript holds the
+/// earlier one, so a session counts once, by its larger row. A row that does not parse is
+/// skipped: the value is stored text, not trusted.
+pub fn prompt_counts(rows: &[(String, String)]) -> (u64, u64) {
+    let mut per_session: std::collections::BTreeMap<&str, (u64, u64)> = Default::default();
+    for (key, value) in rows {
+        let Some((_, session)) = key
+            .split_once(":checkpoint:")
+            .or_else(|| key.split_once(":session:"))
+        else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<Value>(value) else {
+            continue;
+        };
+        let n = |k: &str| v.get(k).and_then(Value::as_u64).unwrap_or(0);
+        let row = (n("typed"), n("skipped"));
+        let best = per_session.entry(session).or_default();
+        if row.0.saturating_add(row.1) > best.0.saturating_add(best.1) {
+            *best = row;
+        }
+    }
+    per_session.values().fold((0, 0), |(t, s), (rt, rs)| {
+        (t.saturating_add(*rt), s.saturating_add(*rs))
+    })
 }
 
 fn project_of_cx(cx: &Ctx) -> Option<String> {
@@ -505,6 +569,7 @@ mod tests {
     fn host_injected_records_are_not_prompts() {
         let cp = extract(HOST_FIXTURE);
         assert_eq!(cp.prompts, ["first typed", "second typed", "third typed"]);
+        assert_eq!((cp.typed, cp.skipped), (3, 10), "T419 counts every record");
         let text = cp.render();
         for noise in [
             "task-notification",
@@ -539,6 +604,61 @@ mod tests {
         let cp = extract(&lines);
         let want: Vec<String> = (5..25).map(|i| format!("typed {i}")).collect();
         assert_eq!(cp.prompts, want);
+        assert_eq!(
+            (cp.typed, cp.skipped),
+            (25, 25),
+            "the counts span the transcript, not the window"
+        );
+    }
+
+    /// T419: the counts are a side channel — the rendered checkpoint is the same text with
+    /// or without them, so the restore injection stays byte-identical.
+    #[test]
+    fn counts_never_reach_the_render() {
+        let cp = extract(HOST_FIXTURE);
+        let bare = Checkpoint {
+            typed: 0,
+            skipped: 0,
+            ..cp.clone()
+        };
+        assert_eq!(cp.render(), bare.render());
+    }
+
+    /// T419: a tool-result echo is a `user` record with no text block — neither typed nor
+    /// host-written, so it moves neither count.
+    #[test]
+    fn tool_result_records_count_as_neither() {
+        let cp = extract(
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}
+{"type":"user","message":{"content":""}}"#,
+        );
+        assert_eq!((cp.typed, cp.skipped), (0, 0));
+    }
+
+    /// T419: one session counts once (its larger row), rows from other plugins' keys and
+    /// rows that do not parse are skipped.
+    #[test]
+    fn prompt_counts_take_each_sessions_largest_row() {
+        let rows = |r: &[(&str, &str)]| {
+            r.iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<Vec<_>>()
+        };
+        let got = prompt_counts(&rows(&[
+            ("plugin:memory:checkpoint:s1", r#"{"typed":2,"skipped":3}"#),
+            ("plugin:memory:session:s1", r#"{"typed":5,"skipped":4}"#),
+            ("plugin:memory:session:s2", r#"{"typed":1,"skipped":0}"#),
+            ("plugin:memory:session:s3", "not json"),
+            ("plugin:memory:other", r#"{"typed":99,"skipped":99}"#),
+        ]));
+        assert_eq!(got, (6, 4));
+        let huge = format!(r#"{{"typed":{},"skipped":1}}"#, u64::MAX);
+        let got = prompt_counts(&rows(&[
+            ("plugin:memory:session:a", huge.as_str()),
+            ("plugin:memory:session:b", huge.as_str()),
+        ]));
+        assert_eq!(got, (u64::MAX, 2), "a forged row saturates, never panics");
+        assert_eq!(prompt_counts(&[]), (0, 0));
     }
 
     #[test]
@@ -665,6 +785,17 @@ mod tests {
         for p in ["src/a.rs", "src/b.rs", "src/c.rs"] {
             assert!(body.contains(p), "{body}");
         }
+        // T419: the hook path stores the prompt counts as memory's plugin state.
+        let cp = extract(FIXTURE);
+        let state = crate::store::Store::open(&cfg.core.db_path)
+            .unwrap()
+            .kv_get(&crate::plugin::plugin_state_key("memory", "session:t712"))
+            .unwrap()
+            .expect("prompt counts row");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&state).unwrap(),
+            serde_json::json!({ "typed": cp.typed, "skipped": cp.skipped })
+        );
 
         let start = serde_json::json!({
             "hook_event_name":"SessionStart",

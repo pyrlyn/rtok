@@ -1377,6 +1377,31 @@ impl Store {
         Ok(())
     }
 
+    /// Every `(key, value)` whose key starts with `prefix`, key order. `%`/`_` in the
+    /// prefix are escaped so a key segment never acts as a wildcard; SQLite's `LIKE`
+    /// ignores ASCII case, so the rows are narrowed again to an exact prefix.
+    pub fn kv_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let mut conn = self.lock()?;
+        let pattern = format!(
+            "{}%",
+            prefix
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        kv::table
+            .filter(kv::key.like(pattern).escape('\\'))
+            .order(kv::key)
+            .select((kv::key, kv::value))
+            .load::<(String, String)>(&mut *conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .filter(|(k, _)| k.starts_with(prefix))
+                    .collect()
+            })
+            .map_err(Into::into)
+    }
+
     pub fn kv_delete(&self, key: &str) -> Result<()> {
         let mut conn = self.lock()?;
         diesel::delete(kv::table.filter(kv::key.eq(key))).execute(&mut *conn)?;
@@ -4858,6 +4883,36 @@ mod tests {
     fn auto_vacuum_mode(store: &Store) -> i32 {
         let mut conn = store.lock().unwrap();
         sql_ext::AutoVacuumMode.get_result(&mut *conn).unwrap()
+    }
+
+    /// T419: a prefix read returns its keys in order, and `_`/`%` in the prefix are
+    /// literal, so `plugin:a_b:` never matches `plugin:axb:`.
+    #[test]
+    fn kv_prefix_is_literal_and_ordered() {
+        let dir = crate::testutil::tmp_dir("t419-kv-prefix");
+        let store = Store::open(&dir.join("rtok.db")).unwrap();
+        for (k, v) in [
+            ("plugin:a_b:2", "two"),
+            ("plugin:a_b:1", "one"),
+            ("plugin:axb:1", "other"),
+            ("plugin:a%b:1", "pct"),
+            ("plugin:A_B:1", "upper"),
+            ("other", "x"),
+        ] {
+            store.kv_set(k, v).unwrap();
+        }
+        let got = store.kv_prefix("plugin:a_b:").unwrap();
+        assert_eq!(
+            got,
+            [
+                ("plugin:a_b:1".to_string(), "one".to_string()),
+                ("plugin:a_b:2".to_string(), "two".to_string()),
+            ]
+        );
+        assert_eq!(store.kv_prefix("plugin:a%b:").unwrap().len(), 1);
+        assert!(store.kv_prefix("nothing:").unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
