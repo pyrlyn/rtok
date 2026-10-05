@@ -16,20 +16,20 @@ const brand = fileURLToPath(new URL("../../brand", import.meta.url));
 const BUILD_OUTPUT = new Set(["node_modules", "dist", "storybook-static", "test-results"]);
 
 function files(dir: string, skip: (name: string) => boolean): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-        if (skip(e.name)) return [];
-        const path = join(dir, e.name);
-        return e.isDirectory() ? files(path, skip) : e.isFile() ? [path] : [];
-    });
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    if (skip(e.name)) return [];
+    const path = join(dir, e.name);
+    return e.isDirectory() ? files(path, skip) : e.isFile() ? [path] : [];
+  });
 }
 
 const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
 test("web/ keeps no copy of a brand file", () => {
-    const brandFiles = new Map(files(brand, () => false).map((p) => [digest(p), p]));
-    expect(brandFiles.size).toBeGreaterThan(0);
-    const copies = files(web, (name) => BUILD_OUTPUT.has(name))
-        .filter((p) => brandFiles.has(digest(p)))
-        .map((p) => `${relative(web, p)} = ${relative(brand, brandFiles.get(digest(p))!)}`);
-    expect(copies).toEqual([]);
+  const brandFiles = new Map(files(brand, () => false).map((p) => [digest(p), p]));
+  expect(brandFiles.size).toBeGreaterThan(0);
+  const copies = files(web, (name) => BUILD_OUTPUT.has(name))
+    .filter((p) => brandFiles.has(digest(p)))
+    .map((p) => `${relative(web, p)} = ${relative(brand, brandFiles.get(digest(p))!)}`);
+  expect(copies).toEqual([]);
 });
