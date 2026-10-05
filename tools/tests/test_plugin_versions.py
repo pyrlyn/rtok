@@ -132,6 +132,7 @@ def test_files_lists_every_version_file_and_manifest():
         "kimi",
         "opencode",
         "pi",
+        "qwen",
         "zcode",
     ]
     for host in version_hosts:
@@ -144,6 +145,7 @@ def test_files_lists_every_version_file_and_manifest():
         "plugins/cursor/.cursor-plugin/plugin.json",
         "plugins/copilot/plugin.json",
         "plugins/gemini/gemini-extension.json",
+        "plugins/qwen/qwen-extension.json",
         "plugins/devin/.devin-plugin/plugin.json",
         "plugins/zcode/.zcode-plugin/plugin.json",
         "plugins/grok/.grok-plugin/plugin.json",

@@ -31,6 +31,7 @@ against each host's current docs 2026-09-23; re-verify before flipping a host to
 | kimi | no | git-hosted catalog possible, not wired in this repo yet | [kimi.com](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/plugins.html) |
 | opencode | no | no marketplace: npm + community ecosystem page | [opencode.ai](https://opencode.ai/docs/plugins/) |
 | pi | no | no marketplace: npm registry + auto-populated gallery | [pi.dev](https://pi.dev/docs/latest/packages) |
+| qwen | no | no marketplace: `qwen extensions install <source>` installs straight from a git URL or local path, no catalog file to publish | [qwenlm.github.io](https://qwenlm.github.io/qwen-code-docs/en/developers/extensions/extension/) |
 | zcode | no | git-hosted catalog possible, not wired in this repo yet | [zcode.z.ai](https://zcode.z.ai/en/docs/plugin) |
 
 ## Adding a host

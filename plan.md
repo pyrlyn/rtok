@@ -108,21 +108,21 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.1 | todo | P2 | 2 | 0% | |
-| T413.2 | todo | P2 | 2 | 0% | |
-| T413.3 | todo | P2 | 3 | 0% | |
-| T413.4 | todo | P2 | 3 | 0% | |
-| T413.5 | todo | P3 | 3 | 0% | |
-| T413.6 | todo | P3 | 2 | 0% | |
-| T413.7 | todo | P3 | 3 | 0% | |
-| T413.8 | todo | P3 | 3 | 0% | |
-| T413.9 | todo | P3 | 3 | 0% | |
-| T413.10 | todo | P3 | 2 | 0% | |
-| T413.11 | todo | P3 | 2 | 0% | |
-| T413.12 | todo | P3 | 2 | 0% | |
-| T413.13 | todo | P3 | 2 | 0% | |
-| T413.14 | todo | P3 | 2 | 0% | |
-| T413.15 | todo | P3 | 2 | 0% | |
+| T413.1 | in progress | P2 | 2 | 85% | Cursor / grok 4.7 |
+| T413.2 | in progress | P2 | 2 | 90% | Cursor / grok 4.7 |
+| T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
+| T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
+| T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.3 | todo | P2 | 3 | 0% | |
 | T414.4 | todo | P2 | 3 | 0% | |
@@ -1967,11 +1967,15 @@ VS Code extension forked from Cline. Check how far `src/agents/cline/` applies (
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: research.md §32.1 from docs.roocode.com and the Roo repo (MCP shape, globalStorage path, no documented CLI MCP file or shell hooks). `register_stdio_mcp` in `src/agents/mod.rs` is the shared `{command, args}` writer; Cline and Windsurf call it, Roo calls it. `src/agents/roo/` is desktop-only, empty `[setup.roo] mcp_path` derives the VS Code globalStorage file. Verify with the host unit tests, `agents_doc`, `host_docs`, `agents_real_config`, and `just check`. Manual `rtok agents install roo --dry-run` only if Roo is installed here.
+
 ### T413.2. `rtok agents install qwen` — Qwen Code
 
 CLI forked from Gemini CLI. Check how far `src/agents/gemini/` applies (settings path, `mcpServers`, hook events, extensions) and share it.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: `research.md` §32.2. User file `~/.qwen/settings.json` (`QWEN_HOME`). `mcpServers` is `{command, args}`, written by `register_stdio_mcp` — Gemini's `register_mcp` hardcodes `--host gemini`, so a path override would stamp the wrong host. Hooks are Claude event names with `timeout` in seconds, so the installer calls `claude::insert_ours` on the `qwen` rows of `hook_events`, not Gemini's millisecond `BeforeTool` writer. `plugins/qwen` is the D21 hooks unit behind `--yes` (`qwen extensions link`, `hooks/hooks.json` from the repo loader; the extension docs page does not list a `hooks` field). MCP stays in `settings.json` on every install. No desktop variant and no proxy: no separate desktop path, and `model.baseUrl` is not for hand edits. Events rtok has no plugin for stay uninstalled. Verify: the targeted nextest filter (qwen unit tests, `agents_doc`, `host_docs`, `agents_list_text`/`json`, `readme_tables_match_support`, `default_toml_is_the_defaults`, `qwen_keeps`) passed. `just check` not run. `qwen` is not on PATH here, so no live `--dry-run`.
 
 ### T413.3. `rtok agents install droid` — Factory Droid
 
@@ -1979,11 +1983,15 @@ Check: the T413 per-host check (step 5) for this host.
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: primary Factory docs for the MCP entry and any hook file; write only documented keys; `src/agents/droid/` plus the host matrix.
+
 ### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 
 Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: vendor docs for IDE and CLI config paths; one variant per documented file; share a helper if the JSON matches an existing host.
 
 ### T413.5. `rtok agents install amp` — Amp
 
@@ -1991,11 +1999,15 @@ Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plug
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
+
 ### T413.6. `rtok agents install goose` — Goose
 
 Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Block's docs for the MCP config file; hooks only if a payload is documented. MCP-only host via the existing stdio or local helper, whichever the file matches.
 
 ### T413.7. `rtok agents install continue` — Continue
 
@@ -2003,11 +2015,15 @@ VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per docu
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
+
 ### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 
 IDE extension and Auggie CLI. MCP and hooks if documented.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Augment and Auggie docs for MCP and hooks; skip a surface whose file is not documented.
 
 ### T413.9. `rtok agents install junie` — JetBrains Junie
 
@@ -2015,11 +2031,15 @@ Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
+
 ### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 
 Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: AWS docs first. If the CLI is the Kiro CLI, close into T413.4 with the citation. Otherwise an MCP installer for the documented file only.
 
 ### T413.11. `rtok agents install crush` — Crush
 
@@ -2027,11 +2047,15 @@ Crush (Charm), open-source terminal agent. MCP and any documented hooks.
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Charm's docs and the Crush repo for the MCP config; hooks only with a documented payload.
+
 ### T413.12. `rtok agents install warp` — Warp
 
 Warp terminal's agent. MCP and rules if they live in a file setup can edit; a setting stored only in the app's database is out of scope.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Warp docs for a file-based MCP or rules path. If the setting lives only in the app database, close with that finding and no installer writes.
 
 ### T413.13. `rtok agents install trae` — Trae
 
@@ -2039,17 +2063,23 @@ Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
+
 ### T413.14. `rtok agents install openhands` — OpenHands
 
 OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
+
 ### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 
 DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: re-read configuration.html and write only the keys it names. Skills and memory stay out unless that page says setup may edit them.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 

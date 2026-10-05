@@ -65,6 +65,7 @@ See [`src/agents/claude/README.md`](../src/agents/claude/README.md) and [`docs/a
 | [`cursor/`](cursor/) | Cursor | hooks + launchers (no MCP: T275) |
 | [`devin/`](devin/) | Devin (CLI + Desktop) | `.devin-plugin` manifest + root `hooks.json` + MCP |
 | [`gemini/`](gemini/) | Gemini CLI | `gemini-extension.json` (embedded MCP) + `hooks/hooks.json` |
+| [`qwen/`](qwen/) | Qwen Code | `qwen-extension.json` + `hooks/hooks.json` (no MCP: settings.json owns it) |
 | [`grok/`](grok/) | Grok Build | Claude-layout plugin, hooks only (no MCP: T275) |
 | [`kimi/`](kimi/) | Kimi Code | single `kimi.plugin.json` (no MCP: T275) |
 | [`opencode/`](opencode/) | OpenCode (+ Kilo) | `rtok.ts` plugin |

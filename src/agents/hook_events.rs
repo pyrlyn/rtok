@@ -109,6 +109,19 @@ pub const HOOK_EVENTS: &[HookEvent] = &[
     row("gemini", "SessionStart", "SessionStart", true),
     row("gemini", "SessionEnd", "SessionEnd", true),
     row("gemini", "PreCompress", "PreCompact", true),
+    // Qwen documents Claude's event names and accepts Bash/Read/Skill as exact
+    // tool aliases; `*` matches every tool. Gemini's BeforeTool rows would be
+    // skipped as an invalid event name (research.md §32.2).
+    matched("qwen", "PreToolUse", "PreToolUse", "Bash", true),
+    matched("qwen", "PreToolUse", "PreToolUse", "Read", true),
+    matched("qwen", "PreToolUse", "PreToolUse", "Skill", true),
+    matched("qwen", "PostToolUse", "PostToolUse", "*", true),
+    row("qwen", "UserPromptSubmit", "UserPromptSubmit", true),
+    row("qwen", "SessionStart", "SessionStart", true),
+    row("qwen", "PreCompact", "PreCompact", true),
+    row("qwen", "PostCompact", "PostCompact", true),
+    row("qwen", "SessionEnd", "SessionEnd", true),
+    row("qwen", "SubagentStart", "SubagentStart", true),
     row("grok", "PreToolUse", "PreToolUse", false),
     row("grok", "PostToolUse", "PostToolUse", false),
     row("grok", "UserPromptSubmit", "UserPromptSubmit", false),
