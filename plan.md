@@ -123,6 +123,14 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.13 | todo | P3 | 2 | 0% | |
 | T413.14 | todo | P3 | 2 | 0% | |
 | T413.15 | todo | P3 | 2 | 0% | |
+| T414 | in progress | P1 | 4 | 0% | Claude Code / opus-5.5 |
+| T414.1 | in progress | P1 | 3 | 0% | Claude Code / opus-5.5 |
+| T414.2 | todo | P1 | 3 | 0% | |
+| T414.3 | todo | P2 | 3 | 0% | |
+| T414.4 | todo | P2 | 3 | 0% | |
+| T414.5 | todo | P2 | 3 | 0% | |
+| T414.6 | todo | P2 | 3 | 0% | |
+| T414.7 | todo | P3 | 1 | 0% | |
 
 
 
@@ -2035,6 +2043,63 @@ Check: the T413 per-host check (step 5) for this host.
 DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
 
 Check: the T413 per-host check (step 5) for this host.
+
+### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
+
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes.
+
+Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
+
+Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
+
+### T414.1. The SPA reads tokens, fonts, icons and logos from `brand/`; drop the copies in `web/`
+
+No visual change: the brand values equal today's (`brand/README.md` "Checked against the product").
+
+Plan:
+1. Install: `just spa-install` also runs `npm ci --prefix brand`; the CI job that builds `web/` does the same (find it in `.github/workflows/ci.yml`).
+2. `web/vite.config.ts`: alias `@pyrlyn/brand` to `brand/node_modules/@pyrlyn/brand` (one pin, the one in `brand/package.json`) and `@brand` to `brand/`; allow both in `server.fs.allow`.
+3. `web/src/styles/app.css`: import `@brand/dist/tokens.css` and `@pyrlyn/brand/base/fonts.css`; the `@theme` block maps Tailwind names onto the `--pyr-*` roles and the `--rtok-*` extras instead of the flat `--rtok-*` copy. Delete `web/src/styles/tokens.css` and `fonts.css`; keep `theme-init.js` working with `data-theme`.
+4. `web/src/ui/Icon.tsx`: glob the base UI icons and `brand/icons/ui/`; `Shell.tsx` logo from `brand/logo/rtok-mark.svg`; `index.html` favicon from `brand/logo/rtok-favicon.svg` through Vite; the offline state from `brand/illustrations/offline.svg`. Delete `web/assets/{fonts,icons,logo.svg,offline.svg}`.
+5. A unit test fails when `web/` carries a file byte-identical to one in `brand/` or the base package.
+
+Check: `just spa-build`, `just spa-test`, `just spa-stories` and `just spa-e2e` green; `just check` green; Overview screenshots (dark and light) before and after match.
+
+### T414.2. Mockup: shell and Overview on the brandbook, in Storybook, for approval
+
+Restyle the shell (sidebar, header, theme switch) and the Overview page per `brand/DESIGN.md` and the base `DESIGN.md` it inherits (type scale, spacing, radii, elevation, motion, focus ring). Stories only; the running app keeps today's look until the creator approves.
+
+Check: dark and light screenshots of the stories sent to the creator, and the creator's approval quoted in this card.
+
+### T414.3. Restyle the `web/src/ui` components to the approved mockup
+
+Chip, DataTable, Kpi, Marks, Panel, Pill, Search, Sparkline, Switch: brand roles only (no hex literals), stories updated.
+
+Check: `just spa-stories` (axe) green; a grep over `web/src` finds no hex colour literal outside tests and fixtures.
+
+### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
+
+Apply the approved shell and components; chart series colours come from the brand roles.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
+
+### T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
+
+As T414.4 for these pages.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
+
+### T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
+
+As T414.4; the Graph 3D view keeps its renderer and takes its colours from the roles.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page and state.
+
+### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
+
+Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
+
+Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
 ## Reference
 
