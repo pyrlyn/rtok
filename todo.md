@@ -118,9 +118,15 @@
 - T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.2. Mockup: shell and Overview on the brandbook, in Storybook, for approval
 - T414.3. Restyle the `web/src/ui` components to the approved mockup
 - T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
 - T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
+- T414.8. Sidebar groups and a collapsible sidebar
+- T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
+- T414.10. Table filters and sort in the URL
+- T414.11. Clickable KPIs and panels open the filtered page
+- T414.12. Live status: snapshot age and pause
+- T414.13. Δtok savings trend on Overview and Stats
+- T414.14. CSV and JSON export of tables
