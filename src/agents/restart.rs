@@ -520,6 +520,7 @@ mod tests {
             "Kilo Code for VS Code" => "Visual Studio Code",
             "Kimi Code Desktop" => "Kimi Code",
             "OpenCode Desktop" => "OpenCode",
+            "Roo Code" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
             "Windsurf" => "Windsurf",
