@@ -5,7 +5,9 @@
 import { Empty } from "../states";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { orUnknown } from "../ui/Unknown";
 import { fmt } from "./format";
+import { why } from "./missing";
 import { Kv, OtherLines, TextPage, WithSnapshot } from "./parts";
 import {
     humanSecs,
@@ -83,9 +85,9 @@ function Service({ service: s }: { service: ServiceRow }) {
             </div>
             <Kv
                 rows={[
-                    ["pid", s.pid ?? "-"],
+                    ["pid", orUnknown(s.pid, why.servicePid, "none")],
                     ["uptime", humanSecs(s.uptimeSecs)],
-                    ["log", s.log ?? "-"],
+                    ["log", orUnknown(s.log, why.serviceLog)],
                 ]}
             />
             <p className="text-2xs text-fg-subtle">
@@ -103,7 +105,7 @@ function Otel({ otel, lastFlush }: { otel: OtelView; lastFlush: string | null })
     ];
     return (
         <>
-            <Kv rows={[["endpoint", otel.endpoint ?? "-"]]} />
+            <Kv rows={[["endpoint", orUnknown(otel.endpoint, why.otelEndpoint, "not set")]]} />
             <div className="grid grid-cols-3 gap-2">
                 {tiles.map(([label, mark, pending]) => (
                     <div key={label} className="rounded-md bg-surface-2 p-2.5">

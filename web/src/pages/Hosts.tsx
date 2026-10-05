@@ -5,6 +5,8 @@
 import { Empty, Loading } from "../states";
 import { Panel } from "../ui/Panel";
 import { Pill, type PillTone } from "../ui/Pill";
+import { Unknown, orUnknown } from "../ui/Unknown";
+import { why } from "./missing";
 import { Kv, OtherLines, TextPage, WithSnapshot } from "./parts";
 import { parseHosts, type HostBlock, type HostsView } from "./text";
 
@@ -82,16 +84,18 @@ function Host({ block: b }: { block: HostBlock }) {
             </Pill>
             <Kv
                 rows={[
-                    ["app", b.app ?? "-"],
+                    ["app", orUnknown(b.app, why.hostApp, "not found")],
                     [
                         "config",
-                        b.config.length === 0
-                            ? "-"
-                            : b.config.map((c) => (
-                                  <span key={c} className="block break-all">
-                                      {c}
-                                  </span>
-                              )),
+                        b.config.length === 0 ? (
+                            <Unknown label="none" why={why.hostConfig} />
+                        ) : (
+                            b.config.map((c) => (
+                                <span key={c} className="block break-all">
+                                    {c}
+                                </span>
+                            ))
+                        ),
                     ],
                 ]}
             />
