@@ -315,9 +315,31 @@ const BAR_WIDTH: usize = 16;
 /// the row a toggle would hit, and a status line below — the keys, and what the last
 /// toggle did. The toggle itself is [`App`]'s; this only renders what it left behind.
 fn render_plugins(frame: &mut Frame, app: &App, area: Rect) {
-    let [table, status] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
+    let [table, fields, status] = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(area);
     frame.render_widget(plugins_table(app), table);
+    frame.render_widget(Paragraph::new(plugin_fields_line(app)), fields);
     frame.render_widget(Paragraph::new(plugins_status_line(app)), status);
+}
+
+/// The cursor row's page fields, `key value` pairs on one line (T419): the same pairs the
+/// web Plugins page lists, so a non-saving signal such as checkpoint prompt quality is
+/// readable here without a detail pane.
+fn plugin_fields_line(app: &App) -> Line<'static> {
+    let Some(plugin) = app.snapshot().plugins.get(app.plugin_cursor()) else {
+        return Line::default();
+    };
+    let text = plugin
+        .fields
+        .iter()
+        .map(|(k, v)| format!("{k} {v}"))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    Line::styled(text, theme::muted())
 }
 
 /// One row per catalogue plugin, `▸` on the cursor row, the `on` column saying what the
@@ -1109,6 +1131,27 @@ mod tests {
         );
         app.key(KeyCode::Down, KeyModifiers::NONE);
         assert!(screen(&app).contains("▸ cmd"), "the cursor follows Down");
+    }
+
+    /// T419: the memory row's fields line shows the checkpoint prompt counts the store
+    /// holds, read through the same model query as the web Plugins page.
+    #[test]
+    fn plugins_tab_shows_the_cursor_rows_checkpoint_counts() {
+        let (cfg, store) = fresh_store("plugin-fields");
+        store
+            .kv_set(
+                &crate::plugin::plugin_state_key("memory", "checkpoint:s1"),
+                r#"{"typed":4,"skipped":9}"#,
+            )
+            .unwrap();
+        drop(store);
+        let app = crate::tui::app::tests::cursor_on_plugin(&cfg, "memory");
+        let screen = screen(&app);
+        assert!(screen.contains("checkpoint prompts typed 4"), "{screen}");
+        assert!(
+            screen.contains("checkpoint host records skipped 9"),
+            "{screen}"
+        );
     }
 
     /// T15.4: a toggle writes `<home>/config.toml` through `config set`'s writer and

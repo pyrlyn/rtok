@@ -43,6 +43,58 @@ fn memory_page_carries_store_counts() {
     );
 }
 
+/// T419: checkpoint prompt counts written through the host reach the memory page summed
+/// per session, and leave the plugin's savings total exactly as it was.
+#[test]
+fn memory_page_sums_checkpoint_counts_without_touching_savings() {
+    use rtok_plugin_sdk::Host;
+    let dir = home("counts");
+    let cfg = Config::load_from(&dir).expect("config");
+    let cx = Runtime::open(cfg.clone(), "mem-counts").unwrap();
+    cx.record(&Measurement {
+        plugin: "memory",
+        kind: "handoff",
+        before_bytes: 40,
+        after_bytes: 10,
+        est_before: 10,
+        est_after: 3,
+        ref_id: None,
+        call_id: None,
+    })
+    .unwrap();
+    let memory = || {
+        model::Model::new(&cfg, Some(&cx.store))
+            .plugins()
+            .into_iter()
+            .find(|p| p.id == "memory")
+            .unwrap()
+    };
+    let field = |p: &model::PluginPage, key: &str| {
+        p.fields
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| panic!("no {key} in {:?}", p.fields))
+    };
+    let before = memory();
+    assert_eq!(field(&before, "checkpoint prompts typed"), "0");
+
+    cx.plugin_state_set("memory", "checkpoint:s1", r#"{"typed":2,"skipped":1}"#)
+        .unwrap();
+    cx.plugin_state_set("memory", "session:s1", r#"{"typed":3,"skipped":4}"#)
+        .unwrap();
+    cx.plugin_state_set("memory", "session:s2", r#"{"typed":1,"skipped":2}"#)
+        .unwrap();
+    let after = memory();
+    assert_eq!(field(&after, "checkpoint prompts typed"), "4");
+    assert_eq!(field(&after, "checkpoint host records skipped"), "6");
+    assert_eq!(
+        serde_json::to_value(before.stats).unwrap(),
+        serde_json::to_value(after.stats).unwrap(),
+        "the counts are not savings"
+    );
+}
+
 #[test]
 fn memory_status_json_matches_model_type() {
     let dir = home("json");

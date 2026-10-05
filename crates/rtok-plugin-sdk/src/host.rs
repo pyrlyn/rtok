@@ -92,6 +92,14 @@ pub trait Host: Send + Sync {
     /// numbers: what is not recorded here did not happen.
     fn record(&self, m: &Measurement) -> Result<()>;
 
+    /// Keep one small value about the plugin's own work under `key` in `plugin`'s namespace;
+    /// a repeat key replaces it. For signals that are not savings (T419: checkpoint prompt
+    /// counts) and so must never reach [`Host::record`]'s numbers. Default `Ok(())`: a host
+    /// without a store drops the value and the plugin still runs.
+    fn plugin_state_set(&self, _plugin: &str, _key: &str, _value: &str) -> Result<()> {
+        Ok(())
+    }
+
     /// Open a `calls` row for one unit of work on `surface`, returning its id.
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32>;
 
