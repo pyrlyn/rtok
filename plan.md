@@ -137,6 +137,11 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
+| T416 | in progress | P1 | 3 | 5% | Claude Code / claude-opus-5-5 |
+| T416.1 | todo | P1 | 2 | 0% | |
+| T416.2 | todo | P1 | 3 | 0% | |
+| T416.3 | todo | P2 | 3 | 0% | |
+| T416.4 | todo | P2 | 3 | 0% | |
 
 
 
@@ -2135,6 +2140,40 @@ Check: unit tests for the CSV writer (quoting, escaping, empty table); a story a
 Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
+
+### T416. Shared `change-preview` crate for dry-run output
+
+Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
+
+The crate renders two kinds of change. A file edit (path, before, after) is a unified diff with the `a/` and `b/` headers `render::unified_diff` prints today, or in stat mode a `path | 7 +++--` line; a removal (path, bytes, files) is `- path  12.1 GB  48 213 files`. Both modes end with a totals line: `3 files changed, 12 insertions(+), 4 deletions(-)` for edits, `15 paths, 1 204 311 files, -106.2 GB` for removals. Colour goes through owo-colors' `if_supports_color` exactly as `render::paint` does; byte sizes through the crate's `human_bytes` (the same binary units as `info::human_bytes`); everything derives `Serialize` for `--json`.
+
+Plan: in `packages/crates`, add the missing project files (`AGENTS.md`, `plan.md`, `todo.md`, `done.md`, `roadmap.md`, `ideas.md`, `toolchain.md`) and the crate as a workspace member, with unit tests for both modes, the totals and the colour switch; one PR there; release-plz publishes on merge.
+
+Check: `cargo test` and `cargo clippy -- -D warnings` green in `packages/crates`; the crate is on crates.io.
+
+### T416.1. rtok renders previews through `change-preview`
+
+Replace `render::unified_diff`, `render::file_diff`, `render::paint` and `info::human_bytes` with the crate (call sites: `config/mod.rs`, `config/validate.rs`, `plugins/memory/sync.rs`, `plugins/read/cache.rs`, `doctor/fix.rs`, `agents/mod.rs`, `agents/junk.rs`, `worktree/list.rs`, `worktree/clean.rs`). No output changes: the trycmd and installer tests stay byte-identical. Drop `similar` from `Cargo.toml` if nothing else uses it.
+
+Check: `just check` green with no expected-output file touched.
+
+### T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
+
+`worktree clean`, `worktree gc` and `agents junk clear` keep dry run as the default and gain `--dry-run` (the same thing, said explicitly; conflicts with `--yes`) and `--stat`. The default preview is one `- path  size  N files` line per path plus the totals line; `--stat` prints only the totals. `junk::disk_usage_until` counts files next to bytes; `--json` gains `files`.
+
+Check: trycmd cases for each command in default, `--stat`, `--dry-run --yes` (rejected) and `--json`; `just check` green.
+
+### T416.3. `--stat` on the commands that show a diff
+
+`config init`, `config set`, `memory sync`, `agents install`, `agents uninstall`, `agents update` and `doctor --fix` gain `--stat`: the per-file stat lines and the totals line instead of the diff. The default `--dry-run` diff ends with the same totals line.
+
+Check: trycmd cases for `--dry-run` and `--dry-run --stat` on `config set` and one installer; `surface_parity` and `config_coverage` green; `just check` green.
+
+### T416.4. `--dry-run` for the destructive commands without a preview
+
+`worktree remove` (the worktree path, its branch and its size and file count), `completions install` and `completions uninstall` (the file diff), `graph projects remove` and `graph projects unlink` (the rows that would go). Out of scope, because they are easy to undo or change no files: `memory pin/unpin/retire/revise`, `agents send/status`, `graph projects add/select/link`, `demon *`, `otel flush`.
+
+Check: a test per command that the dry run changes nothing and prints the preview; `just check` green.
 
 ## Reference
 

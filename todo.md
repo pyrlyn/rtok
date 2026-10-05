@@ -131,3 +131,8 @@
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
+- T416. Shared `change-preview` crate for dry-run output
+- T416.1. rtok renders previews through `change-preview`
+- T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
+- T416.3. `--stat` on the commands that show a diff
+- T416.4. `--dry-run` for the destructive commands without a preview
