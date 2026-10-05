@@ -2,50 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-export function MiniBars({
-    values,
-    label,
-    width = 96,
-    height = 28,
-    className = "fill-accent-fg",
-}: {
-    values: readonly number[];
-    label: string;
-    width?: number;
-    height?: number;
-    className?: string;
-}) {
-    if (!values.length) return null;
-    const max = Math.max(...values, 1);
-    const bar = width / values.length;
-    return (
-        <svg
-            viewBox={`0 0 ${width} ${height}`}
-            width={width}
-            height={height}
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={label}
-        >
-            {values.map((v, i) => {
-                const h = (v / max) * height;
-                return (
-                    <rect
-                        // Bars are positional: the series has no ids and never reorders.
-                        key={i}
-                        x={i * bar + 1}
-                        y={height - h}
-                        width={Math.max(1, bar - 2)}
-                        height={h}
-                        rx="1"
-                        className={className}
-                        opacity={0.45 + 0.55 * (v / max)}
-                    />
-                );
-            })}
-        </svg>
-    );
-}
+import { Mini, type MiniProps } from "./Sparkline";
+
+export const MiniBars = (p: MiniProps) => <Mini kind="bars" {...p} />;
 
 // One dot per plugin, lit when enabled (echoes brand/logo/rtok-mark.svg); disabled dots are coral so
 // the state does not hang on brightness alone.
@@ -69,6 +28,27 @@ export function Bitset({
                     key={p.id}
                     title={`${p.id}: ${p.enabled ? "enabled" : "disabled"}`}
                     className={`size-2 rounded-full ${tone(p)}`}
+                />
+            ))}
+        </div>
+    );
+}
+
+// The mark's 4×4 bitset budget as data: each cell is 1/16 of the estimated tokens, coral cells are
+// the measured cut (Δ), cyan the context kept. Cuts fill from the last cell so the grid reads like
+// the mark, and the label carries the number for anyone who cannot see the colours.
+export function BudgetGrid({ cut, label }: { cut: number; label: string }) {
+    const cells = Number.isFinite(cut) ? Math.round(Math.min(1, Math.max(0, cut)) * 16) : 0;
+    return (
+        <div
+            role="img"
+            aria-label={label}
+            className="grid size-24 shrink-0 grid-cols-4 gap-1.5 rounded-lg bg-mark p-2.5"
+        >
+            {Array.from({ length: 16 }, (_, i) => (
+                <span
+                    key={i}
+                    className={`rounded-full ${i >= 16 - cells ? "bg-brand-coral" : "bg-brand-cyan"}`}
                 />
             ))}
         </div>

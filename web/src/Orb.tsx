@@ -17,7 +17,7 @@ export function Orb() {
                 data-testid="orb-fallback"
                 hidden={webgl}
                 aria-hidden="true"
-                className="pointer-events-none fixed inset-0 -z-10 [opacity:var(--orb-opacity)] bg-[radial-gradient(40%_50%_at_78%_18%,rgb(var(--rtok-accent-rgb)/.16),transparent_70%),radial-gradient(30%_40%_at_88%_30%,rgb(var(--rtok-delta-rgb)/.08),transparent_70%)]"
+                className="pointer-events-none fixed inset-0 -z-10 [opacity:var(--orb-opacity)] bg-[radial-gradient(40%_50%_at_78%_18%,rgb(var(--pyr-accent-rgb)/.16),transparent_70%),radial-gradient(30%_40%_at_88%_30%,rgb(var(--pyr-delta-rgb)/.08),transparent_70%)]"
             />
             <canvas
                 ref={canvas}

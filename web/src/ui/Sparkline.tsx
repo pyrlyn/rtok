@@ -2,57 +2,45 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-// Inline SVG sparkline.
-export function Sparkline({
+import { useMemo } from "react";
+import { Chart } from "../charts/Chart";
+import type { ChartSpec } from "../charts/spec";
+
+export interface MiniProps {
+    values: readonly number[];
+    /** Accessible name of the whole chart. */
+    label: string;
+    /** The series name in the tooltip; defaults to `label`. */
+    name?: string;
+    /** Tooltip heading per point; defaults to the point's position. */
+    x?: readonly string[];
+    sync?: string;
+    format?: (v: number) => string;
+}
+
+/** A 28px chart for KPI cards: a line (`Sparkline`) or bars (`MiniBars`). */
+export function Mini({
+    kind,
     values,
     label,
-    width = 96,
-    height = 28,
-    area = true,
-}: {
-    values: readonly number[];
-    label: string;
-    width?: number;
-    height?: number;
-    area?: boolean;
-}) {
-    if (values.length < 2) return <svg width={width} height={height} aria-hidden="true" />;
-    const max = Math.max(...values);
-    const min = Math.min(...values);
-    const range = max - min || 1;
-    const line = values
-        .map((v, i) => {
-            const x = (i / (values.length - 1)) * width;
-            const y = height - 2 - ((v - min) / range) * (height - 4);
-            return `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
-        })
-        .join("");
-    return (
-        <svg
-            viewBox={`0 0 ${width} ${height}`}
-            width={width}
-            height={height}
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={label}
-            className="overflow-visible text-accent-fg"
-        >
-            {area && (
-                <path
-                    d={`${line}L${width} ${height}L0 ${height}Z`}
-                    fill="currentColor"
-                    opacity="0.12"
-                />
-            )}
-            <path
-                d={line}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-            />
-        </svg>
+    name,
+    x,
+    sync,
+    format,
+}: MiniProps & { kind: ChartSpec["kind"] }) {
+    const spec = useMemo<ChartSpec>(
+        () => ({
+            kind,
+            label,
+            sync,
+            x: x ?? values.map((_, i) => `#${i + 1}`),
+            series: [{ id: "v", label: name ?? label, values, tone: "accent" }],
+        }),
+        [kind, label, sync, x, values, name],
     );
+    if (values.length < (kind === "line" ? 2 : 1))
+        return <div aria-hidden="true" className="h-7" />;
+    return <Chart spec={spec} format={format} className="h-7 w-full" />;
 }
+
+export const Sparkline = (p: MiniProps) => <Mini kind="line" {...p} />;

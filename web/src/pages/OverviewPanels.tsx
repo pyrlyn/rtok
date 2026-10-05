@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
+import { swatch } from "../charts/Chart";
 import { Empty } from "../states";
 import { Panel } from "../ui/Panel";
 import { SERIES, CallsChart } from "./CallsChart";
@@ -27,7 +28,7 @@ export function CallsPanel({ o, calls }: { o: Overview; calls: number }) {
                             <li key={s} className="flex items-center gap-1.5">
                                 <span
                                     aria-hidden="true"
-                                    className={`size-2.5 rounded-sm ${SERIES[s].swatch}`}
+                                    className={`size-2.5 rounded-sm ${swatch[SERIES[s]]}`}
                                 />
                                 {s} {o.bySurface[s].n}
                             </li>

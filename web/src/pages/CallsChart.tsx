@@ -2,19 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { focusRing } from "../ui/cx";
-import { hm } from "./format";
+import { useMemo } from "react";
+import { Chart } from "../charts/Chart";
+import type { ChartSpec, Tone } from "../charts/spec";
+import { hm, hms } from "./format";
 import { SURFACES, type Bucket, type Surface } from "./model";
 
-const W = 720;
-const H = 180;
-const PAD = { l: 32, r: 8, t: 8, b: 22 };
+export const SERIES: Record<Surface, Tone> = { hook: "accent", mcp: "accent-soft", proxy: "muted" };
 
-export const SERIES: Record<Surface, { swatch: string; fill: string }> = {
-    hook: { swatch: "bg-accent-fg", fill: "fill-accent-fg" },
-    mcp: { swatch: "bg-accent-fg/50", fill: "fill-accent-fg/50" },
-    proxy: { swatch: "bg-fg-muted/75", fill: "fill-fg-muted/75" },
-};
+/** Charts on the calls window share this sync group (T414.15). */
+export const CALLS_SYNC = "calls";
 
 export function CallsChart({
     buckets,
@@ -25,92 +22,34 @@ export function CallsChart({
     step: number;
     failed: number;
 }) {
-    const total = (b: Bucket) => b.hook + b.mcp + b.proxy;
-    const max = Math.max(1, ...buckets.map(total));
-    const top = Math.ceil(max / 4) * 4;
-    const inner = { w: W - PAD.l - PAD.r, h: H - PAD.t - PAD.b };
-    const bar = inner.w / buckets.length;
-    const y = (v: number) => PAD.t + inner.h - (v / top) * inner.h;
-    const all = buckets.reduce((s, b) => s + total(b), 0);
+    const spec = useMemo<ChartSpec>(() => {
+        const all = buckets.reduce((s, b) => s + b.hook + b.mcp + b.proxy, 0);
+        return {
+            kind: "stacked-bars",
+            axes: true,
+            sync: CALLS_SYNC,
+            label: `Calls over time: ${all} calls in ${buckets.length} buckets of ${Math.max(1, Math.round(step / 60))} minutes, ${failed} failed`,
+            x: buckets.map((b) => hm(b.t)),
+            titles: buckets.map((b) => `${hms(b.t)} – ${hms(b.t + step)}`),
+            series: SURFACES.map((s) => ({
+                id: s,
+                label: s,
+                values: buckets.map((b) => b[s]),
+                tone: SERIES[s],
+            })),
+            dots: {
+                id: "failed",
+                label: "failed",
+                values: buckets.map((b) => b.err),
+                tone: "delta",
+            },
+        };
+    }, [buckets, step, failed]);
+    // The 9px axis text is unreadable once the chart shrinks to a phone, so it scrolls instead; the
+    // padding keeps the focus ring inside the scroll box, which would clip it.
     return (
-        // The 9px axis text is unreadable once the chart shrinks to a phone, so it scrolls instead.
-        <div tabIndex={0} className={`overflow-x-auto rounded-md ${focusRing}`}>
-            <svg
-                viewBox={`0 0 ${W} ${H}`}
-                className="h-auto w-full min-w-[520px]"
-                role="img"
-                aria-label={`Calls over time: ${all} calls in ${buckets.length} buckets of ${Math.max(1, Math.round(step / 60))} minutes, ${failed} failed`}
-            >
-                {[0, 1, 2, 3, 4].map((i) => {
-                    const v = (top / 4) * i;
-                    return (
-                        <g key={i}>
-                            <line
-                                x1={PAD.l}
-                                x2={W - PAD.r}
-                                y1={y(v)}
-                                y2={y(v)}
-                                className="stroke-border"
-                                strokeDasharray={i ? "2 3" : undefined}
-                            />
-                            <text
-                                x={PAD.l - 6}
-                                y={y(v) + 3}
-                                textAnchor="end"
-                                fontSize="9"
-                                className="fill-fg-muted"
-                            >
-                                {v}
-                            </text>
-                        </g>
-                    );
-                })}
-                {buckets.map((b, i) => {
-                    let acc = 0;
-                    return (
-                        <g key={b.t}>
-                            {SURFACES.map((s) => {
-                                const v = b[s];
-                                if (!v) return null;
-                                const rect = (
-                                    <rect
-                                        key={s}
-                                        x={PAD.l + i * bar + 2}
-                                        y={y(acc + v)}
-                                        width={bar - 4}
-                                        height={y(acc) - y(acc + v)}
-                                        className={SERIES[s].fill}
-                                    >
-                                        <title>{`${hm(b.t)} · ${s} ${v}`}</title>
-                                    </rect>
-                                );
-                                acc += v;
-                                return rect;
-                            })}
-                            {b.err > 0 && (
-                                <circle
-                                    cx={PAD.l + i * bar + bar / 2}
-                                    cy={y(acc) - 6}
-                                    r="2.5"
-                                    className="fill-delta-fg"
-                                >
-                                    <title>{`${b.err} failed`}</title>
-                                </circle>
-                            )}
-                            {i % 4 === 0 && (
-                                <text
-                                    x={PAD.l + i * bar}
-                                    y={H - 6}
-                                    fontSize="9"
-                                    className="fill-fg-muted"
-                                >
-                                    {hm(b.t)}
-                                </text>
-                            )}
-                        </g>
-                    );
-                })}
-            </svg>
+        <div className="-m-1 overflow-x-auto p-1">
+            <Chart spec={spec} className="h-44 w-full min-w-[520px]" />
         </div>
     );
 }
