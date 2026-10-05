@@ -5912,6 +5912,12 @@ Check: `just check`.
 
 Result: `src/worktree/whoami.rs`, `WorktreeCmd::Whoami` in `src/cli.rs`; gates in `tests/surface_parity.rs` (EXEMPT, JSON reader), `docs/config.md`, `README.md`, `help-subcommands.trycmd` and the completion goldens; `tests/worktree.rs` `whoami_shows_the_root_and_only_the_caller_s_worktrees` (a locked and a claimed worktree of the caller, not another agent's claim; `here` follows the cwd; text form). `skills/worktrees/SKILL.md` went from 342 to 206 words; the creator's `~/.claude/skills/worktrees/SKILL.md` carries the same text. `just check`: 2440 passed.
 
+### T423. Worktrees skill: a `whoami` fallback for rtok 0.15.1 and older
+
+The skill from T411 starts with `rtok worktree whoami`, which reached `main` after v0.15.1, so an agent on the released binary hit "unrecognized subcommand 'whoami'" at its first step. Done: the skill names the fallback, `rtok agents whoami` for the id and `rtok worktree list` for the rest, until a release carries T411.
+
+Check: `cargo nextest run --test skill`.
+
 ## T159 — Claude Code `WorktreeCreate`/`WorktreeRemove` hooks route through `rtok worktree`
 
 Depends on T156 (the real payloads), T158 (create) and T153 (remove). A skill is advice an agent may skip; the host's own worktree hooks are the only place where the rules cannot be skipped: `claude --worktree`, the desktop app and sub-agent `isolation: worktree` all create worktrees without asking the agent, which is where the `agent-<hex>` directories and reason-less locks come from (`research.md` §18.1, §18.3).
