@@ -55,10 +55,16 @@ pub fn default_base(repo: &Path) -> String {
     .unwrap_or_else(|| "origin/main".into())
 }
 
+/// The tree `rev` points at.
+pub fn tree(repo: &Path, rev: &str) -> Result<String> {
+    stdout(repo, &["rev-parse", &format!("{rev}^{{tree}}")])
+}
+
 /// Squash-aware: `rev` is merged when merging it into `base` would produce exactly
 /// `base`'s tree. `git branch --merged` cannot see this — a squash merge leaves the
-/// branch's own commits outside the base's history.
-pub fn is_merged(repo: &Path, base: &str, rev: &str) -> Result<bool> {
+/// branch's own commits outside the base's history. `base_tree` is [`tree`] of `base`,
+/// resolved once for a whole inventory.
+pub fn is_merged(repo: &Path, base: &str, base_tree: Option<&str>, rev: &str) -> Result<bool> {
     let merge = git(repo, &["merge-tree", "--write-tree", base, rev])?;
     match merge.status.code() {
         Some(0) => {}
@@ -70,8 +76,8 @@ pub fn is_merged(repo: &Path, base: &str, rev: &str) -> Result<bool> {
         ),
     }
     let merged_tree = String::from_utf8_lossy(&merge.stdout);
-    let base_tree = stdout(repo, &["rev-parse", &format!("{base}^{{tree}}")])?;
-    Ok(merged_tree.lines().next() == Some(base_tree.as_str()))
+    let base_tree = base_tree.with_context(|| format!("no tree for {base}"))?;
+    Ok(merged_tree.lines().next() == Some(base_tree))
 }
 
 /// The second merged signal: the branch's whole diff as one commit already has a
