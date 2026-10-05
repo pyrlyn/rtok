@@ -5912,6 +5912,12 @@ Check: `just check`.
 
 Result: `src/worktree/whoami.rs`, `WorktreeCmd::Whoami` in `src/cli.rs`; gates in `tests/surface_parity.rs` (EXEMPT, JSON reader), `docs/config.md`, `README.md`, `help-subcommands.trycmd` and the completion goldens; `tests/worktree.rs` `whoami_shows_the_root_and_only_the_caller_s_worktrees` (a locked and a claimed worktree of the caller, not another agent's claim; `here` follows the cwd; text form). `skills/worktrees/SKILL.md` went from 342 to 206 words; the creator's `~/.claude/skills/worktrees/SKILL.md` carries the same text. `just check`: 2440 passed.
 
+### T423. Worktrees skill: a `whoami` fallback for rtok 0.15.1 and older
+
+The skill from T411 starts with `rtok worktree whoami`, which reached `main` after v0.15.1, so an agent on the released binary hit "unrecognized subcommand 'whoami'" at its first step. Done: the skill names the fallback, `rtok agents whoami` for the id and `rtok worktree list` for the rest, until a release carries T411.
+
+Check: `cargo nextest run --test skill`.
+
 ## T159 — Claude Code `WorktreeCreate`/`WorktreeRemove` hooks route through `rtok worktree`
 
 Depends on T156 (the real payloads), T158 (create) and T153 (remove). A skill is advice an agent may skip; the host's own worktree hooks are the only place where the rules cannot be skipped: `claude --worktree`, the desktop app and sub-agent `isolation: worktree` all create worktrees without asking the agent, which is where the `agent-<hex>` directories and reason-less locks come from (`research.md` §18.1, §18.3).
@@ -7003,6 +7009,19 @@ Do (2026-09-24): `handle` in `src/proxy/mod.rs` moves request shaping (`record`,
 
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
+
+### T421. `/health` latency test survives runner load
+
+`health_stays_fast_while_a_large_request_is_recorded` (`tests/proxy.rs`, T205) asserts every `/health` poll returns in under 250 ms while a 48 MB `compress`-mode request is shaped. On a loaded `macos-latest` runner it took 301.8 ms (run 37334858645, PR #749, which only touched `web/`); the same code passed on the previous run. Done: the bound scales with how slow the runner is, so load alone cannot fail it, and the test still fails when `/health` waits on the recording (the T205 regression it guards).
+
+Plan: measure on the same runtime how long the big request takes to reach upstream; a T205 regression makes one `/health` poll wait for the whole synchronous shaping, i.e. most of that window, while a healthy proxy answers in a small fraction of it. Assert each poll stays under a fraction of the window instead of a fixed 250 ms. Only `tests/proxy.rs` changes.
+
+Check: the test run many times under artificial CPU load passes every time; with `spawn_blocking` replaced by an inline call in `src/proxy/mod.rs` (not committed) it fails every time; `just check`.
+
+Result (2026-10-05, Claude Code / opus-5.5): the loop keeps the slowest `/health` poll and the window from spawning the big request to upstream seeing it, and asserts `slowest < window * 2 / 3`; the failure message prints both and the poll count. Nothing in `src/` changed. Evidence, debug build, 16-core host already at load average 30-40 from other sessions, extra load from `yes` burners: healthy, 40/40 at host load (ratio up to 0.077) and 100/100 with 32-64 burners at load 33-197 (ratio up to 0.39, slowest poll up to 3.2 s; 90 of those 100 had a poll over 250 ms, so the old bound would have failed them). With `spawn_blocking` replaced by an inline `shape_request` call (not committed): 30/30 fail, ratio 0.835-0.995, at host load and with 32-64 burners. `just check` green.
+
+Status: done 2026-10-05
+Model: Claude Code / opus-5.5
 
 ### T203. PreCompact/SessionEnd read the whole transcript and open extra stores
 
