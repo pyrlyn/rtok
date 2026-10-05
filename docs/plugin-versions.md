@@ -21,7 +21,7 @@ where it came from, so `agents update` could only reinstall every time or trust 
 A plugin reaches a machine from one of three sources, and the scheme covers all of them:
 
 - **GitHub**: the host installs from the repository (`claude plugin marketplace add
-  listepo/rtok`).
+  pyrlyn/rtok`).
 - **Local**: the host installs from a plugin tree on disk (`claude plugin marketplace add
   <path>/plugins/claude`), for development and offline installs.
 - **Marketplace**: the host's catalog entry for the committed `.claude-plugin/marketplace.json`.
@@ -109,8 +109,8 @@ For Claude, `agents update` picks the source in this order: `--source`, else the
 
 | Source | `rtok` marketplace points at | Available version |
 | --- | --- | --- |
-| GitHub | `listepo/rtok` | the running rtok's own version |
-| Marketplace | `listepo/rtok` | the running rtok's own version |
+| GitHub | `pyrlyn/rtok` | the running rtok's own version |
+| Marketplace | `pyrlyn/rtok` | the running rtok's own version |
 | Local | the plugin tree rtok resolves (`plugins/claude` beside the binary, in a `share/rtok` prefix, in the ketch store, or in the source checkout) | that tree's `.rtok-plugin-version` plus `+g<sha>[.dirty]` from `git describe --always --dirty` |
 
 GitHub and marketplace need no network call: the release keeps every version file equal to
@@ -123,9 +123,19 @@ The installed version comes from the receipt row, else from Claude's own record
 SemVer, else `0.0.0`. Claude counts as having the plugin when that file lists `rtok@rtok`.
 
 The `rtok` entry in `~/.claude/plugins/known_marketplaces.json` is checked against the chosen
-source: `{"source":"github","repo":"listepo/rtok"}` for GitHub and marketplace,
+source: `{"source":"github","repo":"pyrlyn/rtok"}` for GitHub and marketplace,
 `{"source":"directory","path":"<local tree>"}` for local. Any other value (such as a pre-0.10
 ketch store path) is stale and forces a reinstall that re-points it.
+
+The repository moved from the `listepo` account to the `pyrlyn` organization. A marketplace
+added before the move still records `{"source":"github","repo":"listepo/rtok"}` for Claude, or
+`source = "https://github.com/listepo/rtok.git"` under `[marketplaces.rtok]` for Codex. Both
+are stale under the rule above. The next `rtok agents install` or `agents update` removes the
+`rtok` marketplace, adds it again from `pyrlyn/rtok` and reinstalls `rtok@rtok` once. The
+marketplace and plugin names stay `rtok`, so `rtok@rtok` keeps meaning the same plugin. To move
+by hand instead: `claude plugin marketplace remove rtok && claude plugin marketplace add
+pyrlyn/rtok && claude plugin install rtok@rtok` (Codex: the same with `codex plugin`, and
+`plugin add` for the last step).
 
 ## The decision
 

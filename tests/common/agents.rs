@@ -426,15 +426,15 @@ cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
 mkdir -p "$(dirname "$cfg")"
 touch "$cfg"
 case "$*" in
-  "plugin marketplace add listepo/rtok")
-    if grep -q '^source = "https://github.com/listepo/rtok.git"$' "$cfg" 2>/dev/null; then
+  "plugin marketplace add pyrlyn/rtok")
+    if grep -q '^source = "https://github.com/pyrlyn/rtok.git"$' "$cfg" 2>/dev/null; then
       exit 0
     fi
     if grep -q '^\[marketplaces.rtok\]$' "$cfg" 2>/dev/null; then
       echo "rtok: already added from a different source" >&2
       exit 1
     fi
-    printf '\n[marketplaces.rtok]\nsource_type = "git"\nsource = "https://github.com/listepo/rtok.git"\n' >> "$cfg"
+    printf '\n[marketplaces.rtok]\nsource_type = "git"\nsource = "https://github.com/pyrlyn/rtok.git"\n' >> "$cfg"
     ;;
   "plugin marketplace remove rtok")
     grep -q '^\[marketplaces.rtok\]$' "$cfg" 2>/dev/null || { echo "rtok: no such marketplace" >&2; exit 1; }
@@ -466,16 +466,16 @@ for %%F in ("%CFG%") do if not exist "%%~dpF" mkdir "%%~dpF"
 type nul >> "%CFG%"
 set "ALLARGS=%*"
 echo %ALLARGS%>>"%HOME%\codex.log"
-if "%ALLARGS%"=="plugin marketplace add listepo/rtok" (
-  findstr /c:"source = \"https://github.com/listepo/rtok.git\"" "%CFG%" >nul 2>&1 && exit /b 0
+if "%ALLARGS%"=="plugin marketplace add pyrlyn/rtok" (
+  findstr /c:"source = \"https://github.com/pyrlyn/rtok.git\"" "%CFG%" >nul 2>&1 && exit /b 0
   findstr /c:"[marketplaces.rtok]" "%CFG%" >nul 2>&1 && (echo rtok: already added from a different source 1>&2 & exit /b 1)
   >>"%CFG%" echo([marketplaces.rtok]
   >>"%CFG%" echo source_type = "git"
-  >>"%CFG%" echo source = "https://github.com/listepo/rtok.git"
+  >>"%CFG%" echo source = "https://github.com/pyrlyn/rtok.git"
 )
 if "%ALLARGS%"=="plugin marketplace remove rtok" (
   findstr /c:"[marketplaces.rtok]" "%CFG%" >nul 2>&1 || (echo rtok: no such marketplace 1>&2 & exit /b 1)
-  findstr /v /c:"[marketplaces.rtok]" /c:"source_type = \"git\"" /c:"source = \"https://github.com/listepo/rtok.git\"" "%CFG%" > "%CFG%.tmp"
+  findstr /v /c:"[marketplaces.rtok]" /c:"source_type = \"git\"" /c:"source = \"https://github.com/pyrlyn/rtok.git\"" "%CFG%" > "%CFG%.tmp"
   move /y "%CFG%.tmp" "%CFG%" >nul
 )
 if "%ALLARGS%"=="plugin add rtok@rtok" (

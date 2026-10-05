@@ -25,20 +25,20 @@ const NAME: &str = "rtok";
 
 const COMPACT: &[(&str, &str)] = &[("PreCompact", ""), ("PostCompact", "")];
 
-/// The plugin tree (T121) and its id in the one-plugin marketplace `listepo/rtok` also is.
+/// The plugin tree (T121) and its id in the one-plugin marketplace `pyrlyn/rtok` also is.
 const PLUGIN_SRC: &str = "plugins/codex";
 const PLUGIN_ID: &str = "rtok@rtok";
 
 /// GitHub `owner/repo` shorthand `codex plugin marketplace add` resolves (T140): the repo
 /// root's `.agents/plugins/marketplace.json` names this one marketplace `rtok`, whose only
 /// plugin is `./plugins/codex` (relative to the repo root, not the marketplace file).
-const MARKETPLACE_REPO: &str = "listepo/rtok";
+const MARKETPLACE_REPO: &str = "pyrlyn/rtok";
 
 /// What `codex plugin marketplace add {MARKETPLACE_REPO}` records in `~/.codex/config.toml`
 /// under `[marketplaces.rtok]` — verified empirically against codex-cli 0.155.1 in a scratch
 /// `CODEX_HOME` (2026-09-22): `source_type = "git"`, `source =
-/// "https://github.com/listepo/rtok.git"`.
-const MARKETPLACE_GIT_SOURCE: &str = "https://github.com/listepo/rtok.git";
+/// "https://github.com/pyrlyn/rtok.git"`.
+const MARKETPLACE_GIT_SOURCE: &str = "https://github.com/pyrlyn/rtok.git";
 
 /// Sibling of `config.toml`: `~/.codex/hooks.json` (Codex also reads inline `[hooks]`).
 pub fn hooks_path(cfg: &Config) -> std::path::PathBuf {
@@ -138,7 +138,7 @@ fn marketplace_state(cfg: &Config) -> MarketplaceState {
 
 /// Offer, add, or remove rtok's Codex plugin through the real `codex plugin` commands
 /// (T140, the Codex counterpart of T139's Claude flow), from the GitHub marketplace
-/// `listepo/rtok`. Added by default — no flag needed — once `codex` is on PATH and the
+/// `pyrlyn/rtok`. Added by default — no flag needed — once `codex` is on PATH and the
 /// plugin is not already enabled; already enabled from the GitHub marketplace (or already
 /// removed) is a no-op. `marketplace add` is skipped once Codex already knows the *GitHub*
 /// marketplace; a `"rtok"` marketplace known under any other source is re-pointed —
@@ -292,7 +292,7 @@ impl Agent for Codex {
             "proxy" => Support::Flag("--proxy"),
             "hooks" => Support::Yes,
             // `plugin`: `plugins/codex` through `codex plugin marketplace add`, from the
-            // GitHub marketplace `listepo/rtok`, enabled by default once `codex` is on PATH
+            // GitHub marketplace `pyrlyn/rtok`, enabled by default once `codex` is on PATH
             // and not already enabled (T140).
             "plugin" => Support::Yes,
             _ => Support::No("Codex has no such module"),
@@ -895,13 +895,34 @@ mod tests {
         let (c, path) = cfg("plugin-fresh", true);
         let report = plugin(&c, false).unwrap();
         assert!(
-            report.contains("codex plugin marketplace add listepo/rtok"),
+            report.contains("codex plugin marketplace add pyrlyn/rtok"),
             "{report}"
         );
         assert!(report.contains("codex plugin add rtok@rtok"), "{report}");
         assert!(report.starts_with("offer plugins/codex → "), "{report}");
         assert!(report.contains(KETCH_INSTALL), "{report}");
         assert!(!path.exists(), "{report}");
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// A marketplace added before the repository moved from `listepo` to `pyrlyn` still
+    /// records the old clone URL; it is re-pointed at the new one rather than trusted to
+    /// GitHub's redirect.
+    #[test]
+    fn plugin_dry_run_repoints_a_marketplace_added_under_the_old_repo_name() {
+        let (c, path) = cfg("plugin-old-repo-market", true);
+        fs::write(
+            &path,
+            "[marketplaces.rtok]\nsource_type = \"git\"\nsource = \"https://github.com/listepo/rtok.git\"\n",
+        )
+        .unwrap();
+        let report = plugin(&c, false).unwrap();
+        assert!(
+            report.contains(
+                "codex plugin marketplace remove rtok && codex plugin marketplace add pyrlyn/rtok && codex plugin add rtok@rtok"
+            ),
+            "{report}"
+        );
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 
@@ -920,7 +941,7 @@ mod tests {
         let report = plugin(&c, false).unwrap();
         assert!(
             report.contains(
-                "codex plugin marketplace remove rtok && codex plugin marketplace add listepo/rtok && codex plugin add rtok@rtok"
+                "codex plugin marketplace remove rtok && codex plugin marketplace add pyrlyn/rtok && codex plugin add rtok@rtok"
             ),
             "{report}"
         );
@@ -942,7 +963,7 @@ mod tests {
         assert_ne!(report, NO_CHANGES);
         assert!(
             report.contains(
-                "codex plugin remove rtok@rtok && codex plugin marketplace remove rtok && codex plugin marketplace add listepo/rtok && codex plugin add rtok@rtok"
+                "codex plugin remove rtok@rtok && codex plugin marketplace remove rtok && codex plugin marketplace add pyrlyn/rtok && codex plugin add rtok@rtok"
             ),
             "{report}"
         );
