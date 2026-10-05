@@ -971,28 +971,22 @@ mod tests {
         s
     }
 
-    /// T203: `checkpoint::write` used to `read_to_string` the whole transcript and
-    /// `attach_ids`/`offer_session` each opened a second/third `Store` on the same SQLite
-    /// file the hook `Runtime` already holds open. On a ~50 MB transcript this checks the
-    /// streamed extractor stays fast, opens the store exactly once for the whole hook run,
-    /// and yields the same note body [`extract`] (the in-memory extractor) computes for the
-    /// same bytes.
-    #[test]
-    fn session_end_on_a_large_transcript_is_bounded() {
-        let dir = std::env::temp_dir().join("rtok-t203-large-transcript");
-        let _ = std::fs::remove_dir_all(&dir);
-        let repo = dir.join("bigproj");
+    /// Runs SessionEnd on a fresh ~`bytes` transcript in its own project under `dir` and
+    /// returns the transcript and the hook's wall time, after checking the hook opened the
+    /// store exactly once.
+    fn timed_session_end(
+        cfg: &crate::config::Config,
+        dir: &Path,
+        project: &str,
+        bytes: usize,
+    ) -> (String, std::time::Duration) {
+        let repo = dir.join(project);
         std::fs::create_dir_all(repo.join(".git")).unwrap();
-        let content = big_transcript(50 * 1024 * 1024);
+        let content = big_transcript(bytes);
         std::fs::write(repo.join("t.jsonl"), &content).unwrap();
-        let expected = extract(&content);
-        assert!(!expected.paths.is_empty() && !expected.errors.is_empty());
-
-        let mut cfg = crate::testutil::config_in(&dir);
-        cfg.plugins.inject.modes.clear();
         let end = serde_json::json!({
             "hook_event_name":"SessionEnd",
-            "session_id":"t203",
+            "session_id":project,
             "transcript_path":repo.join("t.jsonl").to_str().unwrap(),
             "cwd":repo.display().to_string(),
             "reason":"clear"
@@ -1000,21 +994,45 @@ mod tests {
         let mut out = Vec::new();
         let before = crate::store::OPEN_COUNT.with(|n| n.get());
         let started = std::time::Instant::now();
-        crate::hooks::run("SessionEnd", end.to_string().as_bytes(), &mut out, &cfg);
+        crate::hooks::run("SessionEnd", end.to_string().as_bytes(), &mut out, cfg);
         let elapsed = started.elapsed();
         let after = crate::store::OPEN_COUNT.with(|n| n.get());
         assert_eq!(out, b"{}");
         assert_eq!(after - before, 1, "one Store::open per hook run");
-        // Measured on this machine with this (tool_result-dominated) transcript: ~57 ms
-        // `--release`, under the task's 100 ms bound; ~960 ms unoptimized `cargo test`,
-        // where serde_json and every `str::contains` run unoptimized. Shared CI runners are
-        // several times slower still, so the bound only catches a quadratic regression; the
-        // open count above and the streaming read are what keep the hook bounded.
+        (content, elapsed)
+    }
+
+    /// T203: `checkpoint::write` used to `read_to_string` the whole transcript and
+    /// `attach_ids`/`offer_session` each opened a second/third `Store` on the same SQLite
+    /// file the hook `Runtime` already holds open. On a ~50 MB transcript this checks the
+    /// streamed extractor scales linearly, opens the store exactly once for the whole hook
+    /// run, and yields the same note body [`extract`] (the in-memory extractor) computes for
+    /// the same bytes.
+    #[test]
+    fn session_end_on_a_large_transcript_is_bounded() {
+        let dir = std::env::temp_dir().join("rtok-t203-large-transcript");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut cfg = crate::testutil::config_in(&dir);
+        cfg.plugins.inject.modes.clear();
+        // T425: a fixed wall-clock bound (10 s) failed at 13.8 s on a debug build with host
+        // load ~130, while the same run alone took 5.2-8.0 s. Only a quadratic regression is
+        // worth catching here, so the 50 MB run is bounded by a 5 MB run timed in the same
+        // test: linear work is at most ~10x (9.3x worst of ten runs beside 32 `yes` burners,
+        // host load up to ~340), a per-line scan over every earlier line 90x. The small run
+        // goes before and after the large one and the slower of the two is the baseline, so
+        // load that rises or falls during the test inflates both sides of the ratio.
+        let (_, small_before) = timed_session_end(&cfg, &dir, "smallproj1", 5 * 1024 * 1024);
+        let (content, large) = timed_session_end(&cfg, &dir, "bigproj", 50 * 1024 * 1024);
+        let (_, small_after) = timed_session_end(&cfg, &dir, "smallproj2", 5 * 1024 * 1024);
+        let small = small_before.max(small_after);
         assert!(
-            elapsed.as_secs() < 10,
-            "SessionEnd on a 50 MB transcript took {elapsed:?}"
+            large < small * 30,
+            "SessionEnd on 50 MB took {large:?}, over 30x the {small:?} on 5 MB \
+             (before {small_before:?}, after {small_after:?}): extraction is not linear"
         );
 
+        let expected = extract(&content);
+        assert!(!expected.paths.is_empty() && !expected.errors.is_empty());
         let body = crate::store::Store::open(&cfg.core.db_path)
             .unwrap()
             .latest_session_note(Some("bigproj"))

@@ -246,8 +246,9 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (gc)
 _arguments "${_arguments_options[@]}" : /
-'--owner=[Open locks whose reason starts with this owner; every other lock is a hard stop]:OWNER:_default' /
+'--owner=[Open locks whose reason starts with this owner; any other lock holds until /`--stale-lock/`]:OWNER:_default' /
 '--idle=[Keep worktrees modified within this window (/`24h/`, /`7d/`)]:IDLE:_default' /
+'--stale-lock=[Treat someone else'/''s lock as abandoned once its merged, clean worktree is untouched this long]:STALE_LOCK:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /

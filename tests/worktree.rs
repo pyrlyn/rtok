@@ -386,6 +386,15 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     assert_eq!(planned("wt-gone"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-mine"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-theirs"), "keep: locked by Cursor / grok");
+    // T418: past `--stale-lock` a foreign lock on a merged, clean worktree is abandoned;
+    // on a dirty, unmerged or vanished one it still holds.
+    let stale = json_in(&tmp, &work, &[&idle0[..], &["--stale-lock", "0h"]].concat());
+    let abandoned = |name: &str| by_name(&stale, name)["note"].as_str().unwrap().to_owned();
+    let reclaimed = "merged, clean, abandoned lock by Cursor / grok";
+    assert_eq!(abandoned("wt-theirs"), reclaimed);
+    let reclaimed = "merged, clean, abandoned lock, owner unknown";
+    assert_eq!(abandoned("wt-bare-lock"), reclaimed);
+    assert_eq!(abandoned("wt-gone-theirs"), "locked by Cursor / grok");
     assert_eq!(listed(), before);
 
     // No `--owner`, default idle window: only the unlocked stale record may go.

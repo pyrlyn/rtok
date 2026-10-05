@@ -1067,13 +1067,16 @@ Remove merged, clean, idle worktrees with their branches; drop records of delete
 Usage: rtok worktree gc [OPTIONS]
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --yes            Apply; without it this is a dry run that changes nothing
-      --owner <OWNER>  Open locks whose reason starts with this owner; every other lock is a hard
-                       stop
-      --idle <IDLE>    Keep worktrees modified within this window (`24h`, `7d`) [default: 24h]
-      --json           JSON instead of the table
-  -h, --help           Print help
+      --config <PATH>            User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --yes                      Apply; without it this is a dry run that changes nothing
+      --owner <OWNER>            Open locks whose reason starts with this owner; any other lock
+                                 holds until `--stale-lock`
+      --idle <IDLE>              Keep worktrees modified within this window (`24h`, `7d`) [default:
+                                 24h]
+      --stale-lock <STALE_LOCK>  Treat someone else's lock as abandoned once its merged, clean
+                                 worktree is untouched this long [default: 7d]
+      --json                     JSON instead of the table
+  -h, --help                     Print help
 
 $ rtok worktree clean --help
 Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`

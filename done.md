@@ -5912,6 +5912,12 @@ Check: `just check`.
 
 Result: `src/worktree/whoami.rs`, `WorktreeCmd::Whoami` in `src/cli.rs`; gates in `tests/surface_parity.rs` (EXEMPT, JSON reader), `docs/config.md`, `README.md`, `help-subcommands.trycmd` and the completion goldens; `tests/worktree.rs` `whoami_shows_the_root_and_only_the_caller_s_worktrees` (a locked and a claimed worktree of the caller, not another agent's claim; `here` follows the cwd; text form). `skills/worktrees/SKILL.md` went from 342 to 206 words; the creator's `~/.claude/skills/worktrees/SKILL.md` carries the same text. `just check`: 2440 passed.
 
+### T423. Worktrees skill: a `whoami` fallback for rtok 0.15.1 and older
+
+The skill from T411 starts with `rtok worktree whoami`, which reached `main` after v0.15.1, so an agent on the released binary hit "unrecognized subcommand 'whoami'" at its first step. Done: the skill names the fallback, `rtok agents whoami` for the id and `rtok worktree list` for the rest, until a release carries T411.
+
+Check: `cargo nextest run --test skill`.
+
 ## T159 — Claude Code `WorktreeCreate`/`WorktreeRemove` hooks route through `rtok worktree`
 
 Depends on T156 (the real payloads), T158 (create) and T153 (remove). A skill is advice an agent may skip; the host's own worktree hooks are the only place where the rules cannot be skipped: `claude --worktree`, the desktop app and sub-agent `isolation: worktree` all create worktrees without asking the agent, which is where the `agent-<hex>` directories and reason-less locks come from (`research.md` §18.1, §18.3).
@@ -7004,6 +7010,19 @@ Do (2026-09-24): `handle` in `src/proxy/mod.rs` moves request shaping (`record`,
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T421. `/health` latency test survives runner load
+
+`health_stays_fast_while_a_large_request_is_recorded` (`tests/proxy.rs`, T205) asserts every `/health` poll returns in under 250 ms while a 48 MB `compress`-mode request is shaped. On a loaded `macos-latest` runner it took 301.8 ms (run 37334858645, PR #749, which only touched `web/`); the same code passed on the previous run. Done: the bound scales with how slow the runner is, so load alone cannot fail it, and the test still fails when `/health` waits on the recording (the T205 regression it guards).
+
+Plan: measure on the same runtime how long the big request takes to reach upstream; a T205 regression makes one `/health` poll wait for the whole synchronous shaping, i.e. most of that window, while a healthy proxy answers in a small fraction of it. Assert each poll stays under a fraction of the window instead of a fixed 250 ms. Only `tests/proxy.rs` changes.
+
+Check: the test run many times under artificial CPU load passes every time; with `spawn_blocking` replaced by an inline call in `src/proxy/mod.rs` (not committed) it fails every time; `just check`.
+
+Result (2026-10-05, Claude Code / opus-5.5): the loop keeps the slowest `/health` poll and the window from spawning the big request to upstream seeing it, and asserts `slowest < window * 2 / 3`; the failure message prints both and the poll count. Nothing in `src/` changed. Evidence, debug build, 16-core host already at load average 30-40 from other sessions, extra load from `yes` burners: healthy, 40/40 at host load (ratio up to 0.077) and 100/100 with 32-64 burners at load 33-197 (ratio up to 0.39, slowest poll up to 3.2 s; 90 of those 100 had a poll over 250 ms, so the old bound would have failed them). With `spawn_blocking` replaced by an inline `shape_request` call (not committed): 30/30 fail, ratio 0.835-0.995, at host load and with 32-64 burners. `just check` green.
+
+Status: done 2026-10-05
+Model: Claude Code / opus-5.5
+
 ### T203. PreCompact/SessionEnd read the whole transcript and open extra stores
 
 Found 2026-09-22 in the core pass: `checkpoint::write` (`src/plugins/checkpoint.rs:202-212`) `read_to_string`s the entire JSONL transcript (hundreds of MB on real sessions) and `extract` walks every line inside `rtok hook`; `attach_ids` (:227-249) and `offer_session` (:258-280) then open a **second/third** `Store` on the same SQLite file even though the hook `Runtime` holds one — adding lock traffic exactly where T200 hurts (SessionStart with `startup_recall` does the extra open too). Unbounded memory + O(transcript) CPU + connection churn on PreCompact/SessionEnd/SessionStart.
@@ -7040,6 +7059,16 @@ T417 made the checkpoint keep only typed prompts. It saves no tokens — the res
 Done: the SDK `Host` gained `plugin_state_set(plugin, key, value)` (default `Ok(())`), which `Runtime` stores as the `kv` row `plugin:<id>:<key>`; `Store::kv_prefix` reads a prefix back with a literal, case-exact match. The checkpoint extractor counts, over the whole transcript, user-text records taken as typed prompts and those skipped as host-written (a tool-result echo is neither); the counts are never rendered, so the restore is byte-identical. Each PreCompact and SessionEnd write stores `{"typed","skipped"}` under `memory` / `<checkpoint kind>`, replacing the session's earlier row. The memory plugin page shows `checkpoint prompts typed` and `checkpoint host records skipped`, each session counted once by its larger row; live fields now come before config fields, and the TUI Plugins page shows the cursor row's fields on a line under the table. Savings totals are unchanged. On this session's own transcript: 4 typed, 5 skipped — prompts sent while the agent works are stored as `queued_command` attachments, which the checkpoint does not read yet.
 
 Check: `prompt_counts_take_each_sessions_largest_row`, `host_injected_records_are_not_prompts`, `prompt_window_counts_only_typed_prompts`, `tool_result_records_count_as_neither`, `counts_never_reach_the_render`, `session_end_note_and_startup_recall`, `kv_prefix_is_literal_and_ordered`, `plugins_tab_shows_the_cursor_rows_checkpoint_counts`, `memory_page_sums_checkpoint_counts_without_touching_savings`; `just check`.
+
+### T425. Large-transcript SessionEnd test bounds scaling, not wall clock
+
+`checkpoint::tests::session_end_on_a_large_transcript_is_bounded` asserts the SessionEnd hook on a 50 MB transcript finishes in under 10 s. It failed in `just check` at 13.8 s with host load ~130 on a 16-core Mac (debug build); alone at load 50-110 it took 5.2-8.0 s, so the fixed bound has little margin under load. Its comment says the bound only catches a quadratic regression. Done: the test times a 5 MB transcript before and after the 50 MB one in the same test and bounds the 50 MB run against the slower small run (near-linear scaling), with no wall-clock bound; the open count and note-body checks stay. Same approach as T421.
+
+Plan: `src/plugins/checkpoint.rs` only — a helper times one SessionEnd run per project; small, big, small; assert `big < max(small) * K` with K well under the ~100x a quadratic extractor gives.
+
+Check: the test passes repeatedly under CPU load (own `yes` burners); it fails when the extraction loop is made quadratic; `just check` green.
+
+Result (2026-10-05, Claude Code / opus-5.5): `timed_session_end` runs one SessionEnd per project and checks the single `Store::open`; the test times 5 MB, 50 MB, 5 MB and asserts `large < max(small) * 30`, with no wall-clock bound; the note-body check stays. Ten runs beside 32 `yes` burners (host load 73-345): every run passed, the 50 MB hook took 5.0-9.3 s, ratios 0.5-9.3 (a 5 MB run spiked to 12 s once). A per-line `Vec::iter().sum()` over every earlier line injected into `extract_lines_with` failed it: 241 s against 2.7 s, ratio 90.0. `just check` green (2450 tests).
 
 ### T230. Graph page: index status and dead symbols on `tui` and `web`
 
@@ -8323,6 +8352,27 @@ Execution plan:
 Check: the tests above green; `just check`.
 
 Result (2026-10-04, Claude Code / claude-opus-5-5): `detach` reports a branch git refuses to delete as `removed; branch kept: <git's message>`, so `remove` exits 0, releases the claim, and `gc` no longer says `failed, kept` for a removed worktree. New test `remove_guards_commits_and_reports_a_branch_it_could_not_delete` covers the edges listed in step 2; it failed on `main` at the second-worktree case and passes with the fix. Note for manual cleanup: `git branch -d` refuses squash-merged branches, so `--keep-branch` plus `git branch -d` leaves them behind; plain `rtok worktree remove` deletes them because its merged check is squash-aware.
+
+### T418. `rtok worktree gc` reclaims abandoned foreign locks on merged worktrees
+
+`gc` opens only the locks whose owner equals `--owner` and never a lock with a free-text reason, while only locks written since T285 name an agent whose liveness can be checked. Sessions end without `worktree remove`, so locks pile up that nobody can clear: on 2026-10-05 this repository had 108 locked worktrees, 35 of them merged and clean. Done when `gc` treats a lock held by anyone else as abandoned once its worktree is merged into the base, clean, bound to no live agent and untouched for longer than `--stale-lock` (default `7d`), and removes it like its own; dirty, unmerged and gone worktrees stay protected by any lock.
+
+Plan: `src/worktree/gc.rs` — `Policy.stale_lock`, a `Verdict::Reclaim(owner)` that `run` applies with `detach` and reports as `remove` with the lock's owner in the note; unit cases for an old foreign lock, a fresh one, a bare one and a dirty or unmerged one. `src/cli.rs` — `--stale-lock`. `tests/worktree.rs` — a dry run with `--stale-lock 0h` plans the foreign and bare locks for removal. Gates: `config_coverage` allow-list, completion goldens, `docs/agents-and-worktrees.md`.
+
+Check: `cargo nextest run --test worktree --test cli_trycmd --test surface_parity --test config_coverage` and `just check`.
+
+### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
+
+On a repository with ~115 linked worktrees `rtok worktree list` took over 120 s and `rtok worktree gc` (dry run) 98 s, mostly waiting on the disk: one `git status` per worktree in sequence (25–54 s), one `merge-tree` plus `rev-parse <base>^{tree}` per worktree, and a sequential walk of ~1.1 M files (716 k of them under `target/`). Done when both commands print the same rows, states and verdicts as before, measured before/after on the same repository.
+
+Execution plan:
+1. `worktree/mod.rs`: a small order-keeping `par_map` (scoped threads, one per core); `inventory` runs each worktree's `is_merged` + `is_dirty` through it.
+2. `worktree/git.rs`: `rev-parse <base>^{tree}` once per inventory instead of once per worktree.
+3. `worktree/list.rs`: `Row::new` (walk + origin) through `par_map`; the walk reads `.git` and `CACHEDIR.TAG` presence from the directory listing it already has and skips `lstat` on directories (`file_type` from the listing); an optional cutoff stops the walk at the first file newer than it.
+4. `worktree/gc.rs`: merged candidates' walks in parallel with the idle cutoff (the verdict only asks "newer than `now - idle`?"); removals stay sequential.
+5. Verify: JSON of `list` and `gc` from the old and new binary diff equal (minus the live-changing mtimes); `just check`.
+
+Result (2026-10-05, Claude Code / claude-opus-5-5): per-worktree git checks and walks run on one thread per core (`worktree::par_map`, std scoped threads); `list` walks each worktree in the same task as its git checks (`inventory_with`), so walks overlap other worktrees' git calls; the base tree is resolved once; the walk reads `.git` and `CACHEDIR.TAG` from the listing it already has and takes no `lstat` of directories; `gc::decide` asks for the mtime only when the verdict still depends on it (a merged worktree, or a merged one under a foreign lock since T418) and tells the walk the age that settles it, so it stops at the first file younger than that. Measured back to back on the rtok repository with 131 worktrees, debug builds, other sessions building: `list` 559 s → 90 s, `gc` dry run 529 s → 26 s; JSON rows, states and verdicts identical except byte counts of worktrees being built during the run. Remaining floor: `git status` and the merge test for every worktree (≈ 10 s each at 16-way) and the walks of ~1 M files, about 30 s even for `du` at 16-way.
 
 ### T287. Messages between agents and the user: `rtok agents send`, `rtok agents inbox`, MCP `agent_send`, `agent_inbox`
 
