@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import logo from "@brand/logo/rtok-mark.svg";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
 import { Orb } from "./Orb";
+import { Kbd, paletteKeys } from "./palette/Kbd";
+import type { Target } from "./palette/Palette";
+import { useShortcuts } from "./palette/shortcuts";
 import { PAGES, type Page } from "./pages";
 import { Empty, ErrorState, Offline } from "./states";
 import { useTheme } from "./theme";
@@ -20,6 +23,18 @@ const linkTone: Record<ConnectionState, PillTone> = {
     connecting: "info",
     closed: "fail",
 };
+
+// React Aria comes with the palette, so neither weighs on the first paint. A chunk that fails to
+// load leaves the shortcuts dead, never the page.
+type Overlays = Pick<typeof import("./palette/Palette"), "Palette" | "ShortcutHelp">;
+const noOverlays: Overlays = { Palette: () => <></>, ShortcutHelp: () => <></> };
+const overlays = (): Promise<Overlays> =>
+    import("./palette/Palette").catch((e: unknown) => {
+        console.warn("rtok: the command palette failed to load", e);
+        return noOverlays;
+    });
+const Palette = lazy(() => overlays().then((m) => ({ default: m.Palette })));
+const ShortcutHelp = lazy(() => overlays().then((m) => ({ default: m.ShortcutHelp })));
 
 const focusRing = "outline-none focus-visible:shadow-ring";
 const navLink = `${focusRing} flex h-9 shrink-0 items-center gap-3 rounded-md px-2.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent-fg`;
@@ -38,6 +53,22 @@ export function Shell() {
     const [offline, setOffline] = useState(false);
     if (connection === "closed" && !offline) setOffline(true);
     if (connection === "open" && offline) setOffline(false);
+    const navigate = useNavigate();
+    const [palette, setPalette] = useState(false);
+    const [help, setHelp] = useState(false);
+    // Latched: the overlays load on first use, then stay mounted so closing them goes through
+    // React Aria, which hands focus back to whatever opened them.
+    const [overlaysUsed, setOverlaysUsed] = useState(false);
+    if ((palette || help) && !overlaysUsed) setOverlaysUsed(true);
+    const go = (t: Target) => navigate({ to: `/${t.page}`, search: t.id ? { id: t.id } : {} });
+    useShortcuts({
+        palette: () => setPalette((open) => !open),
+        help: () => setHelp(true),
+        go: (page) => {
+            setHelp(false);
+            go({ page });
+        },
+    });
 
     useEffect(() => {
         document.title = `${title} · rtok`;
@@ -59,6 +90,21 @@ export function Shell() {
                 Skip to content
             </a>
             <Orb />
+            <Suspense>
+                {overlaysUsed && (
+                    <>
+                        <Palette
+                            isOpen={palette}
+                            onOpenChange={setPalette}
+                            snap={data}
+                            dark={dark}
+                            onGo={go}
+                            onTheme={toggle}
+                        />
+                        <ShortcutHelp isOpen={help} onOpenChange={setHelp} />
+                    </>
+                )}
+            </Suspense>
             <div className="min-h-screen md:grid md:grid-cols-[200px_minmax(0,1fr)] lg:grid-cols-[232px_minmax(0,1fr)]">
                 <nav
                     aria-label="Admin screens"
@@ -94,6 +140,16 @@ export function Shell() {
                         <Pill tone={linkTone[connection]} dot>
                             {connection === "open" ? "live" : connection}
                         </Pill>
+                        <button
+                            type="button"
+                            onClick={() => setPalette(true)}
+                            aria-label="Open the command palette"
+                            aria-keyshortcuts={paletteKeys() === "⌘ K" ? "Meta+K" : "Control+K"}
+                            className={`${focusRing} flex h-8 items-center gap-2 rounded-md border border-border px-2 text-xs text-fg-muted transition-colors duration-fast hover:border-border-strong hover:text-fg`}
+                        >
+                            <span className="hidden sm:inline">jump to</span>
+                            <Kbd>{paletteKeys()}</Kbd>
+                        </button>
                         <button
                             type="button"
                             onClick={toggle}
