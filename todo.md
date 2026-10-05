@@ -101,3 +101,19 @@
 - T403. A/B a path and identifier dictionary in proxy requests
 - T404. Evaluate a local draft model that the cloud model only verifies
 - T405. Task-board extras for the agent task tools
+- T413. More agent hosts: popular agents rtok does not install into yet
+- T413.1. `rtok agents install roo` — Roo Code
+- T413.2. `rtok agents install qwen` — Qwen Code
+- T413.3. `rtok agents install droid` — Factory Droid
+- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+- T413.5. `rtok agents install amp` — Amp
+- T413.6. `rtok agents install goose` — Goose
+- T413.7. `rtok agents install continue` — Continue
+- T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
+- T413.9. `rtok agents install junie` — JetBrains Junie
+- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
+- T413.11. `rtok agents install crush` — Crush
+- T413.12. `rtok agents install warp` — Warp
+- T413.13. `rtok agents install trae` — Trae
+- T413.14. `rtok agents install openhands` — OpenHands
+- T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
