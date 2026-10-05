@@ -10,7 +10,8 @@ import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Bitset, BudgetGrid, MiniBars } from "../ui/Marks";
 import { Sparkline } from "../ui/Sparkline";
-import { compact, fmt, pct } from "./format";
+import { CALLS_SYNC } from "./CallsChart";
+import { compact, fmt, hms, pct } from "./format";
 import { overview } from "./model";
 import { CallsPanel, DoctorPanel, SessionsPanel } from "./OverviewPanels";
 import { PanelLink, TokenMix, tokenTotal, WithSnapshot } from "./parts";
@@ -119,13 +120,25 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
     const u = o.usage;
     const max = Math.max(1, ...o.measured.map((m) => m.saved));
     const columns = useMemo(() => savingColumns(max), [max]);
+    const turns = useMemo(() => u.turns.slice(-40), [u.turns]);
+    // Minis show no ticks, so their x can carry seconds and tell sub-minute buckets apart.
+    const times = useMemo(() => o.buckets.map((b) => hms(b.t)), [o.buckets]);
+    const perBucket = useMemo(() => o.buckets.map((b) => b.hook + b.mcp + b.proxy), [o.buckets]);
     const kpis: ReactNode[] = [
         <Kpi
             key="in"
             label="input tok"
             value={compact(u.input)}
             sub={`ctx ${compact(o.ctx)} incl. cache`}
-            viz={<Sparkline values={u.turns.slice(-40)} label="ctx tokens per turn" />}
+            viz={
+                <Sparkline
+                    values={turns}
+                    label="ctx tokens per turn"
+                    name="ctx tok"
+                    x={turns.map((_, i) => `turn ${u.turns.length - turns.length + i + 1}`)}
+                    format={compact}
+                />
+            }
         />,
         <Kpi
             key="out"
@@ -146,8 +159,11 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
             sub={`${o.failed} failed · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
             viz={
                 <MiniBars
-                    values={o.buckets.map((b) => b.hook + b.mcp + b.proxy)}
+                    values={perBucket}
                     label="calls per bucket"
+                    name="calls"
+                    x={times}
+                    sync={CALLS_SYNC}
                 />
             }
         />,
@@ -161,7 +177,15 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${o.hosts} hosts`}
-            viz={<Sparkline values={o.liveSeries} label="sessions alive over the calls window" />}
+            viz={
+                <Sparkline
+                    values={o.liveSeries}
+                    label="sessions alive over the calls window"
+                    name="live"
+                    x={times}
+                    sync={CALLS_SYNC}
+                />
+            }
         />,
         <Kpi
             key="on"
