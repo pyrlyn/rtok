@@ -130,3 +130,4 @@
 - T414.12. Live status: snapshot age and pause
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
+- T414.16. Linked hover across charts and live values elsewhere

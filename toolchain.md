@@ -79,6 +79,8 @@ Project programs and direct packages from the manifests.
 | three | local | https://github.com/mrdoob/three.js | T329.13: WebGL scene of the projects overview (lazy chunk `Scene3D`, 575 kB, 143 kB gzip; the first bundle does not grow) |
 | d3-force-3d | local | https://github.com/vasturiano/d3-force-3d | T329.13: force layout run in a web worker (`layout.worker`, 29 kB); `3d-force-graph` would simulate on the main thread, and this is the engine it uses. Last push 2025-04-09, so watch its upkeep |
 | @types/three | local | https://github.com/DefinitelyTyped/DefinitelyTyped | T329.13: Three.js types |
+| echarts | local | https://github.com/apache/echarts | T414.15: canvas renderer behind `web/src/charts/` (only `charts/echarts.ts` imports it; lazy chunk `echarts`, 525 kB, 178 kB gzip). Chosen by the creator over uPlot and Chart.js for built-in tooltips, axis pointers and linked charts |
+| @floating-ui/react-dom | local | https://github.com/floating-ui/floating-ui | T414.15: positions the one chart and mark tooltip (`charts/Tooltip.tsx`); the positioning-only package, not `@floating-ui/react` |
 
 ## cargo
 

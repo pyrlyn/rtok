@@ -13,6 +13,5 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Area: Story = {};
-export const LineOnly: Story = { args: { area: false } };
 export const Flat: Story = { args: { values: [4, 4, 4, 4] } };
 export const TooShort: Story = { args: { values: [4] } };

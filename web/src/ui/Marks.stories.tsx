@@ -14,7 +14,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Bars: Story = {};
-export const Coral: Story = { args: { className: "fill-delta-fg" } };
 export const AllZero: Story = { args: { values: [0, 0, 0] } };
 export const NoValues: Story = { args: { values: [] } };
 
