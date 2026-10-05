@@ -384,8 +384,8 @@ async fn proxy_health_reports_ok_and_mode() {
 
 /// ~48 MB of space-separated words: representative of the tokenizer work `compress`
 /// does over a live blob (unlike one giant unbroken string, which parses/scans faster).
-/// Bigger than the card's "~20 MB" so the pre-fix synchronous section reliably clears
-/// the 250 ms bound below with margin, instead of landing right at the edge.
+/// Bigger than the card's "~20 MB" so the pre-fix synchronous section dominates the
+/// window measured below, instead of being lost next to the upload and the forward.
 fn t205_big_text() -> String {
     let word = "token ";
     word.repeat(48 * 1024 * 1024 / word.len())
@@ -396,6 +396,13 @@ fn t205_big_text() -> String {
 /// (parsed + walked by the `compress` plugin's `proxy_filter`) pinned that worker for
 /// the whole synchronous section, so a concurrent `/health` request had to wait behind
 /// it. With the bookkeeping moved to `spawn_blocking`, `/health` stays fast throughout.
+///
+/// "Fast" is relative to the same run, not a wall-clock bound (T421): a fixed 250 ms
+/// flaked at 302 ms on a loaded macOS runner. The pre-fix stall makes one poll wait out
+/// the whole shaping, over 90% of the time the big request takes to reach upstream; a
+/// healthy proxy keeps every poll to a few percent of it, under 40% even with the host
+/// CPUs oversubscribed eight times. Load stretches both sides, so a two-thirds bound on
+/// the ratio keeps the margin that a fixed bound loses.
 #[tokio::test]
 async fn health_stays_fast_while_a_large_request_is_recorded() {
     let server = MockServer::start();
@@ -425,11 +432,13 @@ async fn health_stays_fast_while_a_large_request_is_recorded() {
     });
     let body_bytes = serde_json::to_vec(&body).expect("request json");
 
+    let client = reqwest::Client::new();
     let big_addr = addr.clone();
+    let window_start = std::time::Instant::now();
     let big_req = tokio::spawn(async move { t51_post(&big_addr, body_bytes).await });
 
-    let client = reqwest::Client::new();
     let mut checks = 0;
+    let mut slowest = Duration::ZERO;
     loop {
         let t0 = std::time::Instant::now();
         let health = client
@@ -437,23 +446,25 @@ async fn health_stays_fast_while_a_large_request_is_recorded() {
             .send()
             .await
             .expect("health");
-        let elapsed = t0.elapsed();
+        slowest = slowest.max(t0.elapsed());
         assert_eq!(health.status(), reqwest::StatusCode::OK);
-        assert!(
-            elapsed < Duration::from_millis(250),
-            "/health took {elapsed:?} while a large request was being recorded"
-        );
         checks += 1;
         // Stop once upstream has the request: the pre-fix stall is the shaping before the
         // forward. Dropping the 48 MB buffers after the reply costs ~100 ms on its own and
-        // would make the bound flaky on 2-core CI runners without saying anything about T205.
+        // would stretch the window without saying anything about T205.
         if big_req.is_finished() || mock.calls_async().await > 0 {
             break;
         }
     }
+    let window = window_start.elapsed();
     assert!(
         checks >= 2,
         "the big request must still overlap a /health poll"
+    );
+    assert!(
+        slowest < window * 2 / 3,
+        "/health took {slowest:?} of the {window:?} the large request needed to reach \
+         upstream ({checks} polls): it waited on the recording"
     );
 
     let big_resp = big_req.await.expect("big request task");
