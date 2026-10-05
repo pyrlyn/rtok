@@ -124,12 +124,19 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | todo | P3 | 2 | 0% | |
 | T413.15 | todo | P3 | 2 | 0% | |
 | T414 | in progress | P1 | 4 | 10% | Claude Code / opus-5.5 |
-| T414.2 | todo | P1 | 3 | 0% | |
+| T414.2 | in progress | P1 | 3 | 80% | Claude Code / opus-5.5 |
 | T414.3 | todo | P2 | 3 | 0% | |
 | T414.4 | todo | P2 | 3 | 0% | |
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
+| T414.8 | todo | P2 | 2 | 0% | |
+| T414.9 | todo | P2 | 3 | 0% | |
+| T414.10 | todo | P2 | 3 | 0% | |
+| T414.11 | todo | P2 | 2 | 0% | |
+| T414.12 | todo | P2 | 2 | 0% | |
+| T414.13 | todo | P2 | 4 | 0% | |
+| T414.14 | todo | P3 | 2 | 0% | |
 
 
 
@@ -2045,17 +2052,17 @@ Check: the T413 per-host check (step 5) for this host.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 
-Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes.
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14).
 
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
 
-### T414.2. Mockup: shell and Overview on the brandbook, in Storybook, for approval
+### T414.2. Mockup: shell and Overview on the brandbook, for approval
 
-Restyle the shell (sidebar, header, theme switch) and the Overview page per `brand/DESIGN.md` and the base `DESIGN.md` it inherits (type scale, spacing, radii, elevation, motion, focus ring). The `@theme` block moves from the flat `--rtok-*` build to the `--pyr-*` roles of `@brand/dist/tokens.css`. Stories only; the running app keeps today's look until the creator approves.
+Restyle the shell (sidebar, header, theme switch) and the Overview page per `brand/DESIGN.md` and the base `DESIGN.md` it inherits (type scale, spacing, radii, elevation, motion, focus ring). The `@theme` block moves from the flat `--rtok-*` build to the `--pyr-*` roles of `@brand/dist/tokens.css`. The mockup is real code on its PR branch, shown with `?sample` (`npm --prefix web run dev`, then `/?sample#/overview`); the PR is not merged until the creator approves.
 
-Check: dark and light screenshots of the stories sent to the creator, and the creator's approval quoted in this card.
+Check: dark and light screenshots sent to the creator, and the creator's approval quoted in this card.
 
 ### T414.3. Restyle the `web/src/ui` components to the approved mockup
 
@@ -2086,6 +2093,48 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light
 Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+
+### T414.8. Sidebar groups and a collapsible sidebar
+
+The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
+
+Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
+
+### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
+
+A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Use a maintained library (e.g. `cmdk`) over a custom one.
+
+Check: unit tests for the shortcut map; a story with a play function that opens the palette, filters and navigates; axe green.
+
+### T414.10. Table filters and sort in the URL
+
+Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
+
+Check: unit tests for search-param parsing (bad values fall back to defaults); e2e opens a filtered URL and sees the filtered rows.
+
+### T414.11. Clickable KPIs and panels open the filtered page
+
+Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
+
+Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
+
+### T414.12. Live status: snapshot age and pause
+
+The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
+
+Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
+
+### T414.13. Δtok savings trend on Overview and Stats
+
+A time series of `Measurement` savings (est before − after per bucket), total and per plugin, added to the snapshot by the Rust model next to `Stats` and drawn on Overview and Stats. Buckets come from the existing aggregation helper; no second aggregation path. No `Measurement` rows → an empty state, never a zero line that reads as a claim.
+
+Check: Rust test for the bucketed series against fixture rows; regenerated `web/src/api/snapshot.gen.ts` committed; story with sample data and with no rows.
+
+### T414.14. CSV and JSON export of tables
+
+An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
+
+Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
 
 ## Reference
 
