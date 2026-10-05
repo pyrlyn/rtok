@@ -8353,6 +8353,19 @@ Plan: `src/worktree/gc.rs` — `Policy.stale_lock`, a `Verdict::Reclaim(owner)` 
 
 Check: `cargo nextest run --test worktree --test cli_trycmd --test surface_parity --test config_coverage` and `just check`.
 
+### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
+
+On a repository with ~115 linked worktrees `rtok worktree list` took over 120 s and `rtok worktree gc` (dry run) 98 s, mostly waiting on the disk: one `git status` per worktree in sequence (25–54 s), one `merge-tree` plus `rev-parse <base>^{tree}` per worktree, and a sequential walk of ~1.1 M files (716 k of them under `target/`). Done when both commands print the same rows, states and verdicts as before, measured before/after on the same repository.
+
+Execution plan:
+1. `worktree/mod.rs`: a small order-keeping `par_map` (scoped threads, one per core); `inventory` runs each worktree's `is_merged` + `is_dirty` through it.
+2. `worktree/git.rs`: `rev-parse <base>^{tree}` once per inventory instead of once per worktree.
+3. `worktree/list.rs`: `Row::new` (walk + origin) through `par_map`; the walk reads `.git` and `CACHEDIR.TAG` presence from the directory listing it already has and skips `lstat` on directories (`file_type` from the listing); an optional cutoff stops the walk at the first file newer than it.
+4. `worktree/gc.rs`: merged candidates' walks in parallel with the idle cutoff (the verdict only asks "newer than `now - idle`?"); removals stay sequential.
+5. Verify: JSON of `list` and `gc` from the old and new binary diff equal (minus the live-changing mtimes); `just check`.
+
+Result (2026-10-05, Claude Code / claude-opus-5-5): per-worktree git checks and walks run on one thread per core (`worktree::par_map`, std scoped threads); `list` walks each worktree in the same task as its git checks (`inventory_with`), so walks overlap other worktrees' git calls; the base tree is resolved once; the walk reads `.git` and `CACHEDIR.TAG` from the listing it already has and takes no `lstat` of directories; `gc::decide` asks for the mtime only when the verdict still depends on it (a merged worktree, or a merged one under a foreign lock since T418) and tells the walk the age that settles it, so it stops at the first file younger than that. Measured back to back on the rtok repository with 131 worktrees, debug builds, other sessions building: `list` 559 s → 90 s, `gc` dry run 529 s → 26 s; JSON rows, states and verdicts identical except byte counts of worktrees being built during the run. Remaining floor: `git status` and the merge test for every worktree (≈ 10 s each at 16-way) and the walks of ~1 M files, about 30 s even for `du` at 16-way.
+
 ### T287. Messages between agents and the user: `rtok agents send`, `rtok agents inbox`, MCP `agent_send`, `agent_inbox`
 
 Depends on T282, T283. The creator wants to reach any running agent by its id from the terminal, and agents to reach each other over MCP.

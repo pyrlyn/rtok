@@ -11,8 +11,8 @@ use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 
-use super::list::usage;
-use super::{Entry, State, inventory};
+use super::list::newest_until;
+use super::{Entry, State, inventory, par_map};
 use crate::render::Col;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,9 +38,22 @@ pub struct Policy<'a> {
     pub live: std::collections::HashSet<String>,
 }
 
-/// `modified` is the newest mtime under the worktree (T151) and `current` says the
-/// command runs from inside it.
-pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Policy) -> Verdict {
+impl Policy<'_> {
+    fn age(&self, modified: SystemTime) -> Duration {
+        self.now.duration_since(modified).unwrap_or_default()
+    }
+}
+
+/// `modified(within)` yields the newest mtime under the worktree (T151). It is a walk, so it
+/// is asked only once no cheaper rule has decided, and `within` is the age that settles the
+/// question asked: the walk may stop at the first file younger than that, which answers it
+/// as the newest file would. `current` says the command runs from inside the worktree.
+pub fn decide(
+    entry: &Entry,
+    modified: impl FnOnce(Duration) -> Option<SystemTime>,
+    current: bool,
+    p: &Policy,
+) -> Verdict {
     let keep = |why: &str| Verdict::Keep(why.into());
     let record = &entry.record;
     if entry.state == State::Main {
@@ -54,20 +67,20 @@ pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Po
         let short: String = agent.chars().take(8).collect();
         return keep(&format!("agent {short} is live"));
     }
-    let age = modified.map(|m| p.now.duration_since(m).unwrap_or_default());
     if record.held_against(p.owner) {
         let owner = record.owner().map(|o| o.owner);
         let owner = owner.map_or(", owner unknown".into(), |o| format!(" by {o}"));
         // Only a merged, clean worktree: a dirty, unmerged or vanished one may still be
         // the only copy of someone's work, so its lock holds however old it is. An
         // unreadable mtime is no evidence of age.
-        let stale = age.is_some_and(|a| a >= p.idle.max(p.stale_lock));
-        return match entry.state == State::Merged && stale {
+        let fresh = p.idle.max(p.stale_lock);
+        let stale =
+            entry.state == State::Merged && modified(fresh).is_some_and(|m| p.age(m) >= fresh);
+        return match stale {
             true => Verdict::Reclaim(owner),
             false => keep(&format!("locked{owner}")),
         };
     }
-    let active = age.is_some_and(|a| a < p.idle);
     match entry.state {
         State::Stale => Verdict::DropRecord,
         State::Dirty => keep("uncommitted changes"),
@@ -75,7 +88,9 @@ pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Po
             Some(b) => keep(&format!("not merged into the base; check `gh pr view {b}`")),
             None => keep("detached HEAD not merged into the base"),
         },
-        _ if active => keep("modified within the idle window"),
+        _ if modified(p.idle).is_some_and(|m| p.age(m) < p.idle) => {
+            keep("modified within the idle window")
+        }
         _ => Verdict::Remove,
     }
 }
@@ -98,12 +113,16 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
     let repo = entries
         .first()
         .map_or(cwd, |main| main.record.path.as_path());
-    let outcomes = entries.iter().map(|entry| {
+    // The walks are the expensive part: side by side, and stopped at the first recent file.
+    // Removals below stay one at a time — each takes the repository's locks.
+    let verdicts = par_map(&entries, |_, entry| {
         let path = &entry.record.path;
         let current = path.canonicalize().is_ok_and(|p| here.starts_with(p));
-        // The walk is the expensive part: only a removal candidate needs its mtime.
-        let modified = (entry.state == State::Merged).then(|| usage(path).modified);
-        let verdict = decide(entry, modified.flatten(), current, policy);
+        let modified = |within| newest_until(path, |m| policy.age(m) < within);
+        decide(entry, modified, current, policy)
+    });
+    let outcomes = entries.iter().zip(verdicts).map(|(entry, verdict)| {
+        let path = &entry.record.path;
         let (action, planned) = match &verdict {
             Verdict::Remove => ("remove", "merged, clean and idle".into()),
             Verdict::Reclaim(owner) => ("remove", format!("merged, clean, abandoned lock{owner}")),
@@ -246,13 +265,27 @@ mod tests {
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
         };
-        let got = match decide(&entry, Some(at(modified)), current, &policy) {
+        let asked = std::cell::Cell::new(None);
+        let walk = |within| {
+            asked.set(Some(within));
+            Some(at(modified))
+        };
+        let got = match decide(&entry, walk, current, &policy) {
             Verdict::Remove => "remove".to_string(),
             Verdict::Reclaim(owner) => format!("reclaim:{owner}"),
             Verdict::DropRecord => "drop-record".to_string(),
             Verdict::Keep(why) => format!("keep:{why}"),
         };
         assert_eq!(got, want);
+        // The walk runs only where its answer can still change the verdict, told the age
+        // that settles it: the idle window, or the stale-lock age under a foreign lock.
+        let held = want.starts_with("reclaim:") || want.starts_with("keep:locked");
+        let within = match want {
+            "remove" | "keep:modified within the idle window" => Some(100),
+            _ if held && state == State::Merged => Some(500),
+            _ => None,
+        };
+        assert_eq!(asked.get(), within.map(Duration::from_secs), "{want}");
     }
 
     #[test]
@@ -273,7 +306,7 @@ mod tests {
             now: at(1_000),
             live: Default::default(),
         };
-        let verdict = decide(&entry, None, false, &policy);
+        let verdict = decide(&entry, |_| None, false, &policy);
         assert_eq!(verdict, Verdict::Keep(format!("locked by {ME}")));
     }
 }
