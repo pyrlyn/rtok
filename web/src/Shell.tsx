@@ -22,7 +22,8 @@ const linkTone: Record<ConnectionState, PillTone> = {
 };
 
 const focusRing = "outline-none focus-visible:shadow-ring";
-const navLink = `${focusRing} flex h-9 shrink-0 items-center gap-3 rounded-md px-2.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent-fg`;
+// Narrow screens get a bottom tab bar (icon over label, centred); from md up it is the sidebar.
+const navLink = `${focusRing} flex min-w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-md px-2 py-1.5 text-2xs md:h-9 md:min-w-0 md:flex-row md:justify-start md:gap-3 md:px-2.5 md:py-0 md:text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent-fg`;
 
 export function Shell() {
     const connection = useConnection();
