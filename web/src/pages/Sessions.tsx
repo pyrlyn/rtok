@@ -7,7 +7,9 @@ import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
 import { Switch } from "../ui/Switch";
+import { orUnknown } from "../ui/Unknown";
 import { ago, compact, hms, iso, nowSecs } from "./format";
+import { why } from "./missing";
 import { matchesSession } from "./model";
 import {
     Count,
@@ -34,7 +36,9 @@ const columns: Column<SessionTotals>[] = [
         cell: (s) => (
             <span className="flex flex-col leading-tight">
                 <b>{s.id.slice(0, 8)}</b>
-                <span className="truncate text-2xs text-fg-muted">{s.host ?? "-"}</span>
+                <span className="truncate text-2xs text-fg-muted">
+                    {orUnknown(s.host, why.sessionHost)}
+                </span>
             </span>
         ),
     },
@@ -133,11 +137,11 @@ function Detail({ session: s, snap }: { session: SessionTotals; snap: Snapshot }
             </div>
             <Kv
                 rows={[
-                    ["host", s.host ?? "-"],
-                    ["project", s.project ?? "-"],
-                    ["provider", s.provider ?? "-"],
-                    ["api", s.api ?? "-"],
-                    ["model", s.model ?? "-"],
+                    ["host", orUnknown(s.host, why.sessionHost)],
+                    ["project", orUnknown(s.project, why.sessionProject)],
+                    ["provider", orUnknown(s.provider, why.sessionProvider)],
+                    ["api", orUnknown(s.api, why.sessionUsage)],
+                    ["model", orUnknown(s.model, why.sessionUsage)],
                     [
                         "started",
                         <>
@@ -164,7 +168,9 @@ function Detail({ session: s, snap }: { session: SessionTotals; snap: Snapshot }
                                 <span className="text-fg-muted">{hms(c.ts)}</span>
                                 <SurfacePill surface={c.surface} />
                                 <span className="text-fg-muted">{c.kind}</span>
-                                <span className="truncate">{c.name ?? c.plugin ?? "-"}</span>
+                                <span className="truncate">
+                                    {orUnknown(c.name ?? c.plugin, why.callName)}
+                                </span>
                                 {!c.ok && (
                                     <span className="ml-auto">
                                         <Pill tone="fail">fail</Pill>

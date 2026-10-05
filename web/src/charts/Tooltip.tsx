@@ -5,6 +5,7 @@
 import { flip, offset, shift, useFloating } from "@floating-ui/react-dom";
 import { useLayoutEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { tooltipBox } from "../ui/cx";
 import type { Anchor } from "./renderer";
 
 /** One tooltip for every chart and mark, hung from a viewport point. */
@@ -33,7 +34,7 @@ export function Tooltip({
             id={id}
             role="tooltip"
             style={floatingStyles}
-            className="pointer-events-none z-50 min-w-32 rounded-md border border-border-strong bg-surface px-2.5 py-2 text-2xs text-fg-muted shadow-lg"
+            className={`${tooltipBox} min-w-32`}
         >
             {children}
         </div>,
