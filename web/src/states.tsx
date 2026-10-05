@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { ReactNode } from "react";
-import offlineArt from "../assets/offline.svg?raw";
+import offlineArt from "@brand/illustrations/offline.svg?raw";
 import { focusRing } from "./ui/cx";
 
 // The four states every page shares; pages pick one instead of drawing their own.

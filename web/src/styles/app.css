@@ -1,9 +1,9 @@
 /* rtok SPA — Tailwind CSS v4 entry.
- * Tokens: ./tokens.css (the design tokens). The @theme mapping below
- * maps them onto Tailwind's scales. */
+ * Tokens and fonts come from the brand pack (`brand/`, T414): the flat `--rtok-*` build and the
+ * base IBM Plex Mono faces. The @theme mapping below maps them onto Tailwind's scales. */
 @import "tailwindcss";
-@import "./tokens.css";
-@import "./fonts.css";
+@import "@brand/dist/legacy/tokens.css";
+@import "@brand/node_modules/@pyrlyn/brand/dist/base/fonts.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 

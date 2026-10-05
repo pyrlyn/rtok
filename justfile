@@ -62,6 +62,7 @@ js-fmt:
 
 # T310.1: the rtok admin SPA in web/ (Vite + React + TypeScript), embedded by build.rs (T310.9).
 spa-install:
+    {{npm}} --prefix brand ci
     {{npm}} --prefix web ci
 
 spa-dev:

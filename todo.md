@@ -117,3 +117,10 @@
 - T413.13. `rtok agents install trae` — Trae
 - T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
+- T414. Web dashboard restyle on the brand pack, built from `brand/` sources
+- T414.2. Mockup: shell and Overview on the brandbook, in Storybook, for approval
+- T414.3. Restyle the `web/src/ui` components to the approved mockup
+- T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
+- T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
+- T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
+- T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`

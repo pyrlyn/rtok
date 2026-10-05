@@ -4,7 +4,7 @@
 
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import logo from "../assets/logo.svg";
+import logo from "@brand/logo/rtok-mark.svg";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
 import { Orb } from "./Orb";
 import { PAGES, type Page } from "./pages";
