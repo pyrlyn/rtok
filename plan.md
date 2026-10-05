@@ -130,7 +130,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.8 | todo | P2 | 2 | 0% | |
-| T414.9 | in progress | P2 | 3 | 5% | Claude Code / opus-5.5 |
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
@@ -2093,14 +2092,6 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
 
 Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
-
-### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
-
-A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on React Aria Components (`Autocomplete`, `Menu`, `Modal`; creator decision), styled on the `--pyr-*` roles.
-
-Check: unit tests for the shortcut map; a story with a play function that opens the palette, filters and navigates; axe green.
-
-Plan: 1) dep `react-aria-components` 1.21.1 (`toolchain.md` row); its `Autocomplete` + `Menu` in a `Modal` cover the palette, so no `cmdk` (no release since 2025-03, pulls Radix). 2) `web/src/palette/shortcuts.ts`: the `g <key>` map over `PAGES` (unique keys, unit-tested), a `?` help entry, and the "typing in a field" guard. 3) `useShortcuts` (one `keydown` listener on `window`: ⌘K / Ctrl+K anywhere, `g <key>` and `?` outside fields, a 1 s window for the second key). 4) `Palette.tsx`: sections Pages, Plugins (id, title), Sessions (id, host, project), Actions (theme); a plugin or session opens its page with `?id=` and the page selects that row. Hosts is a text page with no rows, so a host item opens the Hosts page. 5) `Shortcuts.tsx` help sheet (`Modal`). 6) Mount both in `Shell`. 7) Tests: shortcut map and guard (unit), a story whose play opens the palette with Ctrl+K, filters, picks a plugin and lands on it; axe.
 
 ### T414.10. Table filters and sort in the URL
 

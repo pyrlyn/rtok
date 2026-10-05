@@ -1025,6 +1025,14 @@ Pages describe a chart, they never call a chart library. `web/src/charts/` holds
 
 Result: ECharts 6.1.0 (tree-shaken `echarts/core`, canvas) in its own lazy chunk (525 kB / 178 kB gzip); the entry chunk grew 18 kB. Its own tooltip box stays off; our React tooltip is placed with `@floating-ui/react-dom` 2.1.9 (positioning only, instead of the planned `@floating-ui/react`). Canvas reads the `--pyr-*` roles and redraws on a theme switch. The calls chart, the calls KPI mini and the live sessions mini share one sync group: hovering one draws the pointer in the others, and only the hovered chart shows a tooltip. Charts are focusable `role="img"`; arrows, Home and End move the hover, Escape leaves, the tooltip is linked by `aria-describedby`. A unit test keeps `from "echarts` inside `charts/echarts.ts`. Checked in light and dark themes in the dev server.
 
+### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
+
+A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on React Aria Components (`Autocomplete`, `Menu`, `Modal`; creator decision), styled on the `--pyr-*` roles.
+
+Check: unit tests for the shortcut map; a story with a play function that opens the palette, filters and navigates; axe green.
+
+Result: `web/src/palette/`. ⌘K / Ctrl+K (also the header's "jump to" button) opens a palette over pages, plugins, sessions (newest 30) and hosts from the current snapshot, plus the theme switch; a plugin or session opens its page on that row through `?id=` (validated as a string in `router.tsx`, selected by `useSelectFromUrl`). `g <key>` jumps to a page (keys picked by hand, unit-tested unique), `?` opens the shortcut sheet; single-letter keys never fire inside fields. Behaviour comes from React Aria Components 1.21.1 (`Autocomplete`, `Menu`, `Modal`, `Dialog`); its `Autocomplete` covers the palette, so no `cmdk` (no release since 2025-03). The overlays load lazily (48 kB gzip chunk, entry +1 kB) and stay mounted after first use so closing hands focus back to the opener. Hosts is a text page with no rows, so a host item only opens it.
+
 ### T310.12. Delete Slint, the WASM build and the HTML design
 
 Remove `crates/rtok-webui`, `tools/webui-bundle.sh`, `just web-bundle`/`webui-check`, the wasm steps in CI/release, `tests/web_wasm.rs`, `design/html/` and the rest of the prototype; update D20, `architecture.md`, `toolchain.md` and `rust.md`.
