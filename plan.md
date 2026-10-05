@@ -139,7 +139,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T418 | todo | P2 | 3 | 0% | |
 | T419 | todo | P2 | 3 | 0% | |
 | T420 | todo | P1 | 4 | 0% | |
-| T421 | in progress | P1 | 2 | 10% | Claude Code / opus-5.5 |
 
 
 
@@ -2154,14 +2153,6 @@ Check: a unit test writes two checkpoints in one session and one in another and 
 `just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
 
 Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
-
-### T421. `/health` latency test survives runner load
-
-`health_stays_fast_while_a_large_request_is_recorded` (`tests/proxy.rs`, T205) asserts every `/health` poll returns in under 250 ms while a 48 MB `compress`-mode request is shaped. On a loaded `macos-latest` runner it took 301.8 ms (run 37334858645, PR #749, which only touched `web/`); the same code passed on the previous run. Done: the bound scales with how slow the runner is, so load alone cannot fail it, and the test still fails when `/health` waits on the recording (the T205 regression it guards).
-
-Plan: measure on the same runtime how long the big request takes to reach upstream; a T205 regression makes one `/health` poll wait for the whole synchronous shaping, i.e. most of that window, while a healthy proxy answers in a small fraction of it. Assert each poll stays under a fraction of the window instead of a fixed 250 ms. Only `tests/proxy.rs` changes.
-
-Check: the test run many times under artificial CPU load passes every time; with `spawn_blocking` replaced by an inline call in `src/proxy/mod.rs` (not committed) it fails every time; `just check`.
 
 ## Reference
 
