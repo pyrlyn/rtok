@@ -139,7 +139,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T418 | todo | P2 | 3 | 0% | |
 | T419 | todo | P2 | 3 | 0% | |
 | T420 | todo | P1 | 4 | 0% | |
-| T424 | in progress | P1 | 3 | 10% | Claude Code / claude-opus-5-5 |
 
 
 
@@ -2154,17 +2153,6 @@ Check: a unit test writes two checkpoints in one session and one in another and 
 `just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
 
 Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
-### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
-
-On a repository with ~115 linked worktrees `rtok worktree list` took over 120 s and `rtok worktree gc` (dry run) 98 s, mostly waiting on the disk: one `git status` per worktree in sequence (25–54 s), one `merge-tree` plus `rev-parse <base>^{tree}` per worktree, and a sequential walk of ~1.1 M files (716 k of them under `target/`). Done when both commands print the same rows, states and verdicts as before, measured before/after on the same repository.
-
-Plan:
-1. `worktree/mod.rs`: a small order-keeping `par_map` (scoped threads, one per core); `inventory` runs each worktree's `is_merged` + `is_dirty` through it.
-2. `worktree/git.rs`: `rev-parse <base>^{tree}` once per inventory instead of once per worktree.
-3. `worktree/list.rs`: `Row::new` (walk + origin) through `par_map`; the walk reads `.git` and `CACHEDIR.TAG` presence from the directory listing it already has and skips `lstat` on directories (`file_type` from the listing); an optional cutoff stops the walk at the first file newer than it.
-4. `worktree/gc.rs`: merged candidates' walks in parallel with the idle cutoff (the verdict only asks "newer than `now - idle`?"); removals stay sequential.
-5. Verify: JSON of `list` and `gc` from the old and new binary diff equal (minus the live-changing mtimes); `just check`.
-
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.
