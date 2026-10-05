@@ -40,7 +40,9 @@ pub mod pi;
 pub mod plugin;
 pub(crate) mod plugin_install;
 pub(crate) mod plugin_version;
+pub mod qwen;
 pub mod restart;
+pub mod roo;
 pub mod skill;
 pub mod usage;
 pub mod vscode;
@@ -82,6 +84,8 @@ pub const HOSTS: &[&str] = &[
     "mimo",
     "antigravity",
     "devin",
+    "roo",
+    "qwen",
 ];
 
 /// Every module an rtok install can carry, in print order.
@@ -112,6 +116,8 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "mimo" => Some(&mimo::Mimo),
         "antigravity" => Some(&antigravity::Antigravity),
         "devin" => Some(&devin::Devin),
+        "roo" => Some(&roo::Roo),
+        "qwen" => Some(&qwen::Qwen),
         _ => None,
     }
 }
@@ -1131,6 +1137,43 @@ pub(crate) fn unregister_local_mcp(
     unregister_ours(cfg, path, key, "rtok", &local_mcp_entry("rtok", host))
 }
 
+/// `mcpServers.rtok = {command, args}` with no `type` — the stdio shape Cline, its Roo Code
+/// fork, and Windsurf all document. One body so a new host does not copy the JSON.
+pub(crate) fn register_stdio_mcp(
+    cfg: &Config,
+    path: &std::path::Path,
+    host: &'static str,
+) -> Result<String> {
+    let cmd = rtok_command();
+    rtok_agent_sdk::register_server(
+        &apply(cfg),
+        path,
+        "mcpServers",
+        "rtok",
+        stdio_mcp_entry(&cmd, host),
+        &mcp_summary(&cmd, host),
+    )
+}
+
+fn stdio_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
+    json!({"command": cmd, "args": mcp_args(host)})
+}
+
+/// [`register_stdio_mcp`]'s remove: only the entry as rtok wrote it (T246.2).
+pub(crate) fn unregister_stdio_mcp(
+    cfg: &Config,
+    path: &std::path::Path,
+    host: &'static str,
+) -> Result<String> {
+    unregister_ours(
+        cfg,
+        path,
+        "mcpServers",
+        "rtok",
+        &stdio_mcp_entry("rtok", host),
+    )
+}
+
 /// `Agent::installed` for a host whose only module is `mcp`: present iff `path` mentions
 /// `"rtok"`. Shared by every MCP-only host (T186) instead of each repeating the same
 /// contains-check.
@@ -1775,6 +1818,38 @@ pub(crate) fn assert_local_mcp_roundtrip(
     let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert!(root["mcp"]["rtok"].is_null(), "{root}");
     assert_eq!(root["mcp"]["other"]["url"], "x");
+}
+
+/// Shared assertion for hosts whose MCP entry is `{command, args}` under `mcpServers`
+/// with no `type` ([`register_stdio_mcp`]). Register is idempotent, remove keeps foreign
+/// servers, both surface through `installed`.
+#[cfg(test)]
+pub(crate) fn assert_stdio_mcp_roundtrip(
+    path: &Path,
+    host: &str,
+    register: impl Fn() -> Result<String>,
+    unregister: impl Fn() -> Result<String>,
+    installed: impl Fn() -> Vec<&'static str>,
+) {
+    use serde_json::Value;
+    std::fs::write(path, r#"{"mcpServers":{"foreign":{"command":"x"}}}"#).unwrap();
+    let first = register().unwrap();
+    assert!(first.starts_with("mcpServers.rtok: "), "{first}");
+    assert!(first.contains(host), "{first}");
+    assert_eq!(register().unwrap(), NO_CHANGES);
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(
+        root["mcpServers"]["rtok"].get("type").is_none(),
+        "stdio shape has no type: {root}"
+    );
+    assert_eq!(root["mcpServers"]["rtok"]["args"][0], "mcp");
+    assert_eq!(root["mcpServers"]["rtok"]["args"][2], host);
+    assert_eq!(installed(), ["mcp"]);
+    assert_eq!(unregister().unwrap(), "- mcpServers.rtok");
+    assert_eq!(unregister().unwrap(), NO_CHANGES);
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(root["mcpServers"]["rtok"].is_null(), "{root}");
+    assert_eq!(root["mcpServers"]["foreign"]["command"], "x");
 }
 
 #[cfg(test)]

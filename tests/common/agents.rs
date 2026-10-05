@@ -63,6 +63,8 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".gemini/config/plugins",
         ".gemini/antigravity-cli/plugins",
         "devin",
+        "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings",
+        ".qwen",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -97,7 +99,9 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.mimo]\nconfig_path = \"{h}/.config/mimocode/mimocode.json\"\n\
               [setup.antigravity]\nplugins_path = \"{h}/.gemini/config/plugins\"\n\
               cli_plugins_path = \"{h}/.gemini/antigravity-cli/plugins\"\n\
-              [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n"
+              [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n\
+              [setup.roo]\nmcp_path = \"{h}/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json\"\n\
+              [setup.qwen]\ndir = \"{h}/.qwen\"\n"
         ),
     )
     .unwrap();

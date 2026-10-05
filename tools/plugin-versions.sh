@@ -35,6 +35,7 @@ cursor
 devin
 gemini
 grok
+qwen
 kimi
 opencode
 pi
@@ -49,6 +50,7 @@ plugins/cursor/plugin.json
 plugins/cursor/.cursor-plugin/plugin.json
 plugins/copilot/plugin.json
 plugins/gemini/gemini-extension.json
+plugins/qwen/qwen-extension.json
 plugins/devin/.devin-plugin/plugin.json
 plugins/zcode/.zcode-plugin/plugin.json
 plugins/grok/.grok-plugin/plugin.json

@@ -230,6 +230,10 @@ plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: 
 cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # agy plugin install stages here; read only
 [setup.devin]
 config_path   = "~/.config/devin/config.json"  # mcp_config.json is read beside it; Windows: %APPDATA%\devin\
+[setup.roo]
+mcp_path      = ""                               # empty: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
+[setup.qwen]
+dir           = "~/.qwen"                    # settings.json (hooks, mcpServers); QWEN_HOME moves the directory
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
