@@ -10,7 +10,8 @@ unless `AGENTS.md` or the user says otherwise. Use rtok, not raw `git worktree`
 (no `rtok`? `ketch install pyrlyn/rtok`).
 
 Start with `rtok worktree whoami`: your agent id (quote it when you report), where new
-worktrees go, the worktree you are in and the ones you already hold.
+worktrees go, the worktree you are in and the ones you already hold. rtok 0.15.1 and older
+lack it: run `rtok agents whoami` for the id and `rtok worktree list` for the rest.
 
 ## Create
 
