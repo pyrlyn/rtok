@@ -1,0 +1,17 @@
+{
+  "name": "@pyrlyn/rtok-brand",
+  "version": "0.1.0",
+  "private": true,
+  "description": "rtok brand pack: the rtok deltas (colour roles, logos, product icons) on top of the Pyrlyn base layer (@pyrlyn/brand base/).",
+  "license": "SEE LICENSE IN README.md",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check"
+  },
+  "dependencies": {
+    "@pyrlyn/brand": "github:pyrlyn/brand#v0.3.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
