@@ -7033,6 +7033,16 @@ Check: `just check`.
 
 Result (2026-10-05, Claude Code / opus-5.5): `user_prompt` skips host-injected records (`host_injected`: `isMeta`, `isCompactSummary`, non-`human` `origin.kind`), cuts `<system-reminder>` blocks (`strip_reminders`, an unclosed block runs to the end), and skips text opening with one of `HOST_OPENERS`. The `isMeta`-without-source case in `injected_skill_bodies_are_listed_not_quoted` now yields no prompt. New tests: `host_injected_records_are_not_prompts` (`HOST_FIXTURE`, one record per real shape), `prompt_window_counts_only_typed_prompts`, `strip_reminders_cuts_every_block`; `HOST_FIXTURE` joins the prefilter superset test. On a real 17 MB rtok transcript with 132 task notifications, rtok 0.15.1 restored only `<task-notification>` lines and the compaction summary; the new build restored the three prompts the user typed. `just check` green.
 
+### T425. Large-transcript SessionEnd test bounds scaling, not wall clock
+
+`checkpoint::tests::session_end_on_a_large_transcript_is_bounded` asserts the SessionEnd hook on a 50 MB transcript finishes in under 10 s. It failed in `just check` at 13.8 s with host load ~130 on a 16-core Mac (debug build); alone at load 50-110 it took 5.2-8.0 s, so the fixed bound has little margin under load. Its comment says the bound only catches a quadratic regression. Done: the test times a 5 MB transcript before and after the 50 MB one in the same test and bounds the 50 MB run against the slower small run (near-linear scaling), with no wall-clock bound; the open count and note-body checks stay. Same approach as T421.
+
+Plan: `src/plugins/checkpoint.rs` only — a helper times one SessionEnd run per project; small, big, small; assert `big < max(small) * K` with K well under the ~100x a quadratic extractor gives.
+
+Check: the test passes repeatedly under CPU load (own `yes` burners); it fails when the extraction loop is made quadratic; `just check` green.
+
+Result (2026-10-05, Claude Code / opus-5.5): `timed_session_end` runs one SessionEnd per project and checks the single `Store::open`; the test times 5 MB, 50 MB, 5 MB and asserts `large < max(small) * 30`, with no wall-clock bound; the note-body check stays. Ten runs beside 32 `yes` burners (host load 73-345): every run passed, the 50 MB hook took 5.0-9.3 s, ratios 0.5-9.3 (a 5 MB run spiked to 12 s once). A per-line `Vec::iter().sum()` over every earlier line injected into `extract_lines_with` failed it: 241 s against 2.7 s, ratio 90.0. `just check` green (2450 tests).
+
 ### T230. Graph page: index status and dead symbols on `tui` and `web`
 
 Found 2026-09-23 in the D27 audit: `graph status`, `graph dead`, `graph impact` and `graph affected` are exempt (`tests/surface_parity.rs:385-400`) though they are pure reads over `symbols`; I-80 rejected new export formats because "D27 says the web/TUI page is the surface", yet no page exists.
