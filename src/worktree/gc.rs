@@ -19,15 +19,20 @@ use crate::render::Col;
 pub enum Verdict {
     /// Merged, clean, idle and not held by anyone else: remove the worktree.
     Remove,
+    /// Merged, clean and idle past `stale_lock` under someone else's lock (T418): the
+    /// session that took it is gone and nothing is left to lose. Holds the lock's owner.
+    Reclaim(String),
     /// The directory is gone: drop this one record (never a blanket `prune`).
     DropRecord,
     Keep(String),
 }
 
 pub struct Policy<'a> {
-    /// Whose locks may be opened; every other lock is a hard stop.
+    /// Whose locks may be opened; any other lock holds until it goes stale (T418).
     pub owner: Option<&'a str>,
     pub idle: Duration,
+    /// Untouched this long, a foreign lock on a merged, clean worktree is abandoned.
+    pub stale_lock: Duration,
     pub now: SystemTime,
     /// Live rtok agents (T282): a worktree bound to one is never removed (T285).
     pub live: std::collections::HashSet<String>,
@@ -49,11 +54,20 @@ pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Po
         let short: String = agent.chars().take(8).collect();
         return keep(&format!("agent {short} is live"));
     }
+    let age = modified.map(|m| p.now.duration_since(m).unwrap_or_default());
     if record.held_against(p.owner) {
         let owner = record.owner().map(|o| o.owner);
-        return keep(&owner.map_or("locked, owner unknown".into(), |o| format!("locked by {o}")));
+        let owner = owner.map_or(", owner unknown".into(), |o| format!(" by {o}"));
+        // Only a merged, clean worktree: a dirty, unmerged or vanished one may still be
+        // the only copy of someone's work, so its lock holds however old it is. An
+        // unreadable mtime is no evidence of age.
+        let stale = age.is_some_and(|a| a >= p.idle.max(p.stale_lock));
+        return match entry.state == State::Merged && stale {
+            true => Verdict::Reclaim(owner),
+            false => keep(&format!("locked{owner}")),
+        };
     }
-    let active = modified.is_some_and(|m| p.now.duration_since(m).unwrap_or_default() < p.idle);
+    let active = age.is_some_and(|a| a < p.idle);
     match entry.state {
         State::Stale => Verdict::DropRecord,
         State::Dirty => keep("uncommitted changes"),
@@ -91,9 +105,10 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
         let modified = (entry.state == State::Merged).then(|| usage(path).modified);
         let verdict = decide(entry, modified.flatten(), current, policy);
         let (action, planned) = match &verdict {
-            Verdict::Remove => ("remove", "merged, clean and idle"),
-            Verdict::DropRecord => ("drop-record", "directory is gone"),
-            Verdict::Keep(why) => ("keep", why.as_str()),
+            Verdict::Remove => ("remove", "merged, clean and idle".into()),
+            Verdict::Reclaim(owner) => ("remove", format!("merged, clean, abandoned lock{owner}")),
+            Verdict::DropRecord => ("drop-record", "directory is gone".into()),
+            Verdict::Keep(why) => ("keep", why.clone()),
         };
         let done = (yes && action != "keep")
             .then(|| super::remove::detach(repo, &entry.record, entry.merged));
@@ -105,7 +120,7 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
             note: match done {
                 Some(Ok(note)) => note,
                 Some(Err(e)) => format!("failed, kept: {e:#}"),
-                None => planned.into(),
+                None => planned,
             },
         }
     });
@@ -156,8 +171,24 @@ mod tests {
     )]
     #[case::finished(State::Merged, None, false, 0, "remove")]
     #[case::my_lock(State::Merged, Some(MINE), false, 0, "remove")]
-    #[case::foreign_lock(State::Merged, Some(THEIRS), false, 0, "keep:locked by Cursor / grok")]
-    #[case::bare_lock(State::Merged, Some(""), false, 0, "keep:locked, owner unknown")]
+    #[case::foreign_lock(
+        State::Merged,
+        Some(THEIRS),
+        false,
+        600,
+        "keep:locked by Cursor / grok"
+    )]
+    #[case::bare_lock(State::Merged, Some(""), false, 600, "keep:locked, owner unknown")]
+    #[case::abandoned_lock(State::Merged, Some(THEIRS), false, 0, "reclaim: by Cursor / grok")]
+    #[case::abandoned_bare_lock(State::Merged, Some(""), false, 0, "reclaim:, owner unknown")]
+    #[case::dirty_theirs(State::Dirty, Some(THEIRS), false, 0, "keep:locked by Cursor / grok")]
+    #[case::unmerged_theirs(
+        State::Unmerged,
+        Some(THEIRS),
+        false,
+        0,
+        "keep:locked by Cursor / grok"
+    )]
     #[case::active(
         State::Merged,
         None,
@@ -211,11 +242,13 @@ mod tests {
         let policy = Policy {
             owner: Some(ME),
             idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
         };
         let got = match decide(&entry, Some(at(modified)), current, &policy) {
             Verdict::Remove => "remove".to_string(),
+            Verdict::Reclaim(owner) => format!("reclaim:{owner}"),
             Verdict::DropRecord => "drop-record".to_string(),
             Verdict::Keep(why) => format!("keep:{why}"),
         };
@@ -236,6 +269,7 @@ mod tests {
         let policy = Policy {
             owner: None,
             idle: Duration::ZERO,
+            stale_lock: Duration::ZERO,
             now: at(1_000),
             live: Default::default(),
         };

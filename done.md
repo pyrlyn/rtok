@@ -8286,6 +8286,14 @@ Check: the tests above green; `just check`.
 
 Result (2026-10-04, Claude Code / claude-opus-5-5): `detach` reports a branch git refuses to delete as `removed; branch kept: <git's message>`, so `remove` exits 0, releases the claim, and `gc` no longer says `failed, kept` for a removed worktree. New test `remove_guards_commits_and_reports_a_branch_it_could_not_delete` covers the edges listed in step 2; it failed on `main` at the second-worktree case and passes with the fix. Note for manual cleanup: `git branch -d` refuses squash-merged branches, so `--keep-branch` plus `git branch -d` leaves them behind; plain `rtok worktree remove` deletes them because its merged check is squash-aware.
 
+### T418. `rtok worktree gc` reclaims abandoned foreign locks on merged worktrees
+
+`gc` opens only the locks whose owner equals `--owner` and never a lock with a free-text reason, while only locks written since T285 name an agent whose liveness can be checked. Sessions end without `worktree remove`, so locks pile up that nobody can clear: on 2026-10-05 this repository had 108 locked worktrees, 35 of them merged and clean. Done when `gc` treats a lock held by anyone else as abandoned once its worktree is merged into the base, clean, bound to no live agent and untouched for longer than `--stale-lock` (default `7d`), and removes it like its own; dirty, unmerged and gone worktrees stay protected by any lock.
+
+Plan: `src/worktree/gc.rs` — `Policy.stale_lock`, a `Verdict::Reclaim(owner)` that `run` applies with `detach` and reports as `remove` with the lock's owner in the note; unit cases for an old foreign lock, a fresh one, a bare one and a dirty or unmerged one. `src/cli.rs` — `--stale-lock`. `tests/worktree.rs` — a dry run with `--stale-lock 0h` plans the foreign and bare locks for removal. Gates: `config_coverage` allow-list, completion goldens, `docs/agents-and-worktrees.md`.
+
+Check: `cargo nextest run --test worktree --test cli_trycmd --test surface_parity --test config_coverage` and `just check`.
+
 ### T287. Messages between agents and the user: `rtok agents send`, `rtok agents inbox`, MCP `agent_send`, `agent_inbox`
 
 Depends on T282, T283. The creator wants to reach any running agent by its id from the terminal, and agents to reach each other over MCP.
