@@ -1,5 +1,5 @@
 # Build the Hugo site (site/, `just site`) and deploy it to GitHub Pages through
-# pyrlyn/infra's pages.yml. Tools (just, hugo, go) come from mise.toml.
+# pyrlyn/ci's pages.yml. Tools (just, hugo, go) come from mise.toml.
 name: docs
 
 on:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   pages:
-    uses: pyrlyn/infra/.github/workflows/pages.yml@0603d0ae610af9f792c5caf925041292a857e480 # main
+    uses: pyrlyn/ci/.github/workflows/pages.yml@0603d0ae610af9f792c5caf925041292a857e480 # main
     permissions:
       contents: read
       pages: write

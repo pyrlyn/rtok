@@ -235,12 +235,12 @@ if "Check plugin manifest versions" not in text:
         sys.exit(1)
     text = text.replace(plan_checkout, plan_checkout_with_check, 1)
 
-# A last job that turns a failed release into a `release-failure` issue (pyrlyn/infra).
+# A last job that turns a failed release into a `release-failure` issue (pyrlyn/ci).
 NOTIFY = """
   # Added by tools/dist-generate.sh: a failed release (not a pull request or a dry run)
   # opens or comments on a `release-failure` issue that mentions and assigns @listepo. The
   # only release failure notification: GitHub cannot filter Actions notifications per
-  # workflow. Pinned to pyrlyn/infra's ci/notify-release-failure; repin to its merge commit.
+  # workflow. Pinned to pyrlyn/ci's ci/notify-release-failure; repin to its merge commit.
   notify-failure:
     needs: [plan, build-local-artifacts, build-global-artifacts, host, announce]
     if: >-
@@ -252,7 +252,7 @@ NOTIFY = """
       "actions": "read"
       "issues": "write"
     steps:
-      - uses: pyrlyn/infra/.github/actions/notify-release-failure@d709124d53dd4923eff8f594b3155842508b0049
+      - uses: pyrlyn/ci/.github/actions/notify-release-failure@d709124d53dd4923eff8f594b3155842508b0049
         with:
           ref: ${{ inputs.tag }}
           needs: ${{ toJSON(needs) }}
