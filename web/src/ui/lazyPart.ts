@@ -14,7 +14,8 @@ export function lazyPart<P extends object>(what: string, load: () => Promise<Com
     load().then(
       (c) => ({ default: c }),
       (e: unknown) => {
-        console.warn(`rtok: ${what} failed to load`, e);
+        // A constant format string: `what` is ours today, but a "%" in it must never shape the log.
+        console.warn("rtok: %s failed to load", what, e);
         return { default: none };
       },
     ),
