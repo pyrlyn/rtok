@@ -66,8 +66,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T369 | todo | P1 | 2 | 0% | |
 | T370 | todo | P1 | 4 | 0% | |
 | T371 | todo | P2 | 2 | 0% | |
-| T372 | todo | P2 | 1 | 0% | |
-| T373 | todo | P2 | 1 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
 | T376 | todo | P2 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
@@ -108,8 +106,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.1 | in progress | P2 | 2 | 85% | Cursor / grok 4.7 |
-| T413.2 | in progress | P2 | 2 | 90% | Cursor / grok 4.7 |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
@@ -1577,26 +1573,6 @@ Done when: `impact <name>` on a file with co-change history lists its top partne
 
 Check: unit test on a scripted temp repo (three commits, one over the 20-file cap) asserts the pairs and counts; backtest over the last 100 commits: for each commit's first file, hit@5 of its other files among the top co-change partners ≥ 0.30; build ≤ 300 ms on this repo; `just check`.
 
-### T372. Link tests to sources by naming convention in `affected_from_paths`
-
-From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` test-file linking). `affected_from_paths` (`src/plugins/graph/mod.rs:710`) finds tests through symbol references only, so a test that exercises a binary through `assert_cmd` or a fixture file, or a TS/Python test with dynamic imports, is missed.
-
-Plan: add name-convention links before the symbol walk: `foo.rs` ↔ `tests/foo.rs` / `foo_test.rs`, `foo.ts` ↔ `foo.test.ts` / `foo.spec.ts` / `__tests__/foo.ts`, `foo.py` ↔ `test_foo.py` / `foo_test.py`, `foo.go` ↔ `foo_test.go`; existing files only, one `HashSet` of indexed paths. Union with the symbol result; mark them `(by name)` in the output.
-
-Done when: changing `src/foo.ts` with an existing `src/foo.test.ts` that does not import it by a resolvable path lists that test.
-
-Check: table-driven unit test over the four language conventions plus a negative case (no such file); existing affected tests unchanged; `just check`.
-
-### T373. `rrf_merge` breaks score ties by note id
-
-From the Empryo study (idea-only; Empryo's memory recall merges FTS and vector hits with RRF and a stable order). `rrf_merge` (`src/store/embed.rs:198`) collects scores in a `HashMap` and sorts by score alone, so notes with equal RRF score (common: rank i in one list, absent from the other) may come back in a different order between runs — suspected, not reproduced. A nondeterministic recall order also breaks the cache-stable prefix when recall is injected.
-
-Plan: write the failing test first (two lists producing equal scores, run the merge 50 times, assert one order); then sort by `(score desc, id asc)`.
-
-Done when: `rrf_merge` output is identical across runs for equal scores.
-
-Check: the new unit test in `src/store/embed.rs`; `tests/p29_memory.rs` unchanged; `just check`. If the test passes before the fix, close the card with that note.
-
 ### T374. Memory notes linked to files: recall boosted by the files in play
 
 From the Empryo study (idea-only, clean-room; Empryo memory DB file links and recall boosting). P29 recall matches on the prompt text only; a note about `src/proxy/semantic_cache.rs` is not preferred when the session is editing that file. Low priority while the store holds few notes (18 on the creator's machine, 2026-10-02).
@@ -1960,22 +1936,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
 
 Check: every sub-task below is closed in `done.md` with its per-host check.
-
-### T413.1. `rtok agents install roo` — Roo Code
-
-VS Code extension forked from Cline. Check how far `src/agents/cline/` applies (MCP settings file, rules, hooks if any) and share it through a helper instead of a second copy.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: research.md §32.1 from docs.roocode.com and the Roo repo (MCP shape, globalStorage path, no documented CLI MCP file or shell hooks). `register_stdio_mcp` in `src/agents/mod.rs` is the shared `{command, args}` writer; Cline and Windsurf call it, Roo calls it. `src/agents/roo/` is desktop-only, empty `[setup.roo] mcp_path` derives the VS Code globalStorage file. Verify with the host unit tests, `agents_doc`, `host_docs`, `agents_real_config`, and `just check`. Manual `rtok agents install roo --dry-run` only if Roo is installed here.
-
-### T413.2. `rtok agents install qwen` — Qwen Code
-
-CLI forked from Gemini CLI. Check how far `src/agents/gemini/` applies (settings path, `mcpServers`, hook events, extensions) and share it.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: `research.md` §32.2. User file `~/.qwen/settings.json` (`QWEN_HOME`). `mcpServers` is `{command, args}`, written by `register_stdio_mcp` — Gemini's `register_mcp` hardcodes `--host gemini`, so a path override would stamp the wrong host. Hooks are Claude event names with `timeout` in seconds, so the installer calls `claude::insert_ours` on the `qwen` rows of `hook_events`, not Gemini's millisecond `BeforeTool` writer. `plugins/qwen` is the D21 hooks unit behind `--yes` (`qwen extensions link`, `hooks/hooks.json` from the repo loader; the extension docs page does not list a `hooks` field). MCP stays in `settings.json` on every install. No desktop variant and no proxy: no separate desktop path, and `model.baseUrl` is not for hand edits. Events rtok has no plugin for stay uninstalled. Verify: the targeted nextest filter (qwen unit tests, `agents_doc`, `host_docs`, `agents_list_text`/`json`, `readme_tables_match_support`, `default_toml_is_the_defaults`, `qwen_keeps`) passed. `just check` not run. `qwen` is not on PATH here, so no live `--dry-run`.
 
 ### T413.3. `rtok agents install droid` — Factory Droid
 

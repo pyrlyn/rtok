@@ -7052,6 +7052,50 @@ Check: `just check`.
 
 Result (2026-10-05, Claude Code / opus-5.5): `user_prompt` skips host-injected records (`host_injected`: `isMeta`, `isCompactSummary`, non-`human` `origin.kind`), cuts `<system-reminder>` blocks (`strip_reminders`, an unclosed block runs to the end), and skips text opening with one of `HOST_OPENERS`. The `isMeta`-without-source case in `injected_skill_bodies_are_listed_not_quoted` now yields no prompt. New tests: `host_injected_records_are_not_prompts` (`HOST_FIXTURE`, one record per real shape), `prompt_window_counts_only_typed_prompts`, `strip_reminders_cuts_every_block`; `HOST_FIXTURE` joins the prefilter superset test. On a real 17 MB rtok transcript with 132 task notifications, rtok 0.15.1 restored only `<task-notification>` lines and the compaction summary; the new build restored the three prompts the user typed. `just check` green.
 
+### T372. Link tests to sources by naming convention in `affected_from_paths`
+
+From the Empryo study (idea-only, clean-room). `affected_from_paths` found tests only through symbol references, so a test that never imports the changed file was missed.
+
+Done: before the symbol walk, `affected_from_paths` builds a `HashSet` of indexed paths from `symbol_stats` and unions name-convention candidates for each changed path: `foo.rs` → `tests/foo.rs` / `{dir}/foo_test.rs`; `foo.ts`/`js` → `{dir}/foo.test.*` / `foo.spec.*` / `{dir}/__tests__/foo.*`; `foo.py` → `test_foo.py` / `foo_test.py`; `foo.go` → `foo_test.go`. Matches are marked `← via (by name)`. `is_test_path` also treats `.test.`, `.spec.`, and `/__tests__/` as tests.
+
+Check: `affected_links_tests_by_naming_convention` (Rust name link + negative + candidate table for four languages); existing affected tests unchanged; `cargo test --lib affected_links_tests_by_naming_convention` green.
+
+Status: done 2026-10-06
+Model: Grok Bot
+
+### T373. `rrf_merge` breaks score ties by note id
+
+From the Empryo study (idea-only). `rrf_merge` sorted by score alone, so equal RRF scores (common when a note ranks in only one of the FTS/KNN lists) could reorder between runs and break a cache-stable recall prefix.
+
+Done: sort by `(score desc, id asc)`. Unit test builds two single-hit lists with equal scores and asserts the same id order across 50 runs.
+
+Check: `rrf_merge_breaks_score_ties_by_note_id` in `src/store/embed.rs`; `cargo test --lib rrf_merge_breaks_score_ties_by_note_id` green.
+
+Status: done 2026-10-06
+Model: Grok Bot
+
+### T413.1. `rtok agents install roo` — Roo Code
+
+VS Code extension forked from Cline. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
+
+Done: `src/agents/roo/` desktop-only host; MCP via shared `register_stdio_mcp`; empty `[setup.roo] mcp_path` derives the VS Code globalStorage file; docs and list/config tests updated. Research in `research.md` §32.1.
+
+Check: host unit tests, `agents_doc`, `host_docs`, `agents_real_config` (as in the landing PR); #760 CI green on main.
+
+Status: done 2026-10-05 (#760)
+Model: Cursor / grok 4.7
+
+### T413.2. `rtok agents install qwen` — Qwen Code
+
+CLI forked from Gemini CLI. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
+
+Done: `src/agents/qwen/` plus `plugins/qwen` hooks extension; MCP via `register_stdio_mcp` into `~/.qwen/settings.json`; Claude-named hooks with second timeouts via `claude::insert_ours` on qwen `hook_events` rows; docs and list/config tests updated. Research in `research.md` §32.2.
+
+Check: targeted nextest filter from the landing PR; #760 CI green on main.
+
+Status: done 2026-10-05 (#760)
+Model: Cursor / grok 4.7
+
 ### T419. Checkpoint prompt quality in the web and TUI statistics
 
 T417 made the checkpoint keep only typed prompts. It saves no tokens — the restore is capped at `checkpoint_tokens`, and on 30 real rtok transcripts (2026-10-05) the capped restore averaged 1775 bytes before and 1903 after — it changes what fills the budget. A `Measurement` row would be summed into the memory plugin's savings, so this is a quality metric, shown apart from savings and never added to them.

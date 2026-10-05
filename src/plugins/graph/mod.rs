@@ -645,8 +645,13 @@ fn is_test_path(path: &str) -> bool {
     path == "tests"
         || path.starts_with("tests/")
         || path.contains("/tests/")
+        || path.contains("/__tests__/")
         || path.split('/').next_back().is_some_and(|f| {
-            f.starts_with("test_") || f.starts_with("_test") || f.contains("_test.")
+            f.starts_with("test_")
+                || f.starts_with("_test")
+                || f.contains("_test.")
+                || f.contains(".test.")
+                || f.contains(".spec.")
         })
 }
 
@@ -735,10 +740,17 @@ pub(crate) fn affected_from_paths(
 ) -> Result<String> {
     index_for(cx, root)?;
     let key = index::canon(root);
+    // T372: indexed paths for name-convention test links (existing files only).
+    let indexed: HashSet<String> = cx.symbol_stats(&key)?.into_keys().collect();
     let mut hits = BTreeSet::new();
     let mut starts = HashSet::new();
     for raw in paths {
         let rel = rel_of(root, raw);
+        for candidate in name_linked_tests(&rel) {
+            if indexed.contains(&candidate) && is_test_path(&candidate) {
+                hits.insert((candidate, "(by name)".to_string()));
+            }
+        }
         for name in defs_in_path(cx, root, &key, &rel)? {
             if is_test_path(&rel) {
                 hits.insert((rel.clone(), name.clone()));
@@ -759,6 +771,54 @@ pub(crate) fn affected_from_paths(
         }
     }
     Ok(format_affected(&hits, json))
+}
+
+/// T372: candidate test paths linked by naming convention to `rel` (same stem).
+fn name_linked_tests(rel: &str) -> Vec<String> {
+    let path = Path::new(rel);
+    let Some(stem) = path.file_stem().and_then(OsStr::to_str) else {
+        return Vec::new();
+    };
+    // `foo.test.ts` / `foo.spec.ts` → stem before the test suffix for reverse lookup is unused;
+    // we only map source → test here.
+    let parent = path
+        .parent()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .filter(|p| !p.is_empty() && p != ".")
+        .unwrap_or_default();
+    let join = |dir: &str, file: &str| -> String {
+        if dir.is_empty() {
+            file.to_string()
+        } else {
+            format!("{dir}/{file}")
+        }
+    };
+    let ext = path
+        .extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mut out = Vec::new();
+    match ext.as_str() {
+        "rs" => {
+            out.push(format!("tests/{stem}.rs"));
+            out.push(join(&parent, &format!("{stem}_test.rs")));
+        }
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => {
+            out.push(join(&parent, &format!("{stem}.test.{ext}")));
+            out.push(join(&parent, &format!("{stem}.spec.{ext}")));
+            out.push(join(&parent, &format!("__tests__/{stem}.{ext}")));
+        }
+        "py" => {
+            out.push(join(&parent, &format!("test_{stem}.py")));
+            out.push(join(&parent, &format!("{stem}_test.py")));
+        }
+        "go" => {
+            out.push(join(&parent, &format!("{stem}_test.go")));
+        }
+        _ => {}
+    }
+    out
 }
 
 fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<String>> {
@@ -1991,6 +2051,62 @@ fn c() {}
         assert_eq!(test_command("t.py", "n").as_deref(), Some("pytest t.py::n"));
         assert_eq!(test_command("t.go", "N").as_deref(), Some("go test -run N"));
         assert_eq!(test_command("t.ts", "n").as_deref(), Some("vitest t.ts"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T372: name-convention links list a test that never imports the source.
+    #[test]
+    fn affected_links_tests_by_naming_convention() {
+        let (cx, dir) = cx("affected-by-name");
+        fs::create_dir_all(dir.join("tests")).unwrap();
+        fs::create_dir_all(dir.join("src")).unwrap();
+        // Source with a sibling name-linked test that does not call it.
+        fs::write(dir.join("src/foo.rs"), "pub fn foo() {}\n").unwrap();
+        fs::write(
+            dir.join("tests/foo.rs"),
+            "fn test_foo_name_only() {\n    let _ = 1;\n}\n",
+        )
+        .unwrap();
+        // Negative: no matching test file for this source.
+        fs::write(dir.join("src/lonely.rs"), "pub fn lonely() {}\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        let out = affected_from_paths(&ctx, &dir, &["src/foo.rs".into()], 3, false).unwrap();
+        assert!(
+            out.contains("tests/foo.rs ← via (by name)"),
+            "rust name link missing: {out}"
+        );
+        let out = affected_from_paths(&ctx, &dir, &["src/lonely.rs".into()], 3, false).unwrap();
+        assert!(
+            !out.contains("(by name)"),
+            "lonely source must not invent a name link: {out}"
+        );
+        // Table-driven candidates for the four language conventions plus a negative.
+        assert_eq!(
+            name_linked_tests("src/foo.rs"),
+            vec!["tests/foo.rs".to_string(), "src/foo_test.rs".to_string()]
+        );
+        assert_eq!(
+            name_linked_tests("src/foo.ts"),
+            vec![
+                "src/foo.test.ts".to_string(),
+                "src/foo.spec.ts".to_string(),
+                "src/__tests__/foo.ts".to_string(),
+            ]
+        );
+        assert_eq!(
+            name_linked_tests("pkg/foo.py"),
+            vec!["pkg/test_foo.py".to_string(), "pkg/foo_test.py".to_string()]
+        );
+        assert_eq!(
+            name_linked_tests("pkg/foo.go"),
+            vec!["pkg/foo_test.go".to_string()]
+        );
+        assert!(name_linked_tests("readme.md").is_empty());
+        assert!(is_test_path("src/foo.test.ts"));
+        assert!(is_test_path("src/foo.spec.ts"));
+        assert!(is_test_path("src/__tests__/foo.ts"));
+        assert!(is_test_path("src/test_foo.py"));
+        assert!(is_test_path("src/foo_test.go"));
         let _ = fs::remove_dir_all(dir);
     }
 
