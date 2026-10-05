@@ -651,6 +651,7 @@ pub fn plugin_rows(agent: &dyn Agent, kind: Kind, cfg: &Config) -> Vec<PluginRow
 ///     ✗ not installed  proxy, compress (off)
 ///     − not supported  -
 /// ```
+/// An empty not-installed group is omitted: a lone `-` is not a missing install.
 pub fn plugin_lines(rows: &[PluginRow], indent: &str, console: bool) -> String {
     let mut out = format!("{indent}plugins\n");
     let inner = format!("{indent}  ");
@@ -670,6 +671,10 @@ pub fn plugin_lines(rows: &[PluginRow], indent: &str, console: bool) -> String {
                 }
             })
             .collect();
+        // A dash under "not installed" reads as a failure when nothing is waiting.
+        if ids.is_empty() && state == ModuleState::NotInstalled {
+            continue;
+        }
         let ids = if ids.is_empty() {
             "-".to_string()
         } else {
@@ -2238,6 +2243,32 @@ mod tests {
         assert!(reaches(&pi::Pi, Kind::Cli, &[Surface::Mcp]));
         assert!(!reaches(&pi::Pi, Kind::Cli, &[Surface::Proxy]));
         assert!(reaches(&cursor::Cursor, Kind::Desktop, &[Surface::Mcp]));
+    }
+
+    /// `install` / `update` / `list` share `plugin_lines`. A not-installed group with no
+    /// plugins used to print `✗ not installed  -`; that dash is not a missing install.
+    #[test]
+    fn empty_not_installed_plugin_group_is_omitted() {
+        let rows = [PluginRow {
+            id: "read",
+            on: true,
+            state: ModuleState::Installed,
+        }];
+        let text = plugin_lines(&rows, "", false);
+        assert!(
+            !text.contains("not installed"),
+            "empty group must not print not installed:\n{text}"
+        );
+        assert!(text.contains("installed      read"), "{text}");
+        assert!(text.contains("not supported  -"), "{text}");
+
+        let waiting = [PluginRow {
+            id: "proxy",
+            on: false,
+            state: ModuleState::NotInstalled,
+        }];
+        let text = plugin_lines(&waiting, "", false);
+        assert!(text.contains("not installed  proxy (off)"), "{text}");
     }
 
     /// What an install must leave behind follows `support()` and the flags given; against
