@@ -21,6 +21,9 @@ if split out per T2.5.
 - MCP `mem_update` and `rtok memory retire|pin|unpin|revise` call the same functions here —
   one call path per capability (D21); `revise` is `mem_save` + `retire_note`, nothing else.
 - Recall injects titles and ids only; bodies are fetched on demand with `mem_get`.
+- Checkpoint prompts are only what the human typed (T417, `checkpoint::user_prompt`):
+  host-injected records and `<system-reminder>` blocks never take one of the 20 slots.
+  A new host envelope goes into `HOST_OPENERS` and `HOST_FIXTURE`, not a second filter.
 - `memory export` and `memory import` share one JSONL shape; `checkpoint:*` rows never leave.
 - Recall output is byte-stable across runs with unchanged notes and ≤ 200 tokens.
 - Import reads only the generic JSONL shape (no third-party DB schemas, D6) and is idempotent

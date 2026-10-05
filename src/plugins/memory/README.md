@@ -34,7 +34,14 @@ ahead of newest-first order; both orders are byte-stable for an unchanged store.
 ## Hooks
 
 - PreCompact: extracts the last 20 user prompts (≤ 300 chars each), touched file paths and
-  last error lines from the transcript into a `checkpoint` note.
+  last error lines from the transcript into a `checkpoint` note. A prompt is what the human
+  typed (T417): records the host injected are skipped — `isMeta` (skill bodies, sub-agent
+  hand-backs), `isCompactSummary`, an `origin.kind` other than `human` (task
+  notifications, peer messages), and text that opens with a host envelope
+  (`<task-notification>`, `<ci-monitor-event>`, `<local-command-…>`, `<agent-message`,
+  `[Request interrupted by user`). `<system-reminder>` blocks are cut out of a typed
+  prompt. The same rule applies to the SessionEnd note and `handoff`, which reuse the
+  extractor.
 - SessionStart with `source == "compact"` (and PostCompact on Codex and Devin; Claude Code's
   PostCompact takes no context, T295): injects the latest checkpoint
   (≤ 400 tokens) through `inject`.
