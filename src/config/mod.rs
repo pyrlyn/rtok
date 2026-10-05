@@ -544,6 +544,8 @@ section! {
         mimo: SetupMimo = SetupMimo::default(),
         antigravity: SetupAntigravity = SetupAntigravity::default(),
         devin: SetupDevin = SetupDevin::default(),
+        roo: SetupRoo = SetupRoo::default(),
+        qwen: SetupQwen = SetupQwen::default(),
     }
 }
 
@@ -672,6 +674,19 @@ section! {
     /// sibling `mcp_config.json`. On Windows the installer redirects the shipped default
     /// to `%APPDATA%\devin\config.json` (T89).
     SetupDevin { config_path: PathBuf = p("~/.config/devin/config.json") }
+}
+
+section! {
+    /// `[setup.roo]` — Roo Code's global `mcp_settings.json` (T413.1). Empty
+    /// `mcp_path` means the VS Code user dir plus
+    /// `globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`.
+    SetupRoo { mcp_path: PathBuf = PathBuf::new() }
+}
+
+section! {
+    /// `[setup.qwen]` — Qwen Code's `settings.json` (`hooks`, `mcpServers`) lives under
+    /// `dir` (T413.2). `QWEN_HOME` moves that directory; this key is the override.
+    SetupQwen { dir: PathBuf = p("~/.qwen") }
 }
 
 section! {
@@ -1240,6 +1255,7 @@ impl Config {
             setup.cline.hooks_path,
             setup.cline.mcp_path,
             setup.gemini.dir,
+            setup.qwen.dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
