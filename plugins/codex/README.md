@@ -9,7 +9,7 @@ path to that entry instead of two copies to keep in sync.
 Install:
 
 - `rtok agents install codex` — the automated path (T140): once `codex` is on PATH it runs
-  `codex plugin marketplace add listepo/rtok` against this repo's root marketplace
+  `codex plugin marketplace add pyrlyn/rtok` against this repo's root marketplace
   (`.agents/plugins/marketplace.json`, one entry `rtok` at `./plugins/codex`), then
   `codex plugin add rtok@rtok`, by default — no flag needed. `rtok agents remove codex` reverses
   it (`codex plugin remove rtok@rtok` then `codex plugin marketplace remove rtok`). A missing or

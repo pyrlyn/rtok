@@ -4,7 +4,7 @@
 
 //! T115 + T139 + D21: `rtok agents install claude` installs `plugins/claude` through the official
 //! `claude plugin` commands, by default once `claude` is on PATH — no `--yes` needed — from the
-//! GitHub marketplace `listepo/rtok` (a fake `claude` first on PATH records the calls), and while
+//! GitHub marketplace `pyrlyn/rtok` (a fake `claude` first on PATH records the calls), and while
 //! the plugin is installed it is the only call path for hooks — the settings-file hooks go.
 //! MCP is independent of the plugin (T275): `mcpServers.rtok` is always written to
 //! `~/.claude.json` and `claude_desktop_config.json`, plugin or no plugin.
@@ -59,7 +59,7 @@ fn dry_run_offers_the_claude_commands_and_runs_nothing() {
     let out = rtok(&["agents", "install", "claude", "--dry-run"], &cfg, &home);
     assert!(out.contains("offer plugins/claude"), "{out}");
     assert!(
-        out.contains("claude plugin marketplace add listepo/rtok"),
+        out.contains("claude plugin marketplace add pyrlyn/rtok"),
         "{out}"
     );
     assert!(out.contains("claude plugin install rtok@rtok"), "{out}");
@@ -87,7 +87,7 @@ fn installs_the_plugin_by_default_as_the_only_call_path_and_remove_uninstalls() 
     let log = claude_log(&home);
     let calls: Vec<&str> = log.lines().collect();
     assert_eq!(calls.len(), 2, "{log}");
-    assert_eq!(calls[0], "plugin marketplace add listepo/rtok");
+    assert_eq!(calls[0], "plugin marketplace add pyrlyn/rtok");
     assert_eq!(calls[1], "plugin install rtok@rtok");
     // D21 singleton: the plugin serves hooks instead — the settings file is never written (or,
     // if written, carries none). MCP is independent of the plugin (T275): `~/.claude.json`

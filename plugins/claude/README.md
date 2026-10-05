@@ -10,7 +10,7 @@ marketplace at the repo root (`.claude-plugin/marketplace.json`: `rtok`, plugin 
 `./plugins/claude`) — a local path broke across a ketch upgrade (T139). By hand:
 
 ```bash
-claude plugin marketplace add listepo/rtok
+claude plugin marketplace add pyrlyn/rtok
 claude plugin install rtok@rtok
 ```
 
@@ -30,7 +30,7 @@ Files:
 - `.claude-plugin/marketplace.json` — this directory's own one-plugin marketplace (source `./`),
   kept for local/dev use (`claude plugin marketplace add plugins/claude`); the installer itself
   now adds the repo-root marketplace (`../../.claude-plugin/marketplace.json`, source
-  `./plugins/claude`) by its GitHub shorthand `listepo/rtok`.
+  `./plugins/claude`) by its GitHub shorthand `pyrlyn/rtok`.
 - `hooks/hooks.json` — the installer's ten entries (`claude::CLAUDE_ENTRIES`: PreToolUse Bash, Read,
   Skill; PostToolUse `*`; UserPromptSubmit; SessionStart; PreCompact; PostCompact; SessionEnd;
   SubagentStart — the spawn brief, T130) →

@@ -1,7 +1,7 @@
 {
   "name": "rtok",
   "owner": {
-    "name": "listepo"
+    "name": "pyrlyn"
   },
   "description": "rtok plugins for Claude Code",
   "plugins": [

@@ -212,7 +212,7 @@ fn seed_claude_plugin(home: &std::path::Path) -> std::path::PathBuf {
     fs::create_dir_all(&dir).unwrap();
     fs::write(
         dir.join("known_marketplaces.json"),
-        r#"{"rtok":{"source":{"source":"github","repo":"listepo/rtok"}}}"#,
+        r#"{"rtok":{"source":{"source":"github","repo":"pyrlyn/rtok"}}}"#,
     )
     .unwrap();
     let record = dir.join("installed_plugins.json");
@@ -286,7 +286,7 @@ fn install_leaves_an_installed_claude_plugin_alone() {
 /// Codex's own record of `rtok@rtok` enabled from the GitHub marketplace, beside a foreign
 /// table that must survive (T242.4).
 const CODEX_WITH_PLUGIN: &str = "model = \"o3\"\n\n[marketplaces.rtok]\nsource_type = \"git\"\n\
-source = \"https://github.com/listepo/rtok.git\"\n\n[plugins.\"rtok@rtok\"]\nenabled = true\n";
+source = \"https://github.com/pyrlyn/rtok.git\"\n\n[plugins.\"rtok@rtok\"]\nenabled = true\n";
 
 fn seed_codex_plugin(home: &std::path::Path) -> std::path::PathBuf {
     let path = home.join(".codex/config.toml");
@@ -340,7 +340,7 @@ fn update_reinstalls_the_codex_plugin_when_upgrade_fails() {
     assert_eq!(
         codex_log(&home),
         "plugin marketplace upgrade rtok\nplugin remove rtok@rtok\n\
-         plugin marketplace remove rtok\nplugin marketplace add listepo/rtok\n\
+         plugin marketplace remove rtok\nplugin marketplace add pyrlyn/rtok\n\
          plugin add rtok@rtok\n"
     );
     let doc = fs::read_to_string(&config).unwrap();

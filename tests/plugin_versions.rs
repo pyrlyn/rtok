@@ -153,7 +153,7 @@ mod claude_reinstall {
 
     /// `known_marketplaces.json`'s `"source"` body for the GitHub marketplace `plugin_against`
     /// treats as current (T139).
-    const GITHUB_SOURCE: &str = r#"{"source":"github","repo":"listepo/rtok"}"#;
+    const GITHUB_SOURCE: &str = r#"{"source":"github","repo":"pyrlyn/rtok"}"#;
 
     /// Where the T279 receipt lands for a `home` these tests redirected `HOME`/`XDG_STATE_HOME`/
     /// `LOCALAPPDATA` into (`common::agents::raw_with_path` pins all three so a real value on the
@@ -245,7 +245,7 @@ mod claude_reinstall {
         assert_eq!(
             claude_log(&home),
             "plugin uninstall rtok@rtok\nplugin marketplace remove rtok\n\
-         plugin marketplace add listepo/rtok\nplugin install rtok@rtok\n"
+         plugin marketplace add pyrlyn/rtok\nplugin install rtok@rtok\n"
         );
         assert_eq!(json(&receipt_path(&home))["claude"]["source"], "github");
     }

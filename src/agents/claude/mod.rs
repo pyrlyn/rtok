@@ -398,7 +398,9 @@ pub(crate) const REINSTALL_FAILED: &str = "removed, reinstall failed:";
 /// root's `.claude-plugin/marketplace.json` names this one marketplace `rtok`, whose only
 /// plugin is `./plugins/claude` (relative to the repo root, not the marketplace file). A
 /// local path broke across a ketch upgrade (`store/rtok/vX.Y.Z/…`); GitHub does not move.
-const MARKETPLACE_REPO: &str = "listepo/rtok";
+/// An entry still naming `listepo/rtok`, the repo before it moved to the `pyrlyn` org, reads
+/// as stale and is re-pointed here like any other.
+const MARKETPLACE_REPO: &str = "pyrlyn/rtok";
 
 /// Claude Code's config dir: the one `settings_path` lives in (`~/.claude`).
 /// `pub(crate)`: `doctor::plugin_hooks` (T173) locates `installed_plugins.json` the
@@ -438,7 +440,7 @@ enum MarketplaceState {
     /// No `"rtok"` entry at all.
     Absent,
     /// Points at the wanted target already: the GitHub repo — T139's own shape,
-    /// `{"source": {"source": "github", "repo": "listepo/rtok"}}` (verified against the
+    /// `{"source": {"source": "github", "repo": "pyrlyn/rtok"}}` (verified against the
     /// Claude Code plugin-marketplaces docs) — or, for `--source local` (T279), the local
     /// checkout as `{"source": {"source": "directory", "path": "<target>"}}`.
     Current,
@@ -563,7 +565,7 @@ fn plugin_against(cfg: &Config, remove: bool, target: &str, force: bool) -> Resu
 }
 
 /// Offer, install, or uninstall the plugin through the official `claude plugin` commands
-/// (T115), from the GitHub marketplace `listepo/rtok` (T139). Installed by default — no
+/// (T115), from the GitHub marketplace `pyrlyn/rtok` (T139). Installed by default — no
 /// `--yes` needed — once `claude` is on PATH and the plugin is not already installed;
 /// already installed from the GitHub marketplace (or already removed) is a no-op.
 /// `marketplace add` is skipped once Claude already knows the *GitHub* marketplace, so a
@@ -840,7 +842,7 @@ impl Agent for Claude {
             (_, "mcp") | (Kind::Cli, "hooks") => Support::Yes,
             (Kind::Cli, "proxy") => Support::Flag("--proxy"),
             // `plugin`: `plugins/claude` through `claude plugin install`, from the GitHub
-            // marketplace `listepo/rtok`, installed by default once `claude` is on PATH
+            // marketplace `pyrlyn/rtok`, installed by default once `claude` is on PATH
             // and not already installed (T139).
             (Kind::Cli, _) => Support::Yes,
             (Kind::Desktop, "hooks") => Support::No("Claude Desktop has no hook events"),
@@ -1581,13 +1583,13 @@ mod tests {
 
     /// A marketplace already pointed at the GitHub repo skips `marketplace add`: only the
     /// install step is offered. Shape verified against a real `known_marketplaces.json`
-    /// this machine wrote for `claude plugin marketplace add listepo/rtok`.
+    /// this machine wrote for `claude plugin marketplace add pyrlyn/rtok`.
     #[test]
     fn plugin_dry_run_skips_marketplace_add_when_already_known() {
         let dir = plugin_dir("plugin-known-market");
         fs::write(
             dir.join("plugins/known_marketplaces.json"),
-            r#"{"rtok":{"source":{"source":"github","repo":"listepo/rtok"}}}"#,
+            r#"{"rtok":{"source":{"source":"github","repo":"pyrlyn/rtok"}}}"#,
         )
         .unwrap();
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
@@ -1606,7 +1608,7 @@ mod tests {
         let dir = plugin_dir("plugin-fresh");
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
         assert!(
-            report.contains("claude plugin marketplace add listepo/rtok"),
+            report.contains("claude plugin marketplace add pyrlyn/rtok"),
             "{report}"
         );
         assert!(
@@ -1631,10 +1633,29 @@ mod tests {
         .unwrap();
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
         assert!(
-            report.contains("claude plugin marketplace remove rtok && claude plugin marketplace add listepo/rtok && claude plugin install rtok@rtok"),
+            report.contains("claude plugin marketplace remove rtok && claude plugin marketplace add pyrlyn/rtok && claude plugin install rtok@rtok"),
             "{report}"
         );
         assert!(!report.contains("uninstall"), "{report}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A marketplace added before the repository moved from `listepo` to `pyrlyn` still
+    /// records `listepo/rtok`. GitHub redirects that name today, but nothing guarantees it
+    /// keeps doing so, so the entry reads as stale and is re-pointed at the new repo.
+    #[test]
+    fn plugin_dry_run_repoints_a_marketplace_added_under_the_old_repo_name() {
+        let dir = plugin_dir("plugin-old-repo-market");
+        fs::write(
+            dir.join("plugins/known_marketplaces.json"),
+            r#"{"rtok":{"source":{"source":"github","repo":"listepo/rtok"}}}"#,
+        )
+        .unwrap();
+        let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
+        assert!(
+            report.contains("claude plugin marketplace remove rtok && claude plugin marketplace add pyrlyn/rtok && claude plugin install rtok@rtok"),
+            "{report}"
+        );
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1658,7 +1679,7 @@ mod tests {
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
         assert_ne!(report, NO_CHANGES);
         assert!(
-            report.contains("claude plugin uninstall rtok@rtok && claude plugin marketplace remove rtok && claude plugin marketplace add listepo/rtok && claude plugin install rtok@rtok"),
+            report.contains("claude plugin uninstall rtok@rtok && claude plugin marketplace remove rtok && claude plugin marketplace add pyrlyn/rtok && claude plugin install rtok@rtok"),
             "{report}"
         );
         let _ = fs::remove_dir_all(dir);
@@ -1678,7 +1699,7 @@ mod tests {
         fs::write(plugins.join("known_marketplaces.json"), known).unwrap();
     }
 
-    const GITHUB: &str = r#"{"source":"github","repo":"listepo/rtok"}"#;
+    const GITHUB: &str = r#"{"source":"github","repo":"pyrlyn/rtok"}"#;
 
     /// Same version on record as the one running: skip, name the version, run no `claude`.
     #[test]
@@ -1723,7 +1744,7 @@ mod tests {
         let report = plugin_update(&plugin_cfg(&dir, true)).unwrap();
         assert!(report.starts_with("offer plugins/claude → "), "{report}");
         assert!(
-            report.contains("claude plugin marketplace add listepo/rtok"),
+            report.contains("claude plugin marketplace add pyrlyn/rtok"),
             "{report}"
         );
         assert!(
@@ -1761,7 +1782,7 @@ mod tests {
         for step in [
             "uninstall rtok@rtok",
             "marketplace remove rtok",
-            "marketplace add listepo/rtok",
+            "marketplace add pyrlyn/rtok",
         ] {
             assert!(report.contains(step), "{step}: {report}");
         }
