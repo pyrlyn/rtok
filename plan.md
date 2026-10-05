@@ -123,8 +123,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.13 | todo | P3 | 2 | 0% | |
 | T413.14 | todo | P3 | 2 | 0% | |
 | T413.15 | todo | P3 | 2 | 0% | |
-| T414 | in progress | P1 | 4 | 0% | Claude Code / opus-5.5 |
-| T414.1 | in progress | P1 | 3 | 0% | Claude Code / opus-5.5 |
+| T414 | in progress | P1 | 4 | 10% | Claude Code / opus-5.5 |
 | T414.2 | todo | P1 | 3 | 0% | |
 | T414.3 | todo | P2 | 3 | 0% | |
 | T414.4 | todo | P2 | 3 | 0% | |
@@ -2052,22 +2051,9 @@ Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos a
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
 
-### T414.1. The SPA reads tokens, fonts, icons and logos from `brand/`; drop the copies in `web/`
-
-No visual change: the brand values equal today's (`brand/README.md` "Checked against the product").
-
-Plan:
-1. Install: `just spa-install` also runs `npm ci --prefix brand`; the CI job that builds `web/` does the same (find it in `.github/workflows/ci.yml`).
-2. `web/vite.config.ts`: alias `@pyrlyn/brand` to `brand/node_modules/@pyrlyn/brand` (one pin, the one in `brand/package.json`) and `@brand` to `brand/`; allow both in `server.fs.allow`.
-3. `web/src/styles/app.css`: import `@brand/dist/tokens.css` and `@pyrlyn/brand/base/fonts.css`; the `@theme` block maps Tailwind names onto the `--pyr-*` roles and the `--rtok-*` extras instead of the flat `--rtok-*` copy. Delete `web/src/styles/tokens.css` and `fonts.css`; keep `theme-init.js` working with `data-theme`.
-4. `web/src/ui/Icon.tsx`: glob the base UI icons and `brand/icons/ui/`; `Shell.tsx` logo from `brand/logo/rtok-mark.svg`; `index.html` favicon from `brand/logo/rtok-favicon.svg` through Vite; the offline state from `brand/illustrations/offline.svg`. Delete `web/assets/{fonts,icons,logo.svg,offline.svg}`.
-5. A unit test fails when `web/` carries a file byte-identical to one in `brand/` or the base package.
-
-Check: `just spa-build`, `just spa-test`, `just spa-stories` and `just spa-e2e` green; `just check` green; Overview screenshots (dark and light) before and after match.
-
 ### T414.2. Mockup: shell and Overview on the brandbook, in Storybook, for approval
 
-Restyle the shell (sidebar, header, theme switch) and the Overview page per `brand/DESIGN.md` and the base `DESIGN.md` it inherits (type scale, spacing, radii, elevation, motion, focus ring). Stories only; the running app keeps today's look until the creator approves.
+Restyle the shell (sidebar, header, theme switch) and the Overview page per `brand/DESIGN.md` and the base `DESIGN.md` it inherits (type scale, spacing, radii, elevation, motion, focus ring). The `@theme` block moves from the flat `--rtok-*` build to the `--pyr-*` roles of `@brand/dist/tokens.css`. Stories only; the running app keeps today's look until the creator approves.
 
 Check: dark and light screenshots of the stories sent to the creator, and the creator's approval quoted in this card.
 

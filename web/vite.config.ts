@@ -5,19 +5,27 @@
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
+import { searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath } from "node:url";
+
+// The brand pack is the only source of tokens, fonts, icons and logos (T414); `web/` imports
+// them through this alias instead of keeping copies.
+const brand = fileURLToPath(new URL("../brand", import.meta.url));
 
 // `rtok web` (justfile) serves the API + WS on 127.0.0.1:3333; the dev server proxies
 // both so `npm run dev` can point at a running rtok host without a rebuild.
 export default defineConfig({
   base: "/",
   plugins: [react(), tailwindcss()],
+  resolve: { alias: { "@brand": brand } },
   build: {
     outDir: "dist",
     emptyOutDir: true,
   },
   server: {
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), brand] },
     proxy: {
       "/ws": { target: "http://127.0.0.1:3333", ws: true },
       "/health": { target: "http://127.0.0.1:3333" },

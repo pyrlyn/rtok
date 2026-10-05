@@ -166,6 +166,7 @@ jobs:
       - name: "Build the SPA"
         run: |
           set -euo pipefail
+          mise exec -- npm --prefix brand ci
           mise exec -- npm --prefix web ci
           mise exec -- npm --prefix web run build
           echo "RTOK_WEB_EMBED=require" >> "$GITHUB_ENV"

@@ -47,7 +47,7 @@ export function MiniBars({
     );
 }
 
-// One dot per plugin, lit when enabled (echoes assets/logo.svg); disabled dots are coral so
+// One dot per plugin, lit when enabled (echoes brand/logo/rtok-mark.svg); disabled dots are coral so
 // the state does not hang on brightness alone.
 const tone = (p: { enabled: boolean; saves_tokens: boolean }) =>
     !p.enabled ? "bg-delta-fg/80" : p.saves_tokens ? "bg-accent-fg" : "bg-accent-fg/40";
