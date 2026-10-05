@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="rtok">
-  <rect width="32" height="32" rx="6" fill="#06101A"/>
-  <path d="M7 20a9 9 0 0 1 18 0" fill="none" stroke="#1A3348" stroke-width="2.4" stroke-linecap="round"/>
-  <path d="M7 20a9 9 0 0 1 12.5-8.2" fill="none" stroke="#5CE1FF" stroke-width="2.4" stroke-linecap="round"/>
-  <circle cx="16" cy="20" r="2" fill="#5CE1FF"/>
-  <path d="M16 20 20.5 14.5" stroke="#FF6B4A" stroke-width="1.6" stroke-linecap="round"/>
-  <text x="16" y="27" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="5" font-weight="700" fill="#8AA8BC">TOK</text>
-</svg>

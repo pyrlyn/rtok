@@ -1,6 +1,6 @@
 # rtok brand
 
-This folder is the **source of truth for the rtok brand**: logos, colour tokens (Bitset B / Hex Diff, LOCKED), feature and product icons, the brandbook (`DESIGN.md`) and the provenance snapshots it was built from. It holds only what is
+This folder is the **source of truth for the rtok brand**: logos, colour tokens (Bitset B / Hex Diff, LOCKED), feature and product icons, the brandbook (`DESIGN.md`) and the provenance notes it was built from. It holds only what is
 specific to rtok. Everything the Pyrlyn products share (type scale, spacing, radii, sizes,
 breakpoints, motion, the semantic colour roles, IBM Plex Mono, the UI icons and the `.pyr-*`
 components) is the **Pyrlyn base layer** in [pyrlyn/brand](https://github.com/pyrlyn/brand) `base/`,
@@ -63,14 +63,12 @@ brand/
   tokens.json      rtok roles + brand constants + elevation, extends @pyrlyn/brand/base/tokens.json
   build.mjs        -> dist/tokens.css, dist/tokens.resolved.json, dist/legacy/*, the table below
   DESIGN.md        rtok brandbook (deltas only)
-  PROVENANCE.md    conflicts resolved, adoption steps per surface, what sources/ holds
+  PROVENANCE.md    conflicts resolved, adoption steps per surface, where the provenance snapshots live
   logo/ (+png/)    mark, favicon, wordmark; PNG exports
   icons/feature/   feature icons (+ @2x PNG)
   icons/ui/        rtok-only UI icons (config, graph, hosts, services, stats, usage, worktrees)
   illustrations/   offline.svg (web admin empty state)
   examples/        index.html demo page (flat build)
-  screenshots/     web admin responsive shots, brand demo
-  sources/         verbatim provenance snapshots (not authoritative)
   preview/         light/dark preview PNGs
 ```
 
@@ -124,7 +122,10 @@ Brand constants: `--rtok-brand-cyan` `#5CE1FF` · `--rtok-brand-coral` `#FF6B4A`
   (`node_modules/@pyrlyn/brand`) and at `dist/legacy/`.
 - `PROVENANCE.md`: the rtok sections of the pyrlyn/brand README (Conflicts, Adopting in each surface,
   Sources), paths adjusted.
-- `docs/assets/landing-retina/MOVED.txt` points at `brand/sources/rtok/docs/assets/landing-retina/`.
+- `sources/` (19 MB) and `screenshots/` (29 MB) were not kept: they are provenance and reference
+  material, not used by any build. The originals stay in pyrlyn/brand at tag v0.3.0:
+  [`brands/rtok/sources/`](https://github.com/pyrlyn/brand/tree/v0.3.0/brands/rtok/sources) and [`brands/rtok/screenshots/`](https://github.com/pyrlyn/brand/tree/v0.3.0/brands/rtok/screenshots).
+- `docs/assets/landing-retina/MOVED.txt` points at those snapshots.
 
 ## Checked against the product
 
@@ -138,11 +139,9 @@ Brand constants: `--rtok-brand-cyan` `#5CE1FF` · `--rtok-brand-coral` `#FF6B4A`
 - Nothing in rtok imports this folder yet: the web admin still ships its own copies
   (`web/src/styles/tokens.css`, `web/assets/`), the docs site its `site/static/` files. Rewiring them is
   a follow-up (see `PROVENANCE.md`, "Adopting in each surface").
-- `sources/` are snapshots from rtok `559a7a11` and branch `design/web-admin`; they are not refreshed (e.g.
-  `docs/site.md` there still has the old listepo URLs). Only `tokens.json` and `dist/` are authoritative.
-- `fg-subtle` on light (`#5A7388`) is 4.24:1 on `surface-2` (4.70:1 on `bg`): part of the locked palette,
-  left unchanged; keep it off `surface-2` for body text.
-- `screenshots/` (29 MB) and `sources/` (19 MB) make this folder ~48 MB.
+- The provenance snapshots (`sources/`, `screenshots/`) live only in pyrlyn/brand v0.3.0 and are not
+  refreshed (e.g. `sources/rtok/docs/site.md` there still has the old listepo URLs). Only `tokens.json`
+  and `dist/` are authoritative.
 
 ## Preview
 

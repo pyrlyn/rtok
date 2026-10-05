@@ -7,7 +7,7 @@ icons) is the [Pyrlyn base layer](https://github.com/pyrlyn/brand/blob/v0.3.0/ba
 the same values.
 
 One brand across every rtok surface: the web admin, the rtok docs site and the rtok page on the
-Pyrlyn landing. Origin: the v3-B brand pack (`sources/rtok-brand-v3-B-tokens/`), updated to the
+Pyrlyn landing. Origin: the v3-B brand pack (pyrlyn/brand v0.3.0 `brands/rtok/sources/rtok-brand-v3-B-tokens/`), updated to the
 values on rtok main and the web admin.
 
 ## Idea

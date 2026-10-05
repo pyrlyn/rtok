@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="rtok">
-  <rect width="32" height="32" rx="6" fill="#06101A"/>
-  <rect x="5" y="8" width="22" height="16" rx="3" fill="none" stroke="#5CE1FF" stroke-width="1.5"/>
-  <text x="16" y="19.5" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="9" font-weight="700" fill="#5CE1FF">42</text>
-  <text x="25.5" y="11.5" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="5" font-weight="700" fill="#FF6B4A">Δ</text>
-  <path d="M8 11h3M8 21h3M21 11h3M21 21h3" stroke="#1A3348" stroke-width="1.2"/>
-</svg>

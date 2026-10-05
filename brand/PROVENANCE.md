@@ -97,14 +97,17 @@ the steps to switch each surface to this folder.
 
 ## Sources
 
-`sources/` holds verbatim copies (sha256-verified at import) of everything the tokens came from:
+The provenance snapshots are not kept in this repo. They stay in pyrlyn/brand at tag v0.3.0, under
+[`brands/rtok/sources/`](https://github.com/pyrlyn/brand/tree/v0.3.0/brands/rtok/sources) (verbatim copies, sha256-verified at import, of everything the
+tokens came from) and [`brands/rtok/screenshots/`](https://github.com/pyrlyn/brand/tree/v0.3.0/brands/rtok/screenshots) (web admin responsive shots and the
+brand demo). Paths below are relative to `brands/rtok/sources/` there:
 
-- `sources/rtok/<path>`: files from `listepo/rtok` `origin/main` at `559a7a11`: docs-site CSS, icons.yaml and `site/static` brand assets;
-  `docs/assets/landing-retina/*` (the 19 retina PNG exports, which moved here from rtok);
+- `rtok/<path>`: files from `listepo/rtok` `origin/main` at `559a7a11`: docs-site CSS, icons.yaml and `site/static` brand assets;
+  `docs/assets/landing-retina/*` (the 19 retina PNG exports that used to live in rtok);
   `docs/site.md`; `src/tui/theme.rs`.
-- `sources/rtok-branch-design-web-admin/web/`: `tailwind.config.js`, `src/input.css`, `assets/`
+- `rtok-branch-design-web-admin/web/`: `tailwind.config.js`, `src/input.css`, `assets/`
   and `screenshots/` from branch `design/web-admin` at `1e144253` (draft PR #447, not on main).
-- `sources/rtok-brand-v3-B-tokens/`: the v3-B brand pack (`DESIGN.md`, `BRIEF.md`,
+- `rtok-brand-v3-B-tokens/`: the v3-B brand pack (`DESIGN.md`, `BRIEF.md`,
   `webui-mock/themes/TOKENS.md`, alternative marks and icon sets, previews).
   19 files byte-identical to files already here were left out; see `DUPLICATES.md` there.
 
