@@ -42,6 +42,14 @@ ahead of newest-first order; both orders are byte-stable for an unchanged store.
   `[Request interrupted by user`). `<system-reminder>` blocks are cut out of a typed
   prompt. The same rule applies to the SessionEnd note and `handoff`, which reuse the
   extractor.
+- Prompt quality (T419): each PreCompact and SessionEnd checkpoint also counts, over the
+  whole transcript, the user-text records taken as typed prompts and the ones skipped as
+  host-written. The counts go to plugin state (`kv` key `plugin:memory:<checkpoint kind>`
+  via `Host::plugin_state_set`), never to the Measurement ledger and never into the note,
+  so the restore stays byte-identical and no saving is claimed. The web and TUI Plugins
+  pages show the totals as `checkpoint prompts typed` and `checkpoint host records
+  skipped`; a session with both a PreCompact and a SessionEnd row counts once, by the
+  larger row.
 - SessionStart with `source == "compact"` (and PostCompact on Codex and Devin; Claude Code's
   PostCompact takes no context, T295): injects the latest checkpoint
   (≤ 400 tokens) through `inject`.

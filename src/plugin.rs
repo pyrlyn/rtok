@@ -239,6 +239,12 @@ fn project_of(cwd: Option<&str>) -> Option<String> {
     crate::project::project_name(std::path::Path::new(cwd?))
 }
 
+/// The `kv` key behind [`Host::plugin_state_set`] (T419). The plugin id leads, so one
+/// prefix read gives the stats pages a plugin's whole state.
+pub fn plugin_state_key(plugin: &str, key: &str) -> String {
+    format!("plugin:{plugin}:{key}")
+}
+
 /// The host side of the contract (D25). `Runtime` *is* the host: every capability trait is
 /// implemented here by delegating to the one store, and the session and the archive
 /// directory come from the context rather than from the plugin's arguments.
@@ -260,6 +266,10 @@ impl Host for Runtime {
 
     fn record(&self, m: &Measurement) -> Result<()> {
         Runtime::record(self, m)
+    }
+
+    fn plugin_state_set(&self, plugin: &str, key: &str, value: &str) -> Result<()> {
+        self.store.kv_set(&plugin_state_key(plugin, key), value)
     }
 
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32> {
