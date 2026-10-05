@@ -321,7 +321,7 @@ pub(crate) fn doctor_lines(cfg: &Config) -> Vec<String> {
     super::HOSTS
         .iter()
         .filter_map(|id| super::host(id))
-        .flat_map(|a| host_doctor_lines(a, cfg, |v| super::present(a, v, cfg)))
+        .flat_map(|a| host_doctor_lines(a, cfg, super::present))
         .collect()
 }
 

@@ -201,8 +201,9 @@ pub trait Agent: Sync {
     /// Config files an install writes; copied before any write. Empty for a host that owns a
     /// linked directory instead of a file (pi).
     fn files(&self, cfg: &Config, kind: Kind) -> Vec<PathBuf>;
-    /// Paths whose presence (or whose parent's) means the app is installed. Defaults to
-    /// [`Agent::files`]; a host adds its plugin directory.
+    /// Paths inside the host's own folders; `agents junk list` lists their parents. Not proof
+    /// the app is installed — a folder outlives its app (T426). Defaults to [`Agent::files`]; a
+    /// host adds its plugin directory.
     fn markers(&self, cfg: &Config, kind: Kind) -> Vec<PathBuf> {
         self.files(cfg, kind)
     }
@@ -436,16 +437,22 @@ pub(crate) fn load_toml(path: &Path) -> Result<DocumentMut> {
         .with_context(|| path.display().to_string())
 }
 
-/// True when the app itself is found: its bundle or binary exists, or one of its marker
-/// paths (or the directory that would hold it) does. Setup skips a missing app instead of
-/// creating its files; removal runs regardless so a half-installed host is cleaned up.
-pub fn present(agent: &dyn Agent, v: &Variant, cfg: &Config) -> bool {
+/// True when the app itself is found: its bundle or binary exists. A config folder alone
+/// does not count — one left behind by an uninstalled app made setup write into it (T426).
+/// Setup refuses a missing app instead of creating its files; removal runs regardless so a
+/// half-installed host is cleaned up.
+pub fn present(v: &Variant) -> bool {
     app_path(v).is_some()
-        || agent.markers(cfg, v.kind).iter().any(|p| {
-            p.exists()
-                || p.parent()
-                    .is_some_and(|d| !d.as_os_str().is_empty() && d.exists())
-        })
+}
+
+/// The named hosts none of whose wanted variants is [`present`]: `agents install|update`
+/// refuses the whole run on them before any backup or write (T426).
+fn absent_hosts(agents: &[&'static dyn Agent], want: impl Fn(Kind) -> bool) -> Vec<&'static str> {
+    agents
+        .iter()
+        .filter(|a| !a.variants().iter().any(|v| want(v.kind) && present(v)))
+        .map(|a| a.id())
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
@@ -804,6 +811,12 @@ pub fn resolve(hosts: &[String]) -> Result<Vec<&'static dyn Agent>> {
 pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
     let agents = resolve(&req.hosts)?;
     let want = |kind: Kind| req.mode == Mode::Remove || wants(kind, req.cli, req.desktop, req.all);
+    if req.mode != Mode::Remove {
+        let absent = absent_hosts(&agents, want);
+        if !absent.is_empty() {
+            bail!("{} is not installed", absent.join(", "));
+        }
+    }
     let mut out = String::new();
     if req.mode != Mode::Remove && !rtok_spawns() {
         out.push_str(
@@ -874,7 +887,7 @@ pub(crate) fn apply_all(
         let mut any = false;
         for v in a.variants().iter().filter(|v| want(v.kind)) {
             any = true;
-            if req.mode != Mode::Remove && !present(a, v, cfg) {
+            if req.mode != Mode::Remove && !present(v) {
                 out.push_str(&block(a, v, cfg, Outcome::NotFound));
                 continue;
             }
@@ -942,7 +955,7 @@ pub fn installed_hosts(cfg: &Config) -> Vec<String> {
             host(id).is_some_and(|a| {
                 a.variants()
                     .iter()
-                    .any(|v| present(a, v, cfg) && !installed_modules(a, v.kind, cfg).is_empty())
+                    .any(|v| present(v) && !installed_modules(a, v.kind, cfg).is_empty())
             })
         })
         .map(ToString::to_string)
@@ -975,7 +988,7 @@ pub fn list(cfg: &Config) -> String {
 /// Same blocks as [`list`], only for `ids` (already-resolved host ids).
 pub fn list_ids(cfg: &Config, ids: &[&str]) -> String {
     visit_hosts(ids, |a, v| {
-        let outcome = if present(a, v, cfg) {
+        let outcome = if present(v) {
             Outcome::Listed
         } else {
             Outcome::NotFound
@@ -2680,69 +2693,6 @@ mod tests {
                     assert_eq!(cell, &want, "{id}: {key}");
                 }
             }
-        }
-    }
-
-    fn cfg_with_cursor_hooks(hooks: PathBuf) -> Config {
-        let mut cfg = Config::default();
-        cfg.setup.cursor.hooks_path = hooks;
-        cfg
-    }
-
-    fn cfg_with_claude(settings: PathBuf, claude_json: PathBuf) -> Config {
-        let mut cfg = Config::default();
-        cfg.setup.claude.settings_path = settings;
-        cfg.doctor.claude_json = claude_json;
-        cfg
-    }
-
-    #[test]
-    fn present_when_cursor_dir_exists() {
-        use std::fs;
-        let root = std::env::temp_dir().join(format!("rtok-present-cursor-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let cursor_dir = root.join(".cursor");
-        fs::create_dir_all(&cursor_dir).unwrap();
-        let cfg = cfg_with_cursor_hooks(cursor_dir.join("hooks.json"));
-        let a = &cursor::Cursor;
-        for v in a.variants() {
-            assert!(
-                present(a, v, &cfg),
-                "parent ~/.cursor must count as installed host ({})",
-                v.name
-            );
-        }
-    }
-
-    #[test]
-    fn present_when_claude_dir_exists() {
-        use std::fs;
-        let root = std::env::temp_dir().join(format!("rtok-present-claude-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let claude_dir = root.join(".claude");
-        fs::create_dir_all(&claude_dir).unwrap();
-        let cfg = cfg_with_claude(claude_dir.join("settings.json"), root.join(".claude.json"));
-        let a = &claude::Claude;
-        assert!(
-            present(a, &a.variants()[0], &cfg),
-            "parent ~/.claude must count as installed host"
-        );
-    }
-
-    #[test]
-    fn absent_when_config_paths_missing() {
-        let root = std::env::temp_dir().join(format!("rtok-absent-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let missing = root.join("no-such-dir");
-        let a = &cursor::Cursor;
-        let cfg = cfg_with_cursor_hooks(missing.join("hooks.json"));
-        for v in a.variants().iter().filter(|v| app_path(v).is_none()) {
-            assert!(!present(a, v, &cfg), "{}", v.name);
-        }
-        let a = &claude::Claude;
-        let cfg = cfg_with_claude(missing.join("settings.json"), missing.join(".claude.json"));
-        for v in a.variants().iter().filter(|v| app_path(v).is_none()) {
-            assert!(!present(a, v, &cfg), "{}", v.name);
         }
     }
 
