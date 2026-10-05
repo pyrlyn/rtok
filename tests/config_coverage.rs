@@ -84,6 +84,7 @@ const ALLOW_KEYS: &[&str] = &[
     "worktree.gc.yes",
     "worktree.gc.owner",
     "worktree.gc.idle",
+    "worktree.gc.stale_lock",
     // `worktree add --owner` (T158): who holds this one worktree; `[worktree] root` is the setting.
     "worktree.add.owner",
     // `worktree claim --owner` (T285): the name an old lock carries, per call like `add --owner`.
