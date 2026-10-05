@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import logo from "@brand/logo/rtok-mark.svg";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
 import { Orb } from "./Orb";
@@ -14,6 +14,7 @@ import { PAGES, type Page } from "./pages";
 import { Empty, ErrorState, Offline } from "./states";
 import { useTheme } from "./theme";
 import { Icon } from "./ui/Icon";
+import { lazyPart } from "./ui/lazyPart";
 import { Pill, type PillTone } from "./ui/Pill";
 import type { ConnectionState } from "./api/ws";
 
@@ -24,17 +25,13 @@ const linkTone: Record<ConnectionState, PillTone> = {
     closed: "fail",
 };
 
-// React Aria comes with the palette, so neither weighs on the first paint. A chunk that fails to
-// load leaves the shortcuts dead, never the page.
-type Overlays = Pick<typeof import("./palette/Palette"), "Palette" | "ShortcutHelp">;
-const noOverlays: Overlays = { Palette: () => <></>, ShortcutHelp: () => <></> };
-const overlays = (): Promise<Overlays> =>
-    import("./palette/Palette").catch((e: unknown) => {
-        console.warn("rtok: the command palette failed to load", e);
-        return noOverlays;
-    });
-const Palette = lazy(() => overlays().then((m) => ({ default: m.Palette })));
-const ShortcutHelp = lazy(() => overlays().then((m) => ({ default: m.ShortcutHelp })));
+// React Aria comes with the palette, so neither weighs on the first paint.
+const Palette = lazyPart("the command palette", () =>
+    import("./palette/Palette").then((m) => m.Palette),
+);
+const ShortcutHelp = lazyPart("the shortcut sheet", () =>
+    import("./palette/Palette").then((m) => m.ShortcutHelp),
+);
 
 const focusRing = "outline-none focus-visible:shadow-ring";
 // Narrow screens get a bottom tab bar (icon over label, centred); from md up it is the sidebar.

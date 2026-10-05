@@ -17,8 +17,9 @@ export const FocusShowsTheReason: Story = {
     play: async ({ canvasElement, args }) => {
         const root = within(canvasElement);
         await expect(root.getByText("Unknown")).toBeVisible();
+        // The "?" comes in its own chunk, after the word.
+        const button = await root.findByRole("button", { name: "Why is this unknown?" });
         await userEvent.tab();
-        const button = root.getByRole("button", { name: "Why is this unknown?" });
         await waitFor(() => expect(button).toHaveFocus());
         // The tooltip portals to <body>.
         const tip = await within(document.body).findByRole("tooltip");

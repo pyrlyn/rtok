@@ -189,8 +189,8 @@ describe("calls", () => {
         expect((await screen.findByRole("alert")).textContent).toContain("index not built");
         // Nothing archived is a fact, so it reads "none" with its reason, not Unknown.
         const ref = screen.getByText("ref_id").nextElementSibling as HTMLElement;
+        await within(ref).findByRole("button", { name: "Why none?" });
         expect(ref.textContent).toBe("none?");
-        within(ref).getByRole("button", { name: "Why none?" });
     });
 
     test("expand fetches the archived output and filters it", async () => {
