@@ -25,7 +25,8 @@ const SELF = JSON.parse(readFileSync(join(root, "tokens.json"), "utf8"));
 const NAME = SELF.$extensions?.["com.pyrlyn.brand"];
 if (!NAME) throw new Error('tokens.json: set $extensions["com.pyrlyn.brand"] to the brand slug');
 const EXT = SELF.$extends;
-if (EXT !== "@pyrlyn/brand/base/tokens.json") throw new Error('tokens.json must extend "@pyrlyn/brand/base/tokens.json"');
+if (EXT !== "@pyrlyn/brand/base/tokens.json")
+  throw new Error('tokens.json must extend "@pyrlyn/brand/base/tokens.json"');
 let basePath, pkgPath;
 try {
   basePath = require.resolve(EXT);
@@ -36,14 +37,25 @@ try {
 }
 const BASE = JSON.parse(readFileSync(basePath, "utf8"));
 const BASE_VERSION = JSON.parse(readFileSync(pkgPath, "utf8")).version;
-const SPEC = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dependencies["@pyrlyn/brand"];
+const SPEC = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dependencies[
+  "@pyrlyn/brand"
+];
 const ROLES = BASE.$extensions["com.pyrlyn.roles"];
 const isRole = (k) => ROLES.core.includes(k) || k in ROLES.optional;
 
 // A brand file extends the base: merge group by group (brand wins), so {font.…} style references resolve.
 const merge = (a, b) => {
   const o = { ...a };
-  for (const [k, v] of Object.entries(b)) o[k] = v && typeof v === "object" && !Array.isArray(v) && a[k] && typeof a[k] === "object" && !("$value" in v) ? merge(a[k], v) : v;
+  for (const [k, v] of Object.entries(b))
+    o[k] =
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      a[k] &&
+      typeof a[k] === "object" &&
+      !("$value" in v)
+        ? merge(a[k], v)
+        : v;
   return o;
 };
 const T = merge(BASE, SELF);
@@ -55,8 +67,14 @@ const res = (v) => {
   if (!t || !("$value" in t)) throw new Error(`${NAME}: unresolved reference ${v}`);
   return res(t.$value);
 };
-const tokens = (group) => Object.entries(group ?? {}).filter(([k, v]) => !k.startsWith("$") && v && typeof v === "object" && "$value" in v);
-const hexToRgb = (hex) => { const h = hex.replace("#", ""); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
+const tokens = (group) =>
+  Object.entries(group ?? {}).filter(
+    ([k, v]) => !k.startsWith("$") && v && typeof v === "object" && "$value" in v,
+  );
+const hexToRgb = (hex) => {
+  const h = hex.replace("#", "");
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+};
 const hasAlpha = (hex) => hex.replace("#", "").length === 8;
 const rgbChannels = (hex) => hexToRgb(hex).join(" ");
 const bezier = (a) => `cubic-bezier(${a.join(", ")})`;
@@ -74,7 +92,8 @@ const out = {};
 const vals = {};
 const block = (th, indent = "  ") => {
   const theme = T.theme[th];
-  for (const r of ROLES.core) if (!(r in theme)) throw new Error(`${NAME}: theme.${th} is missing core role "${r}"`);
+  for (const r of ROLES.core)
+    if (!(r in theme)) throw new Error(`${NAME}: theme.${th} is missing core role "${r}"`);
   const l = [`${indent}color-scheme: ${th};`];
   vals[th] = {};
   for (const [k, t] of tokens(theme)) {
@@ -83,19 +102,27 @@ const block = (th, indent = "  ") => {
     vals[th][k] = v;
     const varName = isRole(k) ? `--pyr-${k}` : `--${NAME}-${k}`;
     l.push(`${indent}${varName}: ${v};`);
-    if (isRole(k) && typeof v === "string" && /^#[0-9A-F]{6}$/.test(v)) l.push(`${indent}${varName}-rgb: ${rgbChannels(v)};`);
+    if (isRole(k) && typeof v === "string" && /^#[0-9A-F]{6}$/.test(v))
+      l.push(`${indent}${varName}-rgb: ${rgbChannels(v)};`);
   }
-  if (T.effect?.[`glass-alpha-${th}`]) l.push(`${indent}--pyr-glass-alpha: ${T.effect[`glass-alpha-${th}`].$value};`);
+  if (T.effect?.[`glass-alpha-${th}`])
+    l.push(`${indent}--pyr-glass-alpha: ${T.effect[`glass-alpha-${th}`].$value};`);
   if (SELF.shadow) {
     for (const [k, s] of tokens(SELF.shadow)) {
-      const css = s.$value.map((x) => {
-        const c = /^\{theme\.[a-z]+\.shine\}$/.test(x.color) ? res(theme.shine.$value) : res(x.color);
-        return `${x.inset ? "inset " : ""}${x.offsetX} ${x.offsetY} ${x.blur} ${x.spread} rgb(${rgbChannels(c)} / ${x.alpha})`;
-      }).join(", ");
+      const css = s.$value
+        .map((x) => {
+          const c = /^\{theme\.[a-z]+\.shine\}$/.test(x.color)
+            ? res(theme.shine.$value)
+            : res(x.color);
+          return `${x.inset ? "inset " : ""}${x.offsetX} ${x.offsetY} ${x.blur} ${x.spread} rgb(${rgbChannels(c)} / ${x.alpha})`;
+        })
+        .join(", ");
       l.push(`${indent}--pyr-shadow-${k}: ${css};`);
     }
   }
-  l.push(`${indent}--pyr-ring: 0 0 0 2px var(--pyr-bg), 0 0 0 4px var(--pyr-focus, var(--pyr-accent));`);
+  l.push(
+    `${indent}--pyr-ring: 0 0 0 2px var(--pyr-bg), 0 0 0 4px var(--pyr-focus, var(--pyr-accent));`,
+  );
   return l.join("\n");
 };
 const consts = tokens(SELF.brand).map(([k, t]) => `  --${NAME}-brand-${k}: ${res(t.$value)};`);
@@ -123,25 +150,40 @@ ${block(other, "    ")}
 ${block(other)}
 }
 `;
-out["dist/tokens.resolved.json"] = JSON.stringify({
-  $comment: H,
-  base: { package: "@pyrlyn/brand", version: BASE_VERSION, spec: SPEC },
-  defaultTheme: def,
-  brand: Object.fromEntries(tokens(SELF.brand).map(([k, t]) => [k, res(t.$value)])),
-  [def]: vals[def],
-  [other]: vals[other],
-}, null, 2) + "\n";
+out["dist/tokens.resolved.json"] =
+  JSON.stringify(
+    {
+      $comment: H,
+      base: { package: "@pyrlyn/brand", version: BASE_VERSION, spec: SPEC },
+      defaultTheme: def,
+      brand: Object.fromEntries(tokens(SELF.brand).map(([k, t]) => [k, res(t.$value)])),
+      [def]: vals[def],
+      [other]: vals[other],
+    },
+    null,
+    2,
+  ) + "\n";
 
 // ---------- optional legacy flat build (--<brand>-* for everything, .<brand>-* components) ----------
 if (SELF.$extensions?.["com.pyrlyn.legacyFlat"]) {
   const P = `--${NAME}-`;
   const LH = `Generated by build.mjs from ${SRC}. Do not edit by hand.`;
   const themes = ["dark", "light"];
-  const themeColors = Object.fromEntries(themes.map((th) => [th, Object.fromEntries(tokens(T.theme[th]).map(([k, t]) => [k, String(res(t.$value)).toUpperCase()]))]));
-  const shadowCss = (name, th) => T.shadow[name].$value.map((s) => {
-    const c = /^\{theme\.[a-z]+\.shine\}$/.test(s.color) ? themeColors[th].shine : res(s.color);
-    return `${s.inset ? "inset " : ""}${s.offsetX} ${s.offsetY} ${s.blur} ${s.spread} rgb(${rgbChannels(c)} / ${s.alpha})`;
-  }).join(", ");
+  const themeColors = Object.fromEntries(
+    themes.map((th) => [
+      th,
+      Object.fromEntries(
+        tokens(T.theme[th]).map(([k, t]) => [k, String(res(t.$value)).toUpperCase()]),
+      ),
+    ]),
+  );
+  const shadowCss = (name, th) =>
+    T.shadow[name].$value
+      .map((s) => {
+        const c = /^\{theme\.[a-z]+\.shine\}$/.test(s.color) ? themeColors[th].shine : res(s.color);
+        return `${s.inset ? "inset " : ""}${s.offsetX} ${s.offsetY} ${s.blur} ${s.spread} rgb(${rgbChannels(c)} / ${s.alpha})`;
+      })
+      .join(", ");
   const themeBlock = (th, indent = "  ") => {
     const c = themeColors[th];
     const lines = [`${indent}color-scheme: ${th};`];
@@ -150,7 +192,8 @@ if (SELF.$extensions?.["com.pyrlyn.legacyFlat"]) {
       if (!hasAlpha(v)) lines.push(`${indent}${P}${k}-rgb: ${rgbChannels(v)};`);
     }
     lines.push(`${indent}${P}glass-alpha: ${T.effect[`glass-alpha-${th}`].$value};`);
-    for (const s of tokens(T.shadow)) lines.push(`${indent}${P}shadow-${s[0]}: ${shadowCss(s[0], th)};`);
+    for (const s of tokens(T.shadow))
+      lines.push(`${indent}${P}shadow-${s[0]}: ${shadowCss(s[0], th)};`);
     lines.push(`${indent}${P}ring: 0 0 0 2px var(${P}bg), 0 0 0 4px var(${P}focus);`);
     return lines.join("\n");
   };
@@ -159,12 +202,18 @@ if (SELF.$extensions?.["com.pyrlyn.legacyFlat"]) {
     for (const [k, t] of tokens(T.brand)) l.push(`  ${P}brand-${k}: ${t.$value};`);
     l.push(`  ${P}font-mono: ${family(T.font.family.mono.$value)};`);
     for (const [k, t] of tokens(T.font.weight)) l.push(`  ${P}weight-${k}: ${t.$value};`);
-    for (const [k, t] of tokens(T.font.size)) { l.push(`  ${P}text-${k}: ${t.$value};`); l.push(`  ${P}leading-${k}: ${lineHeight(t)};`); }
+    for (const [k, t] of tokens(T.font.size)) {
+      l.push(`  ${P}text-${k}: ${t.$value};`);
+      l.push(`  ${P}leading-${k}: ${lineHeight(t)};`);
+    }
     for (const [k, t] of tokens(T.font.tracking)) l.push(`  ${P}tracking-${k}: ${t.$value};`);
     for (const [k, t] of tokens(T.space)) l.push(`  ${P}space-${k}: ${t.$value};`);
     for (const [k, t] of tokens(T.radius)) l.push(`  ${P}radius-${k}: ${t.$value};`);
     for (const [k, t] of tokens(T.size)) l.push(`  ${P}size-${k}: ${t.$value};`);
-    for (const [k, t] of tokens(T.breakpoint)) l.push(`  ${P}bp-${k}: ${t.$value}; /* reference only: custom properties do not work in @media */`);
+    for (const [k, t] of tokens(T.breakpoint))
+      l.push(
+        `  ${P}bp-${k}: ${t.$value}; /* reference only: custom properties do not work in @media */`,
+      );
     for (const [k, t] of tokens(T.motion.duration)) l.push(`  ${P}duration-${k}: ${t.$value};`);
     for (const [k, t] of tokens(T.motion.easing)) l.push(`  ${P}ease-${k}: ${bezier(t.$value)};`);
     l.push(`  ${P}opacity-disabled: ${T.opacity.disabled.$value};`);
@@ -197,21 +246,46 @@ ${themeBlock("light")}
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-${tokens(T.motion.duration).map(([k]) => `    ${P}duration-${k}: 0.01ms;`).join("\n")}
+${tokens(T.motion.duration)
+  .map(([k]) => `    ${P}duration-${k}: 0.01ms;`)
+  .join("\n")}
   }
 }
 `;
   const v4 = [];
   const v4c = (name, k) => v4.push(`  --color-${name}: var(${P}${k});`);
-  v4c("bg", "bg"); v4c("surface", "surface"); v4c("surface-2", "surface-2"); v4c("surface-3", "surface-3");
-  v4c("border", "border"); v4c("border-strong", "border-strong");
-  v4c("fg", "fg"); v4c("fg-muted", "fg-muted"); v4c("fg-subtle", "fg-subtle");
-  v4c("accent", "accent"); v4c("accent-fg", "accent-fg"); v4c("accent-muted", "accent-muted"); v4c("accent-on", "on-accent");
-  for (const k of ["delta", "delta-fg", "danger", "danger-fg", "success", "success-fg", "warn", "warn-fg", "focus"]) v4c(k, k);
+  v4c("bg", "bg");
+  v4c("surface", "surface");
+  v4c("surface-2", "surface-2");
+  v4c("surface-3", "surface-3");
+  v4c("border", "border");
+  v4c("border-strong", "border-strong");
+  v4c("fg", "fg");
+  v4c("fg-muted", "fg-muted");
+  v4c("fg-subtle", "fg-subtle");
+  v4c("accent", "accent");
+  v4c("accent-fg", "accent-fg");
+  v4c("accent-muted", "accent-muted");
+  v4c("accent-on", "on-accent");
+  for (const k of [
+    "delta",
+    "delta-fg",
+    "danger",
+    "danger-fg",
+    "success",
+    "success-fg",
+    "warn",
+    "warn-fg",
+    "focus",
+  ])
+    v4c(k, k);
   v4c("mark", "mark-tile");
   for (const [k, t] of tokens(T.brand)) v4.push(`  --color-brand-${k}: ${t.$value};`);
   v4.push(`  --font-mono: var(${P}font-mono);`);
-  for (const [k, t] of tokens(T.font.size)) { v4.push(`  --text-${k}: ${t.$value};`); v4.push(`  --text-${k}--line-height: ${lineHeight(t)};`); }
+  for (const [k, t] of tokens(T.font.size)) {
+    v4.push(`  --text-${k}: ${t.$value};`);
+    v4.push(`  --text-${k}--line-height: ${lineHeight(t)};`);
+  }
   for (const [k, t] of tokens(T.font.tracking)) v4.push(`  --tracking-${k}: ${t.$value};`);
   for (const [k, t] of tokens(T.radius)) v4.push(`  --radius-${k}: ${t.$value};`);
   for (const k of ["e1", "e2", "e3"]) v4.push(`  --shadow-${k}: var(${P}shadow-${k});`);
@@ -236,44 +310,88 @@ ${v4.join("\n")}
 @utility duration-slow { transition-duration: var(${P}duration-slow); }
 `;
   const componentsSrc = readFileSync(join(dirname(basePath), "components/components.css"), "utf8");
-  out["dist/legacy/components.css"] = `/* Generated by build.mjs from @pyrlyn/brand ${BASE_VERSION} base/components/components.css (renamed .pyr-* -> .${NAME}-*, --pyr-* -> ${P}*). Do not edit by hand. */\n` +
+  out["dist/legacy/components.css"] =
+    `/* Generated by build.mjs from @pyrlyn/brand ${BASE_VERSION} base/components/components.css (renamed .pyr-* -> .${NAME}-*, --pyr-* -> ${P}*). Do not edit by hand. */\n` +
     componentsSrc.replace(/--pyr-/g, P).replace(/(["\s.])pyr-([a-z])/g, `$1${NAME}-$2`);
-  out["dist/legacy/tokens.resolved.json"] = JSON.stringify({
-    $comment: LH,
-    dark: themeColors.dark,
-    light: themeColors.light,
-    brand: Object.fromEntries(tokens(T.brand).map(([k, t]) => [k, t.$value])),
-    font: { mono: T.font.family.mono.$value, weight: Object.fromEntries(tokens(T.font.weight).map(([k, t]) => [k, t.$value])), size: Object.fromEntries(tokens(T.font.size).map(([k, t]) => [k, { size: t.$value, lineHeight: lineHeight(t) }])) },
-    space: Object.fromEntries(tokens(T.space).map(([k, t]) => [k, t.$value])),
-    radius: Object.fromEntries(tokens(T.radius).map(([k, t]) => [k, t.$value])),
-    size: Object.fromEntries(tokens(T.size).map(([k, t]) => [k, t.$value])),
-    breakpoint: Object.fromEntries(tokens(T.breakpoint).map(([k, t]) => [k, t.$value])),
-    motion: { duration: Object.fromEntries(tokens(T.motion.duration).map(([k, t]) => [k, t.$value])), easing: Object.fromEntries(tokens(T.motion.easing).map(([k, t]) => [k, bezier(t.$value)])) },
-    shadow: { dark: Object.fromEntries(tokens(T.shadow).map(([k]) => [k, shadowCss(k, "dark")])), light: Object.fromEntries(tokens(T.shadow).map(([k]) => [k, shadowCss(k, "light")])) },
-  }, null, 2) + "\n";
+  out["dist/legacy/tokens.resolved.json"] =
+    JSON.stringify(
+      {
+        $comment: LH,
+        dark: themeColors.dark,
+        light: themeColors.light,
+        brand: Object.fromEntries(tokens(T.brand).map(([k, t]) => [k, t.$value])),
+        font: {
+          mono: T.font.family.mono.$value,
+          weight: Object.fromEntries(tokens(T.font.weight).map(([k, t]) => [k, t.$value])),
+          size: Object.fromEntries(
+            tokens(T.font.size).map(([k, t]) => [k, { size: t.$value, lineHeight: lineHeight(t) }]),
+          ),
+        },
+        space: Object.fromEntries(tokens(T.space).map(([k, t]) => [k, t.$value])),
+        radius: Object.fromEntries(tokens(T.radius).map(([k, t]) => [k, t.$value])),
+        size: Object.fromEntries(tokens(T.size).map(([k, t]) => [k, t.$value])),
+        breakpoint: Object.fromEntries(tokens(T.breakpoint).map(([k, t]) => [k, t.$value])),
+        motion: {
+          duration: Object.fromEntries(tokens(T.motion.duration).map(([k, t]) => [k, t.$value])),
+          easing: Object.fromEntries(
+            tokens(T.motion.easing).map(([k, t]) => [k, bezier(t.$value)]),
+          ),
+        },
+        shadow: {
+          dark: Object.fromEntries(tokens(T.shadow).map(([k]) => [k, shadowCss(k, "dark")])),
+          light: Object.fromEntries(tokens(T.shadow).map(([k]) => [k, shadowCss(k, "light")])),
+        },
+      },
+      null,
+      2,
+    ) + "\n";
 }
 
 // ---------- token table + WCAG contrast (README.md) ----------
-const lum = (hex) => hexToRgb(hex).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
-const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const lum = (hex) =>
+  hexToRgb(hex)
+    .map((v) => v / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+    .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+const ratio = (a, b) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
 const fallback = (th, role) => {
   let v = vals[th][role];
   let r = role;
   while (v === undefined && r in ROLES.optional) {
     const m = ROLES.optional[r].match(/^var\(--pyr-([a-z0-9-]+)\)$/);
-    if (!m) { v = ROLES.optional[r]; break; }
+    if (!m) {
+      v = ROLES.optional[r];
+      break;
+    }
     r = m[1];
     v = vals[th][r];
   }
   return v;
 };
 // Text roles must reach 4.5:1 (WCAG 1.4.3 AA) on bg, surface and surface-2; on-accent on accent.
-const TEXT = ["fg", "fg-muted", "fg-subtle", "accent-fg", "delta-fg", "danger-fg", "success-fg", "warn-fg"];
+const TEXT = [
+  "fg",
+  "fg-muted",
+  "fg-subtle",
+  "accent-fg",
+  "delta-fg",
+  "danger-fg",
+  "success-fg",
+  "warn-fg",
+];
 const GROUNDS = ["bg", "surface", "surface-2"];
 const aa = (th, role) => {
   const fg = fallback(th, role);
   if (!isHex(fg) || hasAlpha(fg)) return "";
-  const pairs = role === "on-accent" ? [["accent", fallback(th, "accent")]] : TEXT.includes(role) ? GROUNDS.map((g) => [g, vals[th][g]]) : [];
+  const pairs =
+    role === "on-accent"
+      ? [["accent", fallback(th, "accent")]]
+      : TEXT.includes(role)
+        ? GROUNDS.map((g) => [g, vals[th][g]])
+        : [];
   if (!pairs.length) return "";
   const min = Math.min(...pairs.map(([, bg]) => ratio(fg, bg)));
   return `${min.toFixed(2)} ${min >= 4.5 ? "✓" : min >= 3 ? "✗ (large text only)" : "✗"}`;
@@ -287,14 +405,22 @@ const rows = [
   `| Role | CSS variable | ${def} (default) | ${def} AA | ${other} | ${other} AA |`,
   "|---|---|---|---|---|---|",
   ...roles.map((k) => {
-    const a = vals[def][k], b = vals[other][k];
-    const fa = a ?? (fallback(def, k) !== undefined ? `${fallback(def, k)} (base fallback)` : undefined);
-    const fb = b ?? (fallback(other, k) !== undefined ? `${fallback(other, k)} (base fallback)` : undefined);
+    const a = vals[def][k],
+      b = vals[other][k];
+    const fa =
+      a ?? (fallback(def, k) !== undefined ? `${fallback(def, k)} (base fallback)` : undefined);
+    const fb =
+      b ?? (fallback(other, k) !== undefined ? `${fallback(other, k)} (base fallback)` : undefined);
     return `| \`${k}\` | \`--pyr-${k}\` | ${cell(fa)} | ${aa(def, k)} | ${cell(fb)} | ${aa(other, k)} |`;
   }),
-  ...extras.map((k) => `| ${NAME} extra | \`--${NAME}-${k}\` | ${cell(vals[def][k])} | | ${cell(vals[other][k])} | |`),
+  ...extras.map(
+    (k) =>
+      `| ${NAME} extra | \`--${NAME}-${k}\` | ${cell(vals[def][k])} | | ${cell(vals[other][k])} | |`,
+  ),
 ];
-const consts2 = tokens(SELF.brand).map(([k, t]) => `\`--${NAME}-brand-${k}\` \`${res(t.$value)}\``).join(" · ");
+const consts2 = tokens(SELF.brand)
+  .map(([k, t]) => `\`--${NAME}-brand-${k}\` \`${res(t.$value)}\``)
+  .join(" · ");
 const table = `<!-- BEGIN TOKEN TABLE (generated by build.mjs, do not edit) -->
 Base: \`@pyrlyn/brand\` ${BASE_VERSION} (\`${SPEC}\`). AA = lowest contrast of a text role on \`bg\`, \`surface\` and
 \`surface-2\` (\`on-accent\`: on \`accent\`); ✓ ≥ 4.5:1. Roles without a value use the base fallback shown.
@@ -314,7 +440,21 @@ let stale = 0;
 const same = (p, c) => existsSync(p) && readFileSync(p).equals(Buffer.from(c));
 for (const [rel, c] of Object.entries(out)) {
   const p = join(root, rel);
-  if (check) { if (!same(p, c)) { console.error(`stale: ${rel}`); stale++; } }
-  else if (!same(p, c)) { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, c); console.log(`wrote ${rel}`); }
+  if (check) {
+    if (!same(p, c)) {
+      console.error(`stale: ${rel}`);
+      stale++;
+    }
+  } else if (!same(p, c)) {
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, c);
+    console.log(`wrote ${rel}`);
+  }
 }
-if (check) { if (stale) { console.error("run: node build.mjs"); process.exit(1); } console.log(`${NAME} brand: dist/ and README token table are up to date (base ${BASE_VERSION})`); }
+if (check) {
+  if (stale) {
+    console.error("run: node build.mjs");
+    process.exit(1);
+  }
+  console.log(`${NAME} brand: dist/ and README token table are up to date (base ${BASE_VERSION})`);
+}
