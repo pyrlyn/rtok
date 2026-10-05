@@ -68,6 +68,9 @@ const noWebgl: Decorator = (Story) => (
     </WithoutWebgl>
 );
 
+/** The lazy scene chunks and the layout worker outlast the default 1 s wait on a busy host; a scene that never renders still fails. */
+const READY = { timeout: 10_000 };
+
 /** Pixels the stage drew: the canvas is transparent where nothing is. */
 function drawn(canvas: HTMLCanvasElement): number {
     const copy = document.createElement("canvas");
@@ -108,10 +111,10 @@ export const WebglOffShowsTwoD: Story = {
     decorators: [noWebgl, viewing("3d")],
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
-        await expect((await canvas.findByRole("status")).textContent).toMatch(
+        await expect((await canvas.findByRole("status", undefined, READY)).textContent).toMatch(
             /3D view unavailable/,
         );
-        await waitFor(() => expect(canvas.getAllByTestId("node-2d")).toHaveLength(5));
+        await waitFor(() => expect(canvas.getAllByTestId("node-2d")).toHaveLength(5), READY);
         await expect(canvas.queryByTestId("graph-3d")).toBeNull();
     },
 };
@@ -134,27 +137,34 @@ export const WebglDrawsAndClickSelects: StoryObj = {
     decorators: [withData(connectSample), viewing("3d")],
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
-        const host = await canvas.findByTestId("graph-3d");
+        const host = await canvas.findByTestId("graph-3d", undefined, READY);
         const gl = await waitFor(() => {
             const c = host.querySelector("canvas");
             if (!c) throw new Error("no canvas yet");
             return c;
-        });
-        await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), { timeout: 8000 });
+        }, READY);
+        await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), READY);
 
         const probe = (globalThis as { __probe?: { current: ViewApi | null } }).__probe!;
         // ketch is not selected in the sample registry; a click on its sphere selects it.
+        // Until the layout and the camera fit stop, the click can land where the sphere was.
+        let last = "";
         const target = await waitFor(() => {
             const at = probe.current?.screenOf(2);
             if (!at) throw new Error("layout not ready");
+            const spot = `${Math.round(at.x)},${Math.round(at.y)}`;
+            if (spot !== last) {
+                last = spot;
+                throw new Error("layout still moving");
+            }
             return at;
-        });
+        }, READY);
         const coords = { clientX: target.x, clientY: target.y };
         await userEvent.pointer([
             { keys: "[MouseLeft>]", target: gl, coords },
             { keys: "[/MouseLeft]", target: gl, coords },
         ]);
-        const header = within(await canvas.findByLabelText("current project"));
-        await expect(await header.findByText("ketch")).toBeVisible();
+        const header = within(await canvas.findByLabelText("current project", undefined, READY));
+        await expect(await header.findByText("ketch", undefined, READY)).toBeVisible();
     },
 };

@@ -1033,6 +1033,16 @@ Check: unit tests for the shortcut map; a story with a play function that opens 
 
 Result: `web/src/palette/`. ⌘K / Ctrl+K (also the header's "jump to" button) opens a palette over pages, plugins, sessions (newest 30) and hosts from the current snapshot, plus the theme switch; a plugin or session opens its page on that row through `?id=` (validated as a string in `router.tsx`, selected by `useSelectFromUrl`). `g <key>` jumps to a page (keys picked by hand, unit-tested unique), `?` opens the shortcut sheet; single-letter keys never fire inside fields. Behaviour comes from React Aria Components 1.21.1 (`Autocomplete`, `Menu`, `Modal`, `Dialog`); its `Autocomplete` covers the palette, so no `cmdk` (no release since 2025-03). The overlays load lazily (48 kB gzip chunk, entry +1 kB) and stay mounted after first use so closing hands focus back to the opener. Hosts is a text page with no rows, so a host item only opens it.
 
+### T415. Graph overview story tests wait for the real readiness signal
+
+`web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
+
+Plan: one `READY = { timeout: 10_000 }` in the story file; pass it to every `findBy*`/`waitFor`; before the click, wait until `screenOf(2)` stops moving so the click lands on the sphere the layout already placed.
+
+Check: `npx vitest run --project storybook src/pages/GraphOverview.stories.tsx` (from `web/`) several times under load; `just check`, `just spa-stories`, `just spa-e2e`.
+
+Result (2026-10-05, Claude Code / opus-5.5): one `READY = { timeout: 10_000 }` in `web/src/pages/GraphOverview.stories.tsx`, passed to every `findBy*`/`waitFor` in both play functions (the canvas-drawn wait drops its own 8 s). Before the click, "Webgl Draws And Click Selects" waits until `screenOf(2)` reads the same rounded pixel twice in a row, so the click lands on the sphere the layout and the camera fit already placed. Reproduced first: the full story suite failed 3 of 3 runs at load average 106-135 (both stories, 1013-1058 ms, `node-2d` and `graph-3d` not found); after the change the full suite passed 5 of 5 and the file alone 5 of 5 at load average 47-78 (lower than the failing runs, but inside the 15-250 band the flake was reported in). Fail-fast kept: with a wrong node count and a missing name the two stories fail at 10.0 s and 12.5 s instead of hanging. `just check`, `just spa-stories` and `just spa-e2e` green.
+
 ### T310.12. Delete Slint, the WASM build and the HTML design
 
 Remove `crates/rtok-webui`, `tools/webui-bundle.sh`, `just web-bundle`/`webui-check`, the wasm steps in CI/release, `tests/web_wasm.rs`, `design/html/` and the rest of the prototype; update D20, `architecture.md`, `toolchain.md` and `rust.md`.
