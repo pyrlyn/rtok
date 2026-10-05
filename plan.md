@@ -107,6 +107,22 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
+| T413 | todo | P2 | 3 | 0% | |
+| T413.1 | todo | P2 | 2 | 0% | |
+| T413.2 | todo | P2 | 2 | 0% | |
+| T413.3 | todo | P2 | 3 | 0% | |
+| T413.4 | todo | P2 | 3 | 0% | |
+| T413.5 | todo | P3 | 3 | 0% | |
+| T413.6 | todo | P3 | 2 | 0% | |
+| T413.7 | todo | P3 | 3 | 0% | |
+| T413.8 | todo | P3 | 3 | 0% | |
+| T413.9 | todo | P3 | 3 | 0% | |
+| T413.10 | todo | P3 | 2 | 0% | |
+| T413.11 | todo | P3 | 2 | 0% | |
+| T413.12 | todo | P3 | 2 | 0% | |
+| T413.13 | todo | P3 | 2 | 0% | |
+| T413.14 | todo | P3 | 2 | 0% | |
+| T413.15 | todo | P3 | 2 | 0% | |
 
 
 
@@ -1915,6 +1931,110 @@ Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F
 Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
 
 Check: each sub-task carries its own Check.
+
+### T413. More agent hosts: popular agents rtok does not install into yet
+
+Creator request 2026-10-05: add installers for popular coding agents missing from `src/agents/` (22 hosts on `9d6557c7`). One sub-task per host, one PR each. The list below is a lead, not evidence: every fact a sub-task relies on (binary, config paths, MCP entry format, hook events and payloads, plugin or extension API) is first written into `research.md` with its primary source (vendor docs or the repository's own files, URL plus date checked).
+
+Shared shape for every sub-task, per `architecture.md` "New host" and D21:
+1. Research: a `research.md` row for the host with the sources above; if a field is not documented, it stays out of the installer (never guessed).
+2. `src/agents/<host>/mod.rs` implementing `Agent` (variants, detection, files, installed modules, apply) and `README.md` with the module table and `## Docs`; registered in `HOSTS` and `host()`; `[setup.<host>]` paths in `config/default.toml`, `src/config/mod.rs`, `docs/config.md`.
+3. Reuse first: a host that forks or mirrors an existing one (named per card) shares that host's code through a helper, never a copy. Host configs: check only rtok's entry, keep the rest byte-for-byte; backups and `--dry-run` from `rtok-agent-sdk`.
+4. `docs/agents.md` row; `agents_install` matrix row (install twice / remove twice / list) against fake homes, never the real agent.
+
+5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
+
+Check: every sub-task below is closed in `done.md` with its per-host check.
+
+### T413.1. `rtok agents install roo` — Roo Code
+
+VS Code extension forked from Cline. Check how far `src/agents/cline/` applies (MCP settings file, rules, hooks if any) and share it through a helper instead of a second copy.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.2. `rtok agents install qwen` — Qwen Code
+
+CLI forked from Gemini CLI. Check how far `src/agents/gemini/` applies (settings path, `mcpServers`, hook events, extensions) and share it.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.3. `rtok agents install droid` — Factory Droid
+
+`rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+
+Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.5. `rtok agents install amp` — Amp
+
+Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.6. `rtok agents install goose` — Goose
+
+Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.7. `rtok agents install continue` — Continue
+
+VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
+
+IDE extension and Auggie CLI. MCP and hooks if documented.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.9. `rtok agents install junie` — JetBrains Junie
+
+Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
+
+Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.11. `rtok agents install crush` — Crush
+
+Crush (Charm), open-source terminal agent. MCP and any documented hooks.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.12. `rtok agents install warp` — Warp
+
+Warp terminal's agent. MCP and rules if they live in a file setup can edit; a setting stored only in the app's database is out of scope.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.13. `rtok agents install trae` — Trae
+
+Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `src/agents/vscode/` already handles.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.14. `rtok agents install openhands` — OpenHands
+
+OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
+
+Check: the T413 per-host check (step 5) for this host.
+
+### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
+
+DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
+
+Check: the T413 per-host check (step 5) for this host.
 
 ## Reference
 
