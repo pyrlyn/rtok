@@ -8,6 +8,8 @@
 //! backdating a call's `ts` needs `Store::set_call_ts`, `#[cfg(test)]`-only and so reachable
 //! only from inside the crate, never from this external test binary.
 
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -28,6 +30,8 @@ fn rtok(args: &[&str], home: &Path) -> String {
         .args(args)
         .env("RTOK_HOME", home)
         .env("HOME", home)
+        // Whatever hosts the test faked with `fake_hosts` (T426); none when it faked none.
+        .env("PATH", home.join(".fake-hosts"))
         .output()
         .unwrap();
     assert!(
@@ -109,6 +113,11 @@ fn write(path: &Path, bytes: usize) {
 #[test]
 fn list_shows_each_installed_host_with_its_folders_and_exact_sizes() {
     let home = home("hosts");
+    // Every host installed but Gemini CLI, so `--all` still has one not installed to show.
+    let hosts = common::agents::fake_hosts(&home);
+    for stub in ["gemini", "gemini.cmd"] {
+        let _ = fs::remove_file(hosts.join(stub));
+    }
     let claude = home.join("cc");
     let codex = home.join("cx");
     write(&claude.join("settings.json"), 10);
@@ -124,6 +133,8 @@ fn list_shows_each_installed_host_with_its_folders_and_exact_sizes() {
 
     let out = Command::new(bin())
         .args(["agents", "junk", "list", "--json"])
+        // Only an installed host lists its folders (T426).
+        .env("PATH", &hosts)
         .env("RTOK_HOME", &home)
         .env("HOME", &home)
         .env("CLAUDE_CONFIG_DIR", &claude)

@@ -374,7 +374,7 @@ fn host_rows(
     let mut keys: Vec<Vec<PathBuf>> = Vec::new();
     for &id in HOSTS {
         let Some(a) = host(id) else { continue };
-        let installed = a.variants().iter().any(|v| present(a, v, cfg));
+        let installed = a.variants().iter().any(present);
         if !installed && !all {
             continue;
         }
@@ -776,7 +776,8 @@ mod tests {
         let report = report_with(
             &cfg,
             &roots(&dir, &[]),
-            Options::default(),
+            // The hosts here are folders only, not installed apps (T426).
+            Options { all: true },
             AGENT_SCAN_LIMIT,
         );
 
@@ -844,7 +845,8 @@ mod tests {
         let report = report_with(
             &cfg,
             &roots(&dir, &env),
-            Options::default(),
+            // The hosts here are folders only, not installed apps (T426).
+            Options { all: true },
             AGENT_SCAN_LIMIT,
         );
 
@@ -889,7 +891,12 @@ mod tests {
         let (cfg, dir) = crate::testutil::config("junk-timeout");
         write(&dir.join(".claude/settings.json"), 10);
 
-        let report = report_with(&cfg, &roots(&dir, &[]), Options::default(), Duration::ZERO);
+        let report = report_with(
+            &cfg,
+            &roots(&dir, &[]),
+            Options { all: true },
+            Duration::ZERO,
+        );
 
         let note = folder(agent(&report, "claude"), &dir.join(".claude"))
             .note

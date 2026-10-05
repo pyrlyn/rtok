@@ -61,6 +61,7 @@ fn setup(args: &[&str], cfg: &Path, home: &Path) -> (String, String, i32) {
         .arg("--no-restart")
         .env("HOME", home)
         .env("USERPROFILE", home)
+        .env("PATH", common::agents::fake_hosts(home))
         .env("RTOK_HOME", home.join(".rtok"))
         .output()
         .expect("rtok setup");

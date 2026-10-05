@@ -119,15 +119,12 @@ pub fn raw(args: &[&str], cfg: &Path, home: &Path) -> Output {
     raw_with_path(args, cfg, home, fake_claude_path(home))
 }
 
-/// [`raw`], but on a PATH with no `claude` at all (fake or real) — a machine that never
-/// installed the Claude Code CLI, so `rtok agents install claude` falls back to the
-/// settings-file surfaces instead of the plugin (T139).
+/// [`raw`], but every host CLI on PATH is a [`fake_hosts`] stub that fails anything past
+/// `--version` — the host is installed (T426) yet `claude plugin install` and its kin fail, so
+/// `rtok agents install claude` falls back to the settings-file surfaces instead of the plugin
+/// (T139).
 pub fn raw_without_claude(args: &[&str], cfg: &Path, home: &Path) -> Output {
-    let path = if cfg!(windows) {
-        std::ffi::OsString::from(r"C:\Windows\System32")
-    } else {
-        std::ffi::OsString::from("/usr/bin:/bin")
-    };
+    let path = std::env::join_paths([fake_hosts(home)]).unwrap();
     raw_with_path(args, cfg, home, path)
 }
 
@@ -289,11 +286,60 @@ if "%ALLARGS%"=="extensions uninstall rtok" rmdir /s /q "%EXT%\rtok" 2>nul
     }
 }
 
+/// Every host variant installed under `home` (T426: setup refuses a host whose app or binary
+/// is missing): a stub per CLI in `<home>/.fake-hosts` that answers `--version` and fails
+/// anything else, as a host CLI rtok cannot drive; it goes on PATH after `.fake-bin` so the
+/// scripted fakes above win. App-only variants get an empty bundle at their first absolute app
+/// path, where the host sandbox looks for it.
+pub fn fake_hosts(home: &Path) -> PathBuf {
+    let dir = home.join(".fake-hosts");
+    fs::create_dir_all(&dir).unwrap();
+    for v in rtok::agents::HOSTS
+        .iter()
+        .filter_map(|id| rtok::agents::host(id))
+        .flat_map(|a| a.variants())
+    {
+        for bin in v.bins {
+            fake_stub(&dir, bin);
+        }
+        if v.bins.is_empty()
+            && let Some(app) = v.apps.iter().find_map(|a| a.strip_prefix('/'))
+        {
+            fs::create_dir_all(home.join(app)).unwrap();
+        }
+    }
+    dir
+}
+
+fn fake_stub(dir: &Path, name: &str) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = dir.join(name);
+        if !bin.exists() {
+            fs::write(&bin, "#!/bin/sh\n[ \"$1\" = --version ] && { echo 0.0.0; exit 0; }\necho \"fake host: unsupported\" >&2\nexit 1\n").unwrap();
+            fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    #[cfg(windows)]
+    {
+        let bin = dir.join(format!("{name}.cmd"));
+        if !bin.exists() {
+            fs::write(
+                &bin,
+                "@echo off\r\nif \"%~1\"==\"--version\" (\r\n  echo 0.0.0\r\n  exit /b 0\r\n)\r\necho fake host: unsupported 1>&2\r\nexit /b 1\r\n",
+            )
+            .unwrap();
+        }
+    }
+}
+
 pub fn fake_claude_path(home: &Path) -> std::ffi::OsString {
     // T168: the copilot shim lives beside claude/codex so every `raw`/`rtok` probe is
     // hermetic — without it `app_version` reached the real npm wrapper, whose
     // `Package extraction …` noise flakes the byte-compared `agents list` tables.
     fake_copilot(home);
+    let hosts = fake_hosts(home);
     let path = std::env::var_os("PATH").unwrap_or_default();
     #[cfg(unix)]
     {
@@ -349,7 +395,7 @@ esac
                 fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
             }
         }
-        let mut dirs = vec![dir];
+        let mut dirs = vec![dir, hosts];
         dirs.extend(std::env::split_paths(&path));
         return std::env::join_paths(dirs).unwrap();
     }
@@ -412,7 +458,7 @@ if "%ALLARGS%"=="plugin update rtok@rtok" (
                 .unwrap();
             }
         }
-        let mut dirs = vec![dir];
+        let mut dirs = vec![dir, hosts];
         dirs.extend(std::env::split_paths(&path));
         return std::env::join_paths(dirs).unwrap();
     }
