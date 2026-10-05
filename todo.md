@@ -133,3 +133,4 @@
 - T418. SessionStart hook back under the 10 ms budget
 - T419. Checkpoint prompt quality in the web and TUI statistics
 - T420. `just check` runs only what a change touches; `just full-check` runs everything
+- T421. `/health` latency test survives runner load
