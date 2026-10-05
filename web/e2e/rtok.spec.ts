@@ -23,7 +23,7 @@ for (const { id } of PAGES) {
     await expect(
       page.getByRole("navigation", { name: "Admin screens" }).getByRole("link", { name: id }),
     ).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("banner").getByText("open", { exact: true })).toBeVisible();
+    await expect(page.getByRole("banner").getByText("live", { exact: true })).toBeVisible();
     const main = page.getByRole("main");
     await expect(main.locator("[aria-busy]")).toHaveCount(0);
     await expect(main.getByText("Something went wrong")).toHaveCount(0);
@@ -68,8 +68,8 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
   rtok,
 }) => {
   await page.goto("/#/overview");
-  const connection = page.getByRole("banner").getByText(/^(open|closed|connecting)$/);
-  await expect(connection).toHaveText("open");
+  const connection = page.getByRole("banner").getByText(/^(live|closed|connecting)$/);
+  await expect(connection).toHaveText("live");
   const nav = page.getByRole("navigation", { name: "Admin screens" });
   const offline = page.getByRole("heading", { name: "Offline", exact: true });
   const reconnect = page.getByRole("button", { name: "Reconnect", exact: true });
@@ -84,9 +84,9 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
 
   await rtok.start();
   // Reconnect skips the client's backoff (capped at 10 s, web/src/api/ws.ts). An automatic retry
-  // that lands first hides the button, so the click may never happen; both paths end open.
+  // that lands first hides the button, so the click may never happen; both paths end live.
   void reconnect.click().catch(() => {});
-  await expect(connection).toHaveText("open", { timeout: 5_000 });
+  await expect(connection).toHaveText("live", { timeout: 5_000 });
   await expect(nav).toBeVisible();
   await expect(offline).toHaveCount(0);
 });

@@ -74,3 +74,24 @@ export function Bitset({
         </div>
     );
 }
+
+// The mark's 4×4 bitset budget as data: each cell is 1/16 of the estimated tokens, coral cells are
+// the measured cut (Δ), cyan the context kept. Cuts fill from the last cell so the grid reads like
+// the mark, and the label carries the number for anyone who cannot see the colours.
+export function BudgetGrid({ cut, label }: { cut: number; label: string }) {
+    const cells = Number.isFinite(cut) ? Math.round(Math.min(1, Math.max(0, cut)) * 16) : 0;
+    return (
+        <div
+            role="img"
+            aria-label={label}
+            className="grid size-24 shrink-0 grid-cols-4 gap-1.5 rounded-lg bg-mark p-2.5"
+        >
+            {Array.from({ length: 16 }, (_, i) => (
+                <span
+                    key={i}
+                    className={`rounded-full ${i >= 16 - cells ? "bg-brand-coral" : "bg-brand-cyan"}`}
+                />
+            ))}
+        </div>
+    );
+}

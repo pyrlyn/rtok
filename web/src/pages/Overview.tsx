@@ -8,7 +8,7 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
-import { Bitset, MiniBars } from "../ui/Marks";
+import { Bitset, BudgetGrid, MiniBars } from "../ui/Marks";
 import { Sparkline } from "../ui/Sparkline";
 import { compact, fmt, pct } from "./format";
 import { overview } from "./model";
@@ -51,6 +51,65 @@ function Share({ value, max }: { value: number; max: number }) {
 
 const sub = (text: string) => <span className="text-sm text-fg-subtle">{text}</span>;
 
+const kicker = "text-2xs font-semibold tracking-kicker text-fg-subtle uppercase";
+
+function Budget({
+    label,
+    value,
+    of,
+    kept,
+}: {
+    label: string;
+    value: number;
+    of: number;
+    kept?: boolean;
+}) {
+    return (
+        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_3rem] items-center gap-2">
+            <dt>{label}</dt>
+            <dd className="h-2 overflow-hidden rounded-full bg-surface-3">
+                <div
+                    className={`h-full rounded-full ${kept ? "bg-accent" : "bg-border-strong"}`}
+                    style={{ width: `${of ? Math.min(100, (value / of) * 100) : 0}%` }}
+                />
+            </dd>
+            <dd className="text-right text-fg tabular-nums">{compact(value)}</dd>
+        </div>
+    );
+}
+
+// The product's one claim, measured: what rtok cut and what share of the estimate that is.
+function Saved({ o }: { o: ReturnType<typeof overview> }) {
+    return (
+        <section
+            aria-label="tokens saved"
+            className="glass flex flex-wrap items-center gap-x-8 gap-y-4 p-4"
+        >
+            <BudgetGrid cut={o.deltaPct} label={`${pct(o.deltaPct)} of the estimated tokens cut`} />
+            <div className="min-w-0">
+                <p className={kicker}>Δ saved tok</p>
+                <p className="mt-1 text-3xl font-semibold whitespace-nowrap">
+                    <span className="text-delta-fg">Δ</span> {compact(o.saved)}
+                </p>
+                <p className="mt-1 text-2xs text-fg-muted">
+                    est {compact(o.estBefore)} → {compact(o.estAfter)}
+                </p>
+            </div>
+            <div className="min-w-0">
+                <p className={kicker}>Δtok %</p>
+                <p className="mt-1 text-3xl font-semibold text-accent-fg">{pct(o.deltaPct)}</p>
+                <p className="mt-1 text-2xs text-fg-muted">
+                    {o.measured.length} plugins with Measurement rows
+                </p>
+            </div>
+            <dl className="ml-auto flex min-w-48 flex-1 flex-col gap-2 text-2xs text-fg-muted sm:max-w-80">
+                <Budget label="est before" value={o.estBefore} of={o.estBefore} />
+                <Budget label="after" value={o.estAfter} of={o.estBefore} kept />
+            </dl>
+        </section>
+    );
+}
+
 export function Overview() {
     return <WithSnapshot>{(snap) => <OverviewBody snap={snap} />}</WithSnapshot>;
 }
@@ -73,29 +132,6 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
             label="output tok"
             value={compact(u.output)}
             sub={`cache create ${compact(u.cache_create)}`}
-        />,
-        <Kpi
-            key="saved"
-            label="Δ saved tok"
-            value={
-                <>
-                    <span className="text-delta-fg">Δ</span> {compact(o.saved)}
-                </>
-            }
-            sub={`est ${compact(o.estBefore)} → ${compact(o.estAfter)}`}
-            viz={
-                <MiniBars
-                    values={o.measured.slice(0, 8).map((m) => m.saved)}
-                    label="saved per plugin"
-                    className="fill-delta-fg"
-                />
-            }
-        />,
-        <Kpi
-            key="pct"
-            label="Δtok %"
-            value={<span className="text-accent-fg">{pct(o.deltaPct)}</span>}
-            sub={`${o.measured.length} plugins with Measurement rows`}
         />,
         <Kpi
             key="cache"
@@ -152,7 +188,8 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                     {a}
                 </div>
             ))}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{kpis}</div>
+            <Saved o={o} />
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">{kpis}</div>
             <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
                 <CallsPanel o={o} calls={snap.calls.length} />
                 <Panel

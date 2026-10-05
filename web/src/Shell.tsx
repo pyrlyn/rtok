@@ -11,6 +11,15 @@ import { PAGES, type Page } from "./pages";
 import { Empty, ErrorState, Offline } from "./states";
 import { useTheme } from "./theme";
 import { Icon } from "./ui/Icon";
+import { Pill, type PillTone } from "./ui/Pill";
+import type { ConnectionState } from "./api/ws";
+
+// The label says the state; the tone only repeats it.
+const linkTone: Record<ConnectionState, PillTone> = {
+    open: "ok",
+    connecting: "info",
+    closed: "fail",
+};
 
 const focusRing = "outline-none focus-visible:shadow-ring";
 const navLink = `${focusRing} flex h-9 shrink-0 items-center gap-3 rounded-md px-2.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent-fg`;
@@ -55,9 +64,14 @@ export function Shell() {
                     aria-label="Admin screens"
                     className="glass fixed inset-x-2 bottom-2 z-40 flex gap-0.5 overflow-x-auto p-1 md:sticky md:inset-auto md:top-0 md:m-3 md:h-[calc(100vh-1.5rem)] md:flex-col md:overflow-y-auto"
                 >
-                    <div className="hidden items-center gap-2 px-2.5 py-2 md:flex">
-                        <img src={logo} alt="" width={22} height={22} className="rounded-sm" />
-                        <span className="text-xs font-bold tracking-wordmark">RTOK</span>
+                    <div className="mb-2 hidden items-center gap-2.5 border-b border-border px-2.5 pt-2 pb-3 md:flex">
+                        <img src={logo} alt="" width={28} height={28} className="rounded-md" />
+                        <span className="flex flex-col leading-none">
+                            <span className="text-sm font-bold tracking-wordmark">RTOK</span>
+                            <span className="mt-1 text-2xs text-fg-subtle">
+                                <span className="text-delta-fg">Δ</span>tok
+                            </span>
+                        </span>
                     </div>
                     {PAGES.map((p: Page) => (
                         <Link key={p.id} to={`/${p.id}`} className={navLink}>
@@ -67,23 +81,28 @@ export function Shell() {
                     ))}
                 </nav>
                 <div className="flex min-w-0 flex-col">
-                    <header className="flex items-center gap-2 px-3 py-3">
-                        <h1
-                            ref={heading}
-                            tabIndex={-1}
-                            className="min-w-0 flex-1 truncate text-base font-bold outline-none md:text-sm"
-                        >
-                            {title}
-                        </h1>
-                        <span className="text-2xs text-fg-subtle">{connection}</span>
+                    <header className="flex items-end gap-3 px-3 pt-4 pb-3">
+                        <div className="min-w-0 flex-1">
+                            <h1
+                                ref={heading}
+                                tabIndex={-1}
+                                className="truncate text-xl font-semibold outline-none"
+                            >
+                                {title}
+                            </h1>
+                        </div>
+                        <Pill tone={linkTone[connection]} dot>
+                            {connection === "open" ? "live" : connection}
+                        </Pill>
                         <button
                             type="button"
                             onClick={toggle}
                             aria-pressed={!dark}
                             aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-                            className={`${focusRing} h-7 rounded-md px-2 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg`}
+                            title={dark ? "Light theme" : "Dark theme"}
+                            className={`${focusRing} grid size-8 place-items-center rounded-md border border-border text-fg-muted transition-colors duration-fast hover:border-border-strong hover:text-fg`}
                         >
-                            {dark ? "Light" : "Dark"}
+                            <Icon name="theme" />
                         </button>
                     </header>
                     <main

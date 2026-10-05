@@ -82,8 +82,8 @@ function compile(gl: WebGLRenderingContext, canvas: HTMLCanvasElement) {
     gl.uniform2f(r, w, h);
     // Seconds since load: mediump `sin` loses precision on large arguments.
     gl.uniform1f(t, (now - t0) / 1000);
-    gl.uniform3fv(ca, cssRgb("--rtok-accent-rgb"));
-    gl.uniform3fv(cd, cssRgb("--rtok-delta-rgb"));
+    gl.uniform3fv(ca, cssRgb("--pyr-accent-rgb"));
+    gl.uniform3fv(cd, cssRgb("--pyr-delta-rgb"));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 }
