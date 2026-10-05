@@ -130,7 +130,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.8 | todo | P2 | 2 | 0% | |
-| T414.9 | todo | P2 | 3 | 0% | |
+| T414.9 | in progress | P2 | 3 | 5% | Claude Code / opus-5.5 |
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
@@ -2052,7 +2052,7 @@ Check: the T413 per-host check (step 5) for this host.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 
-Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; `cmdk` for the palette).
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
 
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
@@ -2096,9 +2096,11 @@ Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reac
 
 ### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
 
-A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on `cmdk` for the palette and React Aria Components for the dialog and focus handling (creator decision), styled on the `--pyr-*` roles.
+A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on React Aria Components (`Autocomplete`, `Menu`, `Modal`; creator decision), styled on the `--pyr-*` roles.
 
 Check: unit tests for the shortcut map; a story with a play function that opens the palette, filters and navigates; axe green.
+
+Plan: 1) dep `react-aria-components` 1.21.1 (`toolchain.md` row); its `Autocomplete` + `Menu` in a `Modal` cover the palette, so no `cmdk` (no release since 2025-03, pulls Radix). 2) `web/src/palette/shortcuts.ts`: the `g <key>` map over `PAGES` (unique keys, unit-tested), a `?` help entry, and the "typing in a field" guard. 3) `useShortcuts` (one `keydown` listener on `window`: ⌘K / Ctrl+K anywhere, `g <key>` and `?` outside fields, a 1 s window for the second key). 4) `Palette.tsx`: sections Pages, Plugins (id, title), Sessions (id, host, project), Actions (theme); a plugin or session opens its page with `?id=` and the page selects that row. Hosts is a text page with no rows, so a host item opens the Hosts page. 5) `Shortcuts.tsx` help sheet (`Modal`). 6) Mount both in `Shell`. 7) Tests: shortcut map and guard (unit), a story whose play opens the palette with Ctrl+K, filters, picks a plugin and lands on it; axe.
 
 ### T414.10. Table filters and sort in the URL
 
