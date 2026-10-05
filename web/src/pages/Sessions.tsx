@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSelectFromUrl } from "./selectFromUrl";
 import type { SessionTotals, Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
@@ -65,6 +66,7 @@ function SessionsBody({ snap }: { snap: Snapshot }) {
     const [query, setQuery] = useState("");
     const [liveOnly, setLiveOnly] = useState(false);
     const [selectedId, setSelectedId] = useState<string>();
+    useSelectFromUrl(setSelectedId);
     const sessions = snap.sessions;
     const rows = useMemo(
         () => sessions.filter((s) => matchesSession(s, liveOnly, query)),

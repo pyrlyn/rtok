@@ -124,7 +124,6 @@
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T414.8. Sidebar groups and a collapsible sidebar
-- T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
 - T414.10. Table filters and sort in the URL
 - T414.11. Clickable KPIs and panels open the filtered page
 - T414.12. Live status: snapshot age and pause

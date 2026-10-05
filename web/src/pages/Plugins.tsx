@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useCallback, useMemo, useState } from "react";
+import { useSelectFromUrl } from "./selectFromUrl";
 import { useServerMessage, useSetMutation } from "../api/query";
 import type { PluginPage } from "../api/snapshot.gen";
 import { Empty } from "../states";
@@ -43,6 +44,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
     const [query, setQuery] = useState("");
     const [show, setShow] = useState<Show>("all");
     const [selectedId, setSelectedId] = useState<string>();
+    useSelectFromUrl(setSelectedId);
     const { mutate } = useSetMutation();
     const message = useServerMessage();
 
