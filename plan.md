@@ -139,6 +139,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T418 | todo | P2 | 3 | 0% | |
 | T419 | todo | P2 | 3 | 0% | |
 | T420 | todo | P1 | 4 | 0% | |
+| T425 | in progress | P1 | 2 | 10% | Claude Code / claude-opus-5-5 |
 
 
 
@@ -2153,6 +2154,14 @@ Check: a unit test writes two checkpoints in one session and one in another and 
 `just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
 
 Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
+
+### T425. Large-transcript SessionEnd test bounds scaling, not wall clock
+
+`checkpoint::tests::session_end_on_a_large_transcript_is_bounded` asserts the SessionEnd hook on a 50 MB transcript finishes in under 10 s. It failed in `just check` at 13.8 s with host load ~130 on a 16-core Mac (debug build); alone at load 50-110 it took 5.2-8.0 s, so the fixed bound has little margin under load. Its comment says the bound only catches a quadratic regression. Done: the test times a 5 MB transcript before and after the 50 MB one in the same test and bounds the 50 MB run against the slower small run (near-linear scaling), with no wall-clock bound; the open count and note-body checks stay. Same approach as T421.
+
+Plan: `src/plugins/checkpoint.rs` only — a helper times one SessionEnd run per project; small, big, small; assert `big < max(small) * K` with K well under the ~100x a quadratic extractor gives.
+
+Check: the test passes repeatedly under CPU load (own `yes` burners); it fails when the extraction loop is made quadratic; `just check` green.
 
 ## Reference
 
