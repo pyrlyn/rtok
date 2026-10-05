@@ -7021,6 +7021,18 @@ Do (2026-09-24): `checkpoint::extract_path` now streams the transcript line by l
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T417. Checkpoint keeps only prompts the human typed
+
+`checkpoint::extract` treated every `type: "user"` transcript record with text as a user prompt. In a live Claude Code session most such records are host-injected: background-task `<task-notification>`s, sub-agent hand-backs (`origin.kind == "peer"`), `<ci-monitor-event>`s, slash-command skill bodies (`isMeta`), the compaction summary (`isCompactSummary`), `[Request interrupted by user]` markers, and `<system-reminder>` blocks wrapped around real prompts. 40 recent rtok transcripts (2026-10-05) held 533 task notifications and 156 peer messages against 185 typed prompts, so the 20-prompt window that PreCompact, SessionEnd, startup recall and `handoff` inject was mostly noise.
+
+Done: a user record is a prompt only when the host did not inject it — `isMeta` and `isCompactSummary` records are skipped; a record with an `origin` counts only when `origin.kind == "human"`; `<system-reminder>…</system-reminder>` blocks are cut out of the text; a record whose remaining text opens with a host envelope (`<task-notification>`, `<ci-monitor-event>`, `<local-command-stdout>`, `<local-command-stderr>`, `<local-command-caveat>`, `<agent-message`) or with `[Request interrupted by user` is skipped, which covers transcripts written before Claude Code added `origin`. Paths, errors and skills are unchanged.
+
+Plan: `user_prompt` in `src/plugins/checkpoint.rs` applies the rules through `host_injected`, `HOST_OPENERS` and `strip_reminders`; `worth_parsing` stays a superset. Unit tests per injected shape, the 20-prompt window, reminder stripping, and the prefilter superset on the new fixture. Docs in `src/plugins/memory/README.md` (Hooks) and `AGENTS.md` (Invariants).
+
+Check: `just check`.
+
+Result (2026-10-05, Claude Code / opus-5.5): `user_prompt` skips host-injected records (`host_injected`: `isMeta`, `isCompactSummary`, non-`human` `origin.kind`), cuts `<system-reminder>` blocks (`strip_reminders`, an unclosed block runs to the end), and skips text opening with one of `HOST_OPENERS`. The `isMeta`-without-source case in `injected_skill_bodies_are_listed_not_quoted` now yields no prompt. New tests: `host_injected_records_are_not_prompts` (`HOST_FIXTURE`, one record per real shape), `prompt_window_counts_only_typed_prompts`, `strip_reminders_cuts_every_block`; `HOST_FIXTURE` joins the prefilter superset test. On a real 17 MB rtok transcript with 132 task notifications, rtok 0.15.1 restored only `<task-notification>` lines and the compaction summary; the new build restored the three prompts the user typed. `just check` green.
+
 ### T230. Graph page: index status and dead symbols on `tui` and `web`
 
 Found 2026-09-23 in the D27 audit: `graph status`, `graph dead`, `graph impact` and `graph affected` are exempt (`tests/surface_parity.rs:385-400`) though they are pure reads over `symbols`; I-80 rejected new export formats because "D27 says the web/TUI page is the surface", yet no page exists.

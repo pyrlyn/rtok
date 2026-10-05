@@ -136,6 +136,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
+| T418 | todo | P2 | 3 | 0% | |
+| T419 | todo | P2 | 3 | 0% | |
+| T420 | todo | P1 | 4 | 0% | |
 
 
 
@@ -2128,6 +2131,28 @@ Check: unit tests for the CSV writer (quoting, escaping, empty table); a story a
 Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
+
+### T418. SessionStart hook back under the 10 ms budget
+
+`rtok hook session-start` on the rtok repo took 12.7, 34.2, 13.4 and 65.0 ms on four manual runs (rtok 0.15.1, 2026-10-05) and warned `hook SessionStart slow … over max_ms 10 ms`. The output stayed correct and the exit code 0, but the fail-open rule asks for ≤ 10 ms.
+
+Done: per-plugin timing of SessionStart on a real store shows where the time goes (memory recall, checkpoint restore, agent id, or store open); the slow part is fixed or moved off the hook path; `tests/latency.rs` covers SessionStart with a populated notes store and stays under its p95 bound.
+
+Check: `tests/latency.rs` SessionStart case green; five manual `rtok hook session-start` runs on the rtok repo print no `slow` warning; `just check`.
+
+### T419. Checkpoint prompt quality in the web and TUI statistics
+
+T417 made the checkpoint keep only typed prompts. It saves no tokens — the restore is capped at `checkpoint_tokens`, and on 30 real rtok transcripts (2026-10-05) the capped restore averaged 1775 bytes before and 1903 after — it changes what fills the budget. A `Measurement` row would be summed into the memory plugin's savings, so this is a quality metric, shown apart from savings and never added to them.
+
+Done: each checkpoint write (PreCompact, SessionEnd) stores per session how many prompts the human typed and how many host-injected records were skipped; a repeat write in the same session replaces its counts, like the note. The memory plugin page shows the totals as fields (`checkpoint prompts typed`, `checkpoint host records skipped`) in the web SPA, and the TUI Plugins page shows the selected plugin's fields, which it does not today. No savings total changes.
+
+Check: a unit test writes two checkpoints in one session and one in another and reads back the summed counts; a web model test and a TUI render test show both fields on the memory page; the memory plugin's savings total is the same with and without the counts; `just check`, `just spa-stories`, `just spa-e2e`.
+
+### T420. `just check` runs only what a change touches; `just full-check` runs everything
+
+`just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
+
+Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
 
 ## Reference
 

@@ -195,17 +195,66 @@ fn skill_body(v: &Value) -> Option<(String, u64)> {
     Some((name.to_string(), text.len() as u64))
 }
 
+/// Text the human typed, without the host context wrapped around it (T417). Most `user`
+/// records in a live Claude Code transcript are host-injected — task notifications,
+/// sub-agent hand-backs, CI events, skill bodies, the compaction summary — and quoting them
+/// would fill the 20-prompt window with noise that crowds out what the user asked for.
 fn user_prompt(v: &Value) -> Option<String> {
-    if v.get("type").and_then(Value::as_str) != Some("user") {
+    if v.get("type").and_then(Value::as_str) != Some("user") || host_injected(v) {
         return None;
     }
     let raw = user_text(v)?;
-    let t = raw.trim();
-    if t.is_empty() {
+    let t = strip_reminders(&raw);
+    let t = t.trim();
+    if t.is_empty() || HOST_OPENERS.iter().any(|o| t.starts_with(o)) {
         None
     } else {
         Some(t.chars().take(300).collect())
     }
+}
+
+/// Record-level marks Claude Code puts on what it injected (checked 2026-10-05): `isMeta`
+/// (skill bodies, peer messages, continuation nudges), `isCompactSummary`, and an `origin`
+/// whose kind is anything but `human` (`task-notification`, `peer`).
+fn host_injected(v: &Value) -> bool {
+    let flag = |k: &str| v.get(k).and_then(Value::as_bool) == Some(true);
+    if flag("isMeta") || flag("isCompactSummary") {
+        return true;
+    }
+    v.get("origin")
+        .and_then(|o| o.get("kind"))
+        .and_then(Value::as_str)
+        .is_some_and(|k| k != "human")
+}
+
+/// Openings of host-written text in records that carry no `origin` — CI monitor events,
+/// local command echoes, interrupts, and transcripts from before Claude Code added `origin`.
+const HOST_OPENERS: [&str; 7] = [
+    "<task-notification>",
+    "<ci-monitor-event>",
+    "<local-command-stdout>",
+    "<local-command-stderr>",
+    "<local-command-caveat>",
+    "<agent-message",
+    "[Request interrupted by user",
+];
+
+/// `text` without its `<system-reminder>` blocks: the host prepends them to typed prompts,
+/// and a block with no closing tag runs to the end because nothing after it was typed.
+fn strip_reminders(text: &str) -> String {
+    const OPEN: &str = "<system-reminder>";
+    const CLOSE: &str = "</system-reminder>";
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find(OPEN) {
+        out.push_str(&rest[..i]);
+        rest = match rest[i..].find(CLOSE) {
+            Some(j) => &rest[i + j + CLOSE.len()..],
+            None => "",
+        };
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Text blocks of a user record joined by newlines; `None` when there are none.
@@ -420,7 +469,7 @@ mod tests {
             r#"{"type":"user","message":{"content":"make it blue"}}"#.to_string(),
             serde_json::json!({"type":"user","isMeta":true,"sourceToolUseID":"toolu_1","message":{"content":[{"type":"text","text":body}]}}).to_string(),
             serde_json::json!({"type":"user","isMeta":true,"sourceToolUseID":"toolu_2","message":{"content":[{"type":"text","text":"Base directory for this skill: C:\\u\\.claude\\plugins\\cache\\p\\1.0\\skills\\ponytail\n\n# P"}]}}).to_string(),
-            // `isMeta` without a source tool is a plain meta prompt, not a skill.
+            // `isMeta` without a source tool is not a skill, and not typed either (T417).
             r#"{"type":"user","isMeta":true,"message":{"content":"Base directory for this skill: /x/y"}}"#.to_string(),
         ]
         .join("\n");
@@ -429,13 +478,83 @@ mod tests {
         assert_eq!(cp.skills[0].0, "pixel");
         assert_eq!(cp.skills[0].1, body.len() as u64);
         assert_eq!(cp.skills[1].0, "ponytail");
-        assert_eq!(
-            cp.prompts,
-            ["make it blue", "Base directory for this skill: /x/y"]
-        );
+        assert_eq!(cp.prompts, ["make it blue"]);
         let text = cp.render();
         assert!(text.contains("skills loaded before compaction: pixel (5.0 KB), ponytail (0.1 KB) — re-invoke only what the next step needs\n"), "{text}");
         assert!(!text.contains("xxxx"), "{text}");
+    }
+
+    /// One record per host-injected shape seen in real Claude Code transcripts (T417,
+    /// 2026-10-05), interleaved with what the human typed.
+    const HOST_FIXTURE: &str = r#"{"type":"user","origin":{"kind":"human"},"message":{"content":"first typed"}}
+{"type":"user","origin":{"kind":"task-notification","producer":"session-task"},"message":{"content":"<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}}
+{"type":"user","isMeta":true,"origin":{"kind":"peer","from":"a1"},"message":{"content":[{"type":"text","text":"Another Claude session sent a message:\n<agent-message from=\"a1\">done</agent-message>"}]}}
+{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"content":"This session is being continued from a previous conversation."}}
+{"type":"user","isMeta":true,"message":{"content":"Your response above was cut off."}}
+{"type":"user","message":{"content":"<ci-monitor-event>\"Auto-fix\" is on</ci-monitor-event>"}}
+{"type":"user","message":{"content":"<local-command-stdout>ok</local-command-stdout>"}}
+{"type":"user","isMeta":true,"message":{"content":"<local-command-caveat>Caveat</local-command-caveat>"}}
+{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}
+{"type":"user","message":{"content":"<task-notification>\n<task-id>old</task-id>\n</task-notification>"}}
+{"type":"user","message":{"content":"<system-reminder>\nonly host context\n</system-reminder>"}}
+{"type":"user","origin":{"kind":"human"},"message":{"content":[{"type":"text","text":"<system-reminder>\nThe user started task_1.\n</system-reminder>\nsecond typed"}]}}
+{"type":"user","origin":{"kind":"human"},"message":{"content":"third <system-reminder>a</system-reminder>typed<system-reminder>\nunclosed tail"}}
+"#;
+
+    #[test]
+    fn host_injected_records_are_not_prompts() {
+        let cp = extract(HOST_FIXTURE);
+        assert_eq!(cp.prompts, ["first typed", "second typed", "third typed"]);
+        let text = cp.render();
+        for noise in [
+            "task-notification",
+            "agent-message",
+            "continued from",
+            "cut off",
+            "ci-monitor",
+            "local-command",
+            "interrupted",
+            "system-reminder",
+            "host context",
+            "task_1",
+            "unclosed",
+        ] {
+            assert!(!text.contains(noise), "{noise} leaked into\n{text}");
+        }
+    }
+
+    /// The 20-prompt window is spent on typed prompts only: notifications in between
+    /// neither take a slot nor push a typed prompt out.
+    #[test]
+    fn prompt_window_counts_only_typed_prompts() {
+        let lines = (0..25)
+            .flat_map(|i| {
+                [
+                    format!(r#"{{"type":"user","origin":{{"kind":"human"}},"message":{{"content":"typed {i}"}}}}"#),
+                    format!(r#"{{"type":"user","origin":{{"kind":"task-notification"}},"message":{{"content":"<task-notification>{i}</task-notification>"}}}}"#),
+                ]
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let cp = extract(&lines);
+        let want: Vec<String> = (5..25).map(|i| format!("typed {i}")).collect();
+        assert_eq!(cp.prompts, want);
+    }
+
+    #[test]
+    fn strip_reminders_cuts_every_block() {
+        assert_eq!(strip_reminders("a"), "a");
+        assert_eq!(
+            strip_reminders(
+                "<system-reminder>x</system-reminder>a<system-reminder>y</system-reminder>b"
+            ),
+            "ab"
+        );
+        assert_eq!(strip_reminders("a<system-reminder>never closed"), "a");
+        assert_eq!(
+            strip_reminders("a</system-reminder>b"),
+            "a</system-reminder>b"
+        );
     }
 
     #[test]
@@ -796,6 +915,7 @@ mod tests {
         let big = big_transcript(2 * 1024 * 1024);
         for (name, content) in [
             ("FIXTURE", FIXTURE),
+            ("HOST_FIXTURE", HOST_FIXTURE),
             ("skill fixture", &skill_fixture),
             ("2 MB transcript", &big),
         ] {
