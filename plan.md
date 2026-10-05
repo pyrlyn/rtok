@@ -136,7 +136,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
-| T414.17 | in progress | P2 | 3 | 5% | Claude Code / opus-5.5 |
 
 
 
@@ -2135,14 +2134,6 @@ Check: a story hovers the calls chart and asserts the KPI minis' pointer and sub
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.
 
 Claim a `todo` row before work: set Status to `in progress` and Agent to `Provider / model`. Before stopping unfinished work, set Status to `todo` and clear Agent. When the Check passes, move the task entirely to `done.md` (Do/Check + Check result) and drop it from this table, its card, and `todo.md`.
-
-### T414.17. Unknown values: a label and an icon with the reason
-
-Creator request 2026-10-05: where a page has no data for a value, it shows "Unknown" and an icon whose tooltip explains why, instead of a bare "-". Missing means absent (null, or "-" in a CLI text page); zero is data and stays a number.
-
-Plan: 1) `web/src/ui/Unknown.tsx`: "Unknown" in the subtle tone plus an info button; the reason in a React Aria `Tooltip` (hover and keyboard focus) that also opens on tap, since touch has no hover. 2) One helper turns `value | null` into the value or `<Unknown why=…/>`. 3) Replace every "-" fallback on the Sessions, Calls, Plugins, Hosts and Worktrees pages; each field gets its own reason taken from where the Rust side leaves it empty (no guessed reasons). 4) Unit test for the helper, a story with a play that focuses the icon and reads the tooltip, axe.
-
-Check: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just js` green; `grep -rn '?? "-"' web/src/pages` finds nothing.
 
 ### Decisions (read before any task)
 
