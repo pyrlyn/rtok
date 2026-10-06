@@ -36,7 +36,10 @@ static VARIANTS: [Variant; 2] = [
         kind: Kind::Desktop,
         name: "Cline for VS Code",
         bins: &[],
-        apps: &["/Applications/Visual Studio Code.app"],
+        apps: &[
+            "/Applications/Visual Studio Code.app",
+            "$LOCALAPPDATA/Programs/Microsoft VS Code/Code.exe",
+        ],
     },
 ];
 

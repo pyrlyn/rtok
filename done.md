@@ -1,5 +1,21 @@
 # rtok — completed tasks
 
+### T429. Find installed agents on Windows
+
+`rtok agents list` missed hosts whose Windows install is a `PATHEXT` shim or an `.exe` beside an extensionless app path, and `--version` never ran a `.cmd` (`CreateProcess` only appends `.exe`).
+
+PATH lookup tries every `PATHEXT` extension (default `.COM;.EXE;.BAT;.CMD`). An app path with no extension also matches `name.exe` (`~/.grok/bin/grok` → `grok.exe`). A bare name or a `.cmd`/`.bat` is version-probed through `cmd /C`. The sandbox home check is ASCII-case-insensitive. OpenCode Desktop's user-install directory is `%LOCALAPPDATA%\Programs\@opencode-aidesktop\OpenCode.exe`. Cline's desktop variant is also VS Code's `Code.exe` on Windows.
+
+Check: `find_bin_tries_pathext_and_skips_dirs_outside_the_limit`, `find_bin_limit_is_ascii_case_insensitive`, `probe_installed_matches_an_exe_beside_an_extensionless_path`, `under_keeps_a_different_case_child_of_home`, `app_version_skips_wrapper_noise_ahead_of_the_real_version` (the Windows case writes a `.cmd`). `docs/windows.md`, OpenCode, Cline and Grok READMEs name the paths. `cargo clippy --lib -- -D warnings` is clean on this machine (unix-only `LinkOutcome` variants are allowed off unix).
+
+### T430. Windows path identity without the verbatim prefix
+
+`std::fs::canonicalize` on Windows returns `\\?\` paths. `starts_with` and `==` then disagree with `C:\…` and with ASCII case, so worktree identity, the read guard and "do not index `$HOME`" miss real directories.
+
+`src/fs.rs` has one helper: `canon`, `path_starts_with`, `same_path`, `strip_prefix`. `dunce` drops the verbatim prefix when the path does not need it, and on Windows the component check ignores ASCII case. `read`, `search`, `worktree`, `doctor` and junk symlink targets use it. `docs/windows.md` says so.
+
+Check: `windows_path_identity_folds_verbatim_prefix_and_ascii_case`, `resolved_drops_the_verbatim_prefix`, `under_ascii_case_insensitive_matches_windows_prefix`, `display_rel_strips_ascii_case_insensitive_prefix`.
+
 ### T97. `rtok agents install kilo` — Kilo Code: the shared OpenCode plugin plus `kilo.json` MCP
 
 Creator request 2026-09-21: a host plugin for Kilo Code CLI + desktop. Kilo Code 7 is rebuilt on the OpenCode server: the CLI (`kilo`, `npm i -g @kilocode/cli`) and the VS Code extension (`kilocode.kilo-code`) share one config — `~/.config/kilo/kilo.json[c]` globally, `kilo.jsonc` / `.kilo/kilo.jsonc` per project; the legacy `mcp_settings.json` is no longer read (v7.0.33+). Plugins are OpenCode-shaped TS modules (`tool.execute.before` / `tool.execute.after`, `shell.env`, …) loaded from `~/.config/kilo/plugin/` or `.kilo/plugin/`; MCP is `mcp.<name> = {type: "local", command: [..], enabled}` — the entry `agents::opencode::register_mcp` already writes. Creator decision 2026-09-21: reuse `plugins/opencode/rtok.ts` as is — it imports only `node:child_process` — so there is no `plugins/kilo/` tree (the omp rule from T92). Evidence (fetched 2026-09-21): https://kilo.ai/docs/automate/extending/plugins, https://kilo.ai/docs/automate/mcp/using-in-kilo-code, https://kilo.ai/docs/code-with-ai/platforms/cli.
