@@ -2132,7 +2132,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(real, "a.rs:1 function");
-        drop(ctx);
         let (plain, dir2) = crate::testutil::runtime("t376-plain");
         let out =
             lsp_or_tags(&Ctx::new(&plain), &dir2, &["alpha"], || panic!("lsp"), tags).unwrap();
