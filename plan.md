@@ -126,6 +126,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
+| T436 | todo | P2 | 3 | 0% | |
+| T436.1 | todo | P2 | 3 | 0% | |
 
 
 
@@ -2059,6 +2061,40 @@ Execution plan:
 4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
+
+### T436. Operation icons and a spinner on every wait, the way ketch draws them
+
+Creator request 2026-10-07: a loader spinner on every operation where the user waits, and icons like ketch's.
+
+Today `src/ui/style.rs` marks a line only by what it means (`Kind`: ✅ success, 💡 info, ⚠️ warning, ❌ error). ketch (`apps/ketch/src/ui.rs`, `OPERATION_ICONS` and `icon()`) first looks up the verb of the line: install 📦, uninstall/remove/prune 🧹, upgrade/update ⏫, download/fetch ⏬, link 🔗, roll back ⏪, search 🔍, doctor 🩺; only then falls back to the tone icon. Work in progress has no icon; each icon is measured with `unicode-width` and padded to one column count so verbs line up even where a terminal ignores U+FE0F.
+
+Done means:
+
+1. Operation icons: `style.rs` gets a verb → icon table on ketch's model (substring match in order, `uninstall` before `install`), extended with rtok's own verbs (index, worktree add/remove, compress/expand, bench, proxy start). A line takes its operation's icon when the verb names one, else its `Kind` icon. Every rtok status line that names an operation goes through it; no command picks its own emoji.
+2. Alignment: icons are padded to a fixed measured width, as in ketch, so the text after the icon starts in the same column for every icon.
+3. Spinner on every wait: T276 owns external commands (`ProgressRunner`); this task covers the waits it does not — rtok's own slow work (network fetches, store migrations, index rebuilds, large reads) — with the same runner or helper, no second spinner implementation. When the wait ends the spinner is replaced by the finished line with its operation icon.
+4. Same rules as today: icons need `[ui] emoji` and a terminal on that stream; spinners draw nothing when stderr is not a TTY; hook output, MCP JSON, `--json` and piped output stay byte-for-byte unchanged.
+5. Reuse first: if the icon table and width padding are the same code in ketch and rtok, extract them into a shared crate in `packages/` and use it from both (workspace rule); otherwise say in the PR why not.
+
+Depends on T276 for the spinner runner.
+
+Check: snapshot tests for the icon of each verb and the fallback to `Kind`; a width test that every icon pads to the same column; a non-TTY test that no icon and no spinner bytes reach a pipe; manual run of `rtok agents install`, `rtok worktree add`, `rtok graph index` in a terminal shows the spinner during the wait and the icon on the result; `just check`.
+
+### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
+
+Creator request 2026-10-07: the same as T436, in the `rtok web` SPA.
+
+Today only page loads show a spinner (`Loading` in `web/src/states.tsx`, T407). Actions that call the API show nothing while they wait: the plugin switch (`pages/Plugins.tsx`, `useSetMutation`), project select and link (`pages/Projects.tsx`, `pages/graph3d/ProjectsOverview.tsx`, `useProjectMutation`), and doctor plan/apply (`pages/DoctorFix.tsx`) and expand (`pages/Calls.tsx`), which only disable their buttons.
+
+Done means:
+
+1. One `Spinner` in `web/src/ui`, with a story; `Loading` draws its ring through it, so there is one spinner in the SPA.
+2. Every control that sends a request shows the spinner on itself from the click until the answer, is disabled meanwhile and sets `aria-busy`. A switch stays in its old position until the server answers; on error it stays there and the error is shown.
+3. Operation icons: a verb → icon map in `web/src/ui` with the same operations as ketch's `OPERATION_ICONS` (install, remove/prune, update, fetch, link, roll back, search, doctor) plus rtok's own from T436, falling back to the success/warning/error/info icon. The web draws them as brand SVG icons through `Icon`, not emoji; missing ones are added under `brand/icons/ui/` (source rule of T414: no copies in `web/`). Action buttons and the result of an action carry their operation's icon.
+4. One list of operations: the web map and the CLI table of T436 name the same operations, checked by a test.
+5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
+
+Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
 
 ## Reference
 
