@@ -138,8 +138,11 @@ fn remove(p: &Payload, store: Option<&Store>) -> Result<String> {
         .context("git lists no worktree")?
         .record
         .path;
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    let Some(entry) = entries.iter().find(|e| real(&e.record.path) == real(path)) else {
+    let real = |p: &Path| crate::fs::canon(p);
+    let Some(entry) = entries
+        .iter()
+        .find(|e| crate::fs::same_path(&real(&e.record.path), &real(path)))
+    else {
         bail!("not a worktree of {}", main.display());
     };
     if entry.state == State::Main {

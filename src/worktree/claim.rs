@@ -60,7 +60,7 @@ pub fn owner(
 
 /// Record the claim in the store; a store error only warns — the lock already holds it.
 pub fn remember(store: Option<&Store>, path: &Path, agent: &str, task: &str) {
-    let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let path = crate::fs::canon(path);
     let saved = store.map(|s| s.claim_worktree(&path.to_string_lossy(), agent, task));
     if let Some(Err(e)) = saved {
         eprintln!("warning: claim not stored: {e:#}");
@@ -123,7 +123,7 @@ pub fn run(
     task: Option<&str>,
     spare_evicting: bool,
 ) -> Result<Adopted> {
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let target = real(path);
     let worktrees = git::list(&target)?;
     let main = &worktrees.first().context("git lists no worktree")?.path;
@@ -131,7 +131,7 @@ pub fn run(
     let Some(record) = worktrees
         .iter()
         .skip(1)
-        .filter(|r| target.starts_with(real(&r.path)))
+        .filter(|r| crate::fs::path_starts_with(&target, &real(&r.path)))
         .max_by_key(|r| real(&r.path).components().count())
     else {
         bail!("{} is not a linked worktree", path.display());

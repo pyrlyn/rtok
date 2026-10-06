@@ -646,6 +646,18 @@ impl Symbols for Runtime {
     fn symbol_top_refs(&self, root: &str, limit: i64) -> Result<Vec<(String, i64, String, i32)>> {
         self.store.symbol_top_refs(root, limit)
     }
+
+    fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
+        self.store.symbol_file_scan(root)
+    }
+
+    fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
+        self.store.file_rank_get(root)
+    }
+
+    fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
+        self.store.file_rank_put(root, graph)
+    }
 }
 
 #[cfg(test)]

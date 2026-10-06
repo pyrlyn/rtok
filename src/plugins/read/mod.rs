@@ -244,37 +244,14 @@ pub(crate) fn resolve_with(
 /// (or the other way around), the two sides can differ only in ASCII case and
 /// a lexical `starts_with` wrongly rejects an in-tree file.
 fn under(path: &Path, root: &Path) -> bool {
-    if root.as_os_str().is_empty() {
-        return false;
-    }
-    if path.starts_with(root) {
-        return true;
-    }
-    cfg!(windows) && under_ascii_case_insensitive(path, root)
-}
-
-#[cfg_attr(not(windows), allow(dead_code))]
-fn under_ascii_case_insensitive(path: &Path, root: &Path) -> bool {
-    use std::path::Component;
-    let path_c: Vec<_> = path.components().collect();
-    let root_c: Vec<_> = root.components().collect();
-    if root_c.is_empty() || root_c.len() > path_c.len() {
-        return false;
-    }
-    path_c.iter().zip(root_c.iter()).all(|(p, r)| match (p, r) {
-        (Component::Normal(a), Component::Normal(b)) => a.eq_ignore_ascii_case(b),
-        (Component::Prefix(a), Component::Prefix(b)) => {
-            a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
-        }
-        (a, b) => a == b,
-    })
+    crate::fs::path_starts_with(path, root)
 }
 
 /// T263: refuse to walk `/` or the home directory (Claude.app launches `rtok mcp` in `/`);
 /// such a walk times out instead of answering. T356: graph indexing uses it too.
 pub(crate) fn walk_root_ok(root: &Path) -> Result<()> {
     if crate::fs::is_unwalkable_root(root, std::env::home_dir().as_deref()) {
-        let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+        let root = crate::fs::canon(root);
         bail!(
             "no project root: rtok mcp runs in {}; pass an absolute path inside the repository or start rtok mcp there",
             root.display()
@@ -560,13 +537,10 @@ pub(crate) mod tests {
     #[cfg(windows)]
     #[test]
     fn under_ascii_case_insensitive_matches_windows_prefix() {
-        let path = Path::new(r"C:\Users\Me\proj\file.txt");
+        let path = Path::new(r"\\?\C:\Users\Me\proj\file.txt");
         let root = Path::new(r"c:\users\me\proj");
-        assert!(under_ascii_case_insensitive(path, root));
-        assert!(!under_ascii_case_insensitive(
-            path,
-            Path::new(r"c:\users\me\project")
-        ));
+        assert!(under(path, root));
+        assert!(!under(path, Path::new(r"c:\users\me\project")));
     }
 
     /// T56.2: line numbering / range from Vfs bytes — same grammar as `read` full|lines, no host disk.
