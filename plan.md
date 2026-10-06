@@ -78,7 +78,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T391 | todo | P3 | 2 | 30% | |
-| T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
@@ -1675,18 +1674,6 @@ From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/age
 Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
 
 Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
-
-### T392. Warn when the same skill is listed twice or loaded more than once
-
-Ivan, 2026-10-04: warn when a skill is loaded more than once or exists as a duplicate. On the creator's machine `~/.claude/skills/worktrees` (a stale personal copy) and rtok's `worktrees` skill had the same name; today `doctor`'s skill audit silently keeps one row per `(source, name)` (`audit_from` in `src/doctor.rs`), and nothing notices a skill body loaded twice in one session (`src/plugins/guard/skill.rs` does not track it).
-
-Done means:
-
-- Static duplicates: `rtok doctor` warns once per skill name reachable from more than one root or plugin (user root, project root, `~/.agents/skills` mirror, plugin skills). It names every path, says whether the bodies are identical or differ, and the description tokens the extra listing costs per request. Two roots that resolve to the same real path stay one listing, as today.
-- Repeat loads: the Skill hook records each load per session; a second load of the same skill since the last compaction gets a warning (the guard's deny reason or added context, per host capability) saying it is already in context and when it was loaded. `rtok stats` (or `doctor`) reports repeat loads per skill from transcripts, with the tokens they cost.
-- Advice only for static duplicates: rtok never deletes a skill it does not own (the T380 ownership rules apply).
-
-Check: a `Vfs` doctor fixture with a duplicate name in two roots (same and different bodies); a hook test for a second load in one session and a load after compaction; `just check`.
 
 ### T393. `doctor` shows the saving a 120-character skill description cap would give
 

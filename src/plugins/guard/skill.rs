@@ -8,8 +8,11 @@
 //! deny with a reason the model reads. Over the cap the body is archived and the reason
 //! is its markdown map plus the `expand` pointer: lossless, off by default, and every
 //! other outcome (small body, host frontmatter keys, unknown path, read error) falls open.
+//!
+//! T392: `PostToolUse(Skill)` also remembers each load per context window and adds one line
+//! when the same skill loads again before a compaction (`note_load`, `forget_loads`).
 
-use rtok_plugin_sdk::{Class, Ctx, Measurement, PreToolDecision, PreToolUse};
+use rtok_plugin_sdk::{Class, Ctx, Measurement, PostToolUse, PreToolDecision, PreToolUse};
 use std::path::{Path, PathBuf};
 
 /// Frontmatter keys the host applies on invocation (Claude Code docs, 2026-09-17); a
@@ -26,6 +29,40 @@ pub(super) fn digest(ev: &PreToolUse, cx: &Ctx) -> Option<PreToolDecision> {
     let path = resolve(name, cx.cwd().map(Path::new), &home)?;
     let body = std::fs::read_to_string(path).ok()?;
     decide(cx, name, &body, u64::from(g.skill_max_bytes))
+}
+
+/// Read-cache namespace of the skill loads (T392); compaction clears it by prefix.
+const LOADS: &str = "skill";
+
+fn load_key(name: &str, agent: Option<&str>) -> String {
+    // A sub-agent has its own context window (T129), so its loads are keyed apart.
+    match agent {
+        Some(id) if !id.is_empty() => format!("{LOADS}\t{name}\t{id}"),
+        _ => format!("{LOADS}\t{name}"),
+    }
+}
+
+/// `PostToolUse(Skill)`: remember the load, and when the skill is already in this window say so.
+/// Added context rather than a deny: the host may have trimmed the first copy, so blocking
+/// the second could leave the model with no body at all.
+pub(super) fn note_load(ev: &PostToolUse, cx: &Ctx) -> Option<String> {
+    let name = ev.tool_input.get("skill")?.as_str()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let key = load_key(name, cx.agent_id());
+    let earlier = cx.get_read_cache(&key).ok().flatten();
+    let _ = cx.put_read_cache(&key, LOADS, None);
+    let (_, ts) = earlier?;
+    let calls = cx.calls_since(ts).unwrap_or(0);
+    Some(format!(
+        "rtok: skill {name} was already loaded {calls} calls ago in this context; use that copy instead of loading it again."
+    ))
+}
+
+/// A compaction drops the loaded bodies, so the next load is a first one again.
+pub(super) fn forget_loads(cx: &Ctx) {
+    let _ = cx.clear_read_cache(LOADS);
 }
 
 /// `SKILL.md` for a skill name: `plugin:skill` → that plugin's `installPath` from
@@ -133,6 +170,32 @@ mod tests {
             s += &format!("## Section {i}\nFirst line of {i}.\n```sh\n# not a heading\n```\n");
         }
         s
+    }
+
+    fn load(cx: &Ctx, skill: &str) -> Option<String> {
+        let input = serde_json::json!({ "skill": skill });
+        let ev = PostToolUse {
+            tool_name: "Skill",
+            tool_input: &input,
+            tool_response: &serde_json::Value::Null,
+        };
+        note_load(&ev, cx)
+    }
+
+    /// T392: the second load of a skill warns, a load after a compaction does not, and another
+    /// context window or another skill is its own first load.
+    #[test]
+    fn a_repeat_load_warns_until_the_next_compaction() {
+        let rt = crate::testutil::runtime("skill-repeat").0;
+        let cx = Ctx::new(&rt);
+        assert_eq!(load(&cx, "rtok-hub"), None, "first load");
+        let warn = load(&cx, "rtok-hub").expect("second load");
+        assert!(warn.contains("skill rtok-hub was already loaded"), "{warn}");
+        assert_eq!(load(&cx, "other"), None);
+        assert_eq!(load(&Ctx::with_agent(&rt, Some("sub")), "rtok-hub"), None);
+        forget_loads(&cx);
+        assert_eq!(load(&cx, "rtok-hub"), None, "after compaction");
+        assert!(load(&cx, "rtok-hub").is_some());
     }
 
     #[test]

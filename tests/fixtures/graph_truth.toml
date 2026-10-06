@@ -38,6 +38,10 @@
 # title)" at the database level, so `checkpoint.rs`'s repeat-PreCompact write moved from
 # `insert_note` to `upsert_note` the same way T66.1 moved `mem_save`. `insert_note` loses
 # the `checkpoint.rs` ref (`import.rs` still calls it) and `upsert_note` gains it.
+#
+# T392 (2026-10-07): the guard plugin overrides `Plugin::session_start` to forget its skill-load
+# marks after a compaction, so `src/plugins/guard/mod.rs` joined the `session_start` defs -- a
+# definition the scan could not have seen, not an index regression.
 
 [[symbol]]
 name = "Manifest"
@@ -296,7 +300,7 @@ refs = ["src/store/mod.rs"]
 name = "session_start"
 kind = "fn"
 rank = true
-defs = ["crates/rtok-plugin-sdk/src/lib.rs", "examples/hello_plugin.rs", "src/hooks/types.rs", "src/plugins/graph/mod.rs", "src/plugins/inject/mod.rs", "src/plugins/memory/mod.rs", "tests/agents_whoami.rs"]
+defs = ["crates/rtok-plugin-sdk/src/lib.rs", "examples/hello_plugin.rs", "src/hooks/types.rs", "src/plugins/graph/mod.rs", "src/plugins/guard/mod.rs", "src/plugins/inject/mod.rs", "src/plugins/memory/mod.rs", "tests/agents_whoami.rs"]
 refs = ["src/plugins/graph/mod.rs"]
 
 [[symbol]]

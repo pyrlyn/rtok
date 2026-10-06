@@ -22,7 +22,17 @@ pub struct FileAgg {
     pub tool_tokens: BTreeMap<String, u64>,
     /// `Skill` tool_uses per `input.skill` (T61.1).
     pub skills: BTreeMap<String, u64>,
+    /// T392: per skill, `(loads, body tokens)` of the `Skill` calls that repeated an earlier one
+    /// with no compaction between.
+    #[serde(default)]
+    pub skill_repeats: BTreeMap<String, (u64, u64)>,
+    /// A cached entry written before a field existed lacks it, and would report no repeats for a
+    /// finished transcript forever; a version mismatch re-parses instead.
+    #[serde(default)]
+    version: u8,
 }
+
+const AGG_VERSION: u8 = 2;
 
 pub type Cache = BTreeMap<PathBuf, FileAgg>;
 
@@ -61,7 +71,7 @@ pub fn scan_with(
         };
         let hit = cache
             .get(&p)
-            .filter(|a| a.size == size && a.mtime_ns == mtime_ns)
+            .filter(|a| a.size == size && a.mtime_ns == mtime_ns && a.version == AGG_VERSION)
             .cloned();
         let agg = match hit {
             Some(a) => a,
@@ -84,8 +94,16 @@ fn aggregate(t: &super::jsonl::Parsed, size: u64, mtime_ns: u64) -> FileAgg {
     let mut agg = FileAgg {
         size,
         mtime_ns,
+        version: AGG_VERSION,
         ..FileAgg::default()
     };
+    let bodies: BTreeMap<&str, u64> = t
+        .injected
+        .iter()
+        .map(|i| (i.tool_use_id.as_str(), i.bytes))
+        .collect();
+    // The compaction count before a call names the context window it loaded into.
+    let mut window: BTreeMap<&str, usize> = BTreeMap::new();
     let mut names: BTreeMap<&str, &str> = BTreeMap::new();
     for u in &t.tool_uses {
         names.insert(&u.id, &u.name);
@@ -93,6 +111,12 @@ fn aggregate(t: &super::jsonl::Parsed, size: u64, mtime_ns: u64) -> FileAgg {
             && let Some(s) = u.input.get("skill").and_then(|v| v.as_str())
         {
             *agg.skills.entry(s.to_string()).or_default() += 1;
+            let now = t.compactions.iter().filter(|&&c| c <= u.turn).count();
+            if window.insert(s, now) == Some(now) {
+                let e = agg.skill_repeats.entry(s.to_string()).or_default();
+                e.0 += 1;
+                e.1 += super::stats::est_tokens(bodies.get(u.id.as_str()).copied().unwrap_or(0));
+            }
         }
     }
     for r in &t.tool_results {
@@ -139,6 +163,23 @@ mod tests {
             "{{\"type\":\"assistant\",\"message\":{{\"id\":\"a{uid}\",\"content\":[{{\"type\":\"tool_use\",\"id\":\"{uid}\",\"name\":\"{name}\",\"input\":{input}}}]}}}}\n\
              {{\"type\":\"user\",\"message\":{{\"id\":\"r{uid}\",\"content\":[{{\"type\":\"tool_result\",\"tool_use_id\":\"{uid}\",\"content\":\"{body}\"}}]}}}}\n"
         )
+    }
+
+    /// T392: a second load in the same window is a repeat, one after a compaction is not.
+    #[test]
+    fn a_skill_loaded_again_before_a_compaction_is_a_repeat() {
+        let load = |n: u32| {
+            format!(
+                "{{\"type\":\"assistant\",\"message\":{{\"id\":\"a{n}\",\"content\":[{{\"type\":\"tool_use\",\"id\":\"s{n}\",\"name\":\"Skill\",\"input\":{{\"skill\":\"rtok\"}}}}]}}}}\n\
+                 {{\"type\":\"user\",\"isMeta\":true,\"sourceToolUseID\":\"s{n}\",\"message\":{{\"id\":\"u{n}\",\"content\":\"{}\"}}}}\n",
+                "B".repeat(40)
+            )
+        };
+        let boundary = "{\"type\":\"system\",\"subtype\":\"compact_boundary\"}\n";
+        let text = load(1) + &load(2) + boundary + &load(3);
+        let agg = aggregate(&super::super::jsonl::parse_jsonl(&text), 0, 0);
+        assert_eq!(agg.skills["rtok"], 3);
+        assert_eq!(agg.skill_repeats["rtok"], (1, 10), "{agg:?}");
     }
 
     /// The T135 Check: a second pass over unchanged transcripts parses 0 bytes, a changed

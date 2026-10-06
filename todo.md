@@ -74,7 +74,6 @@
 - T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
 - T385.13. Measure cross-session read duplication
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
-- T392. Warn when the same skill is listed twice or loaded more than once
 - T393. `doctor` shows the saving a 120-character skill description cap would give
 - T394. Run the paid live benches and record them
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple

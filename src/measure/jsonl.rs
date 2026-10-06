@@ -83,6 +83,9 @@ pub struct Parsed {
     pub thinking: Vec<ThinkingBlock>,
     pub images: Vec<ImageBlock>,
     pub turns: u32,
+    /// T392: the next turn index at each `compact_boundary`; a tool_use whose turn is at or
+    /// past an entry ran after that compaction.
+    pub compactions: Vec<u32>,
     /// T131: the first `user`-role turn's flattened content, whole. This is where a
     /// `SubagentStart` spawn brief's `additionalContext` lands in a sub-agent's own
     /// transcript — whether Claude wraps it as its own record ahead of the task prompt or
@@ -188,6 +191,9 @@ fn ingest(v: &Value, out: &mut Parsed) {
         out.duplicates += 1;
     }
     let turn = out.turns.saturating_sub(1);
+    if is_compact_boundary(v) {
+        out.compactions.push(out.turns);
+    }
     if ty == "user" && turn == 0 && out.first_user_text.is_none() {
         out.first_user_text = Some(flatten_content(msg.get("content")));
     }
@@ -223,6 +229,12 @@ fn ingest(v: &Value, out: &mut Parsed) {
         }
         _ => {}
     }
+}
+
+/// One Claude Code / Codex compaction: a `system` line with `subtype=compact_boundary`.
+/// `isCompactSummary` rides the same event and is not counted again.
+pub(crate) fn is_compact_boundary(v: &Value) -> bool {
+    v.get("subtype").and_then(Value::as_str) == Some("compact_boundary")
 }
 
 fn ingest_block(b: &Value, ty: &str, turn: u32, out: &mut Parsed, repeat: bool) {

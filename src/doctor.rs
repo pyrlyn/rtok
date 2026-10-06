@@ -121,11 +121,39 @@ pub struct ReadShare {
 
 /// The skills audit (T61.3): what the host lists and what it costs the system
 /// prompt. Advice only — nothing here edits a file.
-#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, schemars::JsonSchema)]
 pub struct SkillsAudit {
     pub rows: Vec<SkillRow>,
     /// Description bytes the listing rides with every request (≈ tokens/4).
     pub desc_bytes: u64,
+    /// Names reachable from more than one real path (T392). Advice only: rtok never deletes a
+    /// skill it does not own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub duplicates: Vec<SkillDuplicate>,
+    /// Skills loaded again with no compaction between, from the transcripts (T392).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repeats: Vec<SkillRepeat>,
+}
+
+/// One skill name listed from several places (T392).
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct SkillDuplicate {
+    pub name: String,
+    /// `(source, directory)` of every listing, in root order.
+    pub copies: Vec<(String, String)>,
+    /// Every body is the same text; a differing body is the case the model cannot tell apart.
+    pub identical: bool,
+    /// Description tokens the extra listings add to every request.
+    pub extra_tokens: u64,
+}
+
+/// A skill body re-sent into the same context window (T392).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
+pub struct SkillRepeat {
+    pub name: String,
+    pub loads: u64,
+    /// Estimated tokens of the repeated bodies.
+    pub tokens: u64,
 }
 
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -246,6 +274,24 @@ impl Report {
                     r.body_bytes,
                     r.invocations.map_or_else(|| "-".into(), |n| n.to_string()),
                     flags
+                ));
+            }
+            for d in &skills.duplicates {
+                out.push_str(&format!(
+                    "  WARN duplicate skill `{}`: {} listings, bodies {}, extra listings ≈ {} tokens per request\n",
+                    d.name,
+                    d.copies.len(),
+                    if d.identical { "identical" } else { "differ" },
+                    d.extra_tokens
+                ));
+                for (source, path) in &d.copies {
+                    out.push_str(&format!("    {source} {path}\n"));
+                }
+            }
+            for r in &skills.repeats {
+                out.push_str(&format!(
+                    "  WARN repeat load `{}`: {} times in one context window ≈ {} tokens\n",
+                    r.name, r.loads, r.tokens
                 ));
             }
         }
@@ -624,6 +670,66 @@ fn overlap_lines(
     out
 }
 
+/// A skills root the audit scans, and the hosts that read it (`research.md` §10.1). One table
+/// feeds both the scan and the duplicate rule, so a root cannot be scanned without saying who
+/// lists it.
+struct SkillRoot {
+    /// Relative to `$HOME`, and to the working directory when `project` is set.
+    dir: &'static str,
+    project: bool,
+    hosts: &'static [&'static str],
+}
+
+const SKILL_ROOTS: [SkillRoot; 6] = [
+    SkillRoot {
+        dir: ".claude/skills",
+        project: true,
+        hosts: &["claude"],
+    },
+    // The shared root: Codex, Cursor, Gemini and Copilot read it, Claude does not.
+    SkillRoot {
+        dir: ".agents/skills",
+        project: true,
+        hosts: &["codex", "cursor", "gemini", "copilot"],
+    },
+    SkillRoot {
+        dir: ".codex/skills",
+        project: false,
+        hosts: &["codex"],
+    },
+    SkillRoot {
+        dir: ".cursor/skills",
+        project: false,
+        hosts: &["cursor"],
+    },
+    SkillRoot {
+        dir: ".gemini/skills",
+        project: false,
+        hosts: &["gemini"],
+    },
+    SkillRoot {
+        dir: ".copilot/skills",
+        project: false,
+        hosts: &["copilot"],
+    },
+];
+
+/// Plugin skill dirs come from Claude's `installed_plugins.json`, so only Claude lists them.
+const PLUGIN_SKILL_HOSTS: &[&str] = &["claude"];
+
+/// Hosts that list `dir`; none for a root outside [`SKILL_ROOTS`].
+fn root_hosts(dir: &str, plugin: bool) -> &'static [&'static str] {
+    if plugin {
+        return PLUGIN_SKILL_HOSTS;
+    }
+    // Windows paths use `\`; the table uses `/`.
+    let dir = dir.replace('\\', "/");
+    SKILL_ROOTS
+        .iter()
+        .find(|r| dir.ends_with(r.dir))
+        .map_or(&[], |r| r.hosts)
+}
+
 /// The skills audit probe (T61.3): the documented roots of every host on this
 /// machine (`research.md` §10.1), the enabled plugin skill dirs, and the T61.1
 /// invocation counts from the transcripts. Fail open: unreadable roots are skipped.
@@ -632,27 +738,22 @@ fn skills_audit(cfg: &Config) -> Option<SkillsAudit> {
     // host's dir, `~/.rtok` never holds skills.
     let home = crate::config::env_user_home().unwrap_or_else(|| cfg.home.clone());
     let cwd = std::env::current_dir().ok()?;
-    let user = [
-        ".claude/skills",
-        ".codex/skills",
-        ".cursor/skills",
-        ".gemini/skills",
-        ".copilot/skills",
-    ]
-    .iter()
-    .map(|p| home.join(p).display().to_string())
-    .collect();
-    let project = [".claude/skills", ".agents/skills"]
+    let user = SKILL_ROOTS
         .iter()
-        .map(|p| cwd.join(p).display().to_string())
+        .map(|r| home.join(r.dir).display().to_string())
+        .collect();
+    let project = SKILL_ROOTS
+        .iter()
+        .filter(|r| r.project)
+        .map(|r| cwd.join(r.dir).display().to_string())
         .collect();
     let roots = vec![
         ("user".to_string(), user),
         ("project".to_string(), project),
         ("plugin".to_string(), plugin_skill_dirs(&home)),
     ];
-    let invocations = skill_invocations(cfg);
-    Some(audit_from(
+    let (invocations, repeats) = skill_usage(cfg).unzip();
+    let mut audit = audit_from(
         &roots,
         &|p| std::fs::read_to_string(p).ok(),
         &|d| {
@@ -668,7 +769,26 @@ fn skills_audit(cfg: &Config) -> Option<SkillsAudit> {
             out
         },
         &invocations,
-    ))
+    );
+    audit.repeats = repeats.map(repeat_rows).unwrap_or_default();
+    Some(audit)
+}
+
+/// Per skill name: the invocation count, and `(loads, tokens)` of its repeat loads.
+type SkillUsage = (BTreeMap<String, u64>, BTreeMap<String, (u64, u64)>);
+
+/// Biggest waste first; the name keeps the order byte-stable.
+fn repeat_rows(by_skill: BTreeMap<String, (u64, u64)>) -> Vec<SkillRepeat> {
+    let mut rows: Vec<SkillRepeat> = by_skill
+        .into_iter()
+        .map(|(name, (loads, tokens))| SkillRepeat {
+            name,
+            loads,
+            tokens,
+        })
+        .collect();
+    rows.sort_by(|a, b| b.tokens.cmp(&a.tokens).then(a.name.cmp(&b.name)));
+    rows
 }
 
 /// `<installPath>/skills` of every enabled plugin entry (`installed_plugins.json`).
@@ -701,6 +821,7 @@ fn audit_from(
     invocations: &Option<std::collections::BTreeMap<String, u64>>,
 ) -> SkillsAudit {
     let mut rows: Vec<SkillRow> = Vec::new();
+    let mut listings: Vec<Listing> = Vec::new();
     for (source, dirs) in roots {
         for dir in dirs {
             // A `[id]` suffix carries the plugin id into the source label.
@@ -708,6 +829,7 @@ fn audit_from(
                 Some((d, id)) => (d, Some(format!("plugin:{}", id.trim_end_matches(']')))),
                 None => (dir.as_str(), None),
             };
+            let hosts = root_hosts(dir, plugin.is_some());
             let source = plugin.as_deref().unwrap_or(source);
             for sub in subdirs(dir) {
                 // `file_name`, not `rsplit('/')`: Windows paths end in `\<name>` (T83.7).
@@ -717,17 +839,91 @@ fn audit_from(
                 let Some(md) = read(&format!("{sub}/SKILL.md")) else {
                     continue;
                 };
-                rows.push(skill_row(name, source, &md, invocations));
+                let row = skill_row(name, source, &md, invocations);
+                listings.push(Listing {
+                    row: row.clone(),
+                    dir: sub.clone(),
+                    hosts,
+                    md,
+                });
+                rows.push(row);
             }
         }
     }
+    let duplicates = skill_duplicates(&listings);
     rows.sort_by(|a, b| b.body_bytes.cmp(&a.body_bytes).then(a.name.cmp(&b.name)));
     // The same skill reachable from two roots (`.claude/skills` and
     // `.agents/skills` mirror each other) is one listing, not two.
     let mut seen = std::collections::HashSet::new();
     rows.retain(|r| seen.insert((r.source.clone(), r.name.clone())));
     let desc_bytes = rows.iter().map(|r| r.desc_chars as u64).sum();
-    SkillsAudit { rows, desc_bytes }
+    SkillsAudit {
+        rows,
+        desc_bytes,
+        duplicates,
+        repeats: Vec::new(),
+    }
+}
+
+/// One `SKILL.md` found under a root, before the listing is deduplicated.
+struct Listing {
+    row: SkillRow,
+    dir: String,
+    /// Hosts that read the root this came from ([`SKILL_ROOTS`]).
+    hosts: &'static [&'static str],
+    md: String,
+}
+
+/// Names ONE host lists from two distinct real paths (T392, `research.md` §10.1). Copies in
+/// roots no single host reads together (`~/.claude/skills` and `~/.agents/skills`: rtok installs
+/// its skills per host) cost nothing twice, so each host is judged on its own roots and a finding
+/// names only the copies that host lists. The `(source, name)` dedup above hides the second copy
+/// from the rows, so this reads the raw listings; two roots that resolve to the same directory
+/// (a symlinked mirror) are still one copy.
+fn skill_duplicates(listings: &[Listing]) -> Vec<SkillDuplicate> {
+    let hosts: std::collections::BTreeSet<&str> = listings
+        .iter()
+        .flat_map(|l| l.hosts.iter().copied())
+        .collect();
+    let mut out: Vec<SkillDuplicate> = Vec::new();
+    for host in hosts {
+        let mut by_name: BTreeMap<&str, Vec<&Listing>> = BTreeMap::new();
+        for l in listings.iter().filter(|l| l.hosts.contains(&host)) {
+            let copies = by_name.entry(&l.row.name).or_default();
+            let real = crate::fs::canon(Path::new(&l.dir));
+            if !copies
+                .iter()
+                .any(|c| crate::fs::same_path(&crate::fs::canon(Path::new(&c.dir)), &real))
+            {
+                copies.push(l);
+            }
+        }
+        for (name, copies) in by_name.into_iter().filter(|(_, c)| c.len() > 1) {
+            let copies_of: Vec<(String, String)> = copies
+                .iter()
+                .map(|c| (c.row.source.clone(), c.dir.clone()))
+                .collect();
+            // Codex, Gemini and Copilot read the same pair: one finding, not three.
+            if out.iter().any(|d| d.name == name && d.copies == copies_of) {
+                continue;
+            }
+            out.push(SkillDuplicate {
+                name: name.to_string(),
+                identical: copies
+                    .iter()
+                    .all(|c| frontmatter_body(&c.md) == frontmatter_body(&copies[0].md)),
+                // The first listing is the one worth keeping; the rest are what a request pays extra.
+                extra_tokens: copies[1..]
+                    .iter()
+                    .map(|c| c.row.desc_chars as u64)
+                    .sum::<u64>()
+                    / 4,
+                copies: copies_of,
+            });
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
 }
 
 /// One row: frontmatter `description:` length, body bytes, and the flags the
@@ -786,20 +982,27 @@ fn frontmatter_body(md: &str) -> &str {
 
 /// Invocations per skill over the last 30 d, counted the T61.1 way (the `Skill`
 /// tool_use's `input.skill`). `None` = no scan ran (tests, unreadable dir) — the
-/// `never invoked` flag then stays off (fail open), and never on the hook path.
-fn skill_invocations(cfg: &Config) -> Option<std::collections::BTreeMap<String, u64>> {
+/// `never invoked` flag then stays off (fail open), and never on the hook path. The second map
+/// is the T392 repeat loads: `(loads, tokens)` per skill.
+fn skill_usage(cfg: &Config) -> Option<SkillUsage> {
     if cfg!(test) {
         return None;
     }
     let cutoff =
         std::time::SystemTime::now().checked_sub(std::time::Duration::from_secs(30 * 86400))?;
-    let mut out = std::collections::BTreeMap::new();
+    let mut calls = std::collections::BTreeMap::new();
+    let mut repeats = std::collections::BTreeMap::<String, (u64, u64)>::new();
     for (_, agg) in transcripts(cfg, cutoff) {
         for (skill, n) in agg.skills {
-            *out.entry(skill).or_insert(0) += n;
+            *calls.entry(skill).or_insert(0) += n;
+        }
+        for (skill, (loads, tokens)) in agg.skill_repeats {
+            let e = repeats.entry(skill).or_default();
+            e.0 += loads;
+            e.1 += tokens;
         }
     }
-    Some(out)
+    Some((calls, repeats))
 }
 
 /// T135: transcript aggregates through the (path, size, mtime) cache kept beside the store.
@@ -1471,13 +1674,6 @@ mod tests {
             "home/.claude/plugins/cache/x/y/1.0/skills/plug/SKILL.md",
             "---\ndescription: from a plugin\n---\nbody\n",
         );
-        let read = |p: &str| vfs.read_str(p).map(str::to_string);
-        let subdirs = |d: &str| {
-            vfs.paths_under(d)
-                .iter()
-                .filter_map(|p| p.strip_suffix("/SKILL.md").map(|s| s.to_string()))
-                .collect::<Vec<_>>()
-        };
         let invocations = Some(std::collections::BTreeMap::from([(
             "tiny".to_string(),
             8u64,
@@ -1489,7 +1685,7 @@ mod tests {
                 vec!["home/.claude/plugins/cache/x/y/1.0/skills [x@market]".to_string()],
             ),
         ];
-        let audit = audit_from(&roots, &read, &subdirs, &invocations);
+        let audit = vfs_audit(&vfs, &roots, &invocations);
         assert_eq!(
             audit
                 .rows
@@ -1517,7 +1713,7 @@ mod tests {
             "small=5, wordy=201, fine=4, `from a plugin`=13"
         );
         // No invocation data → the never-invoked flag stays off (fail open).
-        let none = audit_from(&roots, &read, &subdirs, &None);
+        let none = vfs_audit(&vfs, &roots, &None);
         assert!(none.rows.iter().all(|r| !r.warn_never));
     }
 
@@ -1531,15 +1727,8 @@ mod tests {
             "home/.claude/skills/other/SKILL.md",
             "---\ndescription: other\n---\n# o\n",
         );
-        let read = |p: &str| vfs.read_str(p).map(str::to_string);
-        let subdirs = |d: &str| {
-            vfs.paths_under(d)
-                .iter()
-                .filter_map(|p| p.strip_suffix("/SKILL.md").map(|s| s.to_string()))
-                .collect::<Vec<_>>()
-        };
         let roots = vec![("user".to_string(), vec!["home/.claude/skills".to_string()])];
-        let audit = audit_from(&roots, &read, &subdirs, &None);
+        let audit = vfs_audit(&vfs, &roots, &None);
         let rtok = audit.rows.iter().find(|r| r.name == "rtok").unwrap();
         assert!(
             audit.rows.iter().any(|r| r.name == "other"),
@@ -1548,6 +1737,191 @@ mod tests {
         assert_eq!(rtok.source, "user");
         assert_eq!(rtok.desc_chars, 108);
         assert!(!rtok.warn_desc && !rtok.warn_body, "{rtok:?}");
+    }
+
+    /// `audit_from` over an in-memory tree: every `SKILL.md` under a root is one skill dir.
+    fn vfs_audit(
+        vfs: &crate::testutil::Vfs,
+        roots: &[(String, Vec<String>)],
+        invocations: &Option<std::collections::BTreeMap<String, u64>>,
+    ) -> SkillsAudit {
+        let subdirs = |d: &str| {
+            vfs.paths_under(d)
+                .iter()
+                .filter_map(|p| p.strip_suffix("/SKILL.md").map(|s| s.to_string()))
+                .collect::<Vec<_>>()
+        };
+        audit_from(
+            roots,
+            &|p| vfs.read_str(p).map(str::to_string),
+            &subdirs,
+            invocations,
+        )
+    }
+
+    /// T392: a name listed from two roots is one finding that names every path and tells an
+    /// identical body from a differing one; the same directory reached twice is not a copy.
+    #[test]
+    fn skills_audit_flags_a_name_listed_from_two_roots() {
+        let mut vfs = crate::testutil::Vfs::new();
+        let same = "---\ndescription: shared body\n---\n# s\n";
+        vfs.write("home/.claude/skills/twin/SKILL.md", same);
+        vfs.write("proj/.agents/skills/twin/SKILL.md", same);
+        vfs.write("home/.agents/skills/twin/SKILL.md", same);
+        vfs.write(
+            "home/.claude/skills/fork/SKILL.md",
+            "---\ndescription: the old copy\n---\n# a\n",
+        );
+        vfs.write(
+            "plug/skills/fork/SKILL.md",
+            "---\ndescription: newer copy ok\n---\n# b\n",
+        );
+        vfs.write(
+            "home/.claude/skills/solo/SKILL.md",
+            "---\ndescription: alone\n---\n# c\n",
+        );
+        let roots = vec![
+            (
+                "user".to_string(),
+                vec![
+                    "home/.claude/skills".to_string(),
+                    "home/.agents/skills".to_string(),
+                ],
+            ),
+            (
+                "project".to_string(),
+                vec![
+                    "proj/.agents/skills".to_string(),
+                    "home/.claude/skills".to_string(),
+                ],
+            ),
+            (
+                "plugin".to_string(),
+                vec!["plug/skills [x@market]".to_string()],
+            ),
+        ];
+        let audit = vfs_audit(&vfs, &roots, &None);
+        let names: Vec<_> = audit.duplicates.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["fork", "twin"],
+            "solo and the repeated root stay quiet"
+        );
+        let fork = &audit.duplicates[0];
+        assert!(!fork.identical, "{fork:?}");
+        assert_eq!(fork.extra_tokens, 3, "`newer copy ok` is 13 chars");
+        assert_eq!(
+            fork.copies,
+            [
+                ("user".to_string(), "home/.claude/skills/fork".to_string()),
+                (
+                    "plugin:x@market".to_string(),
+                    "plug/skills/fork".to_string()
+                ),
+            ]
+        );
+        let twin = &audit.duplicates[1];
+        assert!(twin.identical, "{twin:?}");
+        assert_eq!(twin.extra_tokens, 2);
+        assert_eq!(
+            twin.copies,
+            [
+                ("user".to_string(), "home/.agents/skills/twin".to_string()),
+                (
+                    "project".to_string(),
+                    "proj/.agents/skills/twin".to_string()
+                ),
+            ],
+            "Claude's own copy is not one that Codex, Gemini or Copilot list"
+        );
+
+        let mut r = report_fixture();
+        r.skills = Some(audit);
+        let text = r.to_text();
+        assert!(
+            text.contains("WARN duplicate skill `fork`: 2 listings, bodies differ, extra listings ≈ 3 tokens per request\n    user home/.claude/skills/fork\n    plugin:x@market plug/skills/fork\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("`twin`: 2 listings, bodies identical"),
+            "{text}"
+        );
+    }
+
+    /// Duplicate names found when the same skill `dup` sits in every one of `roots` (a root
+    /// may carry a ` [plugin-id]` suffix), scanned in that order under one source label.
+    fn duplicate_names(roots: &[&str]) -> Vec<String> {
+        let mut vfs = crate::testutil::Vfs::new();
+        for r in roots {
+            vfs.write(
+                format!("{}/dup/SKILL.md", r.split(" [").next().unwrap()),
+                "---\ndescription: d\n---\n# d\n",
+            );
+        }
+        let roots = vec![(
+            "user".to_string(),
+            roots.iter().map(|r| r.to_string()).collect(),
+        )];
+        vfs_audit(&vfs, &roots, &None)
+            .duplicates
+            .into_iter()
+            .map(|d| d.name)
+            .collect()
+    }
+
+    /// T392, `research.md` §10.1: rtok installs a skill per host, and no host reads both
+    /// `~/.claude/skills` and `~/.agents/skills`, so that pair costs nothing twice.
+    #[test]
+    fn a_skill_in_claude_and_agents_roots_is_not_a_duplicate() {
+        assert!(duplicate_names(&["home/.claude/skills", "home/.agents/skills"]).is_empty());
+        assert!(duplicate_names(&["home/.codex/skills", "home/.claude/skills"]).is_empty());
+    }
+
+    /// T392: Codex, Gemini and Copilot all read both agents roots, so that pair is one finding.
+    #[test]
+    fn a_skill_in_user_and_project_agents_roots_is_a_duplicate() {
+        assert_eq!(
+            duplicate_names(&["home/.agents/skills", "proj/.agents/skills"]),
+            ["dup"]
+        );
+    }
+
+    /// T392: Claude lists its user root and its plugins' skill dirs together.
+    #[test]
+    fn a_skill_in_the_claude_root_and_a_plugin_is_a_duplicate() {
+        assert_eq!(
+            duplicate_names(&["home/.claude/skills", "plug/skills [x@market]"]),
+            ["dup"]
+        );
+    }
+
+    /// T392: repeat loads from the transcripts print per skill with their tokens.
+    #[test]
+    fn skills_audit_prints_repeat_loads() {
+        let mut r = report_fixture();
+        r.skills = Some(SkillsAudit {
+            rows: vec![SkillRow {
+                name: "rtok".into(),
+                source: "user".into(),
+                desc_chars: 10,
+                body_bytes: 100,
+                invocations: None,
+                warn_desc: false,
+                warn_body: false,
+                warn_never: false,
+            }],
+            repeats: repeat_rows(std::collections::BTreeMap::from([
+                ("a".to_string(), (1, 5)),
+                ("rtok".to_string(), (3, 2200)),
+            ])),
+            ..SkillsAudit::default()
+        });
+        let text = r.to_text();
+        let (big, small) = (
+            text.find("repeat load `rtok`: 3 times in one context window ≈ 2200 tokens"),
+            text.find("repeat load `a`: 1 times"),
+        );
+        assert!(big.is_some() && small > big, "{text}");
     }
 
     /// T59.7: the three duplicate checks fire only when both sides are on, name
@@ -1606,6 +1980,7 @@ mod tests {
                 warn_body: true,
                 warn_never: false,
             }],
+            ..SkillsAudit::default()
         };
         let mut r = report_fixture();
         r.skills = Some(audit);

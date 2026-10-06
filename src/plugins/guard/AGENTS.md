@@ -19,6 +19,10 @@
   `..`); over `skill_max_bytes` it archives the body and denies with the heading map
   (`kind: "skill"`), never when the frontmatter carries `allowed-tools`, `model`,
   `context` or `agent`. The whole reason stays under the cap.
+  T392, always on: `PostToolUse(Skill)` records each load in the read cache (`skill\t<name>`,
+  per context window) and adds one line when the skill loads again before a compaction;
+  `PreCompact` and `SessionStart` `compact` clear the keys. Added context, never a deny, and
+  no `Measurement`: it claims no saving. Hosts without PostToolUse context stay silent.
 - `grep_symbol.rs` (T369, opt-in `grep_symbol = true`, cfg `graph`): index lookup only
   (`symbol_defs`, never `index_for`), 1-5 definitions, each re-checked against its file's
   line (a stale row falls through), text from `graph::def_text`, capped at the inject
