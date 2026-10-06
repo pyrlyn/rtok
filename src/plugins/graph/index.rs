@@ -181,7 +181,7 @@ pub fn run_with(
         }
     }
     if !dry_run {
-        let _ = cx.delete_symbols_missing(&rk, &keep);
+        let removed = cx.delete_symbols_missing(&rk, &keep).unwrap_or(0);
         if fp_stale {
             cx.set_extractor_fingerprint(&rk, &current_fp)?;
         }
@@ -192,6 +192,10 @@ pub fn run_with(
         cx.touch_symbol_indexed_at(&rk, ts)?;
         // One pass over names so callers can rank without scanning `symbols` again (T368).
         cx.rebuild_symbol_idf(&rk)?;
+        // A failed rebuild leaves the previous graph; the map falls back, indexing still succeeds.
+        if report.inserted > 0 || removed > 0 || super::rank::missing(cx, &rk) {
+            let _ = super::rank::refresh(cx, &rk);
+        }
     }
     pb.finish_and_clear();
     Ok(report)
@@ -271,7 +275,11 @@ fn run_changed_with(
         Ok(())
     })?;
     if !dry_run {
+        // One pass over names so callers can rank without scanning `symbols` again (T368).
         cx.rebuild_symbol_idf(&rk)?;
+    }
+    if !dry_run && report.inserted > 0 {
+        let _ = super::rank::refresh(cx, &rk);
     }
     pb.finish_and_clear();
     Ok(report)
@@ -678,6 +686,34 @@ pub(crate) mod tests {
         let r = run_with(&Ctx::new(&cx), &dir, false, &pb).unwrap();
         assert_eq!(r.indexed, 7);
         assert_eq!(pb.position(), 7, "the bar and the report must agree");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T370: an index run that changed the root stores the file graph, a dry run writes none,
+    /// and a run that finds nothing new leaves the stored document alone.
+    #[test]
+    fn an_index_run_stores_the_file_graph_when_it_changes_something() {
+        let (cx, dir) = cx("file-rank");
+        let ctx = Ctx::new(&cx);
+        let k = canon(&dir);
+        fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
+        fs::write(dir.join("b.rs"), "pub fn beta() { alpha(); }\n").unwrap();
+        run(&ctx, &dir, true).unwrap();
+        assert!(cx.store.file_rank_get(&k).unwrap().is_none(), "dry run");
+        run(&ctx, &dir, false).unwrap();
+        let first = cx.store.file_rank_get(&k).unwrap().expect("stored");
+        let top = super::super::rank::map(&ctx, &k, 500, &[], i64::MAX).expect("map");
+        assert!(top.lines().nth(1).unwrap().starts_with("a.rs"), "{top}");
+        cx.store.file_rank_put(&k, &format!("{first} ")).unwrap();
+        run(&ctx, &dir, false).unwrap();
+        assert_eq!(
+            cx.store.file_rank_get(&k).unwrap().unwrap(),
+            format!("{first} "),
+            "nothing changed, nothing rebuilt"
+        );
+        fs::write(dir.join("b.rs"), "pub fn beta() {}\n").unwrap();
+        run(&ctx, &dir, false).unwrap();
+        assert_ne!(cx.store.file_rank_get(&k).unwrap().unwrap(), first);
         let _ = fs::remove_dir_all(dir);
     }
 

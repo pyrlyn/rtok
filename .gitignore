@@ -2,11 +2,6 @@
 .serena/
 .reasonix/
 
-# Hugo docs site (site/)
-/site/public/
-/site/resources/
-/site/_vendor/
-/site/.hugo_build.lock
 # T224: stale jscpd/debug outputs; `.jscpd.json` reporters are console-only
 /report.html
 /report/
@@ -42,3 +37,4 @@ __pycache__/
 
 # Build output left behind in checkouts from before T310.12 deleted the crate (#664)
 /crates/rtok-webui/target
+.zcodeignore

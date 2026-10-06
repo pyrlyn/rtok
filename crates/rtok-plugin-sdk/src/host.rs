@@ -549,6 +549,25 @@ pub trait Symbols {
         let _ = (root, limit);
         Ok(Vec::new())
     }
+
+    /// T370: one row per `(name, path, is_def)` with how many index rows it has, imports left
+    /// out. The graph plugin builds its file graph from this one scan.
+    fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
+        let _ = root;
+        Ok(Vec::new())
+    }
+
+    /// T370: the file-graph document the plugin stored for `root`, if any.
+    fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
+        let _ = root;
+        Ok(None)
+    }
+
+    /// T370: replace the file-graph document of `root`.
+    fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
+        let _ = (root, graph);
+        Ok(())
+    }
 }
 
 // The tests for what a host owes a plugin live beside `testing::MemoryHost`, the host this
