@@ -8321,6 +8321,17 @@ Plan: `git rm --cached` `report.html`, `report/jscpd-report.json`, `dump/*`; ext
 Check: `git ls-files report.html report/ dump/` prints nothing; after `just test` and `just dup`, `git status --porcelain` stays clean (T184's Check covers the rest); `just check` green.
 
 Result: Untracked the stale report.html (report/jscpd-report.json and dump/ were already untracked); .gitignore now covers /report.html, /report/, /dump/. just dup leaves git status clean.
+
+### T431. Strip noise from request bodies before they are saved
+
+Every request body rtok saves (`call_io.request_json`, its archive spill, and through them the OTel export) is the client's bytes verbatim. A 2026-10-05 scan of `~/.rtok/rtok.db` (276k hook calls) found harness wrappers in prompts (`<task-notification>` 425, `<ci-monitor-event>` 113, `<system-reminder>` 87, `<local-command-caveat>` 10), ANSI escapes in 89 tool responses, CRLF in 47 bodies and trailing whitespace. Done when `Store::insert_call_io` cleans each request body before it spills: in a JSON body every string value, else UTF-8 text; ANSI escapes, control characters other than `\n`/`\t`, zero-width spaces and BOMs removed; the four harness wrapper blocks removed; CRLF and lone CR become LF, trailing spaces and tabs go, three or more newlines collapse to two. A body with nothing to clean keeps its bytes; non-UTF-8 bodies are kept as is. `[core] store_raw = true` keeps the verbatim body; the default is `false`.
+
+Plan: `src/sanitize.rs` (pure, the ANSI walk moved from `plugins/cmd/run.rs` so both share it), `Store` keeps a `store_raw` flag set by `Runtime` and `ProxyState` from `[core] store_raw`, `insert_call_io` cleans the request; `config/mod.rs` + `config/default.toml` + `docs/config.md`. Tests: unit cases per rule, idempotence, JSON keys and numbers untouched, untouched bodies byte-identical, invalid UTF-8 kept; a store test that a dirty hook body is saved clean and saved verbatim with `store_raw`.
+
+Check: `cargo nextest run --lib sanitize store`, `--test config_coverage`, `just check`.
+
+Result: `src/sanitize.rs` cleans each request body in `Store::insert_call_io` before the spill, so the saved size, sha and archive file describe the cleaned bytes; `[core] store_raw = true` (set from `Runtime` and `ProxyState`) keeps the verbatim body. The ANSI walk is shared with `plugins/cmd/run.rs`.
+
 ### T204. A panicking plugin is dropped silently — the error never reaches the log
 
 Found 2026-09-22 in the core pass: every plugin call is wrapped in `catch_unwind` (`src/hooks/mod.rs:340-344, 381-385, 493-508, 202-205`) but the payload is discarded with `.ok()`/`let _` — no `logs` row, no stderr. architecture.md §4 and the Working agreement promise "that plugin's output is dropped, **the event is logged with the error**". Today a panicking plugin is indistinguishable from one returning `None`, so T233-class failures stay invisible in `rtok doctor` / `rtok logs`.

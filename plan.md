@@ -127,6 +127,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
+| T432 | todo | P2 | 3 | 0% | |
+| T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -2074,6 +2076,18 @@ Charts on the same time axis (the calls chart, the calls and live-sessions KPI m
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
+### T432. Strip terminal noise from proxy requests before they go upstream
+
+The proxy forwards tool results to the model with ANSI escapes and control characters, which cost tokens and carry nothing. Done when the proxy runs T431's cleaner over the text of request messages before sending, limited to ANSI escapes, control characters and zero-width characters, byte-stable across turns so the prompt cache still hits. Harness wrappers stay: they are instructions to the model. Whitespace is decided at claim time: trailing-space or CRLF changes in a tool result can make the model's exact-match edits miss the file.
+
+Check: a proxy test sends a tool result with escapes and asserts the upstream body has none and repeats byte for byte on the next turn.
+
+### T433. Save hook session fields once instead of in every hook body
+
+Every saved hook stdin repeats the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Done when they are stored once per distinct value set in their own table referenced from the call, the saved body keeps only the event's own fields, and the full stdin can be rebuilt for readers (OTel, web). `[core] store_raw = true` keeps the full body. Design (table, migration, readers) is written into this card before code.
+
+Check: a store test saves two hook calls of one session and reads back both full bodies from one session row.
+
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -2126,6 +2140,7 @@ Execution plan:
 4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
+
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.

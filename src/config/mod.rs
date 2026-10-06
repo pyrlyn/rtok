@@ -114,6 +114,9 @@ section! {
         /// T352: hook stdin bodies in `call_io` are cleared after this many days; the call row,
         /// sizes and shas stay. 0 keeps bodies as long as `calls`.
         retain_hook_bodies_days: u32 = 3,
+        /// T431: request bodies are saved without terminal escapes, control and zero-width
+        /// characters, harness wrapper blocks and trailing whitespace; `true` saves them verbatim.
+        store_raw: bool = false,
         /// Removed in T24.5: it is now `log.to_db`. Accepted from an old file with a
         /// warning, then dropped.
         #[serde(skip_serializing_if = "Option::is_none")]
