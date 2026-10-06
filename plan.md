@@ -66,7 +66,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T371 | todo | P2 | 2 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
-| T376 | todo | P2 | 2 | 0% | |
+| T376 | in progress | P2 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -1600,6 +1600,8 @@ Plan: one wrapper in `mod.rs`: try `lsp::<op>`; on `Err` or an empty answer for 
 Done when: with `backend = "lsp"` and no server on PATH (or a fake that exits), `symbol <name>` returns the tags answer with the fallback prefix.
 
 Check: test with the fake/absent server for each of the five ops; existing LSP tests unchanged; `just check`.
+
+Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend check, `Err` or none-answer for a name `tags_know` finds, prefix, `lsp_fallback` Measurement); each of the five tools keeps its tags body as `<op>_tags` and routes through the wrapper, the outline path guard stays outside it. (2) Tests in the same file: a manifest-less root makes `lsp::*` fail before any spawn, so no PATH access; plus direct wrapper tests for the empty-answer rule. (3) `just check`, then move the card to `done.md`.
 
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
