@@ -345,7 +345,6 @@ fn defs_text(
     let mut out = String::new();
     let mut cached: Option<(String, String)> = None;
     for (path, kind, line, end_line) in rows {
-        out.push_str(&format!("{path}:{line} {kind}\n"));
         if !cached.as_ref().is_some_and(|(p, _)| p == path) {
             symbol_src_reads_add(1);
             cached = Some((
@@ -353,10 +352,9 @@ fn defs_text(
                 std::fs::read_to_string(root.join(path)).unwrap_or_default(),
             ));
         }
-        out.push_str(&body_lines(
+        out.push_str(&def_text(
             &cached.as_ref().unwrap().1,
-            *line,
-            *end_line,
+            (path, kind, *line, *end_line),
             budget,
         ));
         if let Some(names) = by_def.get(&(path.clone(), *line)) {
@@ -364,6 +362,19 @@ fn defs_text(
         }
     }
     out
+}
+
+/// One definition as `symbol` prints it: the `{path}:{line} {kind}` head, then its source.
+/// Also the text a symbol-shaped `Grep` is answered with (T369), so both read the same.
+pub(crate) fn def_text(
+    src: &str,
+    (path, kind, line, end_line): (&str, &str, i32, i32),
+    budget: usize,
+) -> String {
+    format!(
+        "{path}:{line} {kind}\n{}",
+        body_lines(src, line, end_line, budget)
+    )
 }
 
 /// Source of one definition, `line..=end_line`, at most `budget` lines then `N more lines`.

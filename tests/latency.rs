@@ -15,14 +15,27 @@ const N: usize = 200;
 const P95_MAX: Duration = Duration::from_millis(10);
 
 fn p95_under_10ms(event: &str, fixture: &[u8]) {
+    p95_with(event, event, fixture, |_| {}, |out| out == b"{}");
+}
+
+/// `tag` names the temp home (two tests of one event must not share it); `setup` prepares the
+/// home once before the warm-up; `ok` checks every hook's stdout.
+fn p95_with(
+    event: &str,
+    tag: &str,
+    fixture: &[u8],
+    setup: impl Fn(&std::path::Path),
+    ok: impl Fn(&[u8]) -> bool,
+) {
     if cfg!(debug_assertions) {
         eprintln!("skip: T2.2 Check is `cargo test --release latency`");
         return;
     }
 
     let bin = env!("CARGO_BIN_EXE_rtok");
-    let tmp = std::env::temp_dir().join(format!("rtok-latency-{event}-{}", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!("rtok-latency-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).expect("temp home");
+    setup(&tmp);
 
     let spawn = || {
         let mut child = Command::new(bin)
@@ -52,7 +65,7 @@ fn p95_under_10ms(event: &str, fixture: &[u8]) {
         assert!(out.status.success(), "hook must fail open with exit 0");
         // SessionStart injects the agent id and the memory line; the others stay `{}`.
         if event != "SessionStart" {
-            assert_eq!(out.stdout, b"{}");
+            assert!(ok(&out.stdout), "{}", String::from_utf8_lossy(&out.stdout));
         }
     }
 
@@ -228,4 +241,48 @@ fn latency_hook_session_start_with_project_registration_p95_under_10ms() {
         serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
     v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
     p95_under_10ms("SessionStart", v.to_string().as_bytes());
+}
+
+/// T369: with `grep_symbol` on, a symbol-shaped `Grep` in an indexed project is answered on the
+/// hook path (one index lookup, one small file read) inside the same 10 ms budget.
+#[test]
+fn latency_hook_grep_symbol_answer_p95_under_10ms() {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/pre_tool_read.json")).unwrap();
+    let project =
+        std::env::temp_dir().join(format!("rtok-latency-grep-proj-{}", std::process::id()));
+    v["cwd"] = project.to_string_lossy().into_owned().into();
+    v["tool_name"] = "Grep".into();
+    v["tool_input"] = serde_json::json!({"pattern": "fn parse_since"});
+    let setup = |home: &std::path::Path| {
+        std::fs::create_dir_all(&project).unwrap();
+        let body = "pub fn parse_since(s: &str) -> u32 {\n    s.len() as u32\n}\n\npub fn run() -> u32 {\n    parse_since(\"1d\")\n}\n";
+        std::fs::write(project.join("lib.rs"), body).unwrap();
+        std::fs::write(
+            home.join("config.toml"),
+            "[plugins.guard]\ngrep_symbol = true\n",
+        )
+        .unwrap();
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_rtok"))
+            .args(["graph", "index"])
+            .arg(&project)
+            .env("RTOK_HOME", home)
+            .output()
+            .expect("rtok graph index");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    // A denial prints the hook's deny JSON, not `{}`.
+    let denied = |out: &[u8]| String::from_utf8_lossy(out).contains("answered from the rtok index");
+    p95_with(
+        "PreToolUse",
+        "grep-symbol",
+        v.to_string().as_bytes(),
+        setup,
+        denied,
+    );
+    let _ = std::fs::remove_dir_all(&project);
 }

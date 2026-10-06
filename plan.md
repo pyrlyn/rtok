@@ -63,7 +63,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T358 | todo | P2 | 4 | 0% | |
 | T368 | todo | P1 | 3 | 0% | |
-| T369 | todo | P1 | 2 | 0% | |
+| T369 | in progress | P1 | 2 | 80% | Claude Code / sonnet-5.5 |
 | T370 | todo | P1 | 4 | 0% | |
 | T371 | todo | P2 | 2 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
@@ -1552,6 +1552,15 @@ Plan: in `pre_tool` (`guard/mod.rs:37`), before `native_redirect`, classify the 
 Done when: with the flag on, `Grep pattern="fn parse_since"` in an indexed project is answered with the definition line(s); a regex such as `TODO|FIXME` is untouched.
 
 Check: unit tests for the classifier (identifier, `fn x`, `class X`, regex, path-globbed); a replay over the Grep calls in local Claude Code transcripts (`[stats] transcripts_dir`) shows ≥ 70 % of symbol-shaped patterns are answered from the index; after a dated window with the flag on, the share of follow-up Grep/Read on the same name within 3 calls is ≤ 25 % (row in `research.md`); hook p95 stays ≤ 10 ms; `just check`.
+
+Execution plan (run 1):
+1. `src/plugins/guard/grep_symbol.rs` (cfg `graph`): classify the Grep input (bare identifier or `fn|def|class|struct|type|func|interface <ident>`; no `glob`/`type`/`-i`/`multiline`; `path` absent or the project root), look the name up with `symbol_defs` under `canon(cwd)` (then the git root), 1-5 definitions only, validate that each indexed line still names the symbol (a stale index falls through), deny with the same `path:line kind` + body text `symbol` prints (shared helpers in `graph/mod.rs`) plus the ref count, capped at `plugins.inject.budget_tokens`.
+2. `plugins.guard.grep_symbol = false` in `src/config/mod.rs`; update `docs/config.md` and the trycmd goldens.
+3. Unit tests: classifier table, deny / fall-through / stale / disabled, `Measurement` row.
+4. Replay over local transcript Grep calls: share of symbol-shaped patterns answered from the index, dated row in `research.md`. Hook p95 with the flag on via `tests/latency.rs`.
+5. Remaining after this run: the follow-up metric after a dated window with the flag on (flag stays off by default until it passes).
+
+Status (2026-10-06): classifier, index lookup, `plugins.guard.grep_symbol`, unit tests and a flag-on latency test are in (`just check` green). The transcript replay found 0 native `Grep` calls; the proxy over shell `rg`/`grep` answers 21 % of symbol-shaped patterns in indexed roots (`research.md` §29.5), below the 70 % bar, so the flag stays off. Remaining: (a) decide with the creator whether the 70 % bar stands given that proxy, or widen the classifier (`\bfoo\(`, field and constant kinds); (b) after a dated window with the flag on, the share of follow-up Grep/Read on the same name within 3 calls (at most 25 %), as a `research.md` row; (c) hook p95 re-measured on an idle machine (load average was 46 on 2026-10-06; the flag-on Grep answer matched the plain PreToolUse run within noise).
 
 ### T370. SessionStart repo map ranked by file-level personalized PageRank
 

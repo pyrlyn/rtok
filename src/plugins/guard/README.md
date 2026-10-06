@@ -28,12 +28,20 @@ instead of carrying the whole body in every later request. Skills whose frontmat
 apply them). Measured 2026-09-17 on this machine: 17 bodies, median 8,863 B, max 248,175 B
 (`research.md` §10.2).
 
+Opt-in (T369): with `grep_symbol = true` a native `Grep` for one identifier (`foo`, `fn foo`,
+`class Foo`; no `glob`, `type`, `-i`, multiline or path other than the project root) is denied
+with that symbol's definitions from the index, the same `path:line kind` and source `symbol`
+prints, plus the reference count, within `plugins.inject.budget_tokens`. One to five
+definitions only; none, more, a missing index or an index that no longer matches the file
+lets the Grep run. Replay: `research.md` §29.5.
+
 ## Config
 
 ```toml
 [plugins.guard]
 enabled = true
 window_turns = 8
+grep_symbol = false     # T369: answer a one-identifier Grep from the symbol index
 skills = false          # T62.1: digest oversized SKILL.md on PreToolUse(Skill)
 skill_max_bytes = 8192
 ```
@@ -44,6 +52,7 @@ See `roadmap.md` § `guard`. Checks in `plan.md`.
 
 T2.6 deny duplicate Read/Bash within `window_turns` when an archive id exists.
 T62.1 digest a skill body over `skill_max_bytes` (opt-in).
+T369 answer a symbol-shaped `Grep` with the indexed definition (opt-in).
 
 ## Status
 
