@@ -27,7 +27,7 @@ pub const RTOK_OWN: &str = "rtok-owned";
 
 /// A walk that hit its deadline. Its newest mtime is a lower bound, so the cache is not idle
 /// just because every file visited so far is old.
-const SCAN_STOPPED: &str = "scan stopped: not cleared";
+pub(super) const SCAN_STOPPED: &str = "scan stopped: not cleared";
 
 /// One directory `clear` may empty as cache.
 #[derive(Debug, Clone, Serialize)]
@@ -74,11 +74,11 @@ impl Ctx {
     }
 }
 
-fn real(p: &Path) -> PathBuf {
+pub(super) fn real(p: &Path) -> PathBuf {
     p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
 }
 
-fn is_symlink(p: &Path) -> bool {
+pub(super) fn is_symlink(p: &Path) -> bool {
     std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
 }
 
@@ -98,18 +98,31 @@ fn idle_keep(path: &Path, current: bool, cx: &Ctx, limit: Duration) -> Option<St
     kept_because(&cache, current, false, &cx.policy)
 }
 
-/// The cache items under one agent: its `owned` directories plus every tagged directory below
-/// `roots`. Each size and each walk gets `limit`, so a huge folder is a lower bound, not a hang.
-/// A directory inside a counted one is dropped, so a byte is never listed twice.
-pub fn cache_items(owned: &[Owned], roots: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item> {
-    let mut items: Vec<Item> = Vec::new();
-    let item = |path: &Path, evidence: &'static str, kept: Option<String>| Item {
-        kind: "cache",
+/// An [`Item`] of `kind` sized within `limit` (a huge directory is a lower bound, not a hang).
+pub(super) fn make_item(
+    kind: &'static str,
+    path: &Path,
+    evidence: &'static str,
+    kept: Option<String>,
+    limit: Duration,
+) -> Item {
+    Item {
+        kind,
         class: "safe",
         path: path.display().to_string(),
         bytes: disk_usage_until(path, Some(Instant::now() + limit)).bytes,
         evidence,
         kept,
+    }
+}
+
+/// The cache items under one agent: its `owned` directories plus every tagged directory below
+/// `roots`. Each size and each walk gets `limit`, so a huge folder is a lower bound, not a hang.
+/// A directory inside a counted one is dropped, so a byte is never listed twice.
+pub fn cache_items(owned: &[Owned], roots: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item> {
+    let mut items: Vec<Item> = Vec::new();
+    let item = |path: &Path, evidence: &'static str, kept: Option<String>| {
+        make_item("cache", path, evidence, kept, limit)
     };
     for o in owned {
         // A link out of the folder is never followed (D36); `list` still shows its target.
@@ -136,7 +149,7 @@ pub fn cache_items(owned: &[Owned], roots: &[PathBuf], cx: &Ctx, limit: Duration
 
 /// One row per path (the first evidence wins), and none inside a path that is itself counted:
 /// clearing the outer one already frees it. Sorted by path.
-fn drop_nested(mut items: Vec<Item>) -> Vec<Item> {
+pub(super) fn drop_nested(mut items: Vec<Item>) -> Vec<Item> {
     items.sort_by(|a, b| a.path.cmp(&b.path));
     items.dedup_by(|b, a| a.path == b.path);
     let counted: Vec<PathBuf> = items

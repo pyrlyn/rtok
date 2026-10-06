@@ -28,6 +28,7 @@ pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
 pub mod junk_cache;
+pub mod junk_kinds;
 pub mod junk_map;
 pub mod kilo;
 pub mod kimi;
