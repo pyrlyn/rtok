@@ -27,6 +27,7 @@ pub mod grok;
 pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
+pub mod junk_cache;
 pub mod junk_map;
 pub mod kilo;
 pub mod kimi;
@@ -40,7 +41,9 @@ pub mod pi;
 pub mod plugin;
 pub(crate) mod plugin_install;
 pub(crate) mod plugin_version;
+pub mod qwen;
 pub mod restart;
+pub mod roo;
 pub mod skill;
 pub mod usage;
 pub mod vscode;
@@ -82,6 +85,8 @@ pub const HOSTS: &[&str] = &[
     "mimo",
     "antigravity",
     "devin",
+    "roo",
+    "qwen",
 ];
 
 /// Every module an rtok install can carry, in print order.
@@ -112,6 +117,8 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "mimo" => Some(&mimo::Mimo),
         "antigravity" => Some(&antigravity::Antigravity),
         "devin" => Some(&devin::Devin),
+        "roo" => Some(&roo::Roo),
+        "qwen" => Some(&qwen::Qwen),
         _ => None,
     }
 }
@@ -195,8 +202,9 @@ pub trait Agent: Sync {
     /// Config files an install writes; copied before any write. Empty for a host that owns a
     /// linked directory instead of a file (pi).
     fn files(&self, cfg: &Config, kind: Kind) -> Vec<PathBuf>;
-    /// Paths whose presence (or whose parent's) means the app is installed. Defaults to
-    /// [`Agent::files`]; a host adds its plugin directory.
+    /// Paths inside the host's own folders; `agents junk list` lists their parents. Not proof
+    /// the app is installed — a folder outlives its app (T426). Defaults to [`Agent::files`]; a
+    /// host adds its plugin directory.
     fn markers(&self, cfg: &Config, kind: Kind) -> Vec<PathBuf> {
         self.files(cfg, kind)
     }
@@ -246,7 +254,7 @@ fn expand_app(spec: &str) -> PathBuf {
 }
 
 /// `~/x` and `$VAR/x` as a path on this machine; anything else unchanged.
-fn expand_spec(spec: &str) -> PathBuf {
+pub(crate) fn expand_spec(spec: &str) -> PathBuf {
     if let Some(rest) = spec.strip_prefix("~/") {
         return join_rel(&home_dir(), rest);
     }
@@ -263,7 +271,7 @@ fn expand_spec(spec: &str) -> PathBuf {
 /// `path` when it is inside `home`, else the same path re-rooted beneath `home`
 /// (`/Applications/X.app` → `<home>/Applications/X.app`; a drive prefix is dropped).
 fn under(home: &Path, path: PathBuf) -> PathBuf {
-    if path.starts_with(home) {
+    if crate::fs::path_starts_with(&path, home) {
         return path;
     }
     let rel: PathBuf = path
@@ -273,20 +281,91 @@ fn under(home: &Path, path: PathBuf) -> PathBuf {
     home.join(rel)
 }
 
-/// The first `bin` on PATH (`.exe`/`.cmd` on Windows). Under [`HOST_SANDBOX_ENV`], only PATH
-/// entries under the home dir count.
+/// Extensions `cmd` tries for a bare name. `PATHEXT` when set, otherwise cmd's own default.
+fn pathext_list() -> Vec<String> {
+    if !cfg!(windows) {
+        return Vec::new();
+    }
+    let raw = std::env::var("PATHEXT").ok();
+    pathext_from(raw.as_deref())
+}
+
+fn pathext_from(raw: Option<&str>) -> Vec<String> {
+    let raw = raw
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(".COM;.EXE;.BAT;.CMD");
+    raw.split(';')
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(|e| {
+            if e.starts_with('.') {
+                e.to_string()
+            } else {
+                format!(".{e}")
+            }
+        })
+        .collect()
+}
+
+/// `bin`, then `bin` plus each extension that is not already on the name.
+fn file_names(bin: &str, exts: &[String]) -> Vec<String> {
+    let mut names = vec![bin.to_string()];
+    let lower = bin.to_ascii_lowercase();
+    let has = exts
+        .iter()
+        .any(|e| lower.ends_with(&e.to_ascii_lowercase()));
+    if !has {
+        for ext in exts {
+            names.push(format!("{bin}.{}", ext.trim_start_matches('.')));
+        }
+    }
+    names
+}
+
+/// The first file named `bin` (or `bin` + an extension from `exts`) in a `path` directory.
+/// When `limit` is set, only directories under it count (ASCII-case-insensitive on Windows).
+pub(crate) fn find_bin(
+    bin: &str,
+    path: Option<&std::ffi::OsStr>,
+    limit: Option<&Path>,
+    exts: &[String],
+) -> Option<PathBuf> {
+    let path = path?;
+    let names = file_names(bin, exts);
+    std::env::split_paths(path)
+        .filter(|dir| limit.is_none_or(|home| crate::fs::path_starts_with(dir, home)))
+        .flat_map(|dir| names.iter().map(move |n| dir.join(n)))
+        .find(|p| p.is_file())
+}
+
+/// The first `bin` on PATH. On Windows every `PATHEXT` extension is tried (`.exe`, `.cmd`,
+/// `.bat`, …). Under [`HOST_SANDBOX_ENV`], only PATH entries under the home dir count.
 pub(crate) fn find_on_path(bin: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     let sandbox = host_sandbox();
-    let names: &[String] = if cfg!(windows) {
-        &[bin.to_string(), format!("{bin}.exe"), format!("{bin}.cmd")]
-    } else {
-        &[bin.to_string()]
-    };
-    std::env::split_paths(&path)
-        .filter(|dir| sandbox.as_ref().is_none_or(|home| dir.starts_with(home)))
-        .flat_map(|dir| names.iter().map(move |n| dir.join(n)))
-        .find(|p| p.is_file())
+    find_bin(
+        bin,
+        Some(path.as_os_str()),
+        sandbox.as_deref(),
+        &pathext_list(),
+    )
+}
+
+/// `path` when it exists (a file or an `.app` bundle). On Windows an extensionless path
+/// also matches `name.exe` / `name.cmd` beside it (`~/.grok/bin/grok` → `grok.exe`).
+pub(crate) fn probe_installed(path: PathBuf) -> Option<PathBuf> {
+    if path.exists() {
+        return Some(path);
+    }
+    let exts = pathext_list();
+    let name = path.file_name()?.to_str()?;
+    for candidate in file_names(name, &exts).into_iter().skip(1) {
+        let next = path.with_file_name(candidate);
+        if next.is_file() {
+            return Some(next);
+        }
+    }
+    None
 }
 
 /// What to spawn for host CLI `bin`: the name itself (or an explicit path), or under
@@ -345,8 +424,7 @@ pub(crate) fn run_cli(
 pub fn app_path(v: &Variant) -> Option<PathBuf> {
     v.apps
         .iter()
-        .map(|a| expand_app(a))
-        .find(|p| p.exists())
+        .find_map(|a| probe_installed(expand_app(a)))
         .or_else(|| v.bins.iter().find_map(|b| find_on_path(b)))
 }
 
@@ -365,7 +443,7 @@ pub fn app_version(v: &Variant) -> String {
         let Some(program) = host_program(bin) else {
             continue;
         };
-        let mut cmd = std::process::Command::new(program);
+        let mut cmd = version_command(&program);
         cmd.arg("--version");
         let out = crate::proc::capture(cmd, Some(VERSION_PROBE_LIMIT));
         let Ok(out) = out else { continue };
@@ -430,16 +508,22 @@ pub(crate) fn load_toml(path: &Path) -> Result<DocumentMut> {
         .with_context(|| path.display().to_string())
 }
 
-/// True when the app itself is found: its bundle or binary exists, or one of its marker
-/// paths (or the directory that would hold it) does. Setup skips a missing app instead of
-/// creating its files; removal runs regardless so a half-installed host is cleaned up.
-pub fn present(agent: &dyn Agent, v: &Variant, cfg: &Config) -> bool {
+/// True when the app itself is found: its bundle or binary exists. A config folder alone
+/// does not count — one left behind by an uninstalled app made setup write into it (T426).
+/// Setup refuses a missing app instead of creating its files; removal runs regardless so a
+/// half-installed host is cleaned up.
+pub fn present(v: &Variant) -> bool {
     app_path(v).is_some()
-        || agent.markers(cfg, v.kind).iter().any(|p| {
-            p.exists()
-                || p.parent()
-                    .is_some_and(|d| !d.as_os_str().is_empty() && d.exists())
-        })
+}
+
+/// The named hosts none of whose wanted variants is [`present`]: `agents install|update`
+/// refuses the whole run on them before any backup or write (T426).
+fn absent_hosts(agents: &[&'static dyn Agent], want: impl Fn(Kind) -> bool) -> Vec<&'static str> {
+    agents
+        .iter()
+        .filter(|a| !a.variants().iter().any(|v| want(v.kind) && present(v)))
+        .map(|a| a.id())
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
@@ -651,6 +735,7 @@ pub fn plugin_rows(agent: &dyn Agent, kind: Kind, cfg: &Config) -> Vec<PluginRow
 ///     ✗ not installed  proxy, compress (off)
 ///     − not supported  -
 /// ```
+/// An empty not-installed group is omitted: a lone `-` is not a missing install.
 pub fn plugin_lines(rows: &[PluginRow], indent: &str, console: bool) -> String {
     let mut out = format!("{indent}plugins\n");
     let inner = format!("{indent}  ");
@@ -670,6 +755,10 @@ pub fn plugin_lines(rows: &[PluginRow], indent: &str, console: bool) -> String {
                 }
             })
             .collect();
+        // A dash under "not installed" reads as a failure when nothing is waiting.
+        if ids.is_empty() && state == ModuleState::NotInstalled {
+            continue;
+        }
         let ids = if ids.is_empty() {
             "-".to_string()
         } else {
@@ -793,6 +882,12 @@ pub fn resolve(hosts: &[String]) -> Result<Vec<&'static dyn Agent>> {
 pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
     let agents = resolve(&req.hosts)?;
     let want = |kind: Kind| req.mode == Mode::Remove || wants(kind, req.cli, req.desktop, req.all);
+    if req.mode != Mode::Remove {
+        let absent = absent_hosts(&agents, want);
+        if !absent.is_empty() {
+            bail!("{} is not installed", absent.join(", "));
+        }
+    }
     let mut out = String::new();
     if req.mode != Mode::Remove && !rtok_spawns() {
         out.push_str(
@@ -863,7 +958,7 @@ pub(crate) fn apply_all(
         let mut any = false;
         for v in a.variants().iter().filter(|v| want(v.kind)) {
             any = true;
-            if req.mode != Mode::Remove && !present(a, v, cfg) {
+            if req.mode != Mode::Remove && !present(v) {
                 out.push_str(&block(a, v, cfg, Outcome::NotFound));
                 continue;
             }
@@ -931,7 +1026,7 @@ pub fn installed_hosts(cfg: &Config) -> Vec<String> {
             host(id).is_some_and(|a| {
                 a.variants()
                     .iter()
-                    .any(|v| present(a, v, cfg) && !installed_modules(a, v.kind, cfg).is_empty())
+                    .any(|v| present(v) && !installed_modules(a, v.kind, cfg).is_empty())
             })
         })
         .map(ToString::to_string)
@@ -964,7 +1059,7 @@ pub fn list(cfg: &Config) -> String {
 /// Same blocks as [`list`], only for `ids` (already-resolved host ids).
 pub fn list_ids(cfg: &Config, ids: &[&str]) -> String {
     visit_hosts(ids, |a, v| {
-        let outcome = if present(a, v, cfg) {
+        let outcome = if present(v) {
             Outcome::Listed
         } else {
             Outcome::NotFound
@@ -1124,6 +1219,43 @@ pub(crate) fn unregister_local_mcp(
     host: &'static str,
 ) -> Result<String> {
     unregister_ours(cfg, path, key, "rtok", &local_mcp_entry("rtok", host))
+}
+
+/// `mcpServers.rtok = {command, args}` with no `type` — the stdio shape Cline, its Roo Code
+/// fork, and Windsurf all document. One body so a new host does not copy the JSON.
+pub(crate) fn register_stdio_mcp(
+    cfg: &Config,
+    path: &std::path::Path,
+    host: &'static str,
+) -> Result<String> {
+    let cmd = rtok_command();
+    rtok_agent_sdk::register_server(
+        &apply(cfg),
+        path,
+        "mcpServers",
+        "rtok",
+        stdio_mcp_entry(&cmd, host),
+        &mcp_summary(&cmd, host),
+    )
+}
+
+fn stdio_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
+    json!({"command": cmd, "args": mcp_args(host)})
+}
+
+/// [`register_stdio_mcp`]'s remove: only the entry as rtok wrote it (T246.2).
+pub(crate) fn unregister_stdio_mcp(
+    cfg: &Config,
+    path: &std::path::Path,
+    host: &'static str,
+) -> Result<String> {
+    unregister_ours(
+        cfg,
+        path,
+        "mcpServers",
+        "rtok",
+        &stdio_mcp_entry("rtok", host),
+    )
 }
 
 /// `Agent::installed` for a host whose only module is `mcp`: present iff `path` mentions
@@ -1390,19 +1522,37 @@ fn bare_rtok_on_path(path: Option<&std::ffi::OsStr>) -> bool {
     bin_on_path("rtok", path)
 }
 
-/// True when `bin` (`bin.exe` too on Windows) is a file in a `path` directory. No sandbox:
-/// the caller passes the `PATH` value, so a test controls it.
+/// True when `bin` (and, on Windows, `bin` plus `PATHEXT`) is a file in a `path` directory.
+/// No sandbox: the caller passes the `PATH` value, so a test controls it.
 pub(crate) fn bin_on_path(bin: &str, path: Option<&std::ffi::OsStr>) -> bool {
-    let Some(path) = path else {
+    find_bin(bin, path, None, &pathext_list()).is_some()
+}
+
+/// How to run `program --version`. A bare name or a `.cmd`/`.bat` on Windows goes through
+/// `cmd /C`, because `CreateProcess` only auto-appends `.exe` and cannot execute a batch shim.
+fn version_command(program: &std::ffi::OsStr) -> std::process::Command {
+    if shell_shim(program) {
+        spawn_cli(program)
+    } else {
+        std::process::Command::new(program)
+    }
+}
+
+fn shell_shim(program: &std::ffi::OsStr) -> bool {
+    if !cfg!(windows) {
         return false;
-    };
-    std::env::split_paths(path).any(|dir| {
-        dir.join(bin).is_file() || (cfg!(windows) && dir.join(format!("{bin}.exe")).is_file())
-    })
+    }
+    let path = Path::new(program);
+    let bare = !path.is_absolute() && path.components().nth(1).is_none();
+    let batch = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    bare || batch
 }
 
 /// What [`ensure_hook_client_link`] did (T357); the caller only needs it for tests and doctor.
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(not(unix), allow(dead_code))]
 pub(crate) enum LinkOutcome {
     /// `rtok-hook` already resolves on `PATH` (not through a stale link of ours).
     AlreadyOnPath,
@@ -1770,6 +1920,38 @@ pub(crate) fn assert_local_mcp_roundtrip(
     let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert!(root["mcp"]["rtok"].is_null(), "{root}");
     assert_eq!(root["mcp"]["other"]["url"], "x");
+}
+
+/// Shared assertion for hosts whose MCP entry is `{command, args}` under `mcpServers`
+/// with no `type` ([`register_stdio_mcp`]). Register is idempotent, remove keeps foreign
+/// servers, both surface through `installed`.
+#[cfg(test)]
+pub(crate) fn assert_stdio_mcp_roundtrip(
+    path: &Path,
+    host: &str,
+    register: impl Fn() -> Result<String>,
+    unregister: impl Fn() -> Result<String>,
+    installed: impl Fn() -> Vec<&'static str>,
+) {
+    use serde_json::Value;
+    std::fs::write(path, r#"{"mcpServers":{"foreign":{"command":"x"}}}"#).unwrap();
+    let first = register().unwrap();
+    assert!(first.starts_with("mcpServers.rtok: "), "{first}");
+    assert!(first.contains(host), "{first}");
+    assert_eq!(register().unwrap(), NO_CHANGES);
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(
+        root["mcpServers"]["rtok"].get("type").is_none(),
+        "stdio shape has no type: {root}"
+    );
+    assert_eq!(root["mcpServers"]["rtok"]["args"][0], "mcp");
+    assert_eq!(root["mcpServers"]["rtok"]["args"][2], host);
+    assert_eq!(installed(), ["mcp"]);
+    assert_eq!(unregister().unwrap(), "- mcpServers.rtok");
+    assert_eq!(unregister().unwrap(), NO_CHANGES);
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(root["mcpServers"]["rtok"].is_null(), "{root}");
+    assert_eq!(root["mcpServers"]["foreign"]["command"], "x");
 }
 
 #[cfg(test)]
@@ -2240,6 +2422,32 @@ mod tests {
         assert!(reaches(&cursor::Cursor, Kind::Desktop, &[Surface::Mcp]));
     }
 
+    /// `install` / `update` / `list` share `plugin_lines`. A not-installed group with no
+    /// plugins used to print `✗ not installed  -`; that dash is not a missing install.
+    #[test]
+    fn empty_not_installed_plugin_group_is_omitted() {
+        let rows = [PluginRow {
+            id: "read",
+            on: true,
+            state: ModuleState::Installed,
+        }];
+        let text = plugin_lines(&rows, "", false);
+        assert!(
+            !text.contains("not installed"),
+            "empty group must not print not installed:\n{text}"
+        );
+        assert!(text.contains("installed      read"), "{text}");
+        assert!(text.contains("not supported  -"), "{text}");
+
+        let waiting = [PluginRow {
+            id: "proxy",
+            on: false,
+            state: ModuleState::NotInstalled,
+        }];
+        let text = plugin_lines(&waiting, "", false);
+        assert!(text.contains("not installed  proxy (off)"), "{text}");
+    }
+
     /// What an install must leave behind follows `support()` and the flags given; against
     /// files that do not exist, every expected module is missing.
     #[test]
@@ -2321,6 +2529,89 @@ mod tests {
             under(home, PathBuf::from("$LOCALAPPDATA/app")),
             PathBuf::from("/h/test-home/$LOCALAPPDATA/app")
         );
+    }
+
+    /// T429: a `.cmd` shim is the install, and a directory outside the home limit is skipped.
+    #[test]
+    fn find_bin_tries_pathext_and_skips_dirs_outside_the_limit() {
+        let root = std::env::temp_dir().join(format!("rtok-find-bin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let inside = root.join("bin");
+        let outside = root.join("other");
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(inside.join("claude.cmd"), b"@echo off\r\n").unwrap();
+        std::fs::write(outside.join("claude.cmd"), b"@echo off\r\n").unwrap();
+        let exts = pathext_from(Some(".cmd"));
+        let path = std::env::join_paths([outside.as_os_str(), inside.as_os_str()]).unwrap();
+        let got = find_bin("claude", Some(path.as_os_str()), Some(&inside), &exts).unwrap();
+        assert_eq!(got, inside.join("claude.cmd"));
+        assert!(
+            find_bin(
+                "claude",
+                Some(path.as_os_str()),
+                Some(&inside.join("missing")),
+                &exts
+            )
+            .is_none()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// T429: `C:\…` and `c:\…` are the same PATH entry under the sandbox home.
+    #[cfg(windows)]
+    #[test]
+    fn find_bin_limit_is_ascii_case_insensitive() {
+        let dir = std::env::temp_dir().join(format!("rtok-find-case-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("grok.EXE"), b"").unwrap();
+        let flipped: PathBuf = dir
+            .to_string_lossy()
+            .chars()
+            .map(|c| match c {
+                'A'..='Z' => c.to_ascii_lowercase(),
+                'a'..='z' => c.to_ascii_uppercase(),
+                _ => c,
+            })
+            .collect::<String>()
+            .into();
+        let path = std::env::join_paths([dir.as_os_str()]).unwrap();
+        let got = find_bin(
+            "grok",
+            Some(path.as_os_str()),
+            Some(&flipped),
+            &pathext_from(Some(".EXE")),
+        );
+        assert!(got.is_some(), "limit {flipped:?} missed {}", dir.display());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T429: `~/.grok/bin/grok` is the install when the file on disk is `grok.exe`.
+    #[test]
+    fn probe_installed_matches_an_exe_beside_an_extensionless_path() {
+        let dir = std::env::temp_dir().join(format!("rtok-probe-exe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("grok.exe");
+        std::fs::write(&exe, b"").unwrap();
+        if cfg!(windows) {
+            let got = probe_installed(dir.join("grok")).unwrap();
+            assert!(crate::fs::same_path(&got, &exe), "{got:?}");
+        } else {
+            assert!(probe_installed(dir.join("grok")).is_none());
+        }
+        assert_eq!(probe_installed(exe.clone()).unwrap(), exe);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T429: a differently cased child of home stays put instead of being re-rooted.
+    #[cfg(windows)]
+    #[test]
+    fn under_keeps_a_different_case_child_of_home() {
+        let home = Path::new(r"C:\Users\Me");
+        let path = PathBuf::from(r"c:\users\me\AppData\Local\Programs\cursor\Cursor.exe");
+        assert_eq!(under(home, path.clone()), path);
     }
 
     /// T280: `.config/nextest.toml` turns the host sandbox on for every test, so no test sees
@@ -2574,69 +2865,6 @@ mod tests {
                     assert_eq!(cell, &want, "{id}: {key}");
                 }
             }
-        }
-    }
-
-    fn cfg_with_cursor_hooks(hooks: PathBuf) -> Config {
-        let mut cfg = Config::default();
-        cfg.setup.cursor.hooks_path = hooks;
-        cfg
-    }
-
-    fn cfg_with_claude(settings: PathBuf, claude_json: PathBuf) -> Config {
-        let mut cfg = Config::default();
-        cfg.setup.claude.settings_path = settings;
-        cfg.doctor.claude_json = claude_json;
-        cfg
-    }
-
-    #[test]
-    fn present_when_cursor_dir_exists() {
-        use std::fs;
-        let root = std::env::temp_dir().join(format!("rtok-present-cursor-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let cursor_dir = root.join(".cursor");
-        fs::create_dir_all(&cursor_dir).unwrap();
-        let cfg = cfg_with_cursor_hooks(cursor_dir.join("hooks.json"));
-        let a = &cursor::Cursor;
-        for v in a.variants() {
-            assert!(
-                present(a, v, &cfg),
-                "parent ~/.cursor must count as installed host ({})",
-                v.name
-            );
-        }
-    }
-
-    #[test]
-    fn present_when_claude_dir_exists() {
-        use std::fs;
-        let root = std::env::temp_dir().join(format!("rtok-present-claude-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let claude_dir = root.join(".claude");
-        fs::create_dir_all(&claude_dir).unwrap();
-        let cfg = cfg_with_claude(claude_dir.join("settings.json"), root.join(".claude.json"));
-        let a = &claude::Claude;
-        assert!(
-            present(a, &a.variants()[0], &cfg),
-            "parent ~/.claude must count as installed host"
-        );
-    }
-
-    #[test]
-    fn absent_when_config_paths_missing() {
-        let root = std::env::temp_dir().join(format!("rtok-absent-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let missing = root.join("no-such-dir");
-        let a = &cursor::Cursor;
-        let cfg = cfg_with_cursor_hooks(missing.join("hooks.json"));
-        for v in a.variants().iter().filter(|v| app_path(v).is_none()) {
-            assert!(!present(a, v, &cfg), "{}", v.name);
-        }
-        let a = &claude::Claude;
-        let cfg = cfg_with_claude(missing.join("settings.json"), missing.join(".claude.json"));
-        for v in a.variants().iter().filter(|v| app_path(v).is_none()) {
-            assert!(!present(a, v, &cfg), "{}", v.name);
         }
     }
 

@@ -20,36 +20,9 @@ use rtok_plugin_sdk::Ctx;
 /// hit became an absolute path. Prefer relative-to-canonical-cwd (so a search
 /// of `src` still yields `src/…`), then relative-to-the-walk-root, then raw.
 ///
-/// Strip `prefix` from `path`, ASCII-case-insensitive on Windows (same rule as
-/// `under` / `under_ascii_case_insensitive` in `mod.rs`).
+/// Strip `prefix` from `path` (T430: ASCII case and a `\\?\` prefix on Windows).
 fn strip_prefix_ci(path: &Path, prefix: &Path) -> Option<PathBuf> {
-    if let Ok(rel) = path.strip_prefix(prefix) {
-        return Some(rel.to_path_buf());
-    }
-    if !cfg!(windows) {
-        return None;
-    }
-    use std::path::Component;
-    let path_c: Vec<_> = path.components().collect();
-    let pref_c: Vec<_> = prefix.components().collect();
-    if pref_c.is_empty() || pref_c.len() > path_c.len() {
-        return None;
-    }
-    let ok = path_c.iter().zip(pref_c.iter()).all(|(p, r)| match (p, r) {
-        (Component::Normal(a), Component::Normal(b)) => a.eq_ignore_ascii_case(b),
-        (Component::Prefix(a), Component::Prefix(b)) => {
-            a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
-        }
-        (a, b) => a == b,
-    });
-    if !ok {
-        return None;
-    }
-    let mut out = PathBuf::new();
-    for c in path_c.into_iter().skip(pref_c.len()) {
-        out.push(c.as_os_str());
-    }
-    Some(out)
+    crate::fs::strip_prefix(path, prefix)
 }
 
 /// Canonical walk base: `dunce::canonicalize(cwd)`, or `cwd` when it does not

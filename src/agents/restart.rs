@@ -176,20 +176,11 @@ fn image_name(name: &str) -> String {
     }
 }
 
-/// `~/x` and `$VAR/x` as a path on this machine; anything else unchanged.
+/// `~/x` and `$VAR/x` as a path on this machine. On Windows an extensionless file also
+/// matches `name.exe` beside it, so `~/.grok/bin/grok` opens `grok.exe`.
 fn expand_app_path(spec: &str) -> PathBuf {
-    if let Some(rest) = spec.strip_prefix("~/")
-        && let Some(home) = crate::config::env_user_home()
-    {
-        return home.join(rest);
-    }
-    if let Some(rest) = spec.strip_prefix('$') {
-        let (var, tail) = rest.split_once('/').unwrap_or((rest, ""));
-        if let Some(root) = std::env::var_os(var) {
-            return std::path::Path::new(&root).join(tail);
-        }
-    }
-    PathBuf::from(spec)
+    let path = super::expand_spec(spec);
+    super::probe_installed(path.clone()).unwrap_or(path)
 }
 
 /// The display/process name our path parsing reads from one `apps[]` entry — the same string
@@ -520,6 +511,7 @@ mod tests {
             "Kilo Code for VS Code" => "Visual Studio Code",
             "Kimi Code Desktop" => "Kimi Code",
             "OpenCode Desktop" => "OpenCode",
+            "Roo Code" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
             "Windsurf" => "Windsurf",

@@ -79,6 +79,13 @@ export type ServerFrame =
  */
 export type ModuleState = "installed" | "not_installed" | "not_supported";
 /**
+ * Whether Claude Code defers MCP tools (T388).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ToolSearchState".
+ */
+export type ToolSearchState = ("enabled" | "disabled") | "unknown";
+/**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "LinkKind".
  */
@@ -496,8 +503,10 @@ export interface Report {
    * One probed MCP server: name, command, tool count, description tokens.
    */
   mcp: ServerInfo[];
+  mcp_tool_search: ToolSearch;
   /**
-   * `ANTHROPIC_BASE_URL` is set, so MCP tool search is likely disabled.
+   * MCP tool search is not confirmed on: `mcp_tool_search.state` is `disabled`, or `unknown`
+   * with a custom `ANTHROPIC_BASE_URL` (the heuristic).
    */
   mcp_tool_search_disabled: boolean;
   /**
@@ -579,6 +588,17 @@ export interface ServerInfo {
   desc_tokens: number;
   name: string;
   tools: number;
+}
+/**
+ * The tool-search state and where it came from; `source` is `None` for the default (nothing to
+ * report), so a plain install prints no line.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ToolSearch".
+ */
+export interface ToolSearch {
+  source?: string | null;
+  state: ToolSearchState;
 }
 /**
  * One finding of a doctor config check. The list is shared by every T331 detector.

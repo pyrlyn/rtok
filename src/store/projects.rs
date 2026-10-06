@@ -13,7 +13,7 @@ use diesel::prelude::*;
 use serde::Serialize;
 
 use super::Store;
-use super::schema::{extractor, projects, symbol_stale, symbols};
+use super::schema::{extractor, file_rank, projects, symbol_stale, symbols};
 use super::unixepoch;
 
 /// Canonical absolute path as one string: the index key of a root, and the match key of a
@@ -141,7 +141,12 @@ impl Store {
             return Ok(());
         }
         let project = self.register_project(path, origin)?;
-        if project.origin == origin && project.name.is_none() {
+        // Without a name there is nothing to set: the update would write NULL over NULL, and
+        // every SessionStart paid a write lock for it.
+        if project.origin == origin
+            && project.name.is_none()
+            && name.is_some_and(|n| !n.trim().is_empty())
+        {
             self.rename_project(project.id, name)?;
         }
         Ok(())
@@ -249,6 +254,7 @@ impl Store {
                 };
                 diesel::delete(symbols::table.filter(symbols::root.eq(&root))).execute(conn)?;
                 diesel::delete(extractor::table.filter(extractor::root.eq(&root))).execute(conn)?;
+                diesel::delete(file_rank::table.find(&root)).execute(conn)?;
                 diesel::delete(symbol_stale::table.filter(symbol_stale::root.eq(&root)))
                     .execute(conn)?;
                 diesel::delete(projects::table.find(id)).execute(conn)?;
@@ -473,6 +479,8 @@ mod tests {
             .unwrap();
         index_row(&store, &a.root);
         index_row(&store, &b.root);
+        store.file_rank_put(&a.root, "{}").unwrap();
+        store.file_rank_put(&b.root, "{}").unwrap();
         store.select_project(a.id).unwrap();
         assert!(store.remove_project(a.id).unwrap());
         assert!(!store.remove_project(a.id).unwrap());
@@ -482,6 +490,8 @@ mod tests {
         assert_eq!(store.symbol_stale_paths(&b.root).unwrap(), ["stale.rs"]);
         assert!(store.extractor_fingerprint(&a.root).unwrap().is_none());
         assert!(store.extractor_fingerprint(&b.root).unwrap().is_some());
+        assert!(store.file_rank_get(&a.root).unwrap().is_none());
+        assert!(store.file_rank_get(&b.root).unwrap().is_some());
         assert_eq!(store.selected_project().unwrap(), None);
         assert!(dir.0.join("a").is_dir(), "the files are never touched");
     }

@@ -600,12 +600,15 @@ enum WorktreeCmd {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
         yes: bool,
-        /// Open locks whose reason starts with this owner; every other lock is a hard stop
+        /// Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`
         #[arg(long)]
         owner: Option<String>,
         /// Keep worktrees modified within this window (`24h`, `7d`)
         #[arg(long, default_value = "24h")]
         idle: String,
+        /// Treat someone else's lock as abandoned once its merged, clean worktree is untouched this long
+        #[arg(long, default_value = "7d")]
+        stale_lock: String,
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
@@ -1530,6 +1533,7 @@ pub fn run() -> Result<()> {
                     yes,
                     owner,
                     idle,
+                    stale_lock,
                     json,
                 },
         } => {
@@ -1544,6 +1548,8 @@ pub fn run() -> Result<()> {
             let policy = gc::Policy {
                 owner: owner.as_deref(),
                 idle: crate::measure::stats::parse_since(&idle).context("--idle")?,
+                stale_lock: crate::measure::stats::parse_since(&stale_lock)
+                    .context("--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
             };
@@ -1754,7 +1760,10 @@ pub fn run() -> Result<()> {
                 let report = crate::agents::junk::report_with(
                     &cfg,
                     &crate::agents::junk_map::Roots::from_env(),
-                    crate::agents::junk::Options { all },
+                    crate::agents::junk::Options {
+                        all,
+                        ..Default::default()
+                    },
                     crate::agents::junk::AGENT_SCAN_LIMIT,
                 );
                 if json {

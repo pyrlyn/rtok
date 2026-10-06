@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
@@ -26,10 +26,21 @@ function files(dir: string, skip: (name: string) => boolean): string[] {
 const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
 test("web/ keeps no copy of a brand file", () => {
-  const brandFiles = new Map(files(brand, () => false).map((p) => [digest(p), p]));
-  expect(brandFiles.size).toBeGreaterThan(0);
-  const copies = files(web, (name) => BUILD_OUTPUT.has(name))
-    .filter((p) => brandFiles.has(digest(p)))
-    .map((p) => `${relative(web, p)} = ${relative(brand, brandFiles.get(digest(p))!)}`);
+  const bySize = new Map<number, string[]>();
+  for (const p of files(brand, () => false)) {
+    const n = statSync(p).size;
+    bySize.set(n, [...(bySize.get(n) ?? []), p]);
+  }
+  expect(bySize.size).toBeGreaterThan(0);
+  // A copy is as long as its original, so a stat rules out almost every file before any read:
+  // hashing all of them overran the 5 s timeout on a loaded host (T427).
+  const copies = files(web, (name) => BUILD_OUTPUT.has(name)).flatMap((p) => {
+    const twins = bySize.get(statSync(p).size) ?? [];
+    if (twins.length === 0) return [];
+    const d = digest(p);
+    return twins
+      .filter((b) => digest(b) === d)
+      .map((b) => `${relative(web, p)} = ${relative(brand, b)}`);
+  });
   expect(copies).toEqual([]);
 });

@@ -5,8 +5,10 @@
 import { swatch } from "../charts/Chart";
 import { Empty } from "../states";
 import { Panel } from "../ui/Panel";
+import { orUnknown } from "../ui/Unknown";
 import { SERIES, CallsChart } from "./CallsChart";
 import { ago, compact, nowSecs } from "./format";
+import { why } from "./missing";
 import { SURFACES, type overview } from "./model";
 import { CheckPill, LivePill, PanelLink } from "./parts";
 
@@ -112,11 +114,12 @@ export function SessionsPanel({ o }: { o: Overview }) {
                                 <div className="truncate text-xs font-semibold">
                                     {s.id.slice(0, 8)}{" "}
                                     <span className="font-normal text-fg-muted">
-                                        {s.host ?? "-"} · {s.model ?? "-"}
+                                        {orUnknown(s.host, why.sessionHost)} ·{" "}
+                                        {orUnknown(s.model, why.sessionUsage)}
                                     </span>
                                 </div>
                                 <div className="truncate text-2xs text-fg-muted">
-                                    {s.project ?? "-"}
+                                    {orUnknown(s.project, why.sessionProject)}
                                 </div>
                             </div>
                             <div className="shrink-0 text-right">

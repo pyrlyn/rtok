@@ -23,6 +23,7 @@ index|sqlite_autoindex_agents_1|agents|
 index|sqlite_autoindex_archive_1|archive|
 index|sqlite_autoindex_archive_decisions_1|archive_decisions|
 index|sqlite_autoindex_extractor_1|extractor|
+index|sqlite_autoindex_file_rank_1|file_rank|
 index|sqlite_autoindex_hosts_1|hosts|
 index|sqlite_autoindex_kv_1|kv|
 index|sqlite_autoindex_models_1|models|
@@ -48,6 +49,7 @@ table|call_io|call_io|CREATE TABLE call_io ( call_id INTEGER PRIMARY KEY REFEREN
 table|calls|calls|CREATE TABLE calls ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session_id TEXT NOT NULL REFERENCES sessions(id), host_id INTEGER REFERENCES hosts(id), provider_id INTEGER REFERENCES providers(id), model_id INTEGER REFERENCES models(id), plugin TEXT, surface TEXT NOT NULL, kind TEXT NOT NULL, parent_id INTEGER REFERENCES calls(id), name TEXT, ms REAL, ok INTEGER NOT NULL DEFAULT 1, error TEXT )
 table|events|events|CREATE TABLE events ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, event TEXT NOT NULL, tool TEXT, plugin TEXT, ms REAL )
 table|extractor|extractor|CREATE TABLE extractor ( root TEXT PRIMARY KEY NOT NULL, fingerprint TEXT NOT NULL , indexed_at INTEGER)
+table|file_rank|file_rank|CREATE TABLE file_rank ( root TEXT PRIMARY KEY NOT NULL, graph TEXT NOT NULL )
 table|hosts|hosts|CREATE TABLE hosts ( id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()) )
 table|kv|kv|CREATE TABLE kv ( key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL )
 table|logs|logs|CREATE TABLE logs ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), level TEXT NOT NULL, source TEXT NOT NULL, name TEXT NOT NULL, session TEXT, call_id INTEGER REFERENCES calls(id), plugin TEXT, message TEXT NOT NULL, fields TEXT )

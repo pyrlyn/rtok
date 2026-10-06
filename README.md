@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/static/logo-wordmark-dark.svg">
-  <img src="site/static/logo-wordmark.svg" alt="rtok" width="200">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-wordmark-dark.svg">
+  <img src="assets/logo-wordmark.svg" alt="rtok" width="200">
 </picture>
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=listepo_rtok&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=listepo_rtok) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=listepo_rtok&metric=coverage)](https://sonarcloud.io/component_measures?id=listepo_rtok&metric=coverage) [![Tests](https://img.shields.io/sonar/tests/listepo_rtok?server=https%3A%2F%2Fsonarcloud.io&compact_message)](https://sonarcloud.io/component_measures?id=listepo_rtok&metric=tests)
@@ -442,13 +442,18 @@ just readme-check
 just dist-plan
 ```
 
-`just check` is the gate. While iterating, `just test-changed` builds and runs only the test
-targets the current diff can reach, which is what makes the loop short: each file under
-`tests/*.rs` is its own integration-test binary, and cargo links every selected one before
-any test runs. The unit-test
-binary is trimmed the same way, which keeps the slow TUI tests out of an unrelated edit. It
-picks targets by name, so it can miss a test that exercises a module without naming it — run
-`just check` before committing.
+`just check` is the gate for what the change touches: it diffs against the merge base with
+`main` (committed and uncommitted) and runs format, lint, the copy-paste, JS and Python checks
+and the tests only for that diff. A docs-only change runs no cargo tests; a change to
+`Cargo.toml`, `build.rs`, `justfile`, `crates/` or `config/` runs everything. `just full-check`
+is the whole gate regardless of the diff, and CI runs the whole gate too.
+
+The selection is `just test-changed`, which also works on its own against any revision. It
+builds and runs only the test targets the diff can reach, which is what makes the loop short:
+each file under `tests/*.rs` is its own integration-test binary, and cargo links every selected
+one before any test runs. The unit-test binary is trimmed the same way, which keeps the slow
+TUI tests out of an unrelated edit. It picks targets by name, so it can miss a test that
+exercises a module without naming it — run `just full-check` when that matters.
 
 Packaging for npm, PyPI and crates.io is manual and local; no workflow publishes. Build and
 try the npm package for this machine without touching a registry:

@@ -289,6 +289,10 @@ plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: 
 cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # agy plugin install stages here; read only
 [setup.devin]
 config_path   = "~/.config/devin/config.json"  # mcp_config.json is read beside it; Windows: %APPDATA%\devin\
+[setup.roo]
+mcp_path      = ""                               # empty: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
+[setup.qwen]
+dir           = "~/.qwen"                    # settings.json (hooks, mcpServers); QWEN_HOME moves the directory
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
@@ -361,6 +365,7 @@ modes         = []                    # same as [setup].modes; setup writes here
 enabled      = true
 window_turns = 8
 deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree (T50.4)
+grep_symbol = false              # opt-in: a Grep for one identifier (`foo`, `fn foo`, `class Foo`, `\bfoo\(`) is denied with its 1-5 indexed definitions + reference count; index lookup only (T369)
 skills = false                   # opt-in (Claude Code): deny a Skill whose SKILL.md exceeds skill_max_bytes with its map + `expand <id>` (T62.1)
 skill_max_bytes = 8192           # bodies at or under this load whole; so does any skill with allowed-tools / model / context / agent in its frontmatter
 
@@ -388,6 +393,7 @@ hybrid     = true                     # when enabled: RRF(fts5, knn); false = kn
 enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 map_tokens = 0                        # SessionStart repo map cap (D5 share next to memory.recall_tokens); 0 = off until a P7 A/B passes
+map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI

@@ -285,6 +285,7 @@ fn check_table(
 /// String keys that take one of a fixed set of values (`rtok config validate` names the set).
 const CHOICES: &[(&str, &[&str])] = &[
     ("log.tspin", &["auto", "always", "off"]),
+    ("plugins.graph.map_rank", &["refs", "pagerank"]),
     // Any other value turns the semantic tier on with the placeholder hash embedding
     // (`proxy::semantic_cache`); `"hash"` is the only backend until P29 ships real ones.
     ("plugins.proxy.semantic_cache.embed_backend", &["hash"]),

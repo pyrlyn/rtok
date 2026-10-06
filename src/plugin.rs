@@ -109,6 +109,9 @@ pub struct Runtime {
     pub cwd: Option<String>,
     /// Files the graph watcher has queued but not yet re-indexed (T68.3).
     pub graph_watch_pending: Arc<Mutex<HashSet<String>>>,
+    /// `Some` while [`Runtime::defer_measurements`] is on: `record` queues here and
+    /// [`Runtime::flush_measurements`] writes the queue in one transaction.
+    deferred: Mutex<Option<Vec<Measurement>>>,
 }
 
 impl Runtime {
@@ -146,6 +149,7 @@ impl Runtime {
             host_id,
             cwd: None,
             graph_watch_pending: Arc::new(Mutex::new(HashSet::new())),
+            deferred: Mutex::new(None),
         })
     }
 
@@ -162,8 +166,45 @@ impl Runtime {
 
     /// Persist a measurement for this session (the only path for savings into the DB).
     pub fn record(&self, m: &Measurement) -> Result<()> {
+        if let Some(queue) = self
+            .deferred
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+        {
+            queue.push(m.clone());
+            return Ok(());
+        }
         self.store
             .insert_measurement_once(&self.session, m, self.once.as_deref())
+    }
+
+    /// Queue every later [`Runtime::record`] instead of writing it. Each write is a lock
+    /// acquisition and a WAL commit, and the hook's 10 ms budget (D1) feels every one of them
+    /// when other sessions write too; SessionStart records three measurements back to back.
+    pub fn defer_measurements(&self) {
+        *self
+            .deferred
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
+    }
+
+    /// Write what [`Runtime::defer_measurements`] queued, in order, in one transaction, and
+    /// go back to writing each `record` at once. Never fails the caller: a lost row is a
+    /// missing statistic, the same as a failed single `record`.
+    pub fn flush_measurements(&self) {
+        let queued = self
+            .deferred
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+            .unwrap_or_default();
+        if queued.is_empty() {
+            return;
+        }
+        let _ = self
+            .store
+            .insert_measurements_once(&self.session, &queued, self.once.as_deref());
     }
 
     pub fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32> {
@@ -240,6 +281,12 @@ fn project_of(cwd: Option<&str>) -> Option<String> {
     crate::project::project_name(std::path::Path::new(cwd?))
 }
 
+/// The `kv` key behind [`Host::plugin_state_set`] (T419). The plugin id leads, so one
+/// prefix read gives the stats pages a plugin's whole state.
+pub fn plugin_state_key(plugin: &str, key: &str) -> String {
+    format!("plugin:{plugin}:{key}")
+}
+
 /// The host side of the contract (D25). `Runtime` *is* the host: every capability trait is
 /// implemented here by delegating to the one store, and the session and the archive
 /// directory come from the context rather than from the plugin's arguments.
@@ -261,6 +308,10 @@ impl Host for Runtime {
 
     fn record(&self, m: &Measurement) -> Result<()> {
         Runtime::record(self, m)
+    }
+
+    fn plugin_state_set(&self, plugin: &str, key: &str, value: &str) -> Result<()> {
+        self.store.kv_set(&plugin_state_key(plugin, key), value)
     }
 
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32> {
@@ -595,6 +646,18 @@ impl Symbols for Runtime {
 
     fn symbol_top_refs(&self, root: &str, limit: i64) -> Result<Vec<(String, i64, String, i32)>> {
         self.store.symbol_top_refs(root, limit)
+    }
+
+    fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
+        self.store.symbol_file_scan(root)
+    }
+
+    fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
+        self.store.file_rank_get(root)
+    }
+
+    fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
+        self.store.file_rank_put(root, graph)
     }
 }
 

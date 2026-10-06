@@ -421,6 +421,57 @@ fn an_unknown_host_is_refused_before_any_backup() {
     assert_eq!(fs::read_to_string(&settings).unwrap(), "{}");
 }
 
+/// T426: a config folder an uninstalled host left behind is not the host. Naming it refuses the
+/// whole run with a non-zero exit before any backup or write, an installed host named beside
+/// it included; `remove` still cleans it up.
+#[test]
+fn a_host_whose_app_is_missing_is_refused_before_any_write() {
+    let home = tmp("absent");
+    let cfg = write_cfg(&home);
+    let path = common::agents::fake_hosts(&home);
+    for stub in ["gemini", "gemini.cmd"] {
+        let _ = fs::remove_file(path.join(stub));
+    }
+    let settings = home.join(".gemini/settings.json");
+    fs::write(&settings, "{}").unwrap();
+    let run = |args: &[&str]| {
+        std::process::Command::new(common::agents::bin())
+            .args(["--config", cfg.to_str().unwrap()])
+            .args(args)
+            .arg("--no-restart")
+            .env("HOME", &home)
+            .env("USERPROFILE", &home)
+            .env("PATH", &path)
+            .output()
+            .unwrap()
+    };
+    for args in [
+        &["agents", "install", "gemini"][..],
+        &["agents", "install", "codex,gemini"],
+        &["agents", "update", "gemini"],
+    ] {
+        let out = run(args);
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success(), "{args:?} must fail: {err}");
+        assert!(err.contains("gemini is not installed"), "{args:?}: {err}");
+    }
+    assert_eq!(fs::read_to_string(&settings).unwrap(), "{}");
+    assert!(
+        backups(&settings).is_empty(),
+        "nothing copied before the refusal"
+    );
+    assert!(
+        !home.join(".codex/config.toml").exists(),
+        "the installed host named beside it is not written either"
+    );
+    let out = run(&["agents", "remove", "gemini"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 /// The configs spawn `rtok` by name; without it on PATH the setup still runs and says so
 /// first. Windows writes the absolute exe instead, so it has nothing to warn about.
 #[test]
@@ -438,7 +489,8 @@ fn a_missing_rtok_on_path_is_a_warning_at_the_top() {
         ])
         .env("HOME", &home)
         .env("USERPROFILE", &home)
-        .env("PATH", home.join("empty-bin"))
+        // Codex itself is installed (T426); only `rtok` is missing from PATH.
+        .env("PATH", common::agents::fake_hosts(&home))
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);

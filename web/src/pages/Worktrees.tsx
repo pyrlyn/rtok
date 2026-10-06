@@ -9,6 +9,8 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill, type PillTone } from "../ui/Pill";
 import { Search } from "../ui/Search";
+import { orUnknown } from "../ui/Unknown";
+import { why } from "./missing";
 import {
     Count,
     Kv,
@@ -89,7 +91,10 @@ function Table({ rows: all, total, note }: { rows: WorktreeRow[]; total: string;
                 header: "worktree",
                 cell: (r) => (
                     <span>
-                        <b>{baseName(r.path)}</b> <span className="text-fg-muted">{r.branch}</span>
+                        <b>{baseName(r.path)}</b>{" "}
+                        <span className="text-fg-muted">
+                            {orUnknown(r.branch, why.worktreeBranch, "no branch")}
+                        </span>
                     </span>
                 ),
             },
@@ -170,12 +175,12 @@ function Detail({ row: r }: { row: WorktreeRow }) {
             <Kv
                 rows={[
                     ["path", <span className="break-all">{r.path}</span>],
-                    ["branch", r.branch],
-                    ["owner", r.owner],
-                    ["agent", r.agent],
-                    ["agent state", r.agentState],
-                    ["seen", r.seen],
-                    ["modified", r.modified],
+                    ["branch", orUnknown(r.branch, why.worktreeBranch, "none")],
+                    ["owner", orUnknown(r.owner, why.worktreeOwner, "none")],
+                    ["agent", orUnknown(r.agent, why.worktreeAgent, "none")],
+                    ["agent state", orUnknown(r.agentState, why.worktreeAgentState, "none")],
+                    ["seen", orUnknown(r.seen, why.worktreeSeen, "never")],
+                    ["modified", orUnknown(r.modified, why.worktreeModified)],
                     ["source", r.source],
                     ["build cache", r.cache],
                 ]}

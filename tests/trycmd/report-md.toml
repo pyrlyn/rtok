@@ -146,6 +146,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.graph.enabled | true | default |
 | plugins.graph.exclude | [] | default |
 | plugins.graph.include | [] | default |
+| plugins.graph.map_rank | refs | default |
 | plugins.graph.map_tokens | 0 | default |
 | plugins.graph.max_auto_projects | 20 | default |
 | plugins.graph.max_tokens | 2000 | default |
@@ -153,6 +154,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.graph.watch | off | default |
 | plugins.guard.deny_grep_glob | false | default |
 | plugins.guard.enabled | true | default |
+| plugins.guard.grep_symbol | false | default |
 | plugins.guard.skill_max_bytes | 8192 | default |
 | plugins.guard.skills | false | default |
 | plugins.guard.window_turns | 8 | default |
@@ -254,6 +256,8 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.pi.extensions_path | ~/.pi/agent/extensions | default |
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |
+| setup.qwen.dir | ~/.qwen | default |
+| setup.roo.mcp_path |  | default |
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |
 | setup.vscode.insiders_user_dir |  | default |
@@ -294,7 +298,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-248 keys.
+252 keys.
 
 ## Doctor
 
@@ -477,6 +481,16 @@ agents
     hooks   not installed
     mcp     not installed
     proxy   not supported: Devin's proxy key is an HTTP proxy for CLI traffic, not a model API base URL
+    plugin  not installed (--yes)
+  roo (desktop)
+    hooks   not supported: Roo Code's docs describe mcp_settings.json and .roo/mcp.json, not shell hook events
+    mcp     not installed
+    proxy   not supported: Roo Code has no documented model base-URL file; roo-cline.debugProxy is a debug proxy, not the model endpoint
+    plugin  not supported: Roo Code has no documented local plugin directory to link; modes live in the extension
+  qwen (cli)
+    hooks   not installed
+    mcp     not installed
+    proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
     plugin  not installed (--yes)
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   dry-refactoring project desc 154c body 2772B calls - WARN never invoked

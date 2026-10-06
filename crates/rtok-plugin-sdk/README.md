@@ -72,7 +72,7 @@ let host = MemoryHost::new();
 
 - API: [docs.rs/rtok-plugin-sdk](https://docs.rs/rtok-plugin-sdk)
 - Writing and shipping a plugin: [`docs/plugin-authoring.md`](https://github.com/pyrlyn/rtok/blob/main/docs/plugin-authoring.md)
-- What rtok is: <https://pyrlyn.github.io/rtok/>
+- What rtok is: <https://github.com/pyrlyn/rtok>
 
 ## Licence
 

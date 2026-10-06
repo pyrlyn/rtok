@@ -5349,7 +5349,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__worktree__subcmd__gc)
-            opts="-h --yes --owner --idle --json --config --help"
+            opts="-h --yes --owner --idle --stale-lock --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -5360,6 +5360,10 @@ _rtok() {
                     return 0
                     ;;
                 --idle)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --stale-lock)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

@@ -19,6 +19,13 @@ fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
     found.unwrap_or_else(|| panic!("{name} missing in {entries:?}"))
 }
 
+/// Claim rows store `fs::canon`. On Windows that drops a safe `\\?\` prefix that
+/// `std::fs::canonicalize` keeps, so a string compare against the raw canonical path fails.
+fn stored_claim_path(path: &Path) -> String {
+    let text = path.canonicalize().unwrap().display().to_string();
+    text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
+}
+
 #[test]
 fn inventory_sees_a_squash_merge_a_foreign_lock_and_a_deleted_directory() {
     let tmp = rtok::testutil::tmp_dir("worktree");
@@ -386,6 +393,15 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     assert_eq!(planned("wt-gone"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-mine"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-theirs"), "keep: locked by Cursor / grok");
+    // T418: past `--stale-lock` a foreign lock on a merged, clean worktree is abandoned;
+    // on a dirty, unmerged or vanished one it still holds.
+    let stale = json_in(&tmp, &work, &[&idle0[..], &["--stale-lock", "0h"]].concat());
+    let abandoned = |name: &str| by_name(&stale, name)["note"].as_str().unwrap().to_owned();
+    let reclaimed = "merged, clean, abandoned lock by Cursor / grok";
+    assert_eq!(abandoned("wt-theirs"), reclaimed);
+    let reclaimed = "merged, clean, abandoned lock, owner unknown";
+    assert_eq!(abandoned("wt-bare-lock"), reclaimed);
+    assert_eq!(abandoned("wt-gone-theirs"), "locked by Cursor / grok");
     assert_eq!(listed(), before);
 
     // No `--owner`, default idle window: only the unlocked stale record may go.
@@ -675,7 +691,7 @@ fn add_binds_the_worktree_to_the_calling_agent() {
         ("claude", Some(me))
     );
     let claims = store.open_worktree_claims().unwrap();
-    let real = path.canonicalize().unwrap().display().to_string();
+    let real = stored_claim_path(path);
     assert_eq!(claims, [(real, me.to_string())]);
 
     let args = ["worktree", "add", "t10", "--agent", &me[..8], "--owner", ME];
@@ -806,7 +822,7 @@ fn adopt_binds_a_host_made_worktree_and_lists_its_origin() {
         "a Cursor-pool worktree gets no lock"
     );
     let claims = store.open_worktree_claims().unwrap();
-    let want = cursor.canonicalize().unwrap().display().to_string();
+    let want = stored_claim_path(&cursor);
     assert!(
         claims.iter().any(|(p, a)| *p == want && a == me),
         "{claims:?}"
@@ -1068,11 +1084,7 @@ fn mcp_worktree_tools_act_for_the_linked_agent() {
     assert!(Path::new(added["path"].as_str().unwrap()).is_dir());
     let lock = lock_of(&work, "rtok-t9");
     assert_eq!(lock.agent.as_deref(), Some(me.as_str()));
-    let real = Path::new(added["path"].as_str().unwrap())
-        .canonicalize()
-        .unwrap()
-        .display()
-        .to_string();
+    let real = stored_claim_path(Path::new(added["path"].as_str().unwrap()));
     assert_eq!(store.open_worktree_claims().unwrap(), [(real, me.clone())]);
 
     let (is_err, text) = &got[1];
@@ -1329,13 +1341,7 @@ fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
         ("claude", Some(ids[0].as_str()))
     );
     let claims = store.open_worktree_claims().unwrap();
-    assert_eq!(
-        claims,
-        [(
-            want.canonicalize().unwrap().display().to_string(),
-            ids[0].clone()
-        )]
-    );
+    assert_eq!(claims, [(stored_claim_path(&want), ids[0].clone())]);
 
     // A resumed `--worktree bold-oak-a3f2` asks again and gets the same worktree.
     let again = create("bold-oak-a3f2");
@@ -1665,7 +1671,7 @@ fn mcp_worktree_adopt_binds_a_host_made_worktree_for_the_linked_agent() {
     );
     assert!(got[3].0 && got[3].1.contains("not taken"), "{}", got[3].1);
     let claims = store.open_worktree_claims().unwrap();
-    let want = cursor.canonicalize().unwrap().display().to_string();
+    let want = stored_claim_path(&cursor);
     assert!(
         claims.iter().any(|(p, a)| *p == want && *a == me),
         "{claims:?}"

@@ -65,8 +65,8 @@ clink.argmatcher("rtok")
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--json"] = "JSON instead of the text lines", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "gc" .. clink.argmatcher()
-          :addflags({ "--yes", "--owner" .. clink.argmatcher():addarg({}), "--idle" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--yes"] = "Apply; without it this is a dry run that changes nothing", ["--owner"] = "Open locks whose reason starts with this owner; every other lock is a hard stop", ["--idle"] = "Keep worktrees modified within this window (`24h`, `7d`)", ["--json"] = "JSON instead of the table", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--yes", "--owner" .. clink.argmatcher():addarg({}), "--idle" .. clink.argmatcher():addarg({}), "--stale-lock" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--yes"] = "Apply; without it this is a dry run that changes nothing", ["--owner"] = "Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`", ["--idle"] = "Keep worktrees modified within this window (`24h`, `7d`)", ["--stale-lock"] = "Treat someone else's lock as abandoned once its merged, clean worktree is untouched this long", ["--json"] = "JSON instead of the table", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "clean" .. clink.argmatcher()
           :addarg(clink.filematches)
           :addflags({ "--idle" .. clink.argmatcher():addarg({}), "--yes", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })

@@ -547,6 +547,8 @@ section! {
         mimo: SetupMimo = SetupMimo::default(),
         antigravity: SetupAntigravity = SetupAntigravity::default(),
         devin: SetupDevin = SetupDevin::default(),
+        roo: SetupRoo = SetupRoo::default(),
+        qwen: SetupQwen = SetupQwen::default(),
     }
 }
 
@@ -675,6 +677,19 @@ section! {
     /// sibling `mcp_config.json`. On Windows the installer redirects the shipped default
     /// to `%APPDATA%\devin\config.json` (T89).
     SetupDevin { config_path: PathBuf = p("~/.config/devin/config.json") }
+}
+
+section! {
+    /// `[setup.roo]` — Roo Code's global `mcp_settings.json` (T413.1). Empty
+    /// `mcp_path` means the VS Code user dir plus
+    /// `globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`.
+    SetupRoo { mcp_path: PathBuf = PathBuf::new() }
+}
+
+section! {
+    /// `[setup.qwen]` — Qwen Code's `settings.json` (`hooks`, `mcpServers`) lives under
+    /// `dir` (T413.2). `QWEN_HOME` moves that directory; this key is the override.
+    SetupQwen { dir: PathBuf = p("~/.qwen") }
 }
 
 section! {
@@ -890,6 +905,10 @@ section! {
         /// MCP `search`/`tree`. Off by default; also stays silent while the
         /// `read` plugin is disabled (no `search`/`tree` to point at).
         deny_grep_glob: bool = false,
+        /// Opt-in (T369): a native `Grep` for one identifier (`foo`, `fn foo`, `class Foo`) is
+        /// denied with that symbol's definitions from the index when it has one to five, so
+        /// the model skips a second round trip. Index lookup only: no walk, no indexing.
+        grep_symbol: bool = false,
         /// Opt-in (T62.1): on `PreToolUse(Skill)` a `SKILL.md` over `skill_max_bytes`
         /// is archived and denied with its markdown map plus the `expand` pointer,
         /// unless its frontmatter carries a key the host applies on invocation.
@@ -938,6 +957,9 @@ section! {
         enabled: bool = true,
         max_tokens: u32 = 2000,
         map_tokens: u32 = 0,
+        /// T370: how the SessionStart map orders files: `refs` counts references per name,
+        /// `pagerank` ranks files by personalized PageRank over the stored file graph.
+        map_rank: String = s("refs"),
         body_lines: u32 = 40,
         auto_index: bool = true,
         auto_add_projects: bool = true,
@@ -1243,6 +1265,7 @@ impl Config {
             setup.cline.hooks_path,
             setup.cline.mcp_path,
             setup.gemini.dir,
+            setup.qwen.dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

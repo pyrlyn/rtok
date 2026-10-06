@@ -58,6 +58,7 @@ const doctor: Report = {
     ],
   },
   mcp: [{ cmd: "rtok mcp", desc_tokens: 640, name: "rtok", tools: 9 }],
+  mcp_tool_search: { source: "heuristic: ANTHROPIC_BASE_URL set", state: "unknown" },
   mcp_tool_search_disabled: true,
   overlaps: ["host-native grep duplicates the rtok search tool ([mcp] search = false)"],
   proxy: "claude-code → rtok proxy → api.anthropic.com",

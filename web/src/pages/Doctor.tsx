@@ -103,7 +103,8 @@ function Details({ d }: { d: Report }) {
                     <Chain label="openai" chain={d.proxy_openai} />
                     {d.mcp_tool_search_disabled && (
                         <p className="text-2xs text-warn-fg">
-                            mcp_tool_search likely disabled (ANTHROPIC_BASE_URL is set)
+                            mcp_tool_search {d.mcp_tool_search.state} (
+                            {d.mcp_tool_search.source ?? "default"})
                         </p>
                     )}
                 </Panel>

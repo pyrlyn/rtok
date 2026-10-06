@@ -204,6 +204,26 @@
     "saves_tokens": true,
     "fields": [
       [
+        "notes live",
+        "0"
+      ],
+      [
+        "notes pinned",
+        "0"
+      ],
+      [
+        "notes retired",
+        "0"
+      ],
+      [
+        "checkpoint prompts typed",
+        "0"
+      ],
+      [
+        "checkpoint host records skipped",
+        "0"
+      ],
+      [
         "recall_titles",
         "5"
       ],
@@ -218,18 +238,6 @@
       [
         "sync_tokens",
         "300"
-      ],
-      [
-        "notes live",
-        "0"
-      ],
-      [
-        "notes pinned",
-        "0"
-      ],
-      [
-        "notes retired",
-        "0"
       ]
     ],
     "stats": {
