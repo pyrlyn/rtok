@@ -415,6 +415,7 @@ mod tests {
                 proxy: "8787".into(),
                 proxy_openai: String::new(),
                 mcp_tool_search_disabled: false,
+                mcp_tool_search: Default::default(),
                 bash_max_output_length: None,
                 auto_compact_window: None,
                 read_share: None,

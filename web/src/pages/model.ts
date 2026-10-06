@@ -109,7 +109,7 @@ export function doctorChecks(d: Report | null): Check[] {
     checks.push({
       st: "warn",
       label: "MCP tool search",
-      detail: "likely disabled (ANTHROPIC_BASE_URL is set)",
+      detail: `${d.mcp_tool_search.state} (${d.mcp_tool_search.source ?? "default"})`,
       field: "mcp_tool_search_disabled",
     });
   }
