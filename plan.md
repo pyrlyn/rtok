@@ -134,6 +134,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.16 | todo | P2 | 3 | 0% | |
 | T418 | todo | P2 | 3 | 0% | |
 | T420 | todo | P1 | 4 | 0% | |
+| T427 | in progress | P2 | 1 | 5% | Claude Code / opus-5.5 |
 
 
 
@@ -2134,6 +2135,15 @@ Check: `tests/latency.rs` SessionStart case green; five manual `rtok hook sessio
 `just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
 
 Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
+
+### T427. The brand-copy test hashes only files whose size matches a brand file
+
+`web/src/brandSources.test.ts` hashes every file in `web/` and `brand/` (about 400 files, 5 MB). Run alone it takes about 2 s; in the parallel unit suite on a loaded host it took 16 to 68 s and failed the 5 s timeout. A copy of a brand file always has the same size, so only files whose size matches some brand file need a hash.
+
+Plan: 1) In `brandSources.test.ts`, stat every file first; hash a `web/` file only when its size is among the brand file sizes, and hash a brand file only when its size occurs in `web/`. 2) Show the guard still bites: copy a brand file into `web/src` locally, see the test fail, remove it. 3) Time the test alone before and after.
+
+Check: `just spa-test`, `just js`; the test fails on a planted copy; its own time drops well under the 5 s timeout.
+
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.

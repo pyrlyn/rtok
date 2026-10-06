@@ -132,3 +132,4 @@
 - T414.16. Linked hover across charts and live values elsewhere
 - T418. SessionStart hook back under the 10 ms budget
 - T420. `just check` runs only what a change touches; `just full-check` runs everything
+- T427. The brand-copy test hashes only files whose size matches a brand file
