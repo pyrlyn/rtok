@@ -127,3 +127,4 @@
 - T416.3. `--stat` on the commands that show a diff
 - T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
+- T436. Operation icons and a spinner on every wait, the way ketch draws them
