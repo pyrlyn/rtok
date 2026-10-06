@@ -272,10 +272,22 @@ Every effective key with its origin — the `config show --sources` page.
 | stats.format | table | default |
 | stats.plugin |  | default |
 | stats.price | false | default |
+| stats.prices.claude-fable-5-1.cache_read | 0.25 | default |
+| stats.prices.claude-fable-5-1.cache_write | 12.5 | default |
+| stats.prices.claude-fable-5-1.input | 10 | default |
+| stats.prices.claude-fable-5-1.output | 50 | default |
 | stats.prices.claude-haiku-4-5.cache_read | 0.1 | default |
 | stats.prices.claude-haiku-4-5.cache_write | 1.25 | default |
 | stats.prices.claude-haiku-4-5.input | 1 | default |
 | stats.prices.claude-haiku-4-5.output | 5 | default |
+| stats.prices.claude-opus-5-5.cache_read | 0.2 | default |
+| stats.prices.claude-opus-5-5.cache_write | 5 | default |
+| stats.prices.claude-opus-5-5.input | 4 | default |
+| stats.prices.claude-opus-5-5.output | 20 | default |
+| stats.prices.claude-sonnet-5-5.cache_read | 0.2 | default |
+| stats.prices.claude-sonnet-5-5.cache_write | 2.5 | default |
+| stats.prices.claude-sonnet-5-5.input | 2 | default |
+| stats.prices.claude-sonnet-5-5.output | 10 | default |
 | stats.prices.claude-sonnet-5.cache_read | 0.2 | default |
 | stats.prices.claude-sonnet-5.cache_write | 2.5 | default |
 | stats.prices.claude-sonnet-5.input | 2 | default |
@@ -299,7 +311,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-253 keys.
+265 keys.
 
 ## Doctor
 

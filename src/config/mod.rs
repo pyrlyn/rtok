@@ -415,8 +415,9 @@ section! {
     }
 }
 
-/// The shipped `[stats.prices]` rows (T49.1). Sources, fetched 2026-09-17:
-/// Anthropic `claude-sonnet-5` / `claude-haiku-4-5` from
+/// The shipped `[stats.prices]` rows (T49.1, T389). Sources: Anthropic
+/// `claude-sonnet-5` / `claude-haiku-4-5` fetched 2026-09-17 and `claude-fable-5-1` /
+/// `claude-opus-5-5` / `claude-sonnet-5-5` fetched 2026-10-06, all from
 /// https://platform.claude.com/docs/en/about-claude/pricing (input / 5m write /
 /// read / output per MTok); OpenAI `gpt-5` / `gpt-5-mini` from
 /// https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -425,6 +426,33 @@ fn default_stats_prices() -> BTreeMap<String, ModelPrice> {
     [
         (
             "claude-sonnet-5",
+            ModelPrice {
+                input: 2.0,
+                cache_write: 2.5,
+                cache_read: 0.2,
+                output: 10.0,
+            },
+        ),
+        (
+            "claude-fable-5-1",
+            ModelPrice {
+                input: 10.0,
+                cache_write: 12.5,
+                cache_read: 0.25,
+                output: 50.0,
+            },
+        ),
+        (
+            "claude-opus-5-5",
+            ModelPrice {
+                input: 4.0,
+                cache_write: 5.0,
+                cache_read: 0.2,
+                output: 20.0,
+            },
+        ),
+        (
+            "claude-sonnet-5-5",
             ModelPrice {
                 input: 2.0,
                 cache_write: 2.5,

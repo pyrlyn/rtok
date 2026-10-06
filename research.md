@@ -234,7 +234,7 @@ Verdict: GO — "X inside path Y" is the measured composite, so `symbol` /
 optional `kind` (exact) arg on the existing tools — no new tool. Surface after:
 4 tools, 94 description tokens (still ≤ 150; each description ≤ 60).
 
-Cost split with p_out = 5 × p_in (input-token equivalents):
+Cost split with p_out = 5 × p_in (input-token equivalents). The ratio is the real one on every current Claude 5 model: Fable 5.1 $10 / $50, Opus 5.5 $4 / $20, Sonnet 5.5 $2 / $10 per MTok input / output (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-06, T389):
 
 | Component | Standard cache read 0.1× | Fable/Mythos 5.1 read 0.025× |
 |-----------|--------------------------|------------------------------|
@@ -900,7 +900,7 @@ Checked 27 claims + 19 repos. Refuted: JetBrains rtk post (rtk did not save; +7.
 
 - Does `ANTHROPIC_BASE_URL` really disable MCP tool search on your setup (deferred tools are visible in this session, so something enables it)? `rtok doctor` T1.4 answers it.
 - Does headroom's live-zone compression keep the prefix byte-stable across turns in your traffic? T5.5 cache-health report answers it before rtok compress replaces it.
-- Pricing for Fable 5.1 output tokens: the cost split above assumes p_out = 5 × p_in; adjust in `rtok stats --price` once known.
+- Pricing for Fable 5.1 output tokens: answered. $50 / MTok output vs $10 input, so the cost split's p_out = 5 × p_in holds; cache read $0.25 (0.025×), 5-minute write $12.50 (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-06). `rtok stats --price` ships the row (T389).
 
 ## 9. Competitive gap review (2026-09-17)
 
