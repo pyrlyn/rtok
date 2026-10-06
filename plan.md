@@ -66,7 +66,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T371 | todo | P2 | 2 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
-| T376 | in progress | P2 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -1591,18 +1590,6 @@ Done when: after a session that reads A and edits B, the checkpoint lists `B (ed
 
 Check: unit tests for the event → action mapping and old-row decode; the checkpoint rendering snapshot (`insta`) updated; `just check`.
 
-### T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
-
-From the Empryo study (idea-only, clean-room; Empryo's intelligence router tries LSP, then tree-sitter, then regex per call and records which one answered). With `plugins.graph.backend = "lsp"`, `symbol_filtered`, `callers`, `impact`, `outline` and `explore` (`src/plugins/graph/mod.rs` around `:260`, `:390`, `:441`, `:897`, `:1015`) return `lsp::…` directly; a server that is missing, still indexing past `READY` (40 s, `src/plugins/graph/lsp.rs`) or dead turns the call into an error instead of a tags answer (to verify: whether `lsp.rs` already degrades internally).
-
-Plan: one wrapper in `mod.rs`: try `lsp::<op>`; on `Err` or an empty answer for a name the tags index has, run the tags path and prefix `(tags; lsp: <reason>)`. Record a `Measurement` (`plugin: "graph"`, `kind: "lsp_fallback"`). No retry loop; the existing restart logic in `lsp.rs` stays.
-
-Done when: with `backend = "lsp"` and no server on PATH (or a fake that exits), `symbol <name>` returns the tags answer with the fallback prefix.
-
-Check: test with the fake/absent server for each of the five ops; existing LSP tests unchanged; `just check`.
-
-Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend check, `Err` or none-answer for a name `tags_know` finds, prefix, `lsp_fallback` Measurement); each of the five tools keeps its tags body as `<op>_tags` and routes through the wrapper, the outline path guard stays outside it. (2) Tests in the same file: a manifest-less root makes `lsp::*` fail before any spawn, so no PATH access; plus direct wrapper tests for the empty-answer rule. (3) `just check`, then move the card to `done.md`.
-
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
 From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
@@ -2292,7 +2279,7 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T369, T370, T371, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95). T368 is done.
+Take first, in order: T369, T370, T371, T372, T373, T374. Then T375, T377, T378 (gated on I-95). T368 and T376 are done.
 
 The 14 portable ideas and where each landed:
 
