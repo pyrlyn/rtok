@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T329.4.1: `symbol` and `callers` over a project scope — the project asked for (or the
+//! T329.4.1, T329.4.2: the five tools over a project scope — the project asked for (or the
 //! working directory's) followed by what it links to. Each project keeps its own index, so
 //! the scope is a loop over the per-root queries; the answer is one text under one cap.
 //! `Ctx` carries no project registry, so the scope is resolved by the caller (`mcp.rs`).
@@ -14,8 +14,10 @@ use anyhow::{Result, bail};
 use rtok_plugin_sdk::Ctx;
 
 use super::{
-    Filter, Tag, ambiguous_banner, callers_filtered, cap, defs_text, flag_ambiguous, index,
-    index_for, lsp, projects, stale_banner, symbol_filtered,
+    ExploreParts, Filter, Tag, TagsExplore, ambiguous_banner, assemble_explore, callers_filtered,
+    cap, cap_kind, defs_text, flag_ambiguous, impact_filtered, impact_lines_text,
+    impact_walk_roots, index, index_for, lsp, lsp_backend, outline_in, projects,
+    reverse_call_chain, stale_banner, symbol_filtered, with_stale,
 };
 use crate::store::Store;
 
@@ -104,7 +106,7 @@ fn walkable(m: &Member) -> Result<()> {
 }
 
 pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
-    let lsp_pinned = cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp";
+    let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {
         walkable(one)?;
         return symbol_filtered(cx, &one.root, name, filter);
@@ -158,7 +160,7 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
 }
 
 pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
-    let lsp_pinned = cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp";
+    let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {
         walkable(one)?;
         return callers_filtered(cx, &one.root, name, filter);
@@ -197,6 +199,197 @@ pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Resul
         return Ok(head + &flag_ambiguous(defs, body));
     }
     Ok(format!("{head}{}", cap(cx, flag_ambiguous(defs, body))?))
+}
+
+/// `impact` over the scope: one walk asked of every member's index, so a change in C reaches its
+/// callers in B and, through them, A. A call chain (`to`) is still found inside one project.
+pub fn impact(
+    cx: &Ctx,
+    scope: &[Member],
+    name: &str,
+    depth: u32,
+    filter: &Filter,
+    to: Option<&str>,
+) -> Result<String> {
+    if let [one] = scope {
+        walkable(one)?;
+        return impact_filtered(cx, &one.root, name, depth, filter, to);
+    }
+    if lsp_backend(cx) {
+        walkable(&scope[0])?;
+        let root = &scope[0].root;
+        let text = with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?)?;
+        return Ok(text + &lsp_note(scope));
+    }
+    let (done, notes) = fan_out(scope, |m| {
+        walkable(m)?;
+        index_for(cx, &m.root)?;
+        let key = index::canon(&m.root);
+        let chains = match to.filter(|t| !t.is_empty()) {
+            Some(target) => cx.symbol_paths(&key, target, name, depth)?,
+            None => Vec::new(),
+        };
+        Ok((key.clone(), chains, cx.symbol_defs(&key, name)?.len()))
+    })?;
+    let head = banners(cx, &done, notes)?;
+    let defs: usize = done.iter().map(|(_, (.., n))| n).sum();
+    let body = if let Some(target) = to.filter(|t| !t.is_empty()) {
+        let mut body = String::new();
+        for (m, (_, chains, _)) in &done {
+            for chain in chains {
+                body.push_str(&format!("{}{}\n", label(m), reverse_call_chain(chain)));
+            }
+        }
+        if body.is_empty() {
+            return Ok(format!(
+                "{head}no path from {name} to {target} within depth {depth}"
+            ));
+        }
+        body
+    } else {
+        let labels: Vec<String> = done.iter().map(|(m, _)| label(m)).collect();
+        let keys: Vec<&str> = done.iter().map(|(_, (k, ..))| k.as_str()).collect();
+        let rows = walk_rows(cx, &labels, &keys, name, depth, filter)?;
+        if rows.is_empty() {
+            let text = format!("nothing reaches {name}{}", filter.scope_note());
+            return Ok(head + &flag_ambiguous(defs, text));
+        }
+        impact_lines_text(&rows)
+    };
+    Ok(format!("{head}{}", cap(cx, flag_ambiguous(defs, body))?))
+}
+
+/// The scoped walk's rows, the member label in front of each path; the selected project's rows
+/// lead within a depth.
+fn walk_rows(
+    cx: &Ctx,
+    labels: &[String],
+    keys: &[&str],
+    name: &str,
+    depth: u32,
+    filter: &Filter,
+) -> Result<Vec<(u32, String, String)>> {
+    let mut rows = impact_walk_roots(cx, keys, name, depth, true)?;
+    rows.retain(|(_, _, path, _)| filter.path_ok(path));
+    rows.sort_by(|a, b| (a.1, a.0, &a.2, &a.3).cmp(&(b.1, b.0, &b.2, &b.3)));
+    Ok(rows
+        .into_iter()
+        .map(|(i, d, path, scope)| (d, format!("{}{path}", labels[i]), scope))
+        .collect())
+}
+
+/// `explore` over the scope: the usual assembler, each of its four questions asked of every
+/// member and the answers labelled; call paths are found inside one project.
+pub fn explore(cx: &Ctx, scope: &[Member], query: &str, filter: &Filter) -> Result<String> {
+    if let [one] = scope {
+        walkable(one)?;
+        return super::explore(cx, &one.root, query, filter);
+    }
+    if lsp_backend(cx) {
+        walkable(&scope[0])?;
+        let text = lsp::explore(cx, &scope[0].root, query, filter)?;
+        return Ok(text + &lsp_note(scope));
+    }
+    let (done, notes) = fan_out(scope, |m| {
+        walkable(m)?;
+        index_for(cx, &m.root)
+    })?;
+    let head = banners(cx, &done, notes)?;
+    let labels: Vec<String> = done.iter().map(|(m, _)| label(m)).collect();
+    let mut all = Scoped {
+        parts: done
+            .iter()
+            .zip(&labels)
+            .map(|((m, _), label)| TagsExplore {
+                cx,
+                root: &m.root,
+                filter,
+                key: index::canon(&m.root),
+                label,
+            })
+            .collect(),
+        labels: &labels,
+    };
+    let (text, before) = assemble_explore(query, filter, &mut all)?;
+    Ok(head + &cap_kind(cx, text, before, "explore")?)
+}
+
+/// `ExploreParts` over several members' `TagsExplore`.
+struct Scoped<'a> {
+    parts: Vec<TagsExplore<'a>>,
+    labels: &'a [String],
+}
+
+impl ExploreParts for Scoped<'_> {
+    fn resolve(&mut self, token: &str) -> Result<Vec<String>> {
+        if self.def_count(token)? > 0 {
+            return Ok(vec![token.to_string()]);
+        }
+        let mut names: Vec<String> = Vec::new();
+        for part in &mut self.parts {
+            for name in part.resolve(token)? {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        names.truncate(5);
+        Ok(names)
+    }
+
+    fn defs(&mut self, name: &str) -> Result<String> {
+        let mut out = String::new();
+        for part in &mut self.parts {
+            if part.def_count(name)? > 0 {
+                out.push_str(&part.defs(name)?);
+            }
+        }
+        if out.is_empty() {
+            return self.parts[0].defs(name);
+        }
+        Ok(out)
+    }
+
+    fn def_count(&mut self, name: &str) -> Result<usize> {
+        let mut n = 0;
+        for part in &mut self.parts {
+            n += part.def_count(name)?;
+        }
+        Ok(n)
+    }
+
+    fn paths(&mut self, a: &str, b: &str) -> Result<Vec<String>> {
+        let mut out = Vec::new();
+        for (part, label) in self.parts.iter_mut().zip(self.labels) {
+            out.extend(part.paths(a, b)?.into_iter().map(|c| format!("{label}{c}")));
+        }
+        Ok(out)
+    }
+
+    fn impact1(&mut self, name: &str) -> Result<(String, usize)> {
+        let (cx, filter) = (self.parts[0].cx, self.parts[0].filter);
+        let keys: Vec<&str> = self.parts.iter().map(|p| p.key.as_str()).collect();
+        let rows = walk_rows(cx, self.labels, &keys, name, 1, filter)?;
+        if rows.is_empty() {
+            return Ok((format!("nothing reaches {name}{}", filter.scope_note()), 0));
+        }
+        Ok((impact_lines_text(&rows), rows.len()))
+    }
+}
+
+/// `outline` of a file in the scope: the first project that holds the path, else the first.
+pub fn outline(cx: &Ctx, scope: &[Member], path: &str) -> Result<String> {
+    let p = Path::new(path);
+    let real = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let holds = |m: &&Member| {
+        if p.is_absolute() {
+            real.starts_with(&m.root)
+        } else {
+            m.root.join(p).exists()
+        }
+    };
+    let m = scope.iter().find(holds).unwrap_or(&scope[0]);
+    outline_in(cx, &m.root, path)
 }
 
 #[cfg(test)]
@@ -369,6 +562,108 @@ mod tests {
         assert_eq!(
             callers(&ctx, &scope, "nothing", &Filter::none()).unwrap(),
             "no references to nothing"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// `a_top` calls `b_mid`, which calls `shared` in `c`; `d` calls `shared` but is not linked.
+    fn chain(tag: &str) -> (Runtime, PathBuf) {
+        world(
+            tag,
+            [
+                "fn a_top() { b_mid(); }\n",
+                "fn b_mid() { shared(); }\n",
+                CALL,
+                "fn d_caller() { shared(); }\n",
+            ],
+        )
+    }
+
+    #[test]
+    fn impact_of_a_function_in_c_walks_up_through_b_into_a() {
+        let (cx, dir) = chain("t3294-impact");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let out = impact(&ctx, &scope, "shared", 3, &Filter::none(), None).unwrap();
+        assert_eq!(out, "1  [b] lib.rs  b_mid\n2  [a] lib.rs  a_top\n");
+        // Depth bounds the climb.
+        let out = impact(&ctx, &scope, "shared", 1, &Filter::none(), None).unwrap();
+        assert_eq!(out, "1  [b] lib.rs  b_mid\n");
+        // B's scope is B and C: A is not in it, and D never crosses.
+        let scope = scope_at(&cx, &dir, "b", None);
+        let out = impact(&ctx, &scope, "shared", 3, &Filter::none(), None).unwrap();
+        assert_eq!(out, "1  [b] lib.rs  b_mid\n");
+        let d = dir.join("d");
+        let scope = scope_at(&cx, &dir, "a", d.to_str());
+        let one = impact(&ctx, &scope, "shared", 3, &Filter::none(), None).unwrap();
+        assert_eq!(one, "1  lib.rs  d_caller\n");
+        assert_eq!(
+            one,
+            impact_filtered(&ctx, &d, "shared", 3, &Filter::none(), None).unwrap()
+        );
+        let scope = scope_at(&cx, &dir, "a", None);
+        let nothing = impact(&ctx, &scope, "a_top", 3, &Filter::none(), None).unwrap();
+        assert_eq!(nothing, "nothing reaches a_top");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn impact_to_names_the_project_of_each_chain() {
+        let (cx, dir) = chain("t3294-impact-to");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let to = |name, target| impact(&ctx, &scope, name, 3, &Filter::none(), Some(target));
+        assert_eq!(
+            to("b_mid", "shared").unwrap(),
+            "[b] b_mid \u{2192} shared\n"
+        );
+        assert_eq!(
+            to("shared", "b_mid").unwrap(),
+            "no path from shared to b_mid within depth 3"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn explore_answers_over_the_scope_and_labels_each_project() {
+        let (cx, dir) = chain("t3294-explore");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let out = explore(&ctx, &scope, "shared b_mid", &Filter::none()).unwrap();
+        assert!(out.contains("= shared\n[c] lib.rs:1 function\n"), "{out}");
+        assert!(out.contains("= b_mid\n[b] lib.rs:1 function\n"), "{out}");
+        assert!(out.contains("shared \u{2190} 1\n"), "{out}");
+        assert!(out.contains("b_mid \u{2190} 1\n"), "{out}");
+        // One project asks the plain explore.
+        let d = dir.join("d");
+        let scope = scope_at(&cx, &dir, "a", d.to_str());
+        assert_eq!(
+            explore(&ctx, &scope, "shared", &Filter::none()).unwrap(),
+            super::super::explore(&ctx, &d, "shared", &Filter::none()).unwrap()
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn outline_reads_the_file_of_the_project_asked_for() {
+        let (cx, dir) = chain("t3294-outline");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        assert!(outline(&ctx, &scope, "lib.rs").unwrap().contains("a_top"));
+        let d = dir.join("d");
+        let scope = scope_at(&cx, &dir, "a", d.to_str());
+        assert!(
+            outline(&ctx, &scope, "lib.rs")
+                .unwrap()
+                .contains("d_caller")
+        );
+        // An absolute path picks the member that holds it.
+        let scope = scope_at(&cx, &dir, "a", None);
+        let c = dir.join("c").join("lib.rs");
+        assert!(
+            outline(&ctx, &scope, c.to_str().unwrap())
+                .unwrap()
+                .contains("shared")
         );
         let _ = fs::remove_dir_all(dir);
     }

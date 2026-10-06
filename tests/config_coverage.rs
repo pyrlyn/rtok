@@ -60,6 +60,12 @@ const ALLOW_KEYS: &[&str] = &[
     "graph.index.dry_run",
     "graph.impact.depth",
     "graph.impact.to",
+    // `graph <cmd> --project` (T329.4.2): which project one call answers for, not a stored setting.
+    "graph.index.project",
+    "graph.dead.project",
+    "graph.status.project",
+    "graph.impact.project",
+    "graph.affected.project",
     // `graph affected` (T68.x): which diff to read on one call, not a stored setting.
     "graph.affected.since",
     "graph.affected.staged",

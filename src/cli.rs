@@ -629,12 +629,23 @@ enum WorktreeCmd {
     },
 }
 
+/// T329.4.2: which project a graph subcommand answers for, instead of a `path` or the cwd.
+#[cfg(feature = "graph")]
+#[derive(clap::Args)]
+struct ProjectFlag {
+    /// Project id or directory (see `rtok graph projects`)
+    #[arg(long, conflicts_with = "path")]
+    project: Option<String>,
+}
+
 #[cfg(feature = "graph")]
 #[derive(Subcommand)]
 enum GraphCmd {
     /// Walk a tree and insert definitions + references
     Index {
         path: Option<PathBuf>,
+        #[command(flatten)]
+        project: ProjectFlag,
         /// Report what would be indexed and write no rows
         #[arg(long)]
         dry_run: bool,
@@ -642,6 +653,8 @@ enum GraphCmd {
     /// List unreferenced private definitions (skips pub, trait impls, tests, macros)
     Dead {
         path: Option<PathBuf>,
+        #[command(flatten)]
+        project: ProjectFlag,
         // T60.1
         /// JSON rows instead of `path:line kind name` lines (uncapped)
         #[arg(long)]
@@ -651,6 +664,8 @@ enum GraphCmd {
     /// Index health for the current or given root
     Status {
         path: Option<PathBuf>,
+        #[command(flatten)]
+        project: ProjectFlag,
         #[arg(long)]
         json: bool,
     },
@@ -663,6 +678,8 @@ enum GraphCmd {
         #[arg(long)]
         to: Option<String>,
         path: Option<PathBuf>,
+        #[command(flatten)]
+        project: ProjectFlag,
     },
     // T329.2
     /// The project registry: list, add, remove, select
@@ -684,6 +701,9 @@ enum GraphCmd {
         /// JSON instead of `file ← via symbol` lines
         #[arg(long)]
         json: bool,
+        /// Project id or directory instead of the cwd (see `rtok graph projects`)
+        #[arg(long)]
+        project: Option<String>,
     },
 }
 
@@ -2073,8 +2093,13 @@ pub fn run() -> Result<()> {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let cx = crate::plugin::Runtime::open(cfg.clone(), "graph")?;
             match action {
-                GraphCmd::Index { path, dry_run } => {
-                    let root = crate::plugins::graph::cli_root(path)?;
+                GraphCmd::Index {
+                    path,
+                    project,
+                    dry_run,
+                } => {
+                    let root =
+                        crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
                     let pb = crate::render::spinner("indexing");
                     let r = crate::plugins::graph::index::run_with(
                         &crate::plugin::Ctx::new(&cx),
@@ -2097,8 +2122,13 @@ pub fn run() -> Result<()> {
                         crate::plugins::graph::follow::report(&cx, &root);
                     }
                 }
-                GraphCmd::Dead { path, json } => {
-                    let root = crate::plugins::graph::cli_root(path)?;
+                GraphCmd::Dead {
+                    path,
+                    project,
+                    json,
+                } => {
+                    let root =
+                        crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
                     let ctx = crate::plugin::Ctx::new(&cx);
                     if json {
                         let rows = crate::plugins::graph::dead_rows(&ctx, &root)?;
@@ -2107,8 +2137,14 @@ pub fn run() -> Result<()> {
                         print!("{}", crate::plugins::graph::dead(&ctx, &root)?);
                     }
                 }
-                GraphCmd::Status { path, json } => {
-                    crate::plugins::graph::status::run(&cfg, path, json)?;
+                GraphCmd::Status {
+                    path,
+                    project,
+                    json,
+                } => {
+                    let root =
+                        crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
+                    crate::plugins::graph::status::run(&cfg, Some(root), json)?;
                 }
                 GraphCmd::Projects { action, json } => {
                     use crate::plugins::graph::projects::{Action, run};
@@ -2145,20 +2181,35 @@ pub fn run() -> Result<()> {
                     depth,
                     to,
                     path,
+                    project,
                 } => {
+                    // Without a project the scope starts at `path` (else the cwd), as for MCP.
                     let root = crate::plugins::graph::cli_root(path)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.project.as_deref(),
+                        &root,
+                    )?;
                     let ctx = crate::plugin::Ctx::new(&cx);
                     print!(
                         "{}",
-                        crate::plugins::graph::impact(&ctx, &root, &name, depth, to.as_deref(),)?
+                        crate::plugins::graph::scope::impact(
+                            &ctx,
+                            &scope,
+                            &name,
+                            depth,
+                            &crate::plugins::graph::Filter::none(),
+                            to.as_deref(),
+                        )?
                     );
                 }
                 GraphCmd::Affected {
                     since,
                     staged,
                     json,
+                    project,
                 } => {
-                    let root = std::env::current_dir()?;
+                    let root = crate::plugins::graph::cli_root_for(&cx.store, None, project)?;
                     print!(
                         "{}",
                         crate::plugins::graph::affected(

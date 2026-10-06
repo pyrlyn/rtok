@@ -724,12 +724,9 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
                     .store
                     .auto_add_project(&root, crate::store::Origin::Mcp, None);
             }
-            let scope = if matches!(name, "symbol" | "callers") {
-                let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
-                crate::plugins::graph::scope::resolve(&cx.store, args["project"].as_str(), &cwd)?
-            } else {
-                Vec::new()
-            };
+            let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
+            let scope =
+                crate::plugins::graph::scope::resolve(&cx.store, args["project"].as_str(), &cwd)?;
             crate::plugins::graph::call(&crate::plugin::Ctx::new(cx), name, args, &scope)
         }
         _ => Err(unknown_tool(name)),
