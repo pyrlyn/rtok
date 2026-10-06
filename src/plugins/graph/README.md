@@ -20,7 +20,7 @@ same file, which is the call edge `callers` groups by and `impact` walks (T8.5).
 
 `symbol` returns each definition and its source, at most `body_lines` lines each (T8.6).
 `callers` returns one line per calling definition. `impact` walks those edges breadth-first
-to `depth`. With `path` and no `name`, the same walk starts from that file's
+to `depth`, then adds `changes with: a.rs (7), b.rs (4)` when git history pairs the defining file with others (T371). With `path` and no `name`, the same walk starts from that file's
 definitions and lists reachable test files (`rtok graph affected` does this for
 `git diff --name-only`). `outline` is the `read` plugin's `map` mode. `explore` answers a free-text code
 question in one call: the query's identifiers resolve to definitions (exact, else prefix

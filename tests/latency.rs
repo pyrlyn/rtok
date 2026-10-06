@@ -399,7 +399,7 @@ fn seed_pagerank_home(home: &std::path::Path) {
             )
         })
         .collect();
-    let graph = rtok::plugins::graph::rank::build(&scan, &mtimes);
+    let graph = rtok::plugins::graph::rank::build(&scan, &mtimes, &[]);
     let store = rtok::store::Store::open(&home.join("rtok.db")).expect("open store");
     let root = rtok::store::canon_root(&std::env::temp_dir());
     store

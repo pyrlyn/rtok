@@ -314,6 +314,10 @@ impl Host for Runtime {
         self.store.kv_set(&plugin_state_key(plugin, key), value)
     }
 
+    fn plugin_state_get(&self, plugin: &str, key: &str) -> Result<Option<String>> {
+        self.store.kv_get(&plugin_state_key(plugin, key))
+    }
+
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32> {
         Runtime::record_call(self, surface, kind, name)
     }

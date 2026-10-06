@@ -12,6 +12,24 @@ Check: `tests/fixtures/graph_truth.toml` has 10 ambiguous names defined in two c
 
 Result: callers precision 1.000 vs 0.296 (+70.4 pp), recall drop 0.000, impact bytes 19424/46623 (0.417), T8.8 overall 0.979. `just check`: 2483 passed, 6 skipped.
 
+### T371. Git co-change pairs feed `impact` and the repo map
+
+From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` co-change: last 300 commits, skip commits touching more than 20 files, keep pairs with count ≥ 2, cache keyed by HEAD). Files that change together but share no symbol (a migration and its model, a test and a fixture, docs and code) are invisible to the symbol graph.
+
+Plan: new `src/plugins/graph/cochange.rs`: run `git log --name-only --format=%H -n 300` the way `mod.rs` already shells out to git (no new dependency), count unordered file pairs, store `(root, head, a, b, count)` in the key-value table from migration 0018 or a small `cochange` table, rebuilt only when HEAD moves. Use: `impact` appends `changes with: a.rs (7), b.rs (4)` for the target file's top 5 partners; T370 adds co-change edges with a lower weight (0.3 of a symbol edge, tunable).
+
+Done when: `impact <name>` on a file with co-change history lists its top partners; a root that is not a git repo behaves as today.
+
+Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
+1. `src/plugins/graph/cochange.rs`: `git log --name-only --relative -n 300` through a `git_stdout` helper shared with `git_changed_files` in `mod.rs`; count unordered pairs over commits of 1 to 20 files, keep count >= 2; one document `{head, pairs}` in the `kv` table under `plugin:graph:cochange:<root>`, rebuilt only when `git rev-parse HEAD` differs. A root that is not a repo yields no pairs.
+2. `Host::plugin_state_get` (default `None`, `Runtime` reads `kv`) as the read half of `plugin_state_set`; no new table, so no migration.
+3. `impact` appends `changes with: a (7), b (4)` for the top 5 partners of the file that defines the name (existing files only); `rank::build` takes the pairs and adds both directions of each pair at weight 0.3 x (1 + ln count), `COCHANGE_WEIGHT` constant.
+4. Tests: scripted temp repo (three commits, one over the cap) asserts pairs and counts, HEAD-keyed cache, non-repo, `impact` line, rank edge. Ignored backtest (`cargo test --lib cochange_backtest -- --ignored --nocapture`, hit@5 >= 0.30 over 100 commits) and build time, measured once.
+
+Check: unit test on a scripted temp repo (three commits, one over the 20-file cap) asserts the pairs and counts; backtest over the last 100 commits: for each commit's first file, hit@5 of its other files among the top co-change partners ≥ 0.30; build ≤ 300 ms on this repo; `just check`.
+
+Result (2026-10-06, Claude Code / sonnet-5.5): `src/plugins/graph/cochange.rs` counts pairs from `git log` (shared `git_stdout` helper, no dependency) and keeps them as one `kv` document per root (`plugin:graph:cochange:<root>`), recounted only when `git rev-parse HEAD` moves; no new table, so no migration. New `Host::plugin_state_get` is the read half of `plugin_state_set`. `impact` appends `changes with: ...` after the cap; `rank::build` adds both directions of each pair at `0.3 x (1 + ln count)`. Backtest over the last 100 commits of this repo, partners counted from the 300 commits before each one: hit@5 76 % (76 of 100; target 30 %), the first file had a partner in 91. Cold build on this repo: 54 ms in a debug build at a host load of 34 (target 300 ms). Note: `plan.md`, `todo.md` and `done.md` change with most commits here, which lifts the hit rate. The map sees a new HEAD from the next index run that changes the root.
+
 ### T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
 
 From the Empryo study (idea-only, clean-room; Empryo's intelligence router tries LSP, then tree-sitter, then regex per call and records which one answered). With `plugins.graph.backend = "lsp"`, `symbol_filtered`, `callers`, `impact`, `outline` and `explore` (`src/plugins/graph/mod.rs` around `:260`, `:390`, `:441`, `:897`, `:1015`) return `lsp::…` directly; a server that is missing, still indexing past `READY` (40 s, `src/plugins/graph/lsp.rs`) or dead turns the call into an error instead of a tags answer (to verify: whether `lsp.rs` already degrades internally).
