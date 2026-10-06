@@ -82,7 +82,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
-| T389 | todo | P2 | 1 | 30% | |
+| T389 | in progress | P2 | 1 | 0% | Claude Code / claude-sonnet-5-5 |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -1718,6 +1718,8 @@ From `research.md` §8 and §9.3: Fable is 39 % of the bill in §9.3, but `confi
 Done means: a `[stats.prices."claude-fable-5-1"]` row (and any other current Claude 5 model ids the transcripts use) with input, output, cache-write and cache-read rates, each from Anthropic's pricing page with the date checked. §2's assumption is replaced by the real rate, or §8 says why a rate is still missing.
 
 Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/config.md` lists the row; `just check`.
+
+Execution plan: add `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` rows to `default_stats_prices()` (`src/config/mod.rs`) from the pricing page checked 2026-10-06; mirror them in `config/default.toml`, `docs/config.md` (+ ru/uk), the trycmd snapshots (`config-init`, `config-show`, `report-md`); replace the `research.md` §8 p_out = 5 × p_in assumption with the real rates; add a test pricing a Fable store row from the shipped defaults; `just check`.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
