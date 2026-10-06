@@ -2331,3 +2331,19 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - `model.baseUrl` is "Not intended to be set by hand — use the `/model` picker or a `modelProviders` entry". Proxy stays out. https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
+
+## 34. SessionStart repo map by file-level PageRank (T370, 2026-10-06)
+
+Sources: this repository at branch `t370-pagerank-map` (base `pyrlyn/main` `c7e42944`); numbers from the tests named below, run on a macOS arm64 laptop under a load average of 30 to 50 from other sessions. Empryo (BSL 1.1) was read for the idea only (PageRank over a file graph, damping 0.85, 20 iterations); no code was taken.
+
+- Backtest (`cargo test --lib backtest -- --ignored --nocapture`, `src/plugins/graph/rank.rs`). The tree is indexed once (3.1 s, 499 files, 39 267 edges). For each of the last 200 commits that touched at least one indexed file (129 commits), recall is the share of the commit's indexed files that a `map_tokens = 1000` map lists. The index is today's, not each commit's parent's.
+
+  | Map order | Files listed in 1000 tokens | Recall, all 129 | Newer 64 | Older 65 |
+  | --- | --- | --- | --- | --- |
+  | `refs` (references per name, T52.3) | 71 | 26.7 % | 23.8 % | 29.6 % |
+  | `pagerank`, 2 definitions per file | 109 | 44.1 % | 41.6 % | 46.6 % |
+  | `pagerank` personalized by the three previous commits' files | 109 | 47.1 % | 43.8 % | 50.3 % |
+
+  `pagerank` minus `refs` is 17.4 pp over all commits, 17.8 pp on the newer half and 17.0 pp on the older half; the card asks for 15 pp. Definitions per file were set by this backtest: three per file gave 41.7 % (15.0 pp, no margin), one gave 49.8 %. Two keeps a name next to each file while clearing the bar on both halves. The personalized row stands in for "files edited in the last day"; the hook seeds from the indexed mtime.
+- Cost on the hook path: a stored graph of 500 files and 39 920 edges is 701 395 bytes of JSON. Decoding it takes 1.4 ms and 20 personalized iterations take 0.33 ms (release, `timing` probe, removed after the run). Building the graph at index time takes 12 ms. `latency_hook_session_start_with_a_pagerank_map_p95_under_10ms` spawns the real hook; a second pass of three variants with the same graph, release: with the map p50 12.9 ms / p95 16.6 ms, with the config but no stored graph p50 10.8 ms / p95 15.7 ms, with neither p50 10.9 ms / p95 13.6 ms. The map adds about 2 ms at p50. On this loaded host the existing SessionStart latency tests (`..._with_project_registration`, `..._with_populated_notes`) also miss 10 ms (p95 13.9 ms and 25.9 ms), so the 10 ms gate needs a quiet machine to be judged.
+- The card's check of 30 ms p95 measured 30.9 ms in the first run (load about 50, so just over) and 16.6 ms in the second; the stricter 10 ms budget of T428 cannot be judged on this host. A quiet-machine run of `cargo test --release --test latency session_start` is the open item.

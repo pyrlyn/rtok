@@ -17,6 +17,9 @@
 - Indexing never runs on the hook path; PostToolUse(Edit|Write) only marks a file stale.
 - One writer per store: a watcher (P8d) is a thread inside `rtok mcp`, never a second process.
 - Schema changes are a new `migrations/NNNN_<slug>/up.sql`, never an edit to an applied one.
+- T370 `rank.rs`: the file graph and its global PageRank are one `file_rank` document per root,
+  rebuilt only when an index run changes the root. SessionStart reads that row and ranks in
+  memory (no `symbols` scan, no process, D1/T428). A personalized rank is never stored.
 - The plugin never writes SQL (D13). Storage is `src/store/symbols.rs` (`symbol_*` methods).
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.

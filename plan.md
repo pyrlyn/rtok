@@ -64,7 +64,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T358 | todo | P2 | 4 | 0% | |
 | T368 | todo | P1 | 3 | 0% | |
 | T369 | todo | P1 | 2 | 0% | |
-| T370 | in progress | P1 | 4 | 5% | Claude Code / sonnet-5.5 |
+| T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T371 | todo | P2 | 2 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
 | T376 | todo | P2 | 2 | 0% | |
@@ -1567,7 +1567,9 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 2. Migration `0030_file_rank` (`file_rank (root PRIMARY KEY, graph TEXT)`): paths, global ranks, indexed mtimes, top defs per file and the edges, written at index end; a project removal drops it. Three `Symbols` host methods with default bodies (`symbol_file_scan`, `file_rank_get`, `file_rank_put`), Diesel impls in `src/store/symbols.rs`, Runtime in `src/plugin.rs`.
 3. SessionStart reads the one row and never spawns a process (D1, T428's 10 ms): personalization seeds are files whose indexed mtime is under 24 h old (only when that set is a working set, 32 files at most; a fresh clone seeds nothing) plus, on `compact`, the paths of the session's last checkpoint (`checkpoint::last_paths`). The personalized rank is computed in memory and never stored.
 4. Config `plugins.graph.map_rank = "refs" | "pagerank"` (default `refs`), `default.toml`, `docs/config.md`, trycmd and config_coverage goldens; `repo_map` branches on it, `refs` output unchanged.
-5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`RTOK_BACKTEST=1`) reproduces the numbers recorded in `research.md`; a latency test measures the hook with a populated row.
+5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
+
+Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
 ### T371. Git co-change pairs feed `impact` and the repo map
 

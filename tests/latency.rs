@@ -259,3 +259,98 @@ fn latency_hook_session_start_with_populated_notes_p95_under_10ms() {
             .expect("seed session note");
     });
 }
+
+/// T370: `map_rank = "pagerank"` reads one stored row and ranks in memory, with no scan of
+/// `symbols` and no process. The graph is about this repo's size (500 files, 40k edges at the
+/// time of writing) so the decode and the personalized iterations are paid in full.
+#[test]
+fn latency_hook_session_start_with_a_pagerank_map_p95_under_10ms() {
+    p95_under_10ms_in(
+        "SessionStart",
+        session_start_in_temp_dir().as_bytes(),
+        "-rank",
+        seed_pagerank_home,
+    );
+}
+
+/// T370: the configured hook prints the map from the stored graph, whatever the build profile.
+#[test]
+fn session_start_prints_the_pagerank_map_from_the_stored_graph() {
+    let home = std::env::temp_dir().join(format!("rtok-rank-map-{}", std::process::id()));
+    std::fs::create_dir_all(&home).expect("temp home");
+    seed_pagerank_home(&home);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .args(["hook", "SessionStart"])
+        .env("RTOK_HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn rtok");
+    let stdin = child.stdin.as_mut().expect("stdin");
+    stdin
+        .write_all(session_start_in_temp_dir().as_bytes())
+        .expect("write fixture");
+    let out = child.wait_with_output().expect("wait");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("repo map"), "{text}");
+    assert!(text.contains(".rs: sym"), "{text}");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+fn session_start_in_temp_dir() -> String {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
+    v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
+    v.to_string()
+}
+
+/// A config that turns the pagerank map on, and a stored graph about this repo's size (500
+/// files, 40k edges at the time of writing) so the decode and the personalized iterations are
+/// paid in full.
+fn seed_pagerank_home(home: &std::path::Path) {
+    std::fs::write(
+        home.join("config.toml"),
+        "[plugins.graph]\nmap_tokens = 1000\nmap_rank = \"pagerank\"\n",
+    )
+    .expect("write config");
+    let (files, names) = (500, 2000);
+    let mut scan = Vec::new();
+    for k in 0..names {
+        scan.push((format!("sym{k}"), format!("f{:03}.rs", k % files), true, 1));
+    }
+    for i in 0..files {
+        for j in 0..80 {
+            let k = (i * 31 + j * 17) % names;
+            scan.push((
+                format!("sym{k}"),
+                format!("f{i:03}.rs"),
+                false,
+                1 + (j % 3) as i64,
+            ));
+        }
+    }
+    // Eight files edited an hour ago are a working set, so the hook runs the personalized
+    // iterations instead of answering from the stored global ranks.
+    let hour = 3_600_000_000_000;
+    let mtimes = (0..files)
+        .map(|i| {
+            (
+                format!("f{i:03}.rs"),
+                if i < 8 { now_nanos() - hour } else { 1 },
+            )
+        })
+        .collect();
+    let graph = rtok::plugins::graph::rank::build(&scan, &mtimes);
+    let store = rtok::store::Store::open(&home.join("rtok.db")).expect("open store");
+    let root = rtok::store::canon_root(&std::env::temp_dir());
+    store
+        .file_rank_put(&root, &serde_json::to_string(&graph).unwrap())
+        .expect("seed graph");
+}
+
+fn now_nanos() -> i64 {
+    let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+    since.map_or(0, |d| d.as_nanos() as i64)
+}
