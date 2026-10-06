@@ -81,7 +81,6 @@
 - T385.11. Deferred tool schemas and thinking replay
 - T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
 - T385.13. Measure cross-session read duplication
-- T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
 - T389. Price row for Fable 5.1 in `[stats.prices]`
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
 - T392. Warn when the same skill is listed twice or loaded more than once

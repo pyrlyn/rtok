@@ -1,0 +1,13 @@
+argv: df -h
+exit: 0
+min_saving: 20
+---
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/disk1       20G   16G  4.0G  80% /
+/dev/disk2      100G   40G   60G  40% /Users
+/dev/disk3      200G  100G  100G  50% /Volumes/data
+/dev/disk4       50G   10G   40G  20% /Volumes/work
+/dev/disk5       10G  9.0G  1.0G  90% /private/tmp
+/dev/disk6       30G    1G   29G   4% /opt
+/dev/disk7       80G   70G   10G  88% /var
+/dev/disk8       15G  3.0G   12G  20% /home

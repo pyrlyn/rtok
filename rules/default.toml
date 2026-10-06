@@ -208,6 +208,16 @@ keep = ["error[|error:|warning:"]
 group = "diag"
 dedupe = true
 
+# T386: path-shaped awk output folds like `ls`. Do not tighten this past a golden that loses to `Rule::default()`.
+[awk]
+max_lines = 24
+head = 4
+tail = 4
+collapse_columns = true
+group = "dir"
+keep = ["awk:|fatal"]
+dedupe = true
+
 # T177: a single Bash call chaining 2+ DISTINCT programs (`&&`, `;`, or a newline) —
 # matched by `formatters::compress`'s mixed-chain detection, not by a command name. A
 # same-program chain (`cargo build && cargo test`) keeps using that program's own
