@@ -59,6 +59,7 @@ pub mod cli;
 pub mod gemini;
 pub mod lane;
 pub mod live;
+mod noise;
 pub use live::LiveCall;
 pub mod openai_chat;
 pub mod openai_responses;
@@ -495,6 +496,12 @@ fn shape_request(
         })
     } else {
         request_body
+    };
+    // T432: terminal noise only matters where the proxy rewrites at all (`compress`); a
+    // passthrough request keeps every byte the client sent.
+    let request_body = match wire {
+        Some(wire) if state.mode == "compress" => noise::strip(wire, request_body),
+        _ => request_body,
     };
     // Provider request shaping runs in both modes (T11.2: OpenAI `stream_options`;
     // T51.2: Anthropic `context_management`).
@@ -1218,6 +1225,56 @@ mod tests {
             "cache hit must write a usage row (T5.1)"
         );
         task.abort();
+    }
+
+    /// T432: the upstream body carries no escapes, control or zero-width characters from a
+    /// tool result, keeps its whitespace, and is the same bytes on the next turn.
+    #[tokio::test]
+    async fn compress_mode_strips_terminal_noise_byte_stably() {
+        use httpmock::prelude::*;
+
+        let noisy = "\u{1b}[31mFAIL\u{1b}[0m a\u{200b}b\u{7}  \r\n";
+        let request = serde_json::json!({"model": "claude-test", "messages": [
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "t1", "content": noisy}
+            ]}
+        ]});
+        let mut want = request.clone();
+        want["messages"][0]["content"][0]["content"] = "FAIL ab  \r\n".into();
+        let want = serde_json::to_string(&want).unwrap();
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/v1/messages").body(&want);
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"type":"message","usage":{"input_tokens":1,"output_tokens":2}}"#);
+        });
+        let dir = std::env::temp_dir().join(format!("rtok-proxy-noise-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut cfg = Config::load_from(&dir).expect("config");
+        cfg.proxy.upstream = server.base_url();
+        cfg.proxy.mode = "compress".to_string();
+        let state = Arc::new(ProxyState::new(&cfg).expect("proxy state"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr").to_string();
+        let task = tokio::spawn(axum::serve(listener, app(state)).into_future());
+        let client = reqwest::Client::new();
+        for _ in 0..2 {
+            let resp = client
+                .post(format!("http://{addr}/v1/messages"))
+                .header("content-type", "application/json")
+                .body(request.to_string())
+                .send()
+                .await
+                .expect("request");
+            assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        }
+        mock.assert_calls(2);
+        task.abort();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
