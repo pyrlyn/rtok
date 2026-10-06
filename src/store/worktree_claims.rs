@@ -36,14 +36,28 @@ impl Store {
     }
 
     /// `rtok worktree remove` (T286): the open claim on `path`, if any, is released.
+    /// SQL equality misses a `\\?\` prefix and Windows case, so the match is [`crate::fs::same_path`].
     pub fn release_worktree_claim(&self, path: &str) -> Result<()> {
         let mut conn = self.lock()?;
-        let open = worktree_claims::table
-            .filter(worktree_claims::path.eq(path))
-            .filter(worktree_claims::released_at.is_null());
-        diesel::update(open)
-            .set(worktree_claims::released_at.eq(unixepoch()))
-            .execute(&mut *conn)?;
+        let open: Vec<String> = worktree_claims::table
+            .filter(worktree_claims::released_at.is_null())
+            .select(worktree_claims::path)
+            .load(&mut *conn)?;
+        let want = std::path::Path::new(path);
+        let hit: Vec<String> = open
+            .into_iter()
+            .filter(|stored| crate::fs::same_path(std::path::Path::new(stored), want))
+            .collect();
+        if hit.is_empty() {
+            return Ok(());
+        }
+        diesel::update(
+            worktree_claims::table
+                .filter(worktree_claims::path.eq_any(hit))
+                .filter(worktree_claims::released_at.is_null()),
+        )
+        .set(worktree_claims::released_at.eq(unixepoch()))
+        .execute(&mut *conn)?;
         Ok(())
     }
 
@@ -93,5 +107,21 @@ mod tests {
         store.release_worktree_claim("/w/x").unwrap();
         assert_eq!(store.open_worktree_claims().unwrap(), [("/w/y".into(), a)]);
         assert_eq!(store.session_model("s-a").unwrap(), None);
+    }
+
+    /// T430: a claim stored with `std::fs::canonicalize`'s prefix releases on the simplified path.
+    #[cfg(windows)]
+    #[test]
+    fn release_matches_a_verbatim_prefix() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let a = store
+            .register_agent(claude, "s-a", None, None, None)
+            .unwrap();
+        store
+            .claim_worktree(r"\\?\C:\Users\Me\wt", &a, "t1")
+            .unwrap();
+        store.release_worktree_claim(r"C:\Users\Me\wt").unwrap();
+        assert!(store.open_worktree_claims().unwrap().is_empty());
     }
 }
