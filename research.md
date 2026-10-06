@@ -2331,3 +2331,17 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - `model.baseUrl` is "Not intended to be set by hand — use the `/model` picker or a `modelProviders` entry". Proxy stays out. https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
+
+## 33. Which tests a change reaches (T420, 2026-10-06)
+
+Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.
+
+| Option | Finding | Source |
+| --- | --- | --- |
+| cargo-nextest filtersets | Predicates select by test name, crate (`package`, `deps`, `rdeps`), binary and kind. None selects by changed file or git diff. `rdeps` works per crate and rtok is one big crate, so it cannot narrow anything. | https://nexte.st/docs/filtersets/reference/ |
+| cargo-difftests 0.6.1 | Coverage based: reruns tests whose executed files changed. Needs nightly Rust and `cargo-binutils`. Last crates.io release 2024-02-24, so unmaintained for over two years; the project rule forbids a dead dependency. | https://crates.io/api/v1/crates/cargo-difftests, https://github.com/dnbln/cargo-difftests |
+| cargo-test-changed 0.1.1 | Maps git changes to crates and their dependents. Crate granularity again; last release 2025-04-04. | https://crates.io/api/v1/crates/cargo-test-changed |
+| rtok's own graph (`rtok graph affected`, MCP `impact` with a path) | Walks callers from every definition in the changed files and keeps the test files. Measured with the release `rtok 0.15.1` on this repo (499 files, 84 486 rows): a one-line edit to `src/plugins/checkpoint.rs` selected 99 of the 100 `tests/*.rs` targets (878 hit lines) and the first run took 9 min 55 s wall clock (242 s user, 307 s system); the debug build was slower still. Cause: the walk is keyed on bare symbol names, and that file defines `write`, `kind`, `walk`, `extract`, `save`, `render`, so every caller of any function of that name, anywhere, is reached. A docs-only diff answers in 0.14 s. | measured here: `rtok graph affected --since HEAD` in the T420 worktree, 2026-10-06 |
+| Name match (`tools/test-changed.sh`, T72.1) | A test file is selected when its name or body mentions a path segment of a changed file (`-w`, case-insensitive); the unit-test binary is filtered by the same segments. The same one-line edit selected 26 of 100 targets and 184 of 1 799 tests, with the test phase taking 18 s. It can miss a test that exercises a module without naming it. | measured here: `just check` with `CHECK_BASE=HEAD`, 2026-10-06 |
+
+Decision: the selection stays the in-repo name match. The only maintained candidates select per crate or need nightly coverage, and rtok's graph selects everything at the cost of minutes. `just check` falls back to `just full-check` when the merge base cannot be computed or a shared input changed (`Cargo.toml`, `build.rs`, `justfile`, `crates/`, `config/`, test fixtures); `just full-check` is the unchanged whole gate and CI never calls `check`. Reopen the graph only if `affected` stops following bare names (qualified symbol keys), which is a graph-plugin change outside T420.
