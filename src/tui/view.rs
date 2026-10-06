@@ -1601,6 +1601,7 @@ mod tests {
                     },
                 ],
                 desc_bytes: 58,
+                ..crate::doctor::SkillsAudit::default()
             }),
             None,
             10_000,

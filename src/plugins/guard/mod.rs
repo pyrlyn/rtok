@@ -5,8 +5,8 @@
 //! Deny duplicate Read/Bash when a prior archive id exists (plan T2.6).
 
 use rtok_plugin_sdk::{
-    Ctx, DashboardPage, Manifest, Measurement, Plugin, PostToolUse, PreToolDecision, PreToolUse,
-    Surface,
+    Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PostToolUse, PreCompact,
+    PreToolDecision, PreToolUse, SessionStart, Surface,
 };
 use serde_json::Value;
 
@@ -88,7 +88,23 @@ impl Plugin for Guard {
         Some(PreToolDecision::Deny { reason })
     }
 
+    // T392: loaded bodies are gone after a compaction. `SessionStart` with `compact` covers hosts
+    // that send no `PreCompact`.
+    fn pre_compact(&self, _ev: &PreCompact, cx: &Ctx) {
+        skill::forget_loads(cx);
+    }
+
+    fn session_start(&self, ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+        if ev.source == "compact" {
+            skill::forget_loads(cx);
+        }
+        None
+    }
+
     fn post_tool(&self, ev: &PostToolUse, cx: &Ctx) -> Option<String> {
+        if ev.tool_name == "Skill" {
+            return skill::note_load(ev, cx);
+        }
         match cache_key(ev.tool_name, ev.tool_input, cx.agent_id()) {
             Some(key) => {
                 let body = payload(ev.tool_response);

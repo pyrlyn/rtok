@@ -664,7 +664,51 @@ export interface SkillsAudit {
    * Description bytes the listing rides with every request (≈ tokens/4).
    */
   desc_bytes: number;
+  /**
+   * Names reachable from more than one real path (T392). Advice only: rtok never deletes a
+   * skill it does not own.
+   */
+  duplicates?: SkillDuplicate[];
+  /**
+   * Skills loaded again with no compaction between, from the transcripts (T392).
+   */
+  repeats?: SkillRepeat[];
   rows: SkillRow[];
+}
+/**
+ * One skill name listed from several places (T392).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "SkillDuplicate".
+ */
+export interface SkillDuplicate {
+  /**
+   * `(source, directory)` of every listing, in root order.
+   */
+  copies: [unknown, unknown][];
+  /**
+   * Description tokens the extra listings add to every request.
+   */
+  extra_tokens: number;
+  /**
+   * Every body is the same text; a differing body is the case the model cannot tell apart.
+   */
+  identical: boolean;
+  name: string;
+}
+/**
+ * A skill body re-sent into the same context window (T392).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "SkillRepeat".
+ */
+export interface SkillRepeat {
+  loads: number;
+  name: string;
+  /**
+   * Estimated tokens of the repeated bodies.
+   */
+  tokens: number;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema

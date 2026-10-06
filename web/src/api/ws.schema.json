@@ -1498,6 +1498,48 @@
         "value"
       ]
     },
+    "SkillDuplicate": {
+      "description": "One skill name listed from several places (T392).",
+      "type": "object",
+      "properties": {
+        "copies": {
+          "description": "`(source, directory)` of every listing, in root order.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "extra_tokens": {
+          "description": "Description tokens the extra listings add to every request.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "identical": {
+          "description": "Every body is the same text; a differing body is the case the model cannot tell apart.",
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "copies",
+        "identical",
+        "extra_tokens"
+      ]
+    },
     "SkillPageRow": {
       "type": "object",
       "properties": {
@@ -1543,6 +1585,31 @@
         "resident",
         "last_invoked",
         "never"
+      ]
+    },
+    "SkillRepeat": {
+      "description": "A skill body re-sent into the same context window (T392).",
+      "type": "object",
+      "properties": {
+        "loads": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "tokens": {
+          "description": "Estimated tokens of the repeated bodies.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "loads",
+        "tokens"
       ]
     },
     "SkillRow": {
@@ -1606,6 +1673,20 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "duplicates": {
+          "description": "Names reachable from more than one real path (T392). Advice only: rtok never deletes a\nskill it does not own.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillDuplicate"
+          }
+        },
+        "repeats": {
+          "description": "Skills loaded again with no compaction between, from the transcripts (T392).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillRepeat"
+          }
         },
         "rows": {
           "type": "array",

@@ -2425,6 +2425,7 @@ mod tests {
                 listed("plug", "plugin:x", 8, 50, Some(1)),
             ],
             desc_bytes: 58,
+            ..doctor::SkillsAudit::default()
         };
         let mut stats = BTreeMap::new();
         stats.insert(

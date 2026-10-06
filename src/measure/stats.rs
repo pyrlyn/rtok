@@ -1083,8 +1083,6 @@ pub fn collect(dir: &Path, since: Duration, plugin: &str, replay: Replay) -> Res
     Ok(report)
 }
 
-/// One Claude Code / Codex compaction: a `system` line with `subtype=compact_boundary`.
-/// `isCompactSummary` rides the same event and is not counted again.
 fn compact_events(path: &Path) -> u64 {
     let Ok(text) = std::fs::read_to_string(path) else {
         return 0;
@@ -1096,7 +1094,7 @@ fn is_compact_line(line: &str) -> bool {
     let Ok(v) = serde_json::from_str::<Value>(line) else {
         return false;
     };
-    v.get("subtype").and_then(Value::as_str) == Some("compact_boundary")
+    super::jsonl::is_compact_boundary(&v)
 }
 
 fn fold_session(
