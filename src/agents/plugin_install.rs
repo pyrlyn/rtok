@@ -151,6 +151,9 @@ fn manifest_version(dir: &Path) -> Option<String> {
     None
 }
 
+/// Where Claude Code and Codex unpack the rtok plugin, one directory per version.
+pub(super) const PLUGIN_CACHE: &str = "plugins/cache/rtok/rtok";
+
 fn claude_probe(cfg: &Config) -> Option<InstallProbe> {
     let dir = super::claude::config_dir(cfg);
     let text = read(&dir.join("plugins/installed_plugins.json"));
@@ -168,11 +171,7 @@ fn claude_probe(cfg: &Config) -> Option<InstallProbe> {
         .get("installPath")
         .and_then(Value::as_str)
         .map(PathBuf::from)
-        .or_else(|| {
-            version
-                .as_deref()
-                .map(|v| dir.join(format!("plugins/cache/rtok/rtok/{v}")))
-        })?;
+        .or_else(|| version.as_deref().map(|v| dir.join(PLUGIN_CACHE).join(v)))?;
     Some(InstallProbe {
         version_file: install.join(".rtok-plugin-version"),
         host_record_version: version,
@@ -181,7 +180,7 @@ fn claude_probe(cfg: &Config) -> Option<InstallProbe> {
 }
 
 fn codex_probe(cfg: &Config) -> InstallProbe {
-    let base = codex_home(cfg).join("plugins/cache/rtok/rtok");
+    let base = codex_home(cfg).join(PLUGIN_CACHE);
     let root = newest_child_dir(&base).unwrap_or(base);
     InstallProbe {
         version_file: root.join(".rtok-plugin-version"),
