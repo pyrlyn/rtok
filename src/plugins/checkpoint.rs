@@ -336,6 +336,19 @@ fn kind(cx: &Ctx) -> String {
     format!("checkpoint:{}", cx.session())
 }
 
+/// T370: the files the session's last checkpoint named, relative to `root` where they sit
+/// under it. Personalizes the repo map after a compaction; any read failure is an empty list.
+pub fn last_paths(cx: &Ctx, root: &str) -> Vec<String> {
+    let Some(body) = cx.latest_note(&kind(cx)).ok().flatten() else {
+        return Vec::new();
+    };
+    let prefix = format!("{}/", root.trim_end_matches('/'));
+    body.lines()
+        .filter_map(|l| l.strip_prefix("path "))
+        .map(|p| p.strip_prefix(&prefix).unwrap_or(p).to_string())
+        .collect()
+}
+
 /// Read `transcript_path`, store a `notes` row `kind=checkpoint:<session>`.
 pub fn save(transcript_path: &str, cx: &Ctx) -> anyhow::Result<Checkpoint> {
     write(transcript_path, cx, &kind(cx), Some("rtok"))
@@ -477,6 +490,30 @@ mod tests {
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/a.rs"}},{"type":"tool_use","name":"Read","input":{"file_path":"src/b.rs"}},{"type":"tool_use","name":"Read","input":{"file_path":"src/c.rs"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"still failing with error: boom"}]}}
 "#;
+
+    /// T370: the repo map is personalized by the paths the session's own checkpoint named,
+    /// made relative to the root where they sit under it.
+    #[test]
+    fn last_paths_are_root_relative_and_empty_without_a_checkpoint() {
+        let (rt, dir) = crate::testutil::runtime("last-paths");
+        let ctx = Ctx::new(&rt);
+        assert!(last_paths(&ctx, "/r").is_empty());
+        let cp = Checkpoint {
+            paths: vec![
+                "/r/src/a.rs".into(),
+                "docs/b.md".into(),
+                "/else/c.rs".into(),
+            ],
+            ..Checkpoint::default()
+        };
+        ctx.upsert_note(None, &kind(&ctx), "compact", &cp.render())
+            .unwrap();
+        assert_eq!(
+            last_paths(&ctx, "/r"),
+            ["src/a.rs", "docs/b.md", "/else/c.rs"]
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn fixture_has_three_paths_and_compact_injects_under_budget() {

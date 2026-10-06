@@ -902,6 +902,10 @@ section! {
         /// MCP `search`/`tree`. Off by default; also stays silent while the
         /// `read` plugin is disabled (no `search`/`tree` to point at).
         deny_grep_glob: bool = false,
+        /// Opt-in (T369): a native `Grep` for one identifier (`foo`, `fn foo`, `class Foo`) is
+        /// denied with that symbol's definitions from the index when it has one to five, so
+        /// the model skips a second round trip. Index lookup only: no walk, no indexing.
+        grep_symbol: bool = false,
         /// Opt-in (T62.1): on `PreToolUse(Skill)` a `SKILL.md` over `skill_max_bytes`
         /// is archived and denied with its markdown map plus the `expand` pointer,
         /// unless its frontmatter carries a key the host applies on invocation.
@@ -950,6 +954,9 @@ section! {
         enabled: bool = true,
         max_tokens: u32 = 2000,
         map_tokens: u32 = 0,
+        /// T370: how the SessionStart map orders files: `refs` counts references per name,
+        /// `pagerank` ranks files by personalized PageRank over the stored file graph.
+        map_rank: String = s("refs"),
         body_lines: u32 = 40,
         auto_index: bool = true,
         auto_add_projects: bool = true,
