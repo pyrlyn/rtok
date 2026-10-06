@@ -64,7 +64,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T358 | todo | P2 | 4 | 0% | |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T371 | in progress | P2 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T374 | todo | P3 | 2 | 0% | |
 | T376 | todo | P2 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
@@ -1561,22 +1560,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
-### T371. Git co-change pairs feed `impact` and the repo map
-
-From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` co-change: last 300 commits, skip commits touching more than 20 files, keep pairs with count ≥ 2, cache keyed by HEAD). Files that change together but share no symbol (a migration and its model, a test and a fixture, docs and code) are invisible to the symbol graph.
-
-Plan: new `src/plugins/graph/cochange.rs`: run `git log --name-only --format=%H -n 300` the way `mod.rs` already shells out to git (no new dependency), count unordered file pairs, store `(root, head, a, b, count)` in the key-value table from migration 0018 or a small `cochange` table, rebuilt only when HEAD moves. Use: `impact` appends `changes with: a.rs (7), b.rs (4)` for the target file's top 5 partners; T370 adds co-change edges with a lower weight (0.3 of a symbol edge, tunable).
-
-Done when: `impact <name>` on a file with co-change history lists its top partners; a root that is not a git repo behaves as today.
-
-Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
-1. `src/plugins/graph/cochange.rs`: `git log --name-only --relative -n 300` through a `git_stdout` helper shared with `git_changed_files` in `mod.rs`; count unordered pairs over commits of 1 to 20 files, keep count >= 2; one document `{head, pairs}` in the `kv` table under `plugin:graph:cochange:<root>`, rebuilt only when `git rev-parse HEAD` differs. A root that is not a repo yields no pairs.
-2. `Host::plugin_state_get` (default `None`, `Runtime` reads `kv`) as the read half of `plugin_state_set`; no new table, so no migration.
-3. `impact` appends `changes with: a (7), b (4)` for the top 5 partners of the file that defines the name (existing files only); `rank::build` takes the pairs and adds both directions of each pair at weight 0.3 x (1 + ln count), `COCHANGE_WEIGHT` constant.
-4. Tests: scripted temp repo (three commits, one over the cap) asserts pairs and counts, HEAD-keyed cache, non-repo, `impact` line, rank edge. Ignored backtest (`cargo test --lib cochange_backtest -- --ignored --nocapture`, hit@5 >= 0.30 over 100 commits) and build time, measured once.
-
-Check: unit test on a scripted temp repo (three commits, one over the 20-file cap) asserts the pairs and counts; backtest over the last 100 commits: for each commit's first file, hit@5 of its other files among the top co-change partners ≥ 0.30; build ≤ 300 ms on this repo; `just check`.
-
 ### T374. Memory notes linked to files: recall boosted by the files in play
 
 From the Empryo study (idea-only, clean-room; Empryo memory DB file links and recall boosting). P29 recall matches on the prompt text only; a note about `src/proxy/semantic_cache.rs` is not preferred when the session is editing that file. Low priority while the store holds few notes (18 on the creator's machine, 2026-10-02).
@@ -2296,13 +2279,13 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T369, T370, T371, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95). T368 is done.
+Take first, in order: T369, T370, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95). T368 and T371 are done.
 
 The 14 portable ideas and where each landed:
 
 1. PageRank repo map — T370 (extends T52.3 / I-28).
 2. Edge confidence / name IDF — T368.
-3. Git co-change — T371.
+3. Git co-change — T371 (done).
 4. Blast radius under a budget — T377.
 5. Trigram index — T378 (gated on I-95).
 6. Clone detection (MinHash) — not now: T52.4 / I-29 (dead code) has no measured question that duplicates answer, and Empryo's own perf PR #220 shows the cold-scan cost; revisit after T68.9.

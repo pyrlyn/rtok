@@ -100,6 +100,11 @@ pub trait Host: Send + Sync {
         Ok(())
     }
 
+    /// The value [`Host::plugin_state_set`] kept under `key`, if any. Default `None`.
+    fn plugin_state_get(&self, _plugin: &str, _key: &str) -> Result<Option<String>> {
+        Ok(None)
+    }
+
     /// Open a `calls` row for one unit of work on `surface`, returning its id.
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32>;
 

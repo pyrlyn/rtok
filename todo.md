@@ -58,7 +58,6 @@
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
-- T371. Git co-change pairs feed `impact` and the repo map
 - T372. Link tests to sources by naming convention in `affected_from_paths`
 - T373. `rrf_merge` breaks score ties by note id
 - T374. Memory notes linked to files: recall boosted by the files in play

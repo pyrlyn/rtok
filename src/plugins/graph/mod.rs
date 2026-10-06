@@ -29,6 +29,7 @@ use rtok_plugin_sdk::{
     Surface, ToolDef,
 };
 
+pub mod cochange;
 pub mod follow;
 pub mod index;
 pub mod lsp;
@@ -528,20 +529,27 @@ pub fn impact_filtered(
     }
     let key = index::canon(root);
     let ranked = resolve::rank_name(cx, &key, name)?;
+    // `def_path` is only set when several files define the name. One definition is its file; an
+    // unresolved name may itself be a path, so its history is asked as is.
+    let file = ranked
+        .def_path
+        .clone()
+        .or_else(|| match cx.symbol_defs(&key, name).ok()?.as_slice() {
+            [(path, ..)] => Some(path.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| name.to_string());
     let mut rows = impact_bfs(cx, &key, name, depth)?;
     rows.retain(|(_, path, _)| filter.path_ok(path));
     rows.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
     if rows.is_empty() {
-        return with_stale(
+        let text = annotate_ambiguous(
             cx,
             root,
-            annotate_ambiguous(
-                cx,
-                root,
-                name,
-                format!("nothing reaches {name}{}", filter.scope_note()),
-            )?,
-        );
+            name,
+            format!("nothing reaches {name}{}", filter.scope_note()),
+        )?;
+        return with_stale(cx, root, with_cochange(cx, root, &file, text));
     }
     let mut text = String::new();
     if ranked.others > 0 {
@@ -549,11 +557,21 @@ pub fn impact_filtered(
         text.push_str(&other_defs_line(name, ranked.others));
     }
     text.push_str(&impact_lines_text(&rows));
-    with_stale(
-        cx,
-        root,
-        cap(cx, annotate_ambiguous(cx, root, name, text)?)?,
-    )
+    let text = cap(cx, annotate_ambiguous(cx, root, name, text)?)?;
+    with_stale(cx, root, with_cochange(cx, root, &file, text))
+}
+
+/// T371: the files that change with `file` in git history, after the walk's lines. Added after
+/// the cap, which keeps the head, so a long walk cannot hide it.
+fn with_cochange(cx: &Ctx, root: &Path, file: &str, mut text: String) -> String {
+    if let Some(line) = cochange::changes_with(cx, root, file) {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(&line);
+        text.push('\n');
+    }
+    text
 }
 
 /// `symbol_paths` walks callers; `impact --to` prints callee chains, so reverse the arrows.
@@ -898,24 +916,25 @@ fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<Strin
     Ok(names)
 }
 
-fn git_changed_files(root: &Path, since: Option<&str>, staged: bool) -> Vec<String> {
-    let mut cmd = std::process::Command::new("git");
-    cmd.arg("-C")
+/// Stdout of `git -C root <args>`; `None` when git is missing, `root` is not a repo or git failed.
+pub(crate) fn git_stdout(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
         .arg(root)
-        .args(["diff", "--name-only", "--relative", "-z"]);
+        .args(args)
+        .output()
+        .ok()?;
+    out.status.success().then_some(out.stdout)
+}
+
+fn git_changed_files(root: &Path, since: Option<&str>, staged: bool) -> Vec<String> {
+    let mut args = vec!["diff", "--name-only", "--relative", "-z"];
     if staged {
-        cmd.arg("--cached");
+        args.push("--cached");
     }
-    if let Some(rev) = since {
-        cmd.arg(rev);
-    }
-    let Ok(out) = cmd.output() else {
-        return Vec::new();
-    };
-    if !out.status.success() {
-        return Vec::new();
-    }
-    out.stdout
+    args.extend(since);
+    git_stdout(root, &args)
+        .unwrap_or_default()
         .split(|b| *b == 0)
         .filter(|s| !s.is_empty())
         .filter_map(|s| String::from_utf8(s.to_vec()).ok())

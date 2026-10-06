@@ -14,10 +14,13 @@
 //! Clean-room: Empryo's `repo-map.ts` was read for the idea (BSL 1.1), no code is taken.
 
 use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
 
 use anyhow::Result;
 use rtok_plugin_sdk::{Class, Ctx};
 use serde::{Deserialize, Serialize};
+
+use super::cochange::Pair;
 
 const DAMPING: f64 = 0.85;
 const MAX_ITERATIONS: usize = 20;
@@ -33,6 +36,10 @@ const RECENT_NANOS: i64 = 24 * 3600 * 1_000_000_000;
 const MAX_SEEDS: usize = 32;
 /// Bumped when the document's shape changes; an older document reads as absent.
 const VERSION: u32 = 1;
+/// T371: weight of a co-change pair against a symbol edge, which is about one reference scaled by
+/// its IDF. History is a weaker signal than a name that resolves, so it only breaks ties
+/// between files the symbols already relate. Tunable.
+const COCHANGE_WEIGHT: f64 = 0.3;
 
 /// The stored document: files by index, the global rank of each and the weighted edges, sorted
 /// by source file.
@@ -51,8 +58,13 @@ pub struct FileGraph {
 }
 
 /// Build the graph from `(name, path, is_def, rows)` scan rows (one per name and file) and the
-/// indexed files with their mtime. Deterministic: the same index gives the same document.
-pub fn build(scan: &[(String, String, bool, i64)], mtimes: &HashMap<String, i64>) -> FileGraph {
+/// indexed files with their mtime, plus the git co-change pairs (T371). Deterministic: the same
+/// index and history give the same document.
+pub fn build(
+    scan: &[(String, String, bool, i64)],
+    mtimes: &HashMap<String, i64>,
+    cochange: &[Pair],
+) -> FileGraph {
     let mut ids: BTreeMap<&str, u32> = BTreeMap::new();
     for path in mtimes
         .keys()
@@ -90,6 +102,15 @@ pub fn build(scan: &[(String, String, bool, i64)], mtimes: &HashMap<String, i64>
             for &to in definers.iter().filter(|&&to| to != from) {
                 *edges.entry((from, to)).or_default() += count as f64 * idf / definers.len() as f64;
             }
+        }
+    }
+    // Both directions: the files changed together, neither depends on the other. A file the
+    // index does not know (deleted since, or not source) has no node to carry the edge.
+    for (a, b, count) in cochange {
+        if let (Some(&a), Some(&b)) = (ids.get(a.as_str()), ids.get(b.as_str())) {
+            let w = COCHANGE_WEIGHT * (1.0 + f64::from(*count).ln());
+            *edges.entry((a, b)).or_default() += w;
+            *edges.entry((b, a)).or_default() += w;
         }
     }
     let mut defs: Vec<Vec<(i64, &str)>> = vec![Vec::new(); n];
@@ -232,7 +253,8 @@ pub fn refresh(cx: &Ctx, root: &str) -> Result<()> {
         .into_iter()
         .map(|(path, (_, mtime, _))| (path, mtime))
         .collect();
-    let g = build(&cx.symbol_file_scan(root)?, &mtimes);
+    let pairs = super::cochange::pairs(cx, Path::new(root));
+    let g = build(&cx.symbol_file_scan(root)?, &mtimes, &pairs);
     cx.file_rank_put(root, &serde_json::to_string(&g)?)
 }
 
@@ -354,7 +376,7 @@ mod tests {
             row("own", "c.rs", true, 1),
             row("own", "c.rs", false, 3),
         ];
-        let g = build(&scan, &mtimes);
+        let g = build(&scan, &mtimes, &[]);
         assert_eq!(g.paths, ["a.rs", "b.rs", "c.rs", "d.rs"]);
         let edges: Vec<(u32, u32)> = g.src.iter().copied().zip(g.dst.iter().copied()).collect();
         assert_eq!(edges, [(0, 1), (0, 3), (1, 3), (2, 3)]);
@@ -367,7 +389,36 @@ mod tests {
         assert!((rank.iter().map(|r| f64::from(*r)).sum::<f64>() - 1.0).abs() < 1e-6);
         assert!(rank[3] > rank[1] && rank[1] > rank[0], "{rank:?}");
         assert_eq!(g.defs[3], ["core"]);
-        assert_eq!(build(&scan, &mtimes), g, "deterministic");
+        assert_eq!(build(&scan, &mtimes, &[]), g, "deterministic");
+    }
+
+    /// T371: a pair of files with no shared symbol gets an edge both ways; a pair with a file the
+    /// index does not know adds nothing.
+    #[test]
+    fn cochange_pairs_add_edges_between_files_that_share_no_symbol() {
+        let mtimes = ["a.rs", "b.rs", "c.rs"]
+            .map(|p| (p.to_string(), 0))
+            .into_iter()
+            .collect();
+        let pair = |a: &str, b: &str, n| (a.to_string(), b.to_string(), n);
+        let g = build(
+            &[],
+            &mtimes,
+            &[pair("a.rs", "c.rs", 4), pair("a.rs", "gone.rs", 9)],
+        );
+        let edges: Vec<(u32, u32)> = g.src.iter().copied().zip(g.dst.iter().copied()).collect();
+        assert_eq!(edges, [(0, 2), (2, 0)]);
+        let w = (COCHANGE_WEIGHT * (1.0 + 4f64.ln())) as f32;
+        assert!(
+            g.weight.iter().all(|x| (x - w).abs() < 1e-6),
+            "{:?}",
+            g.weight
+        );
+        assert!(
+            g.rank[0] > g.rank[1] && g.rank[2] > g.rank[1],
+            "{:?}",
+            g.rank
+        );
     }
 
     #[test]
@@ -377,7 +428,7 @@ mod tests {
         let mut scan = vec![row("common", "a.rs", true, 1), row("rare", "b.rs", true, 1)];
         scan.extend(paths.iter().map(|p| row("common", p, false, 1)));
         scan.push(row("rare", "c.rs", false, 1));
-        let g = build(&scan, &mtimes);
+        let g = build(&scan, &mtimes, &[]);
         let weight = |from: u32, to: u32| {
             let i = (0..g.src.len()).find(|&i| (g.src[i], g.dst[i]) == (from, to));
             g.weight[i.expect("edge")]
