@@ -88,7 +88,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
@@ -132,7 +131,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
-| T418 | todo | P2 | 3 | 0% | |
+| T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T420 | todo | P1 | 4 | 0% | |
 
 
@@ -1766,14 +1765,6 @@ Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just
 
 Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
 
-### T388. `doctor` reports the real MCP Tool Search state
-
-From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
-
-Done means: `doctor` reads `ENABLE_TOOL_SEARCH` from the environment and from Claude Code settings `env`, and prints `enabled`, `disabled` or `unknown (heuristic: ANTHROPIC_BASE_URL set)` with the source. The `tools_rewrite` advice uses the refined state. Cite the Claude Code docs page and date for the variable in `research.md` §3.
-
-Check: unit tests for base URL set with and without the override; `just check`.
-
 ### T389. Price row for Fable 5.1 in `[stats.prices]`
 
 From `research.md` §8 and §9.3: Fable is 39 % of the bill in §9.3, but `config/default.toml` ships prices only for `claude-sonnet-5`, `claude-haiku-4-5`, `gpt-5` and `gpt-5-mini`, so `rtok stats --price` leaves the main workload model unpriced. §2's cost split assumes output = 5 × input "until known".
@@ -2117,13 +2108,24 @@ Charts on the same time axis (the calls chart, the calls and live-sessions KPI m
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
-### T418. SessionStart hook back under the 10 ms budget
+### T428. SessionStart hook back under the 10 ms budget
+
+Renumbered from T418 on 2026-10-06: T418 is the finished `rtok worktree gc` task in `done.md`.
 
 `rtok hook session-start` on the rtok repo took 12.7, 34.2, 13.4 and 65.0 ms on four manual runs (rtok 0.15.1, 2026-10-05) and warned `hook SessionStart slow … over max_ms 10 ms`. The output stayed correct and the exit code 0, but the fail-open rule asks for ≤ 10 ms.
 
 Done: per-plugin timing of SessionStart on a real store shows where the time goes (memory recall, checkpoint restore, agent id, or store open); the slow part is fixed or moved off the hook path; `tests/latency.rs` covers SessionStart with a populated notes store and stays under its p95 bound.
 
 Check: `tests/latency.rs` SessionStart case green; five manual `rtok hook session-start` runs on the rtok repo print no `slow` warning; `just check`.
+
+Execution plan:
+
+1. Time each phase of the hook (store open, `register_agent`, `record_call`, project upsert, each plugin's `session_start`, `inject::apply`, tail) on a copy of the real store (485 MB, 525 notes), idle and with six hooks racing; temporary trace, not committed.
+2. Fix what the numbers show: SessionStart does about eleven write commits (against six for PreToolUse) and `memory::recall` reads every note body twice. Queue the three SessionStart measurements and write them in one transaction (`Runtime::defer_measurements` / `flush_measurements`, `Store::insert_measurements_once`); read each body once in `memory/mod.rs`.
+3. `tests/latency.rs`: a SessionStart case with 40 notes of ~4k tokens and a `session:*` note.
+4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
+
+Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
 ### T420. `just check` runs only what a change touches; `just full-check` runs everything
 

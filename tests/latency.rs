@@ -15,16 +15,16 @@ const N: usize = 200;
 const P95_MAX: Duration = Duration::from_millis(10);
 
 fn p95_under_10ms(event: &str, fixture: &[u8]) {
-    p95_with(event, event, fixture, |_| {}, |out| out == b"{}");
+    p95_with(event, "", fixture, |_| {}, |out| out == b"{}");
 }
 
-/// `tag` names the temp home (two tests of one event must not share it); `setup` prepares the
-/// home once before the warm-up; `ok` checks every hook's stdout.
+/// `tag` keeps two cases of one event apart, as the tests of this file run on parallel threads;
+/// `setup` fills the home before the first spawn; `ok` checks every hook's stdout.
 fn p95_with(
     event: &str,
     tag: &str,
     fixture: &[u8],
-    setup: impl Fn(&std::path::Path),
+    setup: impl FnOnce(&std::path::Path),
     ok: impl Fn(&[u8]) -> bool,
 ) {
     if cfg!(debug_assertions) {
@@ -33,7 +33,8 @@ fn p95_with(
     }
 
     let bin = env!("CARGO_BIN_EXE_rtok");
-    let tmp = std::env::temp_dir().join(format!("rtok-latency-{tag}-{}", std::process::id()));
+    let tmp =
+        std::env::temp_dir().join(format!("rtok-latency-{event}{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).expect("temp home");
     setup(&tmp);
 
@@ -279,10 +280,38 @@ fn latency_hook_grep_symbol_answer_p95_under_10ms() {
     let denied = |out: &[u8]| String::from_utf8_lossy(out).contains("answered from the rtok index");
     p95_with(
         "PreToolUse",
-        "grep-symbol",
+        "-grep-symbol",
         v.to_string().as_bytes(),
         setup,
         denied,
     );
     let _ = std::fs::remove_dir_all(&project);
+}
+
+/// T428: a real store holds note bodies of thousands of tokens and a `session:*` note, and
+/// SessionStart reads the recall titles, each body's size and the newest session note
+/// through them. An empty store (the case above) hides that cost.
+#[test]
+fn latency_hook_session_start_with_populated_notes_p95_under_10ms() {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
+    v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
+    p95_with(
+        "SessionStart",
+        "-notes",
+        v.to_string().as_bytes(),
+        |home| {
+            let store = rtok::store::Store::open(&home.join("rtok.db")).expect("open store");
+            let body = "recalled body line\n".repeat(900);
+            for i in 0..40 {
+                store
+                    .upsert_note(None, "note", &format!("note {i}"), &body)
+                    .expect("seed note");
+            }
+            store
+                .upsert_note(None, "session:seed", "compact", &body)
+                .expect("seed session note");
+        },
+        |out| out == b"{}",
+    );
 }

@@ -84,7 +84,6 @@
 - T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
 - T385.13. Measure cross-session read duplication
 - T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
-- T388. `doctor` reports the real MCP Tool Search state
 - T389. Price row for Fable 5.1 in `[stats.prices]`
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
 - T392. Warn when the same skill is listed twice or loaded more than once
@@ -130,5 +129,5 @@
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
-- T418. SessionStart hook back under the 10 ms budget
+- T428. SessionStart hook back under the 10 ms budget
 - T420. `just check` runs only what a change touches; `just full-check` runs everything
