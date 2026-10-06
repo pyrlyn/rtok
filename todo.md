@@ -130,4 +130,3 @@
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
 - T428. SessionStart hook back under the 10 ms budget
-- T420. `just check` runs only what a change touches; `just full-check` runs everything

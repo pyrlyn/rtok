@@ -132,7 +132,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T420 | todo | P1 | 4 | 0% | |
 
 
 
@@ -2130,12 +2129,6 @@ Execution plan:
 4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
-
-### T420. `just check` runs only what a change touches; `just full-check` runs everything
-
-`just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
-
-Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.
