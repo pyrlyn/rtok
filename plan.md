@@ -82,7 +82,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T391 | todo | P3 | 2 | 30% | |
-| T392 | todo | P2 | 3 | 30% | |
+| T392 | in progress | P2 | 3 | 30% | Claude Code / sonnet-5.5 |
 | T393 | todo | P3 | 1 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
@@ -1719,6 +1719,13 @@ Done means:
 - Advice only for static duplicates: rtok never deletes a skill it does not own (the T380 ownership rules apply).
 
 Check: a `Vfs` doctor fixture with a duplicate name in two roots (same and different bodies); a hook test for a second load in one session and a load after compaction; `just check`.
+
+Execution plan:
+
+1. `src/doctor.rs` `audit_from`: collect every listing (name, source, path, body) before the `(source, name)` dedup; group by name over distinct real paths (`fs::same_path`); `SkillsAudit.duplicates` carries paths, identical-or-differs and the extra description tokens (same bytes/4 estimate as the audit). Add `~/.agents/skills` to the user roots. Rendered under the skills section.
+2. `src/plugins/guard/skill.rs`: `post_tool` for `Skill` records the load in the session `ReadCache` (key `skill\t<name>\t<agent>`); a second load returns added context ("already in context, loaded N calls ago"). `Guard::pre_compact` and `session_start` (`compact`/`clear`) clear the `skill` keys, so a load after compaction is not a repeat. Added context, not a deny: the body may have left the window. Hosts without PostToolUse `additionalContext` stay silent.
+3. Transcripts: `jsonl::Parsed.compactions` (turn of each `compact_boundary`); `transcript_cache::aggregate` folds repeat loads per skill (same compaction epoch) with the `injected` body tokens; doctor prints them next to the duplicates.
+4. Verify: `Vfs` fixtures (same and differing bodies), guard hook tests (repeat, after compaction, other agent window), transcript fold test, `just check`.
 
 ### T393. `doctor` shows the saving a 120-character skill description cap would give
 
