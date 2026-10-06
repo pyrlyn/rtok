@@ -2507,6 +2507,16 @@ Deviations: no JSON `project` field, because `symbol` and `callers` have no JSON
 
 Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
 
+## T329.4.2 — `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
+
+Second half of T329.4. The MCP tools `impact`, `explore` and `outline` take `project` (id or path) and run over the same scope as `symbol` and `callers` (`scope::resolve`, `Member`, `fan_out`, `banners`, `lsp_note`, `cap`); a one-project scope calls today's single-root function, so its output is unchanged byte for byte. `impact` is one breadth-first walk over every member's index (`impact_walk_roots`, which `impact_bfs_follow` now wraps), so a change in C reaches its callers in B and then A; each row path carries `[name] `, the selected project's rows lead within a depth, one cap covers the answer and an ambiguous name is flagged as in `symbol`. `explore` is `assemble_explore` over a `Scoped` set of per-member `TagsExplore` (labelled definitions, summed definition counts, the scoped walk for the impact line). `outline` reads the file from the first member that holds the path. With `backend = "lsp"` only the first project answers and the answer says so. The CLI `--project <id|dir>` (a flattened `ProjectFlag`, conflicting with the `path` argument) is on `graph index`, `dead`, `status`, `impact` and `affected`: `impact` answers over the project's scope through `scope::resolve` and `scope::impact`, the others resolve the project to its root with `cli_root_for`.
+
+Check: `graph::scope::tests` (impact from C walks through B into A, depth bounds it, B's scope excludes A, D does not cross, a one-project scope equals the plain `impact`; `impact --to` names the project; `explore` labels the project and equals the plain answer for one project; `outline` by relative and absolute path), `tests/graph_scope.rs` (impact through `rtok mcp` and the CLI agree, from another directory by path and by id; `explore` and `outline` take `project`; the flag on the single-project subcommands, the conflict with `path` and an unknown project), the trycmd help, completions and `mcp.toml` goldens regenerated, `config_coverage` allow-list; `just check` ran the whole suite: 2630 passed, 8 skipped.
+
+Deviations: `impact --to` and the call paths of `explore` are found inside one project, because `symbol_paths` walks one index; multi-project `impact` prints no co-change line; `impact` with an empty name and a `path` (affected tests) answers for the first project only. `--project` on `dead`, `affected`, `index` and `status` selects one project, not its scope (scoped `dead` and `affected` are T329.5). `graph projects` is untouched, its subcommands already take a project. Tool descriptions are unchanged (the 150-token budget). The docs mention is in `README.md`, `docs/lsp.md` and `docs/commands.md` (en, ru, uk).
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
+
 
 ## T329.12 — `/ws` project messages and the SPA graph page: selector and index indicator (links panel split to T329.20)
 
