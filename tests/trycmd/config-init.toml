@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,366 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -324,6 +324,7 @@ target/tmp/t60-2-config-init.toml
 +enabled      = true
 +window_turns = 8
 +deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree
++grep_symbol = false              # opt-in: answer a Grep for one identifier with its indexed definitions
 +
 +[plugins.memory]
 +enabled        = true

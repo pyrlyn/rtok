@@ -154,6 +154,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.graph.watch | off | default |
 | plugins.guard.deny_grep_glob | false | default |
 | plugins.guard.enabled | true | default |
+| plugins.guard.grep_symbol | false | default |
 | plugins.guard.skill_max_bytes | 8192 | default |
 | plugins.guard.skills | false | default |
 | plugins.guard.window_turns | 8 | default |
@@ -297,7 +298,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-250 keys.
+251 keys.
 
 ## Doctor
 

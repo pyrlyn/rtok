@@ -63,7 +63,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T358 | todo | P2 | 4 | 0% | |
 | T368 | todo | P1 | 3 | 0% | |
-| T369 | todo | P1 | 2 | 0% | |
+| T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T371 | todo | P2 | 2 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
@@ -132,7 +132,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T420 | todo | P1 | 4 | 0% | |
 
 
 
@@ -1542,15 +1541,11 @@ Done when: for an ambiguous name with an import-resolvable definition, `callers`
 
 Check: extend `tests/fixtures/graph_truth.toml` with at least 10 ambiguous names (two crates/packages defining the same name); `tests/graph_truth.rs` callers precision on those +20 pp vs `main`, recall drop ≤ 2 pp, T8.8 overall score stays ≥ 0.93; `impact` output bytes on the ambiguous set −30 %; `just check`.
 
-### T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
+### T369.1. Measure grep_symbol follow-up rate after an opt-in window
 
-From the Empryo study (idea-only, clean-room; Empryo `src/core/tools/repo-map-intercept.ts:190-245`). When the agent greps for an identifier (`fn foo`, `class Foo`, `\bfoo\(`), Empryo answers from its symbol index ("defined at path:line, N refs in …") and only falls through to grep when the pattern is not a symbol. rtok's guard denies native Grep (I-08 / T50.4) or redirects to MCP `search` (`native_redirect`, `src/plugins/guard/mod.rs:149`), which costs a second round trip even when `symbol` would have answered.
+Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of follow-up Grep/Read on the same name within 3 calls (`guard/grep_symbol` rows against the transcripts). At most 25 % means propose default-on to the creator; above it, keep the flag opt-in and record why. Also re-measure the PreToolUse hook p95 on an idle machine (`cargo test --release --test latency -- --test-threads=1`; the flag-on test is `latency_hook_grep_symbol_answer_p95_under_10ms`); on 2026-10-06 the load average was 46 and even the baseline run failed the 10 ms gate. Record the result as a dated row in `research.md` §29.5.
 
-Plan: in `pre_tool` (`guard/mod.rs:37`), before `native_redirect`, classify the Grep pattern: a bare identifier or `fn|def|class|struct|type|func|interface <ident>` with no path glob. Look the name up with `symbol_defs` (`src/store/symbols.rs:475`); one to five definitions → deny with the `path:line kind` list and the ref count as the reason (the same text `symbol` prints, capped at `inject` budget); zero or more than five → current behaviour. Config `plugins.guard.grep_symbol = false` next to `deny_grep_glob` (`src/config/mod.rs:761`); off until the check below passes. Record a `Measurement` (`plugin: "guard"`, `kind: "grep_symbol"`). Must stay inside the ≤ 10 ms PreToolUse budget: index lookup only, never `index_for`.
-
-Done when: with the flag on, `Grep pattern="fn parse_since"` in an indexed project is answered with the definition line(s); a regex such as `TODO|FIXME` is untouched.
-
-Check: unit tests for the classifier (identifier, `fn x`, `class X`, regex, path-globbed); a replay over the Grep calls in local Claude Code transcripts (`[stats] transcripts_dir`) shows ≥ 70 % of symbol-shaped patterns are answered from the index; after a dated window with the flag on, the share of follow-up Grep/Read on the same name within 3 calls is ≤ 25 % (row in `research.md`); hook p95 stays ≤ 10 ms; `just check`.
+Check: a dated `research.md` §29.5 row with the follow-up share and the idle-machine p95 (under 10 ms); `just check`.
 
 ### T370. SessionStart repo map ranked by file-level personalized PageRank
 
@@ -2139,12 +2134,6 @@ Execution plan:
 4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
-
-### T420. `just check` runs only what a change touches; `just full-check` runs everything
-
-`just check` runs every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `origin/main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs today's full gate unchanged, and CI keeps running the full gate. The selection is a maintained tool or rtok's own code graph (`impact`), chosen by research cited in `research.md`; when the selection cannot be computed, `just check` falls back to the full gate.
-
-Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches today's `just check`; CI unchanged.
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.

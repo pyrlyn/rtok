@@ -107,6 +107,7 @@ plugins.graph.reference_depth = 3
 plugins.graph.watch = off
 plugins.guard.deny_grep_glob = false
 plugins.guard.enabled = true
+plugins.guard.grep_symbol = false
 plugins.guard.skill_max_bytes = 8192
 plugins.guard.skills = false
 plugins.guard.window_turns = 8
