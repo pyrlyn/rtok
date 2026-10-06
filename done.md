@@ -5882,6 +5882,20 @@ Complexity: 4/5 — new process-control trait across three platforms, an orchest
 Status: done 2026-09-22
 Check result: `cargo nextest run --workspace --test-threads 8` 1137 passed, 0 failed, 4 skipped; `just check` green (fmt-check, clippy `-D warnings` workspace-wide, full nextest, build-min, jscpd at 1.97% under the 2.0% threshold, oxlint/oxfmt). Unverified: Windows (`tasklist`/`taskkill`) and Linux (`pgrep`/`killall`/`xdg-open`) `RealProcs` code paths are implemented per spec but only exercised on macOS in this sandbox — the per-host app-name table test and orchestration tests all run through `FakeProcs`, which is platform-independent.
 
+### T434. `agents install` reopens the desktop app it closed
+
+`rtok agents install` (and `uninstall`) quits a running desktop app before it writes that host's config and should open it again afterwards (T141). The creator saw the app close and stay closed (2026-10-06). Two causes in `src/agents/restart.rs`: rtok waits at most 5 s for the app to exit, then runs `open -a` anyway, and an Electron app that is still shutting down (or shows a quit prompt) only gets activated and then finishes quitting; and `quit`/`open` check only that the command started, not its exit status, so a failed `open -a` printed no warning and logged nothing.
+
+Done: rtok waits up to 30 s for the app to exit; an app still running after that is not reopened and gets a "restart it manually" warning; a non-zero exit from `osascript`, `open`, `taskkill`, `start` or `killall` is an error, so a failed quit or reopen warns and is logged; unit tests cover the stuck quit and the failed reopen.
+
+Check: `cargo nextest run -E 'test(/agents::restart/)'`; `just check`.
+
+Do: `src/agents/restart.rs` — `run_ok` runs `osascript`, `open`, `taskkill`, `cmd /C start` and `killall` to completion and fails on a non-zero exit with its stderr; `wait_until_not_running` returns whether the app exited, with a 30 s `QUIT_TIMEOUT`; an app still running after it is warned about and not reopened; the three restart warnings share one `warn` helper.
+
+Status: done 2026-10-06
+Check result: `cargo nextest run --lib -E 'test(/agents::restart/)'` 13 passed (new `app_that_never_quits_is_written_but_not_reopened`, `reopen_failure_warns_instead_of_erroring`, `run_ok_fails_on_a_non_zero_exit`); `just check` green, 672 passed.
+Model: Claude Code / opus-5.5
+
 ### T140. `rtok agents install codex` installs rtok's Codex plugin from GitHub `pyrlyn/rtok`, idempotently
 
 T139's counterpart for Codex. Codex's own docs at https://developers.openai.com/plugins/build/plugins name only `marketplace add|list|upgrade|remove`, not a per-plugin enable command, but `codex plugin add --help` on the installed CLI (codex-cli 0.155.1) shows real `codex plugin add|remove` subcommands that enable/disable one plugin exactly like Claude's `plugin install`/`uninstall` — verified empirically end to end in a scratch `CODEX_HOME` (2026-09-22): `codex plugin marketplace add owner/repo` records `[marketplaces.<name>]` with `source_type = "git"` and `source = "https://github.com/<owner>/<repo>.git"`; `codex plugin add <id>` records `[plugins.<id>]` with `enabled = true`; re-adding the identical marketplace source is a no-op, a `"rtok"` marketplace already pointing elsewhere errors "already added from a different source" instead of re-pointing itself, and `marketplace remove` on an absent marketplace errors — so removal must gate on state first, same shape as T139's `MarketplaceState`.

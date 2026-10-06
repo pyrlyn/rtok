@@ -111,27 +111,25 @@ impl Procs for RealProcs {
         }
         #[cfg(target_os = "macos")]
         {
-            std::process::Command::new("osascript")
-                .args(["-e", &format!("tell application \"{name}\" to quit")])
-                .status()
-                .with_context(|| format!("osascript quit {name}"))?;
-            Ok(())
+            run_ok(
+                std::process::Command::new("osascript")
+                    .args(["-e", &format!("tell application \"{name}\" to quit")]),
+                &format!("osascript quit {name}"),
+            )
         }
         #[cfg(target_os = "windows")]
         {
-            std::process::Command::new("taskkill")
-                .args(["/IM", &image_name(name), "/F"])
-                .status()
-                .with_context(|| format!("taskkill {name}"))?;
-            Ok(())
+            run_ok(
+                std::process::Command::new("taskkill").args(["/IM", &image_name(name), "/F"]),
+                &format!("taskkill {name}"),
+            )
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            std::process::Command::new("killall")
-                .arg(name)
-                .status()
-                .with_context(|| format!("killall {name}"))?;
-            Ok(())
+            run_ok(
+                std::process::Command::new("killall").arg(name),
+                &format!("killall {name}"),
+            )
         }
     }
 
@@ -139,19 +137,22 @@ impl Procs for RealProcs {
         #[cfg(target_os = "macos")]
         {
             let _ = path;
-            std::process::Command::new("open")
-                .args(["-a", name])
-                .status()
-                .with_context(|| format!("open -a {name}"))?;
-            Ok(())
+            run_ok(
+                std::process::Command::new("open").args(["-a", name]),
+                &format!("open -a {name}"),
+            )
         }
         #[cfg(target_os = "windows")]
         {
-            std::process::Command::new("cmd")
-                .args(["/C", "start", "", path.to_str().unwrap_or(name)])
-                .status()
-                .with_context(|| format!("start {name}"))?;
-            Ok(())
+            run_ok(
+                std::process::Command::new("cmd").args([
+                    "/C",
+                    "start",
+                    "",
+                    path.to_str().unwrap_or(name),
+                ]),
+                &format!("start {name}"),
+            )
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
@@ -163,6 +164,24 @@ impl Procs for RealProcs {
             Ok(())
         }
     }
+}
+
+/// Run `cmd` to completion and fail on a non-zero exit, carrying its stderr: `open -a` on an
+/// app that is still shutting down exits non-zero, and checking only that it started hid that
+/// failure — the app stayed closed with no warning (T434).
+fn run_ok(cmd: &mut std::process::Command, what: &str) -> Result<()> {
+    let out = cmd
+        .stdout(std::process::Stdio::null())
+        .output()
+        .with_context(|| what.to_string())?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "{what}: {} {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
 }
 
 /// The Windows image name for an app/binary `name`: `name` plus `.exe`, unless it already ends
@@ -212,12 +231,32 @@ fn running_cli_bin(agent: &dyn Agent, procs: &dyn Procs) -> Option<&'static str>
         .find_map(|v| v.bins.iter().copied().find(|b| procs.bin_running(b)))
 }
 
-/// Poll `procs.app_running(name)` until it goes false or `timeout` elapses.
-fn wait_until_not_running(procs: &dyn Procs, name: &str, timeout: Duration) {
+/// How long a quit app gets to exit. Electron apps often need well over 5 s, and reopening one
+/// that is still shutting down only activates the dying instance (T434).
+const QUIT_TIMEOUT: Duration = if cfg!(test) {
+    Duration::from_millis(300)
+} else {
+    Duration::from_secs(30)
+};
+
+/// Poll `procs.app_running(name)` until it goes false or `timeout` elapses; true if it exited.
+fn wait_until_not_running(procs: &dyn Procs, name: &str, timeout: Duration) -> bool {
     let started = std::time::Instant::now();
-    while procs.app_running(name) && started.elapsed() < timeout {
+    loop {
+        if !procs.app_running(name) {
+            return true;
+        }
+        if started.elapsed() >= timeout {
+            return false;
+        }
         std::thread::sleep(Duration::from_millis(100));
     }
+}
+
+/// Print a restart warning and log it; restart problems never fail the command.
+fn warn(cfg: &Config, msg: &str) {
+    eprintln!("{}", crate::ui::style::warn(&format!("warning: {msg}")));
+    crate::log::append(cfg, "warn", "agents", "restart", msg);
 }
 
 /// `rtok agents install|uninstall`: quit a running desktop app before the write if it would
@@ -270,11 +309,17 @@ fn with_restart(
                     let msg = format!(
                         "could not quit {name}: {e:#}; restart it manually to load the new config"
                     );
-                    eprintln!("{}", crate::ui::style::warn(&format!("warning: {msg}")));
-                    crate::log::append(cfg, "warn", "agents", "restart", &msg);
-                } else {
-                    wait_until_not_running(procs, &name, Duration::from_secs(5));
+                    warn(cfg, &msg);
+                } else if wait_until_not_running(procs, &name, QUIT_TIMEOUT) {
                     to_reopen.push((name, path));
+                } else {
+                    // Still up — likely a quit prompt. Reopening now would only focus it, and
+                    // the app would close after the prompt is answered.
+                    let msg = format!(
+                        "{name} did not quit within {} s; restart it manually to load the new config",
+                        QUIT_TIMEOUT.as_secs()
+                    );
+                    warn(cfg, &msg);
                 }
             }
             if changed && let Some(bin) = bin {
@@ -291,8 +336,7 @@ fn with_restart(
     for (name, path) in to_reopen {
         if let Err(e) = procs.open(&name, &path) {
             let msg = format!("could not reopen {name}: {e:#}; open it manually");
-            eprintln!("{}", crate::ui::style::warn(&format!("warning: {msg}")));
-            crate::log::append(cfg, "warn", "agents", "restart", &msg);
+            warn(cfg, &msg);
         }
     }
     out.push_str(&written?);
@@ -319,6 +363,9 @@ mod tests {
         running: RefCell<HashSet<String>>,
         calls: RefCell<Vec<String>>,
         fail_quit: bool,
+        /// `quit` succeeds but the app keeps running, as when it shows a quit prompt.
+        stuck_quit: bool,
+        fail_open: bool,
     }
 
     impl FakeProcs {
@@ -342,11 +389,16 @@ mod tests {
             if self.fail_quit {
                 anyhow::bail!("boom");
             }
-            self.running.borrow_mut().remove(name);
+            if !self.stuck_quit {
+                self.running.borrow_mut().remove(name);
+            }
             Ok(())
         }
         fn open(&self, name: &str, _path: &Path) -> Result<()> {
             self.calls.borrow_mut().push(format!("open:{name}"));
+            if self.fail_open {
+                anyhow::bail!("open -a {name}: exit status: 1");
+            }
             Ok(())
         }
     }
@@ -456,6 +508,55 @@ mod tests {
             ["quit:Windsurf".to_string(), "write".to_string()]
         );
         assert!(out.is_empty());
+    }
+
+    /// T434: an app still running after the quit timeout (a quit prompt) is not reopened —
+    /// `open -a` would only focus it, and it would close once the prompt is answered.
+    #[test]
+    fn app_that_never_quits_is_written_but_not_reopened() {
+        let procs = FakeProcs {
+            stuck_quit: true,
+            ..FakeProcs::running_names(&["Windsurf"])
+        };
+        let out = call_logging_write(&procs);
+        assert_eq!(
+            procs.calls.borrow().as_slice(),
+            ["quit:Windsurf".to_string(), "write".to_string()]
+        );
+        assert!(out.is_empty());
+    }
+
+    /// T434: a failed reopen warns and the install still succeeds.
+    #[test]
+    fn reopen_failure_warns_instead_of_erroring() {
+        let procs = FakeProcs {
+            fail_open: true,
+            ..FakeProcs::running_names(&["Windsurf"])
+        };
+        let out = call_logging_write(&procs);
+        assert_eq!(
+            procs.calls.borrow().as_slice(),
+            [
+                "quit:Windsurf".to_string(),
+                "write".to_string(),
+                "open:Windsurf".to_string()
+            ]
+        );
+        assert!(out.is_empty());
+    }
+
+    /// T434: a command that starts but exits non-zero is an error carrying its stderr.
+    #[cfg(unix)]
+    #[test]
+    fn run_ok_fails_on_a_non_zero_exit() {
+        let err = run_ok(
+            std::process::Command::new("sh").args(["-c", "echo nope >&2; exit 3"]),
+            "probe",
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("probe") && msg.contains("nope"), "{msg}");
+        run_ok(&mut std::process::Command::new("true"), "probe").unwrap();
     }
 
     #[test]
