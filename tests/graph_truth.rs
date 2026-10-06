@@ -20,6 +20,9 @@ struct Truth {
     name: String,
     defs: Vec<String>,
     refs: Vec<String>,
+    /// T368: this name is defined in more than one crate and has an import-resolved
+    /// definition. `refs` is that definition's caller files, not every same-named site.
+    rank: bool,
 }
 
 fn truth() -> Vec<Truth> {
@@ -43,6 +46,7 @@ fn truth() -> Vec<Truth> {
             name: t["name"].as_str().unwrap_or("").to_string(),
             defs: list(t, "defs"),
             refs: list(t, "refs"),
+            rank: t.get("rank").and_then(|v| v.as_bool()).unwrap_or(false),
         })
         .collect()
 }
@@ -326,6 +330,13 @@ fn labelled_symbols_are_found() {
             println!("  def {} in {p} is not a labelled definition", t.name);
         }
     }
+    let overall = if precision + recall == 0.0 {
+        0.0
+    } else {
+        2.0 * precision * recall / (precision + recall)
+    };
+    println!("graph_truth overall {overall:.3}");
+    assert_rank_gates(&cx, &root, &key);
     let _ = std::fs::remove_dir_all(&dir);
     assert!(
         def_recall >= 0.9,
@@ -345,4 +356,162 @@ fn labelled_symbols_are_found() {
         Path::new(&root).join("src").is_dir(),
         "ground truth was scored against this repo"
     );
+    assert!(
+        overall >= 0.93,
+        "T8.8 overall score {overall:.3} below 0.93"
+    );
+}
+
+/// T368: precision of `callers` on the `rank` labels against the unfiltered
+/// ref-file list, and `impact` bytes at depth 2 against that same walk after
+/// the same token cap `impact` applies.
+fn assert_rank_gates(cx: &Runtime, root: &Path, key: &str) {
+    let labels: Vec<Truth> = truth().into_iter().filter(|t| t.rank).collect();
+    assert!(
+        labels.len() >= 10,
+        "need at least 10 ambiguous names, got {}",
+        labels.len()
+    );
+    let ctx = Ctx::new(cx);
+    let (mut base_hit, mut base_n, mut new_hit, mut new_n) = (0usize, 0usize, 0usize, 0usize);
+    let (mut base_rec, mut new_rec, mut label_n) = (0usize, 0usize, 0usize);
+    let (mut impact_new, mut impact_base) = (0usize, 0usize);
+    for t in &labels {
+        let cross = t.defs.iter().any(|p| p.starts_with("crates/"))
+            && t.defs.iter().any(|p| !p.starts_with("crates/"));
+        assert!(cross, "{} is not defined in two crates", t.name);
+        let all: HashSet<String> = cx
+            .store
+            .symbol_ref_groups(key, &t.name)
+            .unwrap()
+            .into_iter()
+            .map(|(p, ..)| p)
+            .collect();
+        let callers_out = rtok::plugins::graph::callers(&ctx, root, &t.name).unwrap();
+        assert!(
+            callers_out.contains(&format!("other definitions of {}", t.name)),
+            "{callers_out}"
+        );
+        let listed: HashSet<String> = caller_files(&callers_out).into_iter().collect();
+        let want: HashSet<String> = t.refs.iter().cloned().collect();
+        base_hit += all.intersection(&want).count();
+        base_n += all.len();
+        new_hit += listed.intersection(&want).count();
+        new_n += listed.len();
+        base_rec += all.intersection(&want).count();
+        new_rec += listed.intersection(&want).count();
+        label_n += want.len();
+        let impact = rtok::plugins::graph::impact(&ctx, root, &t.name, 2, None).unwrap();
+        assert!(
+            impact.contains(&format!("other definitions of {}", t.name)),
+            "{impact}"
+        );
+        let ambiguous = cx.store.symbol_defs(key, &t.name).unwrap().len() > 1;
+        let rows = cx.store.symbol_impact(key, &t.name, 2).unwrap();
+        let base = capped_len(&ctx, &main_impact_text(&rows, ambiguous));
+        println!(
+            "rank {name}: callers {listed}/{all} files, impact {impact_b} vs main {base}",
+            name = t.name,
+            listed = listed.len(),
+            all = all.len(),
+            impact_b = impact.len(),
+        );
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        impact_new += impact.len();
+        impact_base += base;
+    }
+    let base_p = base_hit as f64 / base_n.max(1) as f64;
+    let new_p = new_hit as f64 / new_n.max(1) as f64;
+    let base_r = base_rec as f64 / label_n.max(1) as f64;
+    let new_r = new_rec as f64 / label_n.max(1) as f64;
+    let ratio = impact_new as f64 / impact_base.max(1) as f64;
+    println!(
+        "rank gates: callers precision {new_p:.3} vs main {base_p:.3} (+{:.3}), recall {new_r:.3} vs {base_r:.3} (drop {:.3}), impact bytes {impact_new}/{impact_base} ({ratio:.3})",
+        new_p - base_p,
+        base_r - new_r,
+    );
+    assert!(
+        new_p >= base_p + 0.20,
+        "callers precision {new_p:.3} is not +20 pp over main {base_p:.3}"
+    );
+    assert!(
+        base_r - new_r <= 0.02,
+        "callers recall dropped {:.3} pp, above 2",
+        (base_r - new_r) * 100.0
+    );
+    assert!(
+        ratio <= 0.70,
+        "impact bytes {impact_new} vs main {impact_base} ({ratio:.3}) did not fall 30%"
+    );
+}
+
+/// What `impact` printed before ranking: the unfiltered walk, ambiguous mark included.
+fn main_impact_text(rows: &[(u32, String, String)], ambiguous: bool) -> String {
+    let mut body = String::new();
+    for (d, path, scope) in rows {
+        if scope.is_empty() {
+            body.push_str(&format!("{d}  {path}  (file)\n"));
+        } else {
+            body.push_str(&format!("{d}  {path}  {scope}\n"));
+        }
+    }
+    if !ambiguous {
+        return body;
+    }
+    let marked = if body.is_empty() {
+        String::new()
+    } else {
+        body.lines()
+            .map(|line| format!("{line} ?"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n"
+    };
+    format!("1 names ambiguous (?): narrow with path or kind, or backend = \"lsp\"\n{marked}")
+}
+
+/// Byte length of `cap`: same char budget and 64-hex archive id, without writing one.
+fn capped_len(cx: &Ctx, text: &str) -> usize {
+    let max = cx.plugin_config::<rtok::config::Graph>("graph").max_tokens;
+    let est = cx.estimate(text, rtok::plugin::Class::Code);
+    if est <= max {
+        return text.len();
+    }
+    let text_chars = text.chars().count();
+    let budget_chars = (text_chars * max as usize / est as usize).saturating_sub(120);
+    let total = text.lines().count();
+    let mut head = String::new();
+    let mut shown = 0usize;
+    for line in text.lines() {
+        if shown > 0 && head.chars().count() + line.chars().count() + 1 > budget_chars {
+            break;
+        }
+        head.push_str(line);
+        head.push('\n');
+        shown += 1;
+    }
+    let id = "0".repeat(64);
+    format!("{head}{} more, expand {id}", total - shown).len()
+}
+
+/// Files `callers` printed, ignoring the banner, the cap trailer, and `+N other definitions`.
+fn caller_files(out: &str) -> Vec<String> {
+    out.lines()
+        .filter_map(|line| {
+            let line = line.trim_end().trim_end_matches(" ?").trim();
+            if line.is_empty()
+                || line.starts_with('+')
+                || line.contains("ambiguous")
+                || line.contains("more, expand")
+            {
+                return None;
+            }
+            let path = line.split(" ×").next()?.split("  ").next()?.trim();
+            if path.is_empty() {
+                None
+            } else {
+                Some(path.to_string())
+            }
+        })
+        .collect()
 }

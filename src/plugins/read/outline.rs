@@ -24,6 +24,8 @@ pub struct TagHit {
     pub end_line: usize,
     pub is_def: bool,
     pub line_text: String,
+    /// Full import specifier when `kind == "import"` (T368). `name` stays the last segment.
+    pub import_path: String,
 }
 
 /// True when `path` has a tags-supported extension (cheap; does not parse).
@@ -104,20 +106,39 @@ pub fn tags_with_extensions(
         };
         let line_text = src.get(tag.line_range.clone()).unwrap_or("").to_string();
         let kind = cfg.syntax_type_name(tag.syntax_type_id).to_string();
-        let name = if kind == "import" {
-            import_last_segment(name)
+        let line = tag.span.start.row + 1;
+        let end_line = line_of(tag.range.end.saturating_sub(1));
+        let is_def = tag.is_definition;
+        let items = if kind == "import" {
+            expand_import(name)
         } else {
-            name.to_string()
+            vec![(String::new(), name.to_string())]
         };
-        out.push(TagHit {
-            kind,
-            name,
-            line: tag.span.start.row + 1,
-            end_line: line_of(tag.range.end.saturating_sub(1)),
-            is_def: tag.is_definition,
-            line_text,
-        });
+        for (import_path, item) in items {
+            out.push(TagHit {
+                kind: kind.clone(),
+                name: item,
+                line,
+                end_line,
+                is_def,
+                line_text: line_text.clone(),
+                import_path,
+            });
+        }
     }
+    // The bare last-segment capture keeps that node an import; the full clause is the row we store.
+    let full: Vec<(usize, String)> = out
+        .iter()
+        .filter(|h| h.kind == "import" && h.import_path.contains([':', '/', '.', '\\']))
+        .map(|h| (h.line, h.name.clone()))
+        .collect();
+    out.retain(|h| {
+        h.kind != "import"
+            || h.import_path.contains([':', '/', '.', '\\'])
+            || !full
+                .iter()
+                .any(|(line, name)| *line == h.line && name == &h.name)
+    });
     Ok(out)
 }
 
@@ -200,6 +221,79 @@ fn markdown_render(headings: &[MdHeading], mode: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// One row per named item: `(full specifier, last segment)`. A brace group is one node (T368).
+fn expand_import(raw: &str) -> Vec<(String, String)> {
+    let t = raw.trim().trim_matches(|c| matches!(c, '"' | '\'' | '`'));
+    let t = t.trim().trim_end_matches(';').trim();
+    expand_clause("", t)
+}
+
+fn expand_clause(prefix: &str, clause: &str) -> Vec<(String, String)> {
+    let clause = clause
+        .split(" as ")
+        .next()
+        .unwrap_or(clause)
+        .trim()
+        .trim_end_matches("::*")
+        .trim();
+    if let Some(start) = clause.find('{') {
+        let end = clause.rfind('}').unwrap_or(clause.len());
+        let head = clause[..start].trim().trim_end_matches("::").trim();
+        let next = if prefix.is_empty() {
+            head.to_string()
+        } else if head.is_empty() {
+            prefix.to_string()
+        } else {
+            format!("{prefix}::{head}")
+        };
+        let mut out = Vec::new();
+        for item in split_commas(&clause[start + 1..end]) {
+            out.extend(expand_clause(&next, item));
+        }
+        return out;
+    }
+    if clause.is_empty() || clause == "*" || clause == "self" {
+        return if prefix.is_empty() {
+            Vec::new()
+        } else {
+            one_import(prefix)
+        };
+    }
+    let full = if prefix.is_empty() {
+        clause.to_string()
+    } else {
+        format!("{prefix}::{clause}")
+    };
+    one_import(&full)
+}
+
+fn one_import(path: &str) -> Vec<(String, String)> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Vec::new();
+    }
+    vec![(path.to_string(), import_last_segment(path))]
+}
+
+/// Commas at brace depth 0, so `a::{b, c}` stays one item inside an outer list.
+fn split_commas(body: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let (mut depth, mut start) = (0i32, 0usize);
+    for (i, c) in body.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&body[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&body[start..]);
+    out
 }
 
 /// Last path segment of an import / use / require specifier (T68.6).
@@ -302,17 +396,22 @@ pub(crate) const RUST_SCOPED_CALL: &str = "
         name: (identifier) @name)) @reference.call
 ";
 
-/// `use` last path segment as `kind = import` (T68.6).
+/// `use` as `kind = import` (T68.6). Whole-clause captures feed `expand_import`; the inner ones claim the last segment (T368).
 #[cfg(feature = "lang-rust")]
 pub(crate) const RUST_IMPORT: &str = "
 (use_declaration argument: (identifier) @name) @reference.import
+(use_declaration argument: (scoped_identifier) @name) @reference.import
 (use_declaration argument: (scoped_identifier name: (identifier) @name)) @reference.import
+(use_declaration argument: (use_as_clause) @name) @reference.import
 (use_declaration argument: (use_as_clause path: (identifier) @name)) @reference.import
 (use_declaration argument: (use_as_clause path: (scoped_identifier name: (identifier) @name))) @reference.import
+(use_declaration argument: (use_list) @name) @reference.import
+(use_declaration argument: (scoped_use_list) @name) @reference.import
 (use_list (identifier) @name) @reference.import
 (use_list (scoped_identifier name: (identifier) @name)) @reference.import
 (use_list (use_as_clause path: (identifier) @name)) @reference.import
 (use_list (use_as_clause path: (scoped_identifier name: (identifier) @name))) @reference.import
+(use_declaration argument: (use_wildcard) @name) @reference.import
 (use_wildcard (identifier) @name) @reference.import
 (use_wildcard (scoped_identifier name: (identifier) @name)) @reference.import
 ";
@@ -739,9 +838,36 @@ mod tests {
                 imports.contains(&name),
                 "{path} missing import {name}: {imports:?}"
             );
+            if path == "a.rs" {
+                let full = hits
+                    .iter()
+                    .find(|h| h.kind == "import" && h.name == "Bar")
+                    .expect("Bar import");
+                assert_eq!(full.import_path, "crate::foo::Bar");
+            }
             let map = render(Path::new(path), &src, "map").unwrap();
             assert!(map.starts_with("imports: "), "{path} outline: {map}");
             assert!(map.contains(name), "{path} outline: {map}");
         }
+    }
+
+    /// T368: a brace `use` is one row per item, prefix included, last segment as the name.
+    #[test]
+    fn rust_use_group_keeps_each_full_path() {
+        let src = pad("use crate::foo::{Bar, baz::Qux as Alias};\nfn main() {}\n");
+        let imports: Vec<_> = tags(Path::new("a.rs"), &src)
+            .unwrap()
+            .into_iter()
+            .filter(|h| h.kind == "import" && !h.is_def)
+            .map(|h| (h.name, h.import_path))
+            .collect();
+        assert!(
+            imports.contains(&("Bar".into(), "crate::foo::Bar".into())),
+            "{imports:?}"
+        );
+        assert!(
+            imports.contains(&("Qux".into(), "crate::foo::baz::Qux".into())),
+            "{imports:?}"
+        );
     }
 }

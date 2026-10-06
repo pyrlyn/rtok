@@ -190,6 +190,8 @@ pub fn run_with(
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         cx.touch_symbol_indexed_at(&rk, ts)?;
+        // One pass over names so callers can rank without scanning `symbols` again (T368).
+        cx.rebuild_symbol_idf(&rk)?;
         // A failed rebuild leaves the previous graph; the map falls back, indexing still succeeds.
         if report.inserted > 0 || removed > 0 || super::rank::missing(cx, &rk) {
             let _ = super::rank::refresh(cx, &rk);
@@ -272,6 +274,10 @@ fn run_changed_with(
         }
         Ok(())
     })?;
+    if !dry_run {
+        // One pass over names so callers can rank without scanning `symbols` again (T368).
+        cx.rebuild_symbol_idf(&rk)?;
+    }
     if !dry_run && report.inserted > 0 {
         let _ = super::rank::refresh(cx, &rk);
     }
@@ -380,8 +386,8 @@ fn each_parsed(jobs: &[Job], mut write: impl FnMut(&Job, Parsed) -> Result<()>) 
     })
 }
 
-/// Bump when [`scoped`] changes (T35.5).
-const INDEX_VERSION: u32 = 3;
+/// Bump when [`scoped`] changes (T35.5). T368's full import path in `scope` rewrites version-3 roots once.
+const INDEX_VERSION: u32 = 4;
 
 /// Hex sha256 of `INDEX_VERSION` and every query string [`outline::tags`] compiles —
 /// tags **and** locals, because a language whose locals query changed produces different
@@ -465,7 +471,11 @@ fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
         .collect();
     hits.iter()
         .map(|h| {
-            let scope = if h.is_def || h.kind == "import" {
+            // Import rows keep the full specifier in `scope` (no new column). The
+            // enclosing-definition scope is meaningless for a `use` (T368).
+            let scope = if h.kind == "import" {
+                h.import_path.clone()
+            } else if h.is_def {
                 String::new()
             } else {
                 defs.iter()
