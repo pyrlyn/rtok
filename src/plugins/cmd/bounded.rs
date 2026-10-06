@@ -52,7 +52,10 @@ pub(crate) fn mixed_chain(snippet: &str) -> bool {
         // Every stage: `git log | grep foo` is two programs. Counting only the
         // first stage left the pipe on `git`'s formatter.
         for stage in pipeline {
-            if let Some(program) = stage.first() {
+            // T386: `mise exec -- cargo && mise exec -- git` is two programs. Counting
+            // argv[0] left both stages on `mise` and kept cargo's formatter off the mix.
+            let vis = super::formatters::visible_argv(&stage);
+            if let Some(program) = vis.first() {
                 programs.insert(super::formatters::cmd_stem(program).to_string());
             }
         }
@@ -310,12 +313,14 @@ mod tests {
     #[case("cargo test; cargo clippy")]
     // Backslash-newline continuation is not a chain separator.
     #[case("cargo test \\\n  --all")]
+    #[case("mise exec -- cargo build && mise exec -- cargo test")]
     fn same_program_forms(#[case] cmd: &str) {
         assert!(!super::mixed_chain(cmd), "{cmd}");
     }
 
     #[rstest]
     #[case("cargo test && cargo clippy && git status")]
+    #[case("mise exec -- cargo test && mise exec -- git status")]
     #[case("git log | grep foo")]
     #[case("echo one; cat two")]
     #[case("git status\ncat file.txt\nls")]

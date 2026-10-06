@@ -87,7 +87,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
-| T386 | todo | P2 | 2 | 30% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
@@ -1760,14 +1759,6 @@ Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just che
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
 
 Check: the dated `research.md` row.
-
-### T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
-
-From `research.md` §15.3 (T50.1 default-rule families): `mise` is the largest family still on `Rule::default()` (37 rows, 41,423 after-bytes), then `sqlite3` (8,556 B), `awk` (4,954 B), `just` (4,018 B) and `df` (3,451 B). `cmd_stem` is the basename of argv[0], so `mise exec -- cargo test` is never filtered as `cargo`.
-
-Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just <recipe>` resolve to the inner command's formatter or rule when the inner command is visible on the line. Rules or formatters for `sqlite3`, `df` and `awk` land only where a golden fixture beats `Rule::default()`. The `bash_default` top-20 is re-measured and recorded in §15.3 with a date.
-
-Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
 
 ### T389. Price row for Fable 5.1 in `[stats.prices]`
 
