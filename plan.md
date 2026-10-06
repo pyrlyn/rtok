@@ -53,7 +53,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T337 | todo | research | 1 | 0% | |
 | T340 | todo | research | 1 | 0% | |
 | T341 | todo | research | 1 | 0% | |
-| T342 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
 | T345 | todo | research | 1 | 0% | |
@@ -969,7 +968,7 @@ Today `rtok agents junk clear` (T182, #286) only clears junk rtok itself owns un
 | `cache` | HTTP/model/response caches, `Cache/`, `CachedData/`, `GPUCache/`, `Code Cache/` | safe | Regenerated on next run. |
 | `temp` | temp files and temp directories the agent created (`tmp/`, `*.tmp`, `$TMPDIR/<agent>-*`) | safe | Only entries older than 24 h and not open by a running process. |
 | `logs` | agent log files that are not tied to a session (`logs/*.log`, rotated logs) | review | Kept for the last `[agents.junk] keep_logs_days` (default 30). Session transcripts are the `sessions` kind below. |
-| `build` | build artifacts in agent worktrees and scratch dirs (`target/`, `dist/`, `build/`, `.next/`, `__pycache__/`) | safe | Only under agent-owned worktrees or scratch dirs, never in the user's main checkout. |
+| `build` | build artifacts in agent worktrees and scratch dirs (`target/`, `dist/`, `build/`, `.next/`, `__pycache__/`) | safe | Only under agent-owned worktrees or scratch dirs, never in the user's main checkout; cleared under T152's rules (T342): only when idle (`--idle`, default 24 h), never the cache of the worktree the command runs from unless its path is given, one cache root at a time. |
 | `deps` | reinstallable dependencies (`node_modules/`, `.venv/`, `vendor/` with a lockfile, `.gradle/`, Pods) | review | Only in agent-owned worktrees/scratch dirs; requires a lockfile or manifest next to it so it can be reinstalled. |
 | `locks` | stale lock files (`*.lock` for agent state, `LOCK`, `.lock` dirs) | safe | Only when no process holds them (checked with the OS); package-manager lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`) are never junk. |
 | `backups` | backup files (`*.bak`, `*.bak-<ts>`, `*~`, `_backup/` generations past the cap, T249) | review | The newest backup of each file is always kept. |
@@ -996,7 +995,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 
 **Each agent's cache:**
 
-- **Cleared** (D36) only from: (1) the host's entry in `research.md` §22 (documented cache dirs only); (2) any directory under the agent's folders carrying a valid `CACHEDIR.TAG` (deletion rules per T342); (3) `[agents.junk] extra` entries with `kind = "cache"`.
+- **Cleared** (D36) only from: (1) the host's entry in `research.md` §22 (documented cache dirs only); (2) any directory under the agent's folders carrying a valid `CACHEDIR.TAG` (deleted under T152's rules (T342): only when idle (`--idle`, default 24 h), never the cache of the worktree the command runs from unless its path is given, one cache root at a time); (3) `[agents.junk] extra` entries with `kind = "cache"`.
 - **Listed only** (size shown, "not documented: not cleared", not in any "Freed" total): the platform cache root for that app (`~/Library/Caches/<bundle id or name>`, `$XDG_CACHE_HOME/<app>`, `%LOCALAPPDATA%\<app>\Cache`) and well-known Electron/Chromium cache subfolders inside the app's data dir (`Cache`, `Code Cache`, `GPUCache`, `CachedData`, `DawnCache`) when §22 has no row for them. `Service Worker/CacheStorage` is stored app data, not cache, and is not listed as cache. A heuristic path that gets a cited §22 row moves to "cleared" with no other change.
 - Not cache even if the name says so: anything §22 marks as settings or state, extension/plugin install dirs, and model weights the user downloaded on purpose (listed as `never`, size only).
 - Environment overrides are honoured (`XDG_CACHE_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and the like listed in §22), so a relocated cache is still found.
@@ -1075,7 +1074,7 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 
 #### Running agents
 
-- An agent whose process is running is detected (process list per host binary, plus live rtok sessions from T284). For a running agent, `clear` skips `temp`, `locks`, `swap`, `index` and the current session's logs, and says so; caches are still cleared only if the host's §22 entry says it tolerates that while running, otherwise skipped with "agent running".
+- An agent whose process is running is detected (process list per host binary, plus live rtok sessions from T284). For a running agent, `clear` skips `temp`, `locks`, `swap`, `index` and the current session's logs, and says so; caches are still cleared only if the host's §22 entry says it tolerates that while running, otherwise skipped with "agent running". `build` and `CACHEDIR.TAG` dirs follow T152's idle rule whether or not the agent runs (T342).
 - `--force-running` is not offered; the user closes the agent and runs `clear` again.
 
 #### Config
@@ -1123,7 +1122,7 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 
 ### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
 
-Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 and the investigation T342 (T339 closed: D36).
+Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
 
 Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
 
@@ -1328,13 +1327,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
-
-In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T343. Investigate: T330 `--sort` takes two different value sets on `list`
 

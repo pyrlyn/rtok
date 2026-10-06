@@ -47,7 +47,6 @@
 - T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 - T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
 - T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
-- T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 - T343. Investigate: T330 `--sort` takes two different value sets on `list`
 - T344. Investigate: T330 "backwards compatible" vs new default deletions
 - T345. Investigate: ProgressRunner in the rtok crate vs `crates/rtok-mcp` with no rtok dependency
