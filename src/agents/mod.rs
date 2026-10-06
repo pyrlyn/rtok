@@ -27,6 +27,7 @@ pub mod grok;
 pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
+pub mod junk_cache;
 pub mod junk_map;
 pub mod kilo;
 pub mod kimi;
@@ -253,7 +254,7 @@ fn expand_app(spec: &str) -> PathBuf {
 }
 
 /// `~/x` and `$VAR/x` as a path on this machine; anything else unchanged.
-fn expand_spec(spec: &str) -> PathBuf {
+pub(crate) fn expand_spec(spec: &str) -> PathBuf {
     if let Some(rest) = spec.strip_prefix("~/") {
         return join_rel(&home_dir(), rest);
     }
@@ -270,7 +271,7 @@ fn expand_spec(spec: &str) -> PathBuf {
 /// `path` when it is inside `home`, else the same path re-rooted beneath `home`
 /// (`/Applications/X.app` → `<home>/Applications/X.app`; a drive prefix is dropped).
 fn under(home: &Path, path: PathBuf) -> PathBuf {
-    if path.starts_with(home) {
+    if crate::fs::path_starts_with(&path, home) {
         return path;
     }
     let rel: PathBuf = path
@@ -280,20 +281,91 @@ fn under(home: &Path, path: PathBuf) -> PathBuf {
     home.join(rel)
 }
 
-/// The first `bin` on PATH (`.exe`/`.cmd` on Windows). Under [`HOST_SANDBOX_ENV`], only PATH
-/// entries under the home dir count.
+/// Extensions `cmd` tries for a bare name. `PATHEXT` when set, otherwise cmd's own default.
+fn pathext_list() -> Vec<String> {
+    if !cfg!(windows) {
+        return Vec::new();
+    }
+    let raw = std::env::var("PATHEXT").ok();
+    pathext_from(raw.as_deref())
+}
+
+fn pathext_from(raw: Option<&str>) -> Vec<String> {
+    let raw = raw
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(".COM;.EXE;.BAT;.CMD");
+    raw.split(';')
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(|e| {
+            if e.starts_with('.') {
+                e.to_string()
+            } else {
+                format!(".{e}")
+            }
+        })
+        .collect()
+}
+
+/// `bin`, then `bin` plus each extension that is not already on the name.
+fn file_names(bin: &str, exts: &[String]) -> Vec<String> {
+    let mut names = vec![bin.to_string()];
+    let lower = bin.to_ascii_lowercase();
+    let has = exts
+        .iter()
+        .any(|e| lower.ends_with(&e.to_ascii_lowercase()));
+    if !has {
+        for ext in exts {
+            names.push(format!("{bin}.{}", ext.trim_start_matches('.')));
+        }
+    }
+    names
+}
+
+/// The first file named `bin` (or `bin` + an extension from `exts`) in a `path` directory.
+/// When `limit` is set, only directories under it count (ASCII-case-insensitive on Windows).
+pub(crate) fn find_bin(
+    bin: &str,
+    path: Option<&std::ffi::OsStr>,
+    limit: Option<&Path>,
+    exts: &[String],
+) -> Option<PathBuf> {
+    let path = path?;
+    let names = file_names(bin, exts);
+    std::env::split_paths(path)
+        .filter(|dir| limit.is_none_or(|home| crate::fs::path_starts_with(dir, home)))
+        .flat_map(|dir| names.iter().map(move |n| dir.join(n)))
+        .find(|p| p.is_file())
+}
+
+/// The first `bin` on PATH. On Windows every `PATHEXT` extension is tried (`.exe`, `.cmd`,
+/// `.bat`, …). Under [`HOST_SANDBOX_ENV`], only PATH entries under the home dir count.
 pub(crate) fn find_on_path(bin: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     let sandbox = host_sandbox();
-    let names: &[String] = if cfg!(windows) {
-        &[bin.to_string(), format!("{bin}.exe"), format!("{bin}.cmd")]
-    } else {
-        &[bin.to_string()]
-    };
-    std::env::split_paths(&path)
-        .filter(|dir| sandbox.as_ref().is_none_or(|home| dir.starts_with(home)))
-        .flat_map(|dir| names.iter().map(move |n| dir.join(n)))
-        .find(|p| p.is_file())
+    find_bin(
+        bin,
+        Some(path.as_os_str()),
+        sandbox.as_deref(),
+        &pathext_list(),
+    )
+}
+
+/// `path` when it exists (a file or an `.app` bundle). On Windows an extensionless path
+/// also matches `name.exe` / `name.cmd` beside it (`~/.grok/bin/grok` → `grok.exe`).
+pub(crate) fn probe_installed(path: PathBuf) -> Option<PathBuf> {
+    if path.exists() {
+        return Some(path);
+    }
+    let exts = pathext_list();
+    let name = path.file_name()?.to_str()?;
+    for candidate in file_names(name, &exts).into_iter().skip(1) {
+        let next = path.with_file_name(candidate);
+        if next.is_file() {
+            return Some(next);
+        }
+    }
+    None
 }
 
 /// What to spawn for host CLI `bin`: the name itself (or an explicit path), or under
@@ -352,8 +424,7 @@ pub(crate) fn run_cli(
 pub fn app_path(v: &Variant) -> Option<PathBuf> {
     v.apps
         .iter()
-        .map(|a| expand_app(a))
-        .find(|p| p.exists())
+        .find_map(|a| probe_installed(expand_app(a)))
         .or_else(|| v.bins.iter().find_map(|b| find_on_path(b)))
 }
 
@@ -372,7 +443,7 @@ pub fn app_version(v: &Variant) -> String {
         let Some(program) = host_program(bin) else {
             continue;
         };
-        let mut cmd = std::process::Command::new(program);
+        let mut cmd = version_command(&program);
         cmd.arg("--version");
         let out = crate::proc::capture(cmd, Some(VERSION_PROBE_LIMIT));
         let Ok(out) = out else { continue };
@@ -1451,19 +1522,37 @@ fn bare_rtok_on_path(path: Option<&std::ffi::OsStr>) -> bool {
     bin_on_path("rtok", path)
 }
 
-/// True when `bin` (`bin.exe` too on Windows) is a file in a `path` directory. No sandbox:
-/// the caller passes the `PATH` value, so a test controls it.
+/// True when `bin` (and, on Windows, `bin` plus `PATHEXT`) is a file in a `path` directory.
+/// No sandbox: the caller passes the `PATH` value, so a test controls it.
 pub(crate) fn bin_on_path(bin: &str, path: Option<&std::ffi::OsStr>) -> bool {
-    let Some(path) = path else {
+    find_bin(bin, path, None, &pathext_list()).is_some()
+}
+
+/// How to run `program --version`. A bare name or a `.cmd`/`.bat` on Windows goes through
+/// `cmd /C`, because `CreateProcess` only auto-appends `.exe` and cannot execute a batch shim.
+fn version_command(program: &std::ffi::OsStr) -> std::process::Command {
+    if shell_shim(program) {
+        spawn_cli(program)
+    } else {
+        std::process::Command::new(program)
+    }
+}
+
+fn shell_shim(program: &std::ffi::OsStr) -> bool {
+    if !cfg!(windows) {
         return false;
-    };
-    std::env::split_paths(path).any(|dir| {
-        dir.join(bin).is_file() || (cfg!(windows) && dir.join(format!("{bin}.exe")).is_file())
-    })
+    }
+    let path = Path::new(program);
+    let bare = !path.is_absolute() && path.components().nth(1).is_none();
+    let batch = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    bare || batch
 }
 
 /// What [`ensure_hook_client_link`] did (T357); the caller only needs it for tests and doctor.
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(not(unix), allow(dead_code))]
 pub(crate) enum LinkOutcome {
     /// `rtok-hook` already resolves on `PATH` (not through a stale link of ours).
     AlreadyOnPath,
@@ -2440,6 +2529,89 @@ mod tests {
             under(home, PathBuf::from("$LOCALAPPDATA/app")),
             PathBuf::from("/h/test-home/$LOCALAPPDATA/app")
         );
+    }
+
+    /// T429: a `.cmd` shim is the install, and a directory outside the home limit is skipped.
+    #[test]
+    fn find_bin_tries_pathext_and_skips_dirs_outside_the_limit() {
+        let root = std::env::temp_dir().join(format!("rtok-find-bin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let inside = root.join("bin");
+        let outside = root.join("other");
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(inside.join("claude.cmd"), b"@echo off\r\n").unwrap();
+        std::fs::write(outside.join("claude.cmd"), b"@echo off\r\n").unwrap();
+        let exts = pathext_from(Some(".cmd"));
+        let path = std::env::join_paths([outside.as_os_str(), inside.as_os_str()]).unwrap();
+        let got = find_bin("claude", Some(path.as_os_str()), Some(&inside), &exts).unwrap();
+        assert_eq!(got, inside.join("claude.cmd"));
+        assert!(
+            find_bin(
+                "claude",
+                Some(path.as_os_str()),
+                Some(&inside.join("missing")),
+                &exts
+            )
+            .is_none()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// T429: `C:\…` and `c:\…` are the same PATH entry under the sandbox home.
+    #[cfg(windows)]
+    #[test]
+    fn find_bin_limit_is_ascii_case_insensitive() {
+        let dir = std::env::temp_dir().join(format!("rtok-find-case-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("grok.EXE"), b"").unwrap();
+        let flipped: PathBuf = dir
+            .to_string_lossy()
+            .chars()
+            .map(|c| match c {
+                'A'..='Z' => c.to_ascii_lowercase(),
+                'a'..='z' => c.to_ascii_uppercase(),
+                _ => c,
+            })
+            .collect::<String>()
+            .into();
+        let path = std::env::join_paths([dir.as_os_str()]).unwrap();
+        let got = find_bin(
+            "grok",
+            Some(path.as_os_str()),
+            Some(&flipped),
+            &pathext_from(Some(".EXE")),
+        );
+        assert!(got.is_some(), "limit {flipped:?} missed {}", dir.display());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T429: `~/.grok/bin/grok` is the install when the file on disk is `grok.exe`.
+    #[test]
+    fn probe_installed_matches_an_exe_beside_an_extensionless_path() {
+        let dir = std::env::temp_dir().join(format!("rtok-probe-exe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("grok.exe");
+        std::fs::write(&exe, b"").unwrap();
+        if cfg!(windows) {
+            let got = probe_installed(dir.join("grok")).unwrap();
+            assert!(crate::fs::same_path(&got, &exe), "{got:?}");
+        } else {
+            assert!(probe_installed(dir.join("grok")).is_none());
+        }
+        assert_eq!(probe_installed(exe.clone()).unwrap(), exe);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T429: a differently cased child of home stays put instead of being re-rooted.
+    #[cfg(windows)]
+    #[test]
+    fn under_keeps_a_different_case_child_of_home() {
+        let home = Path::new(r"C:\Users\Me");
+        let path = PathBuf::from(r"c:\users\me\AppData\Local\Programs\cursor\Cursor.exe");
+        assert_eq!(under(home, path.clone()), path);
     }
 
     /// T280: `.config/nextest.toml` turns the host sandbox on for every test, so no test sees

@@ -2,7 +2,7 @@
 title: rtok
 tagline: Token-reduction CLI for AI coding agents — hooks, an MCP server and an API proxy in one Rust binary.
 repo: https://github.com/pyrlyn/rtok
-homepage: https://pyrlyn.github.io/rtok/
+homepage: https://github.com/pyrlyn/rtok
 install: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pyrlyn/rtok/releases/latest/download/rtok-installer.sh | sh"
 install_alternatives:
   - 'ketch install pyrlyn/rtok'
@@ -128,7 +128,7 @@ rtok config show --sources
 ## Links
 
 - Repository: <https://github.com/pyrlyn/rtok>
-- Documentation: <https://pyrlyn.github.io/rtok/>
+- Documentation: <https://github.com/pyrlyn/rtok/tree/main/docs>
 - Getting started: <https://github.com/pyrlyn/rtok/blob/main/docs/getting-started.md>
 - Releases: <https://github.com/pyrlyn/rtok/releases>
 - Changelog: <https://github.com/pyrlyn/rtok/blob/main/CHANGELOG.md>

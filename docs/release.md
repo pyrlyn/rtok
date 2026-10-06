@@ -442,8 +442,6 @@ Install paths:
   [npm, PyPI and crates.io](#npm-pypi-and-cratesio)
 - `brew install pyrlyn/tap/rtok` — after `pyrlyn/homebrew-tap`'s `sync-rtok.yml` PR merges
   the `rtok.rb` Release asset (no `HOMEBREW_TAP_TOKEN` on this repo)
-- docs site: https://pyrlyn.github.io/rtok/ (`.github/workflows/docs.yml`, Pages
-  `build_type: workflow`; deploy concurrency `group: pages`, `cancel-in-progress: false`)
 
 Regenerate the Release workflow after dist config changes:
 

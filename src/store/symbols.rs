@@ -13,7 +13,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
 use super::Store;
-use super::schema::{extractor, symbol_stale, symbols};
+use super::schema::{extractor, file_rank, symbol_stale, symbols};
 
 const INSERT_CHUNK: usize = 999 / 11;
 
@@ -659,6 +659,52 @@ impl Store {
             .into_iter()
             .map(|(name, refs, path, line)| (name, refs.unwrap_or(0), path, line))
             .collect())
+    }
+
+    /// T370: one row per `(name, path, is_def)` with its row count, imports and nameless rows
+    /// left out. The file graph is built from this single scan, in memory.
+    pub fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
+        let mut conn = self.lock()?;
+        let rows: Vec<(String, String, i32, i64)> = symbols::table
+            .filter(
+                symbols::root
+                    .eq(root)
+                    .and(symbols::name.ne(""))
+                    .and(symbols::kind.ne("import")),
+            )
+            .group_by((symbols::name, symbols::path, symbols::is_def))
+            .select((symbols::name, symbols::path, symbols::is_def, count_star()))
+            .order((
+                symbols::name.asc(),
+                symbols::path.asc(),
+                symbols::is_def.asc(),
+            ))
+            .load(&mut *conn)?;
+        Ok(rows
+            .into_iter()
+            .map(|(name, path, is_def, n)| (name, path, is_def != 0, n))
+            .collect())
+    }
+
+    /// T370: the stored file-graph document of `root`, if an index run wrote one.
+    pub fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
+        let mut conn = self.lock()?;
+        Ok(file_rank::table
+            .find(root)
+            .select(file_rank::graph)
+            .first(&mut *conn)
+            .optional()?)
+    }
+
+    pub fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::insert_into(file_rank::table)
+            .values((file_rank::root.eq(root), file_rank::graph.eq(graph)))
+            .on_conflict(file_rank::root)
+            .do_update()
+            .set(file_rank::graph.eq(graph))
+            .execute(&mut *conn)?;
+        Ok(())
     }
 
     /// T52.4: definitions with no same-name reference row under `root`,

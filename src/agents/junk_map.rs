@@ -60,16 +60,24 @@ fn guess(role: Role, path: String) -> Spec {
 /// Where the platform keeps an Electron app's data and caches. §22 has no row for these apps,
 /// so every folder is listed read-only; the app names are the products' own.
 fn electron(app: &str) -> Vec<Spec> {
-    vec![
-        guess(
-            Role::Data,
-            format!("{{home}}/Library/Application Support/{app}"),
-        ),
-        guess(Role::Data, format!("{{xdg_config}}/{app}")),
-        guess(Role::Cache, format!("{{home}}/Library/Caches/{app}")),
-        guess(Role::Cache, format!("{{xdg_cache}}/{app}")),
-    ]
+    let data = [
+        format!("{{home}}/Library/Application Support/{app}"),
+        format!("{{xdg_config}}/{app}"),
+    ];
+    let mut specs: Vec<Spec> = data.iter().map(|d| guess(Role::Data, d.clone())).collect();
+    specs.push(guess(Role::Cache, format!("{{home}}/Library/Caches/{app}")));
+    specs.push(guess(Role::Cache, format!("{{xdg_cache}}/{app}")));
+    // Electron's `sessionData` mixes these with cookies and localStorage, so only these named
+    // subfolders can be cache (research.md §22.2); `Service Worker/CacheStorage` is app data.
+    for d in &data {
+        for sub in ELECTRON_CACHES {
+            specs.push(guess(Role::Cache, format!("{d}/{sub}")));
+        }
+    }
+    specs
 }
+
+const ELECTRON_CACHES: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "CachedData", "DawnCache"];
 
 /// The §22 rows and the desktop-app folders of `host`. A host §22 reads "not documented" for
 /// (Cursor, Kilo, Aider, ...) has only what its own config files already name.
@@ -147,6 +155,7 @@ pub struct Roots {
     xdg_config: PathBuf,
     xdg_data: PathBuf,
     copilot_cache: PathBuf,
+    rtok_cache: PathBuf,
 }
 
 impl Roots {
@@ -165,7 +174,15 @@ impl Roots {
         } else {
             xdg_cache.join("copilot")
         };
+        let rtok_cache = if cfg!(target_os = "macos") {
+            home.join("Library/Caches/rtok")
+        } else if cfg!(windows) {
+            dir("LOCALAPPDATA", home.join("AppData/Local")).join("rtok/cache")
+        } else {
+            xdg_cache.join("rtok")
+        };
         Self {
+            rtok_cache,
             claude: dir("CLAUDE_CONFIG_DIR", home.join(".claude")),
             codex: dir("CODEX_HOME", home.join(".codex")),
             xdg_config: dir("XDG_CONFIG_HOME", home.join(".config")),
@@ -198,6 +215,7 @@ impl Roots {
             "xdg_config" => &self.xdg_config,
             "xdg_data" => &self.xdg_data,
             "copilot_cache" => &self.copilot_cache,
+            "rtok_cache" => &self.rtok_cache,
             _ => return PathBuf::from(template),
         };
         match rest.strip_prefix('/') {

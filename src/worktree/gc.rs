@@ -107,7 +107,7 @@ pub struct Outcome {
 }
 
 pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome>> {
-    let here = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let here = crate::fs::canon(cwd);
     let entries = inventory(cwd)?;
     // Removing worktrees from inside one of them: git needs a directory that survives.
     let repo = entries
@@ -117,7 +117,9 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
     // Removals below stay one at a time — each takes the repository's locks.
     let verdicts = par_map(&entries, |_, entry| {
         let path = &entry.record.path;
-        let current = path.canonicalize().is_ok_and(|p| here.starts_with(p));
+        let current = path
+            .canonicalize()
+            .is_ok_and(|p| crate::fs::path_starts_with(&here, &crate::fs::canon(&p)));
         let modified = |within| newest_until(path, |m| policy.age(m) < within);
         decide(entry, modified, current, policy)
     });

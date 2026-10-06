@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,367 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -324,6 +324,7 @@ target/tmp/t60-2-config-init.toml
 +enabled      = true
 +window_turns = 8
 +deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree
++grep_symbol = false              # opt-in: answer a Grep for one identifier with its indexed definitions
 +
 +[plugins.memory]
 +enabled        = true
@@ -349,6 +350,7 @@ target/tmp/t60-2-config-init.toml
 +enabled    = true
 +max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 +map_tokens = 0                        # SessionStart repo map cap (counts toward the injection budget next to memory.recall_tokens); 0 = off
++map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 +body_lines = 40                       # symbol(): source lines shown per definition
 +auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
 +backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
