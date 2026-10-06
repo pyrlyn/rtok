@@ -551,7 +551,12 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
                     None,
                 );
             }
-            inject_event(input, cx, &registry, agent.as_deref())
+            // T428: memory recall, the handoff and `inject` each record a measurement; one
+            // commit for the three instead of one lock wait each.
+            cx.defer_measurements();
+            let out = inject_event(input, cx, &registry, agent.as_deref());
+            cx.flush_measurements();
+            out
         }
         "UserPromptSubmit" | "PostCompact" | "SubagentStart" => {
             inject_event(input, cx, &registry, agent.as_deref())
@@ -2042,6 +2047,57 @@ mod tests {
         // whole line — stays byte-identical.
         let out2 = dispatch(&stdin, &input, &cx);
         assert_eq!(out, out2, "byte-stable across two runs of the same session");
+    }
+
+    /// T428: the recall and `inject` measurements reach the ledger in the order the plugins
+    /// recorded them, though SessionStart now writes them in one commit, and the queue is
+    /// closed afterwards so a later `record` is written at once.
+    #[test]
+    fn session_start_records_its_measurements_after_the_dispatch() {
+        let (stdin, input, cx) = session_start_fixture("t418-sess");
+        let _ = dispatch(&stdin, &input, &cx);
+        assert_eq!(cx.store.list_measurements("memory").unwrap().len(), 1);
+        assert_eq!(cx.store.list_measurements("inject").unwrap().len(), 1);
+        let m = rtok_plugin_sdk::Measurement {
+            plugin: "memory",
+            kind: "after",
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id: None,
+            call_id: None,
+        };
+        cx.record(&m).unwrap();
+        assert_eq!(cx.store.list_measurements("memory").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn deferred_measurements_wait_for_the_flush_and_keep_their_order() {
+        let cx = Runtime::in_memory("t418-defer").unwrap();
+        let row = |kind| rtok_plugin_sdk::Measurement {
+            plugin: "memory",
+            kind,
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id: None,
+            call_id: None,
+        };
+        cx.defer_measurements();
+        cx.record(&row("first")).unwrap();
+        cx.record(&row("second")).unwrap();
+        assert!(cx.store.list_measurements("memory").unwrap().is_empty());
+        cx.flush_measurements();
+        let kinds: Vec<_> = cx
+            .store
+            .list_measurements("memory")
+            .unwrap()
+            .into_iter()
+            .map(|m| m.kind)
+            .collect();
+        assert_eq!(kinds, ["first", "second"]);
     }
 
     #[test]
