@@ -81,6 +81,7 @@ session_env = "CLAUDE_SESSION_ID"     # змінна середовища, з я
 call_io_inline_bytes = 65536          # тіла MCP/API, більші за це, ідуть в архів (хуки ніколи не архівують)
 hook_max_input_bytes = 8388608        # обмеження stdin для rtok hook <event> (8 MiB); понад нього — вихід із кодом 0 без змін, без архівування й гешування (T201)
 retain_calls_days    = 30             # 0 = зберігати `calls` назавжди
+retain_hook_bodies_days = 3           # тіла stdin хуків очищуються через N днів, рядки лишаються; 0 = доти, доки й `calls` (T352)
 
 [log]                                 # власний лог rtok (D26); його читає `rtok logs`
 path      = "~/.rtok/logs/rtok.log"   # ротовані копії лежать поруч: rtok.log.1 … .5
@@ -104,10 +105,31 @@ host      = "claude"                  # claude | cursor | copilot | devin | clin
 max_ms    = 10                        # м'який бюджет; понад нього подія логується як повільна
 fail_open = true                      # будь-яка помилка → `{}` і код виходу 0; false лише для налагодження
 
-[agents]                              # реєстр агентів rtok (T282, D34)
+[agents]                              # реєстр агентів rtok (T282, D34); див. agents-and-worktrees.md
 enabled    = true                     # false = хуки пропускають register/touch/end агента й надсилання повідомлень (облік сесій не змінюється)
 idle       = "30m"                    # вікно `live()`: немає `ended_at`, а `last_seen` у межах цього проміжку від поточного моменту
 push_bytes = 1024                     # оформлені повідомлення, що надсилаються на кожен UserPromptSubmit/PostToolUse; решта → "and N more" (T288)
+
+[agents.usage]                        # rtok agents usage (T358)
+source = "logs"                       # logs = власні файли сесій агентів (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI); rtok = те, що пройшло через rtok; both
+hosts  = []                           # [] = кожен хост; інакше id хостів, напр. ["claude", "codex"]
+since  = ""                           # "" = увесь час; дата (2026-09-01, цілі дні в tz) або тривалість (30d)
+until  = ""                           # "" = по сьогодні; дата, включно
+period = "monthly"                    # monthly | daily: нижня таблиця
+by     = "agent"                      # agent | model: за чим групує середня таблиця
+tz     = ""                           # зона IANA для меж днів і місяців; "" = системна зона
+
+[agents.usage.dirs]                   # звідки `rtok agents usage` читає власні записи кожного хоста (T358.3); Claude Code і Codex використовують [stats] transcripts_dir / codex_dir
+opencode = ["~/.local/share/opencode"] # файли opencode*.db у ньому; незмінений типовий шлях слідує за $XDG_DATA_HOME
+kilo     = ["~/.local/share/kilo"]     # файли kilo*.db у ньому; незмінений типовий шлях слідує за $XDG_DATA_HOME
+copilot  = ["~/.copilot/session-state"] # */events.jsonl; незмінений типовий шлях слідує за $COPILOT_HOME
+gemini   = ["~/.gemini/tmp"]           # */chats/session-*; незмінений типовий шлях слідує за $GEMINI_CLI_HOME
+droid    = ["~/.factory/sessions"]     # позначається як unsupported, коли є: Factory не документує поля токенів
+pi       = ["~/.pi/agent/sessions"]    # */*.jsonl; незмінений типовий шлях слідує за $PI_CODING_AGENT_SESSION_DIR, інакше $PI_CODING_AGENT_DIR/sessions
+kimi     = ["~/.kimi-code/sessions"]   # Kimi Code: */*/agents/*/wire.jsonl; незмінений типовий шлях слідує за $KIMI_CODE_HOME
+grok     = ["~/.grok/sessions"]        # позначається як unsupported, коли є: xAI вказує на `grok usage`, який rtok не запускає; слідує за $GROK_HOME
+zcode    = ["~/.zcode"]                # позначається як unsupported, коли є: ZCode не документує свої записи сесій
+antigravity = ["~/.gemini/antigravity"] # позначається як unsupported, коли є: Google не документує локальні дані Antigravity
 
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = усі інструменти ввімкнених плагінів; інакше список дозволених; `expand` завжди лишається в переліку (D4)
@@ -134,22 +156,14 @@ max_description_tokens = 60           # 0 = без обрізання; за ме
 allow = []                            # порожньо = зберігати всі назви, яких немає в deny
 deny = []                             # прибрати ці назви з tools[]; подальші виклики все одно пересилаються
 
-# ── Batch / Flex / маршрутизація (заплановано — бінарник ще не завантажує; див. docs/batch-flex.md) ──
-# Якщо скопіювати це в ~/.rtok/config.toml, `rtok config validate` не пройде, доки ключі не з'являться.
-# [proxy.batch]
-# enabled = true                      # fallback уже сьогодні пересилає шляхи Batch
-# observe = true                      # записувати створення/опитування/результати (заплановано)
-# parse_results = false               # розгортати використання з результатів Batch у журнал обліку (заплановано)
-#
-# [proxy.flex]
-# enabled = false                     # prepare може задавати service_tier = "flex" (заплановано)
-# force = false                       # перезаписувати service_tier клієнта
-# fallback = "none"                   # none | default на Flex 429 (TODO)
-#
-# [proxy.routing]
-# enabled = false                     # маршрутизація моделей/рівнів D9 (заплановано)
-# sticky = true                       # закріпити upstream для прив'язки кешу промптів (I-84)
-# default_model = ""                  # порожньо = лишити модель клієнта
+[proxy.lanes]                         # T385.1; позначати смугу кожного запиту в журналі обліку (calls.kind); байти лишаються ідентичними
+enabled = true                        # false = кожен запит — непозначений api_request; x-rtok-lane і /lane/<name>/ пересилаються як надіслано
+
+[proxy.batch]                         # ключів ще немає (T385.4)
+
+[proxy.flex]                          # ключів ще немає (T385.5)
+
+[proxy.routing]                       # ключів ще немає (D9)
 
 [web]                                 # rtok web (ті самі дані, що й у rtok tui)
 host = "127.0.0.1"                    # --host
@@ -278,6 +292,10 @@ plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: 
 cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # сюди готує файли agy plugin install; лише читання
 [setup.devin]
 config_path   = "~/.config/devin/config.json"  # mcp_config.json читається поруч; Windows: %APPDATA%\devin\
+[setup.roo]
+mcp_path      = ""                               # порожньо: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
+[setup.qwen]
+dir           = "~/.qwen"                    # settings.json (хуки, mcpServers); QWEN_HOME переносить каталог
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)
@@ -287,7 +305,8 @@ max_rate  = 0.05                      # стеля повторних читан
 cmd = ""                              # підказка сімейства команди, коли викликач його знає (--cmd)
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
-root = ""                             # де `rtok worktree add` створює worktree; "" = найближчий `_worktrees/` над основним checkout, інакше поруч із ним
+enabled = true                        # false: кожна команда `rtok worktree` (і list) каже, що worktree не ввімкнено, MCP не показує жодного інструмента worktree_*, а хуки Claude WorktreeCreate/WorktreeRemove роблять те, що Claude робить без rtok
+root = "~/.rtok/worktrees"            # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; `~` розкривається
 
 [otel]                                # експорт OpenTelemetry (D19); вимкнено, доки не визначено endpoint
 endpoint      = ""                    # базова URL-адреса OTLP/HTTP, наприклад "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
@@ -317,6 +336,7 @@ enabled          = true
 default_mode     = "full"             # full | lines | map | signatures
 max_chars        = 20000              # понад це — head/tail + id архіву
 native_max_bytes = 32768              # поріг відмови для PreToolUse(Read); ніколи не нижче за це
+range_max_lines = 300              # T383: нативний Read із limit 1..=N проходить хук; 0 = лише без діапазону
 advice           = true               # false = ніколи не відмовляти нативному Read
 allow_paths      = []                 # додаткові корені поза cwd
 search_max       = 50
@@ -348,6 +368,7 @@ modes         = []                    # те саме, що й [setup].modes; se
 enabled      = true
 window_turns = 8
 deny_grep_glob = false           # вмикається явно: відмовляти нативним Grep/Glob, спрямовувати до MCP search/tree (T50.4)
+grep_symbol = false              # вмикається явно: Grep одного ідентифікатора (`foo`, `fn foo`, `class Foo`, `\bfoo\(`) відхиляється з його 1-5 індексованими визначеннями та кількістю посилань; лише пошук в індексі (T369)
 skills = false                   # вмикається явно (Claude Code): відмовляти Skill, чий SKILL.md перевищує skill_max_bytes, із його картою + `expand <id>` (T62.1)
 skill_max_bytes = 8192           # тіла такого розміру або менші завантажуються цілком; так само будь-який skill з allowed-tools / model / context / agent у frontmatter
 
@@ -375,10 +396,15 @@ hybrid     = true                     # коли ввімкнено: RRF(fts5, k
 enabled    = true
 max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"
 map_tokens = 0                        # обмеження карти репозиторію на SessionStart (частка D5 поряд із memory.recall_tokens); 0 = вимкнено, доки не пройде A/B P7
+map_rank   = "refs"                   # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
 body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
 auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
+auto_add_projects = true               # T329.6: реєструвати каталог у реєстрі проєктів, коли там стартує сесія з хуками, створюється або приєднується worktree через `rtok worktree` (під назвою його гілки) або виконується виклик graph MCP; false = реєстр змінюється лише через сторінку й CLI
 backend    = "tags"                   # tags | lsp: бекенд індексу; типово tags; lsp запускає rust-analyzer/clangd/tsserver з PATH (P30)
 watch      = "off"                    # off | notify: фонове переіндексування всередині `rtok mcp` (P8d)
+auto_link_references = true           # T329.8: йти за посиланнями в маніфестах (Cargo path, npm file:/link:, go replace, Python path, submodules) в інші каталоги, реєструвати й автоматично зв'язувати їх
+reference_depth = 3                   # T329.8: скільки рівнів посилань іти від проєкту (A -> B — це 1); досягнення межі показується й логується
+max_auto_projects = 20                # T329.8: найбільше проєктів, які посилання можуть додати до реєстру; досягнення межі показується й логується
 
 [plugins.toon]
 enabled  = true
@@ -423,11 +449,28 @@ cache_by_provider = true
 
 
 
+### `[proxy.lanes]`
+
+Кожен проксійований запит класифікується в смугу, і смуга записується в журнал обліку
+(`calls.kind`). Першим вирішує шлях: Batch (`/v1/messages/batches`, `/v1/batches`,
+Gemini `:batchGenerateContent`), `files`, `embeddings` і `meta` (`/v1/models`,
+`count_tokens`) називають власну смугу. Синхронний чат-виклик — це хід `agent`, якщо
+викликач не вказав інакше заголовком `x-rtok-lane: bulk|internal` або префіксом шляху `/lane/<name>/`
+(`/lane/bulk/v1/messages`). Обидва вилучаються перед відправленням запиту upstream. Евристик
+немає: непозначений запит — це `agent`, смуга, якою був кожен запит до появи смуг.
+
+| Ключ | Тип | Типово | Значення |
+|-----|------|---------|---------|
+| `enabled` | bool | `true` | `false` записує кожен запит як звичайний `api_request` і пересилає заголовок та префікс без змін |
+
+Смуга agent лишає `calls.kind = api_request`; інші записують `api_request:<lane>`
+(`api_request:bulk`, `api_request:batch`, ...). Байти запиту смуга не змінює.
+
 ### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
 
-Ці таблиці документують задумані pass-through для Batch, переписування Flex `service_tier` і
-параметри маршрутизації моделей/sticky. **Вони ще не розбираються** — якщо додати їх до робочого файлу конфігурації,
-`rtok config validate` не пройде, доки не з'являться відповідні поля `Config`. Fallback
+Ці три таблиці існують і порожні: порожній `[proxy.batch]` завантажується, але жодна
+ще не має ключа. Ключі нижче — **задумані**; додавання будь-якого з них до робочого файлу конфігурації
+і далі не проходить `rtok config validate`, доки не з'явиться відповідний крок. Fallback
 проксі вже пересилає невідомі шляхи (зокрема `/v1/batches` і
 `/v1/messages/batches`) без `Wire`; вставлення Flex і переписування для маршрутизації — це майбутня робота над
 `prepare` / політиками. Повна семантика: [`docs/batch-flex.md`](batch-flex.md).
@@ -547,7 +590,7 @@ color = false   # RTOK_UI_COLOR=false
 |-----------|------|-----|
 | глобальний | `--config <path>` | (обирає файл; не ключ) |
 | глобальний | `RTOK_HOME` | (обирає каталог; лише змінна середовища, не прапорець clap) |
-| читання | `--json` | `stats.format` для `stats`; в інших випадках — дія (сторінка `web::model` як JSON, а не збережений ключ). Для `stats`, `info`, `config show`, `doctor`, `plugins`, `agents list`, `agents sessions`, `agents whoami`, `agents show`, `agents inbox`, `logs`, `demon status`, `otel status` |
+| читання | `--json` | `stats.format` для `stats`; в інших випадках — дія (сторінка `web::model` як JSON, а не збережений ключ). Для `stats`, `info`, `config show`, `doctor`, `plugins`, `agents list`, `agents sessions`, `agents whoami`, `agents show`, `agents inbox`, `worktree whoami`, `logs`, `demon status`, `otel status` |
 | `hook` | `--host` | `hook.host` |
 | `proxy` | `--port`, `--upstream`, `--mode`, `--dry-run` | `proxy.port`, `proxy.upstream`, `proxy.mode`, `proxy.dry_run` |
 | `web` | `--host`, `--port` | `web.host`, `web.port` (`rtok dashboard` — застаріле написання) |
@@ -560,6 +603,8 @@ color = false   # RTOK_UI_COLOR=false
 | `agents remove` | `--dry-run` | `setup.dry_run` (сама команда — це дія `--remove`) |
 | `agents list` | — | читає конфігурації хостів і `<bin> --version` (`--json` — див. рядок «читання») |
 | `agents whoami` | — | читає `RTOK_AGENT_ID` і знаходить його через сховище (T283); без ключа, без `setup.*` (`--json` — див. рядок «читання») |
+| `worktree whoami` | — | читає `RTOK_AGENT_ID` і `[worktree] root` (T411); власного ключа немає (`--json` — див. рядок «читання») |
+| `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а також `.dirs.<host>` без прапорця (`--unpriced` обирає вигляд одного виклику, `--json` — див. рядок «читання») |
 | `agents sessions` | `--all` | (дія: також перелічує завершені сесії; live чи idle визначає `agents.idle`) |
 | `agents show` | — | знаходить префікс id через сховище (T284); live чи idle визначає `agents.idle` (`--json` — див. рядок «читання») |
 | `agents status` | — | записує текст статусу агента, що викликає (`RTOK_AGENT_ID`), ≤ 120 символів (T284); без ключа |

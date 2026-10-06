@@ -10,7 +10,7 @@ lang: uk
 
 ## Встановлення
 
-Для macOS (Apple silicon або Intel) і Linux x86-64 є готові бінарники.
+Для macOS (Apple silicon) і Linux x86-64 є готові бінарники.
 Інсталятор написано на POSIX `sh`, він кладе `rtok` (і `rtok-update`) у `~/.cargo/bin`.
 
 ```bash
@@ -23,6 +23,8 @@ curl --proto '=https' --tlsv1.2 -LsSf \
 ```bash
 ketch install pyrlyn/rtok
 ```
+
+Хуки спершу пробують швидкий клієнт `rtok-hook`. Коли менеджер пакетів лінкує в `PATH` лише `rtok`, команди `rtok mcp`, `rtok hook --serve` і `rtok agents install` створюють посилання на `rtok-hook` поруч у тому самому каталозі з `PATH` (unix, у міру можливостей; наявний чужий файл не чіпають).
 
 Із вихідного коду (інструментарій закріплено в `mise.toml`):
 

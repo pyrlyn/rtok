@@ -25,7 +25,7 @@ Claude Code кеширует плагин по `version` в его манифе�
 Плагин попадает на машину из одного из трёх источников, и схема охватывает их все:
 
 - **GitHub**: хост устанавливает из репозитория (`claude plugin marketplace add
-  listepo/rtok`).
+  pyrlyn/rtok`).
 - **Local**: хост устанавливает из дерева плагина на диске (`claude plugin marketplace add
   <path>/plugins/claude`) — для разработки и офлайн-установок.
 - **Marketplace**: запись каталога хоста для закоммиченного `.claude-plugin/marketplace.json`.
@@ -113,8 +113,8 @@ rtok хранит по одной строке на хост с тем, что �
 
 | Источник | На что указывает marketplace `rtok` | Доступная версия |
 | --- | --- | --- |
-| GitHub | `listepo/rtok` | собственная версия запущенного rtok |
-| Marketplace | `listepo/rtok` | собственная версия запущенного rtok |
+| GitHub | `pyrlyn/rtok` | собственная версия запущенного rtok |
+| Marketplace | `pyrlyn/rtok` | собственная версия запущенного rtok |
 | Local | дерево плагина, которое находит rtok (`plugins/claude` рядом с бинарником, в префиксе `share/rtok`, в хранилище ketch или в checkout исходников) | `.rtok-plugin-version` этого дерева плюс `+g<sha>[.dirty]` из `git describe --always --dirty` |
 
 GitHub и marketplace не требуют сетевого вызова: релиз держит каждый файл версии равным
@@ -127,9 +127,19 @@ GitHub и marketplace не требуют сетевого вызова: рел�
 SemVer, иначе `0.0.0`. Считается, что у Claude плагин есть, когда этот файл содержит `rtok@rtok`.
 
 Запись `rtok` в `~/.claude/plugins/known_marketplaces.json` сверяется с выбранным
-источником: `{"source":"github","repo":"listepo/rtok"}` для GitHub и marketplace,
+источником: `{"source":"github","repo":"pyrlyn/rtok"}` для GitHub и marketplace,
 `{"source":"directory","path":"<local tree>"}` для local. Любое другое значение (например, путь к хранилищу ketch
 до 0.10) считается устаревшим и вызывает переустановку, которая перенаправляет запись.
+
+Репозиторий переехал из аккаунта `listepo` в организацию `pyrlyn`. Marketplace,
+добавленный до переезда, по-прежнему записывает `{"source":"github","repo":"listepo/rtok"}` для Claude или
+`source = "https://github.com/listepo/rtok.git"` в `[marketplaces.rtok]` для Codex. Обе записи
+по правилу выше устарели. Следующий `rtok agents install` или `agents update` удаляет
+marketplace `rtok`, добавляет его снова из `pyrlyn/rtok` и один раз переустанавливает `rtok@rtok`. Имена
+marketplace и плагина остаются `rtok`, поэтому `rtok@rtok` по-прежнему означает тот же плагин. Чтобы перейти
+вручную: `claude plugin marketplace remove rtok && claude plugin marketplace add
+pyrlyn/rtok && claude plugin install rtok@rtok` (Codex: то же с `codex plugin`, а для
+последнего шага — `plugin add`).
 
 ## Решение
 
@@ -214,7 +224,86 @@ CLI: Claude Code
 
 ## Список устаревших плагинов
 
-`rtok agents outdated` будет задокументирован, когда появится T279.1.
+`rtok agents outdated` перечисляет хосты, чей плагин rtok старше запущенного rtok, и только их.
+`rtok agents update --check` печатает ровно то же самое — для тех, кто ищет под `update`. Команда
+читает только локальные файлы: никакой сети, никакого вызова CLI хоста и никакого обновления
+marketplace, поэтому она быстрая и работает офлайн. Целевая версия — всегда собственная версия
+запущенного бинарника (`rtok --version`).
+
+```console
+$ rtok agents outdated
+agent  installed available source
+claude 0.0.1     0.14.0    github
+
+run: rtok agents update claude
+```
+
+**Что перечисляется.** Проверяется каждый хост, который поддерживает rtok (тот же реестр, что у
+`agents list`), а не только те, что есть в квитанции, поэтому плагин, установленный вручную или
+более старым rtok, тоже находится. Вариант хоста попадает в строку, когда там установлен плагин и его версия
+ниже запущенного rtok по старшинству SemVer. Метаданные сборки игнорируются: локальная `0.14.0+g12c7e91`
+при rtok `0.14.0` считается актуальной. Установленная версия ищется в том же порядке, что и в
+`agents update` ([решение](#решение)): файл `.rtok-plugin-version` в установленной
+копии, затем квитанция, затем собственная запись хоста (`installed_plugins.json` у Claude). Столбец
+`source` берётся из того же поиска (`github`, `local`, `marketplace`).
+
+**Что скрыто.** Хосты без плагина, с той же версией и с более новой версией
+не печатаются. Хост со старой версией, который установлен, но версию которого нигде не
+записано (нет файла версии, нет строки квитанции, нет пригодной записи хоста), считается `0.0.0` и показывается как
+`legacy`; хост, чья запись называет версию, как `0.0.1` выше, показывает эту версию.
+
+```console
+$ rtok agents outdated
+agent  installed available source
+claude legacy    0.14.0    github
+
+run: rtok agents update claude
+```
+
+**Делать нечего.** Два сообщения, в зависимости от того, что-то установлено или нет:
+
+```console
+$ rtok agents outdated
+all rtok plugins are up to date (1 installed, rtok 0.14.0)
+$ rtok agents outdated gemini
+no rtok plugins installed
+```
+
+**Выбор хостов.** Как у `update`: необязательный список хостов через запятую
+(`rtok agents outdated claude,cursor`) и `--cli` / `--desktop` для одного варианта.
+
+**`--json`** печатает один объект и никакого сообщения для человека, в том числе когда обновлять нечего
+(тогда `outdated` пуст, а `installed` считает проверенные плагины):
+
+```console
+$ rtok agents outdated --json
+{"rtok":"0.14.0","outdated":[{"agent":"claude","variant":"cli","installed":"0.0.1","available":"0.14.0","source":"github","legacy":false}],"installed":1}
+```
+
+| Поле | Значение |
+| --- | --- |
+| `rtok` | Версия запущенного rtok, с которой сравнивается каждая строка. |
+| `outdated[].agent`, `.variant` | Id хоста и вариант (`cli` или `desktop`). |
+| `outdated[].installed` | Установленная версия или `legacy`, когда её нигде не записано. |
+| `outdated[].available` | Версия запущенного rtok. |
+| `outdated[].source` | `github`, `local` или `marketplace`. |
+| `outdated[].legacy` | `true` для строки `legacy`. |
+| `installed` | Сколько установок плагинов проверено, устаревших или нет. |
+
+**`--exit-code`** завершается с кодом 10, когда устарел хотя бы один хост, и с 0 в остальных случаях. Без него
+код выхода в обоих случаях 0, поэтому скрипт, который только читает вывод, продолжает работать:
+
+```console
+$ rtok agents outdated --json --exit-code; echo "exit=$?"
+{"rtok":"0.14.0","outdated":[{"agent":"claude","variant":"cli","installed":"0.0.1","available":"0.14.0","source":"github","legacy":false}],"installed":1}
+exit=10
+```
+
+**Почему это работает офлайн.** Доступная версия — собственная версия запущенного бинарника: тег или
+запись каталога, соответствующие этой сборке, несут тот же `.rtok-plugin-version`
+(это обеспечивает `tools/plugin-versions.sh --check`), поэтому спрашивать сервер не у кого. Отличаться от бинарника
+может только локальная копия репозитория, и её читает `update`; `outdated` — нет.
+Команда никогда ничего не меняет: чтобы действовать по списку, выполните строку `run:`, которую она печатает.
 
 ## Выпуск релиза
 
@@ -243,11 +332,9 @@ $ echo $?
 - `tests/plugin_versions.rs` проверяет, что каждый файл из списка `--files` равен `CARGO_PKG_VERSION`, поэтому
   `just check` ловит расхождение локально.
 
-`release-plz` редактирует только `Cargo.toml`, `Cargo.lock` и `CHANGELOG.md`, поэтому он никогда не трогает
-файлы плагинов, а `tools/release.sh --no-bump` (запускается после слияния его релизного пул-реквеста) ничего
-не коммитит. Если его релизный пул-реквест когда-нибудь повысит версию, проверка в `ci.yml` будет падать на этом пул-реквесте, пока
-в него не закоммитят `tools/plugin-versions.sh --set <version>`, а проверка в `release.yml` остановит
-тег, который проскочил. Сам процесс выпуска описан в
+Больше ничто не повышает версию: release-plz больше не запускается в CI, а пул-реквест
+рабочего процесса Bump несёт коммит `release.sh`, поэтому проверка в `ci.yml` выполняется на нём до слияния,
+а проверка в `release.yml` всё равно остановит тег, который проскочил. Сам процесс выпуска описан в
 [Выпуске релизов rtok](../release.md).
 
 ## Устранение неполадок

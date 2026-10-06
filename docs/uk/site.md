@@ -18,7 +18,7 @@ order: 1
 lang: uk
 ---
 
-<!-- Website copy for the listepo project site. The sync-docs workflow copies this file to
+<!-- Website copy for the pyrlyn project site. The sync-docs workflow copies this file to
 pyrlyn/landing (main) as content/projects/rtok.md on every change to main and on every v*
 tag; front matter follows CONTENT_CONTRACT.md in that repository.
 Sources (checked 2026-09-27): README.md and the clap CLI in src/cli.rs; version from the latest
@@ -56,7 +56,7 @@ GitHub release (v0.10.0); accent from site/assets/css/custom.css (--rtok-accent)
 
 ## Встановлення
 
-macOS (Apple silicon або Intel) і Linux x86-64, встановлення в `~/.cargo/bin`:
+macOS (Apple silicon) і Linux x86-64, встановлення в `~/.cargo/bin`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pyrlyn/rtok/releases/latest/download/rtok-installer.sh | sh
