@@ -1,12 +1,11 @@
 # rtok — `just check` is the gate every task must pass (plan T0.7, D16).
-# Tools are pinned in mise.toml; override CARGO/CLIFF/HUGO if mise is already activated.
+# Tools are pinned in mise.toml; override CARGO/CLIFF if mise is already activated.
 
 cargo := env("CARGO", "mise exec -- cargo")
 cache := env("CARGO_CACHE", "mise exec -- cargo-cache")
 cliff := env("CLIFF", "mise exec -- git-cliff")
 # cargo-dist is not in mise.toml (compiling it on every `mise install` is slow); mise fetches it on demand.
 dist := env("DIST", "mise x cargo:cargo-dist@0.32.0 -- dist")
-hugo := env("HUGO", "mise exec -- hugo --source site")
 jscpd := env("JSCPD", "mise exec -- jscpd")
 oxlint := env("OXLINT", "mise exec -- oxlint")
 oxfmt := env("OXFMT", "mise exec -- oxfmt")
@@ -20,8 +19,15 @@ cpus := `case "$(uname -s)" in Linux) nproc;; Darwin|*BSD) sysctl -n hw.ncpu;; *
 
 default: check
 
+# T420: the gate for what this change touches (files differing from the merge base with main,
+# committed or not). A docs-only change runs no cargo tests; a shared input (Cargo.toml, build.rs,
+# justfile, ...) or an unknown merge base runs `full-check`. CI calls the recipes below directly,
+# so it still runs everything. See tools/selective-check.sh.
+check:
+    tools/selective-check.sh
+
 # fmt --check, clippy -D warnings, tests, min-feature build, copy-paste detector, JS/TS lint+format, Python tests
-check: fmt-check gates
+full-check: fmt-check gates
 
 # T312: fmt-check fails first, in a second; then dup/js/python run beside the cargo chain, which
 # stays sequential (one target/, cargo's lock). just waits for every branch; any failure fails.
@@ -127,8 +133,8 @@ test-cov *args: && swarfr
 
 # Inner loop: build and run only the test targets the current change can reach. `nextest -E`
 # filters after the build, so the saving comes from cargo target selection (`--test <name>`);
-# tools/test-changed.sh maps the diff onto it. Selection is by name, so this is an
-# accelerator, not a coverage proof — `just check` stays the gate before a commit.
+# tools/test-changed.sh maps the diff onto it (T420: `just check` runs it against the merge base).
+# Selection is by name, so this is not a coverage proof — `just full-check` is the whole gate.
 test-changed rev="HEAD": && swarfr
     NEXTEST_TEST_THREADS="{{cpus}}" CARGO="{{cargo}}" tools/test-changed.sh {{rev}}
 
@@ -182,7 +188,7 @@ pypi-publish *flags:
 # the tests that validate Markdown (plan.md/todo.md ids and Check: lines, ideas.md, docs/, ...)
 docs-check:
     {{cargo}} test -p rtok --test plan_unique_ids --test ideas_md --test docs_structure \
-        --test host_docs --test site_pages --test public_numbers --test toolchain_rows \
+        --test host_docs --test public_numbers --test toolchain_rows \
         --test plugin_plans --test report --test agents_doc --test agents_worktrees \
         --test stats_model
 
@@ -212,14 +218,6 @@ release level="patch" *flags:
 # regenerate CHANGELOG.md from git history (git-cliff, config in cliff.toml)
 changelog:
     {{cliff}} -o CHANGELOG.md
-
-# build the docs site into site/public (fails on a broken link or missing mount)
-site:
-    {{hugo}} --minify --panicOnWarning
-
-# docs site at http://localhost:1313 with live reload
-site-serve:
-    {{hugo}} server --buildDrafts
 
 # T310.9: build the SPA, then API+UI on host:port. `RTOK_WEB_DIST` makes `rtok web` read
 # web/dist at run time, so the UI is the one just built even when the binary was compiled earlier

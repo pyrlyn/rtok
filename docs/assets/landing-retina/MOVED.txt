@@ -5,6 +5,6 @@ snapshots in pyrlyn/brand at tag v0.3.0:
   https://github.com/pyrlyn/brand/tree/v0.3.0/brands/rtok/sources/rtok/docs/assets/landing-retina
 
 The current logo and icon exports are brand/logo/png/ and brand/icons/feature/ (see brand/README.md).
-The images the docs site actually serves are in site/static/ and were not moved. README.md stays here
-because the sync-docs workflow publishes docs/**/*.md to pyrlyn/landing. This note is a .txt file so
-that workflow does not publish it.
+The Hugo docs site that served the remaining images is gone; the README logos now live in assets/.
+README.md stays here because the sync-docs workflow publishes docs/**/*.md to pyrlyn/landing. This
+note is a .txt file so that workflow does not publish it.

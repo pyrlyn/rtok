@@ -145,7 +145,7 @@ fn pick(root: &Path) -> Result<(&'static str, &'static [&'static str])> {
 ///
 /// Cargo workspaces use `target/rtok-lsp-xdg` (already gitignored); Dart uses
 /// `.dart_tool/rtok-lsp-xdg`; everything else gets `.rtok-lsp-xdg`.
-fn lsp_state_root(root: &Path) -> PathBuf {
+pub(crate) fn lsp_state_root(root: &Path) -> PathBuf {
     if root.join("Cargo.toml").is_file() {
         root.join("target").join("rtok-lsp-xdg")
     } else if root.join("pubspec.yaml").is_file() {

@@ -36,6 +36,8 @@ static VARIANTS: [Variant; 2] = [
         bins: &["opencode-desktop"],
         apps: &[
             "/Applications/OpenCode.app",
+            // User installer (verified on Windows): the folder name is the package id.
+            "$LOCALAPPDATA/Programs/@opencode-aidesktop/OpenCode.exe",
             "$LOCALAPPDATA/Programs/OpenCode/OpenCode.exe",
         ],
     },

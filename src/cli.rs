@@ -1764,7 +1764,10 @@ pub fn run() -> Result<()> {
                 let report = crate::agents::junk::report_with(
                     &cfg,
                     &crate::agents::junk_map::Roots::from_env(),
-                    crate::agents::junk::Options { all },
+                    crate::agents::junk::Options {
+                        all,
+                        ..Default::default()
+                    },
                     crate::agents::junk::AGENT_SCAN_LIMIT,
                 );
                 if json {

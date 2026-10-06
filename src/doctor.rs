@@ -885,9 +885,12 @@ fn push_file(srcs: &mut Vec<Source>, name: &str, path: &Path) {
     };
     // By the file itself, not its name: with `CLAUDE.md -> AGENTS.md` one file was read twice,
     // every line came back as a duplicate of itself, and its tokens were counted twice.
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let me = real(path);
-    if srcs.iter().any(|s| real(Path::new(&s.path)) == me) {
+    if srcs
+        .iter()
+        .any(|s| crate::fs::same_path(&real(Path::new(&s.path)), &me))
+    {
         return;
     }
     let disp = path.display().to_string();

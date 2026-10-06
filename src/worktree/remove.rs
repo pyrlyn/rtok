@@ -57,7 +57,7 @@ pub struct Removed {
 /// worktree, anyone else's lock, the one holding `cwd`, and an unmerged branch unless
 /// `keep_branch`.
 pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<Removed> {
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let as_path = cwd.join(target);
     let named = as_path.exists();
     let from = if named { as_path.as_path() } else { cwd };
@@ -74,7 +74,7 @@ pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<
     let found: Vec<_> = match named {
         true => entries
             .iter()
-            .filter(|e| real(&e.record.path) == real(&as_path))
+            .filter(|e| crate::fs::same_path(&real(&e.record.path), &real(&as_path)))
             .collect(),
         false => entries
             .iter()

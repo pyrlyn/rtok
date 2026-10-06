@@ -41,9 +41,14 @@ fn ident(what: &str, raw: &str) -> Result<String> {
 /// Symlinks resolved through the deepest ancestor that exists, the rest appended: a root
 /// that does not exist yet still has to be judged by where it would land.
 fn resolved(path: &Path) -> PathBuf {
-    let real = |a: &Path| Some(a.canonicalize().ok()?.join(path.strip_prefix(a).ok()?));
+    // `dunce`: std canonicalize's `\\?\` prefix makes `starts_with` miss the temp dir.
+    let real = |a: &Path| {
+        let canon = dunce::canonicalize(a).ok()?;
+        let rel = path.strip_prefix(a).ok()?;
+        Some(canon.join(rel))
+    };
     let landed = path.ancestors().find_map(real);
-    landed.unwrap_or_else(|| path.to_path_buf())
+    landed.unwrap_or_else(|| crate::fs::canon(path))
 }
 
 /// `temp` lists the directories the OS may purge; a worktree under one of them loses
@@ -81,7 +86,9 @@ pub fn plan(
     let (landing, checkout) = (resolved(root), resolved(main));
     // A repository that itself lives under the temp directory (a test fixture, a scratch
     // clone) is no worse off with its worktrees beside it.
-    let purgeable = |t: &PathBuf| landing.starts_with(t) && !checkout.starts_with(t);
+    let purgeable = |t: &PathBuf| {
+        crate::fs::path_starts_with(&landing, t) && !crate::fs::path_starts_with(&checkout, t)
+    };
     if let Some(tmp) = temp.iter().map(|t| resolved(t)).find(purgeable) {
         bail!(
             "worktree root {} is under the temporary directory {}; set `[worktree] root`",
@@ -236,5 +243,16 @@ mod tests {
             scratch.unwrap().path,
             Path::new("/purged/session/_worktrees/rtok-t1")
         );
+    }
+
+    /// T430: a missing child of a real directory does not keep `std::fs::canonicalize`'s `\\?\`.
+    #[cfg(windows)]
+    #[test]
+    fn resolved_drops_the_verbatim_prefix() {
+        let dir = tmp_dir("wt-resolved");
+        let got = resolved(&dir.join("child"));
+        let text = got.to_string_lossy();
+        assert!(!text.starts_with(r"\\?\"), "{text}");
+        assert!(got.ends_with("child"), "{got:?}");
     }
 }
