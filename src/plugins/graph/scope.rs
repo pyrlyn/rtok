@@ -380,10 +380,13 @@ impl ExploreParts for Scoped<'_> {
 /// `outline` of a file in the scope: the first project that holds the path, else the first.
 pub fn outline(cx: &Ctx, scope: &[Member], path: &str) -> Result<String> {
     let p = Path::new(path);
-    let real = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    // Both sides canonical: Windows' `canonicalize` adds `\\?\` and expands 8.3 names
+    // (`RUNNER~1`), macOS resolves `/var` to `/private/var`.
+    let canon = |q: &Path| dunce::canonicalize(q).unwrap_or_else(|_| q.to_path_buf());
+    let real = canon(p);
     let holds = |m: &&Member| {
         if p.is_absolute() {
-            real.starts_with(&m.root)
+            real.starts_with(canon(&m.root))
         } else {
             m.root.join(p).exists()
         }
