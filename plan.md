@@ -40,6 +40,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.3 | todo | P2 | 3 | 0% | |
+| T330.3.1 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T330.3.2 | todo | P2 | 3 | 0% | |
 | T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -1123,9 +1125,29 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 
 ### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
 
+Split into T330.3.1 and T330.3.2 (one PR each, claimed before coding to stay within the task size cap); this card stays the spec and the parent.
+
 Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 and the investigation T342 (T339 closed: D36).
 
 Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
+
+### T330.3.1. Junk: `cache` kind, rtok's own caches and tagged caches
+
+Part of T330.3. The scan side of the `cache` kind in `rtok agents junk list`, over the existing junk model (`src/agents/junk.rs`, `junk_map.rs`) and T152's tagged-cache code (`worktree::{list, clean}`): documented §22 cache dirs of each host, rtok's own caches (`<project>/.rtok-lsp-xdg/{cache,pub-cache}` of every registered project, `$XDG_CACHE_HOME/rtok`), and every directory under an agent's or rtok's folders carrying a valid `CACHEDIR.TAG`, deleted under T152's rules (T342): only when idle (24 h), never the cache of the worktree the command runs from, one root at a time. A bad `CACHEDIR.TAG` signature is not cache. Platform cache roots and Electron cache folders without a §22 row are listed with "not documented: not cleared" and counted in no "Freed" total (D36). Shared folders are counted once. `clear` itself starts removing these in T330.4 (re-check, flags); `[agents.junk] extra` arrives with T330.5.
+
+Execution plan (2026-10-06, Claude Code / sonnet-5.5):
+1. `junk_map.rs`: Electron cache subfolders (`Cache`, `Code Cache`, `GPUCache`, `CachedData`, `DawnCache`) as listed-only rows; `{rtok_cache}` root.
+2. `worktree/list.rs`: `usage_until` (the existing walk with a deadline); `lsp_state_root` made `pub(crate)`.
+3. New `src/agents/junk_cache.rs`: `Item` model, cache items from §22 dirs, rtok-owned dirs and tagged dirs (`worktree::clean::kept_because` for the idle and own-worktree rules), nested items dropped, one-root-at-a-time by construction.
+4. `junk.rs`: items per agent, `cache` kind row, "Freed" from cleared items (shared path once), text and JSON.
+5. `research.md` §22: rtok-owned cache rows with their primary sources.
+6. Tests on fixture homes under `testutil::tmp_dir` (no real agent folder): exact sizes, kinds under the right agent, tag handling (valid, bad signature, idle, current worktree), listed-only caches, shared folder once, symlink not followed, dry run changes nothing; `just full-check`.
+
+### T330.3.2. Junk: `temp`, `build`, `locks`, `swap` kinds and plugin staging caches
+
+Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item model: `temp` (entries older than 24 h and not open by a running process), `build` (tagged build caches in agent worktrees under T152's rules, untagged `dist/`, `.next/`, `__pycache__/` listed only, D36), `locks` (stale agent lock files, only when no process holds them), `swap` (editor swap files whose owning process is gone) and version-numbered plugin staging caches no host config references (T279). Depends on T330.3.1.
+
+Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
 
 ### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
 
