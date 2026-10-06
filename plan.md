@@ -39,7 +39,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.3 | todo | P2 | 3 | 0% | |
-| T330.3.2 | todo | P2 | 3 | 0% | |
 | T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -1118,12 +1117,6 @@ Split into T330.3.1 (done) and T330.3.2 (one PR each); this card stays the spec 
 Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
 
 Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
-
-### T330.3.2. Junk: `temp`, `build`, `locks`, `swap` kinds and plugin staging caches
-
-Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item model: `temp` (entries older than 24 h and not open by a running process), `build` (tagged build caches in agent worktrees under T152's rules, untagged `dist/`, `.next/`, `__pycache__/` listed only, D36), `locks` (stale agent lock files, only when no process holds them), `swap` (editor swap files whose owning process is gone) and version-numbered plugin staging caches no host config references (T279). Depends on T330.3.1.
-
-Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
 
 ### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
 

@@ -6,7 +6,8 @@
 //!
 //! Agents work in a task worktree while the host launched the server in the main checkout,
 //! so a path in a sibling worktree of the cwd's repository is allowed, and so is every
-//! `file://` root of the client's `roots/list` answer (`mcp.rs`). Scratchpads and every
+//! `file://` root of the client's `roots/list` answer (`mcp.rs`) with the worktrees of its
+//! repository (T435). Scratchpads and every
 //! other directory stay outside; `plugins.read.allow_paths` remains the manual escape hatch.
 //! Nothing here runs unless `rtok mcp` called [`enable`], so hooks never spawn git.
 
@@ -41,13 +42,19 @@ pub fn set_client_roots(roots: Vec<PathBuf>) {
     *lock(&CLIENT) = roots;
 }
 
-/// Client roots plus the worktrees of `cwd`'s repository; empty unless [`enable`]d.
+/// Client roots plus the worktrees of the repositories of `cwd` and of every client root;
+/// empty unless [`enable`]d.
 pub(crate) fn dynamic(cwd: &Path) -> Vec<PathBuf> {
     if !ENABLED.load(Ordering::Relaxed) {
         return Vec::new();
     }
-    let mut roots = lock(&CLIENT).clone();
-    roots.extend(worktrees(cwd));
+    let client = lock(&CLIENT).clone();
+    let mut roots = client.clone();
+    // T435: Claude.app's Code tab can hand a session a server whose cwd is another project,
+    // so the session's own repository is known only as a client root.
+    for dir in std::iter::once(cwd).chain(client.iter().map(PathBuf::as_path)) {
+        roots.extend(worktrees(dir));
+    }
     roots
 }
 
@@ -139,6 +146,13 @@ mod tests {
         assert!(!ok(&files[2]), "scratchpad stays outside");
         let err = super::super::resolve(&main, &files[2], &[]).unwrap_err();
         assert!(err.to_string().contains("path outside cwd"), "{err}");
+        // T435: the process cwd is another project; this repository is only a client root.
+        set_client_roots(vec![main.clone()]);
+        assert!(
+            super::super::resolve(&other, &files[0], &[]).is_ok(),
+            "worktree of a client root's repository"
+        );
+        assert!(super::super::resolve(&other, &files[2], &[]).is_err());
         set_client_roots(Vec::new());
         let _ = std::fs::remove_dir_all(base);
     }
