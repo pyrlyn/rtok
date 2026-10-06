@@ -774,9 +774,10 @@ Arguments:
   [PATH]  
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --dry-run        Report what would be indexed and write no rows
-  -h, --help           Print help
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --project <PROJECT>  Project id or directory (see `rtok graph projects`)
+      --dry-run            Report what would be indexed and write no rows
+  -h, --help               Print help
 
 $ rtok graph dead --help
 List unreferenced private definitions (skips pub, trait impls, tests, macros)
@@ -787,9 +788,10 @@ Arguments:
   [PATH]  
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           JSON rows instead of `path:line kind name` lines (uncapped)
-  -h, --help           Print help
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --project <PROJECT>  Project id or directory (see `rtok graph projects`)
+      --json               JSON rows instead of `path:line kind name` lines (uncapped)
+  -h, --help               Print help
 
 $ rtok graph status --help
 Index health for the current or given root
@@ -800,9 +802,10 @@ Arguments:
   [PATH]  
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           
-  -h, --help           Print help
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --project <PROJECT>  Project id or directory (see `rtok graph projects`)
+      --json               
+  -h, --help               Print help
 
 $ rtok graph impact --help
 Symbol impact or call paths to a target
@@ -814,10 +817,11 @@ Arguments:
   [PATH]  
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --depth <DEPTH>  [default: 2]
-      --to <TO>        
-  -h, --help           Print help
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --depth <DEPTH>      [default: 2]
+      --to <TO>            
+      --project <PROJECT>  Project id or directory (see `rtok graph projects`)
+  -h, --help               Print help
 
 $ rtok graph affected --help
 Tests that reach files changed in git (`git diff --name-only`)
@@ -825,11 +829,12 @@ Tests that reach files changed in git (`git diff --name-only`)
 Usage: rtok graph affected [OPTIONS]
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --since <SINCE>  Diff against this ref
-      --staged         Staged files only (`git diff --cached --name-only`)
-      --json           JSON instead of `file ← via symbol` lines
-  -h, --help           Print help
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --since <SINCE>      Diff against this ref
+      --staged             Staged files only (`git diff --cached --name-only`)
+      --json               JSON instead of `file ← via symbol` lines
+      --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
+  -h, --help               Print help
 
 $ rtok guard --help
 Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)

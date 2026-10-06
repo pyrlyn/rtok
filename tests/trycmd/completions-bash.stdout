@@ -2385,13 +2385,17 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__affected)
-            opts="-h --since --staged --json --config --help"
+            opts="-h --since --staged --json --project --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --since)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --project)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -2407,12 +2411,16 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__dead)
-            opts="-h --json --config --help"
+            opts="-h --project --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --project)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -2607,7 +2615,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__impact)
-            opts="-h --depth --to --config --help"
+            opts="-h --depth --to --project --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2618,6 +2626,10 @@ _rtok() {
                     return 0
                     ;;
                 --to)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --project)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -2633,12 +2645,16 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__index)
-            opts="-h --dry-run --config --help"
+            opts="-h --project --dry-run --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --project)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -2869,12 +2885,16 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__status)
-            opts="-h --json --config --help"
+            opts="-h --project --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --project)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

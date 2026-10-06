@@ -25,8 +25,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.4 | todo | P2 | 4 | 0% | |
-| T329.4.2 | todo | P2 | 3 | 0% | |
 | T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
@@ -39,8 +37,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.3 | todo | P2 | 3 | 0% | |
-| T330.3.2 | todo | P2 | 3 | 0% | |
 | T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -863,22 +859,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback the backend component reads 0.6; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
-
-T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336: the web UI selection never replaces the cwd). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
-
-Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
-
-Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
-
-### T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
-
-Second half of T329.4, depends on T329.4.1: the same scope layer for the MCP tools `impact` (walks up into A), `explore` and `outline`, plus the CLI `--project` flag on every graph subcommand that exists then (clap, man page, completions, trycmd goldens, `surface_parity`).
-
-Mention the `project` argument of the graph MCP tools wherever the docs list them (not checked in T329.4.1).
-
-Check: `impact` walks up into A; `explore` and `outline` take `project`; the CLI `--project` flag agrees with MCP; `just full-check`.
-
 ### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 
 T329 §6 (second half): `dead` over the scope (a symbol in B used only from A is not dead while A links B, still reported per project), `affected` reading `git diff` in every git project of the scope, caps and token budgets applied to the whole answer, `watch` updating every project in the scope. Depends on T329.4.
@@ -1118,20 +1098,6 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - Permission-denied and timeout folders are reported, not fatal; exit code 1 when anything planned was not removed.
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
-
-### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
-
-Split into T330.3.1 (done) and T330.3.2 (one PR each); this card stays the spec and the parent.
-
-Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
-
-Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
-
-### T330.3.2. Junk: `temp`, `build`, `locks`, `swap` kinds and plugin staging caches
-
-Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item model: `temp` (entries older than 24 h and not open by a running process), `build` (tagged build caches in agent worktrees under T152's rules, untagged `dist/`, `.next/`, `__pycache__/` listed only, D36), `locks` (stale agent lock files, only when no process holds them), `swap` (editor swap files whose owning process is gone) and version-numbered plugin staging caches no host config references (T279). Depends on T330.3.1.
-
-Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
 
 ### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
 

@@ -23,6 +23,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Serialize;
 
 use super::junk_cache::{self, Ctx, Item, Owned};
+use super::junk_kinds;
 use super::junk_map::{Role, Roots, specs};
 use super::{Agent, HOSTS, host, present};
 use crate::config::Config;
@@ -310,15 +311,16 @@ fn rtok_folders(cfg: &Config, cache: &Path) -> Vec<Folder> {
 }
 
 /// The cache directories rtok writes: the language-server state it confines to each registered
-/// project (`lsp::lsp_state_root`, a tool may be using it, so T152's idle rule applies) and
-/// its own platform cache dir.
-fn rtok_owned(cfg: &Config, cache: &Path) -> Vec<Owned> {
+/// project (`lsp::lsp_state_root`, a tool may be using it, so T152's idle rule applies), its
+/// own platform cache dir and the plugin copies Claude Code no longer uses (T279).
+fn rtok_owned(cfg: &Config, roots: &Roots, cache: &Path) -> Vec<Owned> {
     let mut owned = vec![Owned {
         path: cache.to_path_buf(),
         evidence: junk_cache::RTOK_OWN,
         idle_rule: false,
     }];
     owned.extend(project_lsp_caches(cfg));
+    owned.extend(junk_kinds::staging_caches(&roots.resolve("{claude}")));
     owned
 }
 
@@ -355,20 +357,28 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     paths
 }
 
-/// The `cache` kind row of `items`: only an item `clear` would take now counts.
-fn cache_row(items: &[Item]) -> Option<KindRow> {
-    let counted = items.iter().filter(|i| i.counted());
-    let (n, bytes) = counted.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
-    (n > 0).then_some(KindRow {
-        kind: "cache",
-        class: "safe",
-        items: n,
-        size_bytes: bytes,
-    })
+/// The junk kinds in the order the T330 table lists them.
+const KINDS: [&str; 5] = ["cache", "temp", "build", "locks", "swap"];
+
+/// One row per kind of `items`: only an item `clear` would take now counts.
+fn kind_rows(items: &[Item]) -> Vec<KindRow> {
+    KINDS
+        .iter()
+        .filter_map(|&kind| {
+            let counted = items.iter().filter(|i| i.kind == kind && i.counted());
+            let (n, bytes) = counted.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
+            (n > 0).then_some(KindRow {
+                kind,
+                class: "safe",
+                items: n,
+                size_bytes: bytes,
+            })
+        })
+        .collect()
 }
 
 fn freed(items: &[Item]) -> u64 {
-    cache_row(items).map_or(0, |k| k.size_bytes)
+    kind_rows(items).iter().map(|k| k.size_bytes).sum()
 }
 
 /// A folder a host writes, before it is sized.
@@ -438,6 +448,7 @@ fn host_rows(
     all: bool,
     limit: Duration,
     cx: &Ctx,
+    worktrees: &[(&'static str, PathBuf)],
 ) -> (Vec<AgentJunk>, BTreeMap<PathBuf, u64>) {
     let mut rows: Vec<AgentJunk> = Vec::new();
     let mut sized: HashMap<PathBuf, Usage> = HashMap::new();
@@ -454,6 +465,7 @@ fn host_rows(
         let mut folders = Vec::new();
         let mut agent_keys = Vec::new();
         let mut owned = Vec::new();
+        let mut temp = Vec::new();
         for f in host_folders(a, cfg, roots) {
             let target = symlink_target(&f.path);
             let key = target.clone().unwrap_or_else(|| f.path.clone());
@@ -463,6 +475,9 @@ fn host_rows(
                     evidence: junk_cache::SECTION_22,
                     idle_rule: false,
                 });
+            }
+            if f.role == Role::Temp && f.documented {
+                temp.push(f.path.clone());
             }
             let usage = *sized
                 .entry(key.clone())
@@ -491,7 +506,17 @@ fn host_rows(
                 note: (!notes.is_empty()).then(|| notes.join("; ")),
             });
         }
-        let items = junk_cache::cache_items(&owned, &outermost(agent_keys.clone()), cx, limit);
+        let roots = outermost(agent_keys.clone());
+        let mut items = junk_cache::cache_items(&owned, &roots, cx, limit);
+        items.extend(junk_kinds::temp_items(&temp, cx, limit));
+        items.extend(junk_kinds::found_items(&roots, limit));
+        let own: Vec<PathBuf> = worktrees
+            .iter()
+            .filter(|(h, _)| *h == a.id())
+            .map(|(_, p)| p.clone())
+            .collect();
+        items.extend(junk_kinds::build_items(&own, cx, limit));
+        let items = junk_cache::drop_nested(items);
         keys.push(agent_keys);
         rows.push(AgentJunk {
             name: a.id(),
@@ -499,7 +524,7 @@ fn host_rows(
             installed,
             folders,
             total_bytes: 0,
-            kinds: cache_row(&items).into_iter().collect(),
+            kinds: kind_rows(&items),
             freed_default_bytes: freed(&items),
             items,
         });
@@ -543,6 +568,9 @@ pub struct Options {
     /// Where the command runs: a tagged cache of that worktree stays.
     pub cwd: PathBuf,
     pub now: SystemTime,
+    /// The agent worktrees `build` looks in, as `(host, path)` ([`junk_kinds::agent_worktrees`]).
+    /// Empty unless the caller lists them: finding them runs git.
+    pub worktrees: Vec<(&'static str, PathBuf)>,
 }
 
 impl Default for Options {
@@ -552,6 +580,7 @@ impl Default for Options {
             idle: junk_cache::DEFAULT_IDLE,
             cwd: std::env::current_dir().unwrap_or_default(),
             now: SystemTime::now(),
+            worktrees: Vec::new(),
         }
     }
 }
@@ -560,10 +589,12 @@ impl Default for Options {
 /// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` itself removes
 /// only rtok's logs and archives until T330.4.
 pub fn report(cfg: &Config) -> Report {
+    let opts = Options::default();
+    let worktrees = junk_kinds::agent_worktrees(cfg, &opts.cwd);
     report_with(
         cfg,
         &Roots::from_env(),
-        Options::default(),
+        Options { worktrees, ..opts },
         AGENT_SCAN_LIMIT,
     )
 }
@@ -591,12 +622,13 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         .map(|f| PathBuf::from(&f.path))
         .collect();
     let cache = junk_cache::cache_items(
-        &rtok_owned(cfg, &rtok_cache),
+        &rtok_owned(cfg, roots, &rtok_cache),
         &outermost(tag_roots),
         &cx,
         limit,
     );
-    kinds.extend(cache_row(&cache));
+    let cache = junk_cache::drop_nested(cache);
+    kinds.extend(kind_rows(&cache));
     let rtok_total = rtok_folders.iter().map(|f| f.size_bytes).sum::<u64>();
     let mut agents = vec![AgentJunk {
         name: "rtok",
@@ -608,7 +640,7 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         kinds,
         items: cache,
     }];
-    let (hosts, mut by_key) = host_rows(cfg, roots, opts.all, limit, &cx);
+    let (hosts, mut by_key) = host_rows(cfg, roots, opts.all, limit, &cx, &opts.worktrees);
     agents.extend(hosts);
     for f in &agents[0].folders {
         by_key.insert(PathBuf::from(&f.path), f.size_bytes);
@@ -618,7 +650,7 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
     let log_archive: u64 = agents[0]
         .kinds
         .iter()
-        .filter(|k| k.kind != "cache")
+        .filter(|k| !KINDS.contains(&k.kind))
         .map(|k| k.size_bytes)
         .sum();
     let cache = agents.iter().flat_map(|a| &a.items).filter(|i| i.counted());
@@ -680,7 +712,24 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
                 size(k.size_bytes)
             ));
         }
-        for i in a.items.iter().filter(|i| !i.counted()) {
+        // A find nothing documents is one line per kind: a worktree can hold hundreds.
+        let (listed, kept): (Vec<&Item>, Vec<&Item>) = a
+            .items
+            .iter()
+            .filter(|i| !i.counted())
+            .partition(|i| i.kept.as_deref() == Some(junk_kinds::NOT_DOCUMENTED));
+        for kind in KINDS {
+            let of_kind = listed.iter().filter(|i| i.kind == kind);
+            let (n, bytes) = of_kind.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
+            if n > 0 {
+                out.push_str(&format!(
+                    "    {kind}: {n} listed, {}  {}\n",
+                    size(bytes),
+                    junk_kinds::NOT_DOCUMENTED
+                ));
+            }
+        }
+        for i in kept {
             let why = i.kept.as_deref().unwrap_or_default();
             out.push_str(&format!(
                 "    kept {}  {}  ({why})\n",
@@ -1255,5 +1304,96 @@ mod tests {
             agent(&report, "claude").items.is_empty(),
             "no link is followed out"
         );
+    }
+
+    /// T330.3.2's fixture: temp, a worktree's tagged `target/` and a stale plugin copy count;
+    /// a lock, a swap file and `dist/` are listed and count for nothing (D36).
+    #[cfg(unix)]
+    #[test]
+    fn temp_build_and_staging_count_while_locks_and_swap_are_listed_only() {
+        use super::junk_cache::{age_files, tagged};
+        let (mut cfg, dir) = crate::testutil::config("junk-kinds");
+        cfg.log.path = dir.join("none/rtok.log");
+        cfg.core.archive_dir = dir.join("none/archive");
+        let r = roots(&dir, &[]);
+        let claude = dir.join(".claude");
+        write(&claude.join("settings.json"), 10);
+        write(&claude.join("shell-snapshots/old.sh"), 300);
+        write(&claude.join("shell-snapshots/new.sh"), 5);
+        write(&claude.join("session.lock"), 1);
+        write(&claude.join("Cargo.lock"), 1);
+        write(&claude.join("x/.edit.swp"), 1);
+        write(&claude.join("plugins/cache/rtok/rtok/0.1.0/p"), 40);
+        write(&claude.join("plugins/cache/rtok/rtok/0.2.0/p"), 40);
+        let used = claude.join("plugins/cache/rtok/rtok/0.2.0");
+        std::fs::write(
+            claude.join("plugins/installed_plugins.json"),
+            format!(
+                r#"{{"plugins":{{"rtok@rtok":[{{"installPath":"{}"}}]}}}}"#,
+                used.display()
+            ),
+        )
+        .unwrap();
+        let wt = dir.join("wt");
+        write(&wt.join("target/o"), 1000);
+        tagged(&wt.join("target"));
+        write(&wt.join("dist/app.js"), 10);
+        age_files(&claude.join("shell-snapshots"), 3 * 86_400);
+        age_files(&claude.join("plugins"), 3 * 86_400);
+        age_files(&wt, 3 * 86_400);
+        // Fresh again: only the old one may go.
+        write(&claude.join("shell-snapshots/new.sh"), 5);
+        // The scan opens the store, as the T330.3.1 fixture does by registering a project.
+        Store::open(&cfg.core.db_path).unwrap();
+        let before = walk_names(&dir);
+
+        let opts = Options {
+            cwd: std::env::temp_dir(),
+            worktrees: vec![("claude", wt.clone())],
+            ..Options::default()
+        };
+        let report = report_with(&cfg, &r, Options { all: true, ..opts }, AGENT_SCAN_LIMIT);
+
+        let c = agent(&report, "claude");
+        let rows: Vec<_> = c.kinds.iter().map(|k| (k.kind, k.items)).collect();
+        assert_eq!(rows, [("temp", 1), ("build", 1)]);
+        let want =
+            disk_usage(&claude.join("shell-snapshots/old.sh")) + disk_usage(&wt.join("target"));
+        assert_eq!(c.freed_default_bytes, want);
+        let listed: Vec<_> = c
+            .items
+            .iter()
+            .filter(|i| !i.counted())
+            .map(|i| (i.kind, i.path.rsplit('/').next().unwrap().to_owned()))
+            .collect();
+        for (kind, name) in [
+            ("locks", "session.lock"),
+            ("swap", ".edit.swp"),
+            ("build", "dist"),
+        ] {
+            assert!(listed.contains(&(kind, name.to_owned())), "{listed:?}");
+        }
+        assert!(!c.items.iter().any(|i| i.path.ends_with("Cargo.lock")));
+
+        let own = agent(&report, "rtok");
+        let stale = claude.join("plugins/cache/rtok/rtok/0.1.0");
+        let paths: Vec<_> = own
+            .items
+            .iter()
+            .filter(|i| i.counted())
+            .map(|i| &i.path)
+            .collect();
+        assert!(paths.contains(&&stale.display().to_string()), "{paths:?}");
+        assert!(!paths.iter().any(|p| p.ends_with("0.2.0")));
+        assert_eq!(report.freed_default_bytes, want + disk_usage(&stale));
+
+        let text = to_list(&report, true, false);
+        assert!(text.contains("temp (safe): 1 items"), "{text}");
+        assert!(text.contains("locks: 1 listed"), "{text}");
+        assert!(
+            text.contains(".edit.swp") && text.contains("(owner unknown)"),
+            "{text}"
+        );
+        assert_eq!(walk_names(&dir), before, "a report changes no file");
     }
 }

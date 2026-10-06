@@ -2528,6 +2528,26 @@ Deviations: no JSON `project` field, because `symbol` and `callers` have no JSON
 
 Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
 
+## T329.4.2 — `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
+
+Second half of T329.4. The MCP tools `impact`, `explore` and `outline` take `project` (id or path) and run over the same scope as `symbol` and `callers` (`scope::resolve`, `Member`, `fan_out`, `banners`, `lsp_note`, `cap`); a one-project scope calls today's single-root function, so its output is unchanged byte for byte. `impact` is one breadth-first walk over every member's index (`impact_walk_roots`, which `impact_bfs_follow` now wraps), so a change in C reaches its callers in B and then A; each row path carries `[name] `, the selected project's rows lead within a depth, one cap covers the answer and an ambiguous name is flagged as in `symbol`. `explore` is `assemble_explore` over a `Scoped` set of per-member `TagsExplore` (labelled definitions, summed definition counts, the scoped walk for the impact line). `outline` reads the file from the first member that holds the path. With `backend = "lsp"` only the first project answers and the answer says so. The CLI `--project <id|dir>` (a flattened `ProjectFlag`, conflicting with the `path` argument) is on `graph index`, `dead`, `status`, `impact` and `affected`: `impact` answers over the project's scope through `scope::resolve` and `scope::impact`, the others resolve the project to its root with `cli_root_for`.
+
+Check: `graph::scope::tests` (impact from C walks through B into A, depth bounds it, B's scope excludes A, D does not cross, a one-project scope equals the plain `impact`; `impact --to` names the project; `explore` labels the project and equals the plain answer for one project; `outline` by relative and absolute path), `tests/graph_scope.rs` (impact through `rtok mcp` and the CLI agree, from another directory by path and by id; `explore` and `outline` take `project`; the flag on the single-project subcommands, the conflict with `path` and an unknown project), the trycmd help, completions and `mcp.toml` goldens regenerated, `config_coverage` allow-list; `just check` ran the whole suite: 2630 passed, 8 skipped.
+
+Deviations: `impact --to` and the call paths of `explore` are found inside one project, because `symbol_paths` walks one index; multi-project `impact` prints no co-change line; `impact` with an empty name and a `path` (affected tests) answers for the first project only. `--project` on `dead`, `affected`, `index` and `status` selects one project, not its scope (scoped `dead` and `affected` are T329.5). `graph projects` is untouched, its subcommands already take a project. Tool descriptions are unchanged (the 150-token budget). The docs mention is in `README.md`, `docs/lsp.md` and `docs/commands.md` (en, ru, uk).
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
+
+
+### T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
+
+T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336: the web UI selection never replaces the cwd). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
+
+Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
+
+Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
+
+Closed 2026-10-07 with its last subtask: T329.4.1 (#778) and T329.4.2 (#794).
 
 ## T329.12 — `/ws` project messages and the SPA graph page: selector and index indicator (links panel split to T329.20)
 
@@ -5903,6 +5923,20 @@ Complexity: 4/5 — new process-control trait across three platforms, an orchest
 Status: done 2026-09-22
 Check result: `cargo nextest run --workspace --test-threads 8` 1137 passed, 0 failed, 4 skipped; `just check` green (fmt-check, clippy `-D warnings` workspace-wide, full nextest, build-min, jscpd at 1.97% under the 2.0% threshold, oxlint/oxfmt). Unverified: Windows (`tasklist`/`taskkill`) and Linux (`pgrep`/`killall`/`xdg-open`) `RealProcs` code paths are implemented per spec but only exercised on macOS in this sandbox — the per-host app-name table test and orchestration tests all run through `FakeProcs`, which is platform-independent.
 
+### T434. `agents install` reopens the desktop app it closed
+
+`rtok agents install` (and `uninstall`) quits a running desktop app before it writes that host's config and should open it again afterwards (T141). The creator saw the app close and stay closed (2026-10-06). Two causes in `src/agents/restart.rs`: rtok waits at most 5 s for the app to exit, then runs `open -a` anyway, and an Electron app that is still shutting down (or shows a quit prompt) only gets activated and then finishes quitting; and `quit`/`open` check only that the command started, not its exit status, so a failed `open -a` printed no warning and logged nothing.
+
+Done: rtok waits up to 30 s for the app to exit; an app still running after that is not reopened and gets a "restart it manually" warning; a non-zero exit from `osascript`, `open`, `taskkill`, `start` or `killall` is an error, so a failed quit or reopen warns and is logged; unit tests cover the stuck quit and the failed reopen.
+
+Check: `cargo nextest run -E 'test(/agents::restart/)'`; `just check`.
+
+Do: `src/agents/restart.rs` — `run_ok` runs `osascript`, `open`, `taskkill`, `cmd /C start` and `killall` to completion and fails on a non-zero exit with its stderr; `wait_until_not_running` returns whether the app exited, with a 30 s `QUIT_TIMEOUT`; an app still running after it is warned about and not reopened; the three restart warnings share one `warn` helper.
+
+Status: done 2026-10-06
+Check result: `cargo nextest run --lib -E 'test(/agents::restart/)'` 13 passed (new `app_that_never_quits_is_written_but_not_reopened`, `reopen_failure_warns_instead_of_erroring`, `run_ok_fails_on_a_non_zero_exit`); `just check` green, 672 passed.
+Model: Claude Code / opus-5.5
+
 ### T140. `rtok agents install codex` installs rtok's Codex plugin from GitHub `pyrlyn/rtok`, idempotently
 
 T139's counterpart for Codex. Codex's own docs at https://developers.openai.com/plugins/build/plugins name only `marketplace add|list|upgrade|remove`, not a per-plugin enable command, but `codex plugin add --help` on the installed CLI (codex-cli 0.155.1) shows real `codex plugin add|remove` subcommands that enable/disable one plugin exactly like Claude's `plugin install`/`uninstall` — verified empirically end to end in a scratch `CODEX_HOME` (2026-09-22): `codex plugin marketplace add owner/repo` records `[marketplaces.<name>]` with `source_type = "git"` and `source = "https://github.com/<owner>/<repo>.git"`; `codex plugin add <id>` records `[plugins.<id>]` with `enabled = true`; re-adding the identical marketplace source is a no-op, a `"rtok"` marketplace already pointing elsewhere errors "already added from a different source" instead of re-pointing itself, and `marketplace remove` on an absent marketplace errors — so removal must gate on state first, same shape as T139's `MarketplaceState`.
@@ -8046,6 +8080,24 @@ Check: fixture homes under `testutil::tmp_dir` (no real agent folder): exact siz
 
 Result (2026-10-06, Cursor / grok 4.7): `list` adds a `cache` kind. A documented §22 cache directory is an item. So is rtok's platform cache dir and each registered project's language-server `cache` and `pub-cache` (idle 24 h, because a server may be using them). A valid `CACHEDIR.TAG` under an agent's or rtok's folders is an item only when idle and not in the worktree the command runs from (`worktree::clean::kept_because`, T342). A bad signature is not cache. Electron cache subfolders and other undocumented cache roots stay listed read-only. A path shared by two agents is freed once. A symlink is not an item and is not followed. A walk that hits its deadline keeps the caches it was judging: the newest mtime is then a lower bound, so an active cache must not look idle. `clear` still removes only T182's logs and archives. Reused `disk_usage_until`, the tagged-cache walk and `kept_because`; `lsp_state_root` stayed in `plugins/graph/lsp.rs` and became `pub(crate)`. The `measure`-only build has no graph plugin, so it does not look for those dirs. No new dependency.
 
+### T330.3.2. Junk: `temp`, `build`, `locks`, `swap` kinds and plugin staging caches
+
+Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item model: `temp` (entries older than 24 h and not open by a running process), `build` (tagged build caches in agent worktrees under T152's rules, untagged `dist/`, `.next/`, `__pycache__/` listed only, D36), `locks` (stale agent lock files, only when no process holds them), `swap` (editor swap files whose owning process is gone) and version-numbered plugin staging caches no host config references (T279). Depends on T330.3.1.
+
+Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
+
+Result (2026-10-06, Claude Code / sonnet-5.5): `rtok agents junk list` gains the `temp`, `build`, `locks` and `swap` kinds (`src/agents/junk_kinds.rs`, over T330.3.1's `Item` model). `temp`: each entry of a §22 temp dir (Claude Code `shell-snapshots`, ZCode `cli/exec`) is an item, kept while touched within the idle window (24 h) or, for a file, while another process holds a lock on it (`rtok_sys::try_lock_exclusive`); a symlink is no item. `build`: the tagged caches of every agent worktree (bound by claim or lock, seen by a session, or made in a host's pool: `junk_kinds::agent_worktrees` over `worktree::list::{rows, attribute_with_store}`) are judged by `kept_because` (idle, never the worktree the command runs from); untagged `dist/`, `.next/` and `__pycache__/` are listed read-only. `locks` and `swap`: a bounded walk of each agent's folders (never `.git`, `node_modules` or a symlink; package-manager lockfiles such as `Cargo.lock` are never listed). D36 and §22 name no lock or swap path, so every such find is read-only, "not documented: not cleared", in no "Freed" total; a held lock or a swap file whose owner is alive (Vim's `b0` pid, Emacs' `.#` link target, checked with `rtok_sys::process_alive`) says so instead, and a `.crswap` or headerless swap reads "owner unknown". Plugin staging: the version directories under `<claude>/plugins/cache/rtok/rtok` that `installed_plugins.json` no longer names as an `installPath` are `cache` items of the `rtok` row (idle rule applies); a missing, unreadable or rtok-less record lists none. Reused: `junk_cache::{cache_items, make_item, drop_nested}`, `usage_until`, `kept_because`, `disk_usage_until`, `junk_map::specs` and `Roots`, `plugin_install::PLUGIN_CACHE` (now shared). `to_list` prints a read-only find as one line per kind. Not done: Codex's staging caches (its config names no version), the "agent running" skip and `[agents.junk]` `temp_min_age_hours` (T330.4, T330.5); `clear` still removes only T182's logs and archives. No new dependency.
+
+### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
+
+Split into T330.3.1 (done) and T330.3.2 (one PR each); this card stays the spec and the parent.
+
+Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
+
+Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
+
+Closed 2026-10-07 with its last subtask: T330.3.1 and T330.3.2 (#793).
+
 ### T248. Plugin READMEs must link the host's official documentation
 
 Creator's request 2026-09-24: every agent plugin package's `README.md` must link the host's official documentation.
@@ -9000,6 +9052,17 @@ Execution plan: (1) `src/plugins/read/mod.rs` root guard: extra roots = `allow_p
 
 Status: done 2026-10-02
 Model: Claude Code / claude-sonnet-5-5 (reviewed by Claude Code / claude-opus-5-5)
+
+### T435. MCP refuses sibling worktrees when the server's cwd is another project
+
+Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.
+
+Done when: a path inside any worktree of the repository of a `roots/list` root is accepted like one of the cwd's repository; unrelated directories and scratchpads stay refused.
+
+**Result (2026-10-06).** `roots::dynamic` in `src/plugins/read/roots.rs` lists the worktrees of the cwd and of every client root (each listing cached 30 s as before, looked up only after the cheap checks fail). `guard_accepts_sibling_worktree_and_client_roots` gains the case cwd = unrelated dir, client root = main checkout → the linked worktree is accepted and a scratchpad is not; it failed before the fix. `src/plugins/read/AGENTS.md` updated.
+
+Status: done 2026-10-06
+Model: Claude Code / claude-opus-5-5
 
 ### T353. MCP parameter tolerance: `a,b` line ranges and missing-param errors
 

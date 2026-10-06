@@ -8,6 +8,10 @@ not consulted for that call. Each LSP answer records one `Measurement` row with
 `plugin = "graph"` and `kind = "lsp.symbol" | "lsp.callers" | "lsp.impact" |
 "lsp.outline" | "lsp.explore"`, so `rtok stats` attributes it like any other saving.
 
+Each of the five tools takes an optional `project` (id or directory). Without it a call answers for
+the working directory's project and the projects it links to; the language server answers one root,
+so with `backend = "lsp"` only the first project of that scope answers and the reply says so.
+
 The server is picked from the workspace root — rtok never links or shells out to
 anything else (D6); it spawns one of these from `PATH`:
 
