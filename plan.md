@@ -26,7 +26,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.4 | todo | P2 | 4 | 0% | |
-| T329.4.2 | todo | P2 | 3 | 0% | |
+| T329.4.2 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
@@ -877,6 +877,14 @@ Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card st
 Second half of T329.4, depends on T329.4.1: the same scope layer for the MCP tools `impact` (walks up into A), `explore` and `outline`, plus the CLI `--project` flag on every graph subcommand that exists then (clap, man page, completions, trycmd goldens, `surface_parity`).
 
 Mention the `project` argument of the graph MCP tools wherever the docs list them (not checked in T329.4.1).
+
+Execution plan:
+
+1. `src/plugins/graph/scope.rs`: add `impact`, `explore` and `outline` next to `symbol` and `callers`, reusing `resolve`, `Member`, `fan_out`, `banners`, `label`, `lsp_note` and `cap`. A one-project scope calls today's single-root function unchanged. `impact` runs one breadth-first walk over every member's index (a new `impact_walk` in `mod.rs`, which `impact_bfs_follow` now wraps), so a function in C reaches its callers in B and then A; rows carry `[name]`. `explore` is `assemble_explore` over a `ScopedExplore` that fans each `ExploreParts` query out to per-member `TagsExplore`. `outline` picks the member that holds the path.
+2. `src/mcp.rs`: resolve the scope for all five tools, not only `symbol` and `callers`; `src/plugins/graph/mod.rs`: `project` in the three input schemas, `call` dispatch.
+3. `src/cli.rs`: a flattened `--project` on `graph index|dead|status|impact|affected` (conflicts with the `path` argument); `impact` answers over the scope, the others resolve the project to its root (their scoped versions are T329.5). Then `config_coverage` allow-list, `surface_parity`, man page, completions, trycmd goldens.
+4. Tests: `graph::scope::tests` (impact walks up into A, explore and outline with `project`, one-project scope unchanged), `tests/graph_scope.rs` through `rtok mcp`, a CLI test for `--project`; docs mention (`README.md`, `docs/commands.md`, ru and uk).
+5. Verify: `just check`, then `just full-check` if time allows.
 
 Check: `impact` walks up into A; `explore` and `outline` take `project`; the CLI `--project` flag agrees with MCP; `just full-check`.
 
