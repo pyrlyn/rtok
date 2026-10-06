@@ -28,7 +28,7 @@ classifiers = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://pyrlyn.github.io/rtok/"
+Homepage = "https://pyrlyn.github.io/landing/rtok/"
 Repository = "https://github.com/pyrlyn/rtok"
 Changelog = "https://github.com/pyrlyn/rtok/blob/main/CHANGELOG.md"
 
