@@ -27,7 +27,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T310 | todo | P1 | 5 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.4 | todo | P2 | 4 | 0% | |
-| T329.4.1 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.4.2 | todo | P2 | 3 | 0% | |
 | T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
@@ -884,17 +883,11 @@ Check: fixture repos from the T329 Check list; `callers` of a function in C retu
 
 Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
 
-### T329.4.1. `project` argument and scoped traversal for the MCP tools `symbol` and `callers`
-
-First half of T329.4. The CLI has no `symbol` or `callers` subcommand, so no clap flag changes; the MCP schemas for the two tools gain `project` (id or path, resolved by `projects::resolve`, expanded by `Store::project_scope`). Without `project` the scope is the cwd project plus its links, or just the cwd root when it is unregistered. A one-project scope keeps today's output byte for byte. A multi-project scope runs the existing per-root queries in scope order; each row header gets a `[name] ` prefix and a JSON `project` field where JSON exists; a name defined in several projects is grouped and flagged with the existing ambiguity banner, the selected project first; one cap applies to the whole answer and each stale banner is prefixed with its project name; with `backend = "lsp"` only the first project answers, and the answer says so. `Ctx` (published SDK) is not grown: the scope is resolved where the `Runtime` store is available and passed into the graph code.
-
-Execution plan: (1) resolve the scope in the MCP graph dispatch in `src/mcp.rs` through a small helper in `src/plugins/graph/projects.rs`; (2) thread a ready scope (list of root and name) into the `symbol` and `callers` code in `src/plugins/graph/mod.rs`, looping over the existing per-root queries; (3) add `project` to the two MCP schemas and update the tool descriptions and `docs/`; (4) tests with fixture repos A, B, C (A links B, B links C) and D (unlinked): `callers` of a C function returns call sites in A and B labelled by project, a same-named symbol in two projects is grouped and flagged, `project` D does not cross, no `project` from A's cwd equals A plus its links, the single-project output is unchanged; (5) `just full-check`.
-
-Check: `callers` of a function defined in C returns call sites in A and B labelled by project; a same-named symbol in two projects is grouped and flagged; `project` set to D does not cross; no `project` from A's cwd equals A plus its links; single-project output unchanged; `just full-check`.
-
 ### T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
 
 Second half of T329.4, depends on T329.4.1: the same scope layer for the MCP tools `impact` (walks up into A), `explore` and `outline`, plus the CLI `--project` flag on every graph subcommand that exists then (clap, man page, completions, trycmd goldens, `surface_parity`).
+
+Mention the `project` argument of the graph MCP tools wherever the docs list them (not checked in T329.4.1).
 
 Check: `impact` walks up into A; `explore` and `outline` take `project`; the CLI `--project` flag agrees with MCP; `just full-check`.
 

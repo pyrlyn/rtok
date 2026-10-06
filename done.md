@@ -2400,6 +2400,18 @@ Deviations: no CLI prints the scope yet; it is a store call that T329.4 and the 
 
 Status: done 2026-10-03 · Model: Claude Code / sonnet-5
 
+## T329.4.1 — `project` argument and scoped traversal for the MCP tools `symbol` and `callers`
+
+First half of T329.4. The CLI has no `symbol` or `callers` subcommand, so no clap flag changed; the MCP schemas of the two tools gain `project` (id or path, resolved by `projects::resolve`, expanded by `Store::project_scope`). Without `project` the scope is the cwd project plus its links, or just the cwd when it is unregistered. A one-project scope keeps today's output byte for byte. A multi-project scope runs the existing per-root queries in scope order; each row head gets a `[name] ` prefix; a name defined in several projects is flagged with the existing ambiguity banner (`?` on the heads), the selected project first; one cap covers the whole answer and each stale banner is prefixed with its project name; a linked project that cannot answer is skipped with a note; with `backend = "lsp"` only the first project answers and the answer says so.
+
+Execution: new `src/plugins/graph/scope.rs` (`resolve`, `symbol`, `callers`); `graph::call` takes the ready scope, resolved in the MCP dispatch in `src/mcp.rs` because `Ctx` (the published SDK) carries no project registry. `defs_text` takes a `Tag` (label prefix and ambiguity suffix) and `flag_ambiguous` is shared with the single-root path.
+
+Check: `graph::scope::tests` (callers of a function in C label call sites in A and B; project D does not cross and a one-project scope equals the plain output; no `project` from A equals A by path and by id; unregistered cwd and unknown project; same name in two projects grouped, flagged, selected project first; one cap over the scope; no hit says so once), `tests/graph_scope.rs` (the same through `rtok mcp`), `graph_contract` unchanged, the `mcp.toml` trycmd golden regenerated; `just full-check`: 2529 passed, 6 skipped.
+
+Deviations: no JSON `project` field, because `symbol` and `callers` have no JSON output through MCP. Tool descriptions are unchanged (the 150-token budget). The docs mention of `project` is left to T329.4.2.
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
+
 
 ## T329.12 — `/ws` project messages and the SPA graph page: selector and index indicator (links panel split to T329.20)
 

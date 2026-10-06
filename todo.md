@@ -21,7 +21,6 @@
 - T310. React SPA replaces the Slint web UI (epic)
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
-- T329.4.1. `project` argument and scoped traversal for the MCP tools `symbol` and `callers`
 - T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
 - T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 - T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
