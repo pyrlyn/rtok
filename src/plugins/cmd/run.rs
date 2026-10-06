@@ -347,7 +347,7 @@ fn emit_filtered_to(
         return;
     }
     let settings = rules::Settings::from_config(cfg);
-    let family = formatters::family(argv);
+    let family = formatters::family_of(&settings, argv, &before);
     let (filtered, kind) = formatters::compress(&settings, argv, &before, exit, &id);
     // A formatter that trims a 29-line `git log` to 20 leaves the other 9 reachable only
     // through this id. A shortening that took only whitespace/ANSI has nothing to expand

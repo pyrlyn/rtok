@@ -56,7 +56,6 @@
 - T348. Investigate: `--agent` means an agent id, a host, or both
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
-- T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T371. Git co-change pairs feed `impact` and the repo map
@@ -68,7 +67,6 @@
 - T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T380. `rtok-` prefix on every shipped skill, and the prefix as the third ownership mark
-- T381. `rtok config init` must not freeze today's defaults into the user's file
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.2. Per-lane policy table
@@ -83,7 +81,6 @@
 - T385.11. Deferred tool schemas and thinking replay
 - T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
 - T385.13. Measure cross-session read duplication
-- T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
 - T389. Price row for Fable 5.1 in `[stats.prices]`
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
 - T392. Warn when the same skill is listed twice or loaded more than once
@@ -131,4 +128,9 @@
 - T414.16. Linked hover across charts and live values elsewhere
 - T432. Strip terminal noise from proxy requests before they go upstream
 - T433. Save hook session fields once instead of in every hook body
+- T416. Shared `change-preview` crate for dry-run output
+- T416.1. rtok renders previews through `change-preview`
+- T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
+- T416.3. `--stat` on the commands that show a diff
+- T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget

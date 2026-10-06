@@ -57,7 +57,7 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
         out.push_str(&super::run::trailer(&id, lines));
         out.push('\n');
     }
-    let family = formatters::family(&argv);
+    let family = formatters::family_of(&settings, &argv, input);
     let _ = cx.record(&Measurement {
         plugin: "cmd",
         kind,

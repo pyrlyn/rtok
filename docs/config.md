@@ -5,7 +5,8 @@ key**, so anything you can pass on the command line you can also make permanent,
 `rtok config show --sources` always tells you where a value came from.
 
 Status: T12.1–T12.2 are done — every table below is a typed section in `config/mod.rs` (unknown
-key = error), `config/default.toml` is embedded and written verbatim by `rtok config init`,
+key = error), `config/default.toml` is embedded and written by `rtok config init` with each
+assignment commented out, so an untouched key follows the current default;
 `core.inject_budget_tokens` has moved to `plugins.inject.budget_tokens`, and layering
 (user < project < env < flags, `figment`-based) plus `config show [--sources] [--json]` and
 `config get <key>` are live. `config set`/`validate` and the flag-coverage test land in T12.3–T12.4.
@@ -58,8 +59,9 @@ to see the value.
 
 ## Reference file
 
-This is `config/default.toml` verbatim. Every value shown is the default; a fresh
-`rtok config init` writes exactly this. Logging is `[log]` only (D26). An old file's
+This is the reference with assignments shown uncommented, so each value below is the
+default. `rtok config init` writes the same text with those assignments commented out;
+uncomment a line to pin it. Logging is `[log]` only (D26). An old file's
 `core.log_file` / `log_level` / `log_to_db` still loads once with a warning and folds into
 `[log]`; `rtok config validate` rejects those keys because they are absent from the reference
 schema.

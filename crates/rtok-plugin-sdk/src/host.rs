@@ -512,6 +512,25 @@ pub trait Symbols {
         Ok(Vec::new())
     }
 
+    /// T368: `(reference file, definition file)` imported by a referencing file.
+    /// Empty when `name` has fewer than two definitions.
+    fn symbol_imported_defs(&self, root: &str, name: &str) -> Result<Vec<(String, String)>> {
+        let _ = (root, name);
+        Ok(Vec::new())
+    }
+
+    /// T368: `(df, n_files)`. `(0, 0)` when the host has no index.
+    fn symbol_name_freq(&self, root: &str, name: &str) -> Result<(i64, i64)> {
+        let _ = (root, name);
+        Ok((0, 0))
+    }
+
+    /// T368: recompute per-name document frequency after an index pass.
+    fn rebuild_symbol_idf(&self, root: &str) -> Result<()> {
+        let _ = root;
+        Ok(())
+    }
+
     /// T68.6: files that import `module` as `(path, line)`.
     fn symbol_importers(&self, root: &str, module: &str) -> Result<Vec<(String, i32)>> {
         let _ = (root, module);

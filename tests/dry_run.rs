@@ -70,7 +70,8 @@ fn config_set_dry_run_shows_both_sides_and_leaves_the_file_alone() {
         before,
         "--dry-run wrote"
     );
-    assert!(out.contains("-port") && out.contains("+port"), "{out}");
+    // Init leaves the default commented, so the preview uncomments it as it changes the value.
+    assert!(out.contains("-# port") && out.contains("+port"), "{out}");
     assert!(out.contains("8791"), "new value missing:\n{out}");
     // A no-op set has nothing to show, and prints nothing rather than an empty diff.
     let same = rtok(&["config", "set", "proxy.port", "8791", "--dry-run"], &home);

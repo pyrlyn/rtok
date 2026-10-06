@@ -100,6 +100,9 @@ fn the_color_key_wins_over_clicolor_force() {
     let cfg = home.join("config.toml");
     fs::write(&cfg, "[ui]\ncolor = false\n").unwrap();
     let out = stdout(&rtok(&home, &["config", "validate"], &force[..1]));
-    assert_eq!(out, format!("ok {}\n", cfg.display()));
+    // `color = false` is a pin, so validate names it, then the same plain ok line.
+    assert!(!out.contains(ESC), "file color=false: {out:?}");
+    assert!(out.contains(&format!("ok {}", cfg.display())), "{out}");
+    assert!(out.contains("ui.color = false (default true)"), "{out}");
     no_emoji(&out);
 }

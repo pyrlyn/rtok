@@ -4,95 +4,97 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,368 @@
+@@ -0,0 +1,370 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
++# Assignments are commented out so a key left untouched follows the current default,
++# not the default from the day this file was written. Uncomment a line to pin it.
 +
 +[core]
-+enabled     = true                    # false = plain proxy (no business logic); HTTP stays up until process exit
-+db_path     = "~/.rtok/rtok.db"       # one SQLite file, WAL
-+archive_dir = "~/.rtok/archive"       # raw payloads for `rtok expand <id>`
-+session_env = "CLAUDE_SESSION_ID"     # env var consulted for the session id when stdin has none
-+call_io_inline_bytes = 65536          # MCP/API bodies larger than this go to archive (hooks never archive)
-+hook_max_input_bytes = 8388608        # rtok hook <event> stdin cap (8 MiB); over it, exits 0 unmodified, no archiving or hashing
-+retain_calls_days    = 30             # 0 = keep `calls` forever
-+retain_hook_bodies_days = 3           # hook stdin bodies cleared after N days, rows kept; 0 = as long as `calls`
-+store_raw = false                     # true = save request bodies verbatim; false strips escapes, control chars, harness wrappers, trailing blanks
++# enabled     = true                    # false = plain proxy (no business logic); HTTP stays up until process exit
++# db_path     = "~/.rtok/rtok.db"       # one SQLite file, WAL
++# archive_dir = "~/.rtok/archive"       # raw payloads for `rtok expand <id>`
++# session_env = "CLAUDE_SESSION_ID"     # env var consulted for the session id when stdin has none
++# call_io_inline_bytes = 65536          # MCP/API bodies larger than this go to archive (hooks never archive)
++# hook_max_input_bytes = 8388608        # rtok hook <event> stdin cap (8 MiB); over it, exits 0 unmodified, no archiving or hashing
++# retain_calls_days    = 30             # 0 = keep `calls` forever
++# retain_hook_bodies_days = 3           # hook stdin bodies cleared after N days, rows kept; 0 = as long as `calls`
++# store_raw = false                     # true = save request bodies verbatim; false strips escapes, control chars, harness wrappers, trailing blanks
 +
 +[log]                                 # rtok's own log; `rtok logs` reads it
-+path      = "~/.rtok/logs/rtok.log"   # rotated siblings live beside it: rtok.log.1 … .5
-+max_bytes = 1048576                   # rotate past 1 MiB (validate: ≥ 1024)
-+files     = 5                         # generations kept; older ones are deleted, never archived (validate: ≤ 20)
-+lines     = 200                       # what `rtok logs` prints when --lines is not given
-+level     = "info"                    # error | warn | info | debug
-+to_db     = true                      # also write a `logs` row for `rtok otel`
-+tspin     = "auto"                    # `rtok logs` through tailspin: auto = terminal and tspin on PATH | always | off
++# path      = "~/.rtok/logs/rtok.log"   # rotated siblings live beside it: rtok.log.1 … .5
++# max_bytes = 1048576                   # rotate past 1 MiB (validate: ≥ 1024)
++# files     = 5                         # generations kept; older ones are deleted, never archived (validate: ≤ 20)
++# lines     = 200                       # what `rtok logs` prints when --lines is not given
++# level     = "info"                    # error | warn | info | debug
++# to_db     = true                      # also write a `logs` row for `rtok otel`
++# tspin     = "auto"                    # `rtok logs` through tailspin: auto = terminal and tspin on PATH | always | off
 +
 +[estimator]                           # chars per token per class, ±15 %; `rtok stats --calibrate` rewrites
-+code  = 3.5
-+prose = 4.2
-+json  = 3.0
-+cjk   = 1.0
++# code  = 3.5
++# prose = 4.2
++# json  = 3.0
++# cjk   = 1.0
 +
 +# ── surfaces ────────────────────────────────────────────────────────────────
 +
 +[hook]                                # rtok hook <event>
-+host      = "claude"                  # claude | cursor | copilot | devin | cline — payload field mapping
-+max_ms    = 10                        # soft budget; over it, the event is logged as slow
-+fail_open = true                      # any error → `{}` and exit 0; false only for debugging
++# host      = "claude"                  # claude | cursor | copilot | devin | cline — payload field mapping
++# max_ms    = 10                        # soft budget; over it, the event is logged as slow
++# fail_open = true                      # any error → `{}` and exit 0; false only for debugging
 +
 +[agents]                              # the rtok agent registry
-+enabled = true                        # false = hooks skip agent register/touch/end (session bookkeeping is unaffected)
-+idle    = "30m"                       # `live()`'s window: no `ended_at` and `last_seen` within this of now
++# enabled = true                        # false = hooks skip agent register/touch/end (session bookkeeping is unaffected)
++# idle    = "30m"                       # `live()`'s window: no `ended_at` and `last_seen` within this of now
 +
 +[agents.usage]                        # rtok agents usage
-+source = "logs"                       # logs = the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI); rtok = what passed through rtok; both
-+hosts  = []                           # [] = every host; else host ids, e.g. ["claude", "codex"]
-+since  = ""                           # "" = all time; a date (2026-09-01, whole days in tz) or a duration (30d)
-+until  = ""                           # "" = through today; a date, inclusive
-+period = "monthly"                    # monthly | daily: the bottom table
-+by     = "agent"                      # agent | model: what the middle table groups by
-+tz     = ""                           # IANA zone for day and month boundaries; "" = the system zone
++# source = "logs"                       # logs = the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI); rtok = what passed through rtok; both
++# hosts  = []                           # [] = every host; else host ids, e.g. ["claude", "codex"]
++# since  = ""                           # "" = all time; a date (2026-09-01, whole days in tz) or a duration (30d)
++# until  = ""                           # "" = through today; a date, inclusive
++# period = "monthly"                    # monthly | daily: the bottom table
++# by     = "agent"                      # agent | model: what the middle table groups by
++# tz     = ""                           # IANA zone for day and month boundaries; "" = the system zone
 +
 +[agents.usage.dirs]                   # where `rtok agents usage` reads each host's own records; Claude Code and Codex use [stats] transcripts_dir / codex_dir
-+opencode = ["~/.local/share/opencode"] # the opencode*.db files in it; an untouched default follows $XDG_DATA_HOME
-+kilo     = ["~/.local/share/kilo"]     # the kilo*.db files in it; an untouched default follows $XDG_DATA_HOME
-+copilot  = ["~/.copilot/session-state"] # */events.jsonl; an untouched default follows $COPILOT_HOME
-+gemini   = ["~/.gemini/tmp"]           # */chats/session-*; an untouched default follows $GEMINI_CLI_HOME
-+droid    = ["~/.factory/sessions"]     # listed as unsupported when present: Factory does not document the token fields
-+pi       = ["~/.pi/agent/sessions"]    # */*.jsonl; an untouched default follows $PI_CODING_AGENT_SESSION_DIR, else $PI_CODING_AGENT_DIR/sessions
-+kimi     = ["~/.kimi-code/sessions"]   # Kimi Code: */*/agents/*/wire.jsonl; an untouched default follows $KIMI_CODE_HOME
-+grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI points at `grok usage`, which rtok does not run; follows $GROK_HOME
-+zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
-+antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
++# opencode = ["~/.local/share/opencode"] # the opencode*.db files in it; an untouched default follows $XDG_DATA_HOME
++# kilo     = ["~/.local/share/kilo"]     # the kilo*.db files in it; an untouched default follows $XDG_DATA_HOME
++# copilot  = ["~/.copilot/session-state"] # */events.jsonl; an untouched default follows $COPILOT_HOME
++# gemini   = ["~/.gemini/tmp"]           # */chats/session-*; an untouched default follows $GEMINI_CLI_HOME
++# droid    = ["~/.factory/sessions"]     # listed as unsupported when present: Factory does not document the token fields
++# pi       = ["~/.pi/agent/sessions"]    # */*.jsonl; an untouched default follows $PI_CODING_AGENT_SESSION_DIR, else $PI_CODING_AGENT_DIR/sessions
++# kimi     = ["~/.kimi-code/sessions"]   # Kimi Code: */*/agents/*/wire.jsonl; an untouched default follows $KIMI_CODE_HOME
++# grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI points at `grok usage`, which rtok does not run; follows $GROK_HOME
++# zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
++# antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 +
 +[mcp]                                 # rtok mcp
-+tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed
-+max_description_tokens  = 60          # enforced by a test
-+max_result_chars        = 20000       # above this, head/tail + archive id
++# tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed
++# max_description_tokens  = 60          # enforced by a test
++# max_result_chars        = 20000       # above this, head/tail + archive id
 +
 +[proxy]                               # rtok proxy
-+enabled         = true                # false = plain reverse proxy (bypass compress/bookkeeping); does NOT stop HTTP
-+bind            = "127.0.0.1"
-+port            = 8790
-+mode            = "passthrough"       # passthrough | compress
-+upstream        = "https://api.anthropic.com"      # RTOK_UPSTREAM; chain behind another proxy for A/B
-+openai_upstream = "https://api.openai.com"         # RTOK_OPENAI_UPSTREAM
-+gemini_upstream = "https://generativelanguage.googleapis.com"  # RTOK_GEMINI_UPSTREAM
-+timeout_s       = 600                 # upstream request timeout
-+include_usage   = true                # OpenAI streaming: add stream_options.include_usage when missing
-+context_management = false            # Anthropic /v1/messages only: add clear_tool_uses edit + beta header (opt-in)
-+dry_run         = false               # --dry-run: print effective [proxy] settings and exit, don't serve
++# enabled         = true                # false = plain reverse proxy (bypass compress/bookkeeping); does NOT stop HTTP
++# bind            = "127.0.0.1"
++# port            = 8790
++# mode            = "passthrough"       # passthrough | compress
++# upstream        = "https://api.anthropic.com"      # RTOK_UPSTREAM; chain behind another proxy for A/B
++# openai_upstream = "https://api.openai.com"         # RTOK_OPENAI_UPSTREAM
++# gemini_upstream = "https://generativelanguage.googleapis.com"  # RTOK_GEMINI_UPSTREAM
++# timeout_s       = 600                 # upstream request timeout
++# include_usage   = true                # OpenAI streaming: add stream_options.include_usage when missing
++# context_management = false            # Anthropic /v1/messages only: add clear_tool_uses edit + beta header (opt-in)
++# dry_run         = false               # --dry-run: print effective [proxy] settings and exit, don't serve
 +
 +[proxy.tools_rewrite]                 # off: request bytes stay identical
-+enabled = false
-+max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
-+allow = []                            # empty = keep all names not in deny
-+deny = []                             # drop these names from tools[]; later calls still forward
++# enabled = false
++# max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
++# allow = []                            # empty = keep all names not in deny
++# deny = []                             # drop these names from tools[]; later calls still forward
 +
 +[proxy.lanes]                         # tag each request's lane in the ledger (calls.kind); bytes stay identical
-+enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
++# enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
 +
 +[proxy.batch]                         # no keys yet
 +
@@ -101,278 +103,278 @@ target/tmp/t60-2-config-init.toml
 +[proxy.routing]                       # no keys yet
 +
 +[web]                                 # rtok web (same data as rtok tui)
-+host = "127.0.0.1"                    # --host
-+port = 3333                           # --port
++# host = "127.0.0.1"                    # --host
++# port = 3333                           # --port
 +
 +[tui]                                 # rtok tui (same data as rtok web)
-+tab       = ""                        # "" = first tab          (--tab <page>)
-+tick_secs = 2                         # model re-read cadence, same as the web 2 s tick (--tick-secs)
++# tab       = ""                        # "" = first tab          (--tab <page>)
++# tick_secs = 2                         # model re-read cadence, same as the web 2 s tick (--tick-secs)
 +
 +[ui]                                  # rtok's own lines on a terminal; pipes, --json stay plain
-+emoji = true                          # emoji before status/warn/error lines (RTOK_UI_EMOJI)
-+color = true                          # colour them; NO_COLOR/CLICOLOR_FORCE apply (RTOK_UI_COLOR)
++# emoji = true                          # emoji before status/warn/error lines (RTOK_UI_EMOJI)
++# color = true                          # colour them; NO_COLOR/CLICOLOR_FORCE apply (RTOK_UI_COLOR)
 +
 +[demon]                               # rtok demon start | stop | restart | status | kill
-+services       = ["proxy"]            # what `rtok demon start` starts when given no name
-+state_dir      = "~/.rtok/demon"      # <name>.json, <name>.log and the <name>.stop marker
-+backoff_ms     = 1000                 # wait before the first restart after a crash
-+max_backoff_ms = 30000                # ceiling for a crash loop
-+healthy_ms     = 10000                # a child up this long resets the backoff
-+poll_ms        = 200                  # how often the supervisor looks at its child
++# services       = ["proxy"]            # what `rtok demon start` starts when given no name
++# state_dir      = "~/.rtok/demon"      # <name>.json, <name>.log and the <name>.stop marker
++# backoff_ms     = 1000                 # wait before the first restart after a crash
++# max_backoff_ms = 30000                # ceiling for a crash loop
++# healthy_ms     = 10000                # a child up this long resets the backoff
++# poll_ms        = 200                  # how often the supervisor looks at its child
 +
 +[stats]                               # rtok stats
-+since           = "30d"
-+format          = "table"             # table | json      (--json)
-+plugin          = ""                  # "" = all         (--plugin <id>)
-+transcripts_dir = "~/.claude/projects"
-+calibrate_samples = 30                # per class        (--calibrate)
-+baseline        = ""                  # default name for --compare; "" = none
-+price           = false               # show per-model USD costs (--price)
++# since           = "30d"
++# format          = "table"             # table | json      (--json)
++# plugin          = ""                  # "" = all         (--plugin <id>)
++# transcripts_dir = "~/.claude/projects"
++# calibrate_samples = 30                # per class        (--calibrate)
++# baseline        = ""                  # default name for --compare; "" = none
++# price           = false               # show per-model USD costs (--price)
 +# USD per MTok rows for --price. Sources, fetched 2026-09-17:
 +# Anthropic claude-sonnet-5 / claude-haiku-4-5: https://platform.claude.com/docs/en/about-claude/pricing
 +# (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 +# https://platform.openai.com/docs/pricing (short-context input / cached input /
 +# output; no separate write price, so cache_write = input). Models without a row
 +# print `-`, never a guess; add dated rows of your own the same way.
-+[stats.prices."claude-sonnet-5"]
-+input = 2.0
-+cache_write = 2.5
-+cache_read = 0.2
-+output = 10.0
-+[stats.prices."claude-haiku-4-5"]
-+input = 1.0
-+cache_write = 1.25
-+cache_read = 0.1
-+output = 5.0
-+[stats.prices."gpt-5"]
-+input = 1.25
-+cache_write = 1.25
-+cache_read = 0.125
-+output = 10.0
-+[stats.prices."gpt-5-mini"]
-+input = 0.25
-+cache_write = 0.25
-+cache_read = 0.025
-+output = 2.0
++# [stats.prices."claude-sonnet-5"]
++# input = 2.0
++# cache_write = 2.5
++# cache_read = 0.2
++# output = 10.0
++# [stats.prices."claude-haiku-4-5"]
++# input = 1.0
++# cache_write = 1.25
++# cache_read = 0.1
++# output = 5.0
++# [stats.prices."gpt-5"]
++# input = 1.25
++# cache_write = 1.25
++# cache_read = 0.125
++# output = 10.0
++# [stats.prices."gpt-5-mini"]
++# input = 0.25
++# cache_write = 0.25
++# cache_read = 0.025
++# output = 2.0
 +
 +[report]                              # rtok report (renders the operator model, computes nothing)
-+format = "md"                         # md; html, pdf, --ai
-+out    = ""                           # "" = stdout     (--out <path>)
-+since  = "30d"                        # how far back the report reads
-+ai     = false                        # model-shaped rendering instead of --format (--ai)
-+budget_tokens = 8000                  # --ai drops whole sections past this
++# format = "md"                         # md; html, pdf, --ai
++# out    = ""                           # "" = stdout     (--out <path>)
++# since  = "30d"                        # how far back the report reads
++# ai     = false                        # model-shaped rendering instead of --format (--ai)
++# budget_tokens = 8000                  # --ai drops whole sections past this
 +
 +[bench]                               # rtok bench
-+tasks    = "bench/tasks.toml"
-+runs     = 3
-+dry_run  = false
-+timeout_s = 900                       # per task run
-+suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP
-+[bench.configs]                       # name = settings file passed to `claude --settings`
-+a = "bench/configs/legacy.json"
-+b = "bench/configs/rtok.json"
++# tasks    = "bench/tasks.toml"
++# runs     = 3
++# dry_run  = false
++# timeout_s = 900                       # per task run
++# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP
++# [bench.configs]                       # name = settings file passed to `claude --settings`
++# a = "bench/configs/legacy.json"
++# b = "bench/configs/rtok.json"
 +
 +[doctor]                              # rtok doctor
-+settings_path   = "~/.claude/settings.json"
-+claude_json     = "~/.claude.json"
-+mcp_json        = ".mcp.json"
-+probe_timeout_ms = 500                # per proxy hop /health probe
-+mcp_timeout_ms  = 15000               # per MCP server tools/list (uvx/npx servers start slowly)
-+instruction_warn_tokens = 1000        # --instructions: flag files above this
-+instructions    = false               # run the instruction audit by default (--instructions)
-+tools_rewrite_min_desc_tokens = 2000 # when [proxy.tools_rewrite] is suggested
++# settings_path   = "~/.claude/settings.json"
++# claude_json     = "~/.claude.json"
++# mcp_json        = ".mcp.json"
++# probe_timeout_ms = 500                # per proxy hop /health probe
++# mcp_timeout_ms  = 15000               # per MCP server tools/list (uvx/npx servers start slowly)
++# instruction_warn_tokens = 1000        # --instructions: flag files above this
++# instructions    = false               # run the instruction audit by default (--instructions)
++# tools_rewrite_min_desc_tokens = 2000 # when [proxy.tools_rewrite] is suggested
 +
 +[setup]                               # rtok agents install / remove <host>
-+dry_run      = false
-+yes          = false                  # required by --replace
-+backup       = true                   # _backup/<name>.bak-<ts> beside each file, before install and uninstall touch it
-+backup_files = 5                      # .bak-* generations kept per file; older ones are deleted (0 = keep all)
-+hook_timeout_s = 5                    # timeout written into each hook entry
-+modes        = []                     # e.g. ["terse", "yagni"]   (--mode)
-+mcp          = true                   # also register the MCP server   (--mcp)
-+proxy        = false                  # also set the base URL          (--proxy)
++# dry_run      = false
++# yes          = false                  # required by --replace
++# backup       = true                   # _backup/<name>.bak-<ts> beside each file, before install and uninstall touch it
++# backup_files = 5                      # .bak-* generations kept per file; older ones are deleted (0 = keep all)
++# hook_timeout_s = 5                    # timeout written into each hook entry
++# modes        = []                     # e.g. ["terse", "yagni"]   (--mode)
++# mcp          = true                   # also register the MCP server   (--mcp)
++# proxy        = false                  # also set the base URL          (--proxy)
 +[setup.claude]
-+settings_path = "~/.claude/settings.json"
++# settings_path = "~/.claude/settings.json"
 +[setup.cursor]
-+hooks_path    = "~/.cursor/hooks.json"
++# hooks_path    = "~/.cursor/hooks.json"
 +[setup.codex]
-+config_path   = "~/.codex/config.toml"
++# config_path   = "~/.codex/config.toml"
 +[setup.opencode]
-+config_path   = "~/.config/opencode/opencode.json"
++# config_path   = "~/.config/opencode/opencode.json"
 +[setup.kilo]
-+config_path   = "~/.config/kilo/kilo.json"      # kilo.jsonc is merged by Kilo, never rewritten
++# config_path   = "~/.config/kilo/kilo.json"      # kilo.jsonc is merged by Kilo, never rewritten
 +[setup.pi]
-+extensions_path = "~/.pi/agent/extensions"
-+tools           = false                     # pi.registerTool for read/search/graph/memory
++# extensions_path = "~/.pi/agent/extensions"
++# tools           = false                     # pi.registerTool for read/search/graph/memory
 +[setup.omp]
-+extensions_path = "~/.omp/agent/extensions" # oh my pi: plugins/pi is linked here
-+mcp_path        = "~/.omp/agent/mcp.json"
++# extensions_path = "~/.omp/agent/extensions" # oh my pi: plugins/pi is linked here
++# mcp_path        = "~/.omp/agent/mcp.json"
 +[setup.zcode]
-+config_path   = "~/.zcode/cli/config.json"
++# config_path   = "~/.zcode/cli/config.json"
 +[setup.kimi]
-+config_path   = "~/.kimi-code/config.toml"  # mcp.json is read beside it
++# config_path   = "~/.kimi-code/config.toml"  # mcp.json is read beside it
 +[setup.vscode]
-+code_user_dir = ""
-+insiders_user_dir = ""
++# code_user_dir = ""
++# insiders_user_dir = ""
 +[setup.copilot]
-+dir           = "~/.copilot"                # mcp-config.json, hooks/rtok.json
++# dir           = "~/.copilot"                # mcp-config.json, hooks/rtok.json
 +[setup.commandcode]
-+dir           = "~/.commandcode"            # settings.json (hooks key), mcp.json
++# dir           = "~/.commandcode"            # settings.json (hooks key), mcp.json
 +[setup.aider]
-+config_path   = "~/.aider.conf.yml"         # openai-api-base → rtok proxy (--proxy)
++# config_path   = "~/.aider.conf.yml"         # openai-api-base → rtok proxy (--proxy)
 +[setup.windsurf]
-+config_path   = "~/.codeium/windsurf/mcp_config.json"
++# config_path   = "~/.codeium/windsurf/mcp_config.json"
 +[setup.zed]
-+config_path   = "~/.config/zed/settings.json"
++# config_path   = "~/.config/zed/settings.json"
 +[setup.cline]
-+hooks_path    = "~/Documents/Cline/Hooks"
-+mcp_path      = "~/.cline/data/settings/cline_mcp_settings.json"  # CLI; the extension uses the VS Code globalStorage settings file
++# hooks_path    = "~/Documents/Cline/Hooks"
++# mcp_path      = "~/.cline/data/settings/cline_mcp_settings.json"  # CLI; the extension uses the VS Code globalStorage settings file
 +[setup.gemini]
-+dir           = "~/.gemini"                  # settings.json (hooks, mcpServers)
++# dir           = "~/.gemini"                  # settings.json (hooks, mcpServers)
 +[setup.codewhale]
-+dir           = "~/.codewhale"               # config.toml ([[hooks.hooks]]), mcp.json (mcpServers)
++# dir           = "~/.codewhale"               # config.toml ([[hooks.hooks]]), mcp.json (mcpServers)
 +[setup.mimo]
-+config_path   = "~/.config/mimocode/mimocode.json" # mcp (OpenCode-fork shape)
++# config_path   = "~/.config/mimocode/mimocode.json" # mcp (OpenCode-fork shape)
 +[setup.antigravity]
-+plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: plugins/antigravity linked here
-+cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # agy plugin install stages here; read only
++# plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: plugins/antigravity linked here
++# cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # agy plugin install stages here; read only
 +[setup.devin]
-+config_path   = "~/.config/devin/config.json"  # mcp_config.json is read beside it; Windows: %APPDATA%/devin/
++# config_path   = "~/.config/devin/config.json"  # mcp_config.json is read beside it; Windows: %APPDATA%/devin/
 +[setup.roo]
-+mcp_path      = ""                               # empty: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
++# mcp_path      = ""                               # empty: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
 +[setup.qwen]
-+dir           = "~/.qwen"                    # settings.json (hooks, mcpServers); QWEN_HOME moves the directory
++# dir           = "~/.qwen"                    # settings.json (hooks, mcpServers); QWEN_HOME moves the directory
 +
 +[expand]                              # rtok expand <id>
-+max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
-+max_rate  = 0.05                      # re-read ceiling; above it the report flags lossy compression
++# max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
++# max_rate  = 0.05                      # re-read ceiling; above it the report flags lossy compression
 +
 +[filter]                              # rtok filter --stdin
-+cmd = ""                              # command family hint when the caller knows it (--cmd)
++# cmd = ""                              # command family hint when the caller knows it (--cmd)
 +
 +[worktree]                            # rtok worktree add | list | gc
-+enabled = true                        # false: rtok worktree and MCP worktree_* are off; Claude's worktree hooks act as without rtok
-+root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>
++# enabled = true                        # false: rtok worktree and MCP worktree_* are off; Claude's worktree hooks act as without rtok
++# root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>
 +
 +[otel]                                # OpenTelemetry export; off until endpoint resolves
-+endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
-+headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
-+service_name  = "rtok"                # resource service.name
-+content       = true                  # gen_ai.input/output.messages, tool arguments and results on spans
-+content_bytes = 65536                 # per attribute; beyond it rtok.archive.id → `rtok expand <id>`
-+flush_secs    = 5                     # proxy / mcp flush interval, and the POST timeout
++# endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
++# headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
++# service_name  = "rtok"                # resource service.name
++# content       = true                  # gen_ai.input/output.messages, tool arguments and results on spans
++# content_bytes = 65536                 # per attribute; beyond it rtok.archive.id → `rtok expand <id>`
++# flush_secs    = 5                     # proxy / mcp flush interval, and the POST timeout
 +
 +# ── plugins ─────────────────────────────────────────────────────────────────
 +
 +[plugins.measure]
-+enabled = true
++# enabled = true
 +
 +[plugins.cmd]
-+enabled  = true
-+rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
-+shell    = ""                         # "" = $SHELL
-+rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
-+rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
-+trailer_min_lines = 40                # add `[rtok <id> · N lines · expand …]` above this
-+fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
-+never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
-+interactive_stems = ["python", "node", "psql", "sqlite3", "irb", "bash", "sh", "zsh", "docker", "kubectl"]  # `-i` skips wrap only for these (docker: run/exec; kubectl: exec); `--interactive` always skips
++# enabled  = true
++# rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
++# shell    = ""                         # "" = $SHELL
++# rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
++# rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
++# trailer_min_lines = 40                # add `[rtok <id> · N lines · expand …]` above this
++# fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
++# never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
++# interactive_stems = ["python", "node", "psql", "sqlite3", "irb", "bash", "sh", "zsh", "docker", "kubectl"]  # `-i` skips wrap only for these (docker: run/exec; kubectl: exec); `--interactive` always skips
 +
 +[plugins.read]
-+enabled          = true
-+default_mode     = "full"             # full | lines | map | signatures
-+max_chars        = 20000              # above this, head/tail + archive id
-+native_max_bytes = 32768              # PreToolUse(Read) deny threshold; never below this
-+range_max_lines = 300              # a native Read with limit 1..=N passes the hook; 0 = unranged only
-+advice           = true               # false = never deny native Read
-+allow_paths      = []                 # extra roots outside cwd
-+search_max       = 50
-+search_max_bytes = 1048576             # search skips files larger than this
-+tree_depth       = 2
-+delta            = true               # changed re-read → unified diff vs last archive
-+delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
++# enabled          = true
++# default_mode     = "full"             # full | lines | map | signatures
++# max_chars        = 20000              # above this, head/tail + archive id
++# native_max_bytes = 32768              # PreToolUse(Read) deny threshold; never below this
++# range_max_lines = 300              # a native Read with limit 1..=N passes the hook; 0 = unranged only
++# advice           = true               # false = never deny native Read
++# allow_paths      = []                 # extra roots outside cwd
++# search_max       = 50
++# search_max_bytes = 1048576             # search skips files larger than this
++# tree_depth       = 2
++# delta            = true               # changed re-read → unified diff vs last archive
++# delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
 +
 +[plugins.archive]
-+enabled    = true
-+keep_turns = 4                        # never touch the last N turns
-+min_tokens = 1500                     # only rewrite tool results above this (estimated)
-+head_lines = 8
-+tail_lines = 4
-+tiers      = false                    # optional L0/L1/L2 depth (OpenViking spec, AGPL-3.0 — rtok does not vendor/link/subprocess; native implementation)
-+live_blobs = false                    # shrink nested JSON dumps + data: blobs in user blocks, never results/system/tools/last-2-turns (opt-in)
-+skills     = false                    # opt-in skill body archiving outside the live zone
++# enabled    = true
++# keep_turns = 4                        # never touch the last N turns
++# min_tokens = 1500                     # only rewrite tool results above this (estimated)
++# head_lines = 8
++# tail_lines = 4
++# tiers      = false                    # optional L0/L1/L2 depth (OpenViking spec, AGPL-3.0 — rtok does not vendor/link/subprocess; native implementation)
++# live_blobs = false                    # shrink nested JSON dumps + data: blobs in user blocks, never results/system/tools/last-2-turns (opt-in)
++# skills     = false                    # opt-in skill body archiving outside the live zone
 +
 +[plugins.proxy]
-+enabled = true                        # the proxy plugin (usage capture); the server itself is [proxy]
++# enabled = true                        # the proxy plugin (usage capture); the server itself is [proxy]
 +
 +[plugins.proxy.semantic_cache]
-+enabled = false                       # Gate P31: must stay false until audit passes
-+threshold = 0.99                      # cosine similarity; semantic tier only
-+ttl_s = 300
-+max_messages = 1                      # bifrost uses 3; start stricter for agents
-+require_empty_tools = true
-+embed_backend = "hash"                # "hash" = direct tier only until P29 embeddings
-+cache_by_model = true
-+cache_by_provider = true
++# enabled = false                       # Gate P31: must stay false until audit passes
++# threshold = 0.99                      # cosine similarity; semantic tier only
++# ttl_s = 300
++# max_messages = 1                      # bifrost uses 3; start stricter for agents
++# require_empty_tools = true
++# embed_backend = "hash"                # "hash" = direct tier only until P29 embeddings
++# cache_by_model = true
++# cache_by_provider = true
 +
 +[plugins.inject]
-+enabled       = true
-+budget_tokens = 800                   # per turn, all injections together
-+modes_dir     = "~/.rtok/modes"
-+modes         = []                    # same as [setup].modes; setup writes here
++# enabled       = true
++# budget_tokens = 800                   # per turn, all injections together
++# modes_dir     = "~/.rtok/modes"
++# modes         = []                    # same as [setup].modes; setup writes here
 +
 +[plugins.guard]
-+enabled      = true
-+window_turns = 8
-+deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree
-+grep_symbol = false              # opt-in: answer a Grep for one identifier with its indexed definitions
++# enabled      = true
++# window_turns = 8
++# deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree
++# grep_symbol = false              # opt-in: answer a Grep for one identifier with its indexed definitions
 +
 +[plugins.memory]
-+enabled        = true
-+recall_titles  = 5                    # SessionStart: last N titles + ids
-+recall_tokens  = 200
-+prompt_recall  = 5                    # UserPromptSubmit: 0 = off; N = ranked titles per turn
-+checkpoint_tokens = 400               # PreCompact → SessionStart(compact)
-+search_limit   = 5
-+sync_tokens    = 300                  # rtok memory sync: CLAUDE.md / AGENTS.md block
-+startup_recall = true                 # SessionStart(startup) restores newest session:* note
-+handoff        = true                 # sub-agent digest MCP tool
-+spawn_brief        = true             # SubagentStart pointer digest
-+spawn_brief_tokens = 300              # token budget for the spawn brief
++# enabled        = true
++# recall_titles  = 5                    # SessionStart: last N titles + ids
++# recall_tokens  = 200
++# prompt_recall  = 5                    # UserPromptSubmit: 0 = off; N = ranked titles per turn
++# checkpoint_tokens = 400               # PreCompact → SessionStart(compact)
++# search_limit   = 5
++# sync_tokens    = 300                  # rtok memory sync: CLAUDE.md / AGENTS.md block
++# startup_recall = true                 # SessionStart(startup) restores newest session:* note
++# handoff        = true                 # sub-agent digest MCP tool
++# spawn_brief        = true             # SubagentStart pointer digest
++# spawn_brief_tokens = 300              # token budget for the spawn brief
 +
 +[plugins.memory.embed]
-+enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
-+provider   = "local"                  # "local" | "openai"
-+model      = "all-MiniLM-L6-v2"
-+dimensions = 384
-+hybrid     = true                     # when enabled: RRF(fts5, knn); false = knn only
++# enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
++# provider   = "local"                  # "local" | "openai"
++# model      = "all-MiniLM-L6-v2"
++# dimensions = 384
++# hybrid     = true                     # when enabled: RRF(fts5, knn); false = knn only
 +
 +[plugins.graph]
-+enabled    = true
-+max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
-+map_tokens = 0                        # SessionStart repo map cap (counts toward the injection budget next to memory.recall_tokens); 0 = off
-+map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
-+body_lines = 40                       # symbol(): source lines shown per definition
-+auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
-+backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
-+watch      = "off"                    # off | notify (P8d): background re-index inside `rtok mcp`
-+auto_link_references = true           # follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
-+reference_depth = 3                   # reference levels followed from the project (A -> B is 1); reaching it is shown and logged
-+max_auto_projects = 20                # most projects references may add to the registry; reaching it is shown and logged
-+exclude    = []                       # gitignore-style paths dropped from the walk
-+include    = []                       # gitignore-style paths forced back in
-+extensions = {}                       # ext = "grammar" remap for custom suffixes
++# enabled    = true
++# max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
++# map_tokens = 0                        # SessionStart repo map cap (counts toward the injection budget next to memory.recall_tokens); 0 = off
++# map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
++# body_lines = 40                       # symbol(): source lines shown per definition
++# auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
++# backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
++# watch      = "off"                    # off | notify (P8d): background re-index inside `rtok mcp`
++# auto_link_references = true           # follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
++# reference_depth = 3                   # reference levels followed from the project (A -> B is 1); reaching it is shown and logged
++# max_auto_projects = 20                # most projects references may add to the registry; reaching it is shown and logged
++# exclude    = []                       # gitignore-style paths dropped from the walk
++# include    = []                       # gitignore-style paths forced back in
++# extensions = {}                       # ext = "grammar" remap for custom suffixes
 +
 +[plugins.toon]
-+enabled  = true
-+min_rows = 5
++# enabled  = true
++# min_rows = 5
 +
 +[plugins.compress]
-+enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
++# enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
 +
 +[plugins.wasm]
-+enabled = false
-+dir = "~/.rtok/plugins"
++# enabled = false
++# dir = "~/.rtok/plugins"
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

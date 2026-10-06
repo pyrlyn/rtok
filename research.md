@@ -1357,6 +1357,37 @@ Top 20 `bash_default` stems by filtered after-bytes:
 
 T50.1 added `[stem]` rules (and golden fixtures) for: `gh`, `pip`, `uv`, `python`, `python3`, `go`, `aws`, `mvn`, `gradle`, `dotnet`, `tsc`, `eslint`, `brew`, `apt`, `cmake`. T58.5 shipped table formatters (one row per object, `kind = formatter`) that beat `Rule::default()` on those fixtures: `docker ps` 3147→1190 vs rule 1311, `kubectl get` 4542→1731 vs rule 1770, `ps aux` 2341→870 vs rule 990 (`tests/cmd_golden/{docker_ps,kubectl_get,ps_aux}`).
 
+### T386 re-measure (2026-10-06)
+
+Command: `rtok stats` on this machine (`stats.since` = `30d`, header `sessions 288`, 2026-10-06), binary built from the T386 tree so `filter_kind` sees the new `df` / `sqlite3` formatters and the `[awk]` rule. `bash_default` ranks stored `cmd` measurements with `kind = rule` whose stem is still on `Rule::default()`, sorted by summed `after_bytes`. A row stored as `mise` or `just` stays there: the peel applies to new runs when the inner command is on the line, and it does not rewrite old families.
+
+Top 20 `bash_default` stems by filtered after-bytes:
+
+| # | stem | `cmd` rule rows | after B |
+| --- | --- | ---: | ---: |
+| 1 | cd | 15,458 | 17,969,939 |
+| 2 | export | 665 | 1,183,761 |
+| 3 | tail | 320 | 761,372 |
+| 4 | scratchpad; | 480 | 571,428 |
+| 5 | mise | 375 | 424,902 |
+| 6 | for | 331 | 360,051 |
+| 7 | until | 191 | 329,935 |
+| 8 | f1147eb3-45b6-41d0-a395-06f85bd38b0b; | 1 | 329,525 |
+| 9 | wc | 219 | 210,182 |
+| 10 | echo | 295 | 206,765 |
+| 11 | GIT_CONFIG_COUNT=1 | 133 | 146,500 |
+| 12 | scratchpad | 96 | 99,057 |
+| 13 | rtk | 89 | 98,371 |
+| 14 | CARGO_INCREMENTAL=0 | 73 | 87,028 |
+| 15 | head | 52 | 84,080 |
+| 16 | WT_OWNER="Claude | 166 | 67,056 |
+| 17 | R=$(ls | 41 | 55,482 |
+| 18 | sleep | 159 | 53,069 |
+| 19 | src; | 28 | 50,208 |
+| 20 | ls; | 45 | 50,126 |
+
+`awk`, `df` and `sqlite3` are absent from `bash_default` (`filter_kind` is `rule`, `formatter` and `formatter`). `just` is rank 44 (19 rows, 14,953 B). The same run's `bash` table (live stem, not stored rows) labels `mise` `default` (93 calls, 57,155 B), `just` `default` (282 calls, 120,142 B), `awk` `rule` (608 calls, 1,103,992 B), `df` `formatter` (170 calls, 102,390 B) and `sqlite3` `formatter` (36 calls, 20,179 B). This is not a saving against the 2026-09-18 snapshot: that one covered 916 sessions, this one is the current 30-day window. The goldens `tests/cmd_golden/{df,sqlite3,awk}` are shorter than `Rule::default()` (`df_sqlite_and_awk_beat_the_default_rule`). `df` and `sqlite3` are formatters; `awk` is the `[awk]` rule (`group = dir`, keep `awk:|fatal`).
+
 ### 15.4 MiMo Code host probe (T186, fetched 2026-09-24)
 
 Confirmed against https://github.com/XiaomiMiMo/MiMo-Code, https://mimo.xiaomi.com/mimocode/start,
@@ -1393,7 +1424,7 @@ Creator request: what else can save LLM tokens in an agent product like rtok (Ai
 | Memory without stuffing | `memory` | FTS5 notes; SessionStart injects `id title` only; bodies via `mem_get` |
 | Code navigation instead of dumps | `graph` | `symbol` / `callers` / `outline` / `impact` from tree-sitter-tags in SQLite |
 | Measurement | `measure`, proxy usage | Context-token-turns + provider usage; `stats` / `report` / doctor |
-| Optional tabular encode | `toon` | JSON tables → TOON (off by default) |
+| Optional tabular encode | `toon` | JSON tables → TOON (on by default since T127) |
 | Optional extractive shrink | `compress` | P28 gate; off until semantic compress clears a bench |
 | Host install surface | `agents install` | Hooks + MCP + proxy so the above actually see traffic |
 

@@ -192,9 +192,9 @@ fn fixture_numbers_are_traceable_to_rows() {
     assert!(out.contains("`rtok expand` froze 1 of 3 live-zone pointers (33.3%)"));
     assert!(out.contains(&format!("Expanded: {first_id}.")));
 
-    // Config: the report's own keys, with their origin.
-    assert!(out.contains("| report.since | 30d | user |"));
-    assert!(out.contains("| report.format | md | user |"));
+    // Config: the report's own keys. Init no longer pins them, so the origin is the default.
+    assert!(out.contains("| report.since | 30d | default |"));
+    assert!(out.contains("| report.format | md | default |"));
 
     // Doctor: the fixture's two hooks. The section set's fixed order, headings included.
     assert!(out.contains("## Doctor"));
@@ -279,7 +279,7 @@ fn empty_store_says_so_rather_than_zeros() {
         "no calls table on an empty store"
     );
     // Config and Doctor still render: they do not depend on store rows.
-    assert!(out.contains("| report.format | md | user |"));
+    assert!(out.contains("| report.format | md | default |"));
     assert!(out.contains("hooks 0"));
 
     let _ = fs::remove_dir_all(&h);

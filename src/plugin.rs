@@ -636,6 +636,18 @@ impl Symbols for Runtime {
         self.store.symbol_imports(root, path)
     }
 
+    fn symbol_imported_defs(&self, root: &str, name: &str) -> Result<Vec<(String, String)>> {
+        self.store.symbol_imported_defs(root, name)
+    }
+
+    fn symbol_name_freq(&self, root: &str, name: &str) -> Result<(i64, i64)> {
+        self.store.symbol_name_freq(root, name)
+    }
+
+    fn rebuild_symbol_idf(&self, root: &str) -> Result<()> {
+        self.store.rebuild_symbol_idf(root)
+    }
+
     fn symbol_importers(&self, root: &str, module: &str) -> Result<Vec<(String, i32)>> {
         self.store.symbol_importers(root, module)
     }
