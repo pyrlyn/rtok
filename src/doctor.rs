@@ -686,11 +686,11 @@ const SKILL_ROOTS: [SkillRoot; 6] = [
         project: true,
         hosts: &["claude"],
     },
-    // The shared root: Codex, Gemini and Copilot read it, Claude does not.
+    // The shared root: Codex, Cursor, Gemini and Copilot read it, Claude does not.
     SkillRoot {
         dir: ".agents/skills",
         project: true,
-        hosts: &["codex", "gemini", "copilot"],
+        hosts: &["codex", "cursor", "gemini", "copilot"],
     },
     SkillRoot {
         dir: ".codex/skills",
