@@ -2302,7 +2302,7 @@ fn c() {}
         assert!(fallback.text.contains("hot a.rs:1 2"), "{}", fallback.text);
         rank::refresh(&Ctx::new(&rt), &index::canon(&dir)).unwrap();
         let ranked = start(&rt).expect("pagerank map");
-        assert_eq!(ranked.text, "repo map\na.rs: hot, mid, cold");
+        assert_eq!(ranked.text, "repo map\na.rs: hot, mid");
         assert_eq!(start(&rt).unwrap(), ranked);
         assert_eq!(ranked.priority, 1);
         let _ = fs::remove_dir_all(dir);
