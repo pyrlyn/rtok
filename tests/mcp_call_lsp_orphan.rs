@@ -104,7 +104,7 @@ fn call_shuts_down_lsp_after_a_successful_tool_call() {
 }
 
 /// Same shutdown guarantee on the error path: the LSP session is already up (past
-/// `initialize`) when the tool call itself fails, which is exactly the case `call()`'s
+/// `initialize`) when the server errors, which is exactly the case `call()`'s
 /// early `?`/`Err` returns must still cover.
 #[test]
 fn call_shuts_down_lsp_after_a_tool_call_that_errors() {
@@ -120,16 +120,18 @@ fn call_shuts_down_lsp_after_a_tool_call_that_errors() {
         .expect("spawn rtok mcp --call");
     drop(child.stdin.take());
     let out = child.wait_with_output().expect("wait");
-    assert!(!out.status.success(), "expected the tool call to fail");
+    // T376: a server error no longer fails the call; it falls back to the tags answer and
+    // names the reason. The session was still torn down on the way, which is the point here.
+    assert!(out.status.success(), "expected the tags fallback to answer");
+    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        String::from_utf8_lossy(&out.stdout).contains("boom"),
-        "stdout {}",
-        String::from_utf8_lossy(&out.stdout)
+        stdout.starts_with("(tags; lsp:") && stdout.contains("boom"),
+        "stdout {stdout}"
     );
 
     assert!(
         fake_lsp::wait_for_fake_death(&lock_path, Duration::from_secs(2)),
-        "fake LSP server still held its lock 2s after a failed `rtok mcp --call` exited"
+        "fake LSP server still held its lock 2s after a fallen-back `rtok mcp --call` exited"
     );
     let _ = std::fs::remove_dir_all(home.parent().unwrap());
 }

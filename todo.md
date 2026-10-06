@@ -62,7 +62,6 @@
 - T373. `rrf_merge` breaks score ties by note id
 - T374. Memory notes linked to files: recall boosted by the files in play
 - T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
-- T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
 - T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
@@ -124,6 +123,8 @@
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
+- T432. Strip terminal noise from proxy requests before they go upstream
+- T433. Save hook session fields once instead of in every hook body
 - T416. Shared `change-preview` crate for dry-run output
 - T416.1. rtok renders previews through `change-preview`
 - T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts

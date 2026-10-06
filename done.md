@@ -30,6 +30,20 @@ Check: unit test on a scripted temp repo (three commits, one over the 20-file ca
 
 Result (2026-10-06, Claude Code / sonnet-5.5): `src/plugins/graph/cochange.rs` counts pairs from `git log` (shared `git_stdout` helper, no dependency) and keeps them as one `kv` document per root (`plugin:graph:cochange:<root>`), recounted only when `git rev-parse HEAD` moves; no new table, so no migration. New `Host::plugin_state_get` is the read half of `plugin_state_set`. `impact` appends `changes with: ...` after the cap; `rank::build` adds both directions of each pair at `0.3 x (1 + ln count)`. Backtest over the last 100 commits of this repo, partners counted from the 300 commits before each one: hit@5 76 % (76 of 100; target 30 %), the first file had a partner in 91. Cold build on this repo: 54 ms in a debug build at a host load of 34 (target 300 ms). Note: `plan.md`, `todo.md` and `done.md` change with most commits here, which lifts the hit rate. The map sees a new HEAD from the next index run that changes the root.
 
+### T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
+
+From the Empryo study (idea-only, clean-room; Empryo's intelligence router tries LSP, then tree-sitter, then regex per call and records which one answered). With `plugins.graph.backend = "lsp"`, `symbol_filtered`, `callers`, `impact`, `outline` and `explore` (`src/plugins/graph/mod.rs` around `:260`, `:390`, `:441`, `:897`, `:1015`) return `lsp::…` directly; a server that is missing, still indexing past `READY` (40 s, `src/plugins/graph/lsp.rs`) or dead turns the call into an error instead of a tags answer (to verify: whether `lsp.rs` already degrades internally).
+
+Plan: one wrapper in `mod.rs`: try `lsp::<op>`; on `Err` or an empty answer for a name the tags index has, run the tags path and prefix `(tags; lsp: <reason>)`. Record a `Measurement` (`plugin: "graph"`, `kind: "lsp_fallback"`). No retry loop; the existing restart logic in `lsp.rs` stays.
+
+Done when: with `backend = "lsp"` and no server on PATH (or a fake that exits), `symbol <name>` returns the tags answer with the fallback prefix.
+
+Check: test with the fake/absent server for each of the five ops; existing LSP tests unchanged; `just check`.
+
+Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend check, `Err` or none-answer for a name `tags_know` finds, prefix, `lsp_fallback` Measurement); each of the five tools keeps its tags body as `<op>_tags` and routes through the wrapper, the outline path guard stays outside it. (2) Tests in the same file: a manifest-less root makes `lsp::*` fail before any spawn, so no PATH access; plus direct wrapper tests for the empty-answer rule. (3) `just check`, then move the card to `done.md`.
+
+Result: with `backend = "lsp"`, `symbol`, `callers`, `impact`, `outline` and `explore` go through one `lsp_or_tags` wrapper in `src/plugins/graph/mod.rs`; an `Err` or a none-answer for a name `tags_know` finds returns the tags answer headed `(tags; lsp: <reason>)` and records `graph` / `lsp_fallback`. Tests: `lsp_backend_falls_back_to_tags_for_every_tool`, `lsp_empty_answer_falls_back_only_for_a_known_name`.
+
 ### T429. Find installed agents on Windows
 
 `rtok agents list` missed hosts whose Windows install is a `PATHEXT` shim or an `.exe` beside an extensionless app path, and `--version` never ran a `.cmd` (`CreateProcess` only appends `.exe`).
@@ -8339,6 +8353,17 @@ Plan: `git rm --cached` `report.html`, `report/jscpd-report.json`, `dump/*`; ext
 Check: `git ls-files report.html report/ dump/` prints nothing; after `just test` and `just dup`, `git status --porcelain` stays clean (T184's Check covers the rest); `just check` green.
 
 Result: Untracked the stale report.html (report/jscpd-report.json and dump/ were already untracked); .gitignore now covers /report.html, /report/, /dump/. just dup leaves git status clean.
+
+### T431. Strip noise from request bodies before they are saved
+
+Every request body rtok saves (`call_io.request_json`, its archive spill, and through them the OTel export) is the client's bytes verbatim. A 2026-10-05 scan of `~/.rtok/rtok.db` (276k hook calls) found harness wrappers in prompts (`<task-notification>` 425, `<ci-monitor-event>` 113, `<system-reminder>` 87, `<local-command-caveat>` 10), ANSI escapes in 89 tool responses, CRLF in 47 bodies and trailing whitespace. Done when `Store::insert_call_io` cleans each request body before it spills: in a JSON body every string value, else UTF-8 text; ANSI escapes, control characters other than `\n`/`\t`, zero-width spaces and BOMs removed; the four harness wrapper blocks removed; CRLF and lone CR become LF, trailing spaces and tabs go, three or more newlines collapse to two. A body with nothing to clean keeps its bytes; non-UTF-8 bodies are kept as is. `[core] store_raw = true` keeps the verbatim body; the default is `false`.
+
+Plan: `src/sanitize.rs` (pure, the ANSI walk moved from `plugins/cmd/run.rs` so both share it), `Store` keeps a `store_raw` flag set by `Runtime` and `ProxyState` from `[core] store_raw`, `insert_call_io` cleans the request; `config/mod.rs` + `config/default.toml` + `docs/config.md`. Tests: unit cases per rule, idempotence, JSON keys and numbers untouched, untouched bodies byte-identical, invalid UTF-8 kept; a store test that a dirty hook body is saved clean and saved verbatim with `store_raw`.
+
+Check: `cargo nextest run --lib sanitize store`, `--test config_coverage`, `just check`.
+
+Result: `src/sanitize.rs` cleans each request body in `Store::insert_call_io` before the spill, so the saved size, sha and archive file describe the cleaned bytes; `[core] store_raw = true` (set from `Runtime` and `ProxyState`) keeps the verbatim body. The ANSI walk is shared with `plugins/cmd/run.rs`.
+
 ### T204. A panicking plugin is dropped silently — the error never reaches the log
 
 Found 2026-09-22 in the core pass: every plugin call is wrapped in `catch_unwind` (`src/hooks/mod.rs:340-344, 381-385, 493-508, 202-205`) but the payload is discarded with `.ok()`/`let _` — no `logs` row, no stderr. architecture.md §4 and the Working agreement promise "that plugin's output is dropped, **the event is logged with the error**". Today a panicking plugin is indistinguishable from one returning `None`, so T233-class failures stay invisible in `rtok doctor` / `rtok logs`.

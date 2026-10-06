@@ -65,7 +65,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T374 | todo | P3 | 2 | 0% | |
-| T376 | todo | P2 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -126,6 +125,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
+| T432 | todo | P2 | 3 | 0% | |
+| T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -1580,16 +1581,6 @@ Done when: after a session that reads A and edits B, the checkpoint lists `B (ed
 
 Check: unit tests for the event → action mapping and old-row decode; the checkpoint rendering snapshot (`insta`) updated; `just check`.
 
-### T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
-
-From the Empryo study (idea-only, clean-room; Empryo's intelligence router tries LSP, then tree-sitter, then regex per call and records which one answered). With `plugins.graph.backend = "lsp"`, `symbol_filtered`, `callers`, `impact`, `outline` and `explore` (`src/plugins/graph/mod.rs` around `:260`, `:390`, `:441`, `:897`, `:1015`) return `lsp::…` directly; a server that is missing, still indexing past `READY` (40 s, `src/plugins/graph/lsp.rs`) or dead turns the call into an error instead of a tags answer (to verify: whether `lsp.rs` already degrades internally).
-
-Plan: one wrapper in `mod.rs`: try `lsp::<op>`; on `Err` or an empty answer for a name the tags index has, run the tags path and prefix `(tags; lsp: <reason>)`. Record a `Measurement` (`plugin: "graph"`, `kind: "lsp_fallback"`). No retry loop; the existing restart logic in `lsp.rs` stays.
-
-Done when: with `backend = "lsp"` and no server on PATH (or a fake that exits), `symbol <name>` returns the tags answer with the fallback prefix.
-
-Check: test with the fake/absent server for each of the five ops; existing LSP tests unchanged; `just check`.
-
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
 From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
@@ -2063,6 +2054,18 @@ Charts on the same time axis (the calls chart, the calls and live-sessions KPI m
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
+### T432. Strip terminal noise from proxy requests before they go upstream
+
+The proxy forwards tool results to the model with ANSI escapes and control characters, which cost tokens and carry nothing. Done when the proxy runs T431's cleaner over the text of request messages before sending, limited to ANSI escapes, control characters and zero-width characters, byte-stable across turns so the prompt cache still hits. Harness wrappers stay: they are instructions to the model. Whitespace is decided at claim time: trailing-space or CRLF changes in a tool result can make the model's exact-match edits miss the file.
+
+Check: a proxy test sends a tool result with escapes and asserts the upstream body has none and repeats byte for byte on the next turn.
+
+### T433. Save hook session fields once instead of in every hook body
+
+Every saved hook stdin repeats the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Done when they are stored once per distinct value set in their own table referenced from the call, the saved body keeps only the event's own fields, and the full stdin can be rebuilt for readers (OTel, web). `[core] store_raw = true` keeps the full body. Design (table, migration, readers) is written into this card before code.
+
+Check: a store test saves two hook calls of one session and reads back both full bodies from one session row.
+
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -2115,6 +2118,7 @@ Execution plan:
 4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
+
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.
@@ -2279,7 +2283,7 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T369, T370, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95). T368 and T371 are done.
+Take first, in order: T369, T370, T372, T373, T374. Then T375, T377, T378 (gated on I-95). T368, T371 and T376 are done.
 
 The 14 portable ideas and where each landed:
 

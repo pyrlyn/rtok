@@ -46,6 +46,7 @@ pub mod project;
 pub mod proxy;
 pub mod render;
 pub mod report;
+pub mod sanitize;
 pub mod store;
 /// Test helpers, also for the integration tests under `tests/`; not part of the public API.
 #[doc(hidden)]
