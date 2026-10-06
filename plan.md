@@ -24,7 +24,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T283 | in progress | P1 | 3 | 60% | Claude Code / sonnet-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
-| T310 | todo | P1 | 5 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.4 | todo | P2 | 4 | 0% | |
 | T329.4.2 | todo | P2 | 3 | 0% | |
@@ -545,14 +544,6 @@ Open questions (2026-10-03, Claude Code / sonnet-5; not started, ask the creator
 2. The host-config formats must come from primary sources before any writer: the `.cursor/worktrees.json` shape (`setup-worktree*` values), where Devin/Windsurf read `post_setup_worktree` (project vs user `hooks.json`), and Kilo's `.kilo/setup-script` is a plain script, so "our entry only" needs a marked block. `research.md` §26 names the keys but not the exact file shapes.
 3. Whether a git lock breaks a host's own eviction is still the T281 live probe; the scripts must go through `adopt`, which already skips the lock in evicting pools.
 
-
-### T310. React SPA replaces the Slint web UI (epic)
-
-`rtok web` draws its admin with Slint compiled to WASM on one `<canvas>` (`crates/rtok-webui`, D20). The creator chose to replace it with a React SPA in `web/`. Stack (creator's picks): React 19, TanStack (Router, Query, Table, Virtual, Form where a page needs it), Vite 8, Vitest 5, Tailwind CSS v4, Storybook 10, Playwright e2e. Data stays the `/ws` snapshot of D23; its TypeScript types are generated from the Rust types (`schemars` → JSON Schema → TS), so Rust stays the one source of truth. The visual reference is `design/html/` (all 13 pages, tokens, icons, fonts) and the `web/` prototype. When the SPA covers every page, `crates/rtok-webui`, the WASM build in CI/release, `design/html/` and the HTML prototype are deleted. One subtask = one PR (≤300 LOC hand-written, ≤10 files; lockfiles and generated files excepted).
-
-Done when: `rtok web` serves the SPA from the binary, every page of `model::pages()` renders on it, Playwright drives the real binary, and no Slint code is left.
-
-Check: `rtok web` from a release build shows every page of `model::pages()` from the embedded SPA; no `slint`/`rtok-webui` left in the tree; `just check` and the SPA CI job green.
 
 ### T329. Graph page: project selector, auto-added projects and linked projects (epic)
 

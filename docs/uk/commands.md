@@ -16,7 +16,7 @@ lang: uk
 | `rtok hook <event>` | точка входу хуків Claude Code (JSON на stdin → JSON на stdout) |
 | `rtok mcp` | MCP-сервер через stdio: `read`, `search`, `tree`, `expand`, `mem_*`, інструменти графа |
 | `rtok proxy` | проміжний вузол `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`: фіксація використання, необов'язковий режим стиснення |
-| `rtok dashboard` | локальний UI на Slint/WASM поверх WebSocket API, що читає те саме сховище |
+| `rtok dashboard` | локальний UI на React поверх WebSocket API, що читає те саме сховище |
 | `rtok run -- <cmd>` | запускає команду, архівує сирий вивід, друкує відфільтровану версію |
 | `rtok filter --stdin` | фільтрує дані, не виконуючи їх (OpenCode `tool.execute.after`) |
 | `rtok expand <id>` | друкує заархівовані дані — цілком або за `--lines` / `--grep` |
