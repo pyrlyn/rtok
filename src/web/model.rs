@@ -108,7 +108,7 @@ pub struct Snapshot {
 
 /// The Usage page: one [`usage::Report`] — the call `rtok agents usage` makes — read once and
 /// carried twice. `text` is that command's screen ([`usage::Report::to_text`]) for the tui and
-/// the Slint page; `report` is the same rows as data for the SPA's tables. Nothing is summed
+/// the SPA's status line; `report` is the same rows as data for the SPA's tables. Nothing is summed
 /// a second time (D27). Both are empty-handed while the first read runs or after it fails:
 /// `report` is `None` and `text` says why.
 #[derive(Debug, Clone, Default, Serialize, JsonSchema)]
