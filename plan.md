@@ -27,6 +27,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T310 | todo | P1 | 5 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.4 | todo | P2 | 4 | 0% | |
+| T329.4.2 | todo | P2 | 3 | 0% | |
 | T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
@@ -49,11 +50,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T333 | todo | research | 1 | 0% | |
 | T334 | todo | research | 1 | 0% | |
 | T335 | todo | research | 1 | 0% | |
-| T336 | todo | research | 1 | 0% | |
 | T337 | todo | research | 1 | 0% | |
 | T340 | todo | research | 1 | 0% | |
 | T341 | todo | research | 1 | 0% | |
-| T342 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
 | T345 | todo | research | 1 | 0% | |
@@ -559,12 +558,12 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334, T336 and T337 gate T329.9, T329.4 and T329.11/T329.17.
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334 and T337 gate T329.9 and T329.11/T329.17; T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
 - **Project**: a directory rtok indexes as one unit, identified by its canonical root path. Display name defaults to the directory name (or the package name from the manifest when there is one); the user can rename it.
-- **Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for.
+- **Selected project**: the project the graph page answers for. The CLI and MCP tools do not follow it: without `project` they answer for the caller's current directory and its links (T336).
 - **Link**: a directed edge "project A sees into project B". A link is either **manual** (the user made it) or **auto** (rtok made it from a reference, see 4).
 - **Graph scope**: the selected project plus every project reachable through its links (transitively). All graph queries run over the scope.
 
@@ -876,9 +875,19 @@ Check: fixture repos under `tests/fixtures`, no network:
 
 ### T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
 
-T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336 decides whether the selected project replaces the cwd, so settle it before claiming). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
+T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336: the web UI selection never replaces the cwd). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
 
 Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
+
+Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
+
+### T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
+
+Second half of T329.4, depends on T329.4.1: the same scope layer for the MCP tools `impact` (walks up into A), `explore` and `outline`, plus the CLI `--project` flag on every graph subcommand that exists then (clap, man page, completions, trycmd goldens, `surface_parity`).
+
+Mention the `project` argument of the graph MCP tools wherever the docs list them (not checked in T329.4.1).
+
+Check: `impact` walks up into A; `explore` and `outline` take `project`; the CLI `--project` flag agrees with MCP; `just full-check`.
 
 ### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 
@@ -968,7 +977,7 @@ Today `rtok agents junk clear` (T182, #286) only clears junk rtok itself owns un
 | `cache` | HTTP/model/response caches, `Cache/`, `CachedData/`, `GPUCache/`, `Code Cache/` | safe | Regenerated on next run. |
 | `temp` | temp files and temp directories the agent created (`tmp/`, `*.tmp`, `$TMPDIR/<agent>-*`) | safe | Only entries older than 24 h and not open by a running process. |
 | `logs` | agent log files that are not tied to a session (`logs/*.log`, rotated logs) | review | Kept for the last `[agents.junk] keep_logs_days` (default 30). Session transcripts are the `sessions` kind below. |
-| `build` | build artifacts in agent worktrees and scratch dirs (`target/`, `dist/`, `build/`, `.next/`, `__pycache__/`) | safe | Only under agent-owned worktrees or scratch dirs, never in the user's main checkout. |
+| `build` | build artifacts in agent worktrees and scratch dirs (`target/`, `dist/`, `build/`, `.next/`, `__pycache__/`) | safe | Only under agent-owned worktrees or scratch dirs, never in the user's main checkout; cleared under T152's rules (T342): only when idle (`--idle`, default 24 h), never the cache of the worktree the command runs from unless its path is given, one cache root at a time. |
 | `deps` | reinstallable dependencies (`node_modules/`, `.venv/`, `vendor/` with a lockfile, `.gradle/`, Pods) | review | Only in agent-owned worktrees/scratch dirs; requires a lockfile or manifest next to it so it can be reinstalled. |
 | `locks` | stale lock files (`*.lock` for agent state, `LOCK`, `.lock` dirs) | safe | Only when no process holds them (checked with the OS); package-manager lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`) are never junk. |
 | `backups` | backup files (`*.bak`, `*.bak-<ts>`, `*~`, `_backup/` generations past the cap, T249) | review | The newest backup of each file is always kept. |
@@ -995,7 +1004,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 
 **Each agent's cache:**
 
-- **Cleared** (D36) only from: (1) the host's entry in `research.md` §22 (documented cache dirs only); (2) any directory under the agent's folders carrying a valid `CACHEDIR.TAG` (deletion rules per T342); (3) `[agents.junk] extra` entries with `kind = "cache"`.
+- **Cleared** (D36) only from: (1) the host's entry in `research.md` §22 (documented cache dirs only); (2) any directory under the agent's folders carrying a valid `CACHEDIR.TAG` (deleted under T152's rules (T342): only when idle (`--idle`, default 24 h), never the cache of the worktree the command runs from unless its path is given, one cache root at a time); (3) `[agents.junk] extra` entries with `kind = "cache"`.
 - **Listed only** (size shown, "not documented: not cleared", not in any "Freed" total): the platform cache root for that app (`~/Library/Caches/<bundle id or name>`, `$XDG_CACHE_HOME/<app>`, `%LOCALAPPDATA%\<app>\Cache`) and well-known Electron/Chromium cache subfolders inside the app's data dir (`Cache`, `Code Cache`, `GPUCache`, `CachedData`, `DawnCache`) when §22 has no row for them. `Service Worker/CacheStorage` is stored app data, not cache, and is not listed as cache. A heuristic path that gets a cited §22 row moves to "cleared" with no other change.
 - Not cache even if the name says so: anything §22 marks as settings or state, extension/plugin install dirs, and model weights the user downloaded on purpose (listed as `never`, size only).
 - Environment overrides are honoured (`XDG_CACHE_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and the like listed in §22), so a relocated cache is still found.
@@ -1074,7 +1083,7 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 
 #### Running agents
 
-- An agent whose process is running is detected (process list per host binary, plus live rtok sessions from T284). For a running agent, `clear` skips `temp`, `locks`, `swap`, `index` and the current session's logs, and says so; caches are still cleared only if the host's §22 entry says it tolerates that while running, otherwise skipped with "agent running".
+- An agent whose process is running is detected (process list per host binary, plus live rtok sessions from T284). For a running agent, `clear` skips `temp`, `locks`, `swap`, `index` and the current session's logs, and says so; caches are still cleared only if the host's §22 entry says it tolerates that while running, otherwise skipped with "agent running". `build` and `CACHEDIR.TAG` dirs follow T152's idle rule whether or not the agent runs (T342).
 - `--force-running` is not offered; the user closes the agent and runs `clear` again.
 
 #### Config
@@ -1122,7 +1131,7 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 
 ### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
 
-Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 and the investigation T342 (T339 closed: D36).
+Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
 
 Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
 
@@ -1295,13 +1304,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-### T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
-
-In the plan, T329 Terms (branch `docs/plan-graph-projects`, ~line 679, from PR #540 (T329), not merged yet) says "**Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for", and T329 §7 (~line 799) says "Without it, the project is the caller's current directory (agents keep today's behaviour)". These contradict each other because the selection is stored globally in the store (§2), so one rule makes an agent's MCP call follow whatever project the user last picked in the web UI and the other makes it follow the agent's cwd; the two give different answers whenever they differ.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
@@ -1327,13 +1329,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
-
-In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T343. Investigate: T330 `--sort` takes two different value sets on `list`
 

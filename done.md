@@ -2400,6 +2400,18 @@ Deviations: no CLI prints the scope yet; it is a store call that T329.4 and the 
 
 Status: done 2026-10-03 · Model: Claude Code / sonnet-5
 
+## T329.4.1 — `project` argument and scoped traversal for the MCP tools `symbol` and `callers`
+
+First half of T329.4. The CLI has no `symbol` or `callers` subcommand, so no clap flag changed; the MCP schemas of the two tools gain `project` (id or path, resolved by `projects::resolve`, expanded by `Store::project_scope`). Without `project` the scope is the cwd project plus its links, or just the cwd when it is unregistered. A one-project scope keeps today's output byte for byte. A multi-project scope runs the existing per-root queries in scope order; each row head gets a `[name] ` prefix; a name defined in several projects is flagged with the existing ambiguity banner (`?` on the heads), the selected project first; one cap covers the whole answer and each stale banner is prefixed with its project name; a linked project that cannot answer is skipped with a note; with `backend = "lsp"` only the first project answers and the answer says so.
+
+Execution: new `src/plugins/graph/scope.rs` (`resolve`, `symbol`, `callers`); `graph::call` takes the ready scope, resolved in the MCP dispatch in `src/mcp.rs` because `Ctx` (the published SDK) carries no project registry. `defs_text` takes a `Tag` (label prefix and ambiguity suffix) and `flag_ambiguous` is shared with the single-root path.
+
+Check: `graph::scope::tests` (callers of a function in C label call sites in A and B; project D does not cross and a one-project scope equals the plain output; no `project` from A equals A by path and by id; unregistered cwd and unknown project; same name in two projects grouped, flagged, selected project first; one cap over the scope; no hit says so once), `tests/graph_scope.rs` (the same through `rtok mcp`), `graph_contract` unchanged, the `mcp.toml` trycmd golden regenerated; `just full-check`: 2529 passed, 6 skipped.
+
+Deviations: no JSON `project` field, because `symbol` and `callers` have no JSON output through MCP. Tool descriptions are unchanged (the 150-token budget). The docs mention of `project` is left to T329.4.2.
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
+
 
 ## T329.12 — `/ws` project messages and the SPA graph page: selector and index indicator (links panel split to T329.20)
 
@@ -7841,6 +7853,34 @@ Execution plan (same branch and PR as T338): (1) list every heuristic in T330 (p
 Recommendation (`research.md` §22.2, approach C): evidence decides what `clear` deletes, heuristics only inform `list`. `clear` deletes a path only when (1) §22 documents it, (2) it carries a valid `CACHEDIR.TAG` (the owner's own declaration; deletion details per T342), or (3) the user lists it in `[agents.junk] extra`. Platform cache roots (`~/Library/Caches/<app>`, `$XDG_CACHE_HOME/<app>`, `%LOCALAPPDATA%\<app>\Cache`) and Electron subfolders without a §22 row are scanned read-only: `list` shows them with size and "not documented: not cleared", and they never count toward "Freed by `clear`". Cursor is `list`-only until a primary source names its paths; T330's Check stops clearing Cursor caches. `Service Worker/CacheStorage` leaves the cache list (stored app data). Decision row: the D36 proposal in T338. Fallback: approach A (§22 only, no heuristic listing). Not recommended: B (heuristics clear).
 
 **Result (2026-10-03, Claude Code / opus):** `research.md` §22.2 checks every T330 heuristic against its primary source: the Cache Directory Tagging spec, Apple's file-system guide, Electron's `app.getPath` docs and VS Code's code-cache cleaner. No primary source names a Cursor path. The creator approved C on 2026-10-03 (D36): `clear` deletes only §22 paths, valid `CACHEDIR.TAG` dirs and user `[agents.junk] extra` paths, and heuristic finds are listed read-only. T330, T330.2-T330.4 and §22 were updated, and T330's Check no longer clears Cursor caches. PR #662.
+
+### T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
+
+In the plan, T329 Terms (branch `docs/plan-graph-projects`, ~line 679, from PR #540 (T329), not merged yet) says "**Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for", and T329 §7 (~line 799) says "Without it, the project is the caller's current directory (agents keep today's behaviour)". These contradict each other because the selection is stored globally in the store (§2), so one rule makes an agent's MCP call follow whatever project the user last picked in the web UI and the other makes it follow the agent's cwd; the two give different answers whenever they differ.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Recommendation: the caller's current directory. The selection is one global value in the store (T329 §2), so making it the default would send every agent's MCP call to whatever project the user last picked in the web UI, and two agents in two repositories would answer for the same project. The cwd keeps today's behaviour and is per caller. The web UI selection drives only the graph page. Callers that need another project pass `project` explicitly.
+
+Decision (creator, 2026-10-06): the cwd project plus its links is the default for every graph command and graph MCP tool; the web UI selection never replaces it. T329 Terms, the T329 split note and the T329.4 card now say so.
+
+Check result (2026-10-06, Claude Code / opus-5.5): decision recorded here; T329 Terms ("Selected project"), the T329 split note (T336 no longer gates T329.4) and the T329.4 card updated; no other card mentions T336.
+
+### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
+
+In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Recommendation: T152's rules. Two commands deleting the same `target/` must not disagree, and T152's rules exist because a fresh build cache under a live agent is in use: clearing it mid-build breaks that build and costs a full rebuild. Idle-only (default 24 h), never the caller's own worktree unless its path is given, and one cache root at a time keep `agents junk clear` as safe as `worktree clean`.
+
+Decision (creator, 2026-10-06): `rtok agents junk clear` clears `build` and `CACHEDIR.TAG` dirs only under T152's rules. The T330 kinds table (`build` row), the T330 "Cleared" list, the running-agent rule and the T330.3 card now say so.
+
+Check result (2026-10-06, Claude Code / opus-5.5): decision recorded here; T330 (`build` row, "Cleared" item 2, running-agent rule) and T330.3 (dependency line) updated; T152 is done and already states these rules.
 
 ### T330.2. Junk: every host as an agent row, folders from `research.md` §22
 
