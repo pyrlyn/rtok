@@ -130,6 +130,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436 | todo | P2 | 3 | 0% | |
+| T436.1 | todo | P2 | 3 | 0% | |
 
 
 
@@ -2105,6 +2106,22 @@ Done means:
 Depends on T276 for the spinner runner.
 
 Check: snapshot tests for the icon of each verb and the fallback to `Kind`; a width test that every icon pads to the same column; a non-TTY test that no icon and no spinner bytes reach a pipe; manual run of `rtok agents install`, `rtok worktree add`, `rtok graph index` in a terminal shows the spinner during the wait and the icon on the result; `just check`.
+
+### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
+
+Creator request 2026-10-07: the same as T436, in the `rtok web` SPA.
+
+Today only page loads show a spinner (`Loading` in `web/src/states.tsx`, T407). Actions that call the API show nothing while they wait: the plugin switch (`pages/Plugins.tsx`, `useSetMutation`), project select and link (`pages/Projects.tsx`, `pages/graph3d/ProjectsOverview.tsx`, `useProjectMutation`), and doctor plan/apply (`pages/DoctorFix.tsx`) and expand (`pages/Calls.tsx`), which only disable their buttons.
+
+Done means:
+
+1. One `Spinner` in `web/src/ui`, with a story; `Loading` draws its ring through it, so there is one spinner in the SPA.
+2. Every control that sends a request shows the spinner on itself from the click until the answer, is disabled meanwhile and sets `aria-busy`. A switch stays in its old position until the server answers; on error it stays there and the error is shown.
+3. Operation icons: a verb → icon map in `web/src/ui` with the same operations as ketch's `OPERATION_ICONS` (install, remove/prune, update, fetch, link, roll back, search, doctor) plus rtok's own from T436, falling back to the success/warning/error/info icon. The web draws them as brand SVG icons through `Icon`, not emoji; missing ones are added under `brand/icons/ui/` (source rule of T414: no copies in `web/`). Action buttons and the result of an action carry their operation's icon.
+4. One list of operations: the web map and the CLI table of T436 name the same operations, checked by a test.
+5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
+
+Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
 
 ## Reference
 

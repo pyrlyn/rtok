@@ -128,3 +128,4 @@
 - T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
 - T436. Operation icons and a spinner on every wait, the way ketch draws them
+- T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
