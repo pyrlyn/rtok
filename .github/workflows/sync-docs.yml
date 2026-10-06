@@ -1,18 +1,28 @@
 # Publishes this repo's docs/ to the public site repository pyrlyn/landing on its main branch; a
 # push there deploys https://pyrlyn.github.io/landing/ via GitHub Pages:
 #   - docs/site.md (the project card) -> content/projects/<this repo's name>.md; its front matter
-#     follows CONTENT_CONTRACT.md in pyrlyn/landing.
-#   - every other docs/**/*.md -> content/docs/<this repo's name>/ (mirrored: files removed here are
-#     removed there), plus _source.json with the source repo, commit and ref. The site renders
-#     them as /landing/<name>/docs/<page>/ and links other relative paths back to this repo at
-#     that commit. Page order and titles live in src/data/docs-nav.json in pyrlyn/landing.
+#     follows CONTENT_CONTRACT.md in pyrlyn/landing. The localized cards docs/ru/site.md and
+#     docs/uk/site.md -> content/projects/ru/<name>.md and content/projects/uk/<name>.md (a card
+#     whose source is gone is removed there too).
+#   - every other user-facing English docs/**/*.md -> content/docs/<this repo's name>/ (internal
+#     pages are left out, see `internal` below; mirrored: files removed or left out here are
+#     removed there; the ru/ and uk/ folders are left out of this mirror and protected
+#     from its --delete), plus _source.json with the source repo, commit and ref. The
+#     site renders them as /landing/<name>/docs/<page>/ and links other relative paths back to
+#     this repo at that commit. Page order and titles live in src/data/docs-nav.json in
+#     pyrlyn/landing.
+#   - every user-facing docs/<lang>/**/*.md translation (lang: ru, uk; except
+#     docs/<lang>/site.md) -> content/docs/<name>/<lang>/, mirrored with its own --delete and
+#     the same filter. The site renders them as /landing/<lang>/<name>/docs/<page>/; a page
+#     without a translation falls back to English.
 #
 # Auth is a write-enabled deploy key on pyrlyn/landing only; its private half is this repo's
 # SITE_DEPLOY_KEY secret. GITHUB_TOKEN stays read-only. This workflow is independent of the
 # pipeline gate, releases and Pages: it never builds, tests or deploys this repository.
 #
-# On a v* tag or release the card's `version:` front matter is set from the tag (v1.2.3 ->
-# "1.2.3"), so the site shows the released version even before docs/site.md is bumped on main.
+# On a v* tag or release every card's `version:` front matter (English, ru and uk) is set from
+# the tag (v1.2.3 -> "1.2.3"), so the site shows the released version even before docs/site.md
+# is bumped on main.
 name: sync-docs
 
 on:
@@ -52,18 +62,30 @@ jobs:
           ref: main
           ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
           path: site
-      - name: Copy docs/site.md into the site repository
+      - name: Copy the project cards (docs/site.md, docs/ru/site.md, docs/uk/site.md) into the site repository
         env:
           PROJECT: ${{ github.event.repository.name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          dest="site/content/projects/${PROJECT}.md"
-          mkdir -p "$(dirname "$dest")"
-          cp source/docs/site.md "$dest"
-          if [ "$REF_TYPE" = "tag" ]; then
-            VERSION="${REF_NAME#v}" DEST="$dest" python3 - <<'PY'
+          # "" is English: docs/site.md -> content/projects/<name>.md (required). A localized
+          # card is optional: docs/<lang>/site.md -> content/projects/<lang>/<name>.md.
+          for lang in "" ru uk; do
+            src="source/docs/${lang:+$lang/}site.md"
+            dest="site/content/projects/${lang:+$lang/}${PROJECT}.md"
+            if [ ! -f "$src" ]; then
+              if [ -z "$lang" ]; then
+                echo "::error::docs/site.md is missing"
+                exit 1
+              fi
+              rm -f "$dest"
+              continue
+            fi
+            mkdir -p "$(dirname "$dest")"
+            cp "$src" "$dest"
+            if [ "$REF_TYPE" = "tag" ]; then
+              VERSION="${REF_NAME#v}" DEST="$dest" python3 - <<'PY'
           import os, re
           path, version = os.environ["DEST"], os.environ["VERSION"]
           text = open(path, encoding="utf-8").read()
@@ -78,8 +100,9 @@ jobs:
               text = f"---\n{fm}---\n" + text[m.end():]
               open(path, "w", encoding="utf-8").write(text)
           PY
-          fi
-      - name: Mirror the other docs/**/*.md into the site repository
+            fi
+          done
+      - name: Mirror the other docs/**/*.md and their ru and uk translations into the site repository
         env:
           PROJECT: ${{ github.event.repository.name }}
           SOURCE: ${{ github.repository }}
@@ -89,10 +112,48 @@ jobs:
           set -euo pipefail
           dest="site/content/docs/${PROJECT}"
           mkdir -p "$dest"
+          # Only user-facing docs are published. Internal pages stay in this repository and are
+          # left out here: research, QA audits, design notes and ADRs, proposals, plans and to-do,
+          # done and roadmap notes, agent instructions, maintainer runbooks and asset notes, plus
+          # this repository's own list (the last lines). The patterns carry no leading / so they
+          # match at any depth; --delete-excluded removes any copy already on the site.
+          internal=(
+            --exclude='research/' --exclude='research*.md'
+            --exclude='qa/' --exclude='*audit*.md'
+            --exclude='design/' --exclude='brand/' --exclude='assets/' --exclude='adr/' --exclude='notes/'
+            --exclude='proposals/' --exclude='*proposal*.md'
+            --exclude='plan*.md' --exclude='PLAN*.md' --exclude='todo*.md' --exclude='TODO*.md'
+            --exclude='next*.md' --exclude='done*.md' --exclude='roadmap*.md' --exclude='ideas.md'
+            --exclude='AGENTS.md' --exclude='CLAUDE.md' --exclude='agency.md'
+            --exclude='sonarcloud-setup.md' --exclude='release.md' --exclude='release-*.md'
+            --exclude='batch-flex.md' --exclude='llm-soft-compression.md' --exclude='model-routing.md'
+            --exclude='plugin-plan-template.md' --exclude='report.md' --exclude='windows.md'
+            --exclude='colima.md'
+          )
+          # English. The locale folders are not part of this mirror: excluded on the sending side
+          # and protected (P) on the receiving side, so --delete / --delete-excluded never touch
+          # content/docs/<name>/ru/ or uk/; each locale is mirrored by its own rsync below.
           rsync -a --delete --delete-excluded --prune-empty-dirs \
+            --filter='P /ru/' --filter='P /uk/' \
+            --exclude='/ru/' --exclude='/uk/' \
             --exclude='/site.md' \
+            "${internal[@]}" \
             --include='*/' --include='*.md' --exclude='*' \
             source/docs/ "$dest/"
+          # Translations: docs/<lang>/**/*.md -> content/docs/<name>/<lang>/, with English file
+          # names; docs/<lang>/site.md is a card (previous step), never a doc page.
+          for lang in ru uk; do
+            if [ -d "source/docs/${lang}" ]; then
+              mkdir -p "$dest/${lang}"
+              rsync -a --delete --delete-excluded --prune-empty-dirs \
+                --exclude='/site.md' \
+                "${internal[@]}" \
+                --include='*/' --include='*.md' --exclude='*' \
+                "source/docs/${lang}/" "$dest/${lang}/"
+            else
+              rm -rf "${dest:?}/${lang}"
+            fi
+          done
           printf '{\n  "repo": "%s",\n  "sha": "%s",\n  "ref": "%s"\n}\n' \
             "$SOURCE" "$SOURCE_SHA" "$REF_NAME" > "$dest/_source.json"
       - name: Commit and push if changed
@@ -104,10 +165,12 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          git add "content/projects/${PROJECT}.md" "content/docs/${PROJECT}"
+          # The checkout is fresh, so content/projects/ holds only this run's card changes; -A also
+          # stages a localized card the copy step removed.
+          git add -A -- content/projects "content/docs/${PROJECT}"
           # _source.json alone changes on every run; only commit when content changed.
           if git diff --cached --quiet -- . ":(exclude)content/docs/${PROJECT}/_source.json"; then
-            echo "content/projects/${PROJECT}.md and content/docs/${PROJECT}/ are already up to date"
+            echo "the ${PROJECT} cards and content/docs/${PROJECT}/ are already up to date"
             exit 0
           fi
           git config user.name "github-actions[bot]"
