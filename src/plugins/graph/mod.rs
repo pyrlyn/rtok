@@ -207,6 +207,86 @@ pub(crate) fn with_stale(cx: &Ctx, root: &Path, text: String) -> Result<String> 
     }
 }
 
+fn lsp_backend(cx: &Ctx) -> bool {
+    cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp"
+}
+
+/// What an LSP answer prints when the server found nothing; the answer is then checked
+/// against the tags index instead of being trusted.
+fn lsp_none_answer(text: &str) -> bool {
+    let text = text.trim_start();
+    text.is_empty()
+        || [
+            "no definition of",
+            "no references to",
+            "nothing reaches",
+            "no symbols resolved",
+        ]
+        .iter()
+        .any(|p| text.starts_with(p))
+}
+
+/// T376: the one door the five tools take. `backend = "lsp"` tries the language server; a
+/// server that is missing, not ready or dead (`Err`), or one that answers "nothing" for a
+/// name the tags index knows, gives the tags answer headed `(tags; lsp: <reason>)`, so the
+/// caller sees which backend spoke and why. `names` are the identifiers the tags index is
+/// asked about; empty means any empty LSP answer falls back. No retry: a dead server is
+/// restarted by `lsp::with_session` on the next call, not here.
+fn lsp_or_tags(
+    cx: &Ctx,
+    root: &Path,
+    names: &[&str],
+    lsp: impl FnOnce() -> Result<String>,
+    tags: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+    if !lsp_backend(cx) {
+        return tags();
+    }
+    let t0 = std::time::Instant::now();
+    let reason = match lsp() {
+        Ok(text) if !lsp_none_answer(&text) => return Ok(text),
+        Ok(text) => {
+            if !names.is_empty() && !tags_know(cx, root, names)? {
+                return Ok(text);
+            }
+            "empty answer".to_string()
+        }
+        Err(e) => format!("{e:#}")
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .take(120)
+            .collect(),
+    };
+    let out = format!("(tags; lsp: {reason})\n{}", tags()?);
+    // Fail open: a lost statistic must not turn a good tags answer into an error.
+    // Not a saving, so before == after, as in `lsp::finish`: before_bytes is the time lost.
+    let est = cx.estimate(&out, Class::Code);
+    let _ = cx.record(&Measurement {
+        plugin: "graph",
+        kind: "lsp_fallback",
+        before_bytes: t0.elapsed().as_millis() as u64,
+        after_bytes: out.len() as u64,
+        est_before: est,
+        est_after: est,
+        ref_id: None,
+        call_id: cx.call_id(),
+    });
+    Ok(out)
+}
+
+fn tags_know(cx: &Ctx, root: &Path, names: &[&str]) -> Result<bool> {
+    index_for(cx, root)?;
+    let key = index::canon(root);
+    for name in names {
+        if !cx.symbol_defs(&key, name)?.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// MCP dispatch for the four tools (`mcp.rs` `invoke`). An `Err` becomes an `isError` result.
 /// `scope` is the project scope of `symbol` and `callers` (T329.4.1), resolved by the caller
 /// because `Ctx` carries no project registry; the other tools still answer for the cwd.
@@ -277,9 +357,16 @@ pub fn symbol(cx: &Ctx, root: &Path, name: &str) -> Result<String> {
 
 /// Filtered `symbol`: a non-empty `filter` keeps only matching definitions (T52.1).
 pub fn symbol_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<String> {
-    if cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp" {
-        return lsp::symbol(cx, root, name, filter);
-    }
+    lsp_or_tags(
+        cx,
+        root,
+        &[name],
+        || lsp::symbol(cx, root, name, filter),
+        || symbol_tags(cx, root, name, filter),
+    )
+}
+
+fn symbol_tags(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<String> {
     index_for(cx, root)?;
     let rows: Vec<_> = cx
         .symbol_defs(&index::canon(root), name)?
@@ -437,9 +524,16 @@ pub fn callers(cx: &Ctx, root: &Path, name: &str) -> Result<String> {
 
 /// Filtered `callers`: a non-empty `filter.path` keeps one subtree (T52.1).
 pub fn callers_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<String> {
-    if cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp" {
-        return lsp::callers(cx, root, name, filter);
-    }
+    lsp_or_tags(
+        cx,
+        root,
+        &[name],
+        || lsp::callers(cx, root, name, filter),
+        || callers_tags(cx, root, name, filter),
+    )
+}
+
+fn callers_tags(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<String> {
     index_for(cx, root)?;
     let key = index::canon(root);
     let ranked = resolve::rank_name(cx, &key, name)?;
@@ -498,9 +592,23 @@ pub fn impact_filtered(
     filter: &Filter,
     to: Option<&str>,
 ) -> Result<String> {
-    if cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp" {
-        return with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?);
-    }
+    lsp_or_tags(
+        cx,
+        root,
+        &[name],
+        || with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?),
+        || impact_tags(cx, root, name, depth, filter, to),
+    )
+}
+
+fn impact_tags(
+    cx: &Ctx,
+    root: &Path,
+    name: &str,
+    depth: u32,
+    filter: &Filter,
+    to: Option<&str>,
+) -> Result<String> {
     index_for(cx, root)?;
     if let Some(target) = to.filter(|s| !s.is_empty()) {
         let chains = cx
@@ -1037,13 +1145,32 @@ fn symbol_src_reads_add(_n: usize) {}
 /// `outline(path)`: the `read` plugin's `map` mode, capped like the other two.
 pub fn outline(cx: &Ctx, path: &str) -> Result<String> {
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    if cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp" {
+    outline_in(cx, &root, path)
+}
+
+fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
+    // The path guard runs outside the wrapper: a refused path is an error to report, not
+    // a server failure to paper over with the tags answer.
+    let abs = if lsp_backend(cx) {
         let allow = &cx.plugin_config::<crate::config::Read>("read").allow_paths;
-        let abs = crate::plugins::read::resolve(&root, Path::new(path), allow)?;
-        return with_stale(cx, &root, lsp::outline(cx, &root, &abs.to_string_lossy())?);
-    }
-    let text = crate::plugins::read::read(cx, path, "map", None)?;
-    with_stale(cx, &root, cap(cx, text)?)
+        Some(crate::plugins::read::resolve(root, Path::new(path), allow)?)
+    } else {
+        None
+    };
+    lsp_or_tags(
+        cx,
+        root,
+        &[],
+        || {
+            let abs = abs.as_deref().unwrap_or(Path::new(path));
+            with_stale(cx, root, lsp::outline(cx, root, &abs.to_string_lossy())?)
+        },
+        || {
+            let text =
+                crate::plugins::read::read_with(cx, &crate::fs::HostFs, root, path, "map", None)?;
+            with_stale(cx, root, cap(cx, text)?)
+        },
+    )
 }
 
 // ---------- T68.1: explore ----------
@@ -1157,9 +1284,18 @@ pub(crate) fn assemble_explore(
 /// call paths between the resolved symbols (`symbol_paths`, ≤ 3 hops) and one
 /// impact depth-1 line per symbol, then goes through `cap` like the other tools.
 pub fn explore(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<String> {
-    if cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp" {
-        return lsp::explore(cx, root, query, filter);
-    }
+    let tokens = explore_tokens(query);
+    let names: Vec<&str> = tokens.iter().map(String::as_str).collect();
+    lsp_or_tags(
+        cx,
+        root,
+        &names,
+        || lsp::explore(cx, root, query, filter),
+        || explore_tags(cx, root, query, filter),
+    )
+}
+
+fn explore_tags(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<String> {
     index_for(cx, root)?;
     let mut parts = TagsExplore {
         cx,
@@ -1906,6 +2042,102 @@ mod tests {
             assert!(err.contains("outside cwd"), "{path}: {err}");
         }
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T376: a project with no language-server manifest makes `lsp::*` fail before any
+    /// process is spawned (so the real PATH is never consulted); each of the five tools then
+    /// answers from the tags index under the fallback prefix and records one `lsp_fallback`.
+    #[test]
+    fn lsp_backend_falls_back_to_tags_for_every_tool() {
+        let (mut c, dir) = crate::testutil::config("t376-fallback");
+        c.plugins.graph.backend = "lsp".into();
+        let cx = crate::plugin::Runtime::open(c, "t376-fallback").unwrap();
+        fs::write(
+            dir.join("a.rs"),
+            "pub fn alpha() {\n    beta();\n}\nfn beta() {}\n",
+        )
+        .unwrap();
+        let ctx = Ctx::new(&cx);
+        let f = Filter::none();
+        let answers = [
+            (
+                "symbol",
+                symbol_filtered(&ctx, &dir, "beta", &f).unwrap(),
+                "beta",
+            ),
+            (
+                "callers",
+                callers_filtered(&ctx, &dir, "beta", &f).unwrap(),
+                "a.rs",
+            ),
+            (
+                "impact",
+                impact_filtered(&ctx, &dir, "beta", 1, &f, None).unwrap(),
+                "alpha",
+            ),
+            ("outline", outline_in(&ctx, &dir, "a.rs").unwrap(), "alpha"),
+            (
+                "explore",
+                explore(&ctx, &dir, "beta", &f).unwrap(),
+                "= beta",
+            ),
+        ];
+        for (tool, out, needle) in &answers {
+            assert!(
+                out.starts_with("(tags; lsp: lsp: no Cargo.toml"),
+                "{tool}: {out}"
+            );
+            assert!(out.contains(needle), "{tool}: {out}");
+        }
+        let rows = cx.store.list_measurements("graph").unwrap();
+        let fallbacks = rows.iter().filter(|r| r.kind == "lsp_fallback").count();
+        assert_eq!(fallbacks, 5, "{rows:?}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T376: an empty LSP answer falls back only for a name the tags index has, and the
+    /// default backend never adds the prefix.
+    #[test]
+    fn lsp_empty_answer_falls_back_only_for_a_known_name() {
+        let (mut c, dir) = crate::testutil::config("t376-empty");
+        c.plugins.graph.backend = "lsp".into();
+        let cx = crate::plugin::Runtime::open(c, "t376-empty").unwrap();
+        fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        let tags = || Ok("tags answer".to_string());
+        let known = lsp_or_tags(
+            &ctx,
+            &dir,
+            &["alpha"],
+            || Ok("no definition of alpha".into()),
+            tags,
+        )
+        .unwrap();
+        assert_eq!(known, "(tags; lsp: empty answer)\ntags answer");
+        let unknown = lsp_or_tags(
+            &ctx,
+            &dir,
+            &["zzz"],
+            || Ok("no definition of zzz".into()),
+            tags,
+        )
+        .unwrap();
+        assert_eq!(unknown, "no definition of zzz");
+        let real = lsp_or_tags(
+            &ctx,
+            &dir,
+            &["alpha"],
+            || Ok("a.rs:1 function".into()),
+            tags,
+        )
+        .unwrap();
+        assert_eq!(real, "a.rs:1 function");
+        let (plain, dir2) = crate::testutil::runtime("t376-plain");
+        let out =
+            lsp_or_tags(&Ctx::new(&plain), &dir2, &["alpha"], || panic!("lsp"), tags).unwrap();
+        assert_eq!(out, "tags answer");
+        let _ = fs::remove_dir_all(dir);
+        let _ = fs::remove_dir_all(dir2);
     }
 
     // ---------- T68.1: explore ----------
