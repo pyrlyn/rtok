@@ -4,11 +4,12 @@
 
 //! T8.10: the `graph` plugin's symbol index over SQLite (the only backend after P39).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::Result;
 use diesel::alias;
-use diesel::dsl::{count_star, exists, min, not};
+use diesel::dsl::{count, count_star, exists, min, not};
+use diesel::expression_methods::AggregateExpressionMethods;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
@@ -952,6 +953,157 @@ impl Store {
         .select((d.field(symbols::path), d.field(symbols::name)))
         .load(&mut *conn)?)
     }
+
+    /// T368: `(reference file, definition file)`. Not a join: a specifier and a repo path share no column.
+    pub fn symbol_imported_defs(&self, root: &str, name: &str) -> Result<Vec<(String, String)>> {
+        let defs: Vec<String> = self
+            .symbol_defs(root, name)?
+            .into_iter()
+            .map(|(path, ..)| path)
+            .collect();
+        if defs.len() < 2 {
+            return Ok(Vec::new());
+        }
+        let mut conn = self.lock()?;
+        let ref_files: Vec<String> = symbols::table
+            .filter(
+                symbols::root
+                    .eq(root)
+                    .and(symbols::name.eq(name))
+                    .and(symbols::is_def.eq(0))
+                    .and(symbols::kind.ne("import")),
+            )
+            .select(symbols::path)
+            .distinct()
+            .load(&mut *conn)?;
+        if ref_files.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut imports: Vec<(String, String)> = Vec::new();
+        for chunk in ref_files.chunks(NAME_CHUNK) {
+            imports.extend(
+                symbols::table
+                    .filter(symbols::root.eq(root))
+                    .filter(symbols::kind.eq("import"))
+                    .filter(symbols::is_def.eq(0))
+                    .filter(symbols::path.eq_any(chunk))
+                    .select((symbols::path, symbols::scope))
+                    .load::<(String, String)>(&mut *conn)?,
+            );
+        }
+        drop(conn);
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        for (ref_file, spec) in imports {
+            if spec.is_empty() {
+                continue;
+            }
+            for def in &defs {
+                if import_matches_file(&spec, def) && seen.insert((ref_file.clone(), def.clone())) {
+                    out.push((ref_file.clone(), def.clone()));
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    /// T368: `(df, n_files)` from the cache written at the end of an index pass.
+    /// `(0, 0)` when that pass has not run, so ranking does not rescan `symbols`.
+    pub fn symbol_name_freq(&self, root: &str, name: &str) -> Result<(i64, i64)> {
+        Ok(self.cached_name_freq(root, name)?.unwrap_or((0, 0)))
+    }
+
+    /// T368: one `GROUP BY name` of referencing files, stored so ranking does not
+    /// rescan `symbols` on every `callers` / `impact`.
+    pub fn rebuild_symbol_idf(&self, root: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        let rows: Vec<(String, i64)> = symbols::table
+            .filter(symbols::root.eq(root))
+            .filter(symbols::is_def.eq(0))
+            .filter(symbols::kind.ne("import"))
+            .filter(symbols::name.ne(""))
+            .group_by(symbols::name)
+            .select((symbols::name, count(symbols::path).aggregate_distinct()))
+            .load(&mut *conn)?;
+        let n = distinct_files(&mut conn, root)?;
+        drop(conn);
+        let mut df = BTreeMap::new();
+        for (name, n_files) in rows {
+            df.insert(name, n_files);
+        }
+        let body = serde_json::to_string(&IdfCache { n, df })?;
+        self.kv_set(&idf_key(root), &body)
+    }
+
+    fn cached_name_freq(&self, root: &str, name: &str) -> Result<Option<(i64, i64)>> {
+        let Some(body) = self.kv_get(&idf_key(root))? else {
+            return Ok(None);
+        };
+        let cache: IdfCache = serde_json::from_str(&body).unwrap_or(IdfCache {
+            n: 0,
+            df: BTreeMap::new(),
+        });
+        Ok(Some((cache.df.get(name).copied().unwrap_or(0), cache.n)))
+    }
+}
+
+/// Per-root document frequency written at the end of an index pass (T368).
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IdfCache {
+    n: i64,
+    df: BTreeMap<String, i64>,
+}
+
+fn idf_key(root: &str) -> String {
+    format!("graph-idf:{root}")
+}
+
+/// Indexed files, not symbol rows. `.distinct().count()` drops the DISTINCT
+/// (Diesel replaces the select), so this is `COUNT(DISTINCT path)`.
+fn distinct_files(conn: &mut SqliteConnection, root: &str) -> Result<i64> {
+    Ok(symbols::table
+        .filter(symbols::root.eq(root))
+        .select(count(symbols::path).aggregate_distinct())
+        .get_result(conn)?)
+}
+
+fn import_segs(spec: &str) -> Vec<String> {
+    spec.split(['/', '\\', ':', '.'])
+        .filter(|s| !s.is_empty())
+        .filter(|s| !matches!(*s, "crate" | "self" | "super" | "package"))
+        .map(|s| s.replace('-', "_"))
+        .collect()
+}
+
+fn file_key(file: &str) -> Vec<String> {
+    let mut parts: Vec<&str> = file.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+    if let Some(last) = parts.last_mut()
+        && let Some((stem, _)) = last.rsplit_once('.')
+    {
+        *last = stem;
+    }
+    if matches!(parts.last().copied(), Some("mod" | "lib" | "index")) {
+        parts.pop();
+    }
+    parts
+        .into_iter()
+        .filter(|p| *p != "src" && *p != "crates")
+        .map(|s| s.replace('-', "_"))
+        .collect()
+}
+
+/// A bare identifier is not a path. Hyphens match underscores; the file's segments must prefix the import.
+fn import_matches_file(spec: &str, file: &str) -> bool {
+    if !spec.contains([':', '/', '.', '\\']) {
+        return false;
+    }
+    let imp = import_segs(spec);
+    let file = file_key(file);
+    if file.is_empty() || imp.is_empty() {
+        return false;
+    }
+    file.len() <= imp.len() && imp[..file.len()] == file[..]
 }
 
 #[cfg(test)]
@@ -1135,5 +1287,62 @@ mod tests {
             .unwrap();
         let got = store.symbol_impact("/r3", "N3", 4).unwrap();
         assert_eq!(got, vec![(1, "a.rs".into(), "".into())]);
+    }
+
+    fn import_at(name: &str, line: i32, spec: &str) -> (String, String, i32, bool, i32, String) {
+        (name.into(), "import".into(), line, false, line, spec.into())
+    }
+
+    #[test]
+    fn import_spec_matches_the_defining_file() {
+        assert!(import_matches_file("crate::a::parse", "src/a.rs"));
+        assert!(import_matches_file(
+            "crate::plugins::toon::encode",
+            "src/plugins/toon/mod.rs"
+        ));
+        assert!(import_matches_file(
+            "rtok_sys::unlock",
+            "crates/rtok-sys/src/lib.rs"
+        ));
+        assert!(import_matches_file(
+            "rtok_mcp::spec::Format",
+            "crates/rtok-mcp/src/spec.rs"
+        ));
+        assert!(!import_matches_file("crate::a::parse", "src/b.rs"));
+        assert!(!import_matches_file(
+            "figment::providers::Format",
+            "src/doctor/hooks.rs"
+        ));
+        assert!(!import_matches_file("parse", "src/a.rs"));
+    }
+
+    #[test]
+    fn imported_defs_are_the_candidate_files_a_reference_imports() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .replace_symbols("/r", "src/a.rs", "s", (0, 0), &[row("parse", 1, true)])
+            .unwrap();
+        store
+            .replace_symbols("/r", "src/b.rs", "s", (0, 0), &[row("parse", 1, true)])
+            .unwrap();
+        store
+            .replace_symbols(
+                "/r",
+                "src/c.rs",
+                "s",
+                (0, 0),
+                &[
+                    import_at("parse", 1, "crate::a::parse"),
+                    reference("parse", 3, "go"),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            store.symbol_imported_defs("/r", "parse").unwrap(),
+            vec![("src/c.rs".into(), "src/a.rs".into())]
+        );
+        store.rebuild_symbol_idf("/r").unwrap();
+        assert_eq!(store.symbol_name_freq("/r", "parse").unwrap(), (1, 3));
+        assert_eq!(store.symbol_name_freq("/r", "missing").unwrap(), (0, 3));
     }
 }

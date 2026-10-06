@@ -33,6 +33,7 @@ pub mod follow;
 pub mod index;
 pub mod lsp;
 pub mod projects;
+pub mod resolve;
 pub mod status;
 pub mod walk;
 pub mod watch;
@@ -396,10 +397,13 @@ pub fn callers_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> R
         return lsp::callers(cx, root, name, filter);
     }
     index_for(cx, root)?;
+    let key = index::canon(root);
+    let ranked = resolve::rank_name(cx, &key, name)?;
     let rows: Vec<_> = cx
-        .symbol_ref_groups(&index::canon(root), name)?
+        .symbol_ref_groups(&key, name)?
         .into_iter()
         .filter(|(path, ..)| filter.path_ok(path))
+        .filter(|(path, ..)| ranked.allows(path))
         .collect();
     if rows.is_empty() {
         return with_stale(
@@ -422,7 +426,14 @@ pub fn callers_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> R
         };
         out.push_str(&format!("{path}{scope} ×{n} (L{line})\n"));
     }
+    if ranked.others > 0 {
+        out.push_str(&other_defs_line(name, ranked.others));
+    }
     with_stale(cx, root, cap(cx, annotate_ambiguous(cx, root, name, out)?)?)
+}
+
+fn other_defs_line(name: &str, others: usize) -> String {
+    format!("+{others} other definitions of {name}\n")
 }
 
 /// `impact(name, depth)`: breadth-first walk of the `scope` edges T8.5 stored — who calls
@@ -471,11 +482,11 @@ pub fn impact_filtered(
             cap(cx, annotate_ambiguous(cx, root, name, body)?)?,
         );
     }
-    let rows: Vec<_> = cx
-        .symbol_impact(&index::canon(root), name, depth)?
-        .into_iter()
-        .filter(|(_, path, _)| filter.path_ok(path))
-        .collect();
+    let key = index::canon(root);
+    let ranked = resolve::rank_name(cx, &key, name)?;
+    let mut rows = impact_bfs(cx, &key, name, depth)?;
+    rows.retain(|(_, path, _)| filter.path_ok(path));
+    rows.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
     if rows.is_empty() {
         return with_stale(
             cx,
@@ -488,13 +499,16 @@ pub fn impact_filtered(
             )?,
         );
     }
+    let mut text = String::new();
+    if ranked.others > 0 {
+        // Cap keeps the head, so this line has to lead or a long walk hides it.
+        text.push_str(&other_defs_line(name, ranked.others));
+    }
+    text.push_str(&impact_lines_text(&rows));
     with_stale(
         cx,
         root,
-        cap(
-            cx,
-            annotate_ambiguous(cx, root, name, impact_lines_text(&rows))?,
-        )?,
+        cap(cx, annotate_ambiguous(cx, root, name, text)?)?,
     )
 }
 
@@ -931,10 +945,19 @@ pub(crate) fn impact_bfs_follow(
     let mut seen: HashSet<String> = HashSet::from([name.to_string()]);
     let mut frontier = vec![name.to_string()];
     let mut out = Vec::new();
+    // Resolved once per name: an ambiguous callee only follows the winning definition (T368).
+    let mut ranked: HashMap<String, resolve::Hit> = HashMap::new();
     for d in 1..=depth.clamp(1, 4) {
         let mut next = Vec::new();
         for from in &frontier {
+            if !ranked.contains_key(from) {
+                ranked.insert(from.clone(), resolve::rank_name(cx, root, from)?);
+            }
+            let allow = &ranked[from];
             for (path, scope, ..) in cx.symbol_ref_groups(root, from)? {
+                if !allow.allows(&path) {
+                    continue;
+                }
                 if scope.is_empty() {
                     out.push((d, path, String::new()));
                 } else if seen.insert(scope.clone()) {
@@ -1122,12 +1145,19 @@ impl ExploreParts for TagsExplore<'_> {
     }
 
     fn defs(&mut self, name: &str) -> Result<String> {
-        let rows: Vec<_> = self
+        let ranked = resolve::rank_name(self.cx, &self.key, name)?;
+        let mut rows: Vec<_> = self
             .cx
             .symbol_defs(&self.key, name)?
             .into_iter()
             .filter(|(path, ..)| self.filter.path_ok(path))
             .collect();
+        if let Some(path) = &ranked.def_path {
+            let kept: Vec<_> = rows.iter().filter(|row| &row.0 == path).cloned().collect();
+            if !kept.is_empty() {
+                rows = kept;
+            }
+        }
         if rows.is_empty() {
             return Ok(format!(
                 "no definition of {name}{}\n",
@@ -1135,7 +1165,11 @@ impl ExploreParts for TagsExplore<'_> {
             ));
         }
         let callees = self.cx.symbol_callees(&self.key, name)?;
-        Ok(defs_text(self.cx, self.root, &rows, &callees))
+        let mut text = defs_text(self.cx, self.root, &rows, &callees);
+        if ranked.others > 0 {
+            text.push_str(&other_defs_line(name, ranked.others));
+        }
+        Ok(text)
     }
 
     fn def_count(&mut self, name: &str) -> Result<usize> {
@@ -1147,12 +1181,10 @@ impl ExploreParts for TagsExplore<'_> {
     }
 
     fn impact1(&mut self, name: &str) -> Result<(String, usize)> {
-        let rows: Vec<_> = self
-            .cx
-            .symbol_impact(&self.key, name, 1)?
-            .into_iter()
-            .filter(|(_, path, _)| self.filter.path_ok(path))
-            .collect();
+        let ranked = resolve::rank_name(self.cx, &self.key, name)?;
+        let mut rows = impact_bfs(self.cx, &self.key, name, 1)?;
+        rows.retain(|(_, path, _)| self.filter.path_ok(path));
+        rows.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
         if rows.is_empty() {
             return Ok((
                 format!("nothing reaches {name}{}", self.filter.scope_note()),
@@ -1160,7 +1192,11 @@ impl ExploreParts for TagsExplore<'_> {
             ));
         }
         let n = rows.len();
-        Ok((impact_lines_text(&rows), n))
+        let mut text = impact_lines_text(&rows);
+        if ranked.others > 0 {
+            text.push_str(&other_defs_line(name, ranked.others));
+        }
+        Ok((text, n))
     }
 }
 
@@ -1467,6 +1503,51 @@ mod tests {
                 .unwrap()
                 .starts_with("1 names ambiguous")
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T368: an import picks one of two same-named definitions. The other
+    /// definition's references collapse to one line.
+    #[test]
+    fn ambiguous_callers_follow_the_import() {
+        let (cx, dir) = cx("rank-import");
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("src/a.rs"), "pub fn parse() {}\n").unwrap();
+        fs::write(
+            dir.join("src/b.rs"),
+            "pub fn parse() {}\nfn local() { parse(); }\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("src/c.rs"),
+            "use crate::a::parse;\nfn go() { parse(); }\n",
+        )
+        .unwrap();
+        // Two references in a three-file tree are most of the index. The 5% cutoff
+        // needs a wider tree so `parse` stays rankable.
+        for i in 0..40 {
+            fs::write(
+                dir.join(format!("src/p{i}.rs")),
+                format!("fn pad{i}() {{}}\n"),
+            )
+            .unwrap();
+        }
+        let ctx = Ctx::new(&cx);
+        let out = callers(&ctx, &dir, "parse").unwrap();
+        assert!(out.contains("src/c.rs"), "{out}");
+        assert!(!out.lines().any(|l| l.contains("src/b.rs")), "{out}");
+        assert!(out.contains("+1 other definitions of parse"), "{out}");
+        let imp = impact(&ctx, &dir, "parse", 1, None).unwrap();
+        assert!(imp.contains("src/c.rs"), "{imp}");
+        assert!(!imp.lines().any(|l| l.contains("src/b.rs")), "{imp}");
+        assert!(imp.contains("+1 other definitions of parse"), "{imp}");
+        let explored = explore(&ctx, &dir, "parse", &Filter::none()).unwrap();
+        assert!(
+            explored.contains("+1 other definitions of parse"),
+            "{explored}"
+        );
+        assert!(explored.contains("src/a.rs"), "{explored}");
+        assert!(!explored.contains("src/b.rs:"), "{explored}");
         let _ = fs::remove_dir_all(dir);
     }
 

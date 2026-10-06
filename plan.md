@@ -62,7 +62,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T348 | todo | research | 1 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T358 | todo | P2 | 4 | 0% | |
-| T368 | todo | P1 | 3 | 0% | |
 | T369 | todo | P1 | 2 | 0% | |
 | T370 | todo | P1 | 4 | 0% | |
 | T371 | todo | P2 | 2 | 0% | |
@@ -1532,16 +1531,6 @@ Check: every item below passes.
 - `rtok config validate` accepts every new key; each has its `default.toml` row and `docs/config.md` row; `just check` green.
 - The screenshot's layout (summary, warning, per-agent table, monthly totals) is what `rtok agents usage` prints for the fixture.
 
-### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
-
-From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` (`src/plugins/graph/mod.rs:312`) only says "ambiguous", and `impact_bfs` (`mod.rs:836`) walks all of them. Empryo resolves an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drops names referenced in more than ~5 % of files from ranking. rtok stores only the last import path segment (`scoped` in `src/plugins/graph/index.rs`, `scope` is empty for `kind == "import"`), so (a) needs the full import path. Overlaps T8.8 (graph_truth fixture) and I-28 / T52.3 (they share the IDF table).
-
-Plan: store the full import path of an `import` row in `scope` (no new column) and bump `extractor_fingerprint()` (`index.rs`) so roots reindex once. New `Store` query next to `symbol_ref_groups` / `symbol_imports` (`src/store/symbols.rs:574`, `:897`): per reference file, the candidate definition files it imports. Rank: imported candidate first, then same directory, then the rest, ties by IDF; `callers` / `explore` print the top candidate group and a `+N other definitions of <name>` line; `impact_bfs` follows only edges whose definition is the resolved one (all edges when nothing resolves — the current behaviour). IDF per root is one `GROUP BY name` over `symbols`, computed at index end.
-
-Done when: for an ambiguous name with an import-resolvable definition, `callers` and `impact` list only that definition's references first and name the rest in one line; unresolvable names behave as today.
-
-Check: extend `tests/fixtures/graph_truth.toml` with at least 10 ambiguous names (two crates/packages defining the same name); `tests/graph_truth.rs` callers precision on those +20 pp vs `main`, recall drop ≤ 2 pp, T8.8 overall score stays ≥ 0.93; `impact` output bytes on the ambiguous set −30 %; `just check`.
-
 ### T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
 
 From the Empryo study (idea-only, clean-room; Empryo `src/core/tools/repo-map-intercept.ts:190-245`). When the agent greps for an identifier (`fn foo`, `class Foo`, `\bfoo\(`), Empryo answers from its symbol index ("defined at path:line, N refs in …") and only falls through to grep when the pattern is not a symbol. rtok's guard denies native Grep (I-08 / T50.4) or redirects to MCP `search` (`native_redirect`, `src/plugins/guard/mod.rs:149`), which costs a second round trip even when `symbol` would have answered.
@@ -2300,7 +2289,7 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T368, T369, T370, T371, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95).
+Take first, in order: T369, T370, T371, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95). T368 is done.
 
 The 14 portable ideas and where each landed:
 

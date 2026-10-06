@@ -56,7 +56,6 @@
 - T348. Investigate: `--agent` means an agent id, a host, or both
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
-- T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 - T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T371. Git co-change pairs feed `impact` and the repo map
