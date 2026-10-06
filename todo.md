@@ -130,4 +130,4 @@
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
-- T418. SessionStart hook back under the 10 ms budget
+- T428. SessionStart hook back under the 10 ms budget

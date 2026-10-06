@@ -261,6 +261,23 @@ impl Store {
         insert_measurement_conn(&mut conn, session, m, once)
     }
 
+    /// [`Store::insert_measurement_once`] for several rows under one write lock and one commit.
+    /// All or none: the rows came from one dispatch and read as one event.
+    pub fn insert_measurements_once(
+        &self,
+        session: &str,
+        ms: &[Measurement],
+        once: Option<&str>,
+    ) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.immediate_transaction(|conn| -> Result<()> {
+            for m in ms {
+                insert_measurement_conn(conn, session, m, once)?;
+            }
+            Ok(())
+        })
+    }
+
     /// Count `measurements` for one plugin. Used by `examples/hello_plugin.rs`.
     pub fn measurement_count(&self, plugin: &str) -> Result<i64> {
         let mut conn = self.lock()?;
@@ -4310,6 +4327,30 @@ mod tests {
             assert_eq!(request_sha256_2.unwrap(), hex_sha256(&bad));
         }
         assert_eq!(store.call_io_request(call_id2).unwrap(), Some(bad.to_vec()));
+    }
+
+    /// T428: a batch is one event, so a row that cannot be stored takes the others with it.
+    #[rstest]
+    fn insert_measurements_once_is_all_or_none() {
+        let store = Store::open_in_memory().unwrap();
+        let row = |est_before| Measurement {
+            plugin: "memory",
+            kind: "recall",
+            before_bytes: 1,
+            after_bytes: 1,
+            est_before,
+            est_after: 1,
+            ref_id: None,
+            call_id: None,
+        };
+        store
+            .insert_measurements_once("s", &[row(1), row(2)], None)
+            .unwrap();
+        assert_eq!(store.measurement_count("memory").unwrap(), 2);
+        store
+            .insert_measurements_once("s", &[row(3), row(i32::MAX as u32 + 1)], None)
+            .unwrap_err();
+        assert_eq!(store.measurement_count("memory").unwrap(), 2);
     }
 
     #[rstest]
