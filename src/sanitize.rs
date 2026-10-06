@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T420: noise a saved request body carries without saying anything — terminal escapes,
+//! T431: noise a saved request body carries without saying anything — terminal escapes,
 //! control and zero-width characters, harness wrapper blocks, trailing whitespace. Pure;
 //! [`body`] is what the store applies unless `[core] store_raw` is set.
 
@@ -13,7 +13,7 @@ use regex::Regex;
 use serde_json::Value;
 
 /// Blocks a host wraps around a prompt or a tool result for the model, not for the record:
-/// each one the 2026-10-05 scan of saved hook bodies found (T420).
+/// each one the 2026-10-05 scan of saved hook bodies found (T431).
 const WRAPPERS: [&str; 4] = [
     "system-reminder",
     "task-notification",

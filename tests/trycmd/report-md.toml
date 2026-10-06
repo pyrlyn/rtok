@@ -80,6 +80,7 @@ Every effective key with its origin — the `config show --sources` page.
 | core.retain_calls_days | 30 | default |
 | core.retain_hook_bodies_days | 3 | default |
 | core.session_env | CLAUDE_SESSION_ID | default |
+| core.store_raw | false | default |
 | demon.backoff_ms | 1000 | default |
 | demon.healthy_ms | 10000 | default |
 | demon.max_backoff_ms | 30000 | default |
@@ -298,7 +299,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-252 keys.
+253 keys.
 
 ## Doctor
 
