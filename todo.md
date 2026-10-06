@@ -21,6 +21,7 @@
 - T310. React SPA replaces the Slint web UI (epic)
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
+- T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
 - T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 - T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
 - T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
@@ -43,11 +44,9 @@
 - T333. Investigate: T271 desktop-entry sweep vs D33/T275
 - T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
-- T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
 - T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 - T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
 - T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
-- T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 - T343. Investigate: T330 `--sort` takes two different value sets on `list`
 - T344. Investigate: T330 "backwards compatible" vs new default deletions
 - T345. Investigate: ProgressRunner in the rtok crate vs `crates/rtok-mcp` with no rtok dependency
@@ -57,7 +56,7 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
-- T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
+- T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T371. Git co-change pairs feed `impact` and the repo map
 - T372. Link tests to sources by naming convention in `affected_from_paths`

@@ -33,6 +33,8 @@ pub mod follow;
 pub mod index;
 pub mod lsp;
 pub mod projects;
+pub mod rank;
+pub mod scope;
 pub mod status;
 pub mod walk;
 pub mod watch;
@@ -71,22 +73,21 @@ impl Plugin for Graph {
         None
     }
 
-    fn session_start(&self, _ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
-        repo_map(cx)
+    fn session_start(&self, ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+        repo_map(ev, cx)
     }
 
     fn mcp_tools(&self) -> Vec<ToolDef> {
-        let named_path = json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"}},"required":["name"]});
         vec![
             ToolDef {
                 name: "symbol",
                 description: "Definitions of a symbol with their source: path:line kind, then the body. Optional path substring and kind narrow the match.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"}},"required":["name"]}),
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
             },
             ToolDef {
                 name: "callers",
                 description: "Which definitions reference a symbol: path, calling definition, count. Optional path substring keeps one subtree.",
-                input_schema: named_path,
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
             },
             ToolDef {
                 name: "impact",
@@ -206,20 +207,33 @@ pub(crate) fn with_stale(cx: &Ctx, root: &Path, text: String) -> Result<String> 
 }
 
 /// MCP dispatch for the four tools (`mcp.rs` `invoke`). An `Err` becomes an `isError` result.
-pub fn call(cx: &Ctx, name: &str, args: &Value) -> Result<String> {
+/// `scope` is the project scope of `symbol` and `callers` (T329.4.1), resolved by the caller
+/// because `Ctx` carries no project registry; the other tools still answer for the cwd.
+pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Result<String> {
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    // T263: every tool but `outline` walks `root` (index or LSP server).
-    if name != "outline" {
+    // T263: every tool but `outline` walks `root` (index or LSP server); `symbol` and
+    // `callers` check each member of their scope instead.
+    if !matches!(name, "outline" | "symbol" | "callers") {
         crate::plugins::read::walk_root_ok(&root)?;
     }
+    let own;
+    let scope = if scope.is_empty() {
+        own = [scope::Member {
+            name: String::new(),
+            root: root.clone(),
+        }];
+        &own[..]
+    } else {
+        scope
+    };
     let arg = |k: &str| args[k].as_str().unwrap_or("");
     let filter = Filter {
         path: arg("path").to_string(),
         kind: arg("kind").to_string(),
     };
     match name {
-        "symbol" => symbol_filtered(cx, &root, arg("name"), &filter),
-        "callers" => callers_filtered(cx, &root, arg("name"), &filter),
+        "symbol" => scope::symbol(cx, scope, arg("name"), &filter),
+        "callers" => scope::callers(cx, scope, arg("name"), &filter),
         "impact" => {
             let name = arg("name");
             if name.is_empty() {
@@ -280,7 +294,19 @@ pub fn symbol_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Re
     }
     let key = index::canon(root);
     let callees = cx.symbol_callees(&key, name)?;
-    with_stale(cx, root, cap(cx, defs_text(cx, root, &rows, &callees))?)
+    with_stale(
+        cx,
+        root,
+        cap(cx, defs_text(cx, root, &rows, &callees, &Tag::default()))?,
+    )
+}
+
+/// What a definition's `path:line kind` head carries in a multi-project answer: the
+/// `[project] ` label in front and the ambiguity `?` behind (T329.4.1).
+#[derive(Default)]
+pub(crate) struct Tag<'a> {
+    pub(crate) prefix: &'a str,
+    pub(crate) suffix: &'a str,
 }
 
 /// `{path}:{line} {kind}` per definition, then that definition's source, at most
@@ -316,14 +342,18 @@ fn mark_ambiguous_lines(out: &str) -> String {
 }
 
 fn annotate_ambiguous(cx: &Ctx, root: &Path, name: &str, out: String) -> Result<String> {
-    if cx.symbol_defs(&index::canon(root), name)?.len() > 1 {
-        Ok(format!(
-            "{}{}",
-            ambiguous_banner(1),
-            mark_ambiguous_lines(&out)
-        ))
+    Ok(flag_ambiguous(
+        cx.symbol_defs(&index::canon(root), name)?.len(),
+        out,
+    ))
+}
+
+/// `defs` is every definition of the name in the answer's scope, not only the shown ones.
+fn flag_ambiguous(defs: usize, out: String) -> String {
+    if defs > 1 {
+        format!("{}{}", ambiguous_banner(1), mark_ambiguous_lines(&out))
     } else {
-        Ok(out)
+        out
     }
 }
 
@@ -332,6 +362,7 @@ fn defs_text(
     root: &Path,
     rows: &[(String, String, i32, i32)],
     callees: &[(String, i32, String, i32)],
+    tag: &Tag,
 ) -> String {
     let budget = cx.plugin_config::<crate::config::Graph>("graph").body_lines as usize;
     let cap = budget / 2;
@@ -345,7 +376,6 @@ fn defs_text(
     let mut out = String::new();
     let mut cached: Option<(String, String)> = None;
     for (path, kind, line, end_line) in rows {
-        out.push_str(&format!("{path}:{line} {kind}\n"));
         if !cached.as_ref().is_some_and(|(p, _)| p == path) {
             symbol_src_reads_add(1);
             cached = Some((
@@ -353,17 +383,31 @@ fn defs_text(
                 std::fs::read_to_string(root.join(path)).unwrap_or_default(),
             ));
         }
-        out.push_str(&body_lines(
+        let def = def_text(
             &cached.as_ref().unwrap().1,
-            *line,
-            *end_line,
+            (path, kind, *line, *end_line),
             budget,
-        ));
+        );
+        let (head, body) = def.split_once('\n').unwrap_or((&def, ""));
+        out.push_str(&format!("{}{head}{}\n{body}", tag.prefix, tag.suffix));
         if let Some(names) = by_def.get(&(path.clone(), *line)) {
             out.push_str(&calls_line(names, cap));
         }
     }
     out
+}
+
+/// One definition as `symbol` prints it: the `{path}:{line} {kind}` head, then its source.
+/// Also the text a symbol-shaped `Grep` is answered with (T369), so both read the same.
+pub(crate) fn def_text(
+    src: &str,
+    (path, kind, line, end_line): (&str, &str, i32, i32),
+    budget: usize,
+) -> String {
+    format!(
+        "{path}:{line} {kind}\n{}",
+        body_lines(src, line, end_line, budget)
+    )
 }
 
 /// Source of one definition, `line..=end_line`, at most `budget` lines then `N more lines`.
@@ -1135,7 +1179,13 @@ impl ExploreParts for TagsExplore<'_> {
             ));
         }
         let callees = self.cx.symbol_callees(&self.key, name)?;
-        Ok(defs_text(self.cx, self.root, &rows, &callees))
+        Ok(defs_text(
+            self.cx,
+            self.root,
+            &rows,
+            &callees,
+            &Tag::default(),
+        ))
     }
 
     fn def_count(&mut self, name: &str) -> Result<usize> {
@@ -1165,9 +1215,11 @@ impl ExploreParts for TagsExplore<'_> {
 }
 
 /// T52.3: ranked repo map from existing `symbols` rows. `map_tokens = 0` is off;
-/// a missing index does not walk the tree (hook path).
-fn repo_map(cx: &Ctx) -> Option<Injection> {
-    let cap = cx.plugin_config::<crate::config::Graph>("graph").map_tokens;
+/// a missing index does not walk the tree (hook path). `map_rank = "pagerank"` (T370) reads the
+/// stored file graph instead and falls back to the reference counts when none is stored.
+fn repo_map(ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+    let cfg = cx.plugin_config::<crate::config::Graph>("graph");
+    let cap = cfg.map_tokens;
     if cap == 0 {
         return None;
     }
@@ -1175,6 +1227,24 @@ fn repo_map(cx: &Ctx) -> Option<Injection> {
         .cwd()
         .map(PathBuf::from)
         .or_else(|| std::env::current_dir().ok())?;
+    if cfg.map_rank == "pagerank" {
+        let root = index::canon(&cwd);
+        let seeds = if ev.source == "compact" {
+            crate::plugins::checkpoint::last_paths(cx, &root)
+        } else {
+            Vec::new()
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as i64);
+        if let Some(text) = rank::map(cx, &root, cap, &seeds, now) {
+            return Some(Injection {
+                plugin: "graph",
+                text,
+                priority: 1,
+            });
+        }
+    }
     let rows = cx
         .symbol_top_refs(&index::canon(&cwd), i64::from(cap))
         .ok()?;
@@ -2255,6 +2325,25 @@ fn c() {}
         assert!(start(&empty).is_none(), "empty index must not inject");
         let _ = fs::remove_dir_all(dir);
         let _ = fs::remove_dir_all(empty_dir);
+    }
+
+    /// T370: `map_rank = "pagerank"` lists files from the stored graph, falls back to the
+    /// reference counts when none is stored, and is byte-stable.
+    #[test]
+    fn repo_map_pagerank_lists_files_and_falls_back_without_a_graph() {
+        let (mut rt, dir) = cx("map-rank");
+        rt.cwd = Some(dir.to_string_lossy().into_owned());
+        rt.config.plugins.graph.map_tokens = 2000;
+        rt.config.plugins.graph.map_rank = "pagerank".into();
+        seed_map(&rt, &dir);
+        let fallback = start(&rt).expect("refs fallback");
+        assert!(fallback.text.contains("hot a.rs:1 2"), "{}", fallback.text);
+        rank::refresh(&Ctx::new(&rt), &index::canon(&dir)).unwrap();
+        let ranked = start(&rt).expect("pagerank map");
+        assert_eq!(ranked.text, "repo map\na.rs: hot, mid");
+        assert_eq!(start(&rt).unwrap(), ranked);
+        assert_eq!(ranked.priority, 1);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
