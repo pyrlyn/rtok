@@ -45,8 +45,17 @@ pub struct Cache {
 
 pub fn usage(dir: &Path) -> Usage {
     let mut total = Usage::default();
-    let _ = walk(dir, true, None, &mut total, &|_| false);
+    let _ = walk(dir, true, None, &mut total, None, &|_| false);
     total
+}
+
+/// [`usage`] that stops at `deadline`; the flag says the walk was cut short, so the result is
+/// a lower bound. A cut walk's mtimes are incomplete: a newer file may be the one not visited,
+/// so a caller that decides "idle" from them must keep the cache.
+pub fn usage_until(dir: &Path, deadline: std::time::Instant) -> (Usage, bool) {
+    let mut total = Usage::default();
+    let cut = walk(dir, true, None, &mut total, Some(deadline), &|_| false);
+    (total, cut.is_break())
 }
 
 /// The newest mtime [`usage`] would report for `dir`, except that the walk ends at the first
@@ -55,7 +64,7 @@ pub fn usage(dir: &Path) -> Usage {
 /// too, so that it holds for the newest exactly when it holds for this answer.
 pub fn newest_until(dir: &Path, enough: impl Fn(SystemTime) -> bool) -> Option<SystemTime> {
     let mut total = Usage::default();
-    let _ = walk(dir, true, None, &mut total, &enough);
+    let _ = walk(dir, true, None, &mut total, None, &enough);
     total.modified
 }
 
@@ -67,8 +76,13 @@ fn walk(
     root: bool,
     cache: Option<usize>,
     total: &mut Usage,
+    deadline: Option<std::time::Instant>,
     enough: &dyn Fn(SystemTime) -> bool,
 ) -> ControlFlow<()> {
+    // `enough` only sees files that have an mtime, so a tree of directories would never stop.
+    if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+        return ControlFlow::Break(());
+    }
     let Ok(entries) = std::fs::read_dir(dir) else {
         return ControlFlow::Continue(());
     };
@@ -101,7 +115,7 @@ fn walk(
             continue;
         };
         if kind.is_dir() {
-            walk(&entry.path(), false, cache, total, enough)?;
+            walk(&entry.path(), false, cache, total, deadline, enough)?;
             continue;
         }
         let Ok(meta) = entry.metadata() else {

@@ -35,6 +35,7 @@
 - T329.21. Project badges in the graph page lists
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
+- T330.3.2. Junk: `temp`, `build`, `locks`, `swap` kinds and plugin staging caches
 - T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
 - T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 - T330.6. Junk: item breakdown, `doctor` line, web card
