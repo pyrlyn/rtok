@@ -289,8 +289,7 @@ fn select(cfg: &Config, named: Option<&[String]>, cli: bool, desktop: bool) -> V
                 continue;
             }
             if named.is_none()
-                && (!agents::present(agent, v, cfg)
-                    || !agent.installed(cfg, v.kind).contains(&"mcp"))
+                && (!agents::present(v) || !agent.installed(cfg, v.kind).contains(&"mcp"))
             {
                 continue;
             }

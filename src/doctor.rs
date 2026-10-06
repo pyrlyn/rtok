@@ -42,8 +42,12 @@ pub struct Report {
     pub proxy: String,
     /// The proxy chain behind the OpenAI seed (`OPENAI_BASE_URL` or a host config).
     pub proxy_openai: String,
-    /// `ANTHROPIC_BASE_URL` is set, so MCP tool search is likely disabled.
+    /// MCP tool search is not confirmed on: `mcp_tool_search.state` is `disabled`, or `unknown`
+    /// with a custom `ANTHROPIC_BASE_URL` (the heuristic).
     pub mcp_tool_search_disabled: bool,
+    // A plain comment: a doc line beside the `$ref` makes the schema generator emit the type twice.
+    // What `ENABLE_TOOL_SEARCH` and `ANTHROPIC_BASE_URL` say about MCP tool search (T388).
+    pub mcp_tool_search: ToolSearch,
     pub bash_max_output_length: Option<String>,
     pub auto_compact_window: Option<String>,
     /// Read-class token share from the transcripts (`None` = no data, fail open).
@@ -164,9 +168,7 @@ impl Report {
         }
         out.push_str(&format!("proxy {}\n", self.proxy));
         out.push_str(&format!("proxy openai {}\n", self.proxy_openai));
-        if self.mcp_tool_search_disabled {
-            out.push_str("mcp_tool_search likely disabled (ANTHROPIC_BASE_URL is set)\n");
-        }
+        out.push_str(&self.mcp_tool_search.render());
         out.push_str(&format!(
             "BASH_MAX_OUTPUT_LENGTH {}\n",
             self.bash_max_output_length.as_deref().unwrap_or("(unset)")
@@ -244,6 +246,96 @@ impl Report {
         }
         out
     }
+}
+
+/// Whether Claude Code defers MCP tools (T388).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolSearchState {
+    #[default]
+    Enabled,
+    Disabled,
+    /// No `ENABLE_TOOL_SEARCH` override, but a custom `ANTHROPIC_BASE_URL`: Claude Code falls back
+    /// to loading tools upfront unless the proxy forwards `tool_reference` blocks, which rtok
+    /// cannot see from here.
+    Unknown,
+}
+
+/// The tool-search state and where it came from; `source` is `None` for the default (nothing to
+/// report), so a plain install prints no line.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, schemars::JsonSchema)]
+pub struct ToolSearch {
+    pub state: ToolSearchState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+impl ToolSearch {
+    fn render(&self) -> String {
+        let Some(source) = &self.source else {
+            return String::new();
+        };
+        let state = match self.state {
+            ToolSearchState::Enabled => "enabled",
+            ToolSearchState::Disabled => "disabled",
+            ToolSearchState::Unknown => "unknown",
+        };
+        format!("mcp_tool_search {state} ({source})\n")
+    }
+
+    /// Tool search is not confirmed on: the old "likely disabled" flag.
+    fn likely_off(&self) -> bool {
+        self.state != ToolSearchState::Enabled
+    }
+}
+
+/// `ENABLE_TOOL_SEARCH` as Claude Code reads it: `settings.json` `env` wins over the shell and
+/// empty means unset, like [`anthropic_base`]. Values per
+/// https://code.claude.com/docs/en/mcp (read 2026-10-06): `false` loads every tool upfront;
+/// `true`, `auto` and `auto:N` all keep deferral on (the threshold modes defer once definitions
+/// pass N % of the context), so only `false` is "disabled". With no usable override a custom base
+/// URL leaves the state `unknown`, since Claude Code then disables it unless set explicitly.
+fn resolve_tool_search(
+    settings: Option<&Value>,
+    env: Option<String>,
+    custom_base_url: bool,
+) -> ToolSearch {
+    let from_settings = settings
+        .and_then(|s| s.pointer("/env/ENABLE_TOOL_SEARCH"))
+        .and_then(|v| match v {
+            Value::String(s) => Some(s.clone()),
+            Value::Bool(b) => Some(b.to_string()),
+            _ => None,
+        })
+        .filter(|v| !v.is_empty())
+        .map(|v| (v, "settings.json env"));
+    let from_env = nonempty(env).map(|v| (v, "environment"));
+    for (raw, place) in from_settings.into_iter().chain(from_env) {
+        let value = raw.trim().to_ascii_lowercase();
+        let state = match value.as_str() {
+            "false" => ToolSearchState::Disabled,
+            "true" | "auto" => ToolSearchState::Enabled,
+            v if v
+                .strip_prefix("auto:")
+                .is_some_and(|n| n.parse::<u8>().is_ok_and(|n| n <= 100)) =>
+            {
+                ToolSearchState::Enabled
+            }
+            // An unrecognised value is no override: fall through to the next source.
+            _ => continue,
+        };
+        return ToolSearch {
+            state,
+            source: Some(format!("ENABLE_TOOL_SEARCH={value} in {place}")),
+        };
+    }
+    if custom_base_url {
+        return ToolSearch {
+            state: ToolSearchState::Unknown,
+            source: Some("heuristic: ANTHROPIC_BASE_URL set".into()),
+        };
+    }
+    ToolSearch::default()
 }
 
 /// Advice for enabling `[proxy.tools_rewrite]` when all four conditions hold.
@@ -338,11 +430,16 @@ pub fn page(cfg: &Config) -> Result<Report> {
         .collect();
     let timeout = Duration::from_millis(cfg.doctor.probe_timeout_ms.max(300));
     let anthropic = anthropic_base(settings.as_ref(), std::env::var("ANTHROPIC_BASE_URL").ok());
-    let mcp_tool_search_off = anthropic.is_some();
+    let tool_search = resolve_tool_search(
+        settings.as_ref(),
+        std::env::var("ENABLE_TOOL_SEARCH").ok(),
+        anthropic.is_some(),
+    );
+    let mcp_tool_search_off = tool_search.likely_off();
     let total_desc_tokens: u32 = mcp.iter().map(|s| s.desc_tokens).sum();
     let proxy_str = proxy_chain(anthropic.clone(), timeout);
     let tools_rewrite_adv = tools_rewrite_advice(
-        anthropic.is_some(),
+        mcp_tool_search_off,
         &proxy_str,
         cfg.proxy.port,
         total_desc_tokens,
@@ -363,7 +460,8 @@ pub fn page(cfg: &Config) -> Result<Report> {
         hooks_total: hooks.total,
         hooks_by_event: hooks.by_event,
         mcp,
-        mcp_tool_search_disabled: anthropic.is_some(),
+        mcp_tool_search_disabled: mcp_tool_search_off,
+        mcp_tool_search: tool_search,
         proxy: proxy_chain(anthropic, timeout),
         proxy_openai: proxy_chain(openai_seed(cfg, settings.as_ref()), timeout),
         bash_max_output_length: std::env::var("BASH_MAX_OUTPUT_LENGTH").ok(),
@@ -765,9 +863,12 @@ fn push_file(srcs: &mut Vec<Source>, name: &str, path: &Path) {
     };
     // By the file itself, not its name: with `CLAUDE.md -> AGENTS.md` one file was read twice,
     // every line came back as a duplicate of itself, and its tokens were counted twice.
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let me = real(path);
-    if srcs.iter().any(|s| real(Path::new(&s.path)) == me) {
+    if srcs
+        .iter()
+        .any(|s| crate::fs::same_path(&real(Path::new(&s.path)), &me))
+    {
         return;
     }
     let disp = path.display().to_string();
@@ -1272,6 +1373,7 @@ pub(crate) fn report_fixture() -> Report {
         proxy: String::new(),
         proxy_openai: String::new(),
         mcp_tool_search_disabled: false,
+        mcp_tool_search: ToolSearch::default(),
         bash_max_output_length: None,
         auto_compact_window: None,
         read_share: None,
@@ -1673,6 +1775,101 @@ mod tests {
         let report = page(&cfg).unwrap();
         assert!(!report.mcp_tool_search_disabled);
         assert!(!report.to_text().contains("mcp_tool_search"), "{report:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T388: with a custom base URL, `ENABLE_TOOL_SEARCH` settles the state; without it the
+    /// state stays a heuristic. Settings `env` wins over the shell, empty is unset.
+    #[test]
+    fn tool_search_follows_the_override_not_the_base_url_alone() {
+        let ts = |settings: Option<&Value>, env: &str, custom: bool| {
+            resolve_tool_search(settings, Some(env.to_string()), custom)
+        };
+        let state = |t: &ToolSearch| (t.state, t.source.clone().unwrap_or_default());
+
+        let (st, src) = state(&ts(None, "", true));
+        assert_eq!(st, ToolSearchState::Unknown);
+        assert_eq!(src, "heuristic: ANTHROPIC_BASE_URL set");
+
+        let (st, src) = state(&ts(None, "true", true));
+        assert_eq!(st, ToolSearchState::Enabled);
+        assert_eq!(src, "ENABLE_TOOL_SEARCH=true in environment");
+        for on in ["auto", "AUTO:5", " auto:100 "] {
+            assert_eq!(ts(None, on, true).state, ToolSearchState::Enabled, "{on}");
+        }
+        assert_eq!(ts(None, "false", true).state, ToolSearchState::Disabled);
+        assert_eq!(ts(None, "false", false).state, ToolSearchState::Disabled);
+
+        // Not a documented value: no override, so the heuristic stands.
+        for bad in ["auto:101", "auto:", "0", "yes"] {
+            assert_eq!(ts(None, bad, true).state, ToolSearchState::Unknown, "{bad}");
+            assert_eq!(ts(None, bad, false), ToolSearch::default(), "{bad}");
+        }
+
+        // No custom URL and no override is the default: nothing to report.
+        assert_eq!(ts(None, "", false), ToolSearch::default());
+        assert_eq!(ToolSearch::default().render(), "");
+
+        let off = serde_json::json!({"env": {"ENABLE_TOOL_SEARCH": "false"}});
+        let (st, src) = state(&ts(Some(&off), "true", true));
+        assert_eq!(st, ToolSearchState::Disabled, "settings beat the shell");
+        assert_eq!(src, "ENABLE_TOOL_SEARCH=false in settings.json env");
+        let empty = serde_json::json!({"env": {"ENABLE_TOOL_SEARCH": ""}});
+        assert_eq!(
+            ts(Some(&empty), "true", true).state,
+            ToolSearchState::Enabled
+        );
+        let junk = serde_json::json!({"env": {"ENABLE_TOOL_SEARCH": "maybe"}});
+        assert_eq!(
+            ts(Some(&junk), "true", true).state,
+            ToolSearchState::Enabled
+        );
+        let boolean = serde_json::json!({"env": {"ENABLE_TOOL_SEARCH": false}});
+        assert_eq!(
+            ts(Some(&boolean), "", false).state,
+            ToolSearchState::Disabled
+        );
+    }
+
+    #[test]
+    fn tool_search_renders_state_and_source() {
+        let t = resolve_tool_search(None, None, true);
+        assert_eq!(
+            t.render(),
+            "mcp_tool_search unknown (heuristic: ANTHROPIC_BASE_URL set)\n"
+        );
+        let t = resolve_tool_search(None, Some("true".into()), true);
+        assert_eq!(
+            t.render(),
+            "mcp_tool_search enabled (ENABLE_TOOL_SEARCH=true in environment)\n"
+        );
+        assert!(t.state == ToolSearchState::Enabled && !t.likely_off());
+    }
+
+    /// T388: a proxy that forwards `tool_reference` blocks and says so through the settings
+    /// override is reported as enabled, and the flag the advice keys off is off.
+    #[test]
+    fn page_reports_the_override_over_a_custom_base_url() {
+        let dir = std::env::temp_dir().join(format!("rtok-t388-override-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("settings.json"),
+            r#"{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:8790","ENABLE_TOOL_SEARCH":"true"}}"#,
+        )
+        .unwrap();
+        let mut cfg = crate::testutil::config_in(&dir);
+        cfg.doctor.settings_path = dir.join("settings.json");
+        cfg.setup.claude.settings_path = dir.join("settings.json");
+        let report = page(&cfg).unwrap();
+        assert_eq!(report.mcp_tool_search.state, ToolSearchState::Enabled);
+        assert!(!report.mcp_tool_search_disabled);
+        let text = report.to_text();
+        assert!(
+            text.contains("mcp_tool_search enabled (ENABLE_TOOL_SEARCH=true in settings.json env)"),
+            "{text}"
+        );
+        assert!(!text.contains("likely disabled"), "{text}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

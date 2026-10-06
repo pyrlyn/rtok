@@ -8,7 +8,9 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { orUnknown } from "../ui/Unknown";
 import { compact, fmt } from "./format";
+import { why } from "./missing";
 import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./parts";
 import { parseStats, type Bust, type HealthRow, type PricedRow, type StatsView } from "./text";
 
@@ -159,7 +161,7 @@ function StatsBody({ view: v }: { view: StatsView }) {
                 />
                 <Kpi
                     label="cache hit"
-                    value={u.hit ?? "-"}
+                    value={orUnknown(u.hit, why.statsHit)}
                     sub={`read ${compact(n(u.cache_read))}`}
                 />
                 <Kpi

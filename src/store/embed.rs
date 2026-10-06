@@ -211,7 +211,12 @@ pub fn rrf_merge(fts: &[NoteHit], knn: &[NoteHit], limit: u32) -> Vec<NoteHit> {
         hits.entry(h.id).or_insert_with(|| h.clone());
     }
     let mut order: Vec<(i32, f32)> = scores.into_iter().collect();
-    order.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    // T373: equal RRF scores break ties by note id ascending (byte-stable across runs).
+    order.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0.cmp(&b.0))
+    });
     order
         .into_iter()
         .take(limit.max(1) as usize)
@@ -223,6 +228,35 @@ pub fn rrf_merge(fts: &[NoteHit], knn: &[NoteHit], limit: u32) -> Vec<NoteHit> {
 mod tests {
     use super::*;
     use crate::config::MemoryEmbed;
+
+    /// T373: equal RRF scores sort by note id ascending, identical across runs.
+    #[test]
+    fn rrf_merge_breaks_score_ties_by_note_id() {
+        // Each note appears in only one list at rank 0 → equal scores 1/(RRF_K+1).
+        let fts = vec![NoteHit {
+            id: 30,
+            title: "c".into(),
+            snippet: String::new(),
+        }];
+        let knn = vec![NoteHit {
+            id: 10,
+            title: "a".into(),
+            snippet: String::new(),
+        }];
+        let first = rrf_merge(&fts, &knn, 10);
+        let ids: Vec<i32> = first.iter().map(|h| h.id).collect();
+        // Tie on score → id ascending: 10 before 30.
+        assert_eq!(ids, vec![10, 30], "{ids:?}");
+        for _ in 0..50 {
+            assert_eq!(
+                rrf_merge(&fts, &knn, 10)
+                    .iter()
+                    .map(|h| h.id)
+                    .collect::<Vec<_>>(),
+                ids
+            );
+        }
+    }
 
     #[test]
     fn hash_embed_is_deterministic_and_unit_length() {

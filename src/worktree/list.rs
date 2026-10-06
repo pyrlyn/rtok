@@ -6,12 +6,13 @@
 //! tagged build cache, plus the orphans git cannot see. Read-only — it deletes nothing.
 
 use std::collections::{BTreeSet, HashSet};
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
-use super::{Entry, inventory};
+use super::{Entry, inventory_with, par_map};
 use crate::info::human_bytes;
 use crate::render::{Col, duration, table};
 
@@ -44,17 +45,60 @@ pub struct Cache {
 
 pub fn usage(dir: &Path) -> Usage {
     let mut total = Usage::default();
-    walk(dir, None, &mut total);
+    let _ = walk(dir, true, None, &mut total, None, &|_| false);
     total
 }
 
-/// `cache` indexes `total.caches` once the walk is inside a tagged root.
-fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
+/// [`usage`] that stops at `deadline`; the flag says the walk was cut short, so the result is
+/// a lower bound. A cut walk's mtimes are incomplete: a newer file may be the one not visited,
+/// so a caller that decides "idle" from them must keep the cache.
+pub fn usage_until(dir: &Path, deadline: std::time::Instant) -> (Usage, bool) {
+    let mut total = Usage::default();
+    let cut = walk(dir, true, None, &mut total, Some(deadline), &|_| false);
+    (total, cut.is_break())
+}
+
+/// The newest mtime [`usage`] would report for `dir`, except that the walk ends at the first
+/// file whose mtime satisfies `enough`. `gc` only asks whether a worktree was touched within
+/// its idle window, which one recent file answers; `enough` must hold for every later mtime
+/// too, so that it holds for the newest exactly when it holds for this answer.
+pub fn newest_until(dir: &Path, enough: impl Fn(SystemTime) -> bool) -> Option<SystemTime> {
+    let mut total = Usage::default();
+    let _ = walk(dir, true, None, &mut total, None, &enough);
+    total.modified
+}
+
+/// `cache` indexes `total.caches` once the walk is inside a tagged root. The listing in hand
+/// answers "is there a `.git` or a `CACHEDIR.TAG` here", so most directories cost one
+/// `read_dir` and no probes; only a name that is present gets checked on disk.
+fn walk(
+    dir: &Path,
+    root: bool,
+    cache: Option<usize>,
+    total: &mut Usage,
+    deadline: Option<std::time::Instant>,
+    enough: &dyn Fn(SystemTime) -> bool,
+) -> ControlFlow<()> {
+    // `enough` only sees files that have an mtime, so a tree of directories would never stop.
+    if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+        return ControlFlow::Break(());
+    }
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+        return ControlFlow::Continue(());
     };
+    let entries: Vec<_> = entries.flatten().collect();
+    let (mut git, mut tag) = (false, false);
+    for entry in &entries {
+        let name = entry.file_name();
+        git |= name == ".git";
+        tag |= name == "CACHEDIR.TAG";
+    }
+    // A nested checkout (another worktree, a submodule) is its own row.
+    if !root && git && dir.join(".git").exists() {
+        return ControlFlow::Continue(());
+    }
     let cache = cache.or_else(|| {
-        is_cache_dir(dir).then(|| {
+        (tag && is_cache_dir(dir)).then(|| {
             let root = Cache {
                 path: dir.to_path_buf(),
                 bytes: 0,
@@ -64,19 +108,19 @@ fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
             total.caches.len() - 1
         })
     });
-    for entry in entries.flatten() {
-        // `DirEntry::metadata` does not follow symlinks: a link costs its own length.
+    for entry in entries {
+        // Neither the listing's file type nor `DirEntry::metadata` follows symlinks: a link
+        // costs its own length.
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            walk(&entry.path(), false, cache, total, deadline, enough)?;
+            continue;
+        }
         let Ok(meta) = entry.metadata() else {
             continue;
         };
-        let path = entry.path();
-        if meta.is_dir() {
-            // A nested checkout (another worktree, a submodule) is its own row.
-            if !path.join(".git").exists() {
-                walk(&path, cache, total);
-            }
-            continue;
-        }
         let modified = meta.modified().ok();
         match cache {
             Some(i) => {
@@ -88,7 +132,11 @@ fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
             None => total.source += meta.len(),
         }
         total.modified = total.modified.max(modified);
+        if modified.is_some_and(enough) {
+            return ControlFlow::Break(());
+        }
     }
+    ControlFlow::Continue(())
 }
 
 /// Directories that look like a linked worktree but that git does not list: their `.git`
@@ -96,7 +144,7 @@ fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
 /// repository moved, or the record was pruned. Looked for next to the known worktrees
 /// and in `<main>/.claude/worktrees`.
 pub fn orphans(entries: &[Entry]) -> Vec<PathBuf> {
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let known: HashSet<PathBuf> = entries.iter().map(|e| real(&e.record.path)).collect();
     let linked = entries.iter().skip(1);
     let mut parents: BTreeSet<PathBuf> = linked
@@ -170,13 +218,15 @@ impl Bound {
 /// Fill [`Row::agent`] from the store: an unlocked worktree's open claim row, then every
 /// bound agent's host and state — `live` within `[agents] idle`, else `ended` or `idle`.
 pub fn bind(rows: &mut [Row], store: &crate::store::Store, idle: &str) -> anyhow::Result<()> {
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let claims = store.open_worktree_claims()?;
     let live: HashSet<String> = store.live_agents(idle)?.into_iter().map(|a| a.id).collect();
     for row in rows.iter_mut().filter(|r| r.state != "main") {
         if row.agent.is_none() && !row.locked {
             let dir = real(&row.path);
-            let claim = claims.iter().find(|(p, _)| real(Path::new(p)) == dir);
+            let claim = claims
+                .iter()
+                .find(|(p, _)| crate::fs::same_path(&real(Path::new(p)), &dir));
             row.agent = claim.map(|(_, id)| Bound::new(id.clone()));
         }
         let Some(bound) = row.agent.as_mut() else {
@@ -235,7 +285,7 @@ impl Row {
 /// session whose `cwd` is the worktree or a directory under it (both canonicalised, so
 /// `/tmp` and `/private/tmp` agree). The main checkout belongs to nobody.
 pub fn attribute(rows: &mut [Row], sessions: &[crate::store::SessionSeen]) {
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     let seen: Vec<(PathBuf, &crate::store::SessionSeen)> = sessions
         .iter()
         .map(|s| (real(Path::new(&s.cwd)), s))
@@ -244,7 +294,7 @@ pub fn attribute(rows: &mut [Row], sessions: &[crate::store::SessionSeen]) {
         let dir = real(&row.path);
         row.session = seen
             .iter()
-            .filter(|(cwd, _)| cwd.starts_with(&dir))
+            .filter(|(cwd, _)| crate::fs::path_starts_with(cwd, &dir))
             .map(|(_, s)| *s)
             .max_by(|a, b| a.last_seen.cmp(&b.last_seen).then(b.id.cmp(&a.id)))
             .map(|s| Seen {
@@ -258,8 +308,7 @@ pub fn attribute(rows: &mut [Row], sessions: &[crate::store::SessionSeen]) {
 
 /// Every worktree of the repository `cwd` belongs to, then the orphans.
 pub fn rows(cwd: &Path) -> anyhow::Result<Vec<Row>> {
-    let entries = inventory(cwd)?;
-    let listed = entries.iter().map(|e| {
+    let listed = inventory_with(cwd, |e| {
         let owner = e.record.owner();
         Row {
             branch: e.record.branch.clone(),
@@ -268,9 +317,10 @@ pub fn rows(cwd: &Path) -> anyhow::Result<Vec<Row>> {
             locked: e.record.locked.is_some(),
             ..Row::new(e.record.path.clone(), e.state.label())
         }
-    });
-    let mut rows: Vec<Row> = listed.collect();
-    rows.extend(orphans(&entries).into_iter().map(|p| Row::new(p, "orphan")));
+    })?;
+    let (entries, mut rows): (Vec<Entry>, Vec<Row>) = listed.into_iter().unzip();
+    let orphans = orphans(&entries);
+    rows.extend(par_map(&orphans, |_, p| Row::new(p.clone(), "orphan")));
     Ok(rows)
 }
 
@@ -390,6 +440,27 @@ mod tests {
         // The root's newest file is at most as new as the worktree's newest file.
         assert!(root.modified.is_some() && root.modified <= used.modified);
         assert_eq!(usage(&dir.join("missing")), Usage::default());
+        // Nothing is ever enough: the whole walk, the same newest mtime.
+        assert_eq!(newest_until(&dir, |_| false), used.modified);
+    }
+
+    /// `gc`'s question: the walk stops at the first file young enough, and that file
+    /// answers it the same as the newest one would.
+    #[test]
+    fn newest_until_stops_at_the_first_file_that_is_enough() {
+        let dir = tmp_dir("wt-newest");
+        for name in ["a", "b", "c"] {
+            write(dir.join(name), b"x").unwrap();
+        }
+        let seen = std::cell::Cell::new(0);
+        let found = newest_until(&dir, |_| {
+            seen.set(seen.get() + 1);
+            true
+        });
+        assert_eq!(seen.get(), 1, "one recent file ends the walk");
+        assert!(found.is_some() && found <= usage(&dir).modified);
+        assert_eq!(newest_until(&dir.join("missing"), |_| true), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

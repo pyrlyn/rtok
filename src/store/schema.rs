@@ -271,6 +271,14 @@ diesel::table! {
     }
 }
 
+// 0030 (T370): the file graph and its global PageRank, one JSON document per root.
+diesel::table! {
+    file_rank (root) {
+        root -> Text,
+        graph -> Text,
+    }
+}
+
 // 0024 (T282, D34): the rtok agent id — one row per host session, one per sub-agent inside
 // it. `parent_key` is '' for the main window or the host's own sub-agent `agent_id`;
 // `parent_id` is the resolved rtok id of that sub-agent's parent row.
@@ -376,6 +384,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     logs,
     symbols,
     extractor,
+    file_rank,
     symbol_stale,
     agents,
     worktree_claims,

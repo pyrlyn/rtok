@@ -9,8 +9,8 @@
 //! add|list|upgrade|remove`, but `codex plugin add --help` on the installed CLI (codex-cli
 //! 0.155.1) shows real `codex plugin add|remove` subcommands that enable/disable one plugin,
 //! verified empirically in a scratch `CODEX_HOME`; the offer runs `codex plugin marketplace
-//! add pyrlyn/rtok && codex plugin add rtok@rtok`. A missing `codex` on PATH
-//! (`raw_without_claude` strips every fake and real CLI down to a bare system PATH) keeps the
+//! add pyrlyn/rtok && codex plugin add rtok@rtok`. A `codex` that fails the
+//! offer (`raw_without_claude` leaves only stub CLIs that fail past `--version`) keeps the
 //! offer open instead of failing the install, and the file-based hooks/MCP surfaces still go
 //! in.
 #![cfg(unix)]
@@ -95,11 +95,14 @@ fn installs_the_plugin_by_default_as_the_only_call_path_and_remove_uninstalls() 
 }
 
 #[test]
-fn a_missing_codex_keeps_the_offer_open_and_the_file_surfaces_still_go_in() {
+fn a_failing_codex_keeps_the_offer_open_and_the_file_surfaces_still_go_in() {
     let home = tmp("codex-plugin-missing");
     let cfg = write_cfg(&home);
     let out = rtok_without_claude(&["agents", "install", "codex"], &cfg, &home);
-    assert!(out.contains("codex not found on PATH"), "{out}");
+    assert!(
+        out.contains("codex failed: fake host: unsupported"),
+        "{out}"
+    );
     let config = fs::read_to_string(home.join(".codex/config.toml")).unwrap_or_default();
     assert!(
         config.contains("[mcp_servers.rtok]"),

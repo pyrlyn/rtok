@@ -32,14 +32,14 @@ pub struct Mine {
 }
 
 pub fn run(cwd: &Path, root: &Path, agent: Option<&AgentDetail>, store: Option<&Store>) -> Whoami {
-    let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let real = |p: &Path| crate::fs::canon(p);
     // Outside a repository there is still an agent and a root to report.
     let records = git::list(cwd).unwrap_or_default();
     let linked = records.iter().skip(1);
     let here_dir = real(cwd);
     let here = linked
         .clone()
-        .find(|r| here_dir.starts_with(real(&r.path)))
+        .find(|r| crate::fs::path_starts_with(&here_dir, &real(&r.path)))
         .map(|r| r.path.clone());
     let claims = store
         .and_then(|s| s.open_worktree_claims().ok())
@@ -53,7 +53,7 @@ pub fn run(cwd: &Path, root: &Path, agent: Option<&AgentDetail>, store: Option<&
         let by_claim = r.locked.is_none()
             && claims
                 .iter()
-                .any(|(p, a)| a == id && real(Path::new(p)) == dir);
+                .any(|(p, a)| a == id && crate::fs::same_path(&real(Path::new(p)), &dir));
         by_lock || by_claim
     };
     let worktrees = linked

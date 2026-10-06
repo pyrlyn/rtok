@@ -54,6 +54,42 @@ warm rerun. If two integration tests time out right after a big rebuild,
 rerun before investigating; excluding `target\` from real-time scanning
 removes the effect entirely (a machine-level decision, not a repo one).
 
+## Finding installed agents
+
+`rtok agents list` treats a host as installed when its app bundle exists or its
+binary is on `PATH`. On Windows that lookup follows `PATHEXT` (`.COM`, `.EXE`,
+`.BAT`, `.CMD`, and whatever else the variable lists), not only `.exe`. A bare
+name such as `cursor` therefore matches `cursor.cmd`, which is how the Cursor
+and VS Code user installers put their CLIs on `PATH`.
+
+An app path with no extension is the same file as `name.exe` beside it.
+`~/.grok/bin/grok` is the install when the file on disk is `grok.exe`.
+
+`--version` for a bare name or a `.cmd`/`.bat` runs through `cmd /C`.
+`CreateProcess` only appends `.exe` and cannot start a batch shim, so a direct
+spawn reports the agent as present with an unknown version.
+
+Two Windows locations that are not the macOS bundle:
+
+- OpenCode Desktop: `%LOCALAPPDATA%\Programs\@opencode-aidesktop\OpenCode.exe`
+  (the older `%LOCALAPPDATA%\Programs\OpenCode\OpenCode.exe` is still accepted).
+- Cline's desktop variant is VS Code:
+  `%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe`.
+
+The home-directory limit used while tests run (`RTOK_HOST_SANDBOX`) compares
+`PATH` entries case-insensitively, so `c:\Users\…` and `C:\Users\…` are one
+directory.
+
+## Paths
+
+`std::fs::canonicalize` on Windows returns a `\\?\` path. Comparisons against
+a `C:\…` path, and ASCII case (`C:\Users` vs `c:\users`), then fail even though
+the filesystem is one directory. rtok's path identity goes through `src/fs.rs`
+(`canon`, `path_starts_with`, `same_path`, `strip_prefix`): `dunce` drops the
+verbatim prefix when the path does not need it, and on Windows the component
+check ignores ASCII case. Worktree identity, the read/search root guard and
+"do not index `$HOME`" all use that helper.
+
 ## Toolchain
 
 Everything comes through mise; `pipx:pytest` resolves on Windows only with

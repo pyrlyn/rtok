@@ -228,8 +228,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;worktree;gc' {
-            [CompletionResult]::new('--owner', '--owner', [CompletionResultType]::ParameterName, 'Open locks whose reason starts with this owner; every other lock is a hard stop')
+            [CompletionResult]::new('--owner', '--owner', [CompletionResultType]::ParameterName, 'Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`')
             [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep worktrees modified within this window (`24h`, `7d`)')
+            [CompletionResult]::new('--stale-lock', '--stale-lock', [CompletionResultType]::ParameterName, 'Treat someone else''s lock as abandoned once its merged, clean worktree is untouched this long')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')

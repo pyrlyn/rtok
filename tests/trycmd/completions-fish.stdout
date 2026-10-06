@@ -155,8 +155,9 @@ complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subc
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from whoami" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from whoami" -l json -d 'JSON instead of the text lines'
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from whoami" -s h -l help -d 'Print help'
-complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l owner -d 'Open locks whose reason starts with this owner; every other lock is a hard stop' -r
+complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l owner -d 'Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`' -r
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l idle -d 'Keep worktrees modified within this window (`24h`, `7d`)' -r
+complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l stale-lock -d 'Treat someone else/'s lock as abandoned once its merged, clean worktree is untouched this long' -r
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l yes -d 'Apply; without it this is a dry run that changes nothing'
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from gc" -l json -d 'JSON instead of the table'

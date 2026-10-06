@@ -11,7 +11,7 @@ only way to a release, and the only thing that creates a `v*` tag. No version is
 [`tools/release.sh`](../tools/release.sh) releases the version in `Cargo.toml`, and raises it only
 when that version is already tagged. `level` (`patch` by default) chooses which part moves.
 
-The run ([`bump.yml`](../.github/workflows/bump.yml) → pyrlyn/infra `bump.yml`):
+The run ([`bump.yml`](../.github/workflows/bump.yml) → pyrlyn/ci `bump.yml`):
 
 1. `tools/release.sh <level> --local` makes one `release: v<version>` commit — `Cargo.toml`,
    `Cargo.lock`, `CHANGELOG.md` and every plugin version file
@@ -442,8 +442,6 @@ Install paths:
   [npm, PyPI and crates.io](#npm-pypi-and-cratesio)
 - `brew install pyrlyn/tap/rtok` — after `pyrlyn/homebrew-tap`'s `sync-rtok.yml` PR merges
   the `rtok.rb` Release asset (no `HOMEBREW_TAP_TOKEN` on this repo)
-- docs site: https://pyrlyn.github.io/rtok/ (`.github/workflows/docs.yml`, Pages
-  `build_type: workflow`; deploy concurrency `group: pages`, `cancel-in-progress: false`)
 
 Regenerate the Release workflow after dist config changes:
 

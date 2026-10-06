@@ -1,5 +1,21 @@
 # rtok — completed tasks
 
+### T429. Find installed agents on Windows
+
+`rtok agents list` missed hosts whose Windows install is a `PATHEXT` shim or an `.exe` beside an extensionless app path, and `--version` never ran a `.cmd` (`CreateProcess` only appends `.exe`).
+
+PATH lookup tries every `PATHEXT` extension (default `.COM;.EXE;.BAT;.CMD`). An app path with no extension also matches `name.exe` (`~/.grok/bin/grok` → `grok.exe`). A bare name or a `.cmd`/`.bat` is version-probed through `cmd /C`. The sandbox home check is ASCII-case-insensitive. OpenCode Desktop's user-install directory is `%LOCALAPPDATA%\Programs\@opencode-aidesktop\OpenCode.exe`. Cline's desktop variant is also VS Code's `Code.exe` on Windows.
+
+Check: `find_bin_tries_pathext_and_skips_dirs_outside_the_limit`, `find_bin_limit_is_ascii_case_insensitive`, `probe_installed_matches_an_exe_beside_an_extensionless_path`, `under_keeps_a_different_case_child_of_home`, `app_version_skips_wrapper_noise_ahead_of_the_real_version` (the Windows case writes a `.cmd`). `docs/windows.md`, OpenCode, Cline and Grok READMEs name the paths. `cargo clippy --lib -- -D warnings` is clean on this machine (unix-only `LinkOutcome` variants are allowed off unix).
+
+### T430. Windows path identity without the verbatim prefix
+
+`std::fs::canonicalize` on Windows returns `\\?\` paths. `starts_with` and `==` then disagree with `C:\…` and with ASCII case, so worktree identity, the read guard and "do not index `$HOME`" miss real directories.
+
+`src/fs.rs` has one helper: `canon`, `path_starts_with`, `same_path`, `strip_prefix`. `dunce` drops the verbatim prefix when the path does not need it, and on Windows the component check ignores ASCII case. `read`, `search`, `worktree`, `doctor` and junk symlink targets use it. `docs/windows.md` says so.
+
+Check: `windows_path_identity_folds_verbatim_prefix_and_ascii_case`, `resolved_drops_the_verbatim_prefix`, `under_ascii_case_insensitive_matches_windows_prefix`, `display_rel_strips_ascii_case_insensitive_prefix`.
+
 ### T97. `rtok agents install kilo` — Kilo Code: the shared OpenCode plugin plus `kilo.json` MCP
 
 Creator request 2026-09-21: a host plugin for Kilo Code CLI + desktop. Kilo Code 7 is rebuilt on the OpenCode server: the CLI (`kilo`, `npm i -g @kilocode/cli`) and the VS Code extension (`kilocode.kilo-code`) share one config — `~/.config/kilo/kilo.json[c]` globally, `kilo.jsonc` / `.kilo/kilo.jsonc` per project; the legacy `mcp_settings.json` is no longer read (v7.0.33+). Plugins are OpenCode-shaped TS modules (`tool.execute.before` / `tool.execute.after`, `shell.env`, …) loaded from `~/.config/kilo/plugin/` or `.kilo/plugin/`; MCP is `mcp.<name> = {type: "local", command: [..], enabled}` — the entry `agents::opencode::register_mcp` already writes. Creator decision 2026-09-21: reuse `plugins/opencode/rtok.ts` as is — it imports only `node:child_process` — so there is no `plugins/kilo/` tree (the omp rule from T92). Evidence (fetched 2026-09-21): https://kilo.ai/docs/automate/extending/plugins, https://kilo.ai/docs/automate/mcp/using-in-kilo-code, https://kilo.ai/docs/code-with-ai/platforms/cli.
@@ -1025,6 +1041,24 @@ Pages describe a chart, they never call a chart library. `web/src/charts/` holds
 
 Result: ECharts 6.1.0 (tree-shaken `echarts/core`, canvas) in its own lazy chunk (525 kB / 178 kB gzip); the entry chunk grew 18 kB. Its own tooltip box stays off; our React tooltip is placed with `@floating-ui/react-dom` 2.1.9 (positioning only, instead of the planned `@floating-ui/react`). Canvas reads the `--pyr-*` roles and redraws on a theme switch. The calls chart, the calls KPI mini and the live sessions mini share one sync group: hovering one draws the pointer in the others, and only the hovered chart shows a tooltip. Charts are focusable `role="img"`; arrows, Home and End move the hover, Escape leaves, the tooltip is linked by `aria-describedby`. A unit test keeps `from "echarts` inside `charts/echarts.ts`. Checked in light and dark themes in the dev server.
 
+### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
+
+A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on React Aria Components (`Autocomplete`, `Menu`, `Modal`; creator decision), styled on the `--pyr-*` roles.
+
+Check: unit tests for the shortcut map; a story with a play function that opens the palette, filters and navigates; axe green.
+
+Result: `web/src/palette/`. ⌘K / Ctrl+K (also the header's "jump to" button) opens a palette over pages, plugins, sessions (newest 30) and hosts from the current snapshot, plus the theme switch; a plugin or session opens its page on that row through `?id=` (validated as a string in `router.tsx`, selected by `useSelectFromUrl`). `g <key>` jumps to a page (keys picked by hand, unit-tested unique), `?` opens the shortcut sheet; single-letter keys never fire inside fields. Behaviour comes from React Aria Components 1.21.1 (`Autocomplete`, `Menu`, `Modal`, `Dialog`); its `Autocomplete` covers the palette, so no `cmdk` (no release since 2025-03). The overlays load lazily (48 kB gzip chunk, entry +1 kB) and stay mounted after first use so closing hands focus back to the opener. Hosts is a text page with no rows, so a host item only opens it.
+
+### T414.17. Unknown values: a label and an icon with the reason
+
+Creator request 2026-10-05: where a page has no data for a value, it shows "Unknown" and an icon whose tooltip explains why, instead of a bare "-". Missing means absent (null, or "-" in a CLI text page); zero is data and stays a number.
+
+Plan: 1) `web/src/ui/Unknown.tsx`: "Unknown" in the subtle tone plus an info button; the reason in a React Aria `Tooltip` (hover and keyboard focus) that also opens on tap, since touch has no hover. 2) One helper turns `value | null` into the value or `<Unknown why=…/>`. 3) Replace every "-" fallback on the Sessions, Calls, Plugins, Hosts and Worktrees pages; each field gets its own reason taken from where the Rust side leaves it empty (no guessed reasons). 4) Unit test for the helper, a story with a play that focuses the icon and reads the tooltip, axe.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just js` green; `grep -rn '?? "-"' web/src/pages` finds nothing.
+
+Result: `web/src/ui/Unknown.tsx` renders the label at once and the "?" with its React Aria `Tooltip` from a lazy chunk (`UnknownWhy`, 5.8 kB gzip; entry +1 kB), so a chunk that fails leaves the word. `orUnknown(value, why, label?)` turns null, "" and the CLI's "-" into it; zero passes through. Every reason lives in `web/src/pages/missing.ts`, each restating where Rust leaves the field null (`src/store` call and session rows, `src/web/model.rs` plugin stats, hosts and services, `src/worktree/list.rs`). Where absence is a fact the label says so with the same tooltip: "top-level" parent, "none" ref_id, host config, worktree branch, owner, agent and pid, "never" seen, "not found" host app, "n/a" saved for plugins that save no tokens, "not set" OTel endpoint. Plugins now show a measured zero or negative saving instead of "-". Covered: Calls, Sessions, Overview's recent sessions, Plugins, Hosts, Worktrees, Services and Stats. Tooltip opens on hover, keyboard focus and touch tap (checked in the dev server at phone width with touch pointer events). `ui/lazyPart.ts` is the shared fail-open lazy loader, now also used by the command palette in `Shell.tsx`. The calls tokens column widened to fit "Unknown ?". The card's grep still finds `web/src/pages/text.ts`, the parser that fills absent CLI columns with "-"; pages render those through `orUnknown`.
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
@@ -1034,6 +1068,16 @@ Plan: one `READY = { timeout: 10_000 }` in the story file; pass it to every `fin
 Check: `npx vitest run --project storybook src/pages/GraphOverview.stories.tsx` (from `web/`) several times under load; `just check`, `just spa-stories`, `just spa-e2e`.
 
 Result (2026-10-05, Claude Code / opus-5.5): one `READY = { timeout: 10_000 }` in `web/src/pages/GraphOverview.stories.tsx`, passed to every `findBy*`/`waitFor` in both play functions (the canvas-drawn wait drops its own 8 s). Before the click, "Webgl Draws And Click Selects" waits until `screenOf(2)` reads the same rounded pixel twice in a row, so the click lands on the sphere the layout and the camera fit already placed. Reproduced first: the full story suite failed 3 of 3 runs at load average 106-135 (both stories, 1013-1058 ms, `node-2d` and `graph-3d` not found); after the change the full suite passed 5 of 5 and the file alone 5 of 5 at load average 47-78 (lower than the failing runs, but inside the 15-250 band the flake was reported in). Fail-fast kept: with a wrong node count and a missing name the two stories fail at 10.0 s and 12.5 s instead of hanging. `just check`, `just spa-stories` and `just spa-e2e` green.
+
+### T427. The brand-copy test hashes only files whose size matches a brand file
+
+`web/src/brandSources.test.ts` hashes every file in `web/` and `brand/` (about 400 files, 5 MB). Run alone it takes about 2 s; in the parallel unit suite on a loaded host it took 16 to 68 s and failed the 5 s timeout. A copy of a brand file always has the same size, so only files whose size matches some brand file need a hash.
+
+Plan: 1) In `brandSources.test.ts`, stat every file first; hash a `web/` file only when its size is among the brand file sizes, and hash a brand file only when its size occurs in `web/`. 2) Show the guard still bites: copy a brand file into `web/src` locally, see the test fail, remove it. 3) Time the test alone before and after.
+
+Check: `just spa-test`, `just js`; the test fails on a planted copy; its own time drops well under the 5 s timeout.
+
+Result: the test stats every brand file, groups them by size, and hashes a `web/` file (and its same-size brand twins) only when a brand file shares its size. With the full brand pack installed (`brand/node_modules`, 208 files) the test takes 10 to 21 ms at load average 110 to 150, against 310 ms before (warm cache; up to 68 s in the parallel suite on a loaded host). A copy of `brand/illustrations/offline.svg` planted in `web/src` still fails it (`src/planted-copy.svg = illustrations/offline.svg`). `just js` green; `just spa-test` 182 of 183, the one failure the load-bound `app.test.tsx` nav test (5.04 s against the 5 s timeout), which this task does not touch.
 
 ### T310.12. Delete Slint, the WASM build and the HTML design
 
@@ -2111,6 +2155,20 @@ Evidence: isolated worktree at e2e43a8 + this task's hunks: `cargo fmt --check` 
 
 Deviation: 11 files (over the 3-file guideline) — the repo's own gates force the spread: `default_toml_is_the_defaults` (default.toml), `config_coverage` leaf rule (docs row per convention), `config-show` snapshot, fixture-count assertion (types.rs), two `Report` struct literals (ai/pdf), plus the two hook fixtures. No new dependency.
 
+**T369 Answer a symbol-shaped `Grep` with the definition instead of a deny** · P1, 2/5 · `src/plugins/guard/grep_symbol.rs`, `src/plugins/guard/mod.rs`, `src/plugins/graph/mod.rs`, `src/config/mod.rs`
+
+From the Empryo study (idea-only, clean-room; Empryo `src/core/tools/repo-map-intercept.ts:190-245`). When the agent greps for an identifier (`fn foo`, `class Foo`, `\bfoo\(`), Empryo answers from its symbol index ("defined at path:line, N refs in …") and only falls through to grep when the pattern is not a symbol. rtok's guard denies native Grep (I-08 / T50.4) or redirects to MCP `search` (`native_redirect`, `src/plugins/guard/mod.rs:149`), which costs a second round trip even when `symbol` would have answered.
+
+Plan: in `pre_tool` (`guard/mod.rs:37`), before `native_redirect`, classify the Grep pattern: a bare identifier or `fn|def|class|struct|type|func|interface <ident>` with no path glob. Look the name up with `symbol_defs` (`src/store/symbols.rs:475`); one to five definitions → deny with the `path:line kind` list and the ref count as the reason (the same text `symbol` prints, capped at `inject` budget); zero or more than five → current behaviour. Config `plugins.guard.grep_symbol = false` next to `deny_grep_glob` (`src/config/mod.rs:761`); off until the check below passes. Record a `Measurement` (`plugin: "guard"`, `kind: "grep_symbol"`). Must stay inside the ≤ 10 ms PreToolUse budget: index lookup only, never `index_for`.
+
+Done when: with the flag on, `Grep pattern="fn parse_since"` in an indexed project is answered with the definition line(s); a regex such as `TODO|FIXME` is untouched.
+
+Check: unit tests for the classifier (identifier, `fn x`, `class X`, regex, path-globbed); a replay over the Grep calls in local Claude Code transcripts (`[stats] transcripts_dir`) shows ≥ 70 % of symbol-shaped patterns are answered from the index; after a dated window with the flag on, the share of follow-up Grep/Read on the same name within 3 calls is ≤ 25 % (row in `research.md`); hook p95 stays ≤ 10 ms; `just check`.
+
+Check result: shipped opt-in. `plugins.guard.grep_symbol = false` stays the default because native `Grep` had no sample (0 calls in the local transcripts) and the follow-up-rate metric is unmeasured (moved to T369.1). The classifier takes a bare identifier, `fn|def|class|struct|type|func|interface <ident>` and the `\bfoo\b`, `\bfoo\(`, `foo\(`, `\bfoo` spellings; a `path` that is a directory inside the project keeps only the definitions under it; `glob`, `type`, `-i`, `multiline`, a file path and a path outside the project fall through, as do zero, more than five, a missing index and an index row that no longer names the symbol. The deny reuses `graph::def_text` (the text `symbol` prints), is capped at the inject budget and records a zero-delta `guard/grep_symbol` row. Unit tests cover the classifier table, directory scoping, stale rows, the cap and the flag. The creator delegated the decision on the replay result to the coordinator on 2026-10-06. Replay over shell `rg`/`grep` calls in local transcripts (`research.md` §29.5): the coverage bar of 70 % is not met. Narrow classifier 26 of 131 (20 %) in indexed roots; widened classifier 128 of 432 (30 %), 128 of 1,001 (13 %) counting unindexed roots as unanswered. Hook p95 could not be confirmed under 10 ms (machine load average 46); the flag-on Grep answer matched the plain `PreToolUse` run within noise (p95 12.3 ms vs 15.5 ms).
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
+
 ## T50.2 — User filter drop-in directory and schema
 
 **T50.2 User filter drop-in directory and schema** · P3, 2/5 · `src/plugins/cmd/rules.rs`, `src/config/mod.rs`, `src/config/validate.rs`, `src/cli.rs`, `config/default.toml`, `docs/config.md`, `docs/cmd-rules.md` (new), `site/content/docs/reference/_content.gotmpl`, `tests/cmd_rules.rs` (new), `tests/trycmd/config-show.stdout`
@@ -2357,6 +2415,18 @@ Check: `project_links::tests` (scope A, B, C and D with a cycle; missing project
 Deviations: no CLI prints the scope yet; it is a store call that T329.4 and the page use.
 
 Status: done 2026-10-03 · Model: Claude Code / sonnet-5
+
+## T329.4.1 — `project` argument and scoped traversal for the MCP tools `symbol` and `callers`
+
+First half of T329.4. The CLI has no `symbol` or `callers` subcommand, so no clap flag changed; the MCP schemas of the two tools gain `project` (id or path, resolved by `projects::resolve`, expanded by `Store::project_scope`). Without `project` the scope is the cwd project plus its links, or just the cwd when it is unregistered. A one-project scope keeps today's output byte for byte. A multi-project scope runs the existing per-root queries in scope order; each row head gets a `[name] ` prefix; a name defined in several projects is flagged with the existing ambiguity banner (`?` on the heads), the selected project first; one cap covers the whole answer and each stale banner is prefixed with its project name; a linked project that cannot answer is skipped with a note; with `backend = "lsp"` only the first project answers and the answer says so.
+
+Execution: new `src/plugins/graph/scope.rs` (`resolve`, `symbol`, `callers`); `graph::call` takes the ready scope, resolved in the MCP dispatch in `src/mcp.rs` because `Ctx` (the published SDK) carries no project registry. `defs_text` takes a `Tag` (label prefix and ambiguity suffix) and `flag_ambiguous` is shared with the single-root path.
+
+Check: `graph::scope::tests` (callers of a function in C label call sites in A and B; project D does not cross and a one-project scope equals the plain output; no `project` from A equals A by path and by id; unregistered cwd and unknown project; same name in two projects grouped, flagged, selected project first; one cap over the scope; no hit says so once), `tests/graph_scope.rs` (the same through `rtok mcp`), `graph_contract` unchanged, the `mcp.toml` trycmd golden regenerated; `just full-check`: 2529 passed, 6 skipped.
+
+Deviations: no JSON `project` field, because `symbol` and `callers` have no JSON output through MCP. Tool descriptions are unchanged (the 150-token budget). The docs mention of `project` is left to T329.4.2.
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
 
 
 ## T329.12 — `/ws` project messages and the SPA graph page: selector and index indicator (links panel split to T329.20)
@@ -5894,6 +5964,12 @@ Check: `just check`.
 
 Result: `src/worktree/whoami.rs`, `WorktreeCmd::Whoami` in `src/cli.rs`; gates in `tests/surface_parity.rs` (EXEMPT, JSON reader), `docs/config.md`, `README.md`, `help-subcommands.trycmd` and the completion goldens; `tests/worktree.rs` `whoami_shows_the_root_and_only_the_caller_s_worktrees` (a locked and a claimed worktree of the caller, not another agent's claim; `here` follows the cwd; text form). `skills/worktrees/SKILL.md` went from 342 to 206 words; the creator's `~/.claude/skills/worktrees/SKILL.md` carries the same text. `just check`: 2440 passed.
 
+### T423. Worktrees skill: a `whoami` fallback for rtok 0.15.1 and older
+
+The skill from T411 starts with `rtok worktree whoami`, which reached `main` after v0.15.1, so an agent on the released binary hit "unrecognized subcommand 'whoami'" at its first step. Done: the skill names the fallback, `rtok agents whoami` for the id and `rtok worktree list` for the rest, until a release carries T411.
+
+Check: `cargo nextest run --test skill`.
+
 ## T159 — Claude Code `WorktreeCreate`/`WorktreeRemove` hooks route through `rtok worktree`
 
 Depends on T156 (the real payloads), T158 (create) and T153 (remove). A skill is advice an agent may skip; the host's own worktree hooks are the only place where the rules cannot be skipped: `claude --worktree`, the desktop app and sub-agent `isolation: worktree` all create worktrees without asking the agent, which is where the `agent-<hex>` directories and reason-less locks come from (`research.md` §18.1, §18.3).
@@ -6898,6 +6974,21 @@ Model: Claude Code / claude-sonnet-5-5
 
 Result: `src/plugins/read/hook.rs` builds the deny head from `[hook] host` (read only on the deny branch): `claude` says `use mcp__rtok__read (ToolSearch select:mcp__rtok__read loads it); before Edit run native Read(limit=1) — it satisfies the edit gate`, `gemini` says `mcp_rtok_read` with no load hint (Gemini discovers tools at startup), any other host keeps `use rtok read` byte for byte. The post-edit deny names the same tool (`...use mcp__rtok__read(mode=diff) vs <id> (ToolSearch ... loads it)`). `REASON` is now the host-independent tail and `DELTA_REASON` the head, so `measure::stats::is_read_deny` and `has_rtok_marker` match old and new text (the latter no longer greps `use rtok read`). `rtok stats` prints a new `then ToolSearch` count per deny (a `ToolSearch` within the next 3 tool calls and before any other `Read` or rtok MCP call). `rtok doctor` gains one advisory line, `"alwaysLoad": true` on the rtok MCP entry with the price of loading its tools up front, when the Claude entry lacks it and tool search is on; the setting is documented for all server types (https://code.claude.com/docs/en/mcp). Pre-release baseline in `research.md` §29.4 (2026-10-04): 89 of 182 denies (48.9 %) followed by a `ToolSearch` over 2026-10-01 to 2026-10-04 by the §29.1 query, 49 of 166 (29.5 %) by `rtok stats --since 30d`; the post-change share needs a release. The per-tool `_meta` form (`anthropic/alwaysLoad`) is recorded as I-113. Tests: one per host for the deny text (claude, gemini, an unlisted host), the T383 stats tests with a ToolSearch case, the doctor advice test; `just check` green (2390 tests).
 
+### T388. `doctor` reports the real MCP Tool Search state
+
+From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
+
+Done means: `doctor` reads `ENABLE_TOOL_SEARCH` from the environment and from Claude Code settings `env`, and prints `enabled`, `disabled` or `unknown (heuristic: ANTHROPIC_BASE_URL set)` with the source. The `tools_rewrite` advice uses the refined state. Cite the Claude Code docs page and date for the variable in `research.md` §3.
+
+Check: unit tests for base URL set with and without the override; `just check`.
+
+Plan: `resolve_tool_search` in `src/doctor.rs` (settings `env` over shell, `false` disables, `true`/`auto`/`auto:N` enable, else the base-URL heuristic) feeds a new `Report.mcp_tool_search {state, source}`; `mcp_tool_search_disabled` and the `tools_rewrite` / `alwaysLoad` advice read the refined state. Bless `ws.schema.json`, regenerate `snapshot.gen.ts`, update the web renderers. Cite the docs in `research.md` §3. Verify with unit tests and `just check`.
+
+Status: done 2026-10-06
+Model: Claude Code / claude-sonnet-5-5
+
+Result: `doctor::resolve_tool_search` reads `ENABLE_TOOL_SEARCH` from the Claude Code settings `env` (which wins) and from the shell, empty is unset. `false` is `disabled`; `true`, `auto` and `auto:N` (N 0-100) are `enabled` (the threshold modes still defer); an unrecognised value is no override. With no override a custom `ANTHROPIC_BASE_URL` gives `unknown`, the default install gives `enabled` and prints nothing. The text line is `mcp_tool_search <state> (<source>)`, e.g. `unknown (heuristic: ANTHROPIC_BASE_URL set)` or `enabled (ENABLE_TOOL_SEARCH=true in settings.json env)`. `Report.mcp_tool_search {state, source}` is new (schema blessed, `snapshot.gen.ts` regenerated, the web Doctor page and overview check show state and source); `mcp_tool_search_disabled` stays and is now true for `disabled` and `unknown`, and the `tools_rewrite` and `alwaysLoad` advice read it. `research.md` §3 cites the values from https://code.claude.com/docs/en/env-vars and https://code.claude.com/docs/en/mcp (checked 2026-10-06); the §7 ledger entry is updated. Checked: `tool_search_follows_the_override_not_the_base_url_alone` (base URL with and without the override, settings over shell, empty, bad values), `tool_search_renders_state_and_source`, `page_reports_the_override_over_a_custom_base_url`; `just check` green (2473 tests run, 2473 passed, 6 skipped); `npm run typecheck` green. `npm test` in `web/` has one failure, `src/ui/Icon.test.ts` ("every page has a sidebar icon"), which this change does not touch.
+
 ### T137. `rtok stats`: image blocks row
 Gate for a multimodal token gate (`research.md` §16.3 #9). Screenshots from browser and simulator tools enter the live zone as image blocks; rtok measures bytes of text only, so their share is unknown.
 Plan: count `image` content blocks in tool results and user messages per tool; bytes; pixel size from the PNG `IHDR` / JPEG `SOF` header (fixed-offset parse, no new dependency); estimated tokens by the provider's published formula, cited in the code comment and in the row.
@@ -6986,6 +7077,19 @@ Do (2026-09-24): `handle` in `src/proxy/mod.rs` moves request shaping (`record`,
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T421. `/health` latency test survives runner load
+
+`health_stays_fast_while_a_large_request_is_recorded` (`tests/proxy.rs`, T205) asserts every `/health` poll returns in under 250 ms while a 48 MB `compress`-mode request is shaped. On a loaded `macos-latest` runner it took 301.8 ms (run 37334858645, PR #749, which only touched `web/`); the same code passed on the previous run. Done: the bound scales with how slow the runner is, so load alone cannot fail it, and the test still fails when `/health` waits on the recording (the T205 regression it guards).
+
+Plan: measure on the same runtime how long the big request takes to reach upstream; a T205 regression makes one `/health` poll wait for the whole synchronous shaping, i.e. most of that window, while a healthy proxy answers in a small fraction of it. Assert each poll stays under a fraction of the window instead of a fixed 250 ms. Only `tests/proxy.rs` changes.
+
+Check: the test run many times under artificial CPU load passes every time; with `spawn_blocking` replaced by an inline call in `src/proxy/mod.rs` (not committed) it fails every time; `just check`.
+
+Result (2026-10-05, Claude Code / opus-5.5): the loop keeps the slowest `/health` poll and the window from spawning the big request to upstream seeing it, and asserts `slowest < window * 2 / 3`; the failure message prints both and the poll count. Nothing in `src/` changed. Evidence, debug build, 16-core host already at load average 30-40 from other sessions, extra load from `yes` burners: healthy, 40/40 at host load (ratio up to 0.077) and 100/100 with 32-64 burners at load 33-197 (ratio up to 0.39, slowest poll up to 3.2 s; 90 of those 100 had a poll over 250 ms, so the old bound would have failed them). With `spawn_blocking` replaced by an inline `shape_request` call (not committed): 30/30 fail, ratio 0.835-0.995, at host load and with 32-64 burners. `just check` green.
+
+Status: done 2026-10-05
+Model: Claude Code / opus-5.5
+
 ### T203. PreCompact/SessionEnd read the whole transcript and open extra stores
 
 Found 2026-09-22 in the core pass: `checkpoint::write` (`src/plugins/checkpoint.rs:202-212`) `read_to_string`s the entire JSONL transcript (hundreds of MB on real sessions) and `extract` walks every line inside `rtok hook`; `attach_ids` (:227-249) and `offer_session` (:258-280) then open a **second/third** `Store` on the same SQLite file even though the hook `Runtime` holds one — adding lock traffic exactly where T200 hurts (SessionStart with `startup_recall` does the extra open too). Unbounded memory + O(transcript) CPU + connection churn on PreCompact/SessionEnd/SessionStart.
@@ -7002,6 +7106,91 @@ Do (2026-09-24): `checkpoint::extract_path` now streams the transcript line by l
 
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
+
+### T417. Checkpoint keeps only prompts the human typed
+
+`checkpoint::extract` treated every `type: "user"` transcript record with text as a user prompt. In a live Claude Code session most such records are host-injected: background-task `<task-notification>`s, sub-agent hand-backs (`origin.kind == "peer"`), `<ci-monitor-event>`s, slash-command skill bodies (`isMeta`), the compaction summary (`isCompactSummary`), `[Request interrupted by user]` markers, and `<system-reminder>` blocks wrapped around real prompts. 40 recent rtok transcripts (2026-10-05) held 533 task notifications and 156 peer messages against 185 typed prompts, so the 20-prompt window that PreCompact, SessionEnd, startup recall and `handoff` inject was mostly noise.
+
+Done: a user record is a prompt only when the host did not inject it — `isMeta` and `isCompactSummary` records are skipped; a record with an `origin` counts only when `origin.kind == "human"`; `<system-reminder>…</system-reminder>` blocks are cut out of the text; a record whose remaining text opens with a host envelope (`<task-notification>`, `<ci-monitor-event>`, `<local-command-stdout>`, `<local-command-stderr>`, `<local-command-caveat>`, `<agent-message`) or with `[Request interrupted by user` is skipped, which covers transcripts written before Claude Code added `origin`. Paths, errors and skills are unchanged.
+
+Plan: `user_prompt` in `src/plugins/checkpoint.rs` applies the rules through `host_injected`, `HOST_OPENERS` and `strip_reminders`; `worth_parsing` stays a superset. Unit tests per injected shape, the 20-prompt window, reminder stripping, and the prefilter superset on the new fixture. Docs in `src/plugins/memory/README.md` (Hooks) and `AGENTS.md` (Invariants).
+
+Check: `just check`.
+
+Result (2026-10-05, Claude Code / opus-5.5): `user_prompt` skips host-injected records (`host_injected`: `isMeta`, `isCompactSummary`, non-`human` `origin.kind`), cuts `<system-reminder>` blocks (`strip_reminders`, an unclosed block runs to the end), and skips text opening with one of `HOST_OPENERS`. The `isMeta`-without-source case in `injected_skill_bodies_are_listed_not_quoted` now yields no prompt. New tests: `host_injected_records_are_not_prompts` (`HOST_FIXTURE`, one record per real shape), `prompt_window_counts_only_typed_prompts`, `strip_reminders_cuts_every_block`; `HOST_FIXTURE` joins the prefilter superset test. On a real 17 MB rtok transcript with 132 task notifications, rtok 0.15.1 restored only `<task-notification>` lines and the compaction summary; the new build restored the three prompts the user typed. `just check` green.
+
+### T372. Link tests to sources by naming convention in `affected_from_paths`
+
+From the Empryo study (idea-only, clean-room). `affected_from_paths` found tests only through symbol references, so a test that never imports the changed file was missed.
+
+Done: before the symbol walk, `affected_from_paths` builds a `HashSet` of indexed paths from `symbol_stats` and unions name-convention candidates for each changed path: `foo.rs` → `tests/foo.rs` / `{dir}/foo_test.rs`; `foo.ts`/`js` → `{dir}/foo.test.*` / `foo.spec.*` / `{dir}/__tests__/foo.*`; `foo.py` → `test_foo.py` / `foo_test.py`; `foo.go` → `foo_test.go`. Matches are marked `← via (by name)`. `is_test_path` also treats `.test.`, `.spec.`, and `/__tests__/` as tests.
+
+Check: `affected_links_tests_by_naming_convention` (Rust name link + negative + candidate table for four languages); existing affected tests unchanged; `cargo test --lib affected_links_tests_by_naming_convention` green.
+
+Status: done 2026-10-06
+Model: Grok Bot
+
+### T373. `rrf_merge` breaks score ties by note id
+
+From the Empryo study (idea-only). `rrf_merge` sorted by score alone, so equal RRF scores (common when a note ranks in only one of the FTS/KNN lists) could reorder between runs and break a cache-stable recall prefix.
+
+Done: sort by `(score desc, id asc)`. Unit test builds two single-hit lists with equal scores and asserts the same id order across 50 runs.
+
+Check: `rrf_merge_breaks_score_ties_by_note_id` in `src/store/embed.rs`; `cargo test --lib rrf_merge_breaks_score_ties_by_note_id` green.
+
+Status: done 2026-10-06
+Model: Grok Bot
+
+### T413.1. `rtok agents install roo` — Roo Code
+
+VS Code extension forked from Cline. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
+
+Done: `src/agents/roo/` desktop-only host; MCP via shared `register_stdio_mcp`; empty `[setup.roo] mcp_path` derives the VS Code globalStorage file; docs and list/config tests updated. Research in `research.md` §32.1.
+
+Check: host unit tests, `agents_doc`, `host_docs`, `agents_real_config` (as in the landing PR); #760 CI green on main.
+
+Status: done 2026-10-05 (#760)
+Model: Cursor / grok 4.7
+
+### T413.2. `rtok agents install qwen` — Qwen Code
+
+CLI forked from Gemini CLI. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
+
+Done: `src/agents/qwen/` plus `plugins/qwen` hooks extension; MCP via `register_stdio_mcp` into `~/.qwen/settings.json`; Claude-named hooks with second timeouts via `claude::insert_ours` on qwen `hook_events` rows; docs and list/config tests updated. Research in `research.md` §32.2.
+
+Check: targeted nextest filter from the landing PR; #760 CI green on main.
+
+Status: done 2026-10-05 (#760)
+Model: Cursor / grok 4.7
+
+### T426. Install refuses a host whose app is not installed
+
+`present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
+
+Done: `present()` (`src/agents/mod.rs`) is `app_path(v).is_some()`, so `agents list`, `install`, `update`, `doctor`, `junk` and `mcp ping` agree; `run` refuses before any backup with `<host> is not installed` when a named host has no wanted variant present; `remove` is unchanged. `Agent::markers` now only feeds `agents junk list`. Test fixtures: `fake_hosts` in `tests/common/agents.rs` stubs every host CLI and app bundle under the sandbox home, `raw_without_claude` keeps only those stubs (they fail past `--version`), and `a_host_whose_app_is_missing_is_refused_before_any_write` covers the refusal.
+
+Check: `rtok agents install gemini` with `~/.gemini` but no `gemini` binary exits 1 with `gemini is not installed` (dry run on the creator's machine); full nextest 2409 passed; `just check` green.
+
+Status: done 2026-10-06
+Model: Claude Code / claude-opus-5-5
+
+### T419. Checkpoint prompt quality in the web and TUI statistics
+
+T417 made the checkpoint keep only typed prompts. It saves no tokens — the restore is capped at `checkpoint_tokens`, and on 30 real rtok transcripts (2026-10-05) the capped restore averaged 1775 bytes before and 1903 after — it changes what fills the budget. A `Measurement` row would be summed into the memory plugin's savings, so this is a quality metric, shown apart from savings and never added to them.
+
+Done: the SDK `Host` gained `plugin_state_set(plugin, key, value)` (default `Ok(())`), which `Runtime` stores as the `kv` row `plugin:<id>:<key>`; `Store::kv_prefix` reads a prefix back with a literal, case-exact match. The checkpoint extractor counts, over the whole transcript, user-text records taken as typed prompts and those skipped as host-written (a tool-result echo is neither); the counts are never rendered, so the restore is byte-identical. Each PreCompact and SessionEnd write stores `{"typed","skipped"}` under `memory` / `<checkpoint kind>`, replacing the session's earlier row. The memory plugin page shows `checkpoint prompts typed` and `checkpoint host records skipped`, each session counted once by its larger row; live fields now come before config fields, and the TUI Plugins page shows the cursor row's fields on a line under the table. Savings totals are unchanged. On this session's own transcript: 4 typed, 5 skipped — prompts sent while the agent works are stored as `queued_command` attachments, which the checkpoint does not read yet.
+
+Check: `prompt_counts_take_each_sessions_largest_row`, `host_injected_records_are_not_prompts`, `prompt_window_counts_only_typed_prompts`, `tool_result_records_count_as_neither`, `counts_never_reach_the_render`, `session_end_note_and_startup_recall`, `kv_prefix_is_literal_and_ordered`, `plugins_tab_shows_the_cursor_rows_checkpoint_counts`, `memory_page_sums_checkpoint_counts_without_touching_savings`; `just check`.
+
+### T425. Large-transcript SessionEnd test bounds scaling, not wall clock
+
+`checkpoint::tests::session_end_on_a_large_transcript_is_bounded` asserts the SessionEnd hook on a 50 MB transcript finishes in under 10 s. It failed in `just check` at 13.8 s with host load ~130 on a 16-core Mac (debug build); alone at load 50-110 it took 5.2-8.0 s, so the fixed bound has little margin under load. Its comment says the bound only catches a quadratic regression. Done: the test times a 5 MB transcript before and after the 50 MB one in the same test and bounds the 50 MB run against the slower small run (near-linear scaling), with no wall-clock bound; the open count and note-body checks stay. Same approach as T421.
+
+Plan: `src/plugins/checkpoint.rs` only — a helper times one SessionEnd run per project; small, big, small; assert `big < max(small) * K` with K well under the ~100x a quadratic extractor gives.
+
+Check: the test passes repeatedly under CPU load (own `yes` burners); it fails when the extraction loop is made quadratic; `just check` green.
+
+Result (2026-10-05, Claude Code / opus-5.5): `timed_session_end` runs one SessionEnd per project and checks the single `Store::open`; the test times 5 MB, 50 MB, 5 MB and asserts `large < max(small) * 30`, with no wall-clock bound; the note-body check stays. Ten runs beside 32 `yes` burners (host load 73-345): every run passed, the 50 MB hook took 5.0-9.3 s, ratios 0.5-9.3 (a 5 MB run spiked to 12 s once). A per-line `Vec::iter().sum()` over every earlier line injected into `extract_lines_with` failed it: 241 s against 2.7 s, ratio 90.0. `just check` green (2450 tests).
 
 ### T230. Graph page: index status and dead symbols on `tui` and `web`
 
@@ -7681,6 +7870,34 @@ Recommendation (`research.md` §22.2, approach C): evidence decides what `clear`
 
 **Result (2026-10-03, Claude Code / opus):** `research.md` §22.2 checks every T330 heuristic against its primary source: the Cache Directory Tagging spec, Apple's file-system guide, Electron's `app.getPath` docs and VS Code's code-cache cleaner. No primary source names a Cursor path. The creator approved C on 2026-10-03 (D36): `clear` deletes only §22 paths, valid `CACHEDIR.TAG` dirs and user `[agents.junk] extra` paths, and heuristic finds are listed read-only. T330, T330.2-T330.4 and §22 were updated, and T330's Check no longer clears Cursor caches. PR #662.
 
+### T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
+
+In the plan, T329 Terms (branch `docs/plan-graph-projects`, ~line 679, from PR #540 (T329), not merged yet) says "**Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for", and T329 §7 (~line 799) says "Without it, the project is the caller's current directory (agents keep today's behaviour)". These contradict each other because the selection is stored globally in the store (§2), so one rule makes an agent's MCP call follow whatever project the user last picked in the web UI and the other makes it follow the agent's cwd; the two give different answers whenever they differ.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Recommendation: the caller's current directory. The selection is one global value in the store (T329 §2), so making it the default would send every agent's MCP call to whatever project the user last picked in the web UI, and two agents in two repositories would answer for the same project. The cwd keeps today's behaviour and is per caller. The web UI selection drives only the graph page. Callers that need another project pass `project` explicitly.
+
+Decision (creator, 2026-10-06): the cwd project plus its links is the default for every graph command and graph MCP tool; the web UI selection never replaces it. T329 Terms, the T329 split note and the T329.4 card now say so.
+
+Check result (2026-10-06, Claude Code / opus-5.5): decision recorded here; T329 Terms ("Selected project"), the T329 split note (T336 no longer gates T329.4) and the T329.4 card updated; no other card mentions T336.
+
+### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
+
+In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Recommendation: T152's rules. Two commands deleting the same `target/` must not disagree, and T152's rules exist because a fresh build cache under a live agent is in use: clearing it mid-build breaks that build and costs a full rebuild. Idle-only (default 24 h), never the caller's own worktree unless its path is given, and one cache root at a time keep `agents junk clear` as safe as `worktree clean`.
+
+Decision (creator, 2026-10-06): `rtok agents junk clear` clears `build` and `CACHEDIR.TAG` dirs only under T152's rules. The T330 kinds table (`build` row), the T330 "Cleared" list, the running-agent rule and the T330.3 card now say so.
+
+Check result (2026-10-06, Claude Code / opus-5.5): decision recorded here; T330 (`build` row, "Cleared" item 2, running-agent rule) and T330.3 (dependency line) updated; T152 is done and already states these rules.
+
 ### T330.2. Junk: every host as an agent row, folders from `research.md` §22
 
 Part of T330. One row per host in `agents::HOSTS` (not installed hosts skipped, `--all` lists them), its config/data/cache/log folders from the §22 map with `file://` links (OSC 8) and sizes; folders without a §22 row (Cursor, platform cache roots) are listed read-only, D36, environment overrides honoured (`XDG_CACHE_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`), a folder shared by two agents counted once with a "shared with" note, permission-denied and per-agent timeout reported. Depends on T330.1 (T338 and T339 closed: D36).
@@ -7688,6 +7905,14 @@ Part of T330. One row per host in `agents::HOSTS` (not installed hosts skipped, 
 Check: fixture HOME with Claude Code, Cursor and Codex folders: each agent, folder and size appears with exact `--bytes`, Cursor's folders marked "not documented"; a symlink out of a folder is not followed; `just check`.
 
 Result (2026-10-03, Claude Code / sonnet-5): `rtok agents junk list` now has one row per installed host of `HOSTS` (`--all` adds the rest, marked "not installed") besides `rtok`. No §22 path map existed in `src` (T182 only wrote it into `research.md`), so `src/agents/junk_map.rs` encodes it once: per host id the temp, log and cache paths §22 documents plus the config/data home (`documented`), the Electron app folders of Cursor, VS Code, Windsurf and Antigravity (not documented), and the folders a host's own `Agent::markers` already name (not documented, nested ones dropped, `~` itself never a folder). Templates start with a token resolved from `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `COPILOT_CACHE_HOME` (empty or relative values ignored); only folders that exist appear. `junk.rs` gains `Folder { role, documented, shared_with, note }`, `AgentJunk { host, installed, total_bytes }`, `Report.total_bytes`, `Usage` and `disk_usage_until` (deadline, permission-denied flag; `disk_usage` is a wrapper), `AGENT_SCAN_LIMIT` (10 s per agent: a slow folder is reported as a lower bound), `report_with`/`Options` and `to_list(report, exact, links)`. A folder two agents resolve to is sized once and shows "shared with"; a symlinked folder is sized at its target with a note; a symlink inside a folder is never followed. Text lines read `<path>  <role>  <size>[  not documented: not cleared][  shared with ...][  (note)]`; the path is an OSC 8 `file://` link (`url::Url::from_file_path`) only when stdout is a TTY. Host rows have no kinds and no "Freed by `clear`" line until T330.3. Tests: 7 unit tests in `junk_map.rs`/`junk.rs` (explicit roots, no process env) and `tests/agents_junk.rs` on a fixture HOME with `CLAUDE_CONFIG_DIR`/`CODEX_HOME` pointed into it; trycmd and completions regenerated for `--all`. Not done: hard links and clones are deduplicated within one folder walk, not across folders; Windows paths (`%LOCALAPPDATA%`) are not in the map.
+
+### T330.3.1. Junk: `cache` kind, rtok's own caches and tagged caches
+
+Part of T330.3. The scan side of the `cache` kind in `rtok agents junk list`, over the existing junk model (`src/agents/junk.rs`, `junk_map.rs`) and T152's tagged-cache code (`worktree::{list, clean}`): documented §22 cache dirs of each host, rtok's own caches (`<project>/.rtok-lsp-xdg/{cache,pub-cache}` of every registered project, `$XDG_CACHE_HOME/rtok`), and every directory under an agent's or rtok's folders carrying a valid `CACHEDIR.TAG`, deleted under T152's rules (T342): only when idle (24 h), never the cache of the worktree the command runs from, one root at a time. A bad `CACHEDIR.TAG` signature is not cache. Platform cache roots and Electron cache folders without a §22 row are listed with "not documented: not cleared" and counted in no "Freed" total (D36). Shared folders are counted once. `clear` itself starts removing these in T330.4 (re-check, flags); `[agents.junk] extra` arrives with T330.5.
+
+Check: fixture homes under `testutil::tmp_dir` (no real agent folder): exact sizes, kinds under the right agent, tag handling (valid, bad signature, idle, current worktree), listed-only caches, shared folder once, symlink not followed, dry run changes nothing; `just check`.
+
+Result (2026-10-06, Cursor / grok 4.7): `list` adds a `cache` kind. A documented §22 cache directory is an item. So is rtok's platform cache dir and each registered project's language-server `cache` and `pub-cache` (idle 24 h, because a server may be using them). A valid `CACHEDIR.TAG` under an agent's or rtok's folders is an item only when idle and not in the worktree the command runs from (`worktree::clean::kept_because`, T342). A bad signature is not cache. Electron cache subfolders and other undocumented cache roots stay listed read-only. A path shared by two agents is freed once. A symlink is not an item and is not followed. A walk that hits its deadline keeps the caches it was judging: the newest mtime is then a lower bound, so an active cache must not look idle. `clear` still removes only T182's logs and archives. Reused `disk_usage_until`, the tagged-cache walk and `kept_because`; `lsp_state_root` stayed in `plugins/graph/lsp.rs` and became `pub(crate)`. The `measure`-only build has no graph plugin, so it does not look for those dirs. No new dependency.
 
 ### T248. Plugin READMEs must link the host's official documentation
 
@@ -8273,6 +8498,20 @@ Execution, PR 2 (2026-10-03, Claude Code / sonnet-5): on top of T285 PR 2. (1) `
 
 Result (2026-10-03, Claude Code / sonnet-5): PR 1 is #482 (the CLI); PR 2 is this one. MCP `worktree_remove` removes the linked agent's own clean worktree (with its branch once merged), refuses a dirty or unmerged one (`keep_branch` removes an unmerged clean one and keeps the branch), another agent's lock and the cwd, never forces, and releases the claim. The CLI and MCP share `remove::for_agent`; the claim-release warning on the CLI is now unstyled, like `claim::remember`'s. About 57 more description tokens in the MCP listing (18 to 19 tools). Stacks on #676 (T285 PR 2).
 
+### T420. `just check` runs only what a change touches; `just full-check` runs everything
+
+`just check` ran every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs the previous full gate unchanged, and CI keeps running the full gate. When the selection cannot be computed, `just check` falls back to the full gate.
+
+Execution plan (2026-10-06, Claude Code / sonnet-5.5):
+1. Research the selector (`research.md` §33): nextest filtersets, cargo-difftests, cargo-test-changed, rtok's `graph affected`, and the existing name match of `tools/test-changed.sh`.
+2. `tools/selective-check.sh` turns the changed files into the recipes to run (shared input -> `full-check`; Markdown, `docs/`, `.github/` -> nothing; `.rs` -> `fmt-check`, `lint`, `dup`, `build-min` for `src/`, `test-changed`; TS/JS -> `js`; Python -> `python`). `justfile`: `check` calls it, `full-check` is the old `check` recipe body.
+3. `tools/test-changed.sh`: dry mode, `--no-tests=pass` for a unit filter that matches nothing, every unit test for a source file whose path names no module, `build.rs` and `migrations/` as shared inputs.
+4. Verify each Check scenario by running it in a throwaway edit; `tools/tests/test_selective_check.py` pins the mapping.
+
+Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches the previous `just check`; CI unchanged.
+
+Check result (2026-10-06, Claude Code / sonnet-5.5): selector: rtok's code graph (`rtok graph affected`) and every maintained tool were measured and rejected, the in-repo name match stays (`research.md` §33). Docs-only (blank line in `README.md`): `check: no code changed ... no cargo tests`, 0.2 s. `src/plugins/checkpoint.rs` (one comment line): `fmt-check lint build-min dup test-changed`, `26 of 100 integration targets + the matching unit tests`, 184 of 1 799 tests ran across 27 binaries (test phase 18 s, whole run 2 min 16 s including a cold clippy). `Cargo.toml` (one comment line): `a shared input — running the full gate`, 2470 tests passed in 2 min 9 s warm; `build.rs` plans `full-check` (`SELECTIVE_DRY=1`). `just --dry-run full-check` runs the same 13 commands as `just --dry-run check` on `pyrlyn/main` (sorted diff empty), and `just full-check` itself passed: 2470 tests, 1 min 39 s warm. CI calls `fmt-check lint build-min dup js python`, `test`, `test-cov`, `example` and `docs-check` and never `check`, so `.github/` is unchanged. `tools/tests/test_selective_check.py`: 14 passed. Merge base: `pyrlyn/main`, then `origin/main`, then `main`; none resolving runs `full-check`. The creator delegated the deviation from the card's selector wording on 2026-10-06; the in-repo name match is kept.
+
 ### T412. `rtok worktree remove`: report a removal whose branch delete failed, and test the refusal edges
 
 Creator request 2026-10-04: check that `rtok worktree remove` / `gc` are as safe as `git worktree remove` + `git branch -d`, catch errors, and handle unmerged work. A live run over a scratch repository (merged, squash-merged, squash then edited, unmerged, dirty, untracked, ignored-only, detached, foreign-locked, fetch failing) matched every refusal, with exit 1 on each. One defect: when `git worktree remove` succeeds and `git branch -D` then fails (the branch is checked out in a second worktree), `detach` returns the error, so `remove` prints `Error:` and exits 1 for a worktree that is gone and skips releasing its claim, and `gc` reports `failed, kept`. Nothing is lost (the branch stays); the report is wrong.
@@ -8285,6 +8524,27 @@ Execution plan:
 Check: the tests above green; `just check`.
 
 Result (2026-10-04, Claude Code / claude-opus-5-5): `detach` reports a branch git refuses to delete as `removed; branch kept: <git's message>`, so `remove` exits 0, releases the claim, and `gc` no longer says `failed, kept` for a removed worktree. New test `remove_guards_commits_and_reports_a_branch_it_could_not_delete` covers the edges listed in step 2; it failed on `main` at the second-worktree case and passes with the fix. Note for manual cleanup: `git branch -d` refuses squash-merged branches, so `--keep-branch` plus `git branch -d` leaves them behind; plain `rtok worktree remove` deletes them because its merged check is squash-aware.
+
+### T418. `rtok worktree gc` reclaims abandoned foreign locks on merged worktrees
+
+`gc` opens only the locks whose owner equals `--owner` and never a lock with a free-text reason, while only locks written since T285 name an agent whose liveness can be checked. Sessions end without `worktree remove`, so locks pile up that nobody can clear: on 2026-10-05 this repository had 108 locked worktrees, 35 of them merged and clean. Done when `gc` treats a lock held by anyone else as abandoned once its worktree is merged into the base, clean, bound to no live agent and untouched for longer than `--stale-lock` (default `7d`), and removes it like its own; dirty, unmerged and gone worktrees stay protected by any lock.
+
+Plan: `src/worktree/gc.rs` — `Policy.stale_lock`, a `Verdict::Reclaim(owner)` that `run` applies with `detach` and reports as `remove` with the lock's owner in the note; unit cases for an old foreign lock, a fresh one, a bare one and a dirty or unmerged one. `src/cli.rs` — `--stale-lock`. `tests/worktree.rs` — a dry run with `--stale-lock 0h` plans the foreign and bare locks for removal. Gates: `config_coverage` allow-list, completion goldens, `docs/agents-and-worktrees.md`.
+
+Check: `cargo nextest run --test worktree --test cli_trycmd --test surface_parity --test config_coverage` and `just check`.
+
+### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
+
+On a repository with ~115 linked worktrees `rtok worktree list` took over 120 s and `rtok worktree gc` (dry run) 98 s, mostly waiting on the disk: one `git status` per worktree in sequence (25–54 s), one `merge-tree` plus `rev-parse <base>^{tree}` per worktree, and a sequential walk of ~1.1 M files (716 k of them under `target/`). Done when both commands print the same rows, states and verdicts as before, measured before/after on the same repository.
+
+Execution plan:
+1. `worktree/mod.rs`: a small order-keeping `par_map` (scoped threads, one per core); `inventory` runs each worktree's `is_merged` + `is_dirty` through it.
+2. `worktree/git.rs`: `rev-parse <base>^{tree}` once per inventory instead of once per worktree.
+3. `worktree/list.rs`: `Row::new` (walk + origin) through `par_map`; the walk reads `.git` and `CACHEDIR.TAG` presence from the directory listing it already has and skips `lstat` on directories (`file_type` from the listing); an optional cutoff stops the walk at the first file newer than it.
+4. `worktree/gc.rs`: merged candidates' walks in parallel with the idle cutoff (the verdict only asks "newer than `now - idle`?"); removals stay sequential.
+5. Verify: JSON of `list` and `gc` from the old and new binary diff equal (minus the live-changing mtimes); `just check`.
+
+Result (2026-10-05, Claude Code / claude-opus-5-5): per-worktree git checks and walks run on one thread per core (`worktree::par_map`, std scoped threads); `list` walks each worktree in the same task as its git checks (`inventory_with`), so walks overlap other worktrees' git calls; the base tree is resolved once; the walk reads `.git` and `CACHEDIR.TAG` from the listing it already has and takes no `lstat` of directories; `gc::decide` asks for the mtime only when the verdict still depends on it (a merged worktree, or a merged one under a foreign lock since T418) and tells the walk the age that settles it, so it stops at the first file younger than that. Measured back to back on the rtok repository with 131 worktrees, debug builds, other sessions building: `list` 559 s → 90 s, `gc` dry run 529 s → 26 s; JSON rows, states and verdicts identical except byte counts of worktrees being built during the run. Remaining floor: `git status` and the merge test for every worktree (≈ 10 s each at 16-way) and the walks of ~1 M files, about 30 s even for `du` at 16-way.
 
 ### T287. Messages between agents and the user: `rtok agents send`, `rtok agents inbox`, MCP `agent_send`, `agent_inbox`
 

@@ -16,18 +16,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use serde_json::json;
 
 use super::hook_events;
 use super::plugin::HostPlugin;
-use super::{Agent, Kind, Mode, Support, Variant, apply};
+use super::{Agent, Kind, Mode, Support, Variant};
 use crate::config::Config;
 
 /// Cline: the `cline` CLI and the `saoudrizwan.claude-dev` VS Code extension.
 pub struct Cline;
-
-/// Cline MCP server name in `cline_mcp_settings.json`.
-const NAME: &str = "rtok";
 
 static VARIANTS: [Variant; 2] = [
     Variant {
@@ -40,7 +36,10 @@ static VARIANTS: [Variant; 2] = [
         kind: Kind::Desktop,
         name: "Cline for VS Code",
         bins: &[],
-        apps: &["/Applications/Visual Studio Code.app"],
+        apps: &[
+            "/Applications/Visual Studio Code.app",
+            "$LOCALAPPDATA/Programs/Microsoft VS Code/Code.exe",
+        ],
     },
 ];
 
@@ -158,29 +157,17 @@ pub fn ext_mcp_path(cfg: &Config) -> PathBuf {
     user_dir.join("globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json")
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> serde_json::Value {
-    json!({"command": cmd, "args": super::mcp_args("cline")})
-}
-
-/// `mcpServers.rtok = {command, args}` in a `cline_mcp_settings.json` — Cline's
-/// documented shape carries no `type` (same call shape as kimi/omp).
+/// `mcpServers.rtok = {command, args}` in a `cline_mcp_settings.json`. Cline's documented
+/// shape carries no `type`; Roo Code (the fork) and Windsurf write the same JSON through
+/// [`super::register_stdio_mcp`].
 pub fn register_mcp(cfg: &Config, path: &Path) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        path,
-        "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "cline"),
-    )
+    super::register_stdio_mcp(cfg, path, "cline")
 }
 
 /// Drop `mcpServers.rtok` from a `cline_mcp_settings.json`, unless the user edited
 /// it (T246.2) — only what rtok wrote goes, and foreign servers are left alone.
 pub fn unregister_mcp(cfg: &Config, path: &Path) -> Result<String> {
-    super::unregister_ours(cfg, path, "mcpServers", NAME, &mcp_entry("rtok"))
+    super::unregister_stdio_mcp(cfg, path, "cline")
 }
 
 #[cfg(test)]

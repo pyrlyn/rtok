@@ -49,6 +49,8 @@ After an rtok upgrade, `rtok agents update` brings every installed host up to da
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity | Desktop | — | — | — | `--yes` | read, archive, memory, graph, toon |
 | [`devin`](https://github.com/pyrlyn/rtok/blob/main/src/agents/devin/README.md) | Devin CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, archive, inject, guard, memory, graph, toon |
 | [`devin`](https://github.com/pyrlyn/rtok/blob/main/src/agents/devin/README.md) | Devin | Desktop | yes | yes | — | `--yes` | measure, cmd, read, archive, inject, guard, memory, graph, toon |
+| [`roo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/roo/README.md) | Roo Code | Desktop | — | yes | — | — | read, archive, memory, graph, toon |
+| [`qwen`](https://github.com/pyrlyn/rtok/blob/main/src/agents/qwen/README.md) | Qwen Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, archive, inject, guard, memory, graph, toon |
 <!-- agents-table:end -->
 
 The table is generated from the host code (`src/agents/<host>/mod.rs` and the plugin catalogue) by `tests/agents_doc.rs`, which fails when it is stale. After changing a host, adding one, or changing a plugin's surfaces, regenerate it:

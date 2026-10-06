@@ -14,15 +14,14 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use serde_json::{Value, json};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply};
+use super::{Agent, Kind, Mode, Support, Variant};
 use crate::config::Config;
-
-const NAME: &str = "rtok";
 
 /// Windsurf: MCP in one `mcp_config.json`; a desktop app only.
 pub struct Windsurf;
+
+const HOST: &str = "windsurf";
 
 static VARIANTS: [Variant; 1] = [Variant {
     kind: Kind::Desktop,
@@ -85,34 +84,15 @@ impl Agent for Windsurf {
     }
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("windsurf")})
-}
-
-/// `mcpServers.rtok = {command, args}` in `mcp_config.json` — the stdio shape the Windsurf
-/// MCP docs show carries no `type`.
+/// `mcpServers.rtok = {command, args}` in `mcp_config.json`. The stdio shape the Windsurf
+/// MCP docs show carries no `type`; the JSON itself is [`super::register_stdio_mcp`].
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &cfg.setup.windsurf.config_path,
-        "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "windsurf"),
-    )
+    super::register_stdio_mcp(cfg, &cfg.setup.windsurf.config_path, HOST)
 }
 
 /// Drop `mcpServers.rtok` from `mcp_config.json`, unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &cfg.setup.windsurf.config_path,
-        "mcpServers",
-        NAME,
-        &mcp_entry("rtok"),
-    )
+    super::unregister_stdio_mcp(cfg, &cfg.setup.windsurf.config_path, HOST)
 }
 
 #[cfg(test)]

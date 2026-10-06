@@ -6,7 +6,9 @@ config files, so each selected app installs on its own:
 - CLI: `[setup.opencode] config_path`, default `~/.config/opencode/opencode.json`
 - Desktop: `~/Library/Application Support/ai.opencode.desktop/opencode.json` on macOS,
   `%APPDATA%\ai.opencode.desktop\opencode.json` on Windows,
-  `~/.config/ai.opencode.desktop/opencode.json` elsewhere
+  `~/.config/ai.opencode.desktop/opencode.json` elsewhere.
+  The Windows app is `%LOCALAPPDATA%\Programs\@opencode-aidesktop\OpenCode.exe`
+  (a copy under `Programs\OpenCode\` is accepted too).
 
 ## Modules
 

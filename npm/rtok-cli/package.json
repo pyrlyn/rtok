@@ -3,7 +3,7 @@
   "version": "0.9.0",
   "description": "Token-reduction CLI for AI coding agents: hooks, MCP server and API proxy with pluggable methods",
   "keywords": ["rtok", "llm", "tokens", "mcp", "agents", "claude", "cli"],
-  "homepage": "https://pyrlyn.github.io/rtok/",
+  "homepage": "https://pyrlyn.github.io/landing/rtok/",
   "bugs": "https://github.com/pyrlyn/rtok/issues",
   "repository": {
     "type": "git",

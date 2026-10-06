@@ -261,6 +261,23 @@ impl Store {
         insert_measurement_conn(&mut conn, session, m, once)
     }
 
+    /// [`Store::insert_measurement_once`] for several rows under one write lock and one commit.
+    /// All or none: the rows came from one dispatch and read as one event.
+    pub fn insert_measurements_once(
+        &self,
+        session: &str,
+        ms: &[Measurement],
+        once: Option<&str>,
+    ) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.immediate_transaction(|conn| -> Result<()> {
+            for m in ms {
+                insert_measurement_conn(conn, session, m, once)?;
+            }
+            Ok(())
+        })
+    }
+
     /// Count `measurements` for one plugin. Used by `examples/hello_plugin.rs`.
     pub fn measurement_count(&self, plugin: &str) -> Result<i64> {
         let mut conn = self.lock()?;
@@ -1375,6 +1392,31 @@ impl Store {
             .set(kv::value.eq(value))
             .execute(&mut *conn)?;
         Ok(())
+    }
+
+    /// Every `(key, value)` whose key starts with `prefix`, key order. `%`/`_` in the
+    /// prefix are escaped so a key segment never acts as a wildcard; SQLite's `LIKE`
+    /// ignores ASCII case, so the rows are narrowed again to an exact prefix.
+    pub fn kv_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let mut conn = self.lock()?;
+        let pattern = format!(
+            "{}%",
+            prefix
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        kv::table
+            .filter(kv::key.like(pattern).escape('\\'))
+            .order(kv::key)
+            .select((kv::key, kv::value))
+            .load::<(String, String)>(&mut *conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .filter(|(k, _)| k.starts_with(prefix))
+                    .collect()
+            })
+            .map_err(Into::into)
     }
 
     pub fn kv_delete(&self, key: &str) -> Result<()> {
@@ -4287,6 +4329,30 @@ mod tests {
         assert_eq!(store.call_io_request(call_id2).unwrap(), Some(bad.to_vec()));
     }
 
+    /// T428: a batch is one event, so a row that cannot be stored takes the others with it.
+    #[rstest]
+    fn insert_measurements_once_is_all_or_none() {
+        let store = Store::open_in_memory().unwrap();
+        let row = |est_before| Measurement {
+            plugin: "memory",
+            kind: "recall",
+            before_bytes: 1,
+            after_bytes: 1,
+            est_before,
+            est_after: 1,
+            ref_id: None,
+            call_id: None,
+        };
+        store
+            .insert_measurements_once("s", &[row(1), row(2)], None)
+            .unwrap();
+        assert_eq!(store.measurement_count("memory").unwrap(), 2);
+        store
+            .insert_measurements_once("s", &[row(3), row(i32::MAX as u32 + 1)], None)
+            .unwrap_err();
+        assert_eq!(store.measurement_count("memory").unwrap(), 2);
+    }
+
     #[rstest]
     fn insert_measurement_rejects_out_of_range_estimates() {
         let store = Store::open_in_memory().unwrap();
@@ -4858,6 +4924,36 @@ mod tests {
     fn auto_vacuum_mode(store: &Store) -> i32 {
         let mut conn = store.lock().unwrap();
         sql_ext::AutoVacuumMode.get_result(&mut *conn).unwrap()
+    }
+
+    /// T419: a prefix read returns its keys in order, and `_`/`%` in the prefix are
+    /// literal, so `plugin:a_b:` never matches `plugin:axb:`.
+    #[test]
+    fn kv_prefix_is_literal_and_ordered() {
+        let dir = crate::testutil::tmp_dir("t419-kv-prefix");
+        let store = Store::open(&dir.join("rtok.db")).unwrap();
+        for (k, v) in [
+            ("plugin:a_b:2", "two"),
+            ("plugin:a_b:1", "one"),
+            ("plugin:axb:1", "other"),
+            ("plugin:a%b:1", "pct"),
+            ("plugin:A_B:1", "upper"),
+            ("other", "x"),
+        ] {
+            store.kv_set(k, v).unwrap();
+        }
+        let got = store.kv_prefix("plugin:a_b:").unwrap();
+        assert_eq!(
+            got,
+            [
+                ("plugin:a_b:1".to_string(), "one".to_string()),
+                ("plugin:a_b:2".to_string(), "two".to_string()),
+            ]
+        );
+        assert_eq!(store.kv_prefix("plugin:a%b:").unwrap().len(), 1);
+        assert!(store.kv_prefix("nothing:").unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

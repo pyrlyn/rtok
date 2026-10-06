@@ -13,8 +13,6 @@ Project programs and direct packages from the manifests.
 | cargo-fuzz | global (`cargo install cargo-fuzz`) + `rustup toolchain install nightly` | `just fuzz` / `fuzz/README.md`: libFuzzer targets; nightly only for the fuzz build, the pinned toolchain is untouched | https://github.com/rust-fuzz/cargo-fuzz |
 | codeql | mise | `just codeql` (T119): local run of the code scanning in `.github/workflows/codeql.yml` | https://github.com/github/codeql-cli-binaries |
 | git-cliff | mise | Changelog | https://github.com/orhun/git-cliff |
-| go | mise | hugo resolves the hextra theme as a Go module (site/go.mod) | https://github.com/golang/go |
-| hugo | mise | Documentation site | https://github.com/gohugoio/hugo |
 | just | mise | Command recipes | https://github.com/casey/just |
 | ketch | see its README | Installs swarfr | https://github.com/pyrlyn/ketch |
 | swarfr | ketch | `just test` / `just test-changed` end with a lossless cleanup of `target/` (T236) | https://github.com/listepo/swarfr |
@@ -81,6 +79,7 @@ Project programs and direct packages from the manifests.
 | @types/three | local | https://github.com/DefinitelyTyped/DefinitelyTyped | T329.13: Three.js types |
 | echarts | local | https://github.com/apache/echarts | T414.15: canvas renderer behind `web/src/charts/` (only `charts/echarts.ts` imports it; lazy chunk `echarts`, 525 kB, 178 kB gzip). Chosen by the creator over uPlot and Chart.js for built-in tooltips, axis pointers and linked charts |
 | @floating-ui/react-dom | local | https://github.com/floating-ui/floating-ui | T414.15: positions the one chart and mark tooltip (`charts/Tooltip.tsx`); the positioning-only package, not `@floating-ui/react` |
+| react-aria-components | local | https://github.com/adobe/react-spectrum | T414.9: behaviour of the command palette and shortcut help (`Autocomplete`, `Menu`, `Modal`, `Dialog`): focus, keyboard, filtering, dismissal; unstyled, so the look stays on the `--pyr-*` roles. Creator decision; covers the palette, so no `cmdk` |
 
 ## cargo
 

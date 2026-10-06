@@ -92,6 +92,14 @@ pub trait Host: Send + Sync {
     /// numbers: what is not recorded here did not happen.
     fn record(&self, m: &Measurement) -> Result<()>;
 
+    /// Keep one small value about the plugin's own work under `key` in `plugin`'s namespace;
+    /// a repeat key replaces it. For signals that are not savings (T419: checkpoint prompt
+    /// counts) and so must never reach [`Host::record`]'s numbers. Default `Ok(())`: a host
+    /// without a store drops the value and the plugin still runs.
+    fn plugin_state_set(&self, _plugin: &str, _key: &str, _value: &str) -> Result<()> {
+        Ok(())
+    }
+
     /// Open a `calls` row for one unit of work on `surface`, returning its id.
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32>;
 
@@ -521,6 +529,25 @@ pub trait Symbols {
     fn symbol_top_refs(&self, root: &str, limit: i64) -> Result<Vec<(String, i64, String, i32)>> {
         let _ = (root, limit);
         Ok(Vec::new())
+    }
+
+    /// T370: one row per `(name, path, is_def)` with how many index rows it has, imports left
+    /// out. The graph plugin builds its file graph from this one scan.
+    fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
+        let _ = root;
+        Ok(Vec::new())
+    }
+
+    /// T370: the file-graph document the plugin stored for `root`, if any.
+    fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
+        let _ = root;
+        Ok(None)
+    }
+
+    /// T370: replace the file-graph document of `root`.
+    fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
+        let _ = (root, graph);
+        Ok(())
     }
 }
 

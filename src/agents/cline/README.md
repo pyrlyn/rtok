@@ -1,7 +1,10 @@
 # Cline
 
 `rtok agents install cline` — the CLI (`cline`) and the VS Code extension
-(`saoudrizwan.claude-dev`). Both scan `~/Documents/Cline/Hooks`, so one directory
+(`saoudrizwan.claude-dev`). The desktop variant is detected from VS Code:
+`/Applications/Visual Studio Code.app` on macOS and
+`%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe` on Windows. Both surfaces
+scan `~/Documents/Cline/Hooks`, so one directory
 serves both surfaces (D21 singleton): per event the installer links
 `plugins/cline/hooks/rtok-hook` as `<hooks_path>/<Event>` (a foreign file at an
 event slot is left alone and named in the output — Cline has one slot per event

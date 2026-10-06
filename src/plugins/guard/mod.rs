@@ -10,6 +10,8 @@ use rtok_plugin_sdk::{
 };
 use serde_json::Value;
 
+#[cfg(feature = "graph")]
+mod grep_symbol;
 mod skill;
 
 /// T201: above this, `post_tool`'s sha256 + synchronous disk write (inside [`Ctx::put_archive`])
@@ -41,6 +43,13 @@ impl Plugin for Guard {
     fn pre_tool(&self, ev: &PreToolUse, cx: &Ctx) -> Option<PreToolDecision> {
         if ev.tool_name == "Skill" {
             return skill::digest(ev, cx);
+        }
+        // T369: answer a symbol-shaped Grep before `native_redirect` would only point elsewhere.
+        #[cfg(feature = "graph")]
+        if ev.tool_name == "Grep"
+            && let Some(d) = grep_symbol::answer(ev, cx)
+        {
+            return Some(d);
         }
         if let Some(d) = native_redirect(ev.tool_name, cx) {
             return Some(d);

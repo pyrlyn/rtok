@@ -58,6 +58,9 @@ const pageRoutes = PAGES.map((page) =>
         getParentRoute: () => root,
         path: page.id,
         component: screens[page.id],
+        // The palette opens a page on one row (`?id=`); kept a string even when it looks numeric.
+        validateSearch: (s: Record<string, unknown>): { id?: string } =>
+            s.id == null ? {} : { id: String(s.id) },
     }),
 );
 

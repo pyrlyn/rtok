@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useCallback, useMemo, useState } from "react";
+import { useSelectFromUrl } from "./selectFromUrl";
 import { useServerMessage, useSetMutation } from "../api/query";
 import type { PluginPage } from "../api/snapshot.gen";
 import { Empty } from "../states";
@@ -12,7 +13,9 @@ import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
 import { Switch } from "../ui/Switch";
+import { Unknown } from "../ui/Unknown";
 import { compact, fmt, pct } from "./format";
+import { why } from "./missing";
 import { savedOf } from "./model";
 import { Count, Kv, Split, Toolbar, WithSnapshot } from "./parts";
 
@@ -41,6 +44,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
     const [query, setQuery] = useState("");
     const [show, setShow] = useState<Show>("all");
     const [selectedId, setSelectedId] = useState<string>();
+    useSelectFromUrl(setSelectedId);
     const { mutate } = useSetMutation();
     const message = useServerMessage();
 
@@ -95,7 +99,8 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 align: "right",
                 cell: (p) => {
                     const s = savedOf(p);
-                    return s != null && s > 0 ? compact(s) : "-";
+                    if (s == null) return <Unknown label="n/a" why={why.pluginNoSaving} />;
+                    return p.stats?.rows ? compact(s) : <Unknown why={why.pluginNoRows} />;
                 },
             },
         ],
@@ -196,9 +201,11 @@ function Detail({
                         ],
                         [
                             "saved",
-                            saved != null && saved > 0
-                                ? `${compact(saved)} (${pct(saved / p.stats.est_before, 0)})`
-                                : "-",
+                            p.stats.rows > 0 && saved != null ? (
+                                `${compact(saved)} (${pct(saved / p.stats.est_before, 0)})`
+                            ) : (
+                                <Unknown why={why.pluginNoRows} />
+                            ),
                         ],
                     ]}
                 />

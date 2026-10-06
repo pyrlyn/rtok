@@ -27,6 +27,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T310 | todo | P1 | 5 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.4 | todo | P2 | 4 | 0% | |
+| T329.4.2 | todo | P2 | 3 | 0% | |
 | T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
@@ -40,6 +41,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.3 | todo | P2 | 3 | 0% | |
+| T330.3.2 | todo | P2 | 3 | 0% | |
 | T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -49,11 +51,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T333 | todo | research | 1 | 0% | |
 | T334 | todo | research | 1 | 0% | |
 | T335 | todo | research | 1 | 0% | |
-| T336 | todo | research | 1 | 0% | |
 | T337 | todo | research | 1 | 0% | |
 | T340 | todo | research | 1 | 0% | |
 | T341 | todo | research | 1 | 0% | |
-| T342 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
 | T345 | todo | research | 1 | 0% | |
@@ -63,11 +63,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T358 | todo | P2 | 4 | 0% | |
 | T368 | todo | P1 | 3 | 0% | |
-| T369 | todo | P1 | 2 | 0% | |
-| T370 | todo | P1 | 4 | 0% | |
+| T369.1 | todo | P3 | 1 | 0% | |
+| T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T371 | todo | P2 | 2 | 0% | |
-| T372 | todo | P2 | 1 | 0% | |
-| T373 | todo | P2 | 1 | 0% | |
 | T374 | todo | P3 | 2 | 0% | |
 | T376 | todo | P2 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
@@ -90,7 +88,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
@@ -108,21 +105,19 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.1 | todo | P2 | 2 | 0% | |
-| T413.2 | todo | P2 | 2 | 0% | |
-| T413.3 | todo | P2 | 3 | 0% | |
-| T413.4 | todo | P2 | 3 | 0% | |
-| T413.5 | todo | P3 | 3 | 0% | |
-| T413.6 | todo | P3 | 2 | 0% | |
-| T413.7 | todo | P3 | 3 | 0% | |
-| T413.8 | todo | P3 | 3 | 0% | |
-| T413.9 | todo | P3 | 3 | 0% | |
-| T413.10 | todo | P3 | 2 | 0% | |
-| T413.11 | todo | P3 | 2 | 0% | |
-| T413.12 | todo | P3 | 2 | 0% | |
-| T413.13 | todo | P3 | 2 | 0% | |
-| T413.14 | todo | P3 | 2 | 0% | |
-| T413.15 | todo | P3 | 2 | 0% | |
+| T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
+| T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
+| T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.3 | todo | P2 | 3 | 0% | |
 | T414.4 | todo | P2 | 3 | 0% | |
@@ -130,7 +125,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.8 | todo | P2 | 2 | 0% | |
-| T414.9 | todo | P2 | 3 | 0% | |
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
@@ -142,6 +136,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.2 | todo | P1 | 3 | 0% | |
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
+| T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 
 
 
@@ -569,12 +564,12 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334, T336 and T337 gate T329.9, T329.4 and T329.11/T329.17.
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334 and T337 gate T329.9 and T329.11/T329.17; T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
 - **Project**: a directory rtok indexes as one unit, identified by its canonical root path. Display name defaults to the directory name (or the package name from the manifest when there is one); the user can rename it.
-- **Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for.
+- **Selected project**: the project the graph page answers for. The CLI and MCP tools do not follow it: without `project` they answer for the caller's current directory and its links (T336).
 - **Link**: a directed edge "project A sees into project B". A link is either **manual** (the user made it) or **auto** (rtok made it from a reference, see 4).
 - **Graph scope**: the selected project plus every project reachable through its links (transitively). All graph queries run over the scope.
 
@@ -886,9 +881,19 @@ Check: fixture repos under `tests/fixtures`, no network:
 
 ### T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
 
-T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336 decides whether the selected project replaces the cwd, so settle it before claiming). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
+T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336: the web UI selection never replaces the cwd). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
 
 Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
+
+Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
+
+### T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
+
+Second half of T329.4, depends on T329.4.1: the same scope layer for the MCP tools `impact` (walks up into A), `explore` and `outline`, plus the CLI `--project` flag on every graph subcommand that exists then (clap, man page, completions, trycmd goldens, `surface_parity`).
+
+Mention the `project` argument of the graph MCP tools wherever the docs list them (not checked in T329.4.1).
+
+Check: `impact` walks up into A; `explore` and `outline` take `project`; the CLI `--project` flag agrees with MCP; `just full-check`.
 
 ### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 
@@ -978,7 +983,7 @@ Today `rtok agents junk clear` (T182, #286) only clears junk rtok itself owns un
 | `cache` | HTTP/model/response caches, `Cache/`, `CachedData/`, `GPUCache/`, `Code Cache/` | safe | Regenerated on next run. |
 | `temp` | temp files and temp directories the agent created (`tmp/`, `*.tmp`, `$TMPDIR/<agent>-*`) | safe | Only entries older than 24 h and not open by a running process. |
 | `logs` | agent log files that are not tied to a session (`logs/*.log`, rotated logs) | review | Kept for the last `[agents.junk] keep_logs_days` (default 30). Session transcripts are the `sessions` kind below. |
-| `build` | build artifacts in agent worktrees and scratch dirs (`target/`, `dist/`, `build/`, `.next/`, `__pycache__/`) | safe | Only under agent-owned worktrees or scratch dirs, never in the user's main checkout. |
+| `build` | build artifacts in agent worktrees and scratch dirs (`target/`, `dist/`, `build/`, `.next/`, `__pycache__/`) | safe | Only under agent-owned worktrees or scratch dirs, never in the user's main checkout; cleared under T152's rules (T342): only when idle (`--idle`, default 24 h), never the cache of the worktree the command runs from unless its path is given, one cache root at a time. |
 | `deps` | reinstallable dependencies (`node_modules/`, `.venv/`, `vendor/` with a lockfile, `.gradle/`, Pods) | review | Only in agent-owned worktrees/scratch dirs; requires a lockfile or manifest next to it so it can be reinstalled. |
 | `locks` | stale lock files (`*.lock` for agent state, `LOCK`, `.lock` dirs) | safe | Only when no process holds them (checked with the OS); package-manager lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`) are never junk. |
 | `backups` | backup files (`*.bak`, `*.bak-<ts>`, `*~`, `_backup/` generations past the cap, T249) | review | The newest backup of each file is always kept. |
@@ -1005,7 +1010,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 
 **Each agent's cache:**
 
-- **Cleared** (D36) only from: (1) the host's entry in `research.md` §22 (documented cache dirs only); (2) any directory under the agent's folders carrying a valid `CACHEDIR.TAG` (deletion rules per T342); (3) `[agents.junk] extra` entries with `kind = "cache"`.
+- **Cleared** (D36) only from: (1) the host's entry in `research.md` §22 (documented cache dirs only); (2) any directory under the agent's folders carrying a valid `CACHEDIR.TAG` (deleted under T152's rules (T342): only when idle (`--idle`, default 24 h), never the cache of the worktree the command runs from unless its path is given, one cache root at a time); (3) `[agents.junk] extra` entries with `kind = "cache"`.
 - **Listed only** (size shown, "not documented: not cleared", not in any "Freed" total): the platform cache root for that app (`~/Library/Caches/<bundle id or name>`, `$XDG_CACHE_HOME/<app>`, `%LOCALAPPDATA%\<app>\Cache`) and well-known Electron/Chromium cache subfolders inside the app's data dir (`Cache`, `Code Cache`, `GPUCache`, `CachedData`, `DawnCache`) when §22 has no row for them. `Service Worker/CacheStorage` is stored app data, not cache, and is not listed as cache. A heuristic path that gets a cited §22 row moves to "cleared" with no other change.
 - Not cache even if the name says so: anything §22 marks as settings or state, extension/plugin install dirs, and model weights the user downloaded on purpose (listed as `never`, size only).
 - Environment overrides are honoured (`XDG_CACHE_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and the like listed in §22), so a relocated cache is still found.
@@ -1084,7 +1089,7 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 
 #### Running agents
 
-- An agent whose process is running is detected (process list per host binary, plus live rtok sessions from T284). For a running agent, `clear` skips `temp`, `locks`, `swap`, `index` and the current session's logs, and says so; caches are still cleared only if the host's §22 entry says it tolerates that while running, otherwise skipped with "agent running".
+- An agent whose process is running is detected (process list per host binary, plus live rtok sessions from T284). For a running agent, `clear` skips `temp`, `locks`, `swap`, `index` and the current session's logs, and says so; caches are still cleared only if the host's §22 entry says it tolerates that while running, otherwise skipped with "agent running". `build` and `CACHEDIR.TAG` dirs follow T152's idle rule whether or not the agent runs (T342).
 - `--force-running` is not offered; the user closes the agent and runs `clear` again.
 
 #### Config
@@ -1132,9 +1137,17 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 
 ### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
 
-Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 and the investigation T342 (T339 closed: D36).
+Split into T330.3.1 (done) and T330.3.2 (one PR each); this card stays the spec and the parent.
+
+Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
 
 Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
+
+### T330.3.2. Junk: `temp`, `build`, `locks`, `swap` kinds and plugin staging caches
+
+Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item model: `temp` (entries older than 24 h and not open by a running process), `build` (tagged build caches in agent worktrees under T152's rules, untagged `dist/`, `.next/`, `__pycache__/` listed only, D36), `locks` (stale agent lock files, only when no process holds them), `swap` (editor swap files whose owning process is gone) and version-numbered plugin staging caches no host config references (T279). Depends on T330.3.1.
+
+Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
 
 ### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
 
@@ -1305,13 +1318,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-### T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
-
-In the plan, T329 Terms (branch `docs/plan-graph-projects`, ~line 679, from PR #540 (T329), not merged yet) says "**Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for", and T329 §7 (~line 799) says "Without it, the project is the caller's current directory (agents keep today's behaviour)". These contradict each other because the selection is stored globally in the store (§2), so one rule makes an agent's MCP call follow whatever project the user last picked in the web UI and the other makes it follow the agent's cwd; the two give different answers whenever they differ.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
@@ -1337,13 +1343,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
-
-In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T343. Investigate: T330 `--sort` takes two different value sets on `list`
 
@@ -1551,15 +1550,11 @@ Done when: for an ambiguous name with an import-resolvable definition, `callers`
 
 Check: extend `tests/fixtures/graph_truth.toml` with at least 10 ambiguous names (two crates/packages defining the same name); `tests/graph_truth.rs` callers precision on those +20 pp vs `main`, recall drop ≤ 2 pp, T8.8 overall score stays ≥ 0.93; `impact` output bytes on the ambiguous set −30 %; `just check`.
 
-### T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
+### T369.1. Measure grep_symbol follow-up rate after an opt-in window
 
-From the Empryo study (idea-only, clean-room; Empryo `src/core/tools/repo-map-intercept.ts:190-245`). When the agent greps for an identifier (`fn foo`, `class Foo`, `\bfoo\(`), Empryo answers from its symbol index ("defined at path:line, N refs in …") and only falls through to grep when the pattern is not a symbol. rtok's guard denies native Grep (I-08 / T50.4) or redirects to MCP `search` (`native_redirect`, `src/plugins/guard/mod.rs:149`), which costs a second round trip even when `symbol` would have answered.
+Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of follow-up Grep/Read on the same name within 3 calls (`guard/grep_symbol` rows against the transcripts). At most 25 % means propose default-on to the creator; above it, keep the flag opt-in and record why. Also re-measure the PreToolUse hook p95 on an idle machine (`cargo test --release --test latency -- --test-threads=1`; the flag-on test is `latency_hook_grep_symbol_answer_p95_under_10ms`); on 2026-10-06 the load average was 46 and even the baseline run failed the 10 ms gate. Record the result as a dated row in `research.md` §29.5.
 
-Plan: in `pre_tool` (`guard/mod.rs:37`), before `native_redirect`, classify the Grep pattern: a bare identifier or `fn|def|class|struct|type|func|interface <ident>` with no path glob. Look the name up with `symbol_defs` (`src/store/symbols.rs:475`); one to five definitions → deny with the `path:line kind` list and the ref count as the reason (the same text `symbol` prints, capped at `inject` budget); zero or more than five → current behaviour. Config `plugins.guard.grep_symbol = false` next to `deny_grep_glob` (`src/config/mod.rs:761`); off until the check below passes. Record a `Measurement` (`plugin: "guard"`, `kind: "grep_symbol"`). Must stay inside the ≤ 10 ms PreToolUse budget: index lookup only, never `index_for`.
-
-Done when: with the flag on, `Grep pattern="fn parse_since"` in an indexed project is answered with the definition line(s); a regex such as `TODO|FIXME` is untouched.
-
-Check: unit tests for the classifier (identifier, `fn x`, `class X`, regex, path-globbed); a replay over the Grep calls in local Claude Code transcripts (`[stats] transcripts_dir`) shows ≥ 70 % of symbol-shaped patterns are answered from the index; after a dated window with the flag on, the share of follow-up Grep/Read on the same name within 3 calls is ≤ 25 % (row in `research.md`); hook p95 stays ≤ 10 ms; `just check`.
+Check: a dated `research.md` §29.5 row with the follow-up share and the idle-machine p95 (under 10 ms); `just check`.
 
 ### T370. SessionStart repo map ranked by file-level personalized PageRank
 
@@ -1571,6 +1566,15 @@ Done when: with `map_rank = "pagerank"`, the SessionStart map lists files by ran
 
 Check: unit tests for PageRank on a 4-node graph (known stationary vector, sum = 1 ± 1e-9) and for personalization; offline backtest over the last 200 commits of this repo: recall of the commit's touched files in a `map_tokens = 1000` map, `pagerank` minus `refs` ≥ 15 pp; SessionStart hook p95 ≤ 30 ms on this repo (divan bench); `just check`.
 
+Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
+1. `src/plugins/graph/rank.rs`: file graph from one grouped `symbols` scan (edge A to B when A references a name defined in B, weight = refs x ln(1 + files / files-referencing-name) / files-defining-name; T368's shared IDF table replaces it when it lands), power iteration (0.85, 20 iterations or L1 < 1e-6, dangling mass uniform) over CSR, JSON encode/decode of the graph, and a one-pass renderer with a running token estimate. No crate: the maintained graph crates have no personalized PageRank.
+2. Migration `0030_file_rank` (`file_rank (root PRIMARY KEY, graph TEXT)`): paths, global ranks, indexed mtimes, top defs per file and the edges, written at index end; a project removal drops it. Three `Symbols` host methods with default bodies (`symbol_file_scan`, `file_rank_get`, `file_rank_put`), Diesel impls in `src/store/symbols.rs`, Runtime in `src/plugin.rs`.
+3. SessionStart reads the one row and never spawns a process (D1, T428's 10 ms): personalization seeds are files whose indexed mtime is under 24 h old (only when that set is a working set, 32 files at most; a fresh clone seeds nothing) plus, on `compact`, the paths of the session's last checkpoint (`checkpoint::last_paths`). The personalized rank is computed in memory and never stored.
+4. Config `plugins.graph.map_rank = "refs" | "pagerank"` (default `refs`), `default.toml`, `docs/config.md`, trycmd and config_coverage goldens; `repo_map` branches on it, `refs` output unchanged.
+5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
+
+Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
+
 ### T371. Git co-change pairs feed `impact` and the repo map
 
 From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` co-change: last 300 commits, skip commits touching more than 20 files, keep pairs with count ≥ 2, cache keyed by HEAD). Files that change together but share no symbol (a migration and its model, a test and a fixture, docs and code) are invisible to the symbol graph.
@@ -1580,26 +1584,6 @@ Plan: new `src/plugins/graph/cochange.rs`: run `git log --name-only --format=%H 
 Done when: `impact <name>` on a file with co-change history lists its top partners; a root that is not a git repo behaves as today.
 
 Check: unit test on a scripted temp repo (three commits, one over the 20-file cap) asserts the pairs and counts; backtest over the last 100 commits: for each commit's first file, hit@5 of its other files among the top co-change partners ≥ 0.30; build ≤ 300 ms on this repo; `just check`.
-
-### T372. Link tests to sources by naming convention in `affected_from_paths`
-
-From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` test-file linking). `affected_from_paths` (`src/plugins/graph/mod.rs:710`) finds tests through symbol references only, so a test that exercises a binary through `assert_cmd` or a fixture file, or a TS/Python test with dynamic imports, is missed.
-
-Plan: add name-convention links before the symbol walk: `foo.rs` ↔ `tests/foo.rs` / `foo_test.rs`, `foo.ts` ↔ `foo.test.ts` / `foo.spec.ts` / `__tests__/foo.ts`, `foo.py` ↔ `test_foo.py` / `foo_test.py`, `foo.go` ↔ `foo_test.go`; existing files only, one `HashSet` of indexed paths. Union with the symbol result; mark them `(by name)` in the output.
-
-Done when: changing `src/foo.ts` with an existing `src/foo.test.ts` that does not import it by a resolvable path lists that test.
-
-Check: table-driven unit test over the four language conventions plus a negative case (no such file); existing affected tests unchanged; `just check`.
-
-### T373. `rrf_merge` breaks score ties by note id
-
-From the Empryo study (idea-only; Empryo's memory recall merges FTS and vector hits with RRF and a stable order). `rrf_merge` (`src/store/embed.rs:198`) collects scores in a `HashMap` and sorts by score alone, so notes with equal RRF score (common: rank i in one list, absent from the other) may come back in a different order between runs — suspected, not reproduced. A nondeterministic recall order also breaks the cache-stable prefix when recall is injected.
-
-Plan: write the failing test first (two lists producing equal scores, run the merge 50 times, assert one order); then sort by `(score desc, id asc)`.
-
-Done when: `rrf_merge` output is identical across runs for equal scores.
-
-Check: the new unit test in `src/store/embed.rs`; `tests/p29_memory.rs` unchanged; `just check`. If the test passes before the fix, close the card with that note.
 
 ### T374. Memory notes linked to files: recall boosted by the files in play
 
@@ -1798,14 +1782,6 @@ Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just
 
 Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
 
-### T388. `doctor` reports the real MCP Tool Search state
-
-From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
-
-Done means: `doctor` reads `ENABLE_TOOL_SEARCH` from the environment and from Claude Code settings `env`, and prints `enabled`, `disabled` or `unknown (heuristic: ANTHROPIC_BASE_URL set)` with the source. The `tools_rewrite` advice uses the refined state. Cite the Claude Code docs page and date for the variable in `research.md` §3.
-
-Check: unit tests for base URL set with and without the override; `just check`.
-
 ### T389. Price row for Fable 5.1 in `[stats.prices]`
 
 From `research.md` §8 and §9.3: Fable is 39 % of the bill in §9.3, but `config/default.toml` ships prices only for `claude-sonnet-5`, `claude-haiku-4-5`, `gpt-5` and `gpt-5-mini`, so `rtok stats --price` leaves the main workload model unpriced. §2's cost split assumes output = 5 × input "until known".
@@ -1965,23 +1941,13 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 
 Check: every sub-task below is closed in `done.md` with its per-host check.
 
-### T413.1. `rtok agents install roo` — Roo Code
-
-VS Code extension forked from Cline. Check how far `src/agents/cline/` applies (MCP settings file, rules, hooks if any) and share it through a helper instead of a second copy.
-
-Check: the T413 per-host check (step 5) for this host.
-
-### T413.2. `rtok agents install qwen` — Qwen Code
-
-CLI forked from Gemini CLI. Check how far `src/agents/gemini/` applies (settings path, `mcpServers`, hook events, extensions) and share it.
-
-Check: the T413 per-host check (step 5) for this host.
-
 ### T413.3. `rtok agents install droid` — Factory Droid
 
 `rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: primary Factory docs for the MCP entry and any hook file; write only documented keys; `src/agents/droid/` plus the host matrix.
 
 ### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 
@@ -1989,11 +1955,15 @@ Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` 
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: vendor docs for IDE and CLI config paths; one variant per documented file; share a helper if the JSON matches an existing host.
+
 ### T413.5. `rtok agents install amp` — Amp
 
 Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
 
 ### T413.6. `rtok agents install goose` — Goose
 
@@ -2001,11 +1971,15 @@ Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hoo
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Block's docs for the MCP config file; hooks only if a payload is documented. MCP-only host via the existing stdio or local helper, whichever the file matches.
+
 ### T413.7. `rtok agents install continue` — Continue
 
 VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
 
 ### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 
@@ -2013,11 +1987,15 @@ IDE extension and Auggie CLI. MCP and hooks if documented.
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Augment and Auggie docs for MCP and hooks; skip a surface whose file is not documented.
+
 ### T413.9. `rtok agents install junie` — JetBrains Junie
 
 Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
 
 ### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 
@@ -2025,11 +2003,15 @@ Verify first whether Amazon Q Developer CLI is still maintained or replaced by t
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: AWS docs first. If the CLI is the Kiro CLI, close into T413.4 with the citation. Otherwise an MCP installer for the documented file only.
+
 ### T413.11. `rtok agents install crush` — Crush
 
 Crush (Charm), open-source terminal agent. MCP and any documented hooks.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Charm's docs and the Crush repo for the MCP config; hooks only with a documented payload.
 
 ### T413.12. `rtok agents install warp` — Warp
 
@@ -2037,11 +2019,15 @@ Warp terminal's agent. MCP and rules if they live in a file setup can edit; a se
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: Warp docs for a file-based MCP or rules path. If the setting lives only in the app database, close with that finding and no installer writes.
+
 ### T413.13. `rtok agents install trae` — Trae
 
 Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `src/agents/vscode/` already handles.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
 
 ### T413.14. `rtok agents install openhands` — OpenHands
 
@@ -2049,15 +2035,19 @@ OpenHands CLI (the local variant only; the cloud service is out of scope). MCP a
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
+
 ### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 
 DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
 
 Check: the T413 per-host check (step 5) for this host.
 
+Plan: re-read configuration.html and write only the keys it names. Skills and memory stay out unless that page says setup may edit them.
+
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 
-Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; `cmdk` for the palette).
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
 
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
@@ -2098,12 +2088,6 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
 
 Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
-
-### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
-
-A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on `cmdk` for the palette and React Aria Components for the dialog and focus handling (creator decision), styled on the `--pyr-*` roles.
-
-Check: unit tests for the shortcut map; a story with a play function that opens the palette, filters and navigates; axe green.
 
 ### T414.10. Table filters and sort in the URL
 
@@ -2175,6 +2159,24 @@ Check: trycmd cases for `--dry-run` and `--dry-run --stat` on `config set` and o
 
 Check: a test per command that the dry run changes nothing and prints the preview; `just check` green.
 
+### T428. SessionStart hook back under the 10 ms budget
+
+Renumbered from T418 on 2026-10-06: T418 is the finished `rtok worktree gc` task in `done.md`.
+
+`rtok hook session-start` on the rtok repo took 12.7, 34.2, 13.4 and 65.0 ms on four manual runs (rtok 0.15.1, 2026-10-05) and warned `hook SessionStart slow … over max_ms 10 ms`. The output stayed correct and the exit code 0, but the fail-open rule asks for ≤ 10 ms.
+
+Done: per-plugin timing of SessionStart on a real store shows where the time goes (memory recall, checkpoint restore, agent id, or store open); the slow part is fixed or moved off the hook path; `tests/latency.rs` covers SessionStart with a populated notes store and stays under its p95 bound.
+
+Check: `tests/latency.rs` SessionStart case green; five manual `rtok hook session-start` runs on the rtok repo print no `slow` warning; `just check`.
+
+Execution plan:
+
+1. Time each phase of the hook (store open, `register_agent`, `record_call`, project upsert, each plugin's `session_start`, `inject::apply`, tail) on a copy of the real store (485 MB, 525 notes), idle and with six hooks racing; temporary trace, not committed.
+2. Fix what the numbers show: SessionStart does about eleven write commits (against six for PreToolUse) and `memory::recall` reads every note body twice. Queue the three SessionStart measurements and write them in one transaction (`Runtime::defer_measurements` / `flush_measurements`, `Store::insert_measurements_once`); read each body once in `memory/mod.rs`.
+3. `tests/latency.rs`: a SessionStart case with 40 notes of ~4k tokens and a `session:*` note.
+4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
+
+Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.

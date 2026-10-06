@@ -11,7 +11,9 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
+import { Unknown, orUnknown } from "../ui/Unknown";
 import { compact, fmt, hms, iso } from "./format";
+import { why } from "./missing";
 import { tokensOf } from "./model";
 import { Count, Kv, Split, SurfacePill, Toolbar, WithSnapshot } from "./parts";
 
@@ -42,20 +44,21 @@ const columns: Column<CallRow>[] = [
         width: "72px",
         cell: (c) => <SurfacePill surface={c.surface} />,
     },
-    { id: "name", header: "name", cell: (c) => c.name ?? c.plugin ?? "-" },
+    { id: "name", header: "name", cell: (c) => orUnknown(c.name ?? c.plugin, why.callName) },
     {
         id: "ms",
         header: "ms",
         width: "52px",
         align: "right",
-        cell: (c) => (c.ms == null ? "-" : c.ms.toFixed(1)),
+        cell: (c) => orUnknown(c.ms?.toFixed(1), why.callMs),
     },
     {
         id: "tok",
         header: "tokens",
-        width: "60px",
+        // Room for "Unknown ?" on calls that carry no usage row.
+        width: "96px",
         align: "right",
-        cell: (c) => compact(tokensOf(c)),
+        cell: (c) => orUnknown(compact(tokensOf(c)), why.callUsage),
     },
     {
         id: "ok",
@@ -163,7 +166,9 @@ function Detail({ call: c, refId }: { call: CallRow; refId: string | undefined }
         <Panel title="detail" hint={`#${c.id}`}>
             <div className="flex items-center gap-2">
                 <SurfacePill surface={c.surface} />
-                <span className="truncate text-sm font-semibold">{c.name ?? "-"}</span>
+                <span className="truncate text-sm font-semibold">
+                    {orUnknown(c.name, why.callName)}
+                </span>
                 <span className="ml-auto">
                     {c.ok ? <Pill tone="ok">ok</Pill> : <Pill tone="fail">failed</Pill>}
                 </span>
@@ -186,16 +191,16 @@ function Detail({ call: c, refId }: { call: CallRow; refId: string | undefined }
                     ],
                     ["session", c.session],
                     ["kind", c.kind],
-                    ["plugin", c.plugin ?? "-"],
-                    ["host", c.host ?? "-"],
-                    ["provider", c.provider ?? "-"],
-                    ["model", c.model ?? "-"],
-                    ["api", c.api ?? "-"],
-                    ["ms", c.ms == null ? "-" : c.ms.toFixed(1)],
+                    ["plugin", orUnknown(c.plugin, why.callPlugin)],
+                    ["host", orUnknown(c.host, why.callHost)],
+                    ["provider", orUnknown(c.provider, why.callProvider)],
+                    ["model", orUnknown(c.model, why.callModel)],
+                    ["api", orUnknown(c.api, why.callUsage)],
+                    ["ms", orUnknown(c.ms?.toFixed(1), why.callMs)],
                     [
                         "tokens",
                         tokens == null ? (
-                            "-"
+                            <Unknown why={why.callUsage} />
                         ) : (
                             <>
                                 {fmt(tokens)}{" "}
@@ -206,8 +211,15 @@ function Detail({ call: c, refId }: { call: CallRow; refId: string | undefined }
                             </>
                         ),
                     ],
-                    ["parent", c.parent_id == null ? "-" : `#${c.parent_id}`],
-                    ["ref_id", refId ?? "-"],
+                    [
+                        "parent",
+                        c.parent_id == null ? (
+                            <Unknown label="top-level" why={why.callParent} />
+                        ) : (
+                            `#${c.parent_id}`
+                        ),
+                    ],
+                    ["ref_id", orUnknown(refId, why.callRef, "none")],
                 ]}
             />
             {refId && <Expand key={refId} refId={refId} />}
