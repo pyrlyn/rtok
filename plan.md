@@ -88,7 +88,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T386 | todo | P2 | 2 | 30% | |
-| T388 | todo | P2 | 2 | 40% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
@@ -1769,14 +1768,6 @@ From `research.md` §15.3 (T50.1 default-rule families): `mise` is the largest f
 Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just <recipe>` resolve to the inner command's formatter or rule when the inner command is visible on the line. Rules or formatters for `sqlite3`, `df` and `awk` land only where a golden fixture beats `Rule::default()`. The `bash_default` top-20 is re-measured and recorded in §15.3 with a date.
 
 Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
-
-### T388. `doctor` reports the real MCP Tool Search state
-
-From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
-
-Done means: `doctor` reads `ENABLE_TOOL_SEARCH` from the environment and from Claude Code settings `env`, and prints `enabled`, `disabled` or `unknown (heuristic: ANTHROPIC_BASE_URL set)` with the source. The `tools_rewrite` advice uses the refined state. Cite the Claude Code docs page and date for the variable in `research.md` §3.
-
-Check: unit tests for base URL set with and without the override; `just check`.
 
 ### T389. Price row for Fable 5.1 in `[stats.prices]`
 

@@ -1121,8 +1121,11 @@
             "$ref": "#/$defs/ServerInfo"
           }
         },
+        "mcp_tool_search": {
+          "$ref": "#/$defs/ToolSearch"
+        },
         "mcp_tool_search_disabled": {
-          "description": "`ANTHROPIC_BASE_URL` is set, so MCP tool search is likely disabled.",
+          "description": "MCP tool search is not confirmed on: `mcp_tool_search.state` is `disabled`, or `unknown`\nwith a custom `ANTHROPIC_BASE_URL` (the heuristic).",
           "type": "boolean"
         },
         "overlaps": {
@@ -1184,6 +1187,7 @@
         "proxy",
         "proxy_openai",
         "mcp_tool_search_disabled",
+        "mcp_tool_search",
         "bash_max_output_length",
         "auto_compact_window",
         "instructions",
@@ -1843,6 +1847,41 @@
         "est_before",
         "est_after",
         "rows"
+      ]
+    },
+    "ToolSearch": {
+      "description": "The tool-search state and where it came from; `source` is `None` for the default (nothing to\nreport), so a plain install prints no line.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/ToolSearchState"
+        }
+      },
+      "required": [
+        "state"
+      ]
+    },
+    "ToolSearchState": {
+      "description": "Whether Claude Code defers MCP tools (T388).",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        {
+          "description": "No `ENABLE_TOOL_SEARCH` override, but a custom `ANTHROPIC_BASE_URL`: Claude Code falls back\nto loading tools upfront unless the proxy forwards `tool_reference` blocks, which rtok\ncannot see from here.",
+          "type": "string",
+          "const": "unknown"
+        }
       ]
     },
     "Totals": {
