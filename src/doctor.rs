@@ -64,6 +64,11 @@ pub struct Report {
     /// lines say "duplicate", never "saves N".
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub overlaps: Vec<String>,
+    /// Explicit keys in the user file whose value is not the current default (T381).
+    /// Text only: a note, not an error, so `--json` and the schema stay as they were.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub config_notes: Vec<String>,
     /// Advice for enabling `[proxy.tools_rewrite]` when applicable (T59.5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools_rewrite_advice: Option<String>,
@@ -242,6 +247,12 @@ impl Report {
                     r.invocations.map_or_else(|| "-".into(), |n| n.to_string()),
                     flags
                 ));
+            }
+        }
+        if !self.config_notes.is_empty() {
+            out.push_str("config\n");
+            for note in &self.config_notes {
+                out.push_str(&format!("  {note}\n"));
             }
         }
         out
@@ -491,6 +502,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
             lines
         },
         tools_rewrite_advice: tools_rewrite_adv,
+        config_notes: config_notes(cfg),
         // File reads only: no `--version` probe, so the 2 s dashboard tick stays cheap.
         agents: crate::agents::HOSTS
             .iter()
@@ -505,6 +517,16 @@ pub fn page(cfg: &Config) -> Result<Report> {
             .collect(),
         problems: checks(cfg),
     })
+}
+
+/// Notes for keys the user file sets away from the current default. Empty when this
+/// config was not loaded from a file.
+fn config_notes(cfg: &Config) -> Vec<String> {
+    cfg.loaded_from
+        .0
+        .as_deref()
+        .map(crate::config::validate::pinned_notes)
+        .unwrap_or_default()
 }
 
 /// Every config finding of this machine: hooks, then duplicate MCP entries.
@@ -1380,6 +1402,7 @@ pub(crate) fn report_fixture() -> Report {
         tools_rewrite_advice: None,
         agents: Vec::new(),
         problems: Vec::new(),
+        config_notes: Vec::new(),
     }
 }
 
@@ -1387,6 +1410,41 @@ pub(crate) fn report_fixture() -> Report {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// T381: `enabled = false` under toon is the old default, pinned. Doctor names the
+    /// key, the value, the current default and the line, and does not treat it as an error.
+    #[test]
+    fn toon_pinned_off_is_a_config_note() {
+        let dir = crate::testutil::tmp_dir("t381-toon");
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "[plugins.toon]\nenabled = false\n").unwrap();
+        let cfg = Config {
+            loaded_from: crate::config::LoadedFrom(Some(path.clone())),
+            ..Config::default()
+        };
+        let notes = config_notes(&cfg);
+        assert!(
+            notes.iter().any(|n| {
+                n.contains("plugins.toon.enabled")
+                    && n.contains("= false")
+                    && n.contains("default true")
+                    && n.contains(":2:")
+            }),
+            "{notes:?}"
+        );
+        let mut report = report_fixture();
+        report.config_notes = notes;
+        let text = report.to_text();
+        assert!(text.contains("config\n  note "), "{text}");
+        assert!(text.contains("plugins.toon.enabled"), "{text}");
+
+        std::fs::write(&path, "[plugins.toon]\nenabled = true\n").unwrap();
+        assert!(
+            config_notes(&cfg).is_empty(),
+            "the current default is not a note"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// T61.3: the audit walks a Vfs tree of three skills — one over 200 desc chars,
     /// one over an 8 KB body, one never invoked — flags each, sorts by body bytes

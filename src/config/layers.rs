@@ -515,6 +515,7 @@ pub fn load(home: &Path, config_file: Option<&Path>, flags: Option<Dict>) -> Res
     )
     .extract()?;
     cfg.finish(home);
+    cfg.loaded_from = super::LoadedFrom(Some(super::Config::user_path(home, config_file)));
     // Every command reaches its config through here, so this is where `[ui]` takes effect.
     crate::ui::style::configure(&cfg.ui);
     for w in &warnings {
@@ -595,7 +596,7 @@ pub fn entries(fig: &Figment) -> Vec<(String, String, String)> {
 
 /// `figment::value::Value` has no `Display` impl (only `Num`/`Bool`/etc. do internally) — this
 /// renders the same shape `config show`/`get` need: TOML-ish scalars, `[a, b]` for arrays.
-fn display(v: &Value) -> String {
+pub(crate) fn display(v: &Value) -> String {
     match v {
         Value::String(_, s) => s.clone(),
         Value::Char(_, c) => c.to_string(),

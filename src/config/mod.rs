@@ -4,9 +4,11 @@
 
 //! `~/.rtok/config.toml` — every setting rtok has (plan T0.2, T12.1, decision D12).
 //!
-//! `config/default.toml` is the reference file: it is embedded with `include_str!`, written
-//! verbatim on a fresh install (so its comments survive), and it must parse to exactly
-//! [`Config::default()`] — a test asserts it.
+//! `config/default.toml` is the reference file: it is embedded with `include_str!` and written
+//! on a fresh install so its comments survive. Assignments in it are comments, so a key the
+//! user never sets keeps following [`Config::default()`] when that default changes. A test
+//! asserts the file still parses to exactly that, and that uncommenting the documented
+//! assignments does too.
 //!
 //! Every section is `#[serde(default, deny_unknown_fields)]`: a partial file keeps the
 //! defaults, and a typo is an error rather than a silently ignored key.
@@ -25,7 +27,8 @@ use anyhow::{Result, bail};
 use rtok_hook::{expand_with, home_dir_from, user_home_from};
 use serde::{Deserialize, Serialize};
 
-/// The annotated reference file, written verbatim by `rtok config init`.
+/// Reference file `rtok config init` writes. Assignments are comments so the file
+/// documents every key without pinning the default from the day it was written.
 pub const DEFAULT_TOML: &str = include_str!("../../config/default.toml");
 
 /// Write a config file with the installers' atomic swap: temp file, then rename. With a plain
@@ -992,6 +995,16 @@ section! {
     }
 }
 
+/// Path of the user file [`crate::config::layers::load`] read. Equality ignores it.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LoadedFrom(pub Option<PathBuf>);
+
+impl PartialEq for LoadedFrom {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 // ── the whole file ──────────────────────────────────────────────────────────
 
 /// Every setting rtok has. Sections mirror the tables in `config/default.toml`.
@@ -1026,6 +1039,10 @@ pub struct Config {
     /// Directory the config was loaded from; not part of the file.
     #[serde(skip)]
     pub home: PathBuf,
+    /// User file this process loaded. Not a setting: equality ignores it, so a loaded
+    /// config still matches the same settings built in a test.
+    #[serde(skip)]
+    pub(crate) loaded_from: LoadedFrom,
     /// Override for the plugin install receipt path (T279, `agents::plugin_version`):
     /// `$XDG_STATE_HOME/rtok/plugins.json` and OS equivalents by default. Not part of the
     /// file — tests set it directly so a receipt round-trip never touches the real state
@@ -1126,8 +1143,8 @@ impl Config {
         Ok(())
     }
 
-    /// Write the reference file verbatim, so its comments survive. Refuses to clobber
-    /// an existing file unless `force`.
+    /// Write the reference file, comments included. Refuses to clobber an existing file
+    /// unless `force`.
     pub fn init(home: &Path, force: bool) -> Result<PathBuf> {
         Self::init_maybe(home, None, force, false).map(|(p, _)| p)
     }
@@ -1562,14 +1579,74 @@ mod tests {
         assert_eq!(e.headers, vec![("signoz-ingestion-key".into(), "k".into())]);
     }
 
+    /// Commented defaults still parse as [`Config::default`], an empty file does the same,
+    /// and uncommenting the documented assignments must too — otherwise a comment can lie
+    /// about the value a missing key will take.
     #[test]
     fn default_toml_is_the_defaults() {
+        for (n, line) in DEFAULT_TOML.lines().enumerate() {
+            let trimmed = line.trim();
+            assert!(
+                trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('['),
+                "line {} pins a default: {line}",
+                n + 1
+            );
+        }
         let parsed: Config = parse(DEFAULT_TOML).expect("default.toml parses");
         assert_eq!(
             parsed,
             Config::default(),
             "config/default.toml drifted from Config::default()"
         );
+        assert_eq!(
+            parse("").unwrap(),
+            parsed,
+            "an empty file must behave as the reference file"
+        );
+        assert!(
+            super::validate::issues_in(std::path::Path::new("config.toml"), DEFAULT_TOML)
+                .is_empty(),
+            "rtok config validate must accept the reference file"
+        );
+        let live = uncomment_documented(DEFAULT_TOML);
+        let documented = parse(&live).expect("uncommented reference parses");
+        assert_eq!(
+            documented, parsed,
+            "a commented default does not match Config::default()"
+        );
+        let notes = super::validate::pinned_notes_in(std::path::Path::new("config.toml"), &live);
+        assert!(
+            notes.is_empty(),
+            "the documented defaults are the current defaults: {notes:?}"
+        );
+    }
+
+    /// Drop the `# ` that [`DEFAULT_TOML`] puts on assignments and on map tables whose
+    /// presence would replace a non-empty default. Prose comments stay comments.
+    fn uncomment_documented(src: &str) -> String {
+        let mut out = String::new();
+        for line in src.lines() {
+            if let Some(rest) = line.strip_prefix("# ") {
+                let code = rest.split('#').next().unwrap_or("").trim();
+                let assignment = code.split_once('=').is_some_and(|(key, _)| {
+                    let key = key.trim();
+                    !key.is_empty()
+                        && key.chars().all(|c| {
+                            c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '"' | '.')
+                        })
+                });
+                let map_table =
+                    code.starts_with("[bench.configs]") || code.starts_with("[stats.prices.");
+                if assignment || map_table {
+                    out.push_str(rest);
+                    out.push('\n');
+                    continue;
+                }
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
     }
 
     #[test]

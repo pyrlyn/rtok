@@ -1183,6 +1183,7 @@ pub fn run() -> Result<()> {
                     }
                     let path = path.unwrap_or(user);
                     let mut errs = validate::issues(&path)?;
+                    let notes = validate::pinned_notes(&path);
                     // The filter drop-ins are deployment state, not part of the
                     // file: read them through the same file as the user layer
                     // (`--config` wins when both are given). `layers::load`
@@ -1199,6 +1200,9 @@ pub fn run() -> Result<()> {
                         &cfg.plugins.cmd.rules_dir,
                     ));
                     if errs.is_empty() {
+                        for note in &notes {
+                            println!("{note}");
+                        }
                         println!("{}", style::success(&format!("ok {}", path.display())));
                     } else {
                         for e in &errs {
