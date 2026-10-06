@@ -230,3 +230,78 @@ name = "calibrate_or_skip"
 kind = "fn"
 defs = ["src/tokens.rs"]
 refs = ["src/cli.rs"]
+
+# T368: each name below is defined in two crates. `defs` is still every defining
+# file. `refs` is the caller files of the import-resolved definition, the set
+# `callers` should print. `rank = true` selects them for the precision and
+# impact-byte gates.
+
+[[symbol]]
+name = "read_frame"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-hook/src/lib.rs", "src/mcp/wrap.rs"]
+refs = ["crates/rtok-hook/src/lib.rs", "tests/hook_resident.rs"]
+
+[[symbol]]
+name = "connect"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-hook/src/lib.rs", "src/store/mod.rs"]
+refs = ["crates/rtok-hook/src/lib.rs", "src/bin/rtok-hook.rs", "tests/hook_resident.rs"]
+
+[[symbol]]
+name = "toml_item_to_json"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-mcp/src/config.rs", "src/agents/mcp.rs"]
+refs = ["crates/rtok-mcp/src/config.rs", "src/agents/mcp.rs"]
+
+[[symbol]]
+name = "pre_tool"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/examples/shrink.rs", "crates/rtok-plugin-sdk/src/lib.rs", "examples/hello_plugin.rs", "src/hooks/mod.rs", "src/hooks/types.rs", "src/plugins/cmd/hook.rs", "src/plugins/cmd/mod.rs", "src/plugins/guard/mod.rs", "src/plugins/read/hook.rs", "src/plugins/read/mod.rs"]
+refs = ["crates/rtok-plugin-sdk/examples/shrink.rs", "src/plugins/cmd/hook.rs", "src/plugins/cmd/mod.rs", "src/plugins/guard/mod.rs", "src/plugins/read/hook.rs", "src/plugins/read/mod.rs"]
+
+[[symbol]]
+name = "skills"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/src/wire.rs", "src/proxy/anthropic.rs"]
+refs = ["src/plugins/archive/mod.rs"]
+
+[[symbol]]
+name = "tool_results"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/src/wire.rs", "src/plugins/archive/pi.rs", "src/proxy/anthropic.rs", "src/proxy/gemini.rs", "src/proxy/openai_chat.rs", "src/proxy/openai_responses.rs", "tests/proxy_bench.rs"]
+refs = ["src/plugins/compress/mod.rs", "src/plugins/toon/mod.rs"]
+
+[[symbol]]
+name = "wire"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/src/lib.rs", "src/measure/usage/kimi.rs", "src/proxy/mod.rs"]
+refs = ["src/proxy/mod.rs"]
+
+[[symbol]]
+name = "session"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/measure/usage/copilot.rs", "src/measure/usage/gemini.rs", "src/measure/usage/pi.rs", "src/plugin.rs", "src/tui/app.rs", "src/web/model/agents.rs", "tests/common/mcp.rs"]
+refs = ["src/store/mod.rs"]
+
+[[symbol]]
+name = "session_start"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/src/lib.rs", "examples/hello_plugin.rs", "src/hooks/types.rs", "src/plugins/graph/mod.rs", "src/plugins/inject/mod.rs", "src/plugins/memory/mod.rs", "tests/agents_whoami.rs"]
+refs = ["src/plugins/graph/mod.rs"]
+
+[[symbol]]
+name = "replace_symbols"
+kind = "fn"
+rank = true
+defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/plugin.rs", "src/store/symbols.rs"]
+refs = ["src/plugin.rs", "src/store/mod.rs"]

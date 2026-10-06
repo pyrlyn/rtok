@@ -17,7 +17,9 @@ pub fn compress(
     archive_id: &str,
 ) -> (String, &'static str) {
     // T176: `sed -n 1,620p`, `| tail -300`, `grep -A3` already printed what was asked
-    // for; a second cut here only sent the agent to `expand` for the same bytes.
+    // for; a second cut here only sent the agent to `expand` for the same bytes. This
+    // stays ahead of the mix check: `cargo test | tail -300` is bounded even though it
+    // names two programs.
     if output.len() <= super::bounded::MAX_BYTES && super::bounded::is_bounded(&argv.join(" ")) {
         return (output.to_string(), "raw");
     }
@@ -25,9 +27,21 @@ pub fn compress(
     // is not one family's output; matching only argv[0] picks the wrong rule, or none at
     // all. A same-program chain (`cargo build && cargo test`, `cd x && cargo test`) keeps
     // its own family's formatter/rule — only a genuine mix routes to `[script]`.
-    let multi = matches!(argv, [one] if super::bounded::mixed_chain(one));
-    let split = family_argv(argv);
-    let stem = if multi { "script" } else { bin(&split) };
+    // T386: `mise exec -- cargo test` is still argv[0] `mise` until the inner command is
+    // peeled; `mixed_chain` uses the same peel so two inner programs stay a mix.
+    let matched = resolve(settings, argv, output);
+    let stem = if matched.multi {
+        "script"
+    } else {
+        bin(&matched.argv)
+    };
+    // The outer line is `mise`, which is not a bounded command; the peeled `sed -n` is.
+    if !matched.multi
+        && output.len() <= super::bounded::MAX_BYTES
+        && super::bounded::is_bounded(&matched.argv.join(" "))
+    {
+        return (output.to_string(), "raw");
+    }
     let rule = settings.pick(stem);
     // T65.2: JSON bodies skip table formatters so kubectl -o json / gh --json
     // reach the compact pass instead of a NAME/STATUS parser.
@@ -40,7 +54,9 @@ pub fn compress(
         };
         return (s, kind);
     }
-    if !multi && let Some(s) = format(&split, output) {
+    if !matched.multi
+        && let Some(s) = format(&matched.argv, output)
+    {
         return (s, "formatter");
     }
     let s = rules::apply(settings, output, exit, &rule, archive_id);
@@ -67,9 +83,44 @@ pub fn family_argv(argv: &[String]) -> Vec<String> {
 }
 
 /// `argv[0]`'s basename — the family a `Measurement` names. `other` when there is none.
+/// A pipe stays the first command (`git status | head` is `git`); [`family_of`] is what
+/// sees a `mise run` / `just` echo.
 pub fn family(argv: &[String]) -> String {
-    let argv = family_argv(argv);
-    match bin(&argv) {
+    // A pipe stays the first command. A wrapper around two different programs is
+    // `[script]` — the same route `compress` takes — rather than the first inner stem.
+    if let [one] = argv
+        && super::bounded::mixed_chain(one)
+    {
+        let raw_argv = family_argv(argv);
+        let peeled_argv = visible_argv(&raw_argv);
+        let raw = bin(&raw_argv);
+        let peeled = bin(&peeled_argv);
+        if peeled != raw && matches!(raw, "mise" | "just") {
+            return "script".to_string();
+        }
+        return named(&raw_argv);
+    }
+    // `command_argv` sees through `cd && mise exec -- cargo`, which `visible_argv`
+    // on the whole line does not (argv[0] is still `cd`).
+    named(&command_argv(argv))
+}
+
+/// [`family`] once `output` is available, so a wrapper whose inner command is only on
+/// an echoed line (`[task] $ cargo test`, a just recipe line) is named for that command.
+pub fn family_of(settings: &rules::Settings, argv: &[String], output: &str) -> String {
+    let base = family(argv);
+    if base != "mise" && base != "just" {
+        return base;
+    }
+    match echoed(settings, &base, output) {
+        Some(resolved) if resolved.multi => "script".to_string(),
+        Some(resolved) => named(&resolved.argv),
+        None => base,
+    }
+}
+
+fn named(argv: &[String]) -> String {
+    match bin(argv) {
         "" => "other".to_string(),
         found => found.to_string(),
     }
@@ -82,7 +133,8 @@ pub(crate) use crate::agents::cmd_stem;
 
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
-    "cargo", "git", "pytest", "jest", "vitest", "tree", "go", "docker", "kubectl", "ps",
+    "cargo", "git", "pytest", "jest", "vitest", "tree", "go", "docker", "kubectl", "ps", "df",
+    "sqlite3",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -102,6 +154,350 @@ fn bin(argv: &[String]) -> &str {
 
 fn sub(argv: &[String]) -> &str {
     argv.get(1).map(String::as_str).unwrap_or("")
+}
+
+struct Resolved {
+    argv: Vec<String>,
+    /// Two or more distinct programs: use `[script]`, not the first family's formatter.
+    multi: bool,
+}
+
+fn script_match() -> Resolved {
+    Resolved {
+        argv: vec!["script".to_string()],
+        multi: true,
+    }
+}
+
+fn resolve(settings: &rules::Settings, argv: &[String], output: &str) -> Resolved {
+    if matches!(argv, [one] if super::bounded::mixed_chain(one)) {
+        return script_match();
+    }
+    let vis = command_argv(argv);
+    let stem = bin(&vis);
+    if matches!(stem, "mise" | "just")
+        && let Some(echoed) = echoed(settings, stem, output)
+    {
+        return echoed;
+    }
+    Resolved {
+        argv: vis,
+        multi: false,
+    }
+}
+
+/// Argv after `mise exec`/`mise x` and `just -c`. A recipe stays as written.
+pub(crate) fn visible_argv(argv: &[String]) -> Vec<String> {
+    let mut cur = argv.to_vec();
+    for _ in 0..4 {
+        let Some(inner) = peel_mise_exec(&cur).or_else(|| peel_just_command(&cur)) else {
+            break;
+        };
+        if inner == cur {
+            break;
+        }
+        cur = inner;
+    }
+    cur
+}
+
+/// Same inner command on every wrapper stage. Peeling `cargo build && cargo test` would keep only `cargo test`'s needles, so that chain stays on [`family_argv`].
+fn command_argv(argv: &[String]) -> Vec<String> {
+    let line = match argv {
+        [one] => one.clone(),
+        many => many.join(" "),
+    };
+    let stages: Vec<Vec<String>> = super::bounded::stages(&line)
+        .into_iter()
+        .filter(|s| !s.is_empty() && !silent_stage(s))
+        .collect();
+    if stages.iter().any(|stage| is_wrapper_stage(stage)) {
+        let peeled: Vec<Vec<String>> = stages.iter().map(|s| visible_argv(s)).collect();
+        if let Some(first) = peeled.first() {
+            let stem = bin(first).to_string();
+            if !stem.is_empty() && peeled.iter().all(|p| bin(p) == stem) {
+                let sub0 = sub(first).to_string();
+                if peeled.iter().all(|p| sub(p) == sub0) {
+                    return first.clone();
+                }
+                return vec![stem];
+            }
+        }
+    }
+    visible_argv(&family_argv(argv))
+}
+
+fn silent_stage(stage: &[String]) -> bool {
+    matches!(stage.first().map(String::as_str), Some("cd" | "export"))
+}
+
+fn is_wrapper_stage(stage: &[String]) -> bool {
+    matches!(stage.first().map(|s| cmd_stem(s)), Some("mise" | "just"))
+}
+
+fn peel_mise_exec(argv: &[String]) -> Option<Vec<String>> {
+    if cmd_stem(argv.first()?) != "mise" {
+        return None;
+    }
+    let mut i = skip_mise_flags(argv, 1)?;
+    if i >= argv.len() || !matches!(argv[i].as_str(), "exec" | "x") {
+        return None;
+    }
+    i += 1;
+    while i < argv.len() {
+        let tok = argv[i].as_str();
+        if tok == "--" {
+            let cmd = argv[i + 1..].to_vec();
+            return (!cmd.is_empty()).then_some(cmd);
+        }
+        if tok == "-c" || tok == "--command" {
+            let words: Vec<String> = argv
+                .get(i + 1)?
+                .split_whitespace()
+                .map(str::to_string)
+                .collect();
+            return (!words.is_empty()).then_some(words);
+        }
+        if let Some(n) = mise_flag_width(tok) {
+            if i + n > argv.len() {
+                return None;
+            }
+            i += n;
+            continue;
+        }
+        if tok.starts_with('-') {
+            return None;
+        }
+        i += 1;
+    }
+    None
+}
+
+/// `just -c` / `--command` names the program on the argv. A recipe name does not: the body is in the justfile, so only an echoed line can name it.
+fn peel_just_command(argv: &[String]) -> Option<Vec<String>> {
+    if cmd_stem(argv.first()?) != "just" {
+        return None;
+    }
+    let mut i = 1;
+    while i < argv.len() {
+        let tok = argv[i].as_str();
+        if tok == "-c" || tok == "--command" {
+            let cmd = argv[i + 1..].to_vec();
+            return (!cmd.is_empty()).then_some(cmd);
+        }
+        if tok.starts_with('-') {
+            let extra = just_flag_values(tok);
+            if i + extra >= argv.len() {
+                return None;
+            }
+            i += 1 + extra;
+            continue;
+        }
+        return None;
+    }
+    None
+}
+
+fn just_flag_values(tok: &str) -> usize {
+    if tok.contains('=') {
+        return 0;
+    }
+    match tok {
+        "--set" => 2,
+        "-f"
+        | "--justfile"
+        | "-d"
+        | "--working-directory"
+        | "--color"
+        | "--shell"
+        | "--shell-arg"
+        | "--command-color"
+        | "--dotenv-filename"
+        | "--dotenv-command"
+        | "--chooser"
+        | "--ceiling"
+        | "--justfile-name" => 1,
+        _ => 0,
+    }
+}
+
+fn skip_mise_flags(argv: &[String], mut i: usize) -> Option<usize> {
+    while i < argv.len() {
+        let tok = argv[i].as_str();
+        if matches!(tok, "exec" | "x" | "run" | "r" | "--") {
+            break;
+        }
+        if let Some(n) = mise_flag_width(tok) {
+            if i + n > argv.len() {
+                return None;
+            }
+            i += n;
+            continue;
+        }
+        if tok.starts_with('-') {
+            return None;
+        }
+        break;
+    }
+    Some(i)
+}
+
+fn mise_flag_width(tok: &str) -> Option<usize> {
+    if let Some((name, _)) = tok.split_once('=')
+        && name.starts_with("--")
+    {
+        return mise_flag_width(name).map(|_| 1);
+    }
+    const VALUE: &[&str] = &[
+        "-C",
+        "--cd",
+        "-E",
+        "--env",
+        "-j",
+        "--jobs",
+        "--allow-env",
+        "--allow-net",
+        "--allow-read",
+        "--allow-write",
+    ];
+    const BOOL: &[&str] = &[
+        "-q",
+        "-v",
+        "-y",
+        "--quiet",
+        "--verbose",
+        "--yes",
+        "--locked",
+        "--silent",
+        "--raw",
+        "--no-deps",
+        "--fresh-env",
+        "--deny-all",
+        "--deny-env",
+        "--deny-net",
+        "--deny-read",
+        "--deny-write",
+    ];
+    if VALUE.contains(&tok) {
+        return Some(2);
+    }
+    if BOOL.contains(&tok) || is_verbose_short(tok) {
+        return Some(1);
+    }
+    None
+}
+
+fn is_verbose_short(tok: &str) -> bool {
+    tok.len() > 2 && tok.bytes().all(|b| b == b'-' || b == b'v') && tok.ends_with('v')
+}
+
+/// Inner command from a wrapper's own echo. Absent when the run was quiet or the
+/// line is the tool's output — those stay on the wrapper (fail open).
+fn echoed(settings: &rules::Settings, wrapper: &str, output: &str) -> Option<Resolved> {
+    let mut first: Option<Vec<String>> = None;
+    let mut stem = String::new();
+    let mut first_sub = String::new();
+    let mut sub_differs = false;
+    for line in output.lines() {
+        let Some(cmd) = echo_command(settings, wrapper, line) else {
+            continue;
+        };
+        if super::bounded::mixed_chain(&cmd) {
+            return Some(script_match());
+        }
+        let vis = visible_argv(&family_argv(&[cmd]));
+        let got = bin(&vis);
+        if got.is_empty() {
+            continue;
+        }
+        if stem.is_empty() {
+            stem = got.to_string();
+            first_sub = sub(&vis).to_string();
+            first = Some(vis);
+            continue;
+        }
+        if got != stem {
+            return Some(script_match());
+        }
+        if sub(&vis) != first_sub {
+            sub_differs = true;
+        }
+    }
+    let argv = first?;
+    if sub_differs {
+        return Some(Resolved {
+            argv: vec![stem],
+            multi: false,
+        });
+    }
+    Some(Resolved { argv, multi: false })
+}
+
+fn echo_command(settings: &rules::Settings, wrapper: &str, line: &str) -> Option<String> {
+    let stripped = strip_ansi(line);
+    if stripped.starts_with([' ', '\t']) {
+        return None;
+    }
+    let t = stripped.trim();
+    // A long line that starts with a known stem is tool output, not the echoed command.
+    if t.is_empty() || t.len() > 400 {
+        return None;
+    }
+    if let Some(cmd) = task_dollar(t) {
+        return Some(cmd.to_string());
+    }
+    if wrapper != "just" {
+        return None;
+    }
+    let words: Vec<String> = t.split_whitespace().map(str::to_string).collect();
+    let stem = cmd_stem(words.first()?);
+    if matches!(stem, "mise" | "just") {
+        return Some(t.to_string());
+    }
+    if filter_kind(settings, stem) != "default" && looks_like_invocation(&words) {
+        return Some(t.to_string());
+    }
+    None
+}
+
+fn task_dollar(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix('[')?;
+    let (name, cmd) = rest.split_once("] $ ")?;
+    if name.is_empty() || cmd.is_empty() {
+        return None;
+    }
+    Some(cmd)
+}
+
+fn looks_like_invocation(words: &[String]) -> bool {
+    let Some(second) = words.get(1) else {
+        return true;
+    };
+    let s = second.as_str();
+    if s.contains("ERR") || s.eq_ignore_ascii_case("error") || s.eq_ignore_ascii_case("warning") {
+        return false;
+    }
+    !s.contains(':')
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' && chars.peek() == Some(&'[') {
+            chars.next();
+            for d in chars.by_ref() {
+                if d.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn format(argv: &[String], output: &str) -> Option<String> {
@@ -127,6 +523,8 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("docker", "ps") => docker_ps(output),
         ("kubectl", "get") => kubectl_get(output),
         ("ps", "aux") => ps_aux(output),
+        ("df", _) => df_table(output),
+        ("sqlite3", _) => sqlite3_table(output),
         _ => None,
     }
 }
@@ -414,6 +812,87 @@ fn ps_aux(output: &str) -> Option<String> {
     } else {
         Some(rows.join("\n"))
     }
+}
+
+/// `df`: one row per mount. Inode columns are noise beside used/size; a body that is not a df table falls through to [`Rule::default`].
+fn df_table(output: &str) -> Option<String> {
+    let mut lines = output.lines().filter(|l| !l.trim().is_empty());
+    let header = lines.next()?;
+    let u = header.to_ascii_uppercase();
+    if !u.contains("FILESYSTEM")
+        || !(u.contains("MOUNTED") || u.contains("CAPACITY") || u.contains("USE%"))
+    {
+        return None;
+    }
+    let rows: Vec<String> = lines.filter_map(compact_df_row).collect();
+    // Past the default cap, head/tail of the raw table is smaller than one short
+    // row per mount. Stay on `Rule::default()` there.
+    if rows.is_empty() || rows.len() > 40 {
+        None
+    } else {
+        Some(rows.join("\n"))
+    }
+}
+
+fn compact_df_row(line: &str) -> Option<String> {
+    let t: Vec<&str> = line.split_whitespace().collect();
+    let p = t.iter().position(|tok| tok.ends_with('%'))?;
+    if p < 3 {
+        return None;
+    }
+    let fs = t[..p - 3].join(" ");
+    let size = t[p - 3];
+    let used = t[p - 2];
+    let pct = t[p];
+    let mut i = p + 1;
+    while i < t.len() && !t[i].contains('/') && df_inode_token(t[i]) {
+        i += 1;
+    }
+    if fs.is_empty() || i >= t.len() {
+        return None;
+    }
+    Some(format!("{fs} {used}/{size} {pct} {}", t[i..].join(" ")))
+}
+
+/// `sqlite3` rule lines (`----`, `+---+`) are not cells. Past [`Rule::default`]'s line cap, keeping every row is larger than that rule's head/tail cut.
+fn sqlite3_table(output: &str) -> Option<String> {
+    let lines: Vec<&str> = output.lines().collect();
+    let dropped = lines.iter().filter(|l| sqlite_rule_line(l)).count();
+    if dropped == 0 {
+        return None;
+    }
+    // Collapse padding: dropping only the rule line can still be larger than `Rule::default`.
+    let kept: Vec<String> = lines
+        .into_iter()
+        .filter(|l| !sqlite_rule_line(l))
+        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|l| !l.is_empty())
+        .collect();
+    if kept.is_empty() || kept.len() > 40 {
+        return None;
+    }
+    Some(kept.join("\n"))
+}
+
+fn sqlite_rule_line(line: &str) -> bool {
+    let t = line.trim();
+    t.len() >= 3
+        && t.bytes()
+            .all(|b| matches!(b, b'-' | b'=' | b' ' | b'+' | b'|'))
+        && t.bytes().any(|b| b == b'-' || b == b'=')
+}
+
+fn df_inode_token(tok: &str) -> bool {
+    if tok == "-" || tok.ends_with('%') {
+        return true;
+    }
+    let core = tok.trim_end_matches(|c: char| {
+        matches!(
+            c,
+            'k' | 'K' | 'm' | 'M' | 'g' | 'G' | 't' | 'T' | 'b' | 'B' | 'i' | 'I'
+        )
+    });
+    !core.is_empty() && core.bytes().all(|b| b.is_ascii_digit() || b == b'.')
 }
 
 fn keep(output: &str, needles: &[&str]) -> String {
@@ -767,6 +1246,53 @@ mod tests {
     }
 
     #[test]
+    fn wrappers_use_the_inner_formatter_when_the_command_is_visible() {
+        let settings = rules::Settings::builtin();
+        let body = "test a::bad ... FAILED\ntest result: FAILED. 1 failed\n";
+        let run = |cmd: &str, output: &str| compress(&settings, &[cmd.into()], output, 0, "id");
+        for cmd in [
+            "mise exec -- cargo test",
+            "mise x node@20 -- cargo test",
+            "mise exec -c 'cargo test'",
+            "just --command cargo test",
+            "just -c cargo test",
+            "cd /tmp && mise exec -- cargo test",
+        ] {
+            let (got, kind) = run(cmd, body);
+            assert_eq!(kind, "formatter", "{cmd}: {got}");
+            assert!(got.contains("FAILED"), "{cmd}: {got}");
+        }
+        let echoed = format!("[test] $ cargo test\n{body}");
+        let (got, kind) = run("mise run test", &echoed);
+        assert_eq!(kind, "formatter", "{got}");
+        let echoed = format!("mise exec -- cargo test\n{body}");
+        let (got, kind) = run("just test", &echoed);
+        assert_eq!(kind, "formatter", "{got}");
+        // Quiet runs print no command line, so the wrapper stem stays.
+        let (got, kind) = run("mise run test", body);
+        assert_ne!(kind, "formatter", "{got}");
+        let (got, kind) = run("just test", body);
+        assert_ne!(kind, "formatter", "{got}");
+    }
+
+    #[test]
+    fn two_echoed_programs_use_the_script_rule() {
+        let settings = rules::Settings::builtin();
+        let body = (0..40)
+            .map(|i| format!("line {i} of mixed output"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let output = format!("mise exec -- git status\n{body}\nmise exec -- cargo test\n{body}");
+        let (got, kind) = compress(&settings, &["just check".into()], &output, 0, "id");
+        assert_eq!(
+            family_of(&settings, &["just check".into()], &output),
+            "script"
+        );
+        assert_eq!(kind, "rule", "{got}");
+        assert!(got.contains("omitted"), "{got}");
+    }
+
+    #[test]
     fn family_names_windows_argv() {
         let argv = |s: &[&str]| s.iter().map(|w| w.to_string()).collect::<Vec<_>>();
         assert_eq!(family(&argv(&[r"C:\tools\git.exe", "status"])), "git");
@@ -842,6 +1368,46 @@ mod tests {
         );
         assert_ne!(kind, "formatter", "{got}");
         assert!(got.contains("invalid option"), "{got}");
+        let (got, kind) = compress(
+            &settings,
+            &argv(&["df", "-h"]),
+            "df: /nope: No such file or directory\n",
+            1,
+            "deadbeef",
+        );
+        assert_ne!(kind, "formatter", "{got}");
+        let (got, kind) = compress(
+            &settings,
+            &argv(&["sqlite3", "db"]),
+            "1|alpha\n2|beta\n",
+            0,
+            "deadbeef",
+        );
+        assert_ne!(kind, "formatter", "{got}");
+    }
+
+    #[test]
+    fn df_sqlite_and_awk_beat_the_default_rule() {
+        let settings = rules::Settings::builtin();
+        let dir = goldens();
+        for file in ["df.in", "sqlite3.in", "awk.in"] {
+            let raw = fs::read_to_string(dir.join(file)).unwrap();
+            let (argv, exit, _, output) = parse_in(&raw);
+            let (got, _) = compress(&settings, &argv, &output, exit, "deadbeef");
+            let rule_out = rules::apply(
+                &settings,
+                &output,
+                exit,
+                &rules::Rule::default(),
+                "deadbeef",
+            );
+            assert!(
+                got.len() < rule_out.len(),
+                "{file}: {} B vs default {} B\n{got}",
+                got.len(),
+                rule_out.len()
+            );
+        }
     }
 
     #[test]
@@ -906,6 +1472,8 @@ mod tests {
             ("docker", "ps"),
             ("kubectl", "get"),
             ("ps", "aux"),
+            ("df", ""),
+            ("sqlite3", ""),
         ];
         // A stem added to `FORMATTER_STEMS` without a row here fails too.
         for stem in FORMATTER_STEMS {
@@ -971,5 +1539,67 @@ mod tests {
             .filter(|family| family != "script" && !covered(family))
             .collect();
         assert!(missing.is_empty(), "families without a golden: {missing:?}");
+    }
+
+    fn words(s: &str) -> Vec<String> {
+        s.split_whitespace().map(str::to_string).collect()
+    }
+
+    /// T386: the inner command is used only when it is on the argv line or on the
+    /// wrapper's own echo. A flag we do not know, or a quiet run, stays on the wrapper.
+    #[test]
+    fn wrappers_use_the_inner_command_when_it_is_visible() {
+        let settings = rules::Settings::builtin();
+        let failed = "test a::bad ... FAILED\ntest result: FAILED. 1 failed\n";
+        assert_eq!(
+            family_of(&settings, &words("mise exec -- cargo test"), failed),
+            "cargo"
+        );
+        assert_eq!(
+            family_of(
+                &settings,
+                &words("mise x -C /tmp -- git status"),
+                "On branch\n"
+            ),
+            "git"
+        );
+        assert_eq!(
+            family_of(&settings, &words("mise exec node@20 -- node -v"), "v20\n"),
+            "node"
+        );
+        assert_eq!(
+            family_of(&settings, &words("just -c cargo test"), failed),
+            "cargo"
+        );
+        assert_eq!(family_of(&settings, &words("mise exec -c"), failed), "mise");
+        let run = format!("[test] $ cargo test\n{failed}");
+        assert_eq!(family_of(&settings, &words("mise run test"), &run), "cargo");
+        assert_eq!(
+            family_of(&settings, &words("mise run test"), failed),
+            "mise"
+        );
+        assert_eq!(
+            family_of(&settings, &words("mise exec cargo test"), failed),
+            "mise"
+        );
+        let just = "git status\nOn branch main\n";
+        assert_eq!(family_of(&settings, &words("just status"), just), "git");
+        let colored = "\u{1b}[32mgit status\u{1b}[0m\nOn branch main\n";
+        assert_eq!(family_of(&settings, &words("just status"), colored), "git");
+        assert_eq!(
+            family_of(
+                &settings,
+                &words("just check"),
+                "Checking foo v0.1.0\nFinished dev\n"
+            ),
+            "just"
+        );
+        let mixed = "mise exec -- cargo test\nmise exec -- git status\n";
+        assert_eq!(family_of(&settings, &words("just check"), mixed), "script");
+        let nested = format!("[test] $ cargo test\n{failed}");
+        assert_eq!(
+            family_of(&settings, &words("mise exec -- just test"), &nested),
+            "cargo"
+        );
     }
 }

@@ -62,7 +62,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T348 | todo | research | 1 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T358 | todo | P2 | 4 | 0% | |
-| T368 | todo | P1 | 3 | 0% | |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T371 | todo | P2 | 2 | 0% | |
@@ -71,7 +70,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
-| T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.2 | todo | P2 | 3 | 20% | |
@@ -86,7 +84,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
-| T386 | todo | P2 | 2 | 30% | |
 | T389 | todo | P2 | 1 | 30% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
@@ -130,6 +127,11 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
+| T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
+| T416.1 | todo | P1 | 2 | 0% | |
+| T416.2 | todo | P1 | 3 | 0% | |
+| T416.3 | todo | P2 | 3 | 0% | |
+| T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 
 
@@ -1534,16 +1536,6 @@ Check: every item below passes.
 - `rtok config validate` accepts every new key; each has its `default.toml` row and `docs/config.md` row; `just check` green.
 - The screenshot's layout (summary, warning, per-agent table, monthly totals) is what `rtok agents usage` prints for the fixture.
 
-### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
-
-From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` (`src/plugins/graph/mod.rs:312`) only says "ambiguous", and `impact_bfs` (`mod.rs:836`) walks all of them. Empryo resolves an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drops names referenced in more than ~5 % of files from ranking. rtok stores only the last import path segment (`scoped` in `src/plugins/graph/index.rs`, `scope` is empty for `kind == "import"`), so (a) needs the full import path. Overlaps T8.8 (graph_truth fixture) and I-28 / T52.3 (they share the IDF table).
-
-Plan: store the full import path of an `import` row in `scope` (no new column) and bump `extractor_fingerprint()` (`index.rs`) so roots reindex once. New `Store` query next to `symbol_ref_groups` / `symbol_imports` (`src/store/symbols.rs:574`, `:897`): per reference file, the candidate definition files it imports. Rank: imported candidate first, then same directory, then the rest, ties by IDF; `callers` / `explore` print the top candidate group and a `+N other definitions of <name>` line; `impact_bfs` follows only edges whose definition is the resolved one (all edges when nothing resolves — the current behaviour). IDF per root is one `GROUP BY name` over `symbols`, computed at index end.
-
-Done when: for an ambiguous name with an import-resolvable definition, `callers` and `impact` list only that definition's references first and name the rest in one line; unresolvable names behave as today.
-
-Check: extend `tests/fixtures/graph_truth.toml` with at least 10 ambiguous names (two crates/packages defining the same name); `tests/graph_truth.rs` callers precision on those +20 pp vs `main`, recall drop ≤ 2 pp, T8.8 overall score stays ≥ 0.93; `impact` output bytes on the ambiguous set −30 %; `just check`.
-
 ### T369.1. Measure grep_symbol follow-up rate after an opt-in window
 
 Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of follow-up Grep/Read on the same name within 3 calls (`guard/grep_symbol` rows against the transcripts). At most 25 % means propose default-on to the creator; above it, keep the flag opt-in and record why. Also re-measure the PreToolUse hook p95 on an idle machine (`cargo test --release --test latency -- --test-threads=1`; the flag-on test is `latency_hook_grep_symbol_answer_p95_under_10ms`); on 2026-10-06 the load average was 46 and even the baseline run failed the 10 ms gate. Record the result as a dated row in `research.md` §29.5.
@@ -1628,19 +1620,6 @@ Plan: per-root trigram posting lists (`file_id` bitmaps, `roaring` only with a `
 Done when: a literal `search` on a 50k-file repo scans only candidate files and returns the same hits.
 
 Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
-
-### T381. `rtok config init` must not freeze today's defaults into the user's file
-
-Ivan, 2026-10-04: a user's `config.toml` keeps whatever defaults were current on the day it was written. `Config::init_maybe` (`src/config/mod.rs`) writes `config/default.toml` verbatim, every key uncommented, so each value is an explicit setting. When a default changes later, the user never gets it. Seen on the creator's machine: T127 (#144) turned `toon` on by default, but `~/.rtok/config.toml` still said `[plugins.toon] enabled = false`, so `toon` stayed off with nothing pointing at the cause.
-
-Done means:
-
-- `rtok config init` writes a file that documents without pinning: every key and its comment stay, but the default values are commented out (`# enabled = true`), so a key the user never touched follows the current default. `rtok config validate` accepts the new file, and an empty `config.toml` behaves the same as one written by `config init`.
-- Existing files: `rtok doctor` (or `rtok config validate`) lists each explicit key whose value differs from the current default. It is a note, not an error, and names the key, the value, the default and the line. Nothing is rewritten automatically: rtok cannot tell a stale default from a deliberate choice, so the user decides.
-- Stale docs fixed in the same change: `src/plugins/toon/AGENTS.md` ("Stays `default_on: false` until …", while `default_on` has been `true` since T127) and `research.md` §16.1 table row "JSON tables → TOON (off by default)".
-- Tests: `tests/trycmd/config-init.toml` re-blessed; a unit test checks that every default in `DEFAULT_TOML` is commented out and that parsing it yields `Config::default()`; a doctor fixture with `toon` pinned off shows the note.
-
-Check: the `DEFAULT_TOML` unit test (every default commented out, parsing yields `Config::default()`), the re-blessed `tests/trycmd/config-init.toml` and the doctor fixture with `toon` pinned off pass; `rtok config init --dry-run` on a scratch home shows only commented values; `just check`.
 
 ### T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 
@@ -1751,14 +1730,6 @@ Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just che
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
 
 Check: the dated `research.md` row.
-
-### T386. `cmd`: see through `mise` and `just` wrappers, and rule the remaining top families
-
-From `research.md` §15.3 (T50.1 default-rule families): `mise` is the largest family still on `Rule::default()` (37 rows, 41,423 after-bytes), then `sqlite3` (8,556 B), `awk` (4,954 B), `just` (4,018 B) and `df` (3,451 B). `cmd_stem` is the basename of argv[0], so `mise exec -- cargo test` is never filtered as `cargo`.
-
-Done means: `mise exec -- <cmd>`, `mise x -- <cmd>`, `mise run <task>` and `just <recipe>` resolve to the inner command's formatter or rule when the inner command is visible on the line. Rules or formatters for `sqlite3`, `df` and `awk` land only where a golden fixture beats `Rule::default()`. The `bash_default` top-20 is re-measured and recorded in §15.3 with a date.
-
-Check: golden fixtures for each wrapper form and each new rule; `rtok stats` before/after row in §15.3; `just check`.
 
 ### T389. Price row for Fable 5.1 in `[stats.prices]`
 
@@ -2103,6 +2074,40 @@ Charts on the same time axis (the calls chart, the calls and live-sessions KPI m
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
+### T416. Shared `change-preview` crate for dry-run output
+
+Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
+
+The crate renders two kinds of change. A file edit (path, before, after) is a unified diff with the `a/` and `b/` headers `render::unified_diff` prints today, or in stat mode a `path | 7 +++--` line; a removal (path, bytes, files) is `- path  12.1 GB  48 213 files`. Both modes end with a totals line: `3 files changed, 12 insertions(+), 4 deletions(-)` for edits, `15 paths, 1 204 311 files, -106.2 GB` for removals. Colour goes through owo-colors' `if_supports_color` exactly as `render::paint` does; byte sizes through the crate's `human_bytes` (the same binary units as `info::human_bytes`); everything derives `Serialize` for `--json`.
+
+Plan: in `packages/crates` (branch `t1-change-preview`), add the crate's project files (`AGENTS.md`, `plan.md`, `todo.md`, `done.md`, `roadmap.md`, `ideas.md`, `toolchain.md`) and the crate as a workspace member, with unit tests for both modes, the totals and the colour switch; `bump.yml` gains a `package` choice and `release.yml` reads the crate from the tag, so the pipeline that releases `file-backup` releases this crate too; one PR there; then `bump.yml -f package=change-preview` publishes it. The crates.io token must allow publishing the new crate name.
+
+Check: `cargo test` and `cargo clippy -- -D warnings` green in `packages/crates`; the crate is on crates.io.
+
+### T416.1. rtok renders previews through `change-preview`
+
+Replace `render::unified_diff`, `render::file_diff`, `render::paint` and `info::human_bytes` with the crate (call sites: `config/mod.rs`, `config/validate.rs`, `plugins/memory/sync.rs`, `plugins/read/cache.rs`, `doctor/fix.rs`, `agents/mod.rs`, `agents/junk.rs`, `worktree/list.rs`, `worktree/clean.rs`). No output changes: the trycmd and installer tests stay byte-identical. Drop `similar` from `Cargo.toml` if nothing else uses it.
+
+Check: `just check` green with no expected-output file touched.
+
+### T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
+
+`worktree clean`, `worktree gc` and `agents junk clear` keep dry run as the default and gain `--dry-run` (the same thing, said explicitly; conflicts with `--yes`) and `--stat`. Both modes print one `- path  size  N files` line per path plus the totals line, because a removal's line already is its stat; `--stat` is accepted so every preview command takes the same flags. `junk::disk_usage_until` counts files next to bytes; `--json` gains `files`.
+
+Check: trycmd cases for each command in default, `--stat`, `--dry-run --yes` (rejected) and `--json`; `just check` green.
+
+### T416.3. `--stat` on the commands that show a diff
+
+`config init`, `config set`, `memory sync`, `agents install`, `agents uninstall`, `agents update` and `doctor --fix` gain `--stat`: the per-file stat lines and the totals line instead of the diff. The default `--dry-run` diff ends with the same totals line.
+
+Check: trycmd cases for `--dry-run` and `--dry-run --stat` on `config set` and one installer; `surface_parity` and `config_coverage` green; `just check` green.
+
+### T416.4. `--dry-run` for the destructive commands without a preview
+
+`worktree remove` (the worktree path, its branch and its size and file count), `completions install` and `completions uninstall` (the file diff), `graph projects remove` and `graph projects unlink` (the rows that would go). Out of scope, because they are easy to undo or change no files: `memory pin/unpin/retire/revise`, `agents send/status`, `graph projects add/select/link`, `demon *`, `otel flush`.
+
+Check: a test per command that the dry run changes nothing and prints the preview; `just check` green.
+
 ### T428. SessionStart hook back under the 10 ms budget
 
 Renumbered from T418 on 2026-10-06: T418 is the finished `rtok worktree gc` task in `done.md`.
@@ -2285,7 +2290,7 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T368, T369, T370, T371, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95).
+Take first, in order: T369, T370, T371, T372, T373, T374. Then T376, T375, T377, T378 (gated on I-95). T368 is done.
 
 The 14 portable ideas and where each landed:
 

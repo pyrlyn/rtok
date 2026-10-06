@@ -258,7 +258,14 @@ fn config_init_get_set_validate_round_trips() {
     );
     ok(&["config", "set", "proxy.port", "8791"], &home);
     assert_eq!(ok(&["config", "get", "proxy.port"], &home).trim(), "8791");
-    assert!(ok(&["config", "validate"], &home).starts_with("ok"));
+    // A pin that is not today's default is a note, then the same ok line.
+    let validated = ok(&["config", "validate"], &home);
+    assert!(
+        validated.lines().any(|line| line.starts_with("ok "))
+            && validated.contains("proxy.port = 8791")
+            && validated.contains("(default 8790)"),
+        "{validated}"
+    );
     let _ = fs::remove_dir_all(&home);
 }
 

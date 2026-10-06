@@ -1782,7 +1782,16 @@ pub fn bash_family(cmd: &str) -> String {
         }
     }
     let first = s.split_whitespace().next().unwrap_or("other");
-    // Split `/` and `\` + strip `.exe` so Windows session logs still bucket by family.
+    // T386: `mise exec -- cargo test` buckets as `cargo`. The peel lives in `cmd`
+    // (`visible_argv`); without that plugin the stem stays argv[0], as before.
+    #[cfg(feature = "cmd")]
+    {
+        let words: Vec<String> = s.split_whitespace().map(str::to_string).collect();
+        let vis = crate::plugins::cmd::formatters::visible_argv(&words);
+        let stem = vis.first().map(String::as_str).unwrap_or(first);
+        crate::agents::cmd_stem(stem).to_string()
+    }
+    #[cfg(not(feature = "cmd"))]
     crate::agents::cmd_stem(first).to_string()
 }
 
@@ -1950,6 +1959,18 @@ mod tests {
         assert_eq!(bash_family("sed -n 1p"), "sed");
         assert_eq!(bash_family(r"C:\Git\cmd\git.exe status"), "git");
         assert_eq!(bash_family("cargo.exe test"), "cargo");
+    }
+
+    #[cfg(feature = "cmd")]
+    #[test]
+    fn bash_family_sees_through_mise_exec() {
+        assert_eq!(bash_family("mise exec -- cargo test"), "cargo");
+        assert_eq!(bash_family("mise x node@20 -- git status"), "git");
+        assert_eq!(bash_family("just --command cargo test"), "cargo");
+        assert_eq!(bash_family("cd /tmp && mise exec -- cargo test"), "cargo");
+        assert_eq!(bash_family("mise run test"), "mise");
+        assert_eq!(bash_family("just check"), "just");
+        assert_eq!(bash_family("just test"), "just");
     }
 
     #[test]
