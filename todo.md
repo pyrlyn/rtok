@@ -130,3 +130,6 @@
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
+- T431. Strip noise from request bodies before they are saved
+- T432. Strip terminal noise from proxy requests before they go upstream
+- T433. Save hook session fields once instead of in every hook body

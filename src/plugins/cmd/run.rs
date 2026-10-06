@@ -223,7 +223,7 @@ fn canonical(body: &[u8]) -> Vec<u8> {
     let mut i = 0usize;
     while i < body.len() {
         match body[i] {
-            0x1b => i = skip_escape(body, i),
+            0x1b => i = crate::sanitize::skip_escape(body, i),
             b'\n' => {
                 push_canonical_line(&line, &mut out);
                 line.clear();
@@ -256,36 +256,6 @@ fn push_canonical_line(line: &[u8], out: &mut Vec<u8>) {
         out.push(b'\n');
     }
     out.extend_from_slice(t);
-}
-
-/// Skip one ANSI escape at `i` (CSI `ESC [ … final`, OSC `ESC ] … BEL|ESC \`, else
-/// `ESC` + one byte) and return the index after it.
-fn skip_escape(body: &[u8], i: usize) -> usize {
-    let mut j = i + 1;
-    match body.get(j) {
-        Some(b'[') => {
-            j += 1;
-            while matches!(body.get(j), Some(c) if !(0x40..=0x7e).contains(c)) {
-                j += 1;
-            }
-            j + 1
-        }
-        Some(b']') => {
-            j += 1;
-            while j < body.len() {
-                if body[j] == 0x07 {
-                    return j + 1;
-                }
-                if body[j] == 0x1b && body.get(j + 1) == Some(&b'\\') {
-                    return j + 2;
-                }
-                j += 1;
-            }
-            j
-        }
-        Some(_) => j + 1,
-        None => j,
-    }
 }
 
 /// Run `args` via the configured/host shell, archive stdout+stderr, print, return the exit

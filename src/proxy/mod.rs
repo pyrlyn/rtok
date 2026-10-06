@@ -97,6 +97,7 @@ pub struct ProxyState {
 impl ProxyState {
     pub fn new(cfg: &Config) -> Result<Self> {
         let store = Store::open(&cfg.core.db_path)?;
+        store.set_store_raw(cfg.core.store_raw);
         // A *read* timeout, not `Client::timeout`: the latter is a deadline on the whole
         // exchange, body stream included, so a turn that streams for longer than
         // `proxy.timeout_s` (extended thinking, many tool calls) was cut mid-SSE with the

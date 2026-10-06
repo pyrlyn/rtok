@@ -59,6 +59,8 @@ const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(1
 pub struct Store {
     conn: Mutex<SqliteConnection>,
     wait: LockWait,
+    /// `[core] store_raw` (T431): save request bodies verbatim instead of cleaned.
+    store_raw: std::sync::atomic::AtomicBool,
 }
 
 /// How long one connection waits on another process's lock (T178).
@@ -207,6 +209,7 @@ impl Store {
         let store = Self {
             conn: Mutex::new(conn),
             wait,
+            store_raw: std::sync::atomic::AtomicBool::new(false),
         };
         store.migrate()?;
         Ok(store)
@@ -594,6 +597,13 @@ impl Store {
             .with_context(|| format!("call {call_id} has no session"))
     }
 
+    /// `[core] store_raw` (T431): with `true`, [`Store::insert_call_io`] saves request bodies
+    /// verbatim. Off by default, so a store opened without the config still cleans.
+    pub fn set_store_raw(&self, raw: bool) {
+        self.store_raw
+            .store(raw, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// T208: the up-to-two payload files are written before the transaction (SQLite cannot
     /// hold them), then their `archive` rows and the `call_io` row commit together. A failed
     /// insert rolls back the rows and removes only the files this call created — a body
@@ -607,8 +617,15 @@ impl Store {
         archive_dir: Option<&Path>,
     ) -> Result<()> {
         let session = self.call_session(call_id)?;
+        // T431: cleaned before the spill, so the sha, the size and the archive file all
+        // describe the bytes that were saved.
+        let raw = self.store_raw.load(std::sync::atomic::Ordering::Relaxed);
+        let request = request.map(|r| match raw {
+            true => std::borrow::Cow::Borrowed(r),
+            false => crate::sanitize::body(r),
+        });
         let (req_json, req_arch, req_bytes, req_sha, req_path, req_created, req_raw) =
-            self.spill(request, inline_cap, archive_dir)?;
+            self.spill(request.as_deref(), inline_cap, archive_dir)?;
         let (res_json, res_arch, res_bytes, res_sha, res_path, res_created, res_raw) =
             self.spill(response, inline_cap, archive_dir)?;
         let mut created_files = Vec::new();
@@ -3168,6 +3185,67 @@ mod tests {
             )
             .unwrap();
         (store, id)
+    }
+
+    /// T431: a request body is saved cleaned — the size and the sha describe the saved bytes —
+    /// and verbatim once `[core] store_raw` is on; the response is never touched.
+    #[test]
+    fn request_bodies_are_saved_clean_unless_store_raw() {
+        let dir = std::env::temp_dir().join(format!("rtok-io-clean-{}", std::process::id()));
+        let (store, id) = io_fixture(&dir);
+        let dirty = "{\"prompt\":\"<system-reminder>\\nx\\n</system-reminder>\\n\\u001b[31mfix\\u001b[0m it  \\r\\n\"}";
+        let reply = "{\"out\":\"\\u001b[1mok\\u001b[0m\"}";
+        let saved = |store: &Store, id: i32| -> (String, String, i64, String) {
+            let mut conn = store.lock().unwrap();
+            call_io::table
+                .filter(call_io::call_id.eq(id))
+                .select((
+                    call_io::request_json.assume_not_null(),
+                    call_io::response_json.assume_not_null(),
+                    call_io::request_bytes,
+                    call_io::request_sha256.assume_not_null(),
+                ))
+                .first(&mut *conn)
+                .unwrap()
+        };
+        store
+            .insert_call_io(
+                id,
+                Some(dirty.as_bytes()),
+                Some(reply.as_bytes()),
+                65536,
+                None,
+            )
+            .unwrap();
+        let (req, res, bytes, sha) = saved(&store, id);
+        assert_eq!(req, r#"{"prompt":"fix it\n"}"#);
+        assert_eq!(res, reply);
+        assert_eq!(bytes, req.len() as i64);
+        assert_eq!(sha, hex_sha256(req.as_bytes()));
+
+        store.set_store_raw(true);
+        let raw_id = store
+            .insert_call(
+                "s1",
+                "mcp",
+                "mcp_call",
+                Some(1),
+                None,
+                None,
+                Some("read"),
+                Some("raw"),
+            )
+            .unwrap();
+        store
+            .insert_call_io(raw_id, Some(dirty.as_bytes()), None, 65536, None)
+            .unwrap();
+        let mut conn = store.lock().unwrap();
+        let req: Option<String> = call_io::table
+            .filter(call_io::call_id.eq(raw_id))
+            .select(call_io::request_json)
+            .first(&mut *conn)
+            .unwrap();
+        assert_eq!(req.as_deref(), Some(dirty));
     }
 
     #[test]

@@ -78,6 +78,7 @@ call_io_inline_bytes = 65536          # MCP/API bodies larger than this go to ar
 hook_max_input_bytes = 8388608        # rtok hook <event> stdin cap (8 MiB); over it, exits 0 unmodified, no archiving or hashing (T201)
 retain_calls_days    = 30             # 0 = keep `calls` forever
 retain_hook_bodies_days = 3           # hook stdin bodies cleared after N days, rows kept; 0 = as long as `calls` (T352)
+store_raw = false                     # true = save request bodies verbatim; false strips escapes, control chars, harness wrappers, trailing blanks (T431)
 
 [log]                                 # rtok's own log (D26); `rtok logs` reads it
 path      = "~/.rtok/logs/rtok.log"   # rotated siblings live beside it: rtok.log.1 … .5

@@ -136,6 +136,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
+| T431 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
+| T432 | todo | P2 | 3 | 0% | |
+| T433 | todo | P2 | 4 | 0% | |
 
 
 
@@ -2128,6 +2131,26 @@ Check: unit tests for the CSV writer (quoting, escaping, empty table); a story a
 Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
+
+### T431. Strip noise from request bodies before they are saved
+
+Every request body rtok saves (`call_io.request_json`, its archive spill, and through them the OTel export) is the client's bytes verbatim. A 2026-10-05 scan of `~/.rtok/rtok.db` (276k hook calls) found harness wrappers in prompts (`<task-notification>` 425, `<ci-monitor-event>` 113, `<system-reminder>` 87, `<local-command-caveat>` 10), ANSI escapes in 89 tool responses, CRLF in 47 bodies and trailing whitespace. Done when `Store::insert_call_io` cleans each request body before it spills: in a JSON body every string value, else UTF-8 text; ANSI escapes, control characters other than `\n`/`\t`, zero-width spaces and BOMs removed; the four harness wrapper blocks removed; CRLF and lone CR become LF, trailing spaces and tabs go, three or more newlines collapse to two. A body with nothing to clean keeps its bytes; non-UTF-8 bodies are kept as is. `[core] store_raw = true` keeps the verbatim body; the default is `false`.
+
+Plan: `src/sanitize.rs` (pure, the ANSI walk moved from `plugins/cmd/run.rs` so both share it), `Store` keeps a `store_raw` flag set by `Runtime` and `ProxyState` from `[core] store_raw`, `insert_call_io` cleans the request; `config/mod.rs` + `config/default.toml` + `docs/config.md`. Tests: unit cases per rule, idempotence, JSON keys and numbers untouched, untouched bodies byte-identical, invalid UTF-8 kept; a store test that a dirty hook body is saved clean and saved verbatim with `store_raw`.
+
+Check: `cargo nextest run --lib sanitize store`, `--test config_coverage`, `just check`.
+
+### T432. Strip terminal noise from proxy requests before they go upstream
+
+The proxy forwards tool results to the model with ANSI escapes and control characters, which cost tokens and carry nothing. Done when the proxy runs T431's cleaner over the text of request messages before sending, limited to ANSI escapes, control characters and zero-width characters, byte-stable across turns so the prompt cache still hits. Harness wrappers stay: they are instructions to the model. Whitespace is decided at claim time: trailing-space or CRLF changes in a tool result can make the model's exact-match edits miss the file.
+
+Check: a proxy test sends a tool result with escapes and asserts the upstream body has none and repeats byte for byte on the next turn.
+
+### T433. Save hook session fields once instead of in every hook body
+
+Every saved hook stdin repeats the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Done when they are stored once per distinct value set in their own table referenced from the call, the saved body keeps only the event's own fields, and the full stdin can be rebuilt for readers (OTel, web). `[core] store_raw = true` keeps the full body. Design (table, migration, readers) is written into this card before code.
+
+Check: a store test saves two hook calls of one session and reads back both full bodies from one session row.
 
 ## Reference
 
