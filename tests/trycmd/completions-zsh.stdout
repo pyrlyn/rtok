@@ -1533,6 +1533,7 @@ _arguments "${_arguments_options[@]}" : /
         case $line[1] in
             (index)
 _arguments "${_arguments_options[@]}" : /
+'()--project=[Project id or directory (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--dry-run[Report what would be indexed and write no rows]' /
 '-h[Print help]' /
@@ -1542,6 +1543,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (dead)
 _arguments "${_arguments_options[@]}" : /
+'()--project=[Project id or directory (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON rows instead of /`path/:line kind name/` lines (uncapped)]' /
 '-h[Print help]' /
@@ -1551,6 +1553,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (status)
 _arguments "${_arguments_options[@]}" : /
+'()--project=[Project id or directory (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[]' /
 '-h[Print help]' /
@@ -1562,6 +1565,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--depth=[]:DEPTH:_default' /
 '--to=[]:TO:_default' /
+'()--project=[Project id or directory (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '-h[Print help]' /
 '--help[Print help]' /
@@ -1682,6 +1686,7 @@ esac
 (affected)
 _arguments "${_arguments_options[@]}" : /
 '(--staged)--since=[Diff against this ref]:SINCE:_default' /
+'--project=[Project id or directory instead of the cwd (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--staged[Staged files only (/`git diff --cached --name-only/`)]' /
 '--json[JSON instead of /`file ← via symbol/` lines]' /

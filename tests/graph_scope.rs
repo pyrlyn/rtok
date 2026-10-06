@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T329.4.1: the `project` argument of the MCP tools `symbol` and `callers`, through
-//! `rtok mcp` over four fixture projects: `a` links `b`, `b` links `c`, `d` stands alone.
+//! T329.4.1, T329.4.2: the `project` argument of the five graph MCP tools and the CLI
+//! `--project` flag, through `rtok` over four fixture projects: `a` links `b`, `b` links `c`, `d` stands alone.
 
 use std::fs;
 use std::io::Write;
@@ -30,6 +30,24 @@ fn rtok(home: &Path, args: &[&str]) {
         "{args:?}: {}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
+
+/// One `rtok graph …` run in `cwd`: stdout on success, stderr otherwise.
+fn cli(home: &Path, cwd: &Path, args: &[&str]) -> Result<String, String> {
+    let out = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .arg("graph")
+        .args(args)
+        .current_dir(cwd)
+        .env("RTOK_HOME", home)
+        .env("HOME", home)
+        .output()
+        .unwrap();
+    let text = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+    if out.status.success() {
+        Ok(text(&out.stdout))
+    } else {
+        Err(text(&out.stderr))
+    }
 }
 
 /// One `tools/call` against a fresh `rtok mcp` rooted at `cwd`; the text of the result.
@@ -138,4 +156,87 @@ fn symbol_finds_the_definition_in_a_linked_project() {
         serde_json::json!({"name": "shared"}),
     );
     assert_eq!(out, "[c] lib.rs:1 function\nfn shared() {}\n");
+}
+
+#[test]
+fn impact_crosses_the_links_and_the_cli_flag_agrees_with_the_mcp_argument() {
+    let home = world("impact");
+    let a = home.join("a");
+    let expect = "1  [a] lib.rs  a_caller\n1  [b] lib.rs  b_caller\n";
+    let mcp = call(&home, &a, "impact", serde_json::json!({"name": "shared"}));
+    assert_eq!(mcp, expect);
+    assert_eq!(cli(&home, &a, &["impact", "shared"]).unwrap(), expect);
+    // From a directory outside every project, `--project` names the scope.
+    let elsewhere = home.join("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap();
+    for project in [a.to_str().unwrap(), "1"] {
+        let flag = cli(
+            &home,
+            &elsewhere,
+            &["impact", "shared", "--project", project],
+        );
+        assert_eq!(flag.unwrap(), expect);
+        let arg = call(
+            &home,
+            &elsewhere,
+            "impact",
+            serde_json::json!({"name": "shared", "project": project}),
+        );
+        assert_eq!(arg, expect);
+    }
+    // D is not linked: it answers for itself only.
+    let d = call(
+        &home,
+        &a,
+        "impact",
+        serde_json::json!({"name": "shared", "project": "4"}),
+    );
+    assert_eq!(d, "1  lib.rs  d_caller\n");
+    assert_eq!(
+        cli(&home, &a, &["impact", "shared", "--project", "4"]).unwrap(),
+        d
+    );
+}
+
+#[test]
+fn explore_and_outline_take_project() {
+    let home = world("explore");
+    let a = home.join("a");
+    let out = call(&home, &a, "explore", serde_json::json!({"query": "shared"}));
+    assert!(out.contains("= shared\n[c] lib.rs:1 function\n"), "{out}");
+    assert!(out.contains("shared \u{2190} 2\n"), "{out}");
+    let d = call(
+        &home,
+        &a,
+        "explore",
+        serde_json::json!({"query": "shared", "project": "4"}),
+    );
+    assert!(d.starts_with("no symbols resolved"), "{d}");
+    assert!(!d.contains("[c]"), "{d}");
+    let map = |project: &str| {
+        call(
+            &home,
+            &a,
+            "outline",
+            serde_json::json!({"path": "lib.rs", "project": project}),
+        )
+    };
+    assert!(map("4").contains("d_caller"));
+    assert!(map("1").contains("a_caller"));
+}
+
+#[test]
+fn the_cli_flag_resolves_a_project_for_the_single_project_subcommands() {
+    let home = world("flag");
+    let elsewhere = home.join("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap();
+    let status = cli(&home, &elsewhere, &["status", "--project", "4", "--json"]).unwrap();
+    assert!(status.contains("/d"), "{status}");
+    assert!(cli(&home, &elsewhere, &["dead", "--project", "4"]).is_ok());
+    assert!(cli(&home, &elsewhere, &["index", "--project", "4", "--dry-run"]).is_ok());
+    assert!(cli(&home, &elsewhere, &["affected", "--project", "4"]).is_ok());
+    let both = cli(&home, &elsewhere, &["status", "--project", "4", "."]);
+    assert!(both.unwrap_err().contains("cannot be used with"));
+    let bad = cli(&home, &elsewhere, &["impact", "x", "--project", "9999"]);
+    assert!(bad.unwrap_err().contains("no project"));
 }

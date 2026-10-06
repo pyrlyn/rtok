@@ -26,7 +26,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.4 | todo | P2 | 4 | 0% | |
-| T329.4.2 | todo | P2 | 3 | 0% | |
 | T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
@@ -870,14 +869,6 @@ T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph
 Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
 
 Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
-
-### T329.4.2. `project` argument and scoped traversal for `impact`, `explore`, `outline` and the CLI `--project` flag
-
-Second half of T329.4, depends on T329.4.1: the same scope layer for the MCP tools `impact` (walks up into A), `explore` and `outline`, plus the CLI `--project` flag on every graph subcommand that exists then (clap, man page, completions, trycmd goldens, `surface_parity`).
-
-Mention the `project` argument of the graph MCP tools wherever the docs list them (not checked in T329.4.1).
-
-Check: `impact` walks up into A; `explore` and `outline` take `project`; the CLI `--project` flag agrees with MCP; `just full-check`.
 
 ### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 

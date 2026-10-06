@@ -94,17 +94,17 @@ impl Plugin for Graph {
             ToolDef {
                 name: "impact",
                 description: "What breaks if a symbol changes: callers up to depth. Optional to: chains reaching it. Empty name + path lists affected tests.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"to":{"type":"string"},"depth":{"type":"integer"},"path":{"type":"string"}}}),
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"to":{"type":"string"},"depth":{"type":"integer"},"path":{"type":"string"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "outline",
                 description: "Definitions in one file (read mode=map).",
-                input_schema: json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+                input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"project":{"type":"string"}},"required":["path"]}),
             },
             ToolDef {
                 name: "explore",
                 description: "Answers a code question: the query's symbols as definitions with bodies, call paths between them, impact counts. Optional path narrows.",
-                input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"path":{"type":"string"}},"required":["query"]}),
+                input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"path":{"type":"string"},"project":{"type":"string"}},"required":["query"]}),
             },
         ]
     }
@@ -288,16 +288,12 @@ fn tags_know(cx: &Ctx, root: &Path, names: &[&str]) -> Result<bool> {
     Ok(false)
 }
 
-/// MCP dispatch for the four tools (`mcp.rs` `invoke`). An `Err` becomes an `isError` result.
-/// `scope` is the project scope of `symbol` and `callers` (T329.4.1), resolved by the caller
-/// because `Ctx` carries no project registry; the other tools still answer for the cwd.
+/// MCP dispatch for the five tools (`mcp.rs` `invoke`). An `Err` becomes an `isError` result.
+/// `scope` is the project scope of the call (T329.4.1, T329.4.2), resolved by the caller because
+/// `Ctx` carries no project registry. T263: every tool but `outline` walks its scope's roots
+/// (index or LSP server), so `scope::` checks each member.
 pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Result<String> {
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    // T263: every tool but `outline` walks `root` (index or LSP server); `symbol` and
-    // `callers` check each member of their scope instead.
-    if !matches!(name, "outline" | "symbol" | "callers") {
-        crate::plugins::read::walk_root_ok(&root)?;
-    }
     let own;
     let scope = if scope.is_empty() {
         own = [scope::Member {
@@ -319,23 +315,26 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
         "impact" => {
             let name = arg("name");
             if name.is_empty() {
+                // Affected tests are one project's (the scoped form is T329.5).
+                let root = &scope[0].root;
+                crate::plugins::read::walk_root_ok(root)?;
                 let path = arg("path");
                 let paths = if path.is_empty() {
                     Vec::new()
                 } else {
-                    vec![rel_of(&root, path)]
+                    vec![rel_of(root, path)]
                 };
                 affected_from_paths(
                     cx,
-                    &root,
+                    root,
                     &paths,
                     args["depth"].as_u64().unwrap_or(3) as u32,
                     false,
                 )
             } else {
-                impact_filtered(
+                scope::impact(
                     cx,
-                    &root,
+                    scope,
                     name,
                     args["depth"].as_u64().unwrap_or(2) as u32,
                     &filter,
@@ -343,8 +342,8 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                 )
             }
         }
-        "outline" => outline(cx, arg("path")),
-        "explore" => explore(cx, &root, arg("query"), &filter),
+        "outline" => scope::outline(cx, scope, arg("path")),
+        "explore" => scope::explore(cx, scope, arg("query"), &filter),
         _ => anyhow::bail!("unknown tool: {name}"),
     }
 }
@@ -713,6 +712,19 @@ pub fn cli_root(path: Option<PathBuf>) -> Result<PathBuf> {
     let meta = std::fs::metadata(&root).map_err(|e| anyhow::anyhow!("{}: {e}", root.display()))?;
     anyhow::ensure!(meta.is_dir(), "{}: not a directory", root.display());
     Ok(root)
+}
+
+/// T329.4.2: the root of a subcommand that works on one project: `--project` (id or directory,
+/// as `projects` resolves it), else `cli_root(path)`.
+pub fn cli_root_for(
+    store: &crate::store::Store,
+    path: Option<PathBuf>,
+    project: Option<String>,
+) -> Result<PathBuf> {
+    match project {
+        Some(target) => cli_root(Some(PathBuf::from(projects::resolve(store, &target)?.root))),
+        None => cli_root(path),
+    }
 }
 
 /// One `dead()` row (T52.4 / T230): an unreferenced private definition's location.
@@ -1113,34 +1125,54 @@ pub(crate) fn impact_bfs_follow(
     depth: u32,
     follow_imports: bool,
 ) -> Result<Vec<(u32, String, String)>> {
+    Ok(impact_walk_roots(cx, &[root], name, depth, follow_imports)?
+        .into_iter()
+        .map(|(_, d, path, scope)| (d, path, scope))
+        .collect())
+}
+
+/// The walk over the indexes of a project scope (T329.4.2): one frontier, asked of every root
+/// at each level, so a function in C reaches its callers in B and then theirs in A. A row's first
+/// field is the position of the root it was found in. Each root ranks an ambiguous name on its
+/// own files.
+pub(crate) fn impact_walk_roots(
+    cx: &Ctx,
+    roots: &[&str],
+    name: &str,
+    depth: u32,
+    follow_imports: bool,
+) -> Result<Vec<(usize, u32, String, String)>> {
     let mut seen: HashSet<String> = HashSet::from([name.to_string()]);
     let mut frontier = vec![name.to_string()];
     let mut out = Vec::new();
-    // Resolved once per name: an ambiguous callee only follows the winning definition (T368).
-    let mut ranked: HashMap<String, resolve::Hit> = HashMap::new();
+    // Resolved once per root and name: an ambiguous callee only follows the winning definition (T368).
+    let mut ranked: HashMap<(usize, String), resolve::Hit> = HashMap::new();
     for d in 1..=depth.clamp(1, 4) {
         let mut next = Vec::new();
         for from in &frontier {
-            if !ranked.contains_key(from) {
-                ranked.insert(from.clone(), resolve::rank_name(cx, root, from)?);
-            }
-            let allow = &ranked[from];
-            for (path, scope, ..) in cx.symbol_ref_groups(root, from)? {
-                if !allow.allows(&path) {
-                    continue;
+            for (i, root) in roots.iter().enumerate() {
+                let key = (i, from.clone());
+                if !ranked.contains_key(&key) {
+                    ranked.insert(key.clone(), resolve::rank_name(cx, root, from)?);
                 }
-                if scope.is_empty() {
-                    out.push((d, path, String::new()));
-                } else if seen.insert(scope.clone()) {
-                    out.push((d, path, scope.clone()));
-                    next.push(scope);
+                let allow = &ranked[&key];
+                for (path, scope, ..) in cx.symbol_ref_groups(root, from)? {
+                    if !allow.allows(&path) {
+                        continue;
+                    }
+                    if scope.is_empty() {
+                        out.push((i, d, path, String::new()));
+                    } else if seen.insert(scope.clone()) {
+                        out.push((i, d, path, scope.clone()));
+                        next.push(scope);
+                    }
                 }
-            }
-            if follow_imports {
-                for (path, def) in cx.symbol_import_follow(root, from)? {
-                    if seen.insert(def.clone()) {
-                        out.push((d, path, def.clone()));
-                        next.push(def);
+                if follow_imports {
+                    for (path, def) in cx.symbol_import_follow(root, from)? {
+                        if seen.insert(def.clone()) {
+                            out.push((i, d, path, def.clone()));
+                            next.push(def);
+                        }
                     }
                 }
             }
@@ -1321,6 +1353,7 @@ fn explore_tags(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<S
         root,
         filter,
         key: index::canon(root),
+        label: "",
     };
     let (text, before) = assemble_explore(query, filter, &mut parts)?;
     with_stale(cx, root, cap_kind(cx, text, before, "explore")?)
@@ -1333,6 +1366,8 @@ struct TagsExplore<'a> {
     root: &'a Path,
     filter: &'a Filter,
     key: String,
+    /// The `[project] ` label of a scoped answer (T329.4.2); empty for one project.
+    label: &'a str,
 }
 
 impl ExploreParts for TagsExplore<'_> {
@@ -1364,7 +1399,11 @@ impl ExploreParts for TagsExplore<'_> {
             ));
         }
         let callees = self.cx.symbol_callees(&self.key, name)?;
-        let mut text = defs_text(self.cx, self.root, &rows, &callees, &Tag::default());
+        let tag = Tag {
+            prefix: self.label,
+            suffix: "",
+        };
+        let mut text = defs_text(self.cx, self.root, &rows, &callees, &tag);
         if ranked.others > 0 {
             text.push_str(&other_defs_line(name, ranked.others));
         }
