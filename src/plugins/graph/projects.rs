@@ -169,7 +169,7 @@ fn list(rt: &Runtime, json: bool) -> Result<String> {
 }
 
 /// `<id|path>`: a number naming a known project is its id, anything else is a directory.
-fn resolve(store: &Store, target: &str) -> Result<Project> {
+pub(super) fn resolve(store: &Store, target: &str) -> Result<Project> {
     let by_id = target
         .parse::<i32>()
         .ok()
