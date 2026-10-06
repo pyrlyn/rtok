@@ -141,7 +141,12 @@ impl Store {
             return Ok(());
         }
         let project = self.register_project(path, origin)?;
-        if project.origin == origin && project.name.is_none() {
+        // Without a name there is nothing to set: the update would write NULL over NULL, and
+        // every SessionStart paid a write lock for it.
+        if project.origin == origin
+            && project.name.is_none()
+            && name.is_some_and(|n| !n.trim().is_empty())
+        {
             self.rename_project(project.id, name)?;
         }
         Ok(())
