@@ -33,7 +33,7 @@ static WRAPPER: LazyLock<Regex> = LazyLock::new(|| {
 /// nothing to clean comes back borrowed, byte for byte.
 pub fn body(bytes: &[u8]) -> Cow<'_, [u8]> {
     if let Ok(mut value) = serde_json::from_slice::<Value>(bytes) {
-        if !clean_value(&mut value) {
+        if !strings(&mut value, text) {
             return Cow::Borrowed(bytes);
         }
         return serde_json::to_vec(&value).map_or(Cow::Borrowed(bytes), Cow::Owned);
@@ -44,18 +44,23 @@ pub fn body(bytes: &[u8]) -> Cow<'_, [u8]> {
     }
 }
 
-/// Clean every string under `value` in place; true when any changed.
-fn clean_value(value: &mut Value) -> bool {
+/// Run `clean` over every string under `value` in place (keys, numbers and structure stay);
+/// true when any changed.
+pub fn strings(value: &mut Value, clean: fn(&str) -> Cow<'_, str>) -> bool {
     match value {
-        Value::String(s) => match text(s) {
-            Cow::Owned(clean) => {
-                *s = clean;
+        Value::String(s) => match clean(s) {
+            Cow::Owned(cleaned) => {
+                *s = cleaned;
                 true
             }
             Cow::Borrowed(_) => false,
         },
-        Value::Array(items) => items.iter_mut().fold(false, |hit, v| clean_value(v) | hit),
-        Value::Object(map) => map.values_mut().fold(false, |hit, v| clean_value(v) | hit),
+        Value::Array(items) => items
+            .iter_mut()
+            .fold(false, |hit, v| strings(v, clean) | hit),
+        Value::Object(map) => map
+            .values_mut()
+            .fold(false, |hit, v| strings(v, clean) | hit),
         _ => false,
     }
 }
@@ -64,7 +69,18 @@ fn clean_value(value: &mut Value) -> bool {
 /// ends, no trailing spaces or tabs, and at most one blank line in a row.
 pub fn text(s: &str) -> Cow<'_, str> {
     let unwrapped = WRAPPER.replace_all(s, "");
-    let clean = whitespace(&characters(&unwrapped));
+    let clean = whitespace(&characters(&unwrapped, true));
+    match clean == s {
+        true => Cow::Borrowed(s),
+        false => Cow::Owned(clean),
+    }
+}
+
+/// `s` without escapes, control and zero-width characters and nothing else (T432): wrappers,
+/// CR, trailing blanks and blank runs stay, because the model reads this text and its
+/// exact-match edits fail when a result's whitespace no longer matches the file.
+pub fn terminal_noise(s: &str) -> Cow<'_, str> {
+    let clean = characters(s, false);
     match clean == s {
         true => Cow::Borrowed(s),
         false => Cow::Owned(clean),
@@ -72,8 +88,8 @@ pub fn text(s: &str) -> Cow<'_, str> {
 }
 
 /// Drops ANSI escapes, zero-width spaces and BOMs, and control characters other than `\n`
-/// and `\t`; CRLF and a lone CR become LF.
-fn characters(s: &str) -> String {
+/// and `\t`. With `line_ends`, CRLF and a lone CR become LF; without, `\r` is kept.
+fn characters(s: &str, line_ends: bool) -> String {
     let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
     let mut i = 0;
@@ -83,9 +99,9 @@ fn characters(s: &str) -> String {
                 i = skip_escape(bytes, i);
                 continue;
             }
-            '\r' if bytes.get(i + 1) == Some(&b'\n') => {}
-            '\r' => out.push('\n'),
-            '\n' | '\t' => out.push(c),
+            '\r' if line_ends && bytes.get(i + 1) == Some(&b'\n') => {}
+            '\r' if line_ends => out.push('\n'),
+            '\n' | '\t' | '\r' => out.push(c),
             // U+200D stays: it joins emoji sequences, so dropping it changes what is shown.
             '\u{200b}' | '\u{2060}' | '\u{feff}' => {}
             c if c.is_control() => {}
@@ -197,6 +213,26 @@ mod tests {
         let got = text(input);
         assert_eq!(got, want, "{input:?}");
         assert_eq!(text(&got), got, "cleaning twice changes nothing: {input:?}");
+    }
+
+    #[rstest]
+    #[case::escapes("\u{1b}[31mred\u{1b}[0m \u{1b}]8;;u\u{7}l\u{1b}]8;;\u{7}", "red l")]
+    #[case::control_and_zero_width("a\u{7}b\u{0}c\u{200b}d\u{feff}e\u{2060}", "abcde")]
+    #[case::whitespace_kept("a  \r\n\r\n\n\n\tb \t\n", "a  \r\n\r\n\n\n\tb \t\n")]
+    #[case::wrapper_kept(
+        "<system-reminder>\n\u{1b}[1mx\u{1b}[0m\n</system-reminder>\n\n\n",
+        "<system-reminder>\nx\n</system-reminder>\n\n\n"
+    )]
+    #[case::emoji_joiner_kept("👩\u{200d}💻", "👩\u{200d}💻")]
+    fn terminal_noise_touches_nothing_else(#[case] input: &str, #[case] want: &str) {
+        let got = terminal_noise(input);
+        assert_eq!(got, want, "{input:?}");
+        assert_eq!(terminal_noise(&got), got, "idempotent: {input:?}");
+    }
+
+    #[test]
+    fn terminal_noise_borrows_clean_text() {
+        assert!(matches!(terminal_noise("a  \r\nb\t"), Cow::Borrowed(_)));
     }
 
     #[test]

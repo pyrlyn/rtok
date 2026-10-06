@@ -125,7 +125,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
-| T432 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
@@ -2053,21 +2052,6 @@ Check: unit tests for the CSV writer (quoting, escaping, empty table); a story a
 Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
-
-### T432. Strip terminal noise from proxy requests before they go upstream
-
-The proxy forwards tool results to the model with ANSI escapes and control characters, which cost tokens and carry nothing. Done when the proxy runs T431's cleaner over the text of request messages before sending, limited to ANSI escapes, control characters and zero-width characters, byte-stable across turns so the prompt cache still hits. Harness wrappers stay: they are instructions to the model. Whitespace is decided at claim time: trailing-space or CRLF changes in a tool result can make the model's exact-match edits miss the file.
-
-Check: a proxy test sends a tool result with escapes and asserts the upstream body has none and repeats byte for byte on the next turn.
-
-Decision at claim: whitespace is left untouched. No trailing-space trimming, no CRLF normalisation, no blank-line collapsing, because the model's exact-match edits depend on it; `\n`, `\r` and `\t` are kept. Wrappers stay too.
-
-Plan:
-1. `src/sanitize.rs`: add `terminal_noise` (escapes, control and zero-width characters only, via the same `characters` walk with CR kept) and make the JSON string walk reusable as `strings`.
-2. `src/proxy/noise.rs`: `strip` cleans every tool result and user text block through the wire's `tool_results` and `live_blobs`; assistant turns are never touched (thinking blocks are signed). Unparseable or already clean bodies keep their original bytes.
-3. `src/proxy/mod.rs`: call it in `shape_request` in `compress` mode only, like the other rewrites; passthrough and plain stay byte-identical. No new config key.
-4. Tests: cleaner unit tests, `noise.rs` unit tests, and a proxy test that sends escapes twice and matches the exact upstream body both times.
-5. Verify with `just check`, then close the task.
 
 ### T433. Save hook session fields once instead of in every hook body
 
