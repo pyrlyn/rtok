@@ -27,7 +27,7 @@ macos-sign = true
 allow-dirty = ["ci"]
 # Injected into build-local-artifacts after checkout; discovers CODESIGN_IDENTITY on macOS.
 github-build-setup = "../build-setup.yml"
-# Releases start only from the Bump workflow (pyrlyn/infra bump.yml): it merges the version PR,
+# Releases start only from the Bump workflow (pyrlyn/ci bump.yml): it merges the version PR,
 # tags the landed commit, creates a draft Release and dispatches this workflow with --ref <tag>
 # -f tag=<tag>. dist never tags: it uploads to that draft and undrafts it (create-release).
 dispatch-releases = true
