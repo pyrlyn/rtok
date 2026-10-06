@@ -313,18 +313,37 @@ fn rtok_folders(cfg: &Config, cache: &Path) -> Vec<Folder> {
 /// project (`lsp::lsp_state_root`, a tool may be using it, so T152's idle rule applies) and
 /// its own platform cache dir.
 fn rtok_owned(cfg: &Config, cache: &Path) -> Vec<Owned> {
-    let own = |path: PathBuf, idle_rule| Owned {
-        path,
+    let mut owned = vec![Owned {
+        path: cache.to_path_buf(),
         evidence: junk_cache::RTOK_OWN,
-        idle_rule,
-    };
-    let mut owned = vec![own(cache.to_path_buf(), false)];
-    let projects = Store::open(&cfg.core.db_path).and_then(|s| s.projects());
-    for p in projects.unwrap_or_default() {
-        let state = crate::plugins::graph::lsp::lsp_state_root(Path::new(&p.root));
-        owned.extend(["cache", "pub-cache"].map(|d| own(state.join(d), true)));
-    }
+        idle_rule: false,
+    }];
+    owned.extend(project_lsp_caches(cfg));
     owned
+}
+
+/// Language-server caches rtok confines to each registered project. Absent from the
+/// `measure`-only build: that binary has no graph plugin, so it never writes these dirs.
+#[cfg(feature = "graph")]
+fn project_lsp_caches(cfg: &Config) -> Vec<Owned> {
+    let projects = Store::open(&cfg.core.db_path).and_then(|s| s.projects());
+    projects
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|p| {
+            let state = crate::plugins::graph::lsp::lsp_state_root(Path::new(&p.root));
+            ["cache", "pub-cache"].map(|d| Owned {
+                path: state.join(d),
+                evidence: junk_cache::RTOK_OWN,
+                idle_rule: true,
+            })
+        })
+        .collect()
+}
+
+#[cfg(not(feature = "graph"))]
+fn project_lsp_caches(_cfg: &Config) -> Vec<Owned> {
+    Vec::new()
 }
 
 /// `paths` without any that sits inside another one, so a directory is walked once.
