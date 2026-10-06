@@ -48,6 +48,35 @@ const S1: &str = "\
 /// Mini: 1.0 + 0 + 0.1 + 2.0 = $3.10, saved 4.0 × 0.225 = $0.90.
 /// Totals: $14.70 cost, $15.30 saved; the other two rows print `-`.
 fn seed(home: &Path) {
+    seed_rows(
+        home,
+        &[
+            (
+                Some("claude-sonnet-5"),
+                "anthropic",
+                2_000_000,
+                400_000,
+                8_000_000,
+                500_000,
+            ),
+            (
+                Some("gpt-5-mini"),
+                "openai_chat",
+                4_000_000,
+                0,
+                4_000_000,
+                1_000_000,
+            ),
+            (Some("mystery-1"), "anthropic", 30, 0, 0, 1),
+            (None, "anthropic", 7, 0, 0, 0),
+        ],
+    );
+}
+
+/// `(model, api, input, cache_write, cache_read, output)` per usage row.
+type Row = (Option<&'static str>, &'static str, i64, i64, i64, i64);
+
+fn seed_rows(home: &Path, rows: &[Row]) {
     let projects = home.join(".claude/projects/acme");
     fs::create_dir_all(&projects).unwrap();
     fs::write(projects.join("s1.jsonl"), S1).unwrap();
@@ -69,36 +98,11 @@ fn seed(home: &Path) {
             Some("/v1/messages"),
         )
         .unwrap();
-    store
-        .insert_usage(
-            "s1",
-            Some("claude-sonnet-5"),
-            "anthropic",
-            2_000_000,
-            400_000,
-            8_000_000,
-            500_000,
-            id,
-        )
-        .unwrap();
-    store
-        .insert_usage(
-            "s1",
-            Some("gpt-5-mini"),
-            "openai_chat",
-            4_000_000,
-            0,
-            4_000_000,
-            1_000_000,
-            id,
-        )
-        .unwrap();
-    store
-        .insert_usage("s1", Some("mystery-1"), "anthropic", 30, 0, 0, 1, id)
-        .unwrap();
-    store
-        .insert_usage("s1", None, "anthropic", 7, 0, 0, 0, id)
-        .unwrap();
+    for &(model, api, input, write, read, output) in rows {
+        store
+            .insert_usage("s1", model, api, input, write, read, output, id)
+            .unwrap();
+    }
 }
 
 #[test]
@@ -154,5 +158,31 @@ fn stats_without_price_mentions_no_costs() {
     let v: serde_json::Value =
         serde_json::from_str(&rtok(&["stats", "--json"], &h)).expect("stats json");
     assert!(v.get("cost").is_none(), "{v}");
+    let _ = fs::remove_dir_all(&h);
+}
+
+/// T389: the main workload model is priced by the shipped defaults, no user
+/// config. Fable 5.1 10.0/12.5/0.25/50.0: 10.0 + 2.5 + 1.0 + 5.0 = $18.50,
+/// saved 4.0 × 9.75 = $39.00.
+#[test]
+fn stats_price_prices_fable_from_shipped_defaults() {
+    let h = home("fable");
+    seed_rows(
+        &h,
+        &[(
+            Some("claude-fable-5-1"),
+            "anthropic",
+            1_000_000,
+            200_000,
+            4_000_000,
+            100_000,
+        )],
+    );
+    let v: serde_json::Value =
+        serde_json::from_str(&rtok(&["stats", "--price", "--json"], &h)).expect("stats json");
+    let fable = &v["cost"]["models"]["claude-fable-5-1"];
+    assert_eq!(fable["cost"], 18.5, "{v}");
+    assert_eq!(fable["saved"], 39.0, "{v}");
+    assert_eq!(v["cost"]["unknown"], serde_json::json!([]), "{v}");
     let _ = fs::remove_dir_all(&h);
 }

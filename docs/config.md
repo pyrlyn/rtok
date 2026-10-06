@@ -185,12 +185,28 @@ codex_dir       = "~/.codex/sessions" # Codex CLI logs → one more `api` row (T
 calibrate_samples = 30                # per class        (--calibrate)
 baseline        = ""                  # default name for --compare; "" = none
 price           = false               # show per-model USD costs (--price)
-# USD per MTok rows for --price (T49.1). Sources, fetched 2026-09-17:
-# Anthropic claude-sonnet-5 / claude-haiku-4-5: https://platform.claude.com/docs/en/about-claude/pricing
+# USD per MTok rows for --price (T49.1). Sources, fetched 2026-09-17 (Anthropic claude-fable-5-1,
+# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-06):
+# Anthropic claude-* rows: https://platform.claude.com/docs/en/about-claude/pricing
 # (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 # https://platform.openai.com/docs/pricing (short-context input / cached input /
 # output; no separate write price, so cache_write = input). Models without a row
 # print `-`, never a guess; add dated rows of your own the same way.
+[stats.prices."claude-fable-5-1"]
+input = 10.0
+cache_write = 12.5
+cache_read = 0.25
+output = 50.0
+[stats.prices."claude-opus-5-5"]
+input = 4.0
+cache_write = 5.0
+cache_read = 0.2
+output = 20.0
+[stats.prices."claude-sonnet-5-5"]
+input = 2.0
+cache_write = 2.5
+cache_read = 0.2
+output = 10.0
 [stats.prices."claude-sonnet-5"]
 input = 2.0
 cache_write = 2.5

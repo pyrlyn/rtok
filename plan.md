@@ -82,7 +82,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
-| T389 | in progress | P2 | 1 | 0% | Claude Code / claude-sonnet-5-5 |
 | T391 | todo | P3 | 2 | 30% | |
 | T392 | todo | P2 | 3 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
@@ -1710,16 +1709,6 @@ Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just che
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
 
 Check: the dated `research.md` row.
-
-### T389. Price row for Fable 5.1 in `[stats.prices]`
-
-From `research.md` §8 and §9.3: Fable is 39 % of the bill in §9.3, but `config/default.toml` ships prices only for `claude-sonnet-5`, `claude-haiku-4-5`, `gpt-5` and `gpt-5-mini`, so `rtok stats --price` leaves the main workload model unpriced. §2's cost split assumes output = 5 × input "until known".
-
-Done means: a `[stats.prices."claude-fable-5-1"]` row (and any other current Claude 5 model ids the transcripts use) with input, output, cache-write and cache-read rates, each from Anthropic's pricing page with the date checked. §2's assumption is replaced by the real rate, or §8 says why a rate is still missing.
-
-Check: `rtok stats --price` on a fixture with a Fable row prices it; `docs/config.md` lists the row; `just check`.
-
-Execution plan: add `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` rows to `default_stats_prices()` (`src/config/mod.rs`) from the pricing page checked 2026-10-06; mirror them in `config/default.toml`, `docs/config.md` (+ ru/uk), the trycmd snapshots (`config-init`, `config-show`, `report-md`); replace the `research.md` §8 p_out = 5 × p_in assumption with the real rates; add a test pricing a Fable store row from the shipped defaults; `just check`.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
