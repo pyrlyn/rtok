@@ -43,7 +43,6 @@
 - T333. Investigate: T271 desktop-entry sweep vs D33/T275
 - T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
-- T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
 - T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 - T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
 - T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
@@ -56,7 +55,7 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
-- T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
+- T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T371. Git co-change pairs feed `impact` and the repo map
 - T372. Link tests to sources by naming convention in `affected_from_paths`
@@ -129,4 +128,3 @@
 - T414.14. CSV and JSON export of tables
 - T414.16. Linked hover across charts and live values elsewhere
 - T428. SessionStart hook back under the 10 ms budget
-- T420. `just check` runs only what a change touches; `just full-check` runs everything

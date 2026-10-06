@@ -2139,6 +2139,20 @@ Evidence: isolated worktree at e2e43a8 + this task's hunks: `cargo fmt --check` 
 
 Deviation: 11 files (over the 3-file guideline) — the repo's own gates force the spread: `default_toml_is_the_defaults` (default.toml), `config_coverage` leaf rule (docs row per convention), `config-show` snapshot, fixture-count assertion (types.rs), two `Report` struct literals (ai/pdf), plus the two hook fixtures. No new dependency.
 
+**T369 Answer a symbol-shaped `Grep` with the definition instead of a deny** · P1, 2/5 · `src/plugins/guard/grep_symbol.rs`, `src/plugins/guard/mod.rs`, `src/plugins/graph/mod.rs`, `src/config/mod.rs`
+
+From the Empryo study (idea-only, clean-room; Empryo `src/core/tools/repo-map-intercept.ts:190-245`). When the agent greps for an identifier (`fn foo`, `class Foo`, `\bfoo\(`), Empryo answers from its symbol index ("defined at path:line, N refs in …") and only falls through to grep when the pattern is not a symbol. rtok's guard denies native Grep (I-08 / T50.4) or redirects to MCP `search` (`native_redirect`, `src/plugins/guard/mod.rs:149`), which costs a second round trip even when `symbol` would have answered.
+
+Plan: in `pre_tool` (`guard/mod.rs:37`), before `native_redirect`, classify the Grep pattern: a bare identifier or `fn|def|class|struct|type|func|interface <ident>` with no path glob. Look the name up with `symbol_defs` (`src/store/symbols.rs:475`); one to five definitions → deny with the `path:line kind` list and the ref count as the reason (the same text `symbol` prints, capped at `inject` budget); zero or more than five → current behaviour. Config `plugins.guard.grep_symbol = false` next to `deny_grep_glob` (`src/config/mod.rs:761`); off until the check below passes. Record a `Measurement` (`plugin: "guard"`, `kind: "grep_symbol"`). Must stay inside the ≤ 10 ms PreToolUse budget: index lookup only, never `index_for`.
+
+Done when: with the flag on, `Grep pattern="fn parse_since"` in an indexed project is answered with the definition line(s); a regex such as `TODO|FIXME` is untouched.
+
+Check: unit tests for the classifier (identifier, `fn x`, `class X`, regex, path-globbed); a replay over the Grep calls in local Claude Code transcripts (`[stats] transcripts_dir`) shows ≥ 70 % of symbol-shaped patterns are answered from the index; after a dated window with the flag on, the share of follow-up Grep/Read on the same name within 3 calls is ≤ 25 % (row in `research.md`); hook p95 stays ≤ 10 ms; `just check`.
+
+Check result: shipped opt-in. `plugins.guard.grep_symbol = false` stays the default because native `Grep` had no sample (0 calls in the local transcripts) and the follow-up-rate metric is unmeasured (moved to T369.1). The classifier takes a bare identifier, `fn|def|class|struct|type|func|interface <ident>` and the `\bfoo\b`, `\bfoo\(`, `foo\(`, `\bfoo` spellings; a `path` that is a directory inside the project keeps only the definitions under it; `glob`, `type`, `-i`, `multiline`, a file path and a path outside the project fall through, as do zero, more than five, a missing index and an index row that no longer names the symbol. The deny reuses `graph::def_text` (the text `symbol` prints), is capped at the inject budget and records a zero-delta `guard/grep_symbol` row. Unit tests cover the classifier table, directory scoping, stale rows, the cap and the flag. The creator delegated the decision on the replay result to the coordinator on 2026-10-06. Replay over shell `rg`/`grep` calls in local transcripts (`research.md` §29.5): the coverage bar of 70 % is not met. Narrow classifier 26 of 131 (20 %) in indexed roots; widened classifier 128 of 432 (30 %), 128 of 1,001 (13 %) counting unindexed roots as unanswered. Hook p95 could not be confirmed under 10 ms (machine load average 46); the flag-on Grep answer matched the plain `PreToolUse` run within noise (p95 12.3 ms vs 15.5 ms).
+
+Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
+
 ## T50.2 — User filter drop-in directory and schema
 
 **T50.2 User filter drop-in directory and schema** · P3, 2/5 · `src/plugins/cmd/rules.rs`, `src/config/mod.rs`, `src/config/validate.rs`, `src/cli.rs`, `config/default.toml`, `docs/config.md`, `docs/cmd-rules.md` (new), `site/content/docs/reference/_content.gotmpl`, `tests/cmd_rules.rs` (new), `tests/trycmd/config-show.stdout`
@@ -7828,6 +7842,20 @@ Recommendation (`research.md` §22.2, approach C): evidence decides what `clear`
 
 **Result (2026-10-03, Claude Code / opus):** `research.md` §22.2 checks every T330 heuristic against its primary source: the Cache Directory Tagging spec, Apple's file-system guide, Electron's `app.getPath` docs and VS Code's code-cache cleaner. No primary source names a Cursor path. The creator approved C on 2026-10-03 (D36): `clear` deletes only §22 paths, valid `CACHEDIR.TAG` dirs and user `[agents.junk] extra` paths, and heuristic finds are listed read-only. T330, T330.2-T330.4 and §22 were updated, and T330's Check no longer clears Cursor caches. PR #662.
 
+### T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
+
+In the plan, T329 Terms (branch `docs/plan-graph-projects`, ~line 679, from PR #540 (T329), not merged yet) says "**Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for", and T329 §7 (~line 799) says "Without it, the project is the caller's current directory (agents keep today's behaviour)". These contradict each other because the selection is stored globally in the store (§2), so one rule makes an agent's MCP call follow whatever project the user last picked in the web UI and the other makes it follow the agent's cwd; the two give different answers whenever they differ.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Recommendation: the caller's current directory. The selection is one global value in the store (T329 §2), so making it the default would send every agent's MCP call to whatever project the user last picked in the web UI, and two agents in two repositories would answer for the same project. The cwd keeps today's behaviour and is per caller. The web UI selection drives only the graph page. Callers that need another project pass `project` explicitly.
+
+Decision (creator, 2026-10-06): the cwd project plus its links is the default for every graph command and graph MCP tool; the web UI selection never replaces it. T329 Terms, the T329 split note and the T329.4 card now say so.
+
+Check result (2026-10-06, Claude Code / opus-5.5): decision recorded here; T329 Terms ("Selected project"), the T329 split note (T336 no longer gates T329.4) and the T329.4 card updated; no other card mentions T336.
+
 ### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 
 In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.
@@ -8433,6 +8461,20 @@ Progress (2026-09-28): PR 1 on branch `t286-worktree-remove`, stacked on #471; i
 Execution, PR 2 (2026-10-03, Claude Code / sonnet-5): on top of T285 PR 2. (1) `remove::for_agent` is the one remove-and-release path (owner default, `remove::run`, claim release); the CLI `worktree remove` calls it. (2) `src/mcp/worktrees.rs`: tool `worktree_remove {path | task, keep_branch?}`, listed beside `worktree_add`; the agent is the session's link, never an argument, and there is no `owner` argument. A session with no linked agent gets the link error and removes nothing. (3) e2e in `tests/worktree.rs` through `rtok mcp`.
 
 Result (2026-10-03, Claude Code / sonnet-5): PR 1 is #482 (the CLI); PR 2 is this one. MCP `worktree_remove` removes the linked agent's own clean worktree (with its branch once merged), refuses a dirty or unmerged one (`keep_branch` removes an unmerged clean one and keeps the branch), another agent's lock and the cwd, never forces, and releases the claim. The CLI and MCP share `remove::for_agent`; the claim-release warning on the CLI is now unstyled, like `claim::remember`'s. About 57 more description tokens in the MCP listing (18 to 19 tools). Stacks on #676 (T285 PR 2).
+
+### T420. `just check` runs only what a change touches; `just full-check` runs everything
+
+`just check` ran every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs the previous full gate unchanged, and CI keeps running the full gate. When the selection cannot be computed, `just check` falls back to the full gate.
+
+Execution plan (2026-10-06, Claude Code / sonnet-5.5):
+1. Research the selector (`research.md` §33): nextest filtersets, cargo-difftests, cargo-test-changed, rtok's `graph affected`, and the existing name match of `tools/test-changed.sh`.
+2. `tools/selective-check.sh` turns the changed files into the recipes to run (shared input -> `full-check`; Markdown, `docs/`, `.github/` -> nothing; `.rs` -> `fmt-check`, `lint`, `dup`, `build-min` for `src/`, `test-changed`; TS/JS -> `js`; Python -> `python`). `justfile`: `check` calls it, `full-check` is the old `check` recipe body.
+3. `tools/test-changed.sh`: dry mode, `--no-tests=pass` for a unit filter that matches nothing, every unit test for a source file whose path names no module, `build.rs` and `migrations/` as shared inputs.
+4. Verify each Check scenario by running it in a throwaway edit; `tools/tests/test_selective_check.py` pins the mapping.
+
+Check: a docs-only change runs no cargo tests; a change to `src/plugins/checkpoint.rs` runs its unit tests and the integration tests that reach it, not the whole suite; a change to `Cargo.toml` or `build.rs` runs everything; `just full-check` matches the previous `just check`; CI unchanged.
+
+Check result (2026-10-06, Claude Code / sonnet-5.5): selector: rtok's code graph (`rtok graph affected`) and every maintained tool were measured and rejected, the in-repo name match stays (`research.md` §33). Docs-only (blank line in `README.md`): `check: no code changed ... no cargo tests`, 0.2 s. `src/plugins/checkpoint.rs` (one comment line): `fmt-check lint build-min dup test-changed`, `26 of 100 integration targets + the matching unit tests`, 184 of 1 799 tests ran across 27 binaries (test phase 18 s, whole run 2 min 16 s including a cold clippy). `Cargo.toml` (one comment line): `a shared input — running the full gate`, 2470 tests passed in 2 min 9 s warm; `build.rs` plans `full-check` (`SELECTIVE_DRY=1`). `just --dry-run full-check` runs the same 13 commands as `just --dry-run check` on `pyrlyn/main` (sorted diff empty), and `just full-check` itself passed: 2470 tests, 1 min 39 s warm. CI calls `fmt-check lint build-min dup js python`, `test`, `test-cov`, `example` and `docs-check` and never `check`, so `.github/` is unchanged. `tools/tests/test_selective_check.py`: 14 passed. Merge base: `pyrlyn/main`, then `origin/main`, then `main`; none resolving runs `full-check`. The creator delegated the deviation from the card's selector wording on 2026-10-06; the in-repo name match is kept.
 
 ### T412. `rtok worktree remove`: report a removal whose branch delete failed, and test the refusal edges
 
