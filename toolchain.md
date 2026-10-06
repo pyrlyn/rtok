@@ -13,8 +13,6 @@ Project programs and direct packages from the manifests.
 | cargo-fuzz | global (`cargo install cargo-fuzz`) + `rustup toolchain install nightly` | `just fuzz` / `fuzz/README.md`: libFuzzer targets; nightly only for the fuzz build, the pinned toolchain is untouched | https://github.com/rust-fuzz/cargo-fuzz |
 | codeql | mise | `just codeql` (T119): local run of the code scanning in `.github/workflows/codeql.yml` | https://github.com/github/codeql-cli-binaries |
 | git-cliff | mise | Changelog | https://github.com/orhun/git-cliff |
-| go | mise | hugo resolves the hextra theme as a Go module (site/go.mod) | https://github.com/golang/go |
-| hugo | mise | Documentation site | https://github.com/gohugoio/hugo |
 | just | mise | Command recipes | https://github.com/casey/just |
 | ketch | see its README | Installs swarfr | https://github.com/pyrlyn/ketch |
 | swarfr | ketch | `just test` / `just test-changed` end with a lossless cleanup of `target/` (T236) | https://github.com/listepo/swarfr |

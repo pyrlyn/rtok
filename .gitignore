@@ -2,11 +2,6 @@
 .serena/
 .reasonix/
 
-# Hugo docs site (site/)
-/site/public/
-/site/resources/
-/site/_vendor/
-/site/.hugo_build.lock
 # T224: stale jscpd/debug outputs; `.jscpd.json` reporters are console-only
 /report.html
 /report/

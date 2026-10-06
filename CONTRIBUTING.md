@@ -1,7 +1,8 @@
 # Contributing
 
-Repository prose is English. Read [`AGENTS.md`](AGENTS.md) before changing
-code — layout, plugin surfaces, and the fail-open / measurement invariants.
+Repository prose is English (except the `docs/ru/` and `docs/uk/` translations). Read
+[`AGENTS.md`](AGENTS.md) before changing code — layout, plugin surfaces, and the fail-open /
+measurement invariants.
 
 ## Checks
 
@@ -17,7 +18,17 @@ SonarCloud OSS (main-branch analysis): [`docs/sonarcloud-setup.md`](docs/sonarcl
 Do not invent metrics or A/B wins in docs. Numbers in the README and
 [`docs/comparison.md`](docs/comparison.md) must match committed evidence
 (`research.md`, bench results). User guides: [`docs/getting-started.md`](docs/getting-started.md)
-and the site under `site/`.
+and the rest of `docs/`.
+
+## Documentation translations
+
+English docs in `docs/` are the source of truth. Russian and Ukrainian translations live in
+`docs/ru/` and `docs/uk/` under the same relative path and file name (front matter adds
+`lang: ru` / `lang: uk`). Any change to an English doc must update the matching `docs/ru/` and
+`docs/uk/` translations in the same change, without waiting for a separate request. New English
+docs get translations too, and removing an English doc removes its translations. These two
+directories are the only place non-English prose is allowed. `AGENTS.md` carries the one-line
+form of this rule (its 350-token budget is enforced by `tests/host_docs.rs`).
 
 ## Expanded rules (from `AGENTS.md`)
 
@@ -78,11 +89,9 @@ the same change. Extract duplicated helpers into `packages/` via local
   or switch a global toolchain.
 - Containers: use Colima + Docker CLI (mise pins), not Docker Desktop — see
   `docs/colima.md`.
-- `README.md` and `docs/` are the public surface; the Hugo site mounts repo
-  markdown read-only, so a repo file *is* the page (`just site` builds; a new
-  `docs/*.md` page needs a row in
-  `site/content/docs/reference/_content.gotmpl`). Brand assets live in
-  `site/static/` and are shared with the README.
+- `README.md` and `docs/` are the public surface; `.github/workflows/sync-docs.yml`
+  mirrors every `docs/**/*.md` to the landing site (pyrlyn/landing), so a repo file
+  *is* the page. The README logos live in `assets/`.
 - Before you start: delegate one-off shell (build, test, git, cargo),
   API/HTTP, and file listings; do not run those from the main context.
 
