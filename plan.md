@@ -49,7 +49,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T333 | todo | research | 1 | 0% | |
 | T334 | todo | research | 1 | 0% | |
 | T335 | todo | research | 1 | 0% | |
-| T336 | todo | research | 1 | 0% | |
 | T337 | todo | research | 1 | 0% | |
 | T340 | todo | research | 1 | 0% | |
 | T341 | todo | research | 1 | 0% | |
@@ -560,12 +559,12 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334, T336 and T337 gate T329.9, T329.4 and T329.11/T329.17.
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334 and T337 gate T329.9 and T329.11/T329.17; T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
 - **Project**: a directory rtok indexes as one unit, identified by its canonical root path. Display name defaults to the directory name (or the package name from the manifest when there is one); the user can rename it.
-- **Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for.
+- **Selected project**: the project the graph page answers for. The CLI and MCP tools do not follow it: without `project` they answer for the caller's current directory and its links (T336).
 - **Link**: a directed edge "project A sees into project B". A link is either **manual** (the user made it) or **auto** (rtok made it from a reference, see 4).
 - **Graph scope**: the selected project plus every project reachable through its links (transitively). All graph queries run over the scope.
 
@@ -877,7 +876,7 @@ Check: fixture repos under `tests/fixtures`, no network:
 
 ### T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
 
-T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336 decides whether the selected project replaces the cwd, so settle it before claiming). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
+T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336: the web UI selection never replaces the cwd). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
 
 Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
 
@@ -1296,13 +1295,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-### T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
-
-In the plan, T329 Terms (branch `docs/plan-graph-projects`, ~line 679, from PR #540 (T329), not merged yet) says "**Selected project**: the project the graph page (and, by default, the CLI and MCP tools) answers for", and T329 §7 (~line 799) says "Without it, the project is the caller's current directory (agents keep today's behaviour)". These contradict each other because the selection is stored globally in the store (§2), so one rule makes an agent's MCP call follow whatever project the user last picked in the web UI and the other makes it follow the agent's cwd; the two give different answers whenever they differ.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
