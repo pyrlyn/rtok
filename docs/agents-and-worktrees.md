@@ -51,7 +51,7 @@ A host that creates worktrees in its own pool (Cursor, Codex, Windsurf and Devin
 - A worktree locked by someone else is never taken.
 - Running `adopt` from a post-create script of the host (Cursor `.cursor/worktrees.json`, Kilo `.kilo/setup-script`, Windsurf and Devin `post_setup_worktree`) is **pending T289.3**. Until then the agent adopts through the skill below.
 
-The `worktrees` skill tells the agent all of this: use `worktree_add` for new work, `worktree_adopt` for a worktree the host made, `worktree_remove` when merged.
+The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for new work, `worktree_adopt` for a worktree the host made, `worktree_remove` when merged.
 
 ## Per host
 

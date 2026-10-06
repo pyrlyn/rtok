@@ -1,9 +1,9 @@
 ---
-name: worktrees
+name: rtok-worktrees
 description: Load before editing a repo: each task gets its own git worktree via rtok unless AGENTS.md or the user says otherwise.
 ---
 
-# worktrees
+# rtok-worktrees
 
 Every task that edits a repository gets its own worktree, never the shared main checkout,
 unless `AGENTS.md` or the user says otherwise. Use rtok, not raw `git worktree`

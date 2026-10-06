@@ -120,6 +120,32 @@ fn pi_extension_unit_test_with_fake_rtok() {
     common::vitest("plugins/pi/tests/rtok.test.ts", &[]);
 }
 
+/// T380: pi has no bundled skill. Install copies `rtok-worktrees` and drops a marked legacy
+/// `worktrees` the same way every other host does.
+#[test]
+fn pi_install_ships_the_prefixed_skill_and_drops_a_marked_legacy_copy() {
+    let home = tmp("skills");
+    let cfg = write_cfg(&home);
+    let skills = home.join("skills");
+    let legacy = skills.join("worktrees");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(legacy.join("SKILL.md"), "old skill\n").unwrap();
+    fs::write(legacy.join(".rtok-owned"), "").unwrap();
+    let (stdout, stderr, code) = setup(&["agents", "install", "pi", "--yes"], &cfg, &home);
+    assert_eq!(code, 0, "stderr={stderr} stdout={stdout}");
+    assert!(skills.join("rtok-worktrees/SKILL.md").is_file(), "{stdout}");
+    assert!(skills.join("rtok/SKILL.md").is_file(), "{stdout}");
+    assert!(!legacy.exists(), "{stdout}");
+    assert!(
+        stdout.lines().any(|l| {
+            let l = l.replace('\\', "/");
+            l.starts_with("- skill ") && l.ends_with("/skills/worktrees")
+        }),
+        "{stdout}"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn setup_pi_dry_run_offers_plugin() {
     let home = tmp("dry");
