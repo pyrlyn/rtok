@@ -51,7 +51,7 @@ pub struct Outcome {
 }
 
 fn real(p: &Path) -> PathBuf {
-    p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
+    crate::fs::canon(p)
 }
 
 /// Every worktree git lists plus the orphans (T151), or exactly the paths named — each
@@ -66,7 +66,7 @@ fn targets(cwd: &Path, paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let known: Vec<PathBuf> = dirs.iter().map(|d| real(d)).collect();
     let named = paths.iter().map(|p| {
         ensure!(
-            known.contains(&real(p)),
+            known.iter().any(|k| crate::fs::same_path(k, &real(p))),
             "{} is not a worktree of this repository",
             p.display()
         );

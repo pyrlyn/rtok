@@ -1,5 +1,8 @@
 # Grok Build — `rtok agents install grok`
 
+On Windows the binary next to `~/.grok/bin/grok` is `grok.exe`. `agents list`
+treats that file as the install (T429).
+
 Grok Build (xAI's `grok` CLI) reads Claude-style plugin directories, so rtok's hooks install as
 one plugin (`plugins/grok`, plan T99). Grok owns its plugin store — `rtok` never writes
 `~/.grok/plugins/`; it prints the exact line:

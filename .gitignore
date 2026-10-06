@@ -42,3 +42,4 @@ __pycache__/
 
 # Build output left behind in checkouts from before T310.12 deleted the crate (#664)
 /crates/rtok-webui/target
+.zcodeignore
