@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok worktree remove` (T286): an agent removes its own finished worktree. [`detach`] is
 //! the single-worktree removal `gc` applies too; [`run`] refuses before it touches anything.
 
@@ -6,10 +10,13 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use super::{Record, State, git, inventory};
+use super::{Record, State, claim, git, inventory};
+use crate::store::{AgentDetail, Store};
 
 /// Unlock, remove without `--force`, then delete the branch when `drop_branch`. A failed
-/// removal puts the lock back, so a half-done run never strips another run's protection.
+/// removal puts the lock back, so a half-done run never strips another run's protection. A
+/// branch git will not delete (checked out elsewhere) is reported, not an error: the worktree
+/// is already gone, and an Err would keep its claim and read as `failed, kept` in gc.
 pub fn detach(repo: &Path, record: &Record, drop_branch: bool) -> Result<String> {
     if record.locked.is_some() {
         git::unlock(repo, &record.path)?;
@@ -23,7 +30,9 @@ pub fn detach(repo: &Path, record: &Record, drop_branch: bool) -> Result<String>
     let Some(branch) = record.branch.as_deref().filter(|_| drop_branch) else {
         return Ok("removed; branch kept".into());
     };
-    git::delete_branch(repo, branch)?;
+    if let Err(e) = git::delete_branch(repo, branch) {
+        return Ok(format!("removed; branch kept: {e:#}"));
+    }
     Ok(match git::has_remote_branch(repo, branch) {
         true => format!("removed with its branch; remote left: git push origin --delete {branch}"),
         false => "removed with its branch".into(),
@@ -98,7 +107,7 @@ pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<
         (State::Unmerged, Some(_)) if keep_branch => {}
         (State::Unmerged, Some(b)) => bail!(
             "{shown}: {b} is not merged into {base}; check `gh pr view {b}`, or pass \
-             --keep-branch to remove the worktree and keep the branch"
+             --keep-branch (MCP: keep_branch) to remove the worktree and keep the branch"
         ),
         (State::Unmerged, None) => {
             bail!("{shown}: detached HEAD not merged into {base}; its commits would be lost")
@@ -111,6 +120,32 @@ pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<
         branch: record.branch.clone(),
         note,
     })
+}
+
+/// `rtok worktree remove` and MCP `worktree_remove`: [`run`] for `agent` (named by `owner_flag`
+/// when it gives one), then release the claim. One path, so both surfaces refuse and release
+/// the same way. With neither an agent nor an owner there is no name to hold a lock by, so
+/// only an unlocked worktree goes.
+pub fn for_agent(
+    store: Option<&Store>,
+    cwd: &Path,
+    target: &str,
+    (agent, owner_flag): (Option<&AgentDetail>, Option<String>),
+    keep_branch: bool,
+) -> Result<Removed> {
+    let owner = match (owner_flag, agent) {
+        (None, None) => None,
+        (flag, agent) => Some(claim::owner(flag, agent, store)?),
+    };
+    let who = Caller {
+        agent: agent.map(|a| a.id.as_str()),
+        owner: owner.as_deref(),
+    };
+    let done = run(cwd, target, &who, keep_branch)?;
+    if let Some(Err(e)) = store.map(|s| s.release_worktree_claim(&done.path)) {
+        eprintln!("warning: claim not released: {e:#}");
+    }
+    Ok(done)
 }
 
 /// A task id names the lock's task or the branch `<task>[-<slug>]`, case aside.

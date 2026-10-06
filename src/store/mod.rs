@@ -1,8 +1,12 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! One SQLite file (plan T0.3, T13.1, decision D8): WAL mode, FTS5, migrations keyed by filename.
 
 // Agent registry (T282, D34): one row per host session rtok sees, one per sub-agent.
 mod agents;
-pub use agents::{AgentDetail, idle_secs};
+pub use agents::{AgentDetail, AgentRow, idle_secs};
 // Messages between agents and the user (T287).
 mod messages;
 pub use messages::{Message, short_agent_id};
@@ -16,6 +20,11 @@ mod sql_ext;
 // T163: shared Diesel extension for SQL the DSL cannot express (recursive CTEs, FTS5).
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
+// T329.1: the graph project registry.
+mod project_links;
+mod projects;
+pub use project_links::{Link, LinkKind};
+pub use projects::{Origin, Project, Resolved, canon_root};
 // T285: which agent a worktree is bound to (the git lock stays the source of truth).
 mod worktree_claims;
 
@@ -136,6 +145,9 @@ thread_local! {
     pub(crate) static OPEN_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// Rows per write transaction when clearing hook bodies (T352).
+const HOOK_BODY_BATCH: i64 = 5_000;
+
 impl Store {
     /// Open (creating directories and the file as needed) and migrate.
     pub fn open(path: &Path) -> Result<Self> {
@@ -173,6 +185,11 @@ impl Store {
         // "database is locked" instead of waiting the few ms the first one holds the lock. First,
         // so switching to WAL waits too; `wait.busy` bounds each statement's wait.
         set_busy(&mut conn, wait.busy)?;
+        // T352: the mode is fixed once a table exists, so only a brand-new file gets it, before
+        // WAL and the first migration. Existing stores convert in `housekeeping` (T352).
+        if std::fs::metadata(url).map_or(true, |m| m.len() == 0) {
+            sql_ext::pragma_auto_vacuum_incremental(&mut conn)?;
+        }
         sql_ext::pragma_journal_wal(&mut conn)?;
         sql_ext::pragma_synchronous_normal(&mut conn)?;
         Self::init(conn, wait)
@@ -242,6 +259,23 @@ impl Store {
     ) -> Result<()> {
         let mut conn = self.lock()?;
         insert_measurement_conn(&mut conn, session, m, once)
+    }
+
+    /// [`Store::insert_measurement_once`] for several rows under one write lock and one commit.
+    /// All or none: the rows came from one dispatch and read as one event.
+    pub fn insert_measurements_once(
+        &self,
+        session: &str,
+        ms: &[Measurement],
+        once: Option<&str>,
+    ) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.immediate_transaction(|conn| -> Result<()> {
+            for m in ms {
+                insert_measurement_conn(conn, session, m, once)?;
+            }
+            Ok(())
+        })
     }
 
     /// Count `measurements` for one plugin. Used by `examples/hello_plugin.rs`.
@@ -1360,6 +1394,31 @@ impl Store {
         Ok(())
     }
 
+    /// Every `(key, value)` whose key starts with `prefix`, key order. `%`/`_` in the
+    /// prefix are escaped so a key segment never acts as a wildcard; SQLite's `LIKE`
+    /// ignores ASCII case, so the rows are narrowed again to an exact prefix.
+    pub fn kv_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let mut conn = self.lock()?;
+        let pattern = format!(
+            "{}%",
+            prefix
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        kv::table
+            .filter(kv::key.like(pattern).escape('\\'))
+            .order(kv::key)
+            .select((kv::key, kv::value))
+            .load::<(String, String)>(&mut *conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .filter(|(k, _)| k.starts_with(prefix))
+                    .collect()
+            })
+            .map_err(Into::into)
+    }
+
     pub fn kv_delete(&self, key: &str) -> Result<()> {
         let mut conn = self.lock()?;
         diesel::delete(kv::table.filter(kv::key.eq(key))).execute(&mut *conn)?;
@@ -1589,6 +1648,47 @@ impl Store {
             .collect())
     }
 
+    /// The ledger's `est_before - est_after` per host over the rows stamped in
+    /// `[since, until)`, with `None` for a session that has no host row (T358.6). An `expand`
+    /// row already reads negative (retrieval costs tokens), so the sum is the net saving the
+    /// report shows. [`Self::measurement_totals`] cannot serve this: it groups by `(plugin,
+    /// kind)` with no window and no session. Sessions are grouped here and mapped to hosts in
+    /// Rust for the same Diesel join-group gap as [`Self::usage_slices`].
+    pub fn measurement_saved_by_host(
+        &self,
+        since: i64,
+        until: i64,
+    ) -> Result<Vec<(Option<String>, i64)>> {
+        use diesel::dsl::sum;
+        let mut conn = self.lock()?;
+        let rows: Vec<(String, Option<i64>, Option<i64>)> = measurements::table
+            .filter(measurements::ts.ge(since).and(measurements::ts.lt(until)))
+            .group_by(measurements::session)
+            .select((
+                measurements::session,
+                sum(measurements::est_before),
+                sum(measurements::est_after),
+            ))
+            .load(&mut *conn)?;
+        let host_of = host_by_session(&mut conn)?;
+        let mut by_host: BTreeMap<Option<String>, i64> = BTreeMap::new();
+        for (session, before, after) in rows {
+            let host = host_of.get(&session).cloned().flatten();
+            *by_host.entry(host).or_default() += before.unwrap_or(0) - after.unwrap_or(0);
+        }
+        Ok(by_host.into_iter().collect())
+    }
+
+    /// Test helper: stamp every `measurements` row of `session` at `ts`.
+    #[cfg(test)]
+    pub fn set_measurement_ts(&self, session: &str, ts: i64) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(measurements::table.filter(measurements::session.eq(session)))
+            .set(measurements::ts.eq(ts))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
     /// Per `(project, kind)` note counts for `memory status` (T69.4). Excludes
     /// `checkpoint:*` and `session:*` housekeeping kinds, same as `list_notes` /
     /// `list_note_titles` (T304): `session:<id>` is unique per session, so leaving it in
@@ -1813,10 +1913,55 @@ impl Store {
         )
     }
 
+    /// Test-only: one `usage` row for `session` (attributed to `host`, a seeded slug) at a
+    /// fixed `ts`, so day and month bucketing can be pinned. `legs` is input, cache write,
+    /// cache read, output.
+    #[cfg(test)]
+    pub fn insert_usage_at(
+        &self,
+        session: &str,
+        host: Option<&str>,
+        model: &str,
+        ts: i64,
+        legs: [i64; 4],
+    ) -> Result<()> {
+        let host_id = match host {
+            Some(h) => self.host_id(h)?,
+            None => None,
+        };
+        self.upsert_session(session, host_id, None, None, Some("proxy"))?;
+        let call = self.insert_call(
+            session,
+            "proxy",
+            "api_request",
+            None,
+            None,
+            None,
+            None,
+            Some("/v1/messages"),
+        )?;
+        let [input, cache_create, cache_read, output] = legs;
+        self.insert_usage(
+            session,
+            Some(model),
+            "anthropic",
+            input,
+            cache_create,
+            cache_read,
+            output,
+            call,
+        )?;
+        let mut conn = self.lock()?;
+        diesel::update(usage::table.filter(usage::call_id.eq(call)))
+            .set(usage::ts.eq(ts))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
     /// Provider counters for an api_request (plan T5.1): one `tokens` row,
     /// `phase = 'after'`, `source = 'provider'`, carrying the four counters. `total` comes
-    /// from the wire ([`rtok_plugin_sdk`-side `Wire::provider_total`]): Anthropic's counters
-    /// are disjoint and sum, OpenAI's `input` already contains the cached slice.
+    /// from the wire ([`rtok_plugin_sdk`-side `Wire::provider_total`]); the counters are
+    /// disjoint on every wire (OpenAI/Gemini `input` has the cached slice subtracted).
     pub fn insert_provider_tokens(
         &self,
         call_id: i32,
@@ -1982,6 +2127,58 @@ impl Store {
         Ok(by_model.into_values().collect())
     }
 
+    /// Usage grouped by session, model and timestamp for `rtok agents usage` (T358.1), with
+    /// `ts` in `[since, until)`. The caller cuts day and month boundaries in a time zone, so
+    /// the store never sees one; Diesel 2.3 cannot `GROUP BY` a computed `ts / N` bucket (the
+    /// gap [`Self::usage_by_model`] documents), so the grain is the request. The host comes from a second read of
+    /// `sessions` because Diesel 2.3 cannot group a join's columns across tables (the same gap
+    /// as [`Self::usage_by_model`]); a session with no host row (an older proxy-only session)
+    /// reads back with `host = None`, which the caller labels by `api`.
+    pub fn usage_slices(&self, since: i64, until: i64) -> Result<Vec<UsageSlice>> {
+        type Row = (
+            String,
+            String,
+            Option<String>,
+            i64,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+        );
+        let mut conn = self.lock()?;
+        let rows: Vec<Row> = usage::table
+            .filter(usage::ts.ge(since).and(usage::ts.lt(until)))
+            .group_by((usage::api, usage::session, usage::model, usage::ts))
+            .select((
+                usage::api,
+                usage::session,
+                usage::model,
+                usage::ts,
+                sum_bigint(usage::input),
+                sum_bigint(usage::cache_create),
+                sum_bigint(usage::cache_read),
+                sum_bigint(usage::output),
+            ))
+            .load(&mut *conn)?;
+        let host_of = host_by_session(&mut conn)?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(api, session, model, ts, input, cache_create, cache_read, output)| UsageSlice {
+                    host: host_of.get(&session).cloned().flatten(),
+                    api,
+                    session,
+                    model,
+                    ts,
+                    input: input.unwrap_or(0),
+                    cache_create: cache_create.unwrap_or(0),
+                    cache_read: cache_read.unwrap_or(0),
+                    output: output.unwrap_or(0),
+                },
+            )
+            .collect())
+    }
+
     /// One row per session the store knows (T25.1, D27): the single read behind the
     /// Sessions page and `rtok agent sessions`. One statement — `usage` (by `session`)
     /// and `calls` (by `session_id`) are pre-aggregated per session because joining
@@ -2127,10 +2324,126 @@ impl Store {
         Ok(paths.0)
     }
 
-    /// Apply `core.retain_calls_days` (0 = keep forever). Proxy and MCP call this once at session
-    /// start.
-    pub fn run_retention(&self, retain_calls_days: u32) -> Result<usize> {
-        self.purge_calls_older_than(i64::from(retain_calls_days))
+    /// Apply `core.retain_calls_days` (0 = keep forever) and `core.retain_hook_bodies_days`
+    /// (0 = keep hook bodies as long as their `calls` row), drop symbol rows of roots that no
+    /// longer exist, then return the freed pages. Proxy and MCP call this once at session
+    /// start; the count is the `calls` rows purged.
+    pub fn run_retention(
+        &self,
+        retain_calls_days: u32,
+        retain_hook_bodies_days: u32,
+    ) -> Result<usize> {
+        let purged = self.purge_calls_older_than(i64::from(retain_calls_days))?;
+        self.clear_hook_bodies_older_than(i64::from(retain_hook_bodies_days))?;
+        self.drop_dead_symbol_roots(std::env::home_dir().as_deref())?;
+        self.maintenance(|c| sql_ext::pragma_incremental_vacuum(c).map_err(Into::into))?;
+        Ok(purged)
+    }
+
+    /// T352: run `f` under the maintenance busy window (see `purge_calls_older_than`).
+    fn maintenance<T>(&self, f: impl FnOnce(&mut SqliteConnection) -> Result<T>) -> Result<T> {
+        let mut conn = self.lock()?;
+        set_busy(&mut conn, std::time::Duration::from_secs(30))?;
+        let out = f(&mut conn);
+        set_busy(&mut conn, self.wait.busy)?;
+        out
+    }
+
+    /// T352: clear the stdin bodies of hook `call_io` rows older than `days` (0 = never).
+    /// The `calls` row, byte counts, shas and archive columns stay; readers already treat a
+    /// missing body as empty. Returns the number of rows cleared.
+    pub fn clear_hook_bodies_older_than(&self, days: i64) -> Result<usize> {
+        self.clear_hook_bodies_in_batches(days, HOOK_BODY_BATCH)
+    }
+
+    /// [`Store::clear_hook_bodies_older_than`] with an explicit batch size: one short write
+    /// transaction per `batch` rows, the connection lock released in between, so a first run
+    /// over a large store never holds the SQLite write lock for the whole clear.
+    fn clear_hook_bodies_in_batches(&self, days: i64, batch: i64) -> Result<usize> {
+        if days <= 0 {
+            return Ok(0);
+        }
+        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let cutoff = now.saturating_sub(days.saturating_mul(86_400));
+        let mut total = 0;
+        loop {
+            let n = self.maintenance(|c| Ok(sql_ext::clear_hook_bodies(c, cutoff, batch)?))?;
+            if n == 0 {
+                return Ok(total);
+            }
+            total += n;
+        }
+    }
+
+    /// T352: run [`Store::housekeeping`] on a background thread, so the `initialize` handshake
+    /// (mcp) or the listener (proxy) is never delayed by it. The thread dies with the process;
+    /// one that is killed mid-run only rolls back its current batch (or its `VACUUM`).
+    pub fn spawn_retention(cfg: &crate::config::Config, surface: &'static str) {
+        let cfg = cfg.clone();
+        let spawned = std::thread::Builder::new()
+            .name("rtok-retention".into())
+            .spawn(move || Self::housekeeping(&cfg, surface));
+        if let Err(e) = spawned {
+            eprintln!("rtok {surface}: retention thread not started: {e}");
+        }
+    }
+
+    /// T352: retention on its own connection, then the one-time conversion of a pre-T352 store
+    /// to `auto_vacuum = INCREMENTAL`. Retention goes first so the `VACUUM` rewrites the
+    /// already-smaller file. Both are housekeeping with a next-start retry (T75): an error is
+    /// logged, not fatal. A failed `VACUUM` (busy, `SQLITE_FULL`) rolls back and leaves the
+    /// file intact; a successful one briefly blocks other writers, once per store.
+    pub fn housekeeping(cfg: &crate::config::Config, surface: &'static str) {
+        let report = |what: &str, e: &anyhow::Error| {
+            let msg = format!("{what} skipped until next start: {e:#}");
+            eprintln!("rtok {surface}: {msg}");
+            crate::log::append(cfg, "warn", surface, "retention", &msg);
+        };
+        let store = match Store::open(&cfg.core.db_path) {
+            Ok(s) => s,
+            Err(e) => return report("retention", &e),
+        };
+        if let Err(e) =
+            store.run_retention(cfg.core.retain_calls_days, cfg.core.retain_hook_bodies_days)
+        {
+            return report("retention", &e);
+        }
+        if let Err(e) = store.convert_to_incremental_vacuum() {
+            report("vacuum", &e);
+        }
+    }
+
+    /// T352/T356: drop the graph index of every root that is no longer a directory (a removed
+    /// worktree or clone) or that may never be a root (`/`, `home`). The empty root is a
+    /// placeholder, not a path, and stays.
+    pub fn drop_dead_symbol_roots(&self, home: Option<&Path>) -> Result<usize> {
+        self.maintenance(|c| {
+            let gone: Vec<String> = sql_ext::symbol_roots(c)?
+                .into_iter()
+                .filter(|r| {
+                    let p = Path::new(r);
+                    !r.is_empty() && (!p.is_dir() || crate::fs::is_unwalkable_root(p, home))
+                })
+                .collect();
+            for root in &gone {
+                sql_ext::delete_symbol_root(c, root)?;
+            }
+            Ok(gone.len())
+        })
+    }
+
+    /// T352: make an existing store shrink on delete. A store created before T352 has
+    /// `auto_vacuum = 0`; the mode only changes through a `VACUUM`, which rewrites the file
+    /// (needs free disk the size of the database). Returns whether it converted anything.
+    pub fn convert_to_incremental_vacuum(&self) -> Result<bool> {
+        self.maintenance(|c| {
+            if sql_ext::AutoVacuumMode.get_result::<i32>(c)? == 2 {
+                return Ok(false);
+            }
+            sql_ext::pragma_auto_vacuum_incremental(c)?;
+            sql_ext::vacuum(c)?;
+            Ok(true)
+        })
     }
 
     #[cfg(test)]
@@ -2211,7 +2524,16 @@ fn write_archive_file(dir: &Path, sha: &str, body: &[u8]) -> Result<(PathBuf, bo
     std::fs::create_dir_all(dir)?;
     let path = dir.join(sha);
     let created = !path.exists();
-    std::fs::write(&path, body)?;
+    // T324: `expand` reads this file lock-free, and another hook process may write the same
+    // body at once, so write a sibling temp file and rename it over the target (atomic on one
+    // filesystem). `fs::write` truncates in place and let a reader see an empty or short file.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = dir.join(format!(".{sha}.tmp-{}-{n}", std::process::id()));
+    if let Err(e) = std::fs::write(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path)) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.into());
+    }
     Ok((path, created))
 }
 
@@ -2361,6 +2683,16 @@ pub struct MeasRow {
     pub ref_id: Option<String>,
 }
 
+/// Each session's host slug, `None` when it has no host row.
+fn host_by_session(conn: &mut SqliteConnection) -> Result<HashMap<String, Option<String>>> {
+    Ok(sessions::table
+        .left_join(hosts::table)
+        .select((sessions::id, hosts::slug.nullable()))
+        .load::<(String, Option<String>)>(conn)?
+        .into_iter()
+        .collect())
+}
+
 /// One `(plugin, kind)` group from [`Store::measurement_totals`] (T207).
 #[derive(Debug, Clone)]
 pub struct MeasurementTotal {
@@ -2386,6 +2718,21 @@ pub struct ApiUsage {
 #[derive(Debug, Clone)]
 pub struct ModelUsage {
     pub model: String,
+    pub input: i64,
+    pub cache_create: i64,
+    pub cache_read: i64,
+    pub output: i64,
+}
+
+/// One [`Store::usage_slices`] row: the usage of one session on one model at `ts` (unix
+/// seconds, UTC).
+#[derive(Debug, Clone)]
+pub struct UsageSlice {
+    pub host: Option<String>,
+    pub api: String,
+    pub session: String,
+    pub model: Option<String>,
+    pub ts: i64,
     pub input: i64,
     pub cache_create: i64,
     pub cache_read: i64,
@@ -2618,7 +2965,7 @@ mod tests {
         held_ack.recv().unwrap();
         let store = Store::open(&db).unwrap();
         let purged = store
-            .run_retention(30)
+            .run_retention(30, 3)
             .expect("purge queues behind the writer");
         assert_eq!(purged, 1, "the old call is gone once the lock is released");
         assert_eq!(store.count_calls().unwrap(), 0);
@@ -3483,7 +3830,12 @@ mod tests {
         assert!(arch_path.is_file());
         assert_eq!(store.count_calls().unwrap(), 1);
 
-        assert_eq!(store.run_retention(cfg.core.retain_calls_days).unwrap(), 1);
+        assert_eq!(
+            store
+                .run_retention(cfg.core.retain_calls_days, cfg.core.retain_hook_bodies_days)
+                .unwrap(),
+            1
+        );
         assert_eq!(store.count_calls().unwrap(), 0);
         assert!(!arch_path.exists());
         let _ = std::fs::remove_dir_all(&dir);
@@ -3511,7 +3863,12 @@ mod tests {
             "0 = keep forever"
         );
 
-        assert_eq!(store.run_retention(cfg.core.retain_calls_days).unwrap(), 1);
+        assert_eq!(
+            store
+                .run_retention(cfg.core.retain_calls_days, cfg.core.retain_hook_bodies_days)
+                .unwrap(),
+            1
+        );
         assert!(!arch_path.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -3816,7 +4173,12 @@ mod tests {
             .put_archive("sess", body_read, &cfg.core.archive_dir)
             .unwrap();
 
-        assert_eq!(store.run_retention(cfg.core.retain_calls_days).unwrap(), 0);
+        assert_eq!(
+            store
+                .run_retention(cfg.core.retain_calls_days, cfg.core.retain_hook_bodies_days)
+                .unwrap(),
+            0
+        );
         assert_eq!(store.archive_decision_counts().unwrap(), (1, 1));
         assert_eq!(
             store
@@ -3965,6 +4327,30 @@ mod tests {
             assert_eq!(request_sha256_2.unwrap(), hex_sha256(&bad));
         }
         assert_eq!(store.call_io_request(call_id2).unwrap(), Some(bad.to_vec()));
+    }
+
+    /// T428: a batch is one event, so a row that cannot be stored takes the others with it.
+    #[rstest]
+    fn insert_measurements_once_is_all_or_none() {
+        let store = Store::open_in_memory().unwrap();
+        let row = |est_before| Measurement {
+            plugin: "memory",
+            kind: "recall",
+            before_bytes: 1,
+            after_bytes: 1,
+            est_before,
+            est_after: 1,
+            ref_id: None,
+            call_id: None,
+        };
+        store
+            .insert_measurements_once("s", &[row(1), row(2)], None)
+            .unwrap();
+        assert_eq!(store.measurement_count("memory").unwrap(), 2);
+        store
+            .insert_measurements_once("s", &[row(3), row(i32::MAX as u32 + 1)], None)
+            .unwrap_err();
+        assert_eq!(store.measurement_count("memory").unwrap(), 2);
     }
 
     #[rstest]
@@ -4357,5 +4743,279 @@ mod tests {
             "CREATE TABLE otel_export (stream TEXT PRIMARY KEY)",
         ]);
         assert!(m.iter().any(|s| s.starts_with("otel_export:")), "{m:?}");
+    }
+
+    /// T324: the archive file is content-addressed and read lock-free by `expand`, so a write
+    /// must never expose a truncated file: it goes to a temp file and is renamed over the
+    /// target (a new inode), which a hard link to the old file proves.
+    #[test]
+    fn archive_file_write_replaces_the_target_atomically() {
+        let dir = crate::testutil::tmp_dir("t324-atomic");
+        let sha = hex_sha256(b"complete body");
+        std::fs::write(dir.join(&sha), b"trunc").unwrap();
+        let reader = dir.join("reader-view");
+        std::fs::hard_link(dir.join(&sha), &reader).unwrap();
+        let (path, created) = write_archive_file(&dir, &sha, b"complete body").unwrap();
+        assert!(!created);
+        assert_eq!(std::fs::read(&path).unwrap(), b"complete body");
+        assert_eq!(
+            std::fs::read(&reader).unwrap(),
+            b"trunc",
+            "written in place, not renamed"
+        );
+        let mut names: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [sha, "reader-view".to_string()],
+            "temp file left behind"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T352: a hook call with an inline stdin body, `age_days` old.
+    fn hook_call_with_body(store: &Store, kind: &str, body: &[u8], age_days: i64) -> i32 {
+        let id = store
+            .insert_call("s", "hook", kind, None, None, None, None, None)
+            .unwrap();
+        store
+            .insert_call_io(id, Some(body), Some(body), body.len() + 1, None)
+            .unwrap();
+        let ts = i64::try_from(crate::log::now()).unwrap() - age_days * 86_400;
+        store.set_call_ts(id, ts).unwrap();
+        id
+    }
+
+    fn call_io_bodies(store: &Store, id: i32) -> (Option<String>, Option<String>, i64) {
+        let mut conn = store.lock().unwrap();
+        call_io::table
+            .filter(call_io::call_id.eq(id))
+            .select((
+                call_io::request_json,
+                call_io::response_json,
+                call_io::request_bytes,
+            ))
+            .first(&mut *conn)
+            .unwrap()
+    }
+
+    #[test]
+    fn retention_clears_old_hook_bodies_and_keeps_the_rest() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .upsert_session("s", Some(1), None, None, Some("hook"))
+            .unwrap();
+        let old = hook_call_with_body(&store, "hook", b"{\"old\":1}", 10);
+        let fresh = hook_call_with_body(&store, "hook", b"{\"fresh\":1}", 1);
+        let mcp = hook_call_with_body(&store, "mcp_call", b"{\"mcp\":1}", 10);
+
+        store.run_retention(30, 3).unwrap();
+
+        let (req, res, bytes) = call_io_bodies(&store, old);
+        assert_eq!((req, res), (None, None));
+        assert_eq!(bytes, 9, "byte counts stay");
+        assert!(call_io_bodies(&store, fresh).0.is_some());
+        assert!(call_io_bodies(&store, mcp).0.is_some());
+        assert_eq!(
+            store.recent_hook_inputs("s", 10).unwrap(),
+            ["{\"fresh\":1}", ""],
+            "a cleared body reads back empty"
+        );
+    }
+
+    #[test]
+    fn hook_bodies_clear_across_several_batches() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .upsert_session("s", Some(1), None, None, Some("hook"))
+            .unwrap();
+        let old: Vec<i32> = (0..5)
+            .map(|_| hook_call_with_body(&store, "hook", b"{}", 10))
+            .collect();
+        let fresh = hook_call_with_body(&store, "hook", b"{}", 1);
+        let cutoff = i64::try_from(crate::log::now()).unwrap() - 3 * 86_400;
+        {
+            let mut conn = store.lock().unwrap();
+            let first = sql_ext::clear_hook_bodies(&mut conn, cutoff, 2).unwrap();
+            assert_eq!(first, 2, "one batch clears at most `batch` rows");
+        }
+        assert_eq!(store.clear_hook_bodies_in_batches(3, 2).unwrap(), 3);
+        assert!(old.iter().all(|&id| call_io_bodies(&store, id).0.is_none()));
+        assert!(call_io_bodies(&store, fresh).0.is_some());
+        assert_eq!(store.clear_hook_bodies_in_batches(3, 2).unwrap(), 0);
+    }
+
+    #[test]
+    fn zero_hook_body_days_keeps_every_body() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .upsert_session("s", Some(1), None, None, Some("hook"))
+            .unwrap();
+        let old = hook_call_with_body(&store, "hook", b"{}", 10);
+        store.run_retention(30, 0).unwrap();
+        assert!(call_io_bodies(&store, old).0.is_some());
+    }
+
+    #[test]
+    fn retention_drops_symbol_roots_that_are_no_longer_directories() {
+        let store = Store::open_in_memory().unwrap();
+        let live = crate::testutil::tmp_dir("t352-live");
+        let live = live.to_str().unwrap();
+        let gone = "/rtok-t352-no-such-root";
+        let row = (
+            "f".to_string(),
+            "function".to_string(),
+            1,
+            true,
+            1,
+            String::new(),
+        );
+        for root in [live, gone, ""] {
+            store
+                .replace_symbols(root, "a.rs", "s", (0, 0), std::slice::from_ref(&row))
+                .unwrap();
+            store.set_extractor_fingerprint(root, "fp").unwrap();
+        }
+        // A stale mark on a file with no rows left, as `mark_symbols_stale_in` leaves it.
+        store.mark_symbols_stale_in(gone, "z.rs").unwrap();
+        store.run_retention(30, 3).unwrap();
+        assert_eq!(store.symbol_count(gone).unwrap(), 0);
+        assert!(store.symbol_stale_paths(gone).unwrap().is_empty());
+        assert_eq!(store.extractor_fingerprint(gone).unwrap(), None);
+        assert_eq!(store.symbol_count(live).unwrap(), 1);
+        assert_eq!(store.symbol_count("").unwrap(), 1, "the empty root stays");
+    }
+
+    /// T356: an existing directory that is `home` or `/` is dropped too; a project stays.
+    #[test]
+    fn retention_drops_home_and_filesystem_roots() {
+        let store = Store::open_in_memory().unwrap();
+        let home = crate::testutil::tmp_dir("t356-home");
+        let project = crate::testutil::tmp_dir("t356-project");
+        let (home, project) = (home.to_str().unwrap(), project.to_str().unwrap());
+        let row = (
+            "f".to_string(),
+            "function".to_string(),
+            1,
+            true,
+            1,
+            String::new(),
+        );
+        for root in [home, project, "/"] {
+            store
+                .replace_symbols(root, "a.rs", "s", (0, 0), std::slice::from_ref(&row))
+                .unwrap();
+            store.set_extractor_fingerprint(root, "fp").unwrap();
+        }
+        assert_eq!(
+            store.drop_dead_symbol_roots(Some(Path::new(home))).unwrap(),
+            2
+        );
+        for gone in [home, "/"] {
+            assert_eq!(store.symbol_count(gone).unwrap(), 0, "{gone}");
+            assert_eq!(store.extractor_fingerprint(gone).unwrap(), None, "{gone}");
+        }
+        assert_eq!(store.symbol_count(project).unwrap(), 1);
+    }
+
+    fn auto_vacuum_mode(store: &Store) -> i32 {
+        let mut conn = store.lock().unwrap();
+        sql_ext::AutoVacuumMode.get_result(&mut *conn).unwrap()
+    }
+
+    /// T419: a prefix read returns its keys in order, and `_`/`%` in the prefix are
+    /// literal, so `plugin:a_b:` never matches `plugin:axb:`.
+    #[test]
+    fn kv_prefix_is_literal_and_ordered() {
+        let dir = crate::testutil::tmp_dir("t419-kv-prefix");
+        let store = Store::open(&dir.join("rtok.db")).unwrap();
+        for (k, v) in [
+            ("plugin:a_b:2", "two"),
+            ("plugin:a_b:1", "one"),
+            ("plugin:axb:1", "other"),
+            ("plugin:a%b:1", "pct"),
+            ("plugin:A_B:1", "upper"),
+            ("other", "x"),
+        ] {
+            store.kv_set(k, v).unwrap();
+        }
+        let got = store.kv_prefix("plugin:a_b:").unwrap();
+        assert_eq!(
+            got,
+            [
+                ("plugin:a_b:1".to_string(), "one".to_string()),
+                ("plugin:a_b:2".to_string(), "two".to_string()),
+            ]
+        );
+        assert_eq!(store.kv_prefix("plugin:a%b:").unwrap().len(), 1);
+        assert!(store.kv_prefix("nothing:").unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fresh_store_is_incremental_and_its_file_shrinks_after_retention() {
+        let dir = crate::testutil::tmp_dir("t352-shrink");
+        let db = dir.join("rtok.db");
+        let store = Store::open(&db).unwrap();
+        assert_eq!(auto_vacuum_mode(&store), 2);
+        store
+            .upsert_session("s", Some(1), None, None, Some("hook"))
+            .unwrap();
+        hook_call_with_body(&store, "hook", &vec![b'x'; 2 << 20], 10);
+        drop(store);
+        let big = std::fs::metadata(&db).unwrap().len();
+        assert!(big > 2 << 20, "{big}");
+
+        let store = Store::open(&db).unwrap();
+        store.run_retention(30, 3).unwrap();
+        drop(store);
+        let small = std::fs::metadata(&db).unwrap().len();
+        assert!(small < big / 2, "{small} vs {big}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_existing_store_converts_once() {
+        let dir = crate::testutil::tmp_dir("t352-convert");
+        let db = dir.join("old.db");
+        // A pre-T352 file: one table exists before any `auto_vacuum` setting.
+        let url = db.to_str().unwrap();
+        let mut raw = SqliteConnection::establish(url).unwrap();
+        diesel::sql_query("CREATE TABLE t (x INTEGER)")
+            .execute(&mut raw)
+            .unwrap();
+        drop(raw);
+        let store = Store::open(&db).unwrap();
+        assert_eq!(auto_vacuum_mode(&store), 0);
+        assert!(store.convert_to_incremental_vacuum().unwrap());
+        assert_eq!(auto_vacuum_mode(&store), 2);
+        assert!(!store.convert_to_incremental_vacuum().unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Session-start housekeeping converts a pre-T352 store on its own, after retention.
+    #[test]
+    fn housekeeping_converts_a_pre_t352_store() {
+        let dir = crate::testutil::tmp_dir("t352-housekeeping");
+        let cfg = crate::testutil::config_in(&dir);
+        let mut raw = SqliteConnection::establish(cfg.core.db_path.to_str().unwrap()).unwrap();
+        diesel::sql_query("CREATE TABLE t (x INTEGER)")
+            .execute(&mut raw)
+            .unwrap();
+        drop(raw);
+        assert_eq!(
+            auto_vacuum_mode(&Store::open(&cfg.core.db_path).unwrap()),
+            0
+        );
+        Store::housekeeping(&cfg, "test");
+        assert_eq!(
+            auto_vacuum_mode(&Store::open(&cfg.core.db_path).unwrap()),
+            2
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

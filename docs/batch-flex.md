@@ -154,10 +154,17 @@ bytes.
 read those rows. Paths without a `Wire` (Batch, `/v1/models`, …) record the
 call when bookkeeping is on but skip usage parsing (`src/proxy/mod.rs`).
 
+**Lanes (T385.1):** every request is classified into a lane (`src/proxy/lane.rs`) and its
+`calls.kind` records it: `api_request` for `agent`, `api_request:<lane>` for `bulk`,
+`batch`, `files`, `embeddings`, `meta` and `internal`. The path decides Batch, files,
+embeddings and meta; `x-rtok-lane` or a `/lane/<name>/` prefix picks `bulk` or `internal` for
+a sync chat call. Both are stripped before forwarding. See `[proxy.lanes]` in
+[config.md](config.md).
+
 **Planned for Batch:**
 
-- tag `calls.kind` / metadata so Batch create/poll/results are distinguishable
-  from sync `api_request`
+- ~~tag `calls.kind` so Batch create/poll/results are distinguishable from sync
+  `api_request`~~ — done by the lane tag (T385.1)
 - when results are fetched, parse per-line usage into `usage` rows (or a
   dedicated rollup) so `--price` can show Batch discounts
 - surface Batch vs sync vs Flex in `rtok report` / stats breakdowns
@@ -174,7 +181,7 @@ rtok ledger numbers.
 ## Configuration
 
 Keys below are documented for the design; they are **not** loaded by the
-binary yet (unknown keys fail `rtok config validate`). See [config.md](config.md).
+binary yet — the three tables exist but are empty, so any key fails `rtok config validate`. See [config.md](config.md).
 
 ```toml
 # Planned — not parsed today

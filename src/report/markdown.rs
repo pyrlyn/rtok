@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! The Markdown rendering of [`Document`](super::Document) — tables, no charts (T22.1).
 //!
 //! It formats; it computes nothing (D24): every number is a model value, every section
@@ -132,7 +136,7 @@ ledger).\n"
     let _ = writeln!(
         s,
         "\n## Expand\n\nHow often a live-zone pointer had to be expanded (`archive_decisions` \
-rows, T5.4).\n"
+rows).\n"
     );
     if exp.decisions == 0 {
         let _ = writeln!(s, "No rows in window.");

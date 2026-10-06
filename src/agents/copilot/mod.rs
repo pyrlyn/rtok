@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! GitHub Copilot installer (`rtok agents install copilot`, plan T46.4).
 //!
 //! Copilot CLI (`copilot`) and the GitHub Copilot app share `~/.copilot` (`[setup.copilot] dir`):
@@ -13,21 +17,11 @@ use anyhow::{Context, Result};
 use rtok_agent_sdk::{Apply, NO_CHANGES, edit_json};
 use serde_json::{Value, json};
 
+use super::hook_events;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
 
 const NAME: &str = "rtok";
-
-/// Copilot's event names paired with the Claude event `rtok hook` runs for them.
-pub const EVENTS: &[(&str, &str)] = &[
-    ("preToolUse", "PreToolUse"),
-    ("postToolUse", "PostToolUse"),
-    ("userPromptSubmitted", "UserPromptSubmit"),
-    ("sessionStart", "SessionStart"),
-    ("sessionEnd", "SessionEnd"),
-    ("preCompact", "PreCompact"),
-    ("subagentStart", "SubagentStart"),
-];
 
 /// The CLI and the desktop app read the same `~/.copilot` files.
 pub struct Copilot;
@@ -157,7 +151,11 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
             return NO_CHANGES.into();
         }
         *root = want;
-        format!("+ {} ({} events)", path.display(), EVENTS.len())
+        format!(
+            "+ {} ({} events)",
+            path.display(),
+            hook_events::installed("copilot").count()
+        )
     })
 }
 
@@ -172,7 +170,7 @@ const MISSING_RTOK_NOTE: &str =
 /// [`hook_resolver_ps`], `sessionStart` adds [`MISSING_RTOK_NOTE`]); other `bin` stays plain.
 pub fn hooks_doc(bin: &str, timeout: u64) -> Value {
     let mut hooks = serde_json::Map::new();
-    for &(copilot, claude) in EVENTS {
+    for (copilot, claude) in hook_events::installed("copilot") {
         let args = format!("hook {claude} --host copilot");
         let note = (copilot == "sessionStart").then_some(MISSING_RTOK_NOTE);
         let (bash, powershell) = if bin == "rtok" {
@@ -224,7 +222,7 @@ fn remove_file(apply: &Apply, path: &Path) -> Result<String> {
 
 /// The `mcpServers.rtok` entry [`register_mcp`] writes.
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"type": "local", "command": cmd, "args": ["mcp"], "tools": ["*"]})
+    json!({"type": "local", "command": cmd, "args": super::mcp_args("copilot"), "tools": ["*"]})
 }
 
 /// `mcpServers.rtok = {type: "local", command, args, tools: ["*"]}` in `mcp-config.json`.
@@ -236,7 +234,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         "mcpServers",
         NAME,
         mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "copilot"),
     )
 }
 
@@ -461,7 +459,7 @@ mod tests {
         let doc: Value = serde_json::from_str(&fs::read_to_string(mcp_path(&c)).unwrap()).unwrap();
         let rtok = &doc["mcpServers"]["rtok"];
         assert_eq!(rtok["type"], "local");
-        assert_eq!(rtok["args"], json!(["mcp"]));
+        assert_eq!(rtok["args"], json!(["mcp", "--host", "copilot"]));
         assert_eq!(rtok["tools"], json!(["*"]));
         assert_eq!(Copilot.installed(&c, Kind::Desktop), ["mcp"]);
         assert_eq!(unregister_mcp(&c).unwrap(), "- mcpServers.rtok");

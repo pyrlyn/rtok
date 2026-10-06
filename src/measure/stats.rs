@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok stats` (plan T1.2): per-tool sizes, Bash families, MCP groups, CTT.
 //!
 //! Tool-result tokens use 4 chars/token (`research.md` §2 heuristic) so this report is
@@ -84,6 +88,9 @@ pub struct Report {
     /// T136: whole-file Reads an outline could have answered. Absent when none.
     #[serde(default, skip_serializing_if = "ReadWholeRow::is_empty")]
     pub read_whole: ReadWholeRow,
+    /// T383: native Reads the read hook denied, and what followed. Absent when none.
+    #[serde(default, skip_serializing_if = "ReadDenyRow::is_empty")]
+    pub read_deny: ReadDenyRow,
     /// T65.1: tool_result bytes whose SHA-256 matches an earlier result in the
     /// same session. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "RepeatRow::is_empty")]
@@ -167,6 +174,28 @@ pub struct ReadWholeRow {
 }
 
 impl ReadWholeRow {
+    fn is_empty(&self) -> bool {
+        self.calls == 0
+    }
+}
+
+/// T383: native `Read`s the read hook denied. `tokens` is the estimated size of the deny
+/// reasons (the cost side of the net per deny). `then_mcp` / `then_native`: denies whose
+/// path was read through rtok's MCP `read` / again by a native `Read` within the next
+/// [`DENY_FOLLOW_CALLS`] tool calls; the rest were abandoned or went elsewhere.
+/// `then_toolsearch` (T384): denies followed by a `ToolSearch` before any other `Read` or rtok MCP
+/// call in that window, the extra turn a deny that names the exact tool is meant to remove.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadDenyRow {
+    pub calls: u64,
+    pub tokens: u64,
+    pub then_mcp: u64,
+    pub then_native: u64,
+    #[serde(default)]
+    pub then_toolsearch: u64,
+}
+
+impl ReadDenyRow {
     fn is_empty(&self) -> bool {
         self.calls == 0
     }
@@ -525,6 +554,13 @@ impl Report {
                 d.edited
             ));
         }
+        if self.read_deny.calls > 0 {
+            let d = &self.read_deny;
+            s.push_str(&format!(
+                "read deny calls {}  tokens {}  then rtok read {}  then native Read {}  then ToolSearch {}\n",
+                d.calls, d.tokens, d.then_mcp, d.then_native, d.then_toolsearch
+            ));
+        }
         if !self.repeat_reads.is_empty() {
             let r = &self.repeat_reads;
             let classes = [
@@ -793,19 +829,26 @@ fn skills_section(skills: &BTreeMap<String, SkillRow>) -> String {
     table(&cols, &out)
 }
 
+/// `<n>`, `<n>d` or `<n>h` from the `--since` flag.
 pub fn parse_since(s: &str) -> Result<Duration> {
+    parse_since_from(s, "--since")
+}
+
+/// [`parse_since`] for a value read from `source` (`stats.since`, `report.since`): the error
+/// names where the bad value came from, so a config typo is not blamed on a flag nobody passed.
+pub fn parse_since_from(s: &str, source: &str) -> Result<Duration> {
     let s = s.trim();
     let (n, unit) = s.split_at(s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len()));
-    let n: u64 = n.parse().map_err(|_| anyhow::anyhow!("bad --since {s}"))?;
+    let n: u64 = n.parse().map_err(|_| anyhow::anyhow!("bad {source} {s}"))?;
     let per_unit = match unit {
         "" | "d" => 86_400u64,
         "h" => 3_600,
-        _ => bail!("bad --since unit in {s}"),
+        _ => bail!("bad {source} unit in {s}"),
     };
     // `--since 99999999999999999d` used to panic in a debug build and wrap in a release one.
     let secs = n
         .checked_mul(per_unit)
-        .ok_or_else(|| anyhow::anyhow!("--since {s} is out of range"))?;
+        .ok_or_else(|| anyhow::anyhow!("{source} {s} is out of range"))?;
     Ok(Duration::from_secs(secs))
 }
 
@@ -1087,6 +1130,7 @@ fn fold_session(
     }
     fold_read_delta(&mut report.read_delta, parsed);
     fold_read_whole(&mut report.read_whole, parsed, replay);
+    fold_read_deny(&mut report.read_deny, parsed);
     fold_repeat(&mut report.repeat, parsed);
     fold_repeat_reads(&mut report.repeat_reads, parsed);
     fold_expand_after(&mut report.expand_after, parsed);
@@ -1429,6 +1473,64 @@ fn fold_read_whole(row: &mut ReadWholeRow, parsed: &Parsed, rp: Replay) {
     }
 }
 
+/// How many tool calls after a deny count as "what the agent did next".
+const DENY_FOLLOW_CALLS: usize = 3;
+
+/// T383: see [`ReadDenyRow`]. The result text is the hook's reason, possibly behind a host
+/// prefix, so it is matched by substring; without the `read` plugin there is no hook to match.
+fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
+    let results: BTreeMap<&str, &str> = parsed
+        .tool_results
+        .iter()
+        .map(|r| (r.tool_use_id.as_str(), r.content.as_str()))
+        .collect();
+    for (i, u) in parsed.tool_uses.iter().enumerate() {
+        let Some(text) = results.get(u.id.as_str()) else {
+            continue;
+        };
+        if u.name != "Read" || !is_read_deny(text) {
+            continue;
+        }
+        row.calls += 1;
+        row.tokens += est_tokens(text.len() as u64);
+        let window = parsed.tool_uses[i + 1..].iter().take(DENY_FOLLOW_CALLS);
+        if window
+            .clone()
+            .take_while(|n| n.name != "Read" && mcp_group(&n.name) != Some("rtok"))
+            .any(|n| n.name == "ToolSearch")
+        {
+            row.then_toolsearch += 1;
+        }
+        let Some(path) = tool_path(&u.input) else {
+            continue;
+        };
+        let next = window.into_iter().find(|n| {
+            (n.name == "Read" || is_rtok_mcp_read(&n.name))
+                && tool_path(&n.input).is_some_and(|p| same_path(p, path))
+        });
+        match next {
+            Some(n) if n.name == "Read" => row.then_native += 1,
+            Some(_) => row.then_mcp += 1,
+            None => {}
+        }
+    }
+}
+
+fn is_rtok_mcp_read(name: &str) -> bool {
+    mcp_group(name) == Some("rtok") && name.ends_with("__read")
+}
+
+#[cfg(feature = "read")]
+fn is_read_deny(content: &str) -> bool {
+    use crate::plugins::read::hook::{DELTA_REASON, REASON};
+    content.contains(REASON) || content.contains(DELTA_REASON)
+}
+
+#[cfg(not(feature = "read"))]
+fn is_read_deny(_content: &str) -> bool {
+    false
+}
+
 #[cfg(feature = "read")]
 fn has_outline(path: &str) -> bool {
     crate::plugins::read::outline::supported(Path::new(path))
@@ -1445,8 +1547,7 @@ fn has_outline(_path: &str) -> bool {
 /// archive/cmd trailer.
 #[cfg(feature = "read")]
 fn has_rtok_marker(content: &str) -> bool {
-    content.contains("use rtok read")
-        || content.contains("file changed since last read")
+    is_read_deny(content)
         || content.contains("unchanged since ")
         || content.starts_with("[archived ")
         || content.contains("[rtok ")
@@ -1807,6 +1908,31 @@ mod tests {
         let table = cost.to_table();
         assert!(table.contains("11.60"), "{table}");
         assert!(table.contains("mystery-1"), "{table}");
+    }
+
+    /// T364: a bad value is blamed on the place it came from, not always on `--since`.
+    #[test]
+    fn parse_since_names_its_source() {
+        for bad in ["7x", "d", "-1d", ""] {
+            let flag = parse_since(bad).unwrap_err().to_string();
+            assert!(
+                flag.contains("--since") && !flag.contains("stats.since"),
+                "{flag}"
+            );
+            let cfg = parse_since_from(bad, "stats.since")
+                .unwrap_err()
+                .to_string();
+            assert!(
+                cfg.contains("stats.since") && !cfg.contains("--since"),
+                "{cfg}"
+            );
+        }
+        let huge = parse_since_from("99999999999999999d", "stats.since").unwrap_err();
+        assert!(huge.to_string().contains("stats.since"), "{huge}");
+        assert_eq!(
+            parse_since_from("12h", "stats.since").unwrap(),
+            Duration::from_secs(12 * 3600)
+        );
     }
 
     /// A window wider than the calendar is a typo, not a wrapped duration: the multiply
@@ -2174,6 +2300,79 @@ mod tests {
             table.contains("read whole calls 2  bytes 80000  50.0% of Read  50.0% of results  not edited 1 bytes 25.0% of results  edited after 1"),
             "{table}"
         );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// T383: denied Reads are counted with the size of their reasons; each is classed by what
+    /// the agent did within the next three calls — an rtok `read` of the path, a native
+    /// `Read` of it, or neither (here: the path comes four calls too late).
+    #[cfg(feature = "read")]
+    #[test]
+    fn read_deny_counts_denies_and_what_followed() {
+        use crate::plugins::read::hook::REASON;
+        let dir = tempfile_dir();
+        let deny = format!("PreToolUse:Read hook error: {REASON}");
+        let call = |id: &str, name: &str, input: Value| json!({"type":"assistant","message":{"id":format!("m{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]}});
+        let result = |id: &str, body: &str| json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":body}]}});
+        let lines = [
+            call("t1", "Read", json!({"file_path":"src/a.rs"})),
+            result("t1", &deny),
+            call("t2", "mcp__rtok__read", json!({"path":"/proj/src/a.rs"})),
+            result("t2", "body"),
+            call("t3", "Read", json!({"file_path":"src/b.rs"})),
+            result("t3", &deny),
+            call("t4", "Read", json!({"file_path":"src/b.rs","limit":50})),
+            result("t4", "body"),
+            call("t5", "Read", json!({"file_path":"src/c.rs"})),
+            result("t5", &deny),
+            call(
+                "t6",
+                "ToolSearch",
+                json!({"query":"select:mcp__rtok__read"}),
+            ),
+            call("t7", "Bash", json!({"command":"ls"})),
+            call("t8", "Bash", json!({"command":"ls"})),
+            call("t9", "mcp__rtok__read", json!({"path":"src/c.rs"})),
+            result("t9", "body"),
+            call("t10", "Read", json!({"file_path":"src/d.rs"})),
+            result("t10", "fine"),
+        ];
+        let r = write_and_collect(&dir, "deny.jsonl", &lines);
+        let d = &r.read_deny;
+        let tokens = est_tokens(deny.len() as u64);
+        assert_eq!(
+            (
+                d.calls,
+                d.tokens,
+                d.then_mcp,
+                d.then_native,
+                d.then_toolsearch
+            ),
+            (3, 3 * tokens, 1, 1, 1)
+        );
+        // T384: the pre-T384 reason and a Claude Code deny that names the exact tool both count.
+        assert!(is_read_deny(
+            "use rtok read; before Edit run native Read(limit=1) — it satisfies the edit gate"
+        ));
+        assert!(is_read_deny(
+            "file changed since last read; use mcp__rtok__read(mode=diff) vs ab12cd34"
+        ));
+        assert!(has_rtok_marker(&format!(
+            "use mcp__rtok__read (ToolSearch select:mcp__rtok__read loads it); {REASON}"
+        )));
+        let table = r.to_table();
+        assert!(
+            table.contains(&format!(
+                "read deny calls 3  tokens {}  then rtok read 1  then native Read 1  then ToolSearch 1",
+                3 * tokens
+            )),
+            "{table}"
+        );
+        fs::remove_dir_all(&dir).ok();
+        let dir = tempfile_dir();
+        let none = write_and_collect(&dir, "empty.jsonl", &[]);
+        assert!(!none.to_table().contains("read deny"));
+        assert!(!serde_json::to_string(&none).unwrap().contains("read_deny"));
         fs::remove_dir_all(&dir).ok();
     }
 

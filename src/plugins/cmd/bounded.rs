@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T176: a command the agent already bounded — `sed -n 1,80p`, `head`/`tail -n`,
 //! `grep -A/-B/-C/-m`, `cat -n` of named files — printed what was asked for. Cutting it
 //! again only buys an `expand` round trip. The lexer reads quotes and the `|`, `|&`,
@@ -54,6 +58,11 @@ pub(crate) fn mixed_chain(snippet: &str) -> bool {
         }
     }
     programs.len() >= 2
+}
+
+/// Every stage of every pipeline in `snippet`, as words with quotes removed.
+pub(crate) fn stages(snippet: &str) -> Vec<Vec<String>> {
+    lex(snippet).into_iter().flatten().collect()
 }
 
 /// Pipelines of stages of words, quotes removed.

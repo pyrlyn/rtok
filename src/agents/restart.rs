@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Close a running desktop app before `agents install|uninstall` writes its config, reopen it
 //! after (T141; replaces T76's interactive y/N prompt with an automatic, no-prompt flow).
 //!
@@ -35,11 +39,7 @@ pub trait Procs {
 /// binary — unlike `osascript`'s app-name lookup, it matches an exact image name only.
 #[cfg(target_os = "windows")]
 fn tasklist_running(name: &str) -> bool {
-    let exe = if name.ends_with(".exe") {
-        name.to_string()
-    } else {
-        format!("{name}.exe")
-    };
+    let exe = image_name(name);
     std::process::Command::new("tasklist")
         .args(["/FI", &format!("IMAGENAME eq {exe}")])
         .output()
@@ -120,7 +120,7 @@ impl Procs for RealProcs {
         #[cfg(target_os = "windows")]
         {
             std::process::Command::new("taskkill")
-                .args(["/IM", &format!("{name}.exe"), "/F"])
+                .args(["/IM", &image_name(name), "/F"])
                 .status()
                 .with_context(|| format!("taskkill {name}"))?;
             Ok(())
@@ -162,6 +162,17 @@ impl Procs for RealProcs {
             }
             Ok(())
         }
+    }
+}
+
+/// The Windows image name for an app/binary `name`: `name` plus `.exe`, unless it already ends
+/// in one (`apps[]` entries such as `.../Code.exe` resolve to `Code.exe`, not `Code.exe.exe`).
+#[cfg(any(target_os = "windows", test))]
+fn image_name(name: &str) -> String {
+    if name.to_ascii_lowercase().ends_with(".exe") {
+        name.to_string()
+    } else {
+        format!("{name}.exe")
     }
 }
 
@@ -303,6 +314,14 @@ mod tests {
     use crate::agents::Mode;
     use std::cell::RefCell;
     use std::collections::HashSet;
+
+    /// T328: a resolved app name that is already an `.exe` (`Code.exe`) must not become `.exe.exe`.
+    #[test]
+    fn windows_image_name_adds_exe_once() {
+        assert_eq!(image_name("Cursor"), "Cursor.exe");
+        assert_eq!(image_name("Code.exe"), "Code.exe");
+        assert_eq!(image_name("CODE.EXE"), "CODE.EXE");
+    }
 
     #[derive(Default)]
     struct FakeProcs {
@@ -501,6 +520,7 @@ mod tests {
             "Kilo Code for VS Code" => "Visual Studio Code",
             "Kimi Code Desktop" => "Kimi Code",
             "OpenCode Desktop" => "OpenCode",
+            "Roo Code" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
             "Windsurf" => "Windsurf",

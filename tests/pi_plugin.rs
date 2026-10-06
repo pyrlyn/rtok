@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T10.6 + D21: pi host plugin is one bash call path, no MCP, ketch if missing.
 //!
 //! Check: `rtok agents install pi --dry-run` names `plugins/pi` and
@@ -57,6 +61,7 @@ fn setup(args: &[&str], cfg: &Path, home: &Path) -> (String, String, i32) {
         .arg("--no-restart")
         .env("HOME", home)
         .env("USERPROFILE", home)
+        .env("PATH", common::agents::fake_hosts(home))
         .env("RTOK_HOME", home.join(".rtok"))
         .output()
         .expect("rtok setup");

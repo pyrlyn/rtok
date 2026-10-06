@@ -8,11 +8,11 @@ tree-sitter grammar features `lang-*` in `Cargo.toml`.
 `rtok_plugin_sdk::…`.
 
 **Invariants**
-- Root guard first: reject anything outside cwd/`allow_paths` before touching the filesystem.
+- Root guard first: reject anything outside cwd/`allow_paths` (plus, in `rtok mcp` only, the cwd repo's worktrees and `roots/list` roots — `roots.rs`, T351) before touching the filesystem.
 - Capped output always carries an archive id; the full content is retrievable via `expand`.
 - Dedup responses are < 80 chars and write a `Measurement { kind: "dedup" }`.
 - Tool descriptions ≤ 60 estimated tokens each (T4.1 test enforces it).
-- The Read-advice hook never denies files under `native_max_bytes`, nor a native `Read` with `limit` ≤ 5 of any file (T127) — the edit gate stays cheap.
+- The Read-advice hook never denies files under `native_max_bytes`, nor a native `Read` with `limit` 1..=`range_max_lines` (default 300, T383; was 5 under T127) of any file — the edit gate stays cheap. Every deny writes a `read`/`deny` cost row.
 
 **Dependencies allowed**: `tree-sitter`, `tree-sitter-tags`, per-language grammars behind
 features, `ignore` for gitignore-aware search. Justify each in the commit message.

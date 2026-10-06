@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `archive` — replace old, large tool-result blocks in the live zone with pointers (plan P5).
 //!
 //! Spec: the catalogue in `plan.md` §1 names the tools this replaces; none is a
@@ -107,7 +111,8 @@ fn rewrite_skill(
         Ok(None) => {
             let archive_id = cx.put_archive(text.as_bytes()).ok()?;
             let n = text.lines().count();
-            let short = &id[..id.len().min(12)];
+            // `id` is a wire `tool_use_id`: not necessarily ASCII, so cut on chars.
+            let short: String = id.chars().take(12).collect();
             let live =
                 format!("[archived {short}: skill {name} · {n} lines · expand({archive_id})]");
             cx.put_archive_decision(&key, &archive_id, &live).ok()?;
@@ -974,7 +979,7 @@ mod tests {
             .enumerate()
             .map(|(index, content)| SkillRef {
                 id: format!("tu-{}", index + 1),
-                name: "slint".into(),
+                name: "pixel".into(),
                 content,
                 turn: total - index - 1,
             })
@@ -986,14 +991,14 @@ mod tests {
         let mut cx = cx("skills-on");
         cx.config.plugins.archive.skills = true;
         cx.config.plugins.archive.keep_turns = 1;
-        let body = skill_text("slint");
+        let body = skill_text("pixel");
         let mut values: Vec<Value> = (0..3).map(|_| Value::String(body.clone())).collect();
         let ms = rewrite_skills(srefs(&mut values), &Ctx::new(&cx));
         assert_eq!(ms.len(), 2, "turns 2 and 1 (keep_turns=1); turn 0 stays");
         assert!(ms.iter().all(|m| m.kind == "skill"));
         assert!(
             values[0].as_str().unwrap().starts_with("[archived ")
-                && values[0].as_str().unwrap().contains("skill slint")
+                && values[0].as_str().unwrap().contains("skill pixel")
         );
         assert!(values[1].as_str().unwrap().starts_with("[archived "));
         assert_eq!(
@@ -1014,12 +1019,37 @@ mod tests {
         assert_eq!(String::from_utf8(back).unwrap(), body);
     }
 
+    /// A non-ASCII `tool_use_id` used to panic on a byte slice inside a UTF-8 char.
+    #[test]
+    fn a_non_ascii_skill_id_is_shortened_on_a_char_boundary() {
+        let mut cx = cx("skills-utf8-id");
+        cx.config.plugins.archive.skills = true;
+        cx.config.plugins.archive.keep_turns = 0;
+        let mut values = [Value::String(skill_text("pixel"))];
+        let skills = vec![SkillRef {
+            id: "tu-ключи-1".into(),
+            name: "pixel".into(),
+            content: &mut values[0],
+            turn: 1,
+        }];
+        let ms = rewrite_skills(skills, &Ctx::new(&cx));
+        assert_eq!(ms.len(), 1);
+        assert!(
+            values[0]
+                .as_str()
+                .unwrap()
+                .starts_with("[archived tu-ключи-1: skill pixel"),
+            "{}",
+            values[0]
+        );
+    }
+
     #[test]
     fn skill_bodies_stay_whole_while_the_flag_is_off() {
         let mut cx = cx("skills-off");
         cx.config.plugins.archive.skills = false;
         cx.config.plugins.archive.keep_turns = 0;
-        let body = skill_text("slint");
+        let body = skill_text("pixel");
         let mut values = vec![Value::String(body.clone())];
         let ms = rewrite_skills(srefs(&mut values), &Ctx::new(&cx));
         assert!(ms.is_empty());

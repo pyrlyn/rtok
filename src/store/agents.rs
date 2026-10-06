@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T282 (D34): the rtok agent id. The host's own session id collides across hosts and is
 //! missing on several (`research.md` §26), so rtok issues its own random UUIDv4 per host session,
 //! shown as its first 8 hex chars and resolved from any unique prefix of 4+ hex chars.
@@ -26,6 +30,8 @@ pub struct AgentRow {
     pub last_seen: i64,
     pub ended_at: Option<i64>,
     pub activity: Option<String>,
+    /// T283.3: the hook process's ancestors, nearest first (empty when never recorded).
+    pub ancestors: Vec<i32>,
 }
 
 type AgentTuple = (
@@ -38,6 +44,7 @@ type AgentTuple = (
     i64,
     i64,
     Option<i64>,
+    Option<String>,
     Option<String>,
 );
 
@@ -53,6 +60,12 @@ fn row_from(t: AgentTuple) -> AgentRow {
         last_seen: t.7,
         ended_at: t.8,
         activity: t.9,
+        ancestors: t
+            .10
+            .iter()
+            .flat_map(|a| a.split_whitespace())
+            .filter_map(|p| p.parse().ok())
+            .collect(),
     }
 }
 
@@ -69,6 +82,7 @@ fn agent_cols() -> (
     agents::last_seen,
     agents::ended_at,
     agents::activity,
+    agents::ancestors,
 ) {
     (
         agents::id,
@@ -81,6 +95,7 @@ fn agent_cols() -> (
         agents::last_seen,
         agents::ended_at,
         agents::activity,
+        agents::ancestors,
     )
 }
 
@@ -168,6 +183,7 @@ impl Store {
     /// row's very first insert. `activity` follows [`Store::touch_agent`]'s rule: `None`
     /// leaves whatever is already stored untouched (`register_agent` never blanks a hook
     /// event's activity when a later event, e.g. `SessionEnd`, only needs the id back).
+    /// A repeat also clears `ended_at`, so a resumed session is live again (T324).
     pub fn register_agent(
         &self,
         host_id: i32,
@@ -204,6 +220,8 @@ impl Store {
             .do_update()
             .set((
                 agents::last_seen.eq(unixepoch().assume_not_null()),
+                // A registering event is proof of life: a resumed session revives its row.
+                agents::ended_at.eq(None::<i64>),
                 agents::cwd.eq(coalesce(diesel::upsert::excluded(agents::cwd), agents::cwd)),
                 agents::activity.eq(coalesce(
                     diesel::upsert::excluded(agents::activity),
@@ -321,6 +339,40 @@ impl Store {
             .into_iter()
             .map(row_from)
             .collect())
+    }
+
+    /// T283.3: record the pids above the hook process that registered `id` (nearest first).
+    /// Written only when it differs, so a hook repeating the same chain adds no write; an empty
+    /// chain says nothing and keeps what is stored.
+    pub fn set_agent_ancestors(&self, id: &str, chain: &[i32]) -> Result<()> {
+        if chain.is_empty() {
+            return Ok(());
+        }
+        let text = chain
+            .iter()
+            .map(i32::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut conn = self.lock()?;
+        diesel::update(
+            agents::table
+                .filter(agents::id.eq(id))
+                .filter(agents::ancestors.is_null().or(agents::ancestors.ne(&text))),
+        )
+        .set(agents::ancestors.eq(&text))
+        .execute(&mut *conn)?;
+        Ok(())
+    }
+
+    /// Test-only: place `last_seen` at an exact time, so a fixture can say "seen before the
+    /// MCP process started" without sleeping.
+    #[cfg(test)]
+    pub(crate) fn set_agent_last_seen(&self, id: &str, ts: i64) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(agents::table.filter(agents::id.eq(id)))
+            .set(agents::last_seen.eq(ts))
+            .execute(&mut *conn)?;
+        Ok(())
     }
 
     /// Test/debug: one row by its exact id. `pub(crate)` so `hooks::mod`'s dispatch-level
@@ -490,6 +542,24 @@ mod tests {
     }
 
     #[test]
+    fn ancestors_are_stored_in_order_and_an_empty_chain_keeps_what_is_there() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let id = store
+            .register_agent(claude, "sess-anc", None, None, None)
+            .unwrap();
+        assert!(store.agent_row(&id).unwrap().unwrap().ancestors.is_empty());
+        store.set_agent_ancestors(&id, &[300, 200, 100]).unwrap();
+        store.set_agent_ancestors(&id, &[300, 200, 100]).unwrap();
+        store.set_agent_ancestors(&id, &[]).unwrap();
+        let row = store.agent_row(&id).unwrap().unwrap();
+        assert_eq!(row.ancestors, [300, 200, 100]);
+        // A later hook under a restarted host replaces the chain.
+        store.set_agent_ancestors(&id, &[400, 200]).unwrap();
+        assert_eq!(store.agent_row(&id).unwrap().unwrap().ancestors, [400, 200]);
+    }
+
+    #[test]
     fn live_agents_parses_the_configured_idle_window() {
         let store = Store::open_in_memory().unwrap();
         let claude = store.host_id("claude").unwrap().unwrap();
@@ -510,5 +580,23 @@ mod tests {
             store.live_agents("not-a-duration").is_err(),
             "a bad [agents] idle must error, not panic"
         );
+    }
+
+    /// T324: a resumed session registers the same row again; it is alive again, not stuck
+    /// behind the `ended_at` stamp of its earlier run.
+    #[test]
+    fn registering_an_ended_agent_again_makes_it_live() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let id = store
+            .register_agent(claude, "sess-resume", None, None, None)
+            .unwrap();
+        store.end_agent(&id, 1_800_000_000).unwrap();
+        assert!(store.live_agents("30m").unwrap().iter().all(|r| r.id != id));
+        let again = store
+            .register_agent(claude, "sess-resume", None, None, None)
+            .unwrap();
+        assert_eq!(again, id);
+        assert!(store.live_agents("30m").unwrap().iter().any(|r| r.id == id));
     }
 }

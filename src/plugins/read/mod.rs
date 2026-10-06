@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `read` — MCP `read` / `search` / `tree` with modes, size caps and re-read dedup (plan P4).
 //!
 //! Spec: the catalogue in `plan.md` §1 names the tools this replaces; none is a
@@ -21,6 +25,7 @@ use crate::fs::normalize;
 pub mod cache;
 pub mod hook;
 pub(crate) mod outline;
+pub mod roots;
 pub mod search;
 #[cfg(test)]
 pub(crate) mod walk;
@@ -99,7 +104,13 @@ pub(crate) fn read_with(
 ) -> Result<String> {
     let cfg = cx.plugin_config::<crate::config::Read>("read");
     let abs = resolve_with(fs, cwd, Path::new(path), &cfg.allow_paths)?;
-    let raw = fs.read_to_string(&abs)?;
+    // The bare io error (`No such file or directory (os error 2)`) never says which file; an
+    // agent reading several paths in one turn cannot tell which one failed (T353).
+    let raw = fs.read_to_string(&abs).map_err(|e| {
+        let msg = e.to_string();
+        let msg = msg.split(" (os error").next().unwrap_or(&msg);
+        anyhow::anyhow!("{msg}: {path}")
+    })?;
     let mode = if mode.is_empty() {
         cfg.default_mode.as_str()
     } else {
@@ -214,6 +225,14 @@ pub(crate) fn resolve_with(
     if roots.iter().any(|r| under(&check, r)) {
         return Ok(abs);
     }
+    // T351 (`rtok mcp` only): sibling worktrees and client roots, looked up after the cheap
+    // checks failed so an ordinary in-cwd call never pays for them.
+    if roots::dynamic(cwd)
+        .iter()
+        .any(|r| under(&check, &fs.canonicalize(r).unwrap_or_else(|| r.clone())))
+    {
+        return Ok(abs);
+    }
     bail!("path outside cwd: {}", path.display())
 }
 
@@ -252,13 +271,10 @@ fn under_ascii_case_insensitive(path: &Path, root: &Path) -> bool {
 }
 
 /// T263: refuse to walk `/` or the home directory (Claude.app launches `rtok mcp` in `/`);
-/// such a walk times out instead of answering.
+/// such a walk times out instead of answering. T356: graph indexing uses it too.
 pub(crate) fn walk_root_ok(root: &Path) -> Result<()> {
-    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let is_home = std::env::home_dir()
-        .and_then(|h| h.canonicalize().ok())
-        .is_some_and(|h| h == root);
-    if root.parent().is_none() || is_home {
+    if crate::fs::is_unwalkable_root(root, std::env::home_dir().as_deref()) {
+        let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
         bail!(
             "no project root: rtok mcp runs in {}; pass an absolute path inside the repository or start rtok mcp there",
             root.display()
@@ -342,6 +358,29 @@ pub(crate) mod tests {
         assert_eq!(read(&cx, path, "lines", Some("-1")).unwrap(), "1:a");
         assert!(read(&cx, path, "lines", Some("x-y")).is_err());
         assert!(read(&cx, path, "full", Some("3-2")).is_err());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A missing file or a directory fails naming the path, without the `(os error N)` tail.
+    #[test]
+    fn file_errors_name_the_path() {
+        let (cx, dir) = cx("file-errors");
+        let cx = Ctx::new(&cx);
+        // Canonical: a missing path is only matched lexically against the canonical root.
+        let canon = dir.canonicalize().unwrap();
+        let missing = canon.join("nope.rs");
+        let missing = missing.to_str().unwrap();
+        // The io wording is the OS's own (Windows: "The system cannot find …", "Access is
+        // denied."), so only the path suffix and the dropped tail are asserted.
+        let err = read(&cx, missing, "full", None).unwrap_err().to_string();
+        assert!(err.ends_with(&format!(": {missing}")), "{err}");
+        assert!(!err.contains("os error"), "{err}");
+        let sub = canon.join("sub");
+        fs::create_dir(&sub).unwrap();
+        let sub = sub.to_str().unwrap();
+        let err = read(&cx, sub, "map", None).unwrap_err().to_string();
+        assert!(err.ends_with(&format!(": {sub}")), "{err}");
+        assert!(!err.contains("os error"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
 

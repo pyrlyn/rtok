@@ -1,20 +1,60 @@
-import { defineConfig } from "vite";
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
+import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
+import { playwright } from "@vitest/browser-playwright";
+import { defineConfig } from "vitest/config";
+import { searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath } from "node:url";
+
+// The brand pack is the only source of tokens, fonts, icons and logos (T414); `web/` imports
+// them through this alias instead of keeping copies.
+const brand = fileURLToPath(new URL("../brand", import.meta.url));
 
 // `rtok web` (justfile) serves the API + WS on 127.0.0.1:3333; the dev server proxies
 // both so `npm run dev` can point at a running rtok host without a rebuild.
 export default defineConfig({
   base: "/",
   plugins: [react(), tailwindcss()],
+  resolve: { alias: { "@brand": brand } },
   build: {
     outDir: "dist",
     emptyOutDir: true,
   },
   server: {
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), brand] },
     proxy: {
       "/ws": { target: "http://127.0.0.1:3333", ws: true },
       "/health": { target: "http://127.0.0.1:3333" },
     },
+  },
+  test: {
+    projects: [
+      {
+        extends: true,
+        test: { name: "unit", include: ["src/**/*.test.{ts,tsx}"] },
+      },
+      {
+        // Every story is a browser test (render, play function, axe). Needs Chromium:
+        // `npx playwright install chromium`, or SPA_BROWSER_CHANNEL=chrome for the system one.
+        extends: true,
+        plugins: [storybookTest({ configDir: ".storybook" })],
+        test: {
+          name: "storybook",
+          setupFiles: [".storybook/vitest.setup.ts"],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({
+              launchOptions: { channel: process.env["SPA_BROWSER_CHANNEL"] || undefined },
+            }),
+            instances: [{ browser: "chromium" }],
+          },
+        },
+      },
+    ],
   },
 });

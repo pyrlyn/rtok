@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T16.5 (D19): read past each watermark, encode, POST, advance on 2xx. Never panics: a
 //! failure is one `logs` row (`source = otel`), the marks stay, and the report says so.
 //! T16.9: an exclusive file lock serialises concurrent flushers across processes.
@@ -32,7 +36,7 @@ const IN_FLIGHT_SECS: i64 = 300;
 
 fn in_flight(c: &crate::store::models::Call, now: i64) -> bool {
     c.ms.is_none()
-        && matches!(c.kind.as_str(), "api_request" | "hook")
+        && (crate::proxy::lane::is_api_request(&c.kind) || c.kind == "hook")
         && c.ts > now - IN_FLIGHT_SECS
 }
 

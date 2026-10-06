@@ -2,6 +2,9 @@ bin.name = "rtok"
 args = "--config tests/trycmd/input/json-readers.toml doctor"
 stdout = """
 hooks 0
+hooks check none found
+duplicate hooks none found
+duplicate mcp servers none found
 mcp
   rtok ([..] tools, ~[..] desc tokens) [..]
 proxy 
@@ -81,7 +84,7 @@ agents
     − proxy   not supported: Kimi Code providers are [providers.<name>] tables with their own base_url and keys; setup does not edit them
     ✗ plugin  not installed (--yes)
   grok (cli)
-    − hooks   not supported: Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second (D21)
+    − hooks   not supported: Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second set
     ✗ mcp     not installed
     − proxy   not supported: Grok Build providers live in its own settings tables; setup does not edit them
     ✗ plugin  not installed (--yes)

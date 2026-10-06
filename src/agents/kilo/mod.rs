@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Kilo Code installer (`rtok agents install kilo`, plan T97).
 //!
 //! Kilo Code 7 runs on the OpenCode server: the `kilo` CLI and the VS Code extension read one
@@ -12,7 +16,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use super::plugin::HostPlugin;
-use super::{Agent, Kind, Mode, Support, Variant, opencode};
+use super::{
+    Agent, Kind, Mode, Support, Variant, opencode, register_local_mcp, unregister_local_mcp,
+};
 use crate::config::Config;
 
 /// Kilo Code: `mcp.rtok` and the linked OpenCode plugin. The CLI and the VS Code extension
@@ -109,9 +115,19 @@ impl Agent for Kilo {
         let c = as_opencode(cfg);
         let mut lines = Vec::new();
         if remove {
-            lines.push(opencode::unregister_mcp(&c)?);
+            lines.push(unregister_local_mcp(
+                &c,
+                &c.setup.opencode.config_path,
+                "mcp",
+                "kilo",
+            )?);
         } else if c.setup.mcp {
-            lines.push(opencode::register_mcp(&c)?);
+            lines.push(register_local_mcp(
+                &c,
+                &c.setup.opencode.config_path,
+                "mcp",
+                "kilo",
+            )?);
         }
         lines.push(PLUGIN.offer(cfg, remove)?);
         Ok(lines)

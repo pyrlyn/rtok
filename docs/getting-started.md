@@ -6,7 +6,7 @@ measured; shortened payloads stay retrievable by id.
 
 ## Install
 
-macOS (Apple silicon or Intel) and Linux x86-64 have prebuilt binaries. The
+macOS (Apple silicon) and Linux x86-64 have prebuilt binaries. The
 installer is POSIX `sh` and puts `rtok` (plus `rtok-update`) in `~/.cargo/bin`.
 
 ```bash
@@ -19,6 +19,8 @@ Or with [ketch](https://github.com/pyrlyn/ketch), from the same release archives
 ```bash
 ketch install pyrlyn/rtok
 ```
+
+Hooks try the fast `rtok-hook` client first. When a package manager links only `rtok` onto `PATH`, `rtok mcp`, `rtok hook --serve` and `rtok agents install` link the `rtok-hook` beside it into the same `PATH` directory (unix, best effort; an existing foreign file is left alone).
 
 From source (toolchain pinned in `mise.toml`):
 

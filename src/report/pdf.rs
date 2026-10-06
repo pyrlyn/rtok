@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! The PDF rendering of [`Document`](super::Document) (T22.3): the same eight
 //! sections in the same order, paged on A4 with a contents page and viewer
 //! bookmarks. It formats; it computes nothing (D24).
@@ -816,6 +820,7 @@ mod tests {
                 proxy: String::new(),
                 proxy_openai: String::new(),
                 mcp_tool_search_disabled: false,
+                mcp_tool_search: Default::default(),
                 bash_max_output_length: None,
                 auto_compact_window: None,
                 read_share: None,
@@ -823,6 +828,7 @@ mod tests {
                 skills: None,
                 overlaps: vec![],
                 agents: vec![],
+                problems: vec![],
             },
             recommendations: vec![],
         }

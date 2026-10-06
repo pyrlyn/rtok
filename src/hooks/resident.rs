@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T178 / D32: `rtok hook --serve`, the optional resident hook process. The `rtok-hook` client
 //! sends it each hook call over a Unix socket (Windows: a named pipe) and prints what it answers
 //! — what `rtok hook` would print, without a process start. One per home (`hook.lock`). Calls
@@ -32,6 +36,7 @@ struct State {
 /// Serve until the home goes away or a client of another version calls. Returns at once when
 /// another resident holds the home or the environment gives it no endpoint.
 pub fn serve() -> Result<()> {
+    crate::agents::ensure_hook_client_link_here();
     let Some(home) = rtok_hook::home(|k| std::env::var_os(k)) else {
         return Ok(());
     };
@@ -145,6 +150,7 @@ impl State {
         let mut cfg = Config::load_lenient(None, crate::cli::hook_host_flag(host));
         // This process's env came from whichever call started it; the payload names the session.
         cfg.core.session_env.clear();
+        cfg.hook_client_pid = req.pid;
         let mut out = Vec::new();
         super::run(&req.event, &req.stdin[..], &mut out, &cfg);
         Some(out)

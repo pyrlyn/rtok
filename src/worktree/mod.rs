@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Git worktree inventory (T150): every worktree of a repository, who holds it and what
 //! state it is in. Off the hot path — a CLI concern like `doctor`, never a hook.
 //! Parsing and classification are pure; [`git`] is the only module that spawns git.
@@ -7,8 +11,15 @@ pub mod claim;
 pub mod clean;
 pub mod gc;
 pub mod git;
+pub mod host;
 pub mod list;
+pub mod origin;
 pub mod remove;
+pub mod whoami;
+
+/// What every `rtok worktree …` command answers while `[worktree] enabled = false` (T410).
+pub const DISABLED: &str =
+    "worktrees are not enabled; set `[worktree] enabled = true` in ~/.rtok/config.toml";
 
 /// A `render::table` with one free-text note appended per line (after a `note` header),
 /// so the table itself still ends right-aligned. `gc` and `clean` print their verdicts this way.
@@ -184,35 +195,80 @@ pub struct Entry {
     pub merged: bool,
 }
 
+/// `f` over `items` on up to one thread per core, results in `items` order. Per-worktree
+/// work is mostly waiting on git and the disk, so a hundred worktrees in sequence take
+/// minutes where the same waits side by side take seconds.
+pub(crate) fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(usize, &T) -> R + Sync) -> Vec<R> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let workers = std::thread::available_parallelism()
+        .map_or(1, std::num::NonZeroUsize::get)
+        .min(items.len());
+    let next = AtomicUsize::new(0);
+    let mut done: Vec<(usize, R)> = std::thread::scope(|s| {
+        let threads: Vec<_> = (0..workers)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut out = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(i) else { break };
+                        out.push((i, f(i, item)));
+                    }
+                    out
+                })
+            })
+            .collect();
+        threads
+            .into_iter()
+            .flat_map(|t| t.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+            .collect()
+    });
+    done.sort_unstable_by_key(|(i, _)| *i);
+    done.into_iter().map(|(_, r)| r).collect()
+}
+
 /// Every worktree of the repository at `repo`, classified against its default base.
 /// A worktree git cannot read counts as dirty and an unanswerable merge check as
 /// unmerged: both are the side on which nothing gets removed.
 pub fn inventory(repo: &Path) -> anyhow::Result<Vec<Entry>> {
+    let entries = inventory_with(repo, |_| ())?;
+    Ok(entries.into_iter().map(|(entry, ())| entry).collect())
+}
+
+/// [`inventory`] plus `then` of each entry, run in the same task right after that entry's git
+/// checks, so one worktree's file walk overlaps another's git calls.
+pub fn inventory_with<X: Send>(
+    repo: &Path,
+    then: impl Fn(&Entry) -> X + Sync,
+) -> anyhow::Result<Vec<(Entry, X)>> {
     let base = git::default_base(repo);
-    let entries = git::list(repo)?.into_iter().enumerate();
-    Ok(entries
-        .map(|(i, record)| {
-            let main = i == 0 || record.bare;
-            let rev = record.branch.as_deref().or(record.head.as_deref());
-            let merged =
-                !main && rev.is_some_and(|r| git::is_merged(repo, &base, r).unwrap_or(false));
-            let state = if main {
-                State::Main
-            } else {
-                let exists = record.path.is_dir();
-                classify(Facts {
-                    exists,
-                    dirty: exists && git::is_dirty(&record.path).unwrap_or(true),
-                    merged,
-                })
-            };
-            Entry {
-                record,
-                state,
+    let base_tree = git::tree(repo, &base).ok();
+    let records = git::list(repo)?;
+    Ok(par_map(&records, |i, record| {
+        let main = i == 0 || record.bare;
+        let rev = record.branch.as_deref().or(record.head.as_deref());
+        let merged = !main
+            && rev.is_some_and(|r| {
+                git::is_merged(repo, &base, base_tree.as_deref(), r).unwrap_or(false)
+            });
+        let state = if main {
+            State::Main
+        } else {
+            let exists = record.path.is_dir();
+            classify(Facts {
+                exists,
+                dirty: exists && git::is_dirty(&record.path).unwrap_or(true),
                 merged,
-            }
-        })
-        .collect())
+            })
+        };
+        let entry = Entry {
+            record: record.clone(),
+            state,
+            merged,
+        };
+        let x = then(&entry);
+        (entry, x)
+    }))
 }
 
 #[cfg(test)]
@@ -241,6 +297,19 @@ mod tests {
         assert_eq!(r[2].locked.as_deref(), Some(""));
         assert!(r[3].bare && r[3].head.is_none());
         assert!(parse_porcelain(b"").is_empty());
+    }
+
+    #[test]
+    fn par_map_keeps_the_input_order() {
+        let items: Vec<u64> = (0..200).collect();
+        let slow_first = |i: usize, n: &u64| {
+            // The early items finish last, so completion order is not input order.
+            std::thread::sleep(std::time::Duration::from_micros(200u64.saturating_sub(*n)));
+            (i, n * 2)
+        };
+        let want: Vec<(usize, u64)> = items.iter().map(|n| (*n as usize, n * 2)).collect();
+        assert_eq!(par_map(&items, slow_first), want);
+        assert!(par_map(&[] as &[u64], |_, n| *n).is_empty());
     }
 
     #[rstest]

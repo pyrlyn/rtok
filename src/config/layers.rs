@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Config layering + precedence (plan T12.2, decision D14).
 //!
 //! Six providers, lowest to highest, each named for [`entries`]'s provenance column:
@@ -125,14 +129,14 @@ fn leaf_value(root: &Dict, dotted: &str) -> Option<Value> {
 
 /// Walk up from `start` looking for a `.git` entry (no subprocess). `None` outside a repo.
 pub(crate) fn git_root(start: &Path) -> Option<PathBuf> {
-    find_up(start, ".git")
+    find_up(start, ".git", Path::exists)
 }
 
-/// The nearest directory at or above `start` that contains `name`.
-fn find_up(start: &Path, name: &str) -> Option<PathBuf> {
+/// The nearest directory at or above `start` whose `name` entry satisfies `is_match`.
+fn find_up(start: &Path, name: &str, is_match: fn(&Path) -> bool) -> Option<PathBuf> {
     let mut dir = start.to_path_buf();
     loop {
-        if dir.join(name).exists() {
+        if is_match(&dir.join(name)) {
             return Some(dir);
         }
         if !dir.pop() {
@@ -153,7 +157,7 @@ struct DotenvFile {
 
 fn read_dotenv(home: &Path, cwd: Option<&Path>) -> DotenvFile {
     let mut files: Vec<PathBuf> = cwd
-        .and_then(|c| find_up(c, ".env"))
+        .and_then(|c| find_up(c, ".env", Path::is_file))
         .map(|d| d.join(".env"))
         .into_iter()
         .collect();
@@ -551,7 +555,9 @@ fn legacy_source_for(fig: &Figment, key: &str) -> Option<String> {
     fig.find_metadata(legacy).map(|m| m.name.to_string())
 }
 
-pub fn entries(fig: &Figment) -> Vec<(String, String, String)> {
+/// Every effective leaf as `(dotted key, value, source layer)`, sorted: the typed data behind
+/// [`entries`], which only renders it. `config validate` runs the value rules over it.
+pub(crate) fn sourced(fig: &Figment) -> Vec<(String, Value, String)> {
     let table = env_leaf_table();
     let mut keys: Vec<&String> = table.values().map(|(dotted, _)| dotted).collect();
     keys.sort();
@@ -569,11 +575,20 @@ pub fn entries(fig: &Figment) -> Vec<(String, String, String)> {
             } else {
                 source
             };
+            Some((key.clone(), value, source))
+        })
+        .collect()
+}
+
+pub fn entries(fig: &Figment) -> Vec<(String, String, String)> {
+    sourced(fig)
+        .into_iter()
+        .map(|(key, value, source)| {
             let mut shown = display(&value);
             if SECRET_KEYS.contains(&key.as_str()) && !shown.is_empty() {
                 shown = "<redacted>".into();
             }
-            Some((key.clone(), shown, source))
+            (key, shown, source)
         })
         .collect()
 }
@@ -796,6 +811,20 @@ mod tests {
         );
         assert!(std::env::var_os("RTOK_T125_LEAK").is_none(), "parse only");
         assert_eq!(dotenv_pairs(&home, None)[0].1, "8801");
+        let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(&proj);
+    }
+
+    /// T328: a directory named `.env` is not a dotenv file and must not hide the real one above.
+    #[test]
+    fn a_dotenv_directory_does_not_hide_the_file_above() {
+        let home = tmp("dotenv-dir-home");
+        let proj = tmp("dotenv-dir-proj");
+        let sub = proj.join("a");
+        std::fs::create_dir_all(sub.join(".env")).unwrap();
+        std::fs::write(proj.join(".env"), "RTOK_PROXY_PORT=8799\n").unwrap();
+        let pairs = dotenv_pairs(&home, Some(&sub));
+        assert_eq!(pairs, vec![("PROXY_PORT".to_string(), "8799".to_string())]);
         let _ = std::fs::remove_dir_all(&home);
         let _ = std::fs::remove_dir_all(&proj);
     }

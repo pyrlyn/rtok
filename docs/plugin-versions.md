@@ -21,7 +21,7 @@ where it came from, so `agents update` could only reinstall every time or trust 
 A plugin reaches a machine from one of three sources, and the scheme covers all of them:
 
 - **GitHub**: the host installs from the repository (`claude plugin marketplace add
-  listepo/rtok`).
+  pyrlyn/rtok`).
 - **Local**: the host installs from a plugin tree on disk (`claude plugin marketplace add
   <path>/plugins/claude`), for development and offline installs.
 - **Marketplace**: the host's catalog entry for the committed `.claude-plugin/marketplace.json`.
@@ -109,8 +109,8 @@ For Claude, `agents update` picks the source in this order: `--source`, else the
 
 | Source | `rtok` marketplace points at | Available version |
 | --- | --- | --- |
-| GitHub | `listepo/rtok` | the running rtok's own version |
-| Marketplace | `listepo/rtok` | the running rtok's own version |
+| GitHub | `pyrlyn/rtok` | the running rtok's own version |
+| Marketplace | `pyrlyn/rtok` | the running rtok's own version |
 | Local | the plugin tree rtok resolves (`plugins/claude` beside the binary, in a `share/rtok` prefix, in the ketch store, or in the source checkout) | that tree's `.rtok-plugin-version` plus `+g<sha>[.dirty]` from `git describe --always --dirty` |
 
 GitHub and marketplace need no network call: the release keeps every version file equal to
@@ -123,9 +123,19 @@ The installed version comes from the receipt row, else from Claude's own record
 SemVer, else `0.0.0`. Claude counts as having the plugin when that file lists `rtok@rtok`.
 
 The `rtok` entry in `~/.claude/plugins/known_marketplaces.json` is checked against the chosen
-source: `{"source":"github","repo":"listepo/rtok"}` for GitHub and marketplace,
+source: `{"source":"github","repo":"pyrlyn/rtok"}` for GitHub and marketplace,
 `{"source":"directory","path":"<local tree>"}` for local. Any other value (such as a pre-0.10
 ketch store path) is stale and forces a reinstall that re-points it.
+
+The repository moved from the `listepo` account to the `pyrlyn` organization. A marketplace
+added before the move still records `{"source":"github","repo":"listepo/rtok"}` for Claude, or
+`source = "https://github.com/listepo/rtok.git"` under `[marketplaces.rtok]` for Codex. Both
+are stale under the rule above. The next `rtok agents install` or `agents update` removes the
+`rtok` marketplace, adds it again from `pyrlyn/rtok` and reinstalls `rtok@rtok` once. The
+marketplace and plugin names stay `rtok`, so `rtok@rtok` keeps meaning the same plugin. To move
+by hand instead: `claude plugin marketplace remove rtok && claude plugin marketplace add
+pyrlyn/rtok && claude plugin install rtok@rtok` (Codex: the same with `codex plugin`, and
+`plugin add` for the last step).
 
 ## The decision
 
@@ -210,7 +220,86 @@ CLI: Claude Code
 
 ## Listing outdated plugins
 
-`rtok agents outdated` is documented once T279.1 lands.
+`rtok agents outdated` lists the hosts whose rtok plugin is older than the running rtok, and
+only those. `rtok agents update --check` prints exactly the same thing, for anyone who looks
+under `update`. It reads local files only: no network, no host CLI call and no marketplace
+refresh, so it is fast and works offline. The target is always the running binary's own
+version (`rtok --version`).
+
+```console
+$ rtok agents outdated
+agent  installed available source
+claude 0.0.1     0.14.0    github
+
+run: rtok agents update claude
+```
+
+**What is listed.** Every host rtok supports is checked (the same registry as `agents list`),
+not only the ones in the receipt, so a plugin installed by hand or by an older rtok is found
+too. A host variant is a row when the plugin is installed there and its version is lower than
+the running rtok by SemVer precedence. Build metadata is ignored: a local `0.14.0+g12c7e91`
+on rtok `0.14.0` is current. The installed version is looked up in the same order as
+`agents update` ([the decision](#the-decision)): the `.rtok-plugin-version` file in the installed
+copy, then the receipt, then the host's own record (Claude's `installed_plugins.json`). The
+`source` column comes from the same lookup (`github`, `local`, `marketplace`).
+
+**What is hidden.** Hosts without the plugin, with the same version and with a newer version
+are not printed. A host with an older version that is installed but whose version nothing
+records (no version file, no receipt row, no usable host record) counts as `0.0.0` and shows as
+`legacy`; a host whose record does say a version, like `0.0.1` above, shows that version.
+
+```console
+$ rtok agents outdated
+agent  installed available source
+claude legacy    0.14.0    github
+
+run: rtok agents update claude
+```
+
+**Nothing to do.** Two messages, depending on whether anything is installed:
+
+```console
+$ rtok agents outdated
+all rtok plugins are up to date (1 installed, rtok 0.14.0)
+$ rtok agents outdated gemini
+no rtok plugins installed
+```
+
+**Selecting hosts.** Like `update`: an optional comma-separated host list
+(`rtok agents outdated claude,cursor`), and `--cli` / `--desktop` for one variant.
+
+**`--json`** prints one object and no human message, also when there is nothing to update
+(`outdated` is then empty, and `installed` counts the plugins that were checked):
+
+```console
+$ rtok agents outdated --json
+{"rtok":"0.14.0","outdated":[{"agent":"claude","variant":"cli","installed":"0.0.1","available":"0.14.0","source":"github","legacy":false}],"installed":1}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `rtok` | The running rtok version, the one every row is compared with. |
+| `outdated[].agent`, `.variant` | Host id and variant (`cli` or `desktop`). |
+| `outdated[].installed` | The installed version, or `legacy` when nothing records one. |
+| `outdated[].available` | The running rtok version. |
+| `outdated[].source` | `github`, `local` or `marketplace`. |
+| `outdated[].legacy` | `true` for a `legacy` row. |
+| `installed` | How many plugin installs were checked, outdated or not. |
+
+**`--exit-code`** exits 10 when at least one host is outdated and 0 otherwise. Without it the
+exit code is 0 either way, so a script that only reads the output keeps working:
+
+```console
+$ rtok agents outdated --json --exit-code; echo "exit=$?"
+{"rtok":"0.14.0","outdated":[{"agent":"claude","variant":"cli","installed":"0.0.1","available":"0.14.0","source":"github","legacy":false}],"installed":1}
+exit=10
+```
+
+**Why it works offline.** The available version is the running binary's own: the tag or
+catalog entry that matches this build carries the same `.rtok-plugin-version`
+(`tools/plugin-versions.sh --check` keeps it so), so there is nothing to ask a server. Only a
+local checkout can differ from the binary, and `update` reads that; `outdated` does not.
+The command never changes anything: to act on the list, run the `run:` line it prints.
 
 ## Releasing
 
@@ -239,11 +328,9 @@ script touches.
 - `tests/plugin_versions.rs` asserts every file `--files` lists equals `CARGO_PKG_VERSION`, so
   `just check` catches drift locally.
 
-`release-plz` edits only `Cargo.toml`, `Cargo.lock` and `CHANGELOG.md`, so it never touches the
-plugin files, and `tools/release.sh --no-bump` (run after its release PR merges) commits
-nothing. If its release PR ever raises the version, the `ci.yml` check fails on that PR until
-`tools/plugin-versions.sh --set <version>` is committed to it, and the `release.yml` check stops
-a tag that slipped through. See
+Nothing else raises the version: release-plz no longer runs in CI, and the Bump workflow's
+pull request carries the `release.sh` commit, so the `ci.yml` check runs on it before the merge
+and the `release.yml` check stops a tag that slipped through anyway. See
 [Releasing rtok](release.md) for the release flow itself.
 
 ## Troubleshooting

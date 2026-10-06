@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Devin CLI + Desktop (`rtok agents install devin`, plan T89).
 //!
 //! Both surfaces read the same user files. Hooks live under the `"hooks"` key of
@@ -20,24 +24,18 @@ use anyhow::Result;
 use rtok_agent_sdk::{NO_CHANGES, edit_json, object_at};
 use serde_json::{Value, json};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply};
+use super::{Agent, Kind, Mode, Support, Variant, apply, hook_events};
 use crate::config::Config;
 
 const NAME: &str = "rtok";
 
-/// `(event, matcher)` in Devin's names. Empty matcher omits the field. Mapped from
-/// Claude's `ENTRIES`: `Bash`/`Read` → `^exec$`/`^read$`, no `Skill` (Devin has no
-/// such tool hook here), `PreCompact`+`PostCompact` → the one event `PostCompaction`.
-/// The same list `plugins/devin/hooks.json` carries (T88).
-const ENTRIES: &[(&str, &str)] = &[
-    ("PreToolUse", "^exec$"),
-    ("PreToolUse", "^read$"),
-    ("PostToolUse", ""),
-    ("UserPromptSubmit", ""),
-    ("SessionStart", ""),
-    ("PostCompaction", ""),
-    ("SessionEnd", ""),
-];
+/// `(event, matcher)` in Devin's names, from the `devin` rows of [`hook_events`]. Empty matcher
+/// omits the field. Mapped from Claude's list: `Bash`/`Read` → `^exec$`/`^read$`, no `Skill`
+/// (Devin has no such tool hook here), `PreCompact`+`PostCompact` → the one event
+/// `PostCompaction`. The same list `plugins/devin/hooks.json` carries (T88).
+fn entries() -> Vec<(&'static str, &'static str)> {
+    hook_events::entries("devin")
+}
 
 /// CLI (`devin` on PATH) and Desktop (`Devin.app`): one install writes the same files.
 pub struct Devin;
@@ -192,7 +190,7 @@ fn is_ours(cmd: &str, event: &str) -> bool {
 }
 
 /// The plugin's `hooks.json`: top-level event names, no `"hooks"` wrapper.
-/// Built from [`ENTRIES`] and [`plugin_command`], so the installer and the plugin cannot drift.
+/// Built from [`entries`] and [`plugin_command`], so the installer and the plugin cannot drift.
 pub fn hooks_doc() -> Value {
     hooks_doc_with(plugin_command, PLUGIN_HOOK_TIMEOUT_S)
 }
@@ -200,7 +198,7 @@ pub fn hooks_doc() -> Value {
 /// [`hooks_doc`]'s shape with `command(event)` and `timeout` of the caller's choosing.
 fn hooks_doc_with(command: impl Fn(&str) -> String, timeout: u64) -> Value {
     let mut hooks = serde_json::Map::new();
-    for &(event, matcher) in ENTRIES {
+    for (event, matcher) in entries() {
         let mut group = json!({
             "hooks": [{
                 "type": "command",
@@ -248,17 +246,17 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
     edit_json(&a, &path, |root| {
         if remove {
             let hooks = root.get_mut("hooks");
-            super::claude::strip_ours_as(&FORM, &a, &path, hooks, ENTRIES, "timeout", timeout)
+            super::claude::strip_ours_as(&FORM, &a, &path, hooks, &entries(), "timeout", timeout)
         } else {
             let hooks = object_at(root, "hooks");
             let bin = super::rtok_hook_bin();
-            super::claude::insert_ours_as(&FORM, hooks, ENTRIES, &bin, "timeout", timeout)
+            super::claude::insert_ours_as(&FORM, hooks, &entries(), &bin, "timeout", timeout)
         }
     })
 }
 
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
+    json!({"command": cmd, "args": super::mcp_args("devin")})
 }
 
 pub fn register_mcp(cfg: &Config) -> Result<String> {
@@ -269,7 +267,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         "mcpServers",
         NAME,
         mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "devin"),
     )
 }
 
@@ -314,7 +312,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(mcp["mcpServers"]["rtok"]["command"], "rtok");
-        assert_eq!(mcp["mcpServers"]["rtok"]["args"], json!(["mcp"]));
+        assert_eq!(
+            mcp["mcpServers"]["rtok"]["args"],
+            json!(["mcp", "--host", "devin"])
+        );
         let second = install(&c);
         assert!(second.iter().all(|l| l == NO_CHANGES), "{second:?}");
     }

@@ -31,9 +31,10 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --call <TOOL>    Call one listed tool and print the text result (pi `registerTool` shim,
-                       T70.3)
+      --call <TOOL>    Call one listed tool and print the text result (pi `registerTool` shim)
       --json <ARGS>    JSON arguments for `--call`
+      --host <HOST>    The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays
+                       `[hook] host` so the process can find its rtok agent
   -h, --help           Print help
 
 $ rtok proxy --help
@@ -50,7 +51,7 @@ Options:
   -h, --help                 Print help
 
 $ rtok web --help
-Local web UI over the same data as `rtok tui` (WebSocket API + Slint/WASM)
+Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)
 
 Usage: rtok web [OPTIONS]
 
@@ -61,7 +62,7 @@ Options:
   -h, --help           Print help
 
 $ rtok tui --help
-Terminal UI over the same data as `rtok web` (D23: one model, two renderings)
+Terminal UI over the same data as `rtok web` (one model, two renderings)
 
 Usage: rtok tui [OPTIONS]
 
@@ -109,8 +110,16 @@ Usage: rtok doctor [OPTIONS]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --instructions   Also run the instruction-file audit (T7.2)
+      --instructions   Also run the instruction-file audit
       --json           JSON instead of the table
+      --fix            Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a
+                       checklist, a pipe the diff; --yes writes without asking
+      --yes            With --fix: write the changes (a copy goes to `_backup/` first)
+      --dry-run        With --fix --yes: print the diffs and write nothing
+      --only <ONLY>    With --fix: limit it to these problems (repeatable; default: all of them)
+                       [possible values: broken-hooks, duplicate-hooks, duplicate-mcp]
+      --agent <HOST>   Check (and with --fix, repair) the hooks of one host only (an id of `rtok
+                       agents list`)
   -h, --help           Print help
 
 $ rtok info --help
@@ -137,15 +146,15 @@ Commands:
   list       Every known app: kind and name, path and version, config files, rtok modules
   info       One host: the same block `agents list` prints, just for that app
   sessions   What is running in this project: host, provider, model, tokens, start, run time
-  junk       Junk rtok owns under its own home: log siblings and archive payloads past retention
-  whoami     This session's own rtok agent id (T283, D34): `RTOK_AGENT_ID`, resolved through the
-             store
+  usage      Tokens and estimated cost per agent and month (or day), from the agents' logs or rtok
+  junk       Junk and agent folders: `list` shows rtok's and every installed host's folders with
+             sizes, `clear` removes rtok's own junk
+  whoami     This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
   show       One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status
   status     Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars
-  send       Send a message to an agent (T287): `send <id-prefix> <text|->` or `send --all-live
-             <text|->`
-  inbox      Read messages (T287): your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
-             id that agent's queue (marks nothing)
+  send       Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
+  inbox      Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id
+             that agent's queue (marks nothing)
   help       Print this message or the help of the given subcommand(s)
 
 Options:
@@ -175,7 +184,7 @@ Options:
       --desktop        Only the desktop app (`cursor`/`opencode` have CLI and desktop; default is
                        all)
       --all            All variants (the default when neither `--cli` nor `--desktop` is given)
-      --no-restart     Skip closing/reopening a running desktop app around the write (T141)
+      --no-restart     Skip closing/reopening a running desktop app around the write
   -h, --help           Print help
 
 $ rtok agents uninstall --help
@@ -190,8 +199,8 @@ Arguments:
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --dry-run        Print what would be removed and exit
-      --no-restart     Skip closing/reopening a running desktop app around the write (T141)
-      --yes            Also remove rtok entries you changed, without asking (T246)
+      --no-restart     Skip closing/reopening a running desktop app around the write
+      --yes            Also remove rtok entries you changed, without asking
   -h, --help           Print help
 
 $ rtok agents update --help
@@ -208,11 +217,10 @@ Options:
       --cli              Only the CLI app (default is all)
       --desktop          Only the desktop app (default is all)
       --all              All variants (the default when neither `--cli` nor `--desktop` is given)
-      --no-restart       Skip closing/reopening a running desktop app around the write (T141)
+      --no-restart       Skip closing/reopening a running desktop app around the write
       --force            Reinstall the plugin even when it is already at the available version
-                         (T279)
-      --source <SOURCE>  Compare against this install source instead of the one on record (T279)
-                         [possible values: github, local, marketplace]
+      --source <SOURCE>  Compare against this install source instead of the one on record [possible
+                         values: github, local, marketplace]
       --check            List outdated plugins only (same output as `agents outdated`)
   -h, --help             Print help
 
@@ -290,17 +298,77 @@ Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
   -h, --help           Print help
 
+$ rtok agents usage --help
+Tokens and estimated cost per agent and month (or day), from the agents' logs or rtok
+
+Prices come from `[stats.prices]`; a model without one counts in the tokens and is left out of the
+cost (`--unpriced` names those).
+
+Usage: rtok agents usage [OPTIONS]
+
+Options:
+      --config <PATH>
+          User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+
+      --source <SOURCE>
+          Data source: `logs` (the agents' own session files, the default), `rtok` (what passed
+          through rtok) or `both`
+
+      --host <IDS>
+          Only these hosts, comma-separated (`claude,codex`)
+
+      --since <DATE|DUR>
+          From a date (`2026-09-01`, whole days in `--tz`) or a duration back from now (`30d`)
+
+      --until <DATE>
+          Through this date, inclusive
+
+      --daily
+          Bottom table by day
+
+      --monthly
+          Bottom table by month (the default)
+
+      --by <AGENT|MODEL>
+          Middle table grouping: `agent` (the default) or `model`
+
+      --tz <ZONE>
+          IANA time zone for day and month boundaries (default: the system zone)
+
+      --unpriced
+          List the models without a price instead of the tables
+
+      --json
+          One JSON document
+
+  -h, --help
+          Print help (see a summary with '-h')
+
 $ rtok agents junk --help
-Junk rtok owns under its own home: log siblings and archive payloads past retention
+Junk and agent folders: `list` shows rtok's and every installed host's folders with sizes, `clear`
+removes rtok's own junk
 
 Usage: rtok agents junk [OPTIONS] <COMMAND>
 
 Commands:
+  list   Folders, junk kinds and sizes per agent, and the space `agents junk clear` would free
   clear  List what `agents junk clear` would remove; `--yes` applies it
   help   Print this message or the help of the given subcommand(s)
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -h, --help           Print help
+
+$ rtok agents junk list --help
+Folders, junk kinds and sizes per agent, and the space `agents junk clear` would free
+
+Usage: rtok agents junk list [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           JSON instead of the text
+      --bytes          Exact byte counts instead of KB/MB/GB
+      --all            Also the hosts that are not installed
   -h, --help           Print help
 
 $ rtok agents junk clear --help
@@ -315,7 +383,7 @@ Options:
   -h, --help           Print help
 
 $ rtok agents whoami --help
-This session's own rtok agent id (T283, D34): `RTOK_AGENT_ID`, resolved through the store
+This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
 
 Usage: rtok agents whoami [OPTIONS]
 
@@ -350,7 +418,7 @@ Options:
   -h, --help           Print help
 
 $ rtok agents send --help
-Send a message to an agent (T287): `send <id-prefix> <text|->` or `send --all-live <text|->`
+Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
 
 Usage: rtok agents send [OPTIONS] [TO] [TEXT]
 
@@ -364,8 +432,8 @@ Options:
   -h, --help           Print help
 
 $ rtok agents inbox --help
-Read messages (T287): your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id that
-agent's queue (marks nothing)
+Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id that agent's
+queue (marks nothing)
 
 Usage: rtok agents inbox [OPTIONS] [ID]
 
@@ -387,7 +455,7 @@ Arguments:
   [COMMAND]...  
 
 Options:
-      --agent <ID>     Sub-agent id from PreToolUse; scopes the dedup pointer (T127)
+      --agent <ID>     Sub-agent id from PreToolUse; scopes the dedup pointer
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
   -h, --help           Print help
 
@@ -420,7 +488,7 @@ Options:
   -h, --help               Print help
 
 $ rtok archive --help
-The archive live zone (`rtok archive rewrite` — pi `context` carrier, T70.2)
+The archive live zone (`rtok archive rewrite` — pi `context` carrier)
 
 Usage: rtok archive [OPTIONS] <COMMAND>
 
@@ -445,19 +513,37 @@ Options:
   -h, --help           Print help
 
 $ rtok completions --help
-Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
+Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows
+cmd)
+
+With a shell, prints its script. With `--install` or `--uninstall`, writes or removes the script in
+that shell's per-user completions directory (default shell: `$SHELL`). With nothing, in a terminal,
+opens a list of the shells: the ones with completions installed are checked; checking one installs
+it, unchecking removes it. `--list` shows the same state without a terminal.
 
 Usage: rtok completions [OPTIONS] [SHELL]
 
 Arguments:
-  [SHELL]  Shell to complete for (with `--install`/`--uninstall`: default `$SHELL`) [possible
-           values: bash, zsh, fish, powershell, elvish, clink]
+  [SHELL]
+          Shell to complete for (with `--install`/`--uninstall`: default `$SHELL`)
+          
+          [possible values: bash, zsh, fish, powershell, elvish, clink]
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --install        Write the script to the shell's per-user completions directory
-      --uninstall      Remove what `--install` wrote
-  -h, --help           Print help
+      --config <PATH>
+          User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+
+      --install
+          Write the script to the shell's per-user completions directory
+
+      --uninstall
+          Remove what `--install` wrote
+
+      --list
+          Print each shell, whether its completions are installed (yes/no) and the file
+
+  -h, --help
+          Print help (see a summary with '-h')
 
 $ rtok man --help
 Print the man page (roff), or write every page with `--dir`
@@ -538,7 +624,7 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           JSON `{key,value,source}` instead of the bare value (T228)
+      --json           JSON `{key,value,source}` instead of the bare value
   -h, --help           Print help
 
 $ rtok config validate --help
@@ -575,12 +661,12 @@ Usage: rtok memory [OPTIONS] <COMMAND>
 Commands:
   import  Import `{kind,title,body}` JSONL; dedupe by body sha256
   export  Print every note but session checkpoints as the JSONL `import` reads
-  retire  Retire a note: a tombstone — never recalled or searched, body kept (T69.1)
-  pin     Pin a note so it leads SessionStart recall (T69.1)
-  unpin   Drop a note back to newest-first recall order (T69.1)
-  revise  Save a replacement (title, body) for a note and retire the old row (T69.1)
-  sync    Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block (T69.6)
-  status  Notes live/pinned/retired, recall and MCP call counts (T69.4)
+  retire  Retire a note: a tombstone — never recalled or searched, body kept
+  pin     Pin a note so it leads SessionStart recall
+  unpin   Drop a note back to newest-first recall order
+  revise  Save a replacement (title, body) for a note and retire the old row
+  sync    Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block
+  status  Notes live/pinned/retired, recall and MCP call counts
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -611,7 +697,7 @@ Options:
   -h, --help               Print help
 
 $ rtok memory retire --help
-Retire a note: a tombstone — never recalled or searched, body kept (T69.1)
+Retire a note: a tombstone — never recalled or searched, body kept
 
 Usage: rtok memory retire [OPTIONS] <ID>
 
@@ -624,7 +710,7 @@ Options:
   -h, --help                           Print help
 
 $ rtok memory pin --help
-Pin a note so it leads SessionStart recall (T69.1)
+Pin a note so it leads SessionStart recall
 
 Usage: rtok memory pin [OPTIONS] <ID>
 
@@ -636,7 +722,7 @@ Options:
   -h, --help           Print help
 
 $ rtok memory unpin --help
-Drop a note back to newest-first recall order (T69.1)
+Drop a note back to newest-first recall order
 
 Usage: rtok memory unpin [OPTIONS] <ID>
 
@@ -648,7 +734,7 @@ Options:
   -h, --help           Print help
 
 $ rtok memory revise --help
-Save a replacement (title, body) for a note and retire the old row (T69.1)
+Save a replacement (title, body) for a note and retire the old row
 
 Usage: rtok memory revise [OPTIONS] --title <TITLE> --body <BODY> <ID>
 
@@ -669,8 +755,9 @@ Usage: rtok graph [OPTIONS] <COMMAND>
 Commands:
   index     Walk a tree and insert definitions + references
   dead      List unreferenced private definitions (skips pub, trait impls, tests, macros)
-  status    Index health for the current or given root (T68.3)
-  impact    Symbol impact or call paths to a target (T68.4)
+  status    Index health for the current or given root
+  impact    Symbol impact or call paths to a target
+  projects  The project registry: list, add, remove, select
   affected  Tests that reach files changed in git (`git diff --name-only`)
   help      Print this message or the help of the given subcommand(s)
 
@@ -701,11 +788,11 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           JSON rows instead of `path:line kind name` lines (T60.1, uncapped)
+      --json           JSON rows instead of `path:line kind name` lines (uncapped)
   -h, --help           Print help
 
 $ rtok graph status --help
-Index health for the current or given root (T68.3)
+Index health for the current or given root
 
 Usage: rtok graph status [OPTIONS] [PATH]
 
@@ -718,7 +805,7 @@ Options:
   -h, --help           Print help
 
 $ rtok graph impact --help
-Symbol impact or call paths to a target (T68.4)
+Symbol impact or call paths to a target
 
 Usage: rtok graph impact [OPTIONS] <NAME> [PATH]
 
@@ -745,7 +832,7 @@ Options:
   -h, --help           Print help
 
 $ rtok guard --help
-Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path, T70.5)
+Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
 
 Usage: rtok guard [OPTIONS] <COMMAND>
 
@@ -918,7 +1005,7 @@ Options:
   -h, --help           Print help
 
 $ rtok report --help
-The operator model as one document (D24): Markdown, HTML and PDF
+The operator model as one document: Markdown, HTML and PDF
 
 Usage: rtok report [OPTIONS]
 
@@ -927,7 +1014,7 @@ Options:
       --format <FORMAT>  Output format [default: md] [possible values: md, html, pdf]
       --out <PATH>       Write to this path instead of stdout
       --since <SINCE>    How far back the report reads (`30d`, `24h`)
-      --ai               Model-shaped rendering of the same document instead of `--format` (T22.4)
+      --ai               Model-shaped rendering of the same document instead of `--format`
   -h, --help             Print help
 
 $ rtok worktree --help
@@ -939,9 +1026,12 @@ Commands:
   add     Create the worktree for a task: one location, one name, one locked owner; prints its path
   claim   Bind an existing worktree to an agent: rewrites its lock only when unlocked or already
           yours
+  adopt   Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
+          pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only
   remove  Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
           merged, release the claim; refuses dirty, foreign-locked or current worktrees
   list    Every worktree and orphan with its owner, state, source and build-cache bytes
+  whoami  Your agent, where new worktrees go, the worktree you are in and the ones you hold
   gc      Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
   clean   Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without
           `--yes`
@@ -961,19 +1051,32 @@ Options:
       --json           JSON instead of the table
   -h, --help           Print help
 
+$ rtok worktree whoami --help
+Your agent, where new worktrees go, the worktree you are in and the ones you hold
+
+Usage: rtok worktree whoami [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           JSON instead of the text lines
+  -h, --help           Print help
+
 $ rtok worktree gc --help
 Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
 
 Usage: rtok worktree gc [OPTIONS]
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --yes            Apply; without it this is a dry run that changes nothing
-      --owner <OWNER>  Open locks whose reason starts with this owner; every other lock is a hard
-                       stop
-      --idle <IDLE>    Keep worktrees modified within this window (`24h`, `7d`) [default: 24h]
-      --json           JSON instead of the table
-  -h, --help           Print help
+      --config <PATH>            User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --yes                      Apply; without it this is a dry run that changes nothing
+      --owner <OWNER>            Open locks whose reason starts with this owner; any other lock
+                                 holds until `--stale-lock`
+      --idle <IDLE>              Keep worktrees modified within this window (`24h`, `7d`) [default:
+                                 24h]
+      --stale-lock <STALE_LOCK>  Treat someone else's lock as abandoned once its merged, clean
+                                 worktree is untouched this long [default: 7d]
+      --json                     JSON instead of the table
+  -h, --help                     Print help
 
 $ rtok worktree clean --help
 Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`
@@ -1020,6 +1123,24 @@ Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --owner <OWNER>  The owner an old lock names, as `<provider> / <model>`. Defaults to `<host> /
                        <model>` of the agent
+  -h, --help           Print help
+
+$ rtok worktree adopt --help
+Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a pool its
+host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only
+
+Usage: rtok worktree adopt [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]  The worktree, or a directory inside it; defaults to the current directory
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --task <TASK>    The task id, when the lock and the branch do not name one (a detached HEAD)
+      --agent <AGENT>  The rtok agent id (any unique prefix); defaults to `RTOK_AGENT_ID`
+      --owner <OWNER>  The owner the lock names, as `<provider> / <model>`. Defaults to `<host> /
+                       <model>` of the agent
+      --json           Print the result as JSON
   -h, --help           Print help
 
 $ rtok worktree remove --help

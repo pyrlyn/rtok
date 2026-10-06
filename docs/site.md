@@ -17,7 +17,7 @@ featured: true
 order: 1
 ---
 
-<!-- Website copy for the listepo project site. The sync-docs workflow copies this file to
+<!-- Website copy for the pyrlyn project site. The sync-docs workflow copies this file to
 pyrlyn/landing (main) as content/projects/rtok.md on every change to main and on every v*
 tag; front matter follows CONTENT_CONTRACT.md in that repository.
 Sources (checked 2026-09-27): README.md and the clap CLI in src/cli.rs; version from the latest
@@ -55,7 +55,7 @@ including rtok's own.
 
 ## Install
 
-macOS (Apple silicon or Intel) and Linux x86-64, installed into `~/.cargo/bin`:
+macOS (Apple silicon) and Linux x86-64, installed into `~/.cargo/bin`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pyrlyn/rtok/releases/latest/download/rtok-installer.sh | sh

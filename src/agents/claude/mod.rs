@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Install rtok hooks into Claude Code `settings.json` (plan T2.3).
 //!
 //! What is Claude-specific is the `hooks` shape below; backup, the write gate and the
@@ -20,25 +24,13 @@ use serde_json::{Value, json};
 
 use super::{Agent, Kind, Mode, Support, Variant, apply, mcp, plugin_version};
 
-/// `(event, matcher)` — empty matcher omits the field. `SessionEnd` was missing, so no session
-/// row got `ended_at` and no OTel session root ever shipped (`hooks::dispatch` handles it).
-/// Hosts with a Claude-compatible hook shape (ZCode) take a prefix of this list.
-pub(super) const ENTRIES: &[(&str, &str)] = &[
-    ("PreToolUse", "Bash"),
-    ("PreToolUse", "Read"),
-    ("PreToolUse", "Skill"),
-    ("PostToolUse", "*"),
-    ("UserPromptSubmit", ""),
-    ("SessionStart", ""),
-    ("PreCompact", ""),
-    ("PostCompact", ""),
-    ("SessionEnd", ""),
-];
-
-/// Claude's own list, read from the plugin's `hooks/hooks.json` in file order — the one place
-/// it is written (T262.1), so the GitHub plugin install and the settings-file install cannot
-/// drift. It is [`ENTRIES`] plus `SubagentStart`, the spawn brief's event (T130.2); Kimi takes
-/// `ENTRIES` wholesale and discards a `SubagentStart` hook's output, so it stays out of there.
+/// Claude's own `(event, matcher)` list (empty matcher omits the field), read from the plugin's
+/// `hooks/hooks.json` in file order — the one place it is written (T262.1), so the GitHub plugin
+/// install and the settings-file install cannot drift. `tests/hook_manifests.rs` and
+/// `plugin_tree_matches_the_installer` hold it to the `claude` rows of `hook_events`, which the
+/// other Claude-shaped hosts (Kimi, ZCode, Devin) have their own rows beside. `SubagentStart`
+/// is the spawn brief's event (T130.2); Kimi discards a `SubagentStart` hook's output, so its
+/// rows leave it out.
 fn claude_entries() -> &'static [(&'static str, &'static str)] {
     static LIST: LazyLock<Vec<(&str, &str)>> = LazyLock::new(|| {
         serde_json::from_str::<PluginHooks>(include_str!(
@@ -47,6 +39,11 @@ fn claude_entries() -> &'static [(&'static str, &'static str)] {
         .expect("plugins/claude/hooks/hooks.json parses (plugin_tree_matches_the_installer)")
         .hooks
         .0
+        .into_iter()
+        // T159: the worktree hooks replace the host's own create/remove, so they need the
+        // launcher's plain-git fallback — only the plugin carries that, never settings.json.
+        .filter(|(event, _)| !event.starts_with("Worktree"))
+        .collect()
     });
     &LIST
 }
@@ -368,7 +365,13 @@ pub(super) fn strip_ours_as(
 /// Add `rtok mcp` to `mcpServers` in `~/.claude.json` (T4.7).
 pub fn register_mcp(cfg: &Config) -> Result<String> {
     let cmd = super::rtok_command();
-    rtok_agent_sdk::register_mcp(&apply(cfg), &cfg.doctor.claude_json, "rtok", &cmd, &["mcp"])
+    rtok_agent_sdk::register_mcp(
+        &apply(cfg),
+        &cfg.doctor.claude_json,
+        "rtok",
+        &cmd,
+        &super::mcp_args("claude"),
+    )
 }
 
 /// Drop `mcpServers.rtok` from `~/.claude.json` (`rtok agents remove claude`).
@@ -395,7 +398,9 @@ pub(crate) const REINSTALL_FAILED: &str = "removed, reinstall failed:";
 /// root's `.claude-plugin/marketplace.json` names this one marketplace `rtok`, whose only
 /// plugin is `./plugins/claude` (relative to the repo root, not the marketplace file). A
 /// local path broke across a ketch upgrade (`store/rtok/vX.Y.Z/…`); GitHub does not move.
-const MARKETPLACE_REPO: &str = "listepo/rtok";
+/// An entry still naming `listepo/rtok`, the repo before it moved to the `pyrlyn` org, reads
+/// as stale and is re-pointed here like any other.
+const MARKETPLACE_REPO: &str = "pyrlyn/rtok";
 
 /// Claude Code's config dir: the one `settings_path` lives in (`~/.claude`).
 /// `pub(crate)`: `doctor::plugin_hooks` (T173) locates `installed_plugins.json` the
@@ -435,7 +440,7 @@ enum MarketplaceState {
     /// No `"rtok"` entry at all.
     Absent,
     /// Points at the wanted target already: the GitHub repo — T139's own shape,
-    /// `{"source": {"source": "github", "repo": "listepo/rtok"}}` (verified against the
+    /// `{"source": {"source": "github", "repo": "pyrlyn/rtok"}}` (verified against the
     /// Claude Code plugin-marketplaces docs) — or, for `--source local` (T279), the local
     /// checkout as `{"source": {"source": "directory", "path": "<target>"}}`.
     Current,
@@ -560,7 +565,7 @@ fn plugin_against(cfg: &Config, remove: bool, target: &str, force: bool) -> Resu
 }
 
 /// Offer, install, or uninstall the plugin through the official `claude plugin` commands
-/// (T115), from the GitHub marketplace `listepo/rtok` (T139). Installed by default — no
+/// (T115), from the GitHub marketplace `pyrlyn/rtok` (T139). Installed by default — no
 /// `--yes` needed — once `claude` is on PATH and the plugin is not already installed;
 /// already installed from the GitHub marketplace (or already removed) is a no-op.
 /// `marketplace add` is skipped once Claude already knows the *GitHub* marketplace, so a
@@ -837,7 +842,7 @@ impl Agent for Claude {
             (_, "mcp") | (Kind::Cli, "hooks") => Support::Yes,
             (Kind::Cli, "proxy") => Support::Flag("--proxy"),
             // `plugin`: `plugins/claude` through `claude plugin install`, from the GitHub
-            // marketplace `listepo/rtok`, installed by default once `claude` is on PATH
+            // marketplace `pyrlyn/rtok`, installed by default once `claude` is on PATH
             // and not already installed (T139).
             (Kind::Cli, _) => Support::Yes,
             (Kind::Desktop, "hooks") => Support::No("Claude Desktop has no hook events"),
@@ -906,7 +911,13 @@ impl Agent for Claude {
                 if remove {
                     super::unregister_mcp_ours(cfg, &path, "rtok")?
                 } else if cfg.setup.mcp {
-                    rtok_agent_sdk::register_mcp(&a, &path, "rtok", &desktop_command(), &["mcp"])?
+                    rtok_agent_sdk::register_mcp(
+                        &a,
+                        &path,
+                        "rtok",
+                        &desktop_command(),
+                        &super::mcp_args("claude"),
+                    )?
                 } else {
                     NO_CHANGES.into()
                 },
@@ -991,6 +1002,8 @@ mod tests {
             )),
             "{report}"
         );
+        // T159: the worktree hooks are the plugin's alone.
+        assert!(!report.contains("Worktree"), "{report}");
         assert!(!path.exists());
     }
 
@@ -1126,7 +1139,14 @@ mod tests {
         // the real `desktop_path()`, which is not overridable from a Config).
         let path = tmp("desktop-mcp");
         let a = apply(&cfg(path.clone(), false));
-        rtok_agent_sdk::register_mcp(&a, &path, "rtok", &desktop_command(), &["mcp"]).unwrap();
+        rtok_agent_sdk::register_mcp(
+            &a,
+            &path,
+            "rtok",
+            &desktop_command(),
+            &crate::agents::mcp_args("claude"),
+        )
+        .unwrap();
         // Compare the parsed value: a Windows path's `\` is `\\` in the raw JSON (T83.5).
         let raw = fs::read_to_string(&path).unwrap();
         let written: Value = serde_json::from_str(&raw).unwrap();
@@ -1154,11 +1174,21 @@ mod tests {
         let path = tmp("desktop-mcp-independent");
         let a = apply(&cfg(path.clone(), false));
         for _ in 0..2 {
-            rtok_agent_sdk::register_mcp(&a, &path, "rtok", &desktop_command(), &["mcp"]).unwrap();
+            rtok_agent_sdk::register_mcp(
+                &a,
+                &path,
+                "rtok",
+                &desktop_command(),
+                &crate::agents::mcp_args("claude"),
+            )
+            .unwrap();
         }
         assert!(mcp::has_entry(&path, "mcpServers", "rtok"));
         let raw: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(raw["mcpServers"]["rtok"]["args"], json!(["mcp"]));
+        assert_eq!(
+            raw["mcpServers"]["rtok"]["args"],
+            json!(["mcp", "--host", "claude"])
+        );
     }
 
     /// T246 via the Claude wrapper: an entry the user pointed elsewhere is left alone on
@@ -1377,7 +1407,7 @@ mod tests {
             {"type":"command","command":"/old/store/rtok/v0.1.0/rtok hook PreToolUse","timeout":3}
         ]}]});
         let want = command("rtok", "PreToolUse");
-        let report = insert_ours(&mut hooks, &ENTRIES[..1], "rtok", "timeout", 7);
+        let report = insert_ours(&mut hooks, &claude_entries()[..1], "rtok", "timeout", 7);
         assert_eq!(
             report,
             format!("~ PreToolUse Bash {want}\n1 updates"),
@@ -1390,7 +1420,7 @@ mod tests {
         assert_eq!(hooks["PreToolUse"].as_array().unwrap().len(), 1);
         let before = hooks.clone();
         assert_eq!(
-            insert_ours(&mut hooks, &ENTRIES[..1], "rtok", "timeout", 7),
+            insert_ours(&mut hooks, &claude_entries()[..1], "rtok", "timeout", 7),
             NO_CHANGES
         );
         assert_eq!(hooks, before);
@@ -1442,12 +1472,17 @@ mod tests {
     /// plugins/claude`).
     #[test]
     fn plugin_tree_matches_the_installer() {
+        use crate::agents::hook_events;
         let parse = |s: &str| serde_json::from_str::<Value>(s).unwrap();
         let hooks = parse(include_str!("../../../plugins/claude/hooks/hooks.json"));
         let timeout = Config::default().setup.hook_timeout_s;
-        // T262.1: the file is the list; the shared `ENTRIES` other hosts take must lead it.
-        assert_eq!(claude_entries()[..ENTRIES.len()], *ENTRIES);
+        // T262.1: the file is the list; T390.1: the table's `claude` rows say the same, and
+        // Kimi's rows are those minus `SubagentStart`.
+        assert_eq!(claude_entries(), hook_events::entries("claude"));
         assert!(claude_entries().contains(&("SubagentStart", "")));
+        let mut kimi_expected = claude_entries().to_vec();
+        kimi_expected.retain(|&(event, _)| event != "SubagentStart");
+        assert_eq!(hook_events::entries("kimi"), kimi_expected);
         let mut want = json!({});
         for &(event, matcher) in claude_entries() {
             // T178: prefer the tiny `rtok-hook` client (resident), then `rtok hook`, then
@@ -1462,6 +1497,13 @@ mod tests {
                 e["matcher"] = json!(matcher);
             }
             array_at(&mut want, event).push(e);
+        }
+        // T159: once each, plugin only (D21 singleton), through the launcher with its own
+        // fallback and a timeout that fits a fetch plus `git worktree add`.
+        for event in ["WorktreeCreate", "WorktreeRemove"] {
+            let cmd = format!("\"${{CLAUDE_PLUGIN_ROOT}}/scripts/worktree.sh\" {event}");
+            let entry = json!({"hooks": [{"type": "command", "command": cmd, "timeout": 120}]});
+            array_at(&mut want, event).push(entry);
         }
         assert_eq!(hooks["hooks"], want);
         let manifest = parse(include_str!(
@@ -1541,13 +1583,13 @@ mod tests {
 
     /// A marketplace already pointed at the GitHub repo skips `marketplace add`: only the
     /// install step is offered. Shape verified against a real `known_marketplaces.json`
-    /// this machine wrote for `claude plugin marketplace add listepo/rtok`.
+    /// this machine wrote for `claude plugin marketplace add pyrlyn/rtok`.
     #[test]
     fn plugin_dry_run_skips_marketplace_add_when_already_known() {
         let dir = plugin_dir("plugin-known-market");
         fs::write(
             dir.join("plugins/known_marketplaces.json"),
-            r#"{"rtok":{"source":{"source":"github","repo":"listepo/rtok"}}}"#,
+            r#"{"rtok":{"source":{"source":"github","repo":"pyrlyn/rtok"}}}"#,
         )
         .unwrap();
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
@@ -1566,7 +1608,7 @@ mod tests {
         let dir = plugin_dir("plugin-fresh");
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
         assert!(
-            report.contains("claude plugin marketplace add listepo/rtok"),
+            report.contains("claude plugin marketplace add pyrlyn/rtok"),
             "{report}"
         );
         assert!(
@@ -1591,10 +1633,29 @@ mod tests {
         .unwrap();
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
         assert!(
-            report.contains("claude plugin marketplace remove rtok && claude plugin marketplace add listepo/rtok && claude plugin install rtok@rtok"),
+            report.contains("claude plugin marketplace remove rtok && claude plugin marketplace add pyrlyn/rtok && claude plugin install rtok@rtok"),
             "{report}"
         );
         assert!(!report.contains("uninstall"), "{report}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A marketplace added before the repository moved from `listepo` to `pyrlyn` still
+    /// records `listepo/rtok`. GitHub redirects that name today, but nothing guarantees it
+    /// keeps doing so, so the entry reads as stale and is re-pointed at the new repo.
+    #[test]
+    fn plugin_dry_run_repoints_a_marketplace_added_under_the_old_repo_name() {
+        let dir = plugin_dir("plugin-old-repo-market");
+        fs::write(
+            dir.join("plugins/known_marketplaces.json"),
+            r#"{"rtok":{"source":{"source":"github","repo":"listepo/rtok"}}}"#,
+        )
+        .unwrap();
+        let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
+        assert!(
+            report.contains("claude plugin marketplace remove rtok && claude plugin marketplace add pyrlyn/rtok && claude plugin install rtok@rtok"),
+            "{report}"
+        );
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1618,7 +1679,7 @@ mod tests {
         let report = plugin(&plugin_cfg(&dir, true), false).unwrap();
         assert_ne!(report, NO_CHANGES);
         assert!(
-            report.contains("claude plugin uninstall rtok@rtok && claude plugin marketplace remove rtok && claude plugin marketplace add listepo/rtok && claude plugin install rtok@rtok"),
+            report.contains("claude plugin uninstall rtok@rtok && claude plugin marketplace remove rtok && claude plugin marketplace add pyrlyn/rtok && claude plugin install rtok@rtok"),
             "{report}"
         );
         let _ = fs::remove_dir_all(dir);
@@ -1638,7 +1699,7 @@ mod tests {
         fs::write(plugins.join("known_marketplaces.json"), known).unwrap();
     }
 
-    const GITHUB: &str = r#"{"source":"github","repo":"listepo/rtok"}"#;
+    const GITHUB: &str = r#"{"source":"github","repo":"pyrlyn/rtok"}"#;
 
     /// Same version on record as the one running: skip, name the version, run no `claude`.
     #[test]
@@ -1683,7 +1744,7 @@ mod tests {
         let report = plugin_update(&plugin_cfg(&dir, true)).unwrap();
         assert!(report.starts_with("offer plugins/claude → "), "{report}");
         assert!(
-            report.contains("claude plugin marketplace add listepo/rtok"),
+            report.contains("claude plugin marketplace add pyrlyn/rtok"),
             "{report}"
         );
         assert!(
@@ -1721,7 +1782,7 @@ mod tests {
         for step in [
             "uninstall rtok@rtok",
             "marketplace remove rtok",
-            "marketplace add listepo/rtok",
+            "marketplace add pyrlyn/rtok",
         ] {
             assert!(report.contains(step), "{step}: {report}");
         }

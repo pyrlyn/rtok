@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! ZCode installer (`rtok agents install zcode`, plan T46.1).
 //!
 //! Z.ai's ZCode desktop app reads a Claude-compatible hook protocol from
@@ -14,6 +18,7 @@ use rtok_agent_sdk::{NO_CHANGES, array_at, edit_json, object_at};
 use serde_json::{Value, json};
 
 use super::claude::{desktop_command, insert_ours, strip_ours};
+use super::hook_events;
 use super::plugin::HostPlugin;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
@@ -31,19 +36,11 @@ static VARIANTS: [Variant; 1] = [Variant {
     ],
 }];
 
-/// The Claude entries ZCode documents, by name — no Skill matcher, no PreCompact,
-/// PostCompact or SessionEnd. A positional `&ENTRIES[..5]` let the T62.1 Skill insert
-/// silently swap SessionStart out of the installed set.
-const ZCODE_ENTRIES: &[(&str, &str)] = &[
-    ("PreToolUse", "Bash"),
-    ("PreToolUse", "Read"),
-    ("PostToolUse", "*"),
-    ("UserPromptSubmit", ""),
-    ("SessionStart", ""),
-];
-
-fn events() -> &'static [(&'static str, &'static str)] {
-    ZCODE_ENTRIES
+/// The Claude entries ZCode documents, by name (the `zcode` rows of [`hook_events`]) — no Skill
+/// matcher, no PreCompact, PostCompact or SessionEnd. A positional prefix of Claude's list let
+/// the T62.1 Skill insert silently swap SessionStart out of the installed set.
+fn events() -> Vec<(&'static str, &'static str)> {
+    hook_events::entries("zcode")
 }
 
 const NAME: &str = "rtok";
@@ -55,14 +52,14 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
     edit_json(&a, path, |root| {
         if remove {
             let events_obj = root.get_mut("hooks").and_then(|h| h.get_mut("events"));
-            return strip_ours(&a, path, events_obj, events(), "timeoutMs", timeout_ms);
+            return strip_ours(&a, path, events_obj, &events(), "timeoutMs", timeout_ms);
         }
         let hooks = object_at(root, "hooks");
         let enable = hooks.get("enabled") != Some(&json!(true));
         hooks["enabled"] = json!(true);
         let report = insert_ours(
             object_at(hooks, "events"),
-            events(),
+            &events(),
             &desktop_command(),
             "timeoutMs",
             timeout_ms,
@@ -77,7 +74,7 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 
 /// The `mcp.servers.rtok` entry [`register_mcp`] writes.
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
+    json!({"command": cmd, "args": super::mcp_args("zcode")})
 }
 
 /// `mcp.servers.rtok` → `<abs rtok> mcp`.
@@ -89,7 +86,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         "mcp.servers",
         NAME,
         mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "zcode"),
     )
 }
 

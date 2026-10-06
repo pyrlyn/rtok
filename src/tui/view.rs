@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! The shell (T15.2): a header line, the tab bar, the page body, a footer. The tabs
 //! are the model's page list, never a second one (D23). The Overview tab renders CTT,
 //! per-plugin savings bars and a per-turn sparkline off the snapshot (T15.3); the
@@ -180,6 +184,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "config" => frame.render_widget(config_page(app), area),
         "services" => frame.render_widget(services_page(app), area),
         "worktrees" => frame.render_widget(worktrees_page(app), area),
+        "usage" => frame.render_widget(usage_page(app), area),
         page => unreachable!("page `{page}` has no TUI body — surface_parity holds the list"),
     }
 }
@@ -310,9 +315,31 @@ const BAR_WIDTH: usize = 16;
 /// the row a toggle would hit, and a status line below — the keys, and what the last
 /// toggle did. The toggle itself is [`App`]'s; this only renders what it left behind.
 fn render_plugins(frame: &mut Frame, app: &App, area: Rect) {
-    let [table, status] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
+    let [table, fields, status] = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(area);
     frame.render_widget(plugins_table(app), table);
+    frame.render_widget(Paragraph::new(plugin_fields_line(app)), fields);
     frame.render_widget(Paragraph::new(plugins_status_line(app)), status);
+}
+
+/// The cursor row's page fields, `key value` pairs on one line (T419): the same pairs the
+/// web Plugins page lists, so a non-saving signal such as checkpoint prompt quality is
+/// readable here without a detail pane.
+fn plugin_fields_line(app: &App) -> Line<'static> {
+    let Some(plugin) = app.snapshot().plugins.get(app.plugin_cursor()) else {
+        return Line::default();
+    };
+    let text = plugin
+        .fields
+        .iter()
+        .map(|(k, v)| format!("{k} {v}"))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    Line::styled(text, theme::muted())
 }
 
 /// One row per catalogue plugin, `▸` on the cursor row, the `on` column saying what the
@@ -474,6 +501,13 @@ fn worktrees_page(app: &App) -> Paragraph<'static> {
         return empty("worktrees did not answer this tick — `rtok worktree list` has the details");
     };
     Paragraph::new(text.clone())
+}
+
+/// The model's Usage page (T358.5): `rtok agents usage`'s screen, verbatim — the snapshot
+/// carries the report's own text, so the tui sums nothing. Reads happen off the tick: the
+/// text says "reading usage…" until the first one lands, and why when one fails.
+fn usage_page(app: &App) -> Paragraph<'static> {
+    Paragraph::new(app.snapshot().agent_usage.text.clone())
 }
 
 /// The model's Calls page (T15.5): the ledger's recent rows, newest first — surface,
@@ -1051,6 +1085,22 @@ mod tests {
         }
     }
 
+    /// T358.5: the Usage tab shows the snapshot's `agent_usage.text`, the CLI's own screen.
+    #[test]
+    fn usage_tab_renders_the_cli_screen() {
+        let cfg = config();
+        let mut app = App::new(&cfg);
+        while app.page() != "usage" {
+            app.key(KeyCode::Right, KeyModifiers::NONE);
+        }
+        let mut snap = crate::web::model::snapshot(&cfg);
+        snap.agent_usage.text = "rtok agents usage: logs from 2 agents\n  1.2M tokens\n".into();
+        app.refresh(snap);
+        let screen = screen(&app);
+        assert!(screen.contains("logs from 2 agents"), "{screen}");
+        assert!(screen.contains("1.2M tokens"), "{screen}");
+    }
+
     /// The bar's guards: nothing saved is no bar.
     #[test]
     fn bar_draws_nothing_for_nothing_saved() {
@@ -1081,6 +1131,27 @@ mod tests {
         );
         app.key(KeyCode::Down, KeyModifiers::NONE);
         assert!(screen(&app).contains("▸ cmd"), "the cursor follows Down");
+    }
+
+    /// T419: the memory row's fields line shows the checkpoint prompt counts the store
+    /// holds, read through the same model query as the web Plugins page.
+    #[test]
+    fn plugins_tab_shows_the_cursor_rows_checkpoint_counts() {
+        let (cfg, store) = fresh_store("plugin-fields");
+        store
+            .kv_set(
+                &crate::plugin::plugin_state_key("memory", "checkpoint:s1"),
+                r#"{"typed":4,"skipped":9}"#,
+            )
+            .unwrap();
+        drop(store);
+        let app = crate::tui::app::tests::cursor_on_plugin(&cfg, "memory");
+        let screen = screen(&app);
+        assert!(screen.contains("checkpoint prompts typed 4"), "{screen}");
+        assert!(
+            screen.contains("checkpoint host records skipped 9"),
+            "{screen}"
+        );
     }
 
     /// T15.4: a toggle writes `<home>/config.toml` through `config set`'s writer and

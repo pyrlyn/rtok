@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T121 + D21: the Codex plugin tree is a manifest and rtok's hooks (T275/D33 dropped its MCP
 //! server).
 
@@ -39,7 +43,7 @@ fn marketplace_lists_this_folder() {
     );
 }
 
-/// The repo-root marketplace `codex plugin marketplace add listepo/rtok` resolves (T140):
+/// The repo-root marketplace `codex plugin marketplace add pyrlyn/rtok` resolves (T140):
 /// same shape as the nested dev marketplace above, but its one plugin points at the
 /// `plugins/codex` subdirectory instead of `./`, since the marketplace file itself lives at
 /// the repo root, not inside the plugin's own folder.

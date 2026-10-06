@@ -16,15 +16,20 @@ index|measurements_session_ts|measurements|CREATE INDEX measurements_session_ts 
 index|messages_to_agent|messages|CREATE INDEX messages_to_agent ON messages (to_agent, id)
 index|note_embeddings_model|note_embeddings|CREATE INDEX note_embeddings_model ON note_embeddings (model)
 index|notes_topic|notes|CREATE UNIQUE INDEX notes_topic ON notes (COALESCE(project, ''), kind, title)
+index|project_links_to|project_links|CREATE INDEX project_links_to ON project_links(to_id)
+index|projects_one_selected|projects|CREATE UNIQUE INDEX projects_one_selected ON projects(selected) WHERE selected = 1
 index|sqlite_autoindex___diesel_schema_migrations_1|__diesel_schema_migrations|
 index|sqlite_autoindex_agents_1|agents|
 index|sqlite_autoindex_archive_1|archive|
 index|sqlite_autoindex_archive_decisions_1|archive_decisions|
 index|sqlite_autoindex_extractor_1|extractor|
+index|sqlite_autoindex_file_rank_1|file_rank|
 index|sqlite_autoindex_hosts_1|hosts|
 index|sqlite_autoindex_kv_1|kv|
 index|sqlite_autoindex_models_1|models|
 index|sqlite_autoindex_otel_export_1|otel_export|
+index|sqlite_autoindex_project_links_1|project_links|
+index|sqlite_autoindex_projects_1|projects|
 index|sqlite_autoindex_providers_1|providers|
 index|sqlite_autoindex_read_cache_1|read_cache|
 index|sqlite_autoindex_sessions_1|sessions|
@@ -37,13 +42,14 @@ index|tokens_plugin|tokens|CREATE INDEX tokens_plugin ON tokens (plugin, ts)
 index|usage_call|usage|CREATE INDEX usage_call ON usage (call_id)
 index|usage_session|usage|CREATE INDEX usage_session ON usage (session, ts)
 table|__diesel_schema_migrations|__diesel_schema_migrations|CREATE TABLE __diesel_schema_migrations ( version VARCHAR(50) PRIMARY KEY NOT NULL, run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP )
-table|agents|agents|CREATE TABLE agents ( id TEXT PRIMARY KEY, -- NOT NULL: SQLite treats NULLs as distinct in a UNIQUE index, so a NULL host_id would -- make `agents_host_session` below insert a new row on every event instead of upserting. host_id INTEGER NOT NULL REFERENCES hosts(id), host_session_id TEXT NOT NULL, parent_key TEXT NOT NULL DEFAULT '', parent_id TEXT REFERENCES agents(id), cwd TEXT, started_at INTEGER NOT NULL DEFAULT (unixepoch()), last_seen INTEGER NOT NULL DEFAULT (unixepoch()), ended_at INTEGER, activity TEXT, status_text TEXT )
+table|agents|agents|CREATE TABLE agents ( id TEXT PRIMARY KEY, -- NOT NULL: SQLite treats NULLs as distinct in a UNIQUE index, so a NULL host_id would -- make `agents_host_session` below insert a new row on every event instead of upserting. host_id INTEGER NOT NULL REFERENCES hosts(id), host_session_id TEXT NOT NULL, parent_key TEXT NOT NULL DEFAULT '', parent_id TEXT REFERENCES agents(id), cwd TEXT, started_at INTEGER NOT NULL DEFAULT (unixepoch()), last_seen INTEGER NOT NULL DEFAULT (unixepoch()), ended_at INTEGER, activity TEXT, status_text TEXT , ancestors TEXT)
 table|archive|archive|CREATE TABLE archive ( id TEXT PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, tool TEXT, bytes INTEGER NOT NULL, path TEXT NOT NULL, sha256 TEXT NOT NULL , agent_id TEXT NULL)
 table|archive_decisions|archive_decisions|CREATE TABLE "archive_decisions" ( session TEXT NOT NULL, tool_use_id TEXT NOT NULL, archive_id TEXT NOT NULL REFERENCES archive(id), pointer TEXT NOT NULL, expanded_ts INTEGER, ts INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (session, tool_use_id) )
 table|call_io|call_io|CREATE TABLE call_io ( call_id INTEGER PRIMARY KEY REFERENCES calls(id), request_bytes INTEGER NOT NULL DEFAULT 0, response_bytes INTEGER NOT NULL DEFAULT 0, request_sha256 TEXT, response_sha256 TEXT, request_json TEXT, response_json TEXT, request_archive TEXT REFERENCES archive(id), response_archive TEXT REFERENCES archive(id) , request_raw BLOB NULL, response_raw BLOB NULL)
 table|calls|calls|CREATE TABLE calls ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session_id TEXT NOT NULL REFERENCES sessions(id), host_id INTEGER REFERENCES hosts(id), provider_id INTEGER REFERENCES providers(id), model_id INTEGER REFERENCES models(id), plugin TEXT, surface TEXT NOT NULL, kind TEXT NOT NULL, parent_id INTEGER REFERENCES calls(id), name TEXT, ms REAL, ok INTEGER NOT NULL DEFAULT 1, error TEXT )
 table|events|events|CREATE TABLE events ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, event TEXT NOT NULL, tool TEXT, plugin TEXT, ms REAL )
 table|extractor|extractor|CREATE TABLE extractor ( root TEXT PRIMARY KEY NOT NULL, fingerprint TEXT NOT NULL , indexed_at INTEGER)
+table|file_rank|file_rank|CREATE TABLE file_rank ( root TEXT PRIMARY KEY NOT NULL, graph TEXT NOT NULL )
 table|hosts|hosts|CREATE TABLE hosts ( id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()) )
 table|kv|kv|CREATE TABLE kv ( key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL )
 table|logs|logs|CREATE TABLE logs ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), level TEXT NOT NULL, source TEXT NOT NULL, name TEXT NOT NULL, session TEXT, call_id INTEGER REFERENCES calls(id), plugin TEXT, message TEXT NOT NULL, fields TEXT )
@@ -58,6 +64,8 @@ table|notes_fts_data|notes_fts_data|CREATE TABLE 'notes_fts_data'(id INTEGER PRI
 table|notes_fts_docsize|notes_fts_docsize|CREATE TABLE 'notes_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
 table|notes_fts_idx|notes_fts_idx|CREATE TABLE 'notes_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
 table|otel_export|otel_export|CREATE TABLE otel_export ( stream TEXT PRIMARY KEY, mark BIGINT NOT NULL DEFAULT 0 )
+table|project_links|project_links|CREATE TABLE project_links ( from_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, to_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('manual', 'auto')), reason TEXT, unlinked INTEGER NOT NULL DEFAULT 0 CHECK (unlinked IN (0, 1)), created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (from_id, to_id), CHECK (from_id != to_id) )
+table|projects|projects|CREATE TABLE projects ( id INTEGER PRIMARY KEY, root TEXT NOT NULL UNIQUE, name TEXT, origin TEXT NOT NULL CHECK (origin IN ('manual', 'session', 'worktree', 'mcp', 'reference')), created_at INTEGER NOT NULL DEFAULT (unixepoch()), last_used_at INTEGER NOT NULL DEFAULT (unixepoch()), selected INTEGER NOT NULL DEFAULT 0 CHECK (selected IN (0, 1)) )
 table|providers|providers|CREATE TABLE providers ( id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()) )
 table|read_cache|read_cache|CREATE TABLE read_cache ( session TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT NOT NULL, ts INTEGER NOT NULL DEFAULT (unixepoch()), archive_id TEXT, PRIMARY KEY (session, path) )
 table|sessions|sessions|CREATE TABLE sessions ( id TEXT PRIMARY KEY, host_id INTEGER REFERENCES hosts(id), project TEXT, cwd TEXT, source TEXT, started_at INTEGER NOT NULL DEFAULT (unixepoch()), ended_at INTEGER )

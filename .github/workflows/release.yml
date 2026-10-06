@@ -10,8 +10,8 @@
 # * uploads those artifacts to temporary workflow zip
 # * on success, uploads the artifacts to a GitHub Release
 #
-# Note that the GitHub Release will be created with a generated
-# title/body based on your changelogs.
+# Note that a GitHub Release with this tag is assumed to exist as a draft
+# with the appropriate title/body, and will be undrafted for you.
 
 name: Release
 permissions:
@@ -143,7 +143,7 @@ jobs:
         uses: "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c"
         with:
           "cache_key_prefix": "mise-v1-release"
-          "install_args": "rust"
+          "install_args": "rust node"
       - name: "Add release targets to the mise toolchain"
         run: |
           set -euo pipefail
@@ -163,14 +163,12 @@ jobs:
         with:
           "cache-on-failure": true
           "shared-key": "release-dist"
-      - name: "Install wasm-pack"
-        uses: "taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73"
-        with:
-          "tool": "wasm-pack"
-      - name: "Build the Slint WASM bundle"
+      - name: "Build the SPA"
         run: |
-          rustup target add wasm32-unknown-unknown
-          tools/webui-bundle.sh --require
+          set -euo pipefail
+          mise exec -- npm --prefix brand ci
+          mise exec -- npm --prefix web ci
+          mise exec -- npm --prefix web run build
           echo "RTOK_WEB_EMBED=require" >> "$GITHUB_ENV"
         shell: "bash"
       - name: "Generate man pages and completions"
@@ -420,14 +418,13 @@ jobs:
       - name: Create GitHub Release
         env:
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
-          ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
-          ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
           RELEASE_COMMIT: "${{ github.sha }}"
         run: |
-          # Write and read notes from a file to avoid quoting breaking things
-          echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
+          # If we're editing a release in place, we need to upload things ahead of time
+          gh release upload "${{ needs.plan.outputs.tag }}" artifacts/*
 
-          # Append archive sizes so the Release page shows MiB without opening Assets.
+          # bump.yml wrote the notes; append archive sizes so the Release page shows MiB.
+          gh release view "${{ needs.plan.outputs.tag }}" --json body --jq .body > "$RUNNER_TEMP/notes.txt"
           {
             echo
             echo "## Download sizes"
@@ -448,7 +445,7 @@ jobs:
           } >> "$RUNNER_TEMP/notes.txt"
           sed -n '/^## Download sizes$/,$p' "$RUNNER_TEMP/notes.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          gh release edit "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --notes-file "$RUNNER_TEMP/notes.txt" --draft=false
 
   announce:
     needs:
@@ -470,7 +467,7 @@ jobs:
   # Added by tools/dist-generate.sh: a failed release (not a pull request or a dry run)
   # opens or comments on a `release-failure` issue that mentions and assigns @listepo. The
   # only release failure notification: GitHub cannot filter Actions notifications per
-  # workflow. Pinned to pyrlyn/infra's ci/notify-release-failure; repin to its merge commit.
+  # workflow. Pinned to pyrlyn/ci's ci/notify-release-failure; repin to its merge commit.
   notify-failure:
     needs: [plan, build-local-artifacts, build-global-artifacts, host, announce]
     if: >-
@@ -482,7 +479,7 @@ jobs:
       "actions": "read"
       "issues": "write"
     steps:
-      - uses: pyrlyn/infra/.github/actions/notify-release-failure@d709124d53dd4923eff8f594b3155842508b0049
+      - uses: pyrlyn/ci/.github/actions/notify-release-failure@d709124d53dd4923eff8f594b3155842508b0049
         with:
           ref: ${{ inputs.tag }}
           needs: ${{ toJSON(needs) }}

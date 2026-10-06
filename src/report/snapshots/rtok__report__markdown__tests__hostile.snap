@@ -45,7 +45,7 @@ Busts: 0 over 1 turns in 1 session(s).
 
 ## Expand
 
-How often a live-zone pointer had to be expanded (`archive_decisions` rows, T5.4).
+How often a live-zone pointer had to be expanded (`archive_decisions` rows).
 
 `rtok expand` froze 0 of 1 live-zone pointers (—%). Expanded: <script>alert(1)</script> \| `tick` second line.
 
@@ -65,6 +65,9 @@ Live probes (the `rtok doctor` page), not store rows.
 
 ```text
 hooks 0
+hooks check none found
+duplicate hooks none found
+duplicate mcp servers none found
 mcp
 proxy <script>alert(1)</script> | `tick`
 second line

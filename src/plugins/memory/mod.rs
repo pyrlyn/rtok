@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Notes API: `mem_save` / `mem_search` / `mem_get` (plan T6.1).
 
 pub mod export;
@@ -111,6 +115,7 @@ fn title_line(id: i32, title: &str, body_tokens: u32) -> String {
 }
 
 /// Build capped index text from `(id, title, body_token_estimate)` rows, dropping newest last.
+/// A lone entry that still overflows has its title halved, then is dropped: the cap holds.
 fn render_title_index(cx: &Ctx, entries: &mut Vec<(i32, String, u32)>, cap: u32) -> String {
     loop {
         let mut lines = vec![INDEX_GUIDE.to_string()];
@@ -118,19 +123,51 @@ fn render_title_index(cx: &Ctx, entries: &mut Vec<(i32, String, u32)>, cap: u32)
             lines.push(title_line(*id, title, *tok));
         }
         let text = lines.join("\n");
-        if cx.estimate(&text, Class::Prose) <= cap || entries.len() <= 1 {
+        if cx.estimate(&text, Class::Prose) <= cap {
             return text;
         }
-        entries.pop();
+        if entries.len() > 1 {
+            entries.pop();
+        } else if let Some(entry) = entries.first_mut().filter(|e| !e.1.is_empty()) {
+            let keep = entry.1.chars().count() / 2;
+            entry.1 = entry.1.chars().take(keep).collect();
+        } else {
+            entries.clear();
+            return INDEX_GUIDE.to_string();
+        }
     }
 }
 
-fn body_token_estimate(cx: &Ctx, id: i32) -> u32 {
-    cx.get_note_body(id)
-        .ok()
-        .flatten()
-        .map(|body| cx.estimate(&body, Class::Prose))
-        .unwrap_or(0)
+/// Byte length and token estimate of each note's body, one read per note. The title line
+/// shows the estimate and the measurement sums both, and a body is the heaviest thing the
+/// SessionStart hook reads, so the second read per note is not repeated. A note whose body
+/// is gone is absent.
+fn body_sizes(
+    cx: &Ctx,
+    ids: impl Iterator<Item = i32>,
+) -> std::collections::HashMap<i32, (u64, u32)> {
+    ids.filter_map(|id| {
+        let body = cx.get_note_body(id).ok().flatten()?;
+        Some((id, (body.len() as u64, cx.estimate(&body, Class::Prose))))
+    })
+    .collect()
+}
+
+fn body_tokens(sizes: &std::collections::HashMap<i32, (u64, u32)>, id: i32) -> u32 {
+    sizes.get(&id).map_or(0, |s| s.1)
+}
+
+/// The `(before_bytes, est_before)` a recall replaced: the bodies of the notes it kept.
+fn bodies_before(
+    sizes: &std::collections::HashMap<i32, (u64, u32)>,
+    entries: &[(i32, String, u32)],
+) -> (u64, u32) {
+    entries
+        .iter()
+        .filter_map(|(id, _, _)| sizes.get(id))
+        .fold((0, 0), |(bytes, est), (b, t)| {
+            (bytes + b, est.saturating_add(*t))
+        })
 }
 
 fn remember_save(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
@@ -171,23 +208,17 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     if hits.is_empty() {
         return None;
     }
+    let sizes = body_sizes(cx, hits.iter().map(|h| h.id));
     let mut entries: Vec<(i32, String, u32)> = hits
         .iter()
-        .map(|h| (h.id, h.title.clone(), body_token_estimate(cx, h.id)))
+        .map(|h| (h.id, h.title.clone(), body_tokens(&sizes, h.id)))
         .collect();
     let text = render_title_index(cx, &mut entries, cap);
     let sha = crate::store::hex_sha256(text.as_bytes());
     if cx.last_measurement_ref("memory", "prompt_recall").ok()? == Some(sha.clone()) {
         return None;
     }
-    let mut before_bytes = 0u64;
-    let mut est_before = 0u32;
-    for (id, _, _) in &entries {
-        if let Ok(Some(body)) = cx.get_note_body(*id) {
-            before_bytes += body.len() as u64;
-            est_before = est_before.saturating_add(cx.estimate(&body, Class::Prose));
-        }
-    }
+    let (before_bytes, est_before) = bodies_before(&sizes, &entries);
     let after_bytes = text.len() as u64;
     let est_after = cx.estimate(&text, Class::Prose);
     let _ = cx.record(&Measurement {
@@ -214,6 +245,7 @@ fn recall(cx: &Ctx) -> Option<Injection> {
     let project = resolved_project(cx);
     let rows = cx.list_note_titles(project.as_deref(), n).ok()?;
     let mut kept: Vec<(i32, String, u32)> = Vec::new();
+    let mut sizes = std::collections::HashMap::new();
     let text = if rows.is_empty() {
         let line = empty_project_line(project.as_deref());
         if cx.estimate(&line, Class::Prose) > cap {
@@ -221,20 +253,14 @@ fn recall(cx: &Ctx) -> Option<Injection> {
         }
         line
     } else {
+        sizes = body_sizes(cx, rows.iter().map(|r| r.0));
         kept = rows
             .into_iter()
-            .map(|(id, title)| (id, title, body_token_estimate(cx, id)))
+            .map(|(id, title)| (id, title, body_tokens(&sizes, id)))
             .collect();
         render_title_index(cx, &mut kept, cap)
     };
-    let mut before_bytes = 0u64;
-    let mut est_before = 0u32;
-    for (id, _, _) in &kept {
-        if let Ok(Some(body)) = cx.get_note_body(*id) {
-            before_bytes += body.len() as u64;
-            est_before = est_before.saturating_add(cx.estimate(&body, Class::Prose));
-        }
-    }
+    let (before_bytes, est_before) = bodies_before(&sizes, &kept);
     let after_bytes = text.len() as u64;
     let est_after = cx.estimate(&text, Class::Prose);
     let _ = cx.record(&Measurement {
@@ -381,6 +407,23 @@ pub fn mem_revise(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One over-long title used to be returned whole, past `cap`.
+    #[test]
+    fn a_single_long_title_cannot_break_the_index_cap() {
+        let cx = crate::plugin::Runtime::in_memory("t327-title-cap").unwrap();
+        let ctx = Ctx::new(&cx);
+        let cap = 30;
+        let mut entries = vec![(1, "x".repeat(2000), 5)];
+        let text = render_title_index(&ctx, &mut entries, cap);
+        assert!(ctx.estimate(&text, Class::Prose) <= cap, "{text}");
+        assert!(text.starts_with(INDEX_GUIDE), "{text}");
+        assert!(
+            text.contains("1 x"),
+            "the entry is shortened, not lost: {text}"
+        );
+    }
+
     #[test]
     fn remember_prefix_saves_a_note_and_repeats_same_id() {
         use rtok_plugin_sdk::PromptSubmit;
@@ -508,6 +551,27 @@ mod tests {
         assert!(inj.text.contains(INDEX_GUIDE), "{}", inj.text);
         assert!(!inj.text.contains(secret), "{}", inj.text);
         assert!(cx.estimate(&inj.text, Class::Prose) <= 200);
+    }
+
+    /// T428: the recall measurement still prices the bodies the titles replace, now from the
+    /// one read per note: their summed bytes and token estimates.
+    #[test]
+    fn recall_measurement_sums_the_bodies_it_replaced() {
+        let cx = crate::plugin::Runtime::in_memory("t418-sizes").unwrap();
+        let bodies = ["short body", "a longer body, still plain ascii text"];
+        for (i, body) in bodies.iter().enumerate() {
+            mem_save(&cx, "note", &format!("n{i}"), body, None).unwrap();
+        }
+        recall(&Ctx::new(&cx)).unwrap();
+        let rows = cx.store.list_measurements("memory").unwrap();
+        let row = rows
+            .iter()
+            .find(|r| r.kind == "recall")
+            .expect("recall row");
+        let bytes: usize = bodies.iter().map(|b| b.len()).sum();
+        let est: u32 = bodies.iter().map(|b| cx.estimate(b, Class::Prose)).sum();
+        assert_eq!(row.before_bytes, bytes as i64);
+        assert_eq!(row.est_before, est as i32);
     }
 
     /// T293: zero notes for the resolved project inject one line naming that key.

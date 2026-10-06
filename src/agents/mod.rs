@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Agent hosts (`rtok agents install|remove|list`).
 //!
 //! Everything the hosts share — backup, the dry-run/idempotence write gate, `mcpServers`
@@ -20,10 +24,13 @@ pub mod cursor;
 pub mod devin;
 pub mod gemini;
 pub mod grok;
+pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
+pub mod junk_map;
 pub mod kilo;
 pub mod kimi;
+pub mod link;
 pub(crate) mod mcp;
 pub mod mimo;
 pub mod omp;
@@ -33,8 +40,11 @@ pub mod pi;
 pub mod plugin;
 pub(crate) mod plugin_install;
 pub(crate) mod plugin_version;
+pub mod qwen;
 pub mod restart;
+pub mod roo;
 pub mod skill;
+pub mod usage;
 pub mod vscode;
 pub mod windsurf;
 pub mod zcode;
@@ -74,6 +84,8 @@ pub const HOSTS: &[&str] = &[
     "mimo",
     "antigravity",
     "devin",
+    "roo",
+    "qwen",
 ];
 
 /// Every module an rtok install can carry, in print order.
@@ -104,6 +116,8 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "mimo" => Some(&mimo::Mimo),
         "antigravity" => Some(&antigravity::Antigravity),
         "devin" => Some(&devin::Devin),
+        "roo" => Some(&roo::Roo),
+        "qwen" => Some(&qwen::Qwen),
         _ => None,
     }
 }
@@ -187,8 +201,9 @@ pub trait Agent: Sync {
     /// Config files an install writes; copied before any write. Empty for a host that owns a
     /// linked directory instead of a file (pi).
     fn files(&self, cfg: &Config, kind: Kind) -> Vec<PathBuf>;
-    /// Paths whose presence (or whose parent's) means the app is installed. Defaults to
-    /// [`Agent::files`]; a host adds its plugin directory.
+    /// Paths inside the host's own folders; `agents junk list` lists their parents. Not proof
+    /// the app is installed — a folder outlives its app (T426). Defaults to [`Agent::files`]; a
+    /// host adds its plugin directory.
     fn markers(&self, cfg: &Config, kind: Kind) -> Vec<PathBuf> {
         self.files(cfg, kind)
     }
@@ -267,7 +282,7 @@ fn under(home: &Path, path: PathBuf) -> PathBuf {
 
 /// The first `bin` on PATH (`.exe`/`.cmd` on Windows). Under [`HOST_SANDBOX_ENV`], only PATH
 /// entries under the home dir count.
-fn find_on_path(bin: &str) -> Option<PathBuf> {
+pub(crate) fn find_on_path(bin: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     let sandbox = host_sandbox();
     let names: &[String] = if cfg!(windows) {
@@ -422,16 +437,22 @@ pub(crate) fn load_toml(path: &Path) -> Result<DocumentMut> {
         .with_context(|| path.display().to_string())
 }
 
-/// True when the app itself is found: its bundle or binary exists, or one of its marker
-/// paths (or the directory that would hold it) does. Setup skips a missing app instead of
-/// creating its files; removal runs regardless so a half-installed host is cleaned up.
-pub fn present(agent: &dyn Agent, v: &Variant, cfg: &Config) -> bool {
+/// True when the app itself is found: its bundle or binary exists. A config folder alone
+/// does not count — one left behind by an uninstalled app made setup write into it (T426).
+/// Setup refuses a missing app instead of creating its files; removal runs regardless so a
+/// half-installed host is cleaned up.
+pub fn present(v: &Variant) -> bool {
     app_path(v).is_some()
-        || agent.markers(cfg, v.kind).iter().any(|p| {
-            p.exists()
-                || p.parent()
-                    .is_some_and(|d| !d.as_os_str().is_empty() && d.exists())
-        })
+}
+
+/// The named hosts none of whose wanted variants is [`present`]: `agents install|update`
+/// refuses the whole run on them before any backup or write (T426).
+fn absent_hosts(agents: &[&'static dyn Agent], want: impl Fn(Kind) -> bool) -> Vec<&'static str> {
+    agents
+        .iter()
+        .filter(|a| !a.variants().iter().any(|v| want(v.kind) && present(v)))
+        .map(|a| a.id())
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
@@ -643,6 +664,7 @@ pub fn plugin_rows(agent: &dyn Agent, kind: Kind, cfg: &Config) -> Vec<PluginRow
 ///     ✗ not installed  proxy, compress (off)
 ///     − not supported  -
 /// ```
+/// An empty not-installed group is omitted: a lone `-` is not a missing install.
 pub fn plugin_lines(rows: &[PluginRow], indent: &str, console: bool) -> String {
     let mut out = format!("{indent}plugins\n");
     let inner = format!("{indent}  ");
@@ -662,6 +684,10 @@ pub fn plugin_lines(rows: &[PluginRow], indent: &str, console: bool) -> String {
                 }
             })
             .collect();
+        // A dash under "not installed" reads as a failure when nothing is waiting.
+        if ids.is_empty() && state == ModuleState::NotInstalled {
+            continue;
+        }
         let ids = if ids.is_empty() {
             "-".to_string()
         } else {
@@ -785,11 +811,20 @@ pub fn resolve(hosts: &[String]) -> Result<Vec<&'static dyn Agent>> {
 pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
     let agents = resolve(&req.hosts)?;
     let want = |kind: Kind| req.mode == Mode::Remove || wants(kind, req.cli, req.desktop, req.all);
+    if req.mode != Mode::Remove {
+        let absent = absent_hosts(&agents, want);
+        if !absent.is_empty() {
+            bail!("{} is not installed", absent.join(", "));
+        }
+    }
     let mut out = String::new();
     if req.mode != Mode::Remove && !rtok_spawns() {
         out.push_str(
             "warning: rtok is not on PATH; the hooks and MCP entries spawn `rtok` by name and will fail until it is\n",
         );
+    }
+    if req.mode != Mode::Remove && !cfg.setup.dry_run {
+        ensure_hook_client_link_here();
     }
     let mut taken: Vec<PathBuf> = Vec::new();
     if !cfg.setup.dry_run && cfg.setup.backup {
@@ -852,7 +887,7 @@ pub(crate) fn apply_all(
         let mut any = false;
         for v in a.variants().iter().filter(|v| want(v.kind)) {
             any = true;
-            if req.mode != Mode::Remove && !present(a, v, cfg) {
+            if req.mode != Mode::Remove && !present(v) {
                 out.push_str(&block(a, v, cfg, Outcome::NotFound));
                 continue;
             }
@@ -920,7 +955,7 @@ pub fn installed_hosts(cfg: &Config) -> Vec<String> {
             host(id).is_some_and(|a| {
                 a.variants()
                     .iter()
-                    .any(|v| present(a, v, cfg) && !installed_modules(a, v.kind, cfg).is_empty())
+                    .any(|v| present(v) && !installed_modules(a, v.kind, cfg).is_empty())
             })
         })
         .map(ToString::to_string)
@@ -953,7 +988,7 @@ pub fn list(cfg: &Config) -> String {
 /// Same blocks as [`list`], only for `ids` (already-resolved host ids).
 pub fn list_ids(cfg: &Config, ids: &[&str]) -> String {
     visit_hosts(ids, |a, v| {
-        let outcome = if present(a, v, cfg) {
+        let outcome = if present(v) {
             Outcome::Listed
         } else {
             Outcome::NotFound
@@ -1073,14 +1108,36 @@ pub(crate) fn register_local_mcp(
     cfg: &Config,
     path: &std::path::Path,
     key: &str,
+    host: &'static str,
 ) -> Result<String> {
     let cmd = rtok_command();
-    let entry = local_mcp_entry(&cmd);
-    rtok_agent_sdk::register_server(&apply(cfg), path, key, "rtok", entry, &format!("{cmd} mcp"))
+    let entry = local_mcp_entry(&cmd, host);
+    rtok_agent_sdk::register_server(
+        &apply(cfg),
+        path,
+        key,
+        "rtok",
+        entry,
+        &mcp_summary(&cmd, host),
+    )
 }
 
-fn local_mcp_entry(cmd: &str) -> serde_json::Value {
-    json!({"type": "local", "command": [cmd, "mcp"], "enabled": true})
+fn local_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
+    let [sub, flag, id] = mcp_args(host);
+    json!({"type": "local", "command": [cmd, sub, flag, id], "enabled": true})
+}
+
+/// What follows the binary in a host's `rtok mcp` entry: `mcp --host <id>` (T283.2), so the MCP
+/// process knows which host started it without `[hook] host`. One place, so no host spells it
+/// by hand; removal ignores the pair (see `rtok_agent_sdk::judge_owned`), so an entry written
+/// without it is still rtok's own.
+pub(crate) const fn mcp_args(host: &'static str) -> [&'static str; 3] {
+    ["mcp", "--host", host]
+}
+
+/// The report text after `<key>.rtok: ` for a host's entry.
+pub(crate) fn mcp_summary(cmd: &str, host: &'static str) -> String {
+    format!("{cmd} {}", mcp_args(host).join(" "))
 }
 
 /// [`register_local_mcp`]'s remove: only the entry as rtok wrote it (T246.2).
@@ -1088,8 +1145,46 @@ pub(crate) fn unregister_local_mcp(
     cfg: &Config,
     path: &std::path::Path,
     key: &str,
+    host: &'static str,
 ) -> Result<String> {
-    unregister_ours(cfg, path, key, "rtok", &local_mcp_entry("rtok"))
+    unregister_ours(cfg, path, key, "rtok", &local_mcp_entry("rtok", host))
+}
+
+/// `mcpServers.rtok = {command, args}` with no `type` — the stdio shape Cline, its Roo Code
+/// fork, and Windsurf all document. One body so a new host does not copy the JSON.
+pub(crate) fn register_stdio_mcp(
+    cfg: &Config,
+    path: &std::path::Path,
+    host: &'static str,
+) -> Result<String> {
+    let cmd = rtok_command();
+    rtok_agent_sdk::register_server(
+        &apply(cfg),
+        path,
+        "mcpServers",
+        "rtok",
+        stdio_mcp_entry(&cmd, host),
+        &mcp_summary(&cmd, host),
+    )
+}
+
+fn stdio_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
+    json!({"command": cmd, "args": mcp_args(host)})
+}
+
+/// [`register_stdio_mcp`]'s remove: only the entry as rtok wrote it (T246.2).
+pub(crate) fn unregister_stdio_mcp(
+    cfg: &Config,
+    path: &std::path::Path,
+    host: &'static str,
+) -> Result<String> {
+    unregister_ours(
+        cfg,
+        path,
+        "mcpServers",
+        "rtok",
+        &stdio_mcp_entry("rtok", host),
+    )
 }
 
 /// `Agent::installed` for a host whose only module is `mcp`: present iff `path` mentions
@@ -1353,19 +1448,122 @@ pub(crate) fn resolve_rtok_command(
 }
 
 fn bare_rtok_on_path(path: Option<&std::ffi::OsStr>) -> bool {
+    bin_on_path("rtok", path)
+}
+
+/// True when `bin` (`bin.exe` too on Windows) is a file in a `path` directory. No sandbox:
+/// the caller passes the `PATH` value, so a test controls it.
+pub(crate) fn bin_on_path(bin: &str, path: Option<&std::ffi::OsStr>) -> bool {
     let Some(path) = path else {
         return false;
     };
-    for dir in std::env::split_paths(path) {
-        if cfg!(windows) {
-            if dir.join("rtok.exe").is_file() || dir.join("rtok").is_file() {
-                return true;
-            }
-        } else if dir.join("rtok").is_file() {
-            return true;
-        }
+    std::env::split_paths(path).any(|dir| {
+        dir.join(bin).is_file() || (cfg!(windows) && dir.join(format!("{bin}.exe")).is_file())
+    })
+}
+
+/// What [`ensure_hook_client_link`] did (T357); the caller only needs it for tests and doctor.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LinkOutcome {
+    /// `rtok-hook` already resolves on `PATH` (not through a stale link of ours).
+    AlreadyOnPath,
+    /// No `rtok-hook` beside the running executable, no `rtok` on `PATH`, or not unix.
+    Nothing,
+    /// The link was created.
+    Linked,
+    /// A stale or dangling link was re-pointed at this version's client.
+    Relinked,
+    /// The link already points at this version's client.
+    Current,
+    /// Something else owns the name; left alone.
+    Foreign,
+    /// An IO error (read-only directory, race): fail soft, nothing changed.
+    Failed,
+}
+
+/// T357: package managers (ketch) may link only `rtok` onto `PATH`, leaving the fast hook
+/// client `rtok-hook` (T178) unused. Link it next to the `rtok` the hooks run, in the first
+/// `path` directory that has one. Fail soft: never an error; a few stats, so cheap enough for
+/// the start of `rtok mcp`, `rtok hook --serve` and the host-hook install, never per hook.
+pub(crate) fn ensure_hook_client_link(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
+    #[cfg(unix)]
+    {
+        link_hook_client(path, exe)
     }
-    false
+    #[cfg(not(unix))]
+    {
+        let _ = (path, exe);
+        LinkOutcome::Nothing
+    }
+}
+
+#[cfg(unix)]
+fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
+    use std::os::unix::fs::symlink;
+    const NAME: &str = "rtok-hook";
+    let Some(path) = path else {
+        return LinkOutcome::Nothing;
+    };
+    let Some(dir) = std::env::split_paths(path).find(|d| d.join("rtok").is_file()) else {
+        return LinkOutcome::Nothing;
+    };
+    // Only the `rtok` that IS this executable: a dev build or a test binary must never link
+    // into the `PATH` of a different install.
+    let Ok(exe) = std::fs::canonicalize(exe) else {
+        return LinkOutcome::Nothing;
+    };
+    if std::fs::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
+        return LinkOutcome::Nothing;
+    }
+    let link = dir.join(NAME);
+    let meta = std::fs::symlink_metadata(&link);
+    if meta.is_err() && bin_on_path(NAME, Some(path)) {
+        return LinkOutcome::AlreadyOnPath;
+    }
+    let sibling = exe.parent().map(|p| p.join(NAME));
+    let Some(sibling) = sibling.filter(|s| s.is_file()) else {
+        return LinkOutcome::Nothing;
+    };
+    let relink = match meta {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => return LinkOutcome::Failed,
+        Ok(m) if m.file_type().is_symlink() => {
+            let Ok(target) = std::fs::read_link(&link) else {
+                return LinkOutcome::Failed;
+            };
+            let target = dir.join(target);
+            if std::fs::canonicalize(&target).is_ok_and(|t| t == sibling) {
+                return LinkOutcome::Current;
+            }
+            let dangling = !target.exists();
+            if !dangling && target.file_name().is_none_or(|n| n != NAME) {
+                return LinkOutcome::Foreign;
+            }
+            true
+        }
+        Ok(_) => return LinkOutcome::Foreign,
+    };
+    let tmp = dir.join(format!(".{NAME}.{}.tmp", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    if symlink(&sibling, &tmp).is_err() {
+        return LinkOutcome::Failed;
+    }
+    if std::fs::rename(&tmp, &link).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return LinkOutcome::Failed;
+    }
+    if relink {
+        LinkOutcome::Relinked
+    } else {
+        LinkOutcome::Linked
+    }
+}
+
+/// [`ensure_hook_client_link`] for the running process: real `PATH` and executable.
+pub(crate) fn ensure_hook_client_link_here() {
+    if let Ok(exe) = std::env::current_exe() {
+        ensure_hook_client_link(std::env::var_os("PATH").as_deref(), &exe);
+    }
 }
 
 /// Basename of a command path — split on `/` and `\`, drop a trailing `.exe`
@@ -1567,12 +1765,14 @@ fn ketch_store_plugin(
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .map(|e| e.path())
         .collect();
-    // Lexicographic order is enough for `v0.1.5`-style tags; newest last.
-    entries.sort_by(|a, b| {
-        a.file_name()
-            .unwrap_or_default()
-            .cmp(b.file_name().unwrap_or_default())
-    });
+    // Newest last: by semver (`v0.1.10` > `v0.1.9`); a name that does not parse sorts before
+    // every version and falls back to name order among its kind.
+    let key = |p: &std::path::PathBuf| {
+        let name = p.file_name().unwrap_or_default().to_string_lossy();
+        let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
+        (ver, name.into_owned())
+    };
+    entries.sort_by_cached_key(key);
     for dir in entries.into_iter().rev() {
         let candidate = join_rel(&dir, rel);
         if candidate.exists() {
@@ -1631,6 +1831,38 @@ pub(crate) fn assert_local_mcp_roundtrip(
     let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert!(root["mcp"]["rtok"].is_null(), "{root}");
     assert_eq!(root["mcp"]["other"]["url"], "x");
+}
+
+/// Shared assertion for hosts whose MCP entry is `{command, args}` under `mcpServers`
+/// with no `type` ([`register_stdio_mcp`]). Register is idempotent, remove keeps foreign
+/// servers, both surface through `installed`.
+#[cfg(test)]
+pub(crate) fn assert_stdio_mcp_roundtrip(
+    path: &Path,
+    host: &str,
+    register: impl Fn() -> Result<String>,
+    unregister: impl Fn() -> Result<String>,
+    installed: impl Fn() -> Vec<&'static str>,
+) {
+    use serde_json::Value;
+    std::fs::write(path, r#"{"mcpServers":{"foreign":{"command":"x"}}}"#).unwrap();
+    let first = register().unwrap();
+    assert!(first.starts_with("mcpServers.rtok: "), "{first}");
+    assert!(first.contains(host), "{first}");
+    assert_eq!(register().unwrap(), NO_CHANGES);
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(
+        root["mcpServers"]["rtok"].get("type").is_none(),
+        "stdio shape has no type: {root}"
+    );
+    assert_eq!(root["mcpServers"]["rtok"]["args"][0], "mcp");
+    assert_eq!(root["mcpServers"]["rtok"]["args"][2], host);
+    assert_eq!(installed(), ["mcp"]);
+    assert_eq!(unregister().unwrap(), "- mcpServers.rtok");
+    assert_eq!(unregister().unwrap(), NO_CHANGES);
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert!(root["mcpServers"]["rtok"].is_null(), "{root}");
+    assert_eq!(root["mcpServers"]["foreign"]["command"], "x");
 }
 
 #[cfg(test)]
@@ -1973,6 +2205,24 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    /// T328: the newest store folder is chosen by semver, not by name (`v0.1.10` > `v0.1.9`).
+    #[test]
+    fn ketch_store_takes_the_newest_version_not_the_lexicographic_last() {
+        use std::fs;
+        let root = std::env::temp_dir().join(format!("rtok-ketch-semver-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = root.join("store").join("rtok");
+        for v in ["v0.1.9", "v0.1.10"] {
+            write_plugin(&store.join(v).join("plugins").join("cursor"));
+        }
+        let got = ketch_store_plugin(&root, "plugins/cursor", "9.9.9");
+        assert_eq!(
+            got,
+            Some(store.join("v0.1.10").join("plugins").join("cursor"))
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn join_rel_splits_slash_and_backslash() {
         let base = std::path::Path::new("/tmp/root");
@@ -2081,6 +2331,32 @@ mod tests {
         assert!(reaches(&pi::Pi, Kind::Cli, &[Surface::Mcp]));
         assert!(!reaches(&pi::Pi, Kind::Cli, &[Surface::Proxy]));
         assert!(reaches(&cursor::Cursor, Kind::Desktop, &[Surface::Mcp]));
+    }
+
+    /// `install` / `update` / `list` share `plugin_lines`. A not-installed group with no
+    /// plugins used to print `✗ not installed  -`; that dash is not a missing install.
+    #[test]
+    fn empty_not_installed_plugin_group_is_omitted() {
+        let rows = [PluginRow {
+            id: "read",
+            on: true,
+            state: ModuleState::Installed,
+        }];
+        let text = plugin_lines(&rows, "", false);
+        assert!(
+            !text.contains("not installed"),
+            "empty group must not print not installed:\n{text}"
+        );
+        assert!(text.contains("installed      read"), "{text}");
+        assert!(text.contains("not supported  -"), "{text}");
+
+        let waiting = [PluginRow {
+            id: "proxy",
+            on: false,
+            state: ModuleState::NotInstalled,
+        }];
+        let text = plugin_lines(&waiting, "", false);
+        assert!(text.contains("not installed  proxy (off)"), "{text}");
     }
 
     /// What an install must leave behind follows `support()` and the flags given; against
@@ -2420,66 +2696,146 @@ mod tests {
         }
     }
 
-    fn cfg_with_cursor_hooks(hooks: PathBuf) -> Config {
-        let mut cfg = Config::default();
-        cfg.setup.cursor.hooks_path = hooks;
-        cfg
+    /// T357 fixture: `pkg/v1` and `pkg/v2` hold `rtok` + `rtok-hook`; `bin/rtok` links `pkg/v1`.
+    #[cfg(unix)]
+    struct LinkFx {
+        root: PathBuf,
     }
 
-    fn cfg_with_claude(settings: PathBuf, claude_json: PathBuf) -> Config {
-        let mut cfg = Config::default();
-        cfg.setup.claude.settings_path = settings;
-        cfg.doctor.claude_json = claude_json;
-        cfg
-    }
-
-    #[test]
-    fn present_when_cursor_dir_exists() {
-        use std::fs;
-        let root = std::env::temp_dir().join(format!("rtok-present-cursor-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let cursor_dir = root.join(".cursor");
-        fs::create_dir_all(&cursor_dir).unwrap();
-        let cfg = cfg_with_cursor_hooks(cursor_dir.join("hooks.json"));
-        let a = &cursor::Cursor;
-        for v in a.variants() {
-            assert!(
-                present(a, v, &cfg),
-                "parent ~/.cursor must count as installed host ({})",
-                v.name
-            );
+    #[cfg(unix)]
+    impl LinkFx {
+        fn new(name: &str) -> Self {
+            use std::os::unix::fs::symlink;
+            let root =
+                std::env::temp_dir().join(format!("rtok-t357-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            for v in ["v1", "v2"] {
+                std::fs::create_dir_all(root.join("pkg").join(v)).unwrap();
+                for f in ["rtok", "rtok-hook"] {
+                    std::fs::write(root.join("pkg").join(v).join(f), "").unwrap();
+                }
+            }
+            std::fs::create_dir_all(root.join("bin")).unwrap();
+            symlink(root.join("pkg/v1/rtok"), root.join("bin/rtok")).unwrap();
+            Self { root }
+        }
+        fn bin(&self) -> PathBuf {
+            self.root.join("bin")
+        }
+        fn path(&self) -> std::ffi::OsString {
+            std::env::join_paths([self.bin()]).unwrap()
+        }
+        fn exe(&self, v: &str) -> PathBuf {
+            self.root.join("pkg").join(v).join("rtok")
+        }
+        fn link(&self) -> PathBuf {
+            self.bin().join("rtok-hook")
+        }
+        fn run(&self, v: &str) -> LinkOutcome {
+            ensure_hook_client_link(Some(&self.path()), &self.exe(v))
         }
     }
 
+    #[cfg(unix)]
+    impl Drop for LinkFx {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[cfg(unix)]
     #[test]
-    fn present_when_claude_dir_exists() {
-        use std::fs;
-        let root = std::env::temp_dir().join(format!("rtok-present-claude-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let claude_dir = root.join(".claude");
-        fs::create_dir_all(&claude_dir).unwrap();
-        let cfg = cfg_with_claude(claude_dir.join("settings.json"), root.join(".claude.json"));
-        let a = &claude::Claude;
-        assert!(
-            present(a, &a.variants()[0], &cfg),
-            "parent ~/.claude must count as installed host"
+    fn hook_client_link_created_then_current() {
+        let fx = LinkFx::new("create");
+        assert_eq!(fx.run("v1"), LinkOutcome::Linked);
+        let target = std::fs::canonicalize(fx.link()).unwrap();
+        assert_eq!(
+            target,
+            std::fs::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
         );
+        assert!(bin_on_path("rtok-hook", Some(&fx.path())));
+        assert_eq!(fx.run("v1"), LinkOutcome::Current);
     }
 
+    #[cfg(unix)]
     #[test]
-    fn absent_when_config_paths_missing() {
-        let root = std::env::temp_dir().join(format!("rtok-absent-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let missing = root.join("no-such-dir");
-        let a = &cursor::Cursor;
-        let cfg = cfg_with_cursor_hooks(missing.join("hooks.json"));
-        for v in a.variants().iter().filter(|v| app_path(v).is_none()) {
-            assert!(!present(a, v, &cfg), "{}", v.name);
-        }
-        let a = &claude::Claude;
-        let cfg = cfg_with_claude(missing.join("settings.json"), missing.join(".claude.json"));
-        for v in a.variants().iter().filter(|v| app_path(v).is_none()) {
-            assert!(!present(a, v, &cfg), "{}", v.name);
-        }
+    fn hook_client_link_noop_when_already_on_path() {
+        let fx = LinkFx::new("onpath");
+        let other = fx.root.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("rtok-hook"), "").unwrap();
+        let path = std::env::join_paths([fx.bin(), other]).unwrap();
+        let got = ensure_hook_client_link(Some(&path), &fx.exe("v1"));
+        assert_eq!(got, LinkOutcome::AlreadyOnPath);
+        assert!(std::fs::symlink_metadata(fx.link()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_client_link_repoints_other_version() {
+        use std::os::unix::fs::symlink;
+        let fx = LinkFx::new("repoint");
+        symlink(fx.root.join("pkg/v1/rtok-hook"), fx.link()).unwrap();
+        // The package manager moved `rtok` to v2; the link still names v1.
+        std::fs::remove_file(fx.bin().join("rtok")).unwrap();
+        symlink(fx.exe("v2"), fx.bin().join("rtok")).unwrap();
+        assert_eq!(fx.run("v2"), LinkOutcome::Relinked);
+        let want = std::fs::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
+        assert_eq!(std::fs::canonicalize(fx.link()).unwrap(), want);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_client_link_repoints_dangling() {
+        use std::os::unix::fs::symlink;
+        let fx = LinkFx::new("dangling");
+        symlink(fx.root.join("gone/anything"), fx.link()).unwrap();
+        assert_eq!(fx.run("v1"), LinkOutcome::Relinked);
+        assert!(fx.link().is_file());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_client_link_leaves_foreign_names_alone() {
+        use std::os::unix::fs::symlink;
+        let fx = LinkFx::new("foreign");
+        std::fs::write(fx.link(), "mine").unwrap();
+        assert_eq!(fx.run("v1"), LinkOutcome::Foreign);
+        assert_eq!(std::fs::read_to_string(fx.link()).unwrap(), "mine");
+        std::fs::remove_file(fx.link()).unwrap();
+        let elsewhere = fx.root.join("pkg/v1/rtok");
+        symlink(&elsewhere, fx.link()).unwrap();
+        assert_eq!(fx.run("v1"), LinkOutcome::Foreign);
+        assert_eq!(std::fs::read_link(fx.link()).unwrap(), elsewhere);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_client_link_needs_sibling_and_own_rtok() {
+        let fx = LinkFx::new("nosibling");
+        // `bin/rtok` is v1, not this executable: never link another install's PATH.
+        assert_eq!(fx.run("v2"), LinkOutcome::Nothing);
+        assert_eq!(
+            ensure_hook_client_link(None, &fx.exe("v1")),
+            LinkOutcome::Nothing
+        );
+        std::fs::remove_file(fx.root.join("pkg/v1/rtok-hook")).unwrap();
+        assert_eq!(fx.run("v1"), LinkOutcome::Nothing);
+        assert!(std::fs::symlink_metadata(fx.link()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_client_link_read_only_dir_fails_soft() {
+        use std::os::unix::fs::PermissionsExt;
+        let fx = LinkFx::new("readonly");
+        std::fs::set_permissions(fx.bin(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        let got = fx.run("v1");
+        std::fs::set_permissions(fx.bin(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        // root ignores directory modes; either way nothing panics.
+        assert!(
+            matches!(got, LinkOutcome::Failed | LinkOutcome::Linked),
+            "{got:?}"
+        );
     }
 }

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Optional LSP backend (T30.2). Native JSON-RPC over stdio.
 //! Spawns rust-analyzer / clangd / typescript-language-server from PATH (D6: not serena).
 
@@ -247,7 +251,8 @@ fn kind_name(k: u64) -> &'static str {
     match k {
         5 => "class",
         6 => "method",
-        11 => "enum",
+        10 => "enum",
+        11 => "interface",
         12 => "function",
         13 => "variable",
         23 => "struct",
@@ -1005,6 +1010,23 @@ pub(crate) fn outline(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    /// LSP 3.17 `SymbolKind`: 10 is Enum, 11 is Interface (11 used to read as "enum").
+    #[test]
+    fn kind_name_follows_the_lsp_symbol_kind_numbers() {
+        for (k, name) in [
+            (5, "class"),
+            (6, "method"),
+            (10, "enum"),
+            (11, "interface"),
+            (12, "function"),
+            (13, "variable"),
+            (23, "struct"),
+            (99, "symbol"),
+        ] {
+            assert_eq!(kind_name(k), name, "SymbolKind {k}");
+        }
+    }
 
     /// T41.1: a `pubspec.yaml` root picks `dart language-server`, and a `.dart`
     /// file resolves its workspace to that root.

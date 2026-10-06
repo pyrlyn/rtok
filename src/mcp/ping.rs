@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok mcp ping` (T275.1): prove a host's rtok MCP server answers.
 //!
 //! Headless hosts run the agent's own non-interactive command. Every other variant
@@ -285,8 +289,7 @@ fn select(cfg: &Config, named: Option<&[String]>, cli: bool, desktop: bool) -> V
                 continue;
             }
             if named.is_none()
-                && (!agents::present(agent, v, cfg)
-                    || !agent.installed(cfg, v.kind).contains(&"mcp"))
+                && (!agents::present(v) || !agent.installed(cfg, v.kind).contains(&"mcp"))
             {
                 continue;
             }

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Command Code installer (`rtok agents install commandcode`).
 //!
 //! Command Code (`command-code`, alias `cmd`) keeps user state in `~/.commandcode`:
@@ -19,6 +23,7 @@ use anyhow::Result;
 use rtok_agent_sdk::{NO_CHANGES, array_at, edit_json, object_at};
 use serde_json::{Value, json};
 
+use super::hook_events;
 use super::plugin::HostPlugin;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
@@ -37,23 +42,9 @@ static VARIANTS: [Variant; 1] = [Variant {
     apps: &[],
 }];
 
-/// Command Code hook events paired with the Claude event `rtok hook` runs for them.
-pub const EVENTS: &[(&str, &str)] = &[
-    ("PreToolUse", "PreToolUse"),
-    ("PostToolUse", "PostToolUse"),
-    ("SessionStart", "SessionStart"),
-    ("Stop", "SessionEnd"),
-];
-
-/// Matchers per event: Command Code matches `tool_display_name` (`SHELL`, `READ`, …).
-/// Lifecycle events carry no tool, so they omit `matcher` (a matcher there never fires).
-fn matcher(event: &str) -> Option<&'static str> {
-    match event {
-        "PreToolUse" => Some("SHELL|READ|WRITE|EDIT"),
-        "PostToolUse" => Some(".*"),
-        _ => None,
-    }
-}
+// The events and matchers are the `commandcode` rows of `hook_events`: Command Code matches
+// `tool_display_name` (`SHELL`, `READ`, …), and lifecycle events carry no tool, so their rows
+// have no matcher (one there never fires).
 
 impl Agent for CommandCode {
     fn id(&self) -> &'static str {
@@ -152,14 +143,14 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 /// Register `rtok mcp` in the user-scope `mcp.json`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
     let cmd = super::rtok_command();
-    let entry = json!({"command": cmd, "args": ["mcp"]});
+    let entry = json!({"command": cmd, "args": super::mcp_args("commandcode")});
     rtok_agent_sdk::register_server(
         &apply(cfg),
         &mcp_path(cfg),
         "mcpServers",
         "rtok",
         entry,
-        &format!("{cmd} mcp"),
+        &super::mcp_summary(&cmd, "commandcode"),
     )
 }
 
@@ -203,11 +194,13 @@ pub fn plugin_is_mcp(cfg: &Config, remove: bool) -> bool {
 fn insert_ours(root: &mut Value) -> String {
     let hooks = object_at(root, "hooks");
     let mut added = Vec::new();
-    for &(event, claude) in EVENTS {
+    for row in hook_events::installer_rows("commandcode") {
+        let (event, claude) = (row.host_event, row.rtok_event);
+        let matcher = (!row.matcher.is_empty()).then_some(row.matcher);
         let cmd = hook_cmd(claude);
         let arr = array_at(hooks, event);
         // One definition per matcher: Command Code matches `tool_display_name`.
-        let def = match matcher(event) {
+        let def = match matcher {
             Some(m) => arr
                 .iter_mut()
                 .find(|e| e.get("matcher").and_then(Value::as_str) == Some(m)),
@@ -216,8 +209,7 @@ fn insert_ours(root: &mut Value) -> String {
         let def = match def {
             Some(d) => d,
             None => {
-                let m = matcher(event);
-                arr.push(match m {
+                arr.push(match matcher {
                     Some(m) => json!({"matcher": m, "hooks": []}),
                     None => json!({"hooks": []}),
                 });
@@ -239,7 +231,7 @@ fn insert_ours(root: &mut Value) -> String {
 
 fn strip_ours(root: &mut Value) -> String {
     let mut removed = Vec::new();
-    for &(event, _) in EVENTS {
+    for (event, _) in hook_events::installed("commandcode") {
         let Some(arr) = root
             .pointer_mut(&format!("/hooks/{event}"))
             .and_then(Value::as_array_mut)
@@ -290,7 +282,7 @@ fn is_ours(entry: &Value) -> bool {
         return false;
     };
     // The events `insert_ours` writes (`rtok hook <Claude event> --host commandcode`).
-    for (_, claude) in EVENTS {
+    for (_, claude) in hook_events::installed("commandcode") {
         let suffix = format!(" hook {claude} --host commandcode");
         if let Some(bin) = cmd.strip_suffix(&suffix)
             && super::is_rtok_bin(super::unquote_bin(bin))
@@ -421,7 +413,10 @@ mod tests {
         assert!(first.starts_with("mcpServers.rtok: "), "{first}");
         assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES);
         let doc: Value = serde_json::from_str(&fs::read_to_string(mcp_path(&c)).unwrap()).unwrap();
-        assert_eq!(doc["mcpServers"]["rtok"]["args"], json!(["mcp"]));
+        assert_eq!(
+            doc["mcpServers"]["rtok"]["args"],
+            json!(["mcp", "--host", "commandcode"])
+        );
         assert_eq!(doc["mcpServers"]["other"]["command"], "x");
         assert!(CommandCode.installed(&c, Kind::Cli).contains(&"mcp"));
         assert_eq!(unregister_mcp(&c).unwrap(), "- mcpServers.rtok");

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T5.0: httpmock upstream harness for Anthropic and OpenAI wires.
 //!
 //! Cargo compiles this as `tests/proxy.rs` (not `tests/proxy/mod.rs`) so
@@ -102,6 +106,10 @@ impl MockUpstream {
     pub fn assert_upstream_called_once(&self) {
         self.mock.assert();
     }
+
+    pub fn assert_upstream_hits(&self, n: usize) {
+        self.mock.assert_calls(n);
+    }
 }
 
 fn post(up: &MockUpstream, path: &str) -> Vec<u8> {
@@ -197,16 +205,35 @@ async fn t51_post(addr: &str, body: Vec<u8>) -> reqwest::Response {
         .expect("request through the proxy")
 }
 
-/// The recorder task writes rows after the body was forwarded; poll briefly for `n` of them.
-async fn t51_usage_n(state: &Store, session: &str, n: usize) -> Vec<UsageRow> {
-    for _ in 0..400 {
-        let rows = state.usage_rows(session).expect("usage read");
-        if rows.len() >= n {
-            return rows;
+/// The recorder writes rows after the body was forwarded, one insert at a time; poll
+/// `probe` until it yields, failing after a deadline generous enough for slow CI runners.
+async fn eventually<T>(what: &str, mut probe: impl FnMut() -> Option<T>) -> T {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(v) = probe() {
+            return v;
         }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "{what} never appeared"
+        );
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("usage row for {session} never appeared");
+}
+
+async fn t51_usage_n(state: &Store, session: &str, n: usize) -> Vec<UsageRow> {
+    eventually(&format!("usage row for {session}"), || {
+        Some(state.usage_rows(session).expect("usage read")).filter(|rows| rows.len() >= n)
+    })
+    .await
+}
+
+/// `finish` writes the provider `tokens` row after `usage`: wait for it, don't race it.
+async fn t51_tokens(state: &Store, n: i64) {
+    eventually(&format!("{n} tokens rows"), || {
+        (state.count_tokens().expect("tokens") >= n).then_some(())
+    })
+    .await
 }
 
 async fn t51_usage(state: &Store, session: &str) -> Vec<UsageRow> {
@@ -244,6 +271,7 @@ async fn proxy_passthrough_body_records_usage_rows() {
     );
     assert_eq!(state.store.count_kind("api_request").expect("calls"), 1);
     assert_eq!(state.store.count_call_io().expect("call_io"), 1);
+    t51_tokens(&state.store, 1).await;
     assert_eq!(state.store.count_tokens().expect("tokens"), 1);
     task.abort();
 }
@@ -356,8 +384,8 @@ async fn proxy_health_reports_ok_and_mode() {
 
 /// ~48 MB of space-separated words: representative of the tokenizer work `compress`
 /// does over a live blob (unlike one giant unbroken string, which parses/scans faster).
-/// Bigger than the card's "~20 MB" so the pre-fix synchronous section reliably clears
-/// the 250 ms bound below with margin, instead of landing right at the edge.
+/// Bigger than the card's "~20 MB" so the pre-fix synchronous section dominates the
+/// window measured below, instead of being lost next to the upload and the forward.
 fn t205_big_text() -> String {
     let word = "token ";
     word.repeat(48 * 1024 * 1024 / word.len())
@@ -368,6 +396,13 @@ fn t205_big_text() -> String {
 /// (parsed + walked by the `compress` plugin's `proxy_filter`) pinned that worker for
 /// the whole synchronous section, so a concurrent `/health` request had to wait behind
 /// it. With the bookkeeping moved to `spawn_blocking`, `/health` stays fast throughout.
+///
+/// "Fast" is relative to the same run, not a wall-clock bound (T421): a fixed 250 ms
+/// flaked at 302 ms on a loaded macOS runner. The pre-fix stall makes one poll wait out
+/// the whole shaping, over 90% of the time the big request takes to reach upstream; a
+/// healthy proxy keeps every poll to a few percent of it, under 40% even with the host
+/// CPUs oversubscribed eight times. Load stretches both sides, so a two-thirds bound on
+/// the ratio keeps the margin that a fixed bound loses.
 #[tokio::test]
 async fn health_stays_fast_while_a_large_request_is_recorded() {
     let server = MockServer::start();
@@ -397,11 +432,13 @@ async fn health_stays_fast_while_a_large_request_is_recorded() {
     });
     let body_bytes = serde_json::to_vec(&body).expect("request json");
 
+    let client = reqwest::Client::new();
     let big_addr = addr.clone();
+    let window_start = std::time::Instant::now();
     let big_req = tokio::spawn(async move { t51_post(&big_addr, body_bytes).await });
 
-    let client = reqwest::Client::new();
     let mut checks = 0;
+    let mut slowest = Duration::ZERO;
     loop {
         let t0 = std::time::Instant::now();
         let health = client
@@ -409,23 +446,25 @@ async fn health_stays_fast_while_a_large_request_is_recorded() {
             .send()
             .await
             .expect("health");
-        let elapsed = t0.elapsed();
+        slowest = slowest.max(t0.elapsed());
         assert_eq!(health.status(), reqwest::StatusCode::OK);
-        assert!(
-            elapsed < Duration::from_millis(250),
-            "/health took {elapsed:?} while a large request was being recorded"
-        );
         checks += 1;
         // Stop once upstream has the request: the pre-fix stall is the shaping before the
         // forward. Dropping the 48 MB buffers after the reply costs ~100 ms on its own and
-        // would make the bound flaky on 2-core CI runners without saying anything about T205.
+        // would stretch the window without saying anything about T205.
         if big_req.is_finished() || mock.calls_async().await > 0 {
             break;
         }
     }
+    let window = window_start.elapsed();
     assert!(
         checks >= 2,
         "the big request must still overlap a /health poll"
+    );
+    assert!(
+        slowest < window * 2 / 3,
+        "/health took {slowest:?} of the {window:?} the large request needed to reach \
+         upstream ({checks} polls): it waited on the recording"
     );
 
     let big_resp = big_req.await.expect("big request task");
@@ -488,7 +527,7 @@ async fn proxy_openai_chat_body_records_usage_with_cached_tokens() {
     let u = &rows[0];
     assert_eq!(
         (u.input, u.cache_create, u.cache_read, u.output),
-        (10, 0, 7, 2),
+        (3, 0, 7, 2),
         "cache_read comes from prompt_tokens_details.cached_tokens; no cache_create on this wire"
     );
     assert_eq!(u.model.as_deref(), Some(T112_MODEL));
@@ -512,7 +551,7 @@ async fn proxy_openai_chat_stream_is_byte_identical_and_adds_include_usage() {
     let u = &rows[0];
     assert_eq!(
         (u.input, u.cache_create, u.cache_read, u.output),
-        (10, 0, 7, 2),
+        (3, 0, 7, 2),
         "usage decoded from the final SSE chunk"
     );
     // The one byte-level change passthrough makes: the request now opts into stream usage.
@@ -591,7 +630,7 @@ async fn proxy_openai_responses_body_records_usage_without_rewriting_previous_re
     let u = &rows[0];
     assert_eq!(
         (u.input, u.cache_create, u.cache_read, u.output),
-        (10, 0, 7, 2),
+        (3, 0, 7, 2),
         "cache_read comes from input_tokens_details.cached_tokens; no cache_create on this wire"
     );
     assert_eq!(u.model.as_deref(), Some(T113_MODEL));
@@ -703,7 +742,7 @@ async fn proxy_openai_responses_stream_is_byte_identical_and_records_usage() {
     let u = &rows[0];
     assert_eq!(
         (u.input, u.cache_create, u.cache_read, u.output),
-        (10, 0, 7, 2),
+        (3, 0, 7, 2),
         "usage decoded from response.completed, cache_read from cached_tokens"
     );
     let sent = state
@@ -783,13 +822,14 @@ async fn proxy_gemini_body_records_usage_with_cached_tokens_and_path_model() {
     let u = &rows[0];
     assert_eq!(
         (u.input, u.cache_create, u.cache_read, u.output),
-        (12, 0, 7, 3),
+        (5, 0, 7, 3),
         "cache_read comes from cachedContentTokenCount; no cache_create on this wire"
     );
     assert_eq!(u.model.as_deref(), Some(T513_MODEL));
     assert_eq!(u.api, "gemini");
     assert_eq!(state.store.count_kind("api_request").expect("calls"), 1);
     assert_eq!(state.store.count_call_io().expect("call_io"), 1);
+    t51_tokens(&state.store, 1).await;
     assert_eq!(state.store.count_tokens().expect("tokens"), 1);
     task.abort();
 }
@@ -821,7 +861,7 @@ async fn proxy_gemini_stream_is_byte_identical_and_records_usage() {
     let u = &rows[0];
     assert_eq!(
         (u.input, u.cache_create, u.cache_read, u.output),
-        (12, 0, 7, 3),
+        (5, 0, 7, 3),
         "usage decoded from the final SSE chunk"
     );
     assert_eq!(u.model.as_deref(), Some(T513_MODEL));
@@ -1463,6 +1503,7 @@ async fn proxy_cache_hit_records_usage_and_request_bytes() {
         .expect("call_io")
         .expect("request");
     assert_eq!(hit_req, body, "hit call_io keeps the request bytes");
+    t51_tokens(&state.store, 2).await;
     assert_eq!(state.store.count_tokens().expect("tokens"), 2);
     assert_eq!(
         state
@@ -1471,6 +1512,126 @@ async fn proxy_cache_hit_records_usage_and_request_bytes() {
             .expect("measurements"),
         1
     );
+    task.abort();
+}
+
+/// A proxy with the semantic cache on, pointed at `upstream`.
+async fn t323_server(label: &str, upstream: String) -> Server {
+    proxy_server(&format!("t323-{label}"), |cfg| {
+        cfg.proxy.upstream = upstream;
+        cfg.plugins.proxy.semantic_cache.enabled = true;
+    })
+    .await
+}
+
+/// T323: an upstream that promises a long JSON body, sends a prefix and hangs up. Binds
+/// an ephemeral port; the counter is how many requests reached it.
+fn t323_truncating_upstream() -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fake upstream");
+    let url = format!("http://{}", listener.local_addr().expect("local addr"));
+    let hits = Arc::new(AtomicUsize::new(0));
+    let seen = hits.clone();
+    std::thread::spawn(move || {
+        for conn in listener.incoming() {
+            let Ok(mut s) = conn else { break };
+            s.set_read_timeout(Some(Duration::from_secs(5))).ok();
+            let mut req = Vec::new();
+            let mut chunk = [0u8; 4096];
+            // Request head, then as many body bytes as its content-length announces.
+            while let Ok(n @ 1..) = s.read(&mut chunk) {
+                req.extend_from_slice(&chunk[..n]);
+                let Some(at) = req.windows(4).position(|w| w == b"\r\n\r\n") else {
+                    continue;
+                };
+                let head = String::from_utf8_lossy(&req[..at]).to_lowercase();
+                let want = head
+                    .lines()
+                    .find_map(|l| l.strip_prefix("content-length:"))
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
+                if req.len() >= at + 4 + want {
+                    break;
+                }
+            }
+            seen.fetch_add(1, Ordering::SeqCst);
+            let prefix = &ANTHROPIC_MESSAGES_BODY[..40];
+            let head = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                ANTHROPIC_MESSAGES_BODY.len()
+            );
+            let _ = s.write_all(head.as_bytes());
+            let _ = s.write_all(prefix);
+        }
+    });
+    (url, hits)
+}
+
+/// T323: a body cut off mid-stream (upstream hang-up) is not a response — the next
+/// identical request must reach upstream again, not be served the cut-off JSON.
+#[tokio::test]
+async fn proxy_cache_never_stores_a_truncated_body() {
+    let (url, hits) = t323_truncating_upstream();
+    let (addr, state, task) = t323_server("trunc", url).await;
+    let first = t51_post(&addr, t51_request()).await;
+    assert_eq!(first.status(), reqwest::StatusCode::OK);
+    assert!(first.bytes().await.is_err(), "the client sees the cut");
+    t51_usage(&state.store, T51_SESSION).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let second = t51_post(&addr, t51_request()).await;
+    let _ = second.bytes().await;
+    assert_eq!(
+        hits.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "the second request must reach upstream, not the cache"
+    );
+    task.abort();
+}
+
+/// T323: the cache key carries the caller (`x-api-key`, `authorization`) and the headers
+/// that change the response (`anthropic-version`, `anthropic-beta`): the same body from
+/// another identity is a miss, from the same identity a hit.
+#[tokio::test]
+async fn proxy_cache_is_keyed_by_caller_identity() {
+    let up = MockUpstream::anthropic_messages_body();
+    let (addr, state, task) = t323_server("caller", up.base_url()).await;
+    let post = |headers: &'static [(&'static str, &'static str)]| {
+        let addr = addr.clone();
+        async move {
+            let mut rb = reqwest::Client::new()
+                .post(format!("http://{addr}/v1/messages"))
+                .header("content-type", "application/json")
+                .body(t51_request());
+            for (k, v) in headers {
+                rb = rb.header(*k, *v);
+            }
+            rb.send()
+                .await
+                .expect("request")
+                .bytes()
+                .await
+                .expect("body");
+        }
+    };
+    let cases: [&'static [(&'static str, &'static str)]; 5] = [
+        &[("x-api-key", "key-a")],
+        &[("x-api-key", "key-b")],
+        &[("authorization", "Bearer tok-c")],
+        &[
+            ("x-api-key", "key-a"),
+            ("anthropic-beta", "files-api-2025-04-14"),
+        ],
+        &[("x-api-key", "key-a"), ("anthropic-version", "2023-06-01")],
+    ];
+    for (i, headers) in cases.iter().enumerate() {
+        post(headers).await;
+        t51_usage_n(&state.store, T51_SESSION, i + 1).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    up.assert_upstream_hits(cases.len());
+    // The same identity again is served from the cache.
+    post(cases[0]).await;
+    up.assert_upstream_hits(cases.len());
     task.abort();
 }
 
@@ -1680,10 +1841,10 @@ const T612_SESSION: &str = "sess-t612";
 
 fn t612_skill_body() -> String {
     let lines: Vec<String> = (1..=400)
-        .map(|i| format!("slint line {i}: widget docs and examples for the skill body"))
+        .map(|i| format!("pixel line {i}: widget docs and examples for the skill body"))
         .collect();
     format!(
-        "Base directory for this skill: /s/slint\n\n# Slint\n{}",
+        "Base directory for this skill: /s/pixel\n\n# Pixel\n{}",
         lines.join("\n")
     )
 }
@@ -1695,7 +1856,7 @@ fn t612_request() -> Vec<u8> {
         "metadata": {"user_id": T612_SESSION},
         "messages": [
             {"role":"user","content":[
-                {"type":"tool_result","tool_use_id":"toolu_skill","content":"Launching skill: slint"},
+                {"type":"tool_result","tool_use_id":"toolu_skill","content":"Launching skill: pixel"},
                 {"type":"text","text": t612_skill_body()}
             ]},
             {"role":"assistant","content":"ok"},
@@ -1745,13 +1906,13 @@ async fn proxy_compress_archives_skill_bodies_outside_keep_turns() {
         .expect("skill text");
     assert!(
         pointer.starts_with("[archived ")
-            && pointer.contains("skill slint")
+            && pointer.contains("skill pixel")
             && pointer.contains("expand("),
         "{pointer:.120}"
     );
     assert_eq!(
         body["messages"][0]["content"][0]["content"].as_str(),
-        Some("Launching skill: slint"),
+        Some("Launching skill: pixel"),
         "the Launching skill result stays"
     );
     assert_eq!(

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! PreCompact checkpoint + compact restore (plan T2.5).
 
 use rtok_plugin_sdk::{Class, Ctx, Injection, Measurement};
@@ -20,6 +24,11 @@ pub struct Checkpoint {
     pub ids: Vec<String>,
     /// `(tool, bytes)` aligned with [`Self::ids`].
     id_meta: Vec<(String, u64)>,
+    /// User-text records taken as typed prompts over the whole transcript, not just the
+    /// 20 kept (T419). Never rendered: the restore stays byte-identical.
+    pub typed: u64,
+    /// User-text records dropped as host-written (T417's filter), same span as `typed`.
+    pub skipped: u64,
 }
 
 impl Checkpoint {
@@ -102,6 +111,7 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
     let mut paths = BTreeSet::new();
     let mut errors = VecDeque::new();
     let mut skills = Vec::new();
+    let (mut typed, mut skipped) = (0, 0);
     for line in lines {
         let Ok(line) = line else { continue };
         if filter && !worth_parsing(&line) {
@@ -122,11 +132,18 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
         });
         if let Some(s) = skill_body(&v) {
             skills.push(s);
-        } else if let Some(p) = user_prompt(&v) {
-            if prompts.len() == 20 {
-                prompts.pop_front();
+        } else {
+            match user_prompt(&v) {
+                Some(UserText::Typed(p)) => {
+                    typed += 1;
+                    if prompts.len() == 20 {
+                        prompts.pop_front();
+                    }
+                    prompts.push_back(p);
+                }
+                Some(UserText::Host) => skipped += 1,
+                None => {}
             }
-            prompts.push_back(p);
         }
     }
     Checkpoint {
@@ -134,6 +151,8 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
         paths: paths.into_iter().collect(),
         errors: errors.into(),
         skills,
+        typed,
+        skipped,
         ..Default::default()
     }
 }
@@ -191,17 +210,82 @@ fn skill_body(v: &Value) -> Option<(String, u64)> {
     Some((name.to_string(), text.len() as u64))
 }
 
-fn user_prompt(v: &Value) -> Option<String> {
+/// Text the human typed, without the host context wrapped around it (T417). Most `user`
+/// records in a live Claude Code transcript are host-injected — task notifications,
+/// sub-agent hand-backs, CI events, skill bodies, the compaction summary — and quoting them
+/// would fill the 20-prompt window with noise that crowds out what the user asked for.
+fn user_prompt(v: &Value) -> Option<UserText> {
     if v.get("type").and_then(Value::as_str) != Some("user") {
         return None;
     }
     let raw = user_text(v)?;
-    let t = raw.trim();
-    if t.is_empty() {
-        None
-    } else {
-        Some(t.chars().take(300).collect())
+    // A tool-result echo has no text block and joins to "": not a prompt of anyone's,
+    // so it must not count as a skipped host record either.
+    if raw.trim().is_empty() {
+        return None;
     }
+    if host_injected(v) {
+        return Some(UserText::Host);
+    }
+    let t = strip_reminders(&raw);
+    let t = t.trim();
+    if t.is_empty() || HOST_OPENERS.iter().any(|o| t.starts_with(o)) {
+        Some(UserText::Host)
+    } else {
+        Some(UserText::Typed(t.chars().take(300).collect()))
+    }
+}
+
+/// What [`user_prompt`] made of a user record that carries text; the split is T419's
+/// quality signal, so a record without text (a tool result) is neither.
+#[derive(Debug, PartialEq, Eq)]
+enum UserText {
+    Typed(String),
+    Host,
+}
+
+/// Record-level marks Claude Code puts on what it injected (checked 2026-10-05): `isMeta`
+/// (skill bodies, peer messages, continuation nudges), `isCompactSummary`, and an `origin`
+/// whose kind is anything but `human` (`task-notification`, `peer`).
+fn host_injected(v: &Value) -> bool {
+    let flag = |k: &str| v.get(k).and_then(Value::as_bool) == Some(true);
+    if flag("isMeta") || flag("isCompactSummary") {
+        return true;
+    }
+    v.get("origin")
+        .and_then(|o| o.get("kind"))
+        .and_then(Value::as_str)
+        .is_some_and(|k| k != "human")
+}
+
+/// Openings of host-written text in records that carry no `origin` — CI monitor events,
+/// local command echoes, interrupts, and transcripts from before Claude Code added `origin`.
+const HOST_OPENERS: [&str; 7] = [
+    "<task-notification>",
+    "<ci-monitor-event>",
+    "<local-command-stdout>",
+    "<local-command-stderr>",
+    "<local-command-caveat>",
+    "<agent-message",
+    "[Request interrupted by user",
+];
+
+/// `text` without its `<system-reminder>` blocks: the host prepends them to typed prompts,
+/// and a block with no closing tag runs to the end because nothing after it was typed.
+fn strip_reminders(text: &str) -> String {
+    const OPEN: &str = "<system-reminder>";
+    const CLOSE: &str = "</system-reminder>";
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find(OPEN) {
+        out.push_str(&rest[..i]);
+        rest = match rest[i..].find(CLOSE) {
+            Some(j) => &rest[i + j + CLOSE.len()..],
+            None => "",
+        };
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Text blocks of a user record joined by newlines; `None` when there are none.
@@ -252,6 +336,19 @@ fn kind(cx: &Ctx) -> String {
     format!("checkpoint:{}", cx.session())
 }
 
+/// T370: the files the session's last checkpoint named, relative to `root` where they sit
+/// under it. Personalizes the repo map after a compaction; any read failure is an empty list.
+pub fn last_paths(cx: &Ctx, root: &str) -> Vec<String> {
+    let Some(body) = cx.latest_note(&kind(cx)).ok().flatten() else {
+        return Vec::new();
+    };
+    let prefix = format!("{}/", root.trim_end_matches('/'));
+    body.lines()
+        .filter_map(|l| l.strip_prefix("path "))
+        .map(|p| p.strip_prefix(&prefix).unwrap_or(p).to_string())
+        .collect()
+}
+
 /// Read `transcript_path`, store a `notes` row `kind=checkpoint:<session>`.
 pub fn save(transcript_path: &str, cx: &Ctx) -> anyhow::Result<Checkpoint> {
     write(transcript_path, cx, &kind(cx), Some("rtok"))
@@ -282,7 +379,40 @@ fn write(
     // PreCompact/SessionEnd in the same session replaces the checkpoint instead of
     // piling up dead history that nothing reads.
     cx.upsert_note(project, kind, "compact", &cp.render())?;
+    // T419: a quality signal, not a saving, so it stays out of the Measurement ledger; one
+    // row per checkpoint kind, replaced like the note above. Best effort: the stats line
+    // is not worth failing the checkpoint over.
+    let counts = serde_json::json!({ "typed": cp.typed, "skipped": cp.skipped });
+    let _ = cx.plugin_state_set("memory", kind, &counts.to_string());
     Ok(cp)
+}
+
+/// Typed and skipped totals over the plugin-state rows [`write`] left (T419). PreCompact
+/// and SessionEnd of one session each write a row and the later transcript holds the
+/// earlier one, so a session counts once, by its larger row. A row that does not parse is
+/// skipped: the value is stored text, not trusted.
+pub fn prompt_counts(rows: &[(String, String)]) -> (u64, u64) {
+    let mut per_session: std::collections::BTreeMap<&str, (u64, u64)> = Default::default();
+    for (key, value) in rows {
+        let Some((_, session)) = key
+            .split_once(":checkpoint:")
+            .or_else(|| key.split_once(":session:"))
+        else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<Value>(value) else {
+            continue;
+        };
+        let n = |k: &str| v.get(k).and_then(Value::as_u64).unwrap_or(0);
+        let row = (n("typed"), n("skipped"));
+        let best = per_session.entry(session).or_default();
+        if row.0.saturating_add(row.1) > best.0.saturating_add(best.1) {
+            *best = row;
+        }
+    }
+    per_session.values().fold((0, 0), |(t, s), (rt, rs)| {
+        (t.saturating_add(*rt), s.saturating_add(*rs))
+    })
 }
 
 fn project_of_cx(cx: &Ctx) -> Option<String> {
@@ -361,6 +491,30 @@ mod tests {
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"still failing with error: boom"}]}}
 "#;
 
+    /// T370: the repo map is personalized by the paths the session's own checkpoint named,
+    /// made relative to the root where they sit under it.
+    #[test]
+    fn last_paths_are_root_relative_and_empty_without_a_checkpoint() {
+        let (rt, dir) = crate::testutil::runtime("last-paths");
+        let ctx = Ctx::new(&rt);
+        assert!(last_paths(&ctx, "/r").is_empty());
+        let cp = Checkpoint {
+            paths: vec![
+                "/r/src/a.rs".into(),
+                "docs/b.md".into(),
+                "/else/c.rs".into(),
+            ],
+            ..Checkpoint::default()
+        };
+        ctx.upsert_note(None, &kind(&ctx), "compact", &cp.render())
+            .unwrap();
+        assert_eq!(
+            last_paths(&ctx, "/r"),
+            ["src/a.rs", "docs/b.md", "/else/c.rs"]
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn fixture_has_three_paths_and_compact_injects_under_budget() {
         let cp = extract(FIXTURE);
@@ -409,29 +563,155 @@ mod tests {
     /// its size, and the prompt list keeps only what the human typed.
     #[test]
     fn injected_skill_bodies_are_listed_not_quoted() {
-        let body = "Base directory for this skill: /home/u/.claude/skills/slint\n\n# Slint\n"
+        let body = "Base directory for this skill: /home/u/.claude/skills/pixel\n\n# Pixel\n"
             .to_string()
             + &"x".repeat(5000);
         let lines = [
             r#"{"type":"user","message":{"content":"make it blue"}}"#.to_string(),
             serde_json::json!({"type":"user","isMeta":true,"sourceToolUseID":"toolu_1","message":{"content":[{"type":"text","text":body}]}}).to_string(),
             serde_json::json!({"type":"user","isMeta":true,"sourceToolUseID":"toolu_2","message":{"content":[{"type":"text","text":"Base directory for this skill: C:\\u\\.claude\\plugins\\cache\\p\\1.0\\skills\\ponytail\n\n# P"}]}}).to_string(),
-            // `isMeta` without a source tool is a plain meta prompt, not a skill.
+            // `isMeta` without a source tool is not a skill, and not typed either (T417).
             r#"{"type":"user","isMeta":true,"message":{"content":"Base directory for this skill: /x/y"}}"#.to_string(),
         ]
         .join("\n");
         let cp = extract(&lines);
         assert_eq!(cp.skills.len(), 2, "{:?}", cp.skills);
-        assert_eq!(cp.skills[0].0, "slint");
+        assert_eq!(cp.skills[0].0, "pixel");
         assert_eq!(cp.skills[0].1, body.len() as u64);
         assert_eq!(cp.skills[1].0, "ponytail");
-        assert_eq!(
-            cp.prompts,
-            ["make it blue", "Base directory for this skill: /x/y"]
-        );
+        assert_eq!(cp.prompts, ["make it blue"]);
         let text = cp.render();
-        assert!(text.contains("skills loaded before compaction: slint (5.0 KB), ponytail (0.1 KB) — re-invoke only what the next step needs\n"), "{text}");
+        assert!(text.contains("skills loaded before compaction: pixel (5.0 KB), ponytail (0.1 KB) — re-invoke only what the next step needs\n"), "{text}");
         assert!(!text.contains("xxxx"), "{text}");
+    }
+
+    /// One record per host-injected shape seen in real Claude Code transcripts (T417,
+    /// 2026-10-05), interleaved with what the human typed.
+    const HOST_FIXTURE: &str = r#"{"type":"user","origin":{"kind":"human"},"message":{"content":"first typed"}}
+{"type":"user","origin":{"kind":"task-notification","producer":"session-task"},"message":{"content":"<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}}
+{"type":"user","isMeta":true,"origin":{"kind":"peer","from":"a1"},"message":{"content":[{"type":"text","text":"Another Claude session sent a message:\n<agent-message from=\"a1\">done</agent-message>"}]}}
+{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"content":"This session is being continued from a previous conversation."}}
+{"type":"user","isMeta":true,"message":{"content":"Your response above was cut off."}}
+{"type":"user","message":{"content":"<ci-monitor-event>\"Auto-fix\" is on</ci-monitor-event>"}}
+{"type":"user","message":{"content":"<local-command-stdout>ok</local-command-stdout>"}}
+{"type":"user","isMeta":true,"message":{"content":"<local-command-caveat>Caveat</local-command-caveat>"}}
+{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}
+{"type":"user","message":{"content":"<task-notification>\n<task-id>old</task-id>\n</task-notification>"}}
+{"type":"user","message":{"content":"<system-reminder>\nonly host context\n</system-reminder>"}}
+{"type":"user","origin":{"kind":"human"},"message":{"content":[{"type":"text","text":"<system-reminder>\nThe user started task_1.\n</system-reminder>\nsecond typed"}]}}
+{"type":"user","origin":{"kind":"human"},"message":{"content":"third <system-reminder>a</system-reminder>typed<system-reminder>\nunclosed tail"}}
+"#;
+
+    #[test]
+    fn host_injected_records_are_not_prompts() {
+        let cp = extract(HOST_FIXTURE);
+        assert_eq!(cp.prompts, ["first typed", "second typed", "third typed"]);
+        assert_eq!((cp.typed, cp.skipped), (3, 10), "T419 counts every record");
+        let text = cp.render();
+        for noise in [
+            "task-notification",
+            "agent-message",
+            "continued from",
+            "cut off",
+            "ci-monitor",
+            "local-command",
+            "interrupted",
+            "system-reminder",
+            "host context",
+            "task_1",
+            "unclosed",
+        ] {
+            assert!(!text.contains(noise), "{noise} leaked into\n{text}");
+        }
+    }
+
+    /// The 20-prompt window is spent on typed prompts only: notifications in between
+    /// neither take a slot nor push a typed prompt out.
+    #[test]
+    fn prompt_window_counts_only_typed_prompts() {
+        let lines = (0..25)
+            .flat_map(|i| {
+                [
+                    format!(r#"{{"type":"user","origin":{{"kind":"human"}},"message":{{"content":"typed {i}"}}}}"#),
+                    format!(r#"{{"type":"user","origin":{{"kind":"task-notification"}},"message":{{"content":"<task-notification>{i}</task-notification>"}}}}"#),
+                ]
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let cp = extract(&lines);
+        let want: Vec<String> = (5..25).map(|i| format!("typed {i}")).collect();
+        assert_eq!(cp.prompts, want);
+        assert_eq!(
+            (cp.typed, cp.skipped),
+            (25, 25),
+            "the counts span the transcript, not the window"
+        );
+    }
+
+    /// T419: the counts are a side channel — the rendered checkpoint is the same text with
+    /// or without them, so the restore injection stays byte-identical.
+    #[test]
+    fn counts_never_reach_the_render() {
+        let cp = extract(HOST_FIXTURE);
+        let bare = Checkpoint {
+            typed: 0,
+            skipped: 0,
+            ..cp.clone()
+        };
+        assert_eq!(cp.render(), bare.render());
+    }
+
+    /// T419: a tool-result echo is a `user` record with no text block — neither typed nor
+    /// host-written, so it moves neither count.
+    #[test]
+    fn tool_result_records_count_as_neither() {
+        let cp = extract(
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}
+{"type":"user","message":{"content":""}}"#,
+        );
+        assert_eq!((cp.typed, cp.skipped), (0, 0));
+    }
+
+    /// T419: one session counts once (its larger row), rows from other plugins' keys and
+    /// rows that do not parse are skipped.
+    #[test]
+    fn prompt_counts_take_each_sessions_largest_row() {
+        let rows = |r: &[(&str, &str)]| {
+            r.iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<Vec<_>>()
+        };
+        let got = prompt_counts(&rows(&[
+            ("plugin:memory:checkpoint:s1", r#"{"typed":2,"skipped":3}"#),
+            ("plugin:memory:session:s1", r#"{"typed":5,"skipped":4}"#),
+            ("plugin:memory:session:s2", r#"{"typed":1,"skipped":0}"#),
+            ("plugin:memory:session:s3", "not json"),
+            ("plugin:memory:other", r#"{"typed":99,"skipped":99}"#),
+        ]));
+        assert_eq!(got, (6, 4));
+        let huge = format!(r#"{{"typed":{},"skipped":1}}"#, u64::MAX);
+        let got = prompt_counts(&rows(&[
+            ("plugin:memory:session:a", huge.as_str()),
+            ("plugin:memory:session:b", huge.as_str()),
+        ]));
+        assert_eq!(got, (u64::MAX, 2), "a forged row saturates, never panics");
+        assert_eq!(prompt_counts(&[]), (0, 0));
+    }
+
+    #[test]
+    fn strip_reminders_cuts_every_block() {
+        assert_eq!(strip_reminders("a"), "a");
+        assert_eq!(
+            strip_reminders(
+                "<system-reminder>x</system-reminder>a<system-reminder>y</system-reminder>b"
+            ),
+            "ab"
+        );
+        assert_eq!(strip_reminders("a<system-reminder>never closed"), "a");
+        assert_eq!(
+            strip_reminders("a</system-reminder>b"),
+            "a</system-reminder>b"
+        );
     }
 
     #[test]
@@ -542,6 +822,17 @@ mod tests {
         for p in ["src/a.rs", "src/b.rs", "src/c.rs"] {
             assert!(body.contains(p), "{body}");
         }
+        // T419: the hook path stores the prompt counts as memory's plugin state.
+        let cp = extract(FIXTURE);
+        let state = crate::store::Store::open(&cfg.core.db_path)
+            .unwrap()
+            .kv_get(&crate::plugin::plugin_state_key("memory", "session:t712"))
+            .unwrap()
+            .expect("prompt counts row");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&state).unwrap(),
+            serde_json::json!({ "typed": cp.typed, "skipped": cp.skipped })
+        );
 
         let start = serde_json::json!({
             "hook_event_name":"SessionStart",
@@ -717,28 +1008,22 @@ mod tests {
         s
     }
 
-    /// T203: `checkpoint::write` used to `read_to_string` the whole transcript and
-    /// `attach_ids`/`offer_session` each opened a second/third `Store` on the same SQLite
-    /// file the hook `Runtime` already holds open. On a ~50 MB transcript this checks the
-    /// streamed extractor stays fast, opens the store exactly once for the whole hook run,
-    /// and yields the same note body [`extract`] (the in-memory extractor) computes for the
-    /// same bytes.
-    #[test]
-    fn session_end_on_a_large_transcript_is_bounded() {
-        let dir = std::env::temp_dir().join("rtok-t203-large-transcript");
-        let _ = std::fs::remove_dir_all(&dir);
-        let repo = dir.join("bigproj");
+    /// Runs SessionEnd on a fresh ~`bytes` transcript in its own project under `dir` and
+    /// returns the transcript and the hook's wall time, after checking the hook opened the
+    /// store exactly once.
+    fn timed_session_end(
+        cfg: &crate::config::Config,
+        dir: &Path,
+        project: &str,
+        bytes: usize,
+    ) -> (String, std::time::Duration) {
+        let repo = dir.join(project);
         std::fs::create_dir_all(repo.join(".git")).unwrap();
-        let content = big_transcript(50 * 1024 * 1024);
+        let content = big_transcript(bytes);
         std::fs::write(repo.join("t.jsonl"), &content).unwrap();
-        let expected = extract(&content);
-        assert!(!expected.paths.is_empty() && !expected.errors.is_empty());
-
-        let mut cfg = crate::testutil::config_in(&dir);
-        cfg.plugins.inject.modes.clear();
         let end = serde_json::json!({
             "hook_event_name":"SessionEnd",
-            "session_id":"t203",
+            "session_id":project,
             "transcript_path":repo.join("t.jsonl").to_str().unwrap(),
             "cwd":repo.display().to_string(),
             "reason":"clear"
@@ -746,21 +1031,45 @@ mod tests {
         let mut out = Vec::new();
         let before = crate::store::OPEN_COUNT.with(|n| n.get());
         let started = std::time::Instant::now();
-        crate::hooks::run("SessionEnd", end.to_string().as_bytes(), &mut out, &cfg);
+        crate::hooks::run("SessionEnd", end.to_string().as_bytes(), &mut out, cfg);
         let elapsed = started.elapsed();
         let after = crate::store::OPEN_COUNT.with(|n| n.get());
         assert_eq!(out, b"{}");
         assert_eq!(after - before, 1, "one Store::open per hook run");
-        // Measured on this machine with this (tool_result-dominated) transcript: ~57 ms
-        // `--release`, under the task's 100 ms bound; ~960 ms unoptimized `cargo test`,
-        // where serde_json and every `str::contains` run unoptimized. Shared CI runners are
-        // several times slower still, so the bound only catches a quadratic regression; the
-        // open count above and the streaming read are what keep the hook bounded.
+        (content, elapsed)
+    }
+
+    /// T203: `checkpoint::write` used to `read_to_string` the whole transcript and
+    /// `attach_ids`/`offer_session` each opened a second/third `Store` on the same SQLite
+    /// file the hook `Runtime` already holds open. On a ~50 MB transcript this checks the
+    /// streamed extractor scales linearly, opens the store exactly once for the whole hook
+    /// run, and yields the same note body [`extract`] (the in-memory extractor) computes for
+    /// the same bytes.
+    #[test]
+    fn session_end_on_a_large_transcript_is_bounded() {
+        let dir = std::env::temp_dir().join("rtok-t203-large-transcript");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut cfg = crate::testutil::config_in(&dir);
+        cfg.plugins.inject.modes.clear();
+        // T425: a fixed wall-clock bound (10 s) failed at 13.8 s on a debug build with host
+        // load ~130, while the same run alone took 5.2-8.0 s. Only a quadratic regression is
+        // worth catching here, so the 50 MB run is bounded by a 5 MB run timed in the same
+        // test: linear work is at most ~10x (9.3x worst of ten runs beside 32 `yes` burners,
+        // host load up to ~340), a per-line scan over every earlier line 90x. The small run
+        // goes before and after the large one and the slower of the two is the baseline, so
+        // load that rises or falls during the test inflates both sides of the ratio.
+        let (_, small_before) = timed_session_end(&cfg, &dir, "smallproj1", 5 * 1024 * 1024);
+        let (content, large) = timed_session_end(&cfg, &dir, "bigproj", 50 * 1024 * 1024);
+        let (_, small_after) = timed_session_end(&cfg, &dir, "smallproj2", 5 * 1024 * 1024);
+        let small = small_before.max(small_after);
         assert!(
-            elapsed.as_secs() < 10,
-            "SessionEnd on a 50 MB transcript took {elapsed:?}"
+            large < small * 30,
+            "SessionEnd on 50 MB took {large:?}, over 30x the {small:?} on 5 MB \
+             (before {small_before:?}, after {small_after:?}): extraction is not linear"
         );
 
+        let expected = extract(&content);
+        assert!(!expected.paths.is_empty() && !expected.errors.is_empty());
         let body = crate::store::Store::open(&cfg.core.db_path)
             .unwrap()
             .latest_session_note(Some("bigproj"))
@@ -778,7 +1087,7 @@ mod tests {
     #[test]
     fn prefilter_is_a_true_superset_on_fixtures_and_a_large_transcript() {
         let skill_fixture = {
-            let body = "Base directory for this skill: /home/u/.claude/skills/slint\n\n# Slint\n"
+            let body = "Base directory for this skill: /home/u/.claude/skills/pixel\n\n# Pixel\n"
                 .to_string()
                 + &"x".repeat(5000);
             [
@@ -792,6 +1101,7 @@ mod tests {
         let big = big_transcript(2 * 1024 * 1024);
         for (name, content) in [
             ("FIXTURE", FIXTURE),
+            ("HOST_FIXTURE", HOST_FIXTURE),
             ("skill fixture", &skill_fixture),
             ("2 MB transcript", &big),
         ] {

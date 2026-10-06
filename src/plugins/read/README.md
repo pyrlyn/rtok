@@ -25,13 +25,19 @@ Five MCP tools instead of seventy-eight, and no per-turn banner.
   diff is below `delta_max_ratio` of the file (default 0.6). Measured 2026-09-18
   (`rtok stats --since 90d`, 959 sessions): 593 such re-reads, **7.3 %** of Read bytes.
 - PreToolUse(Read) advice: native `Read` of a file > 32 K that was not edited in the last
-  5 tool calls is denied with "use rtok read; before Edit run native Read(limit=1)". After an
-  Edit of a file already in the read cache, the deny points at `read(mode=diff)` instead.
-  Never for files under 32 K, and never for a native `Read` with `limit` ≤ 5 (T127): the
-  host's `Edit` wants a native `Read` first, an MCP `read` does not count, and one line is
-  enough — so content always comes from `read` and the edit gate costs one line.
+  5 tool calls is denied with "use rtok read; before Edit run native Read(limit=1)", where
+  `rtok read` is the host's exact MCP tool name (T384: `mcp__rtok__read` plus the
+  `ToolSearch select:` line that loads it on Claude Code, `mcp_rtok_read` on Gemini CLI; any
+  other host keeps `rtok read`). After an Edit of a file already in the read cache, the deny
+  points at `read(mode=diff)` instead.
+  Never for files under 32 K, and never for a native `Read` with `limit` 1..=`range_max_lines`
+  (300; T127, T383): the host's `Edit` wants a native `Read` first and an MCP `read` does not
+  count, so a ranged Read is the edit gate. Every deny records a `read`/`deny` cost row.
 
-Root guard: paths must be under cwd or `allow_paths`.
+Root guard: paths must be under cwd or `allow_paths`. In `rtok mcp` (T351) every worktree of the
+cwd's repository (`git worktree list`, re-read at most every 30 s, only after a path failed the
+cheap checks) and every `file://` root of the client's `roots/list` answer count too; host
+scratchpads and any other directory stay outside, so `allow_paths` is the escape hatch.
 
 ## Config
 
@@ -39,6 +45,7 @@ Root guard: paths must be under cwd or `allow_paths`.
 [plugins.read]
 enabled = true
 native_max_bytes = 32768     # PreToolUse(Read) deny threshold
+range_max_lines = 300        # T383: native Read with limit 1..=N passes
 allow_paths = []             # extra roots outside cwd
 delta = true                 # T58.1: changed re-read → unified diff (7.3 % of Read bytes)
 delta_max_ratio = 0.6        # full file when the diff is not below this fraction

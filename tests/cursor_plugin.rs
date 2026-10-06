@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T10.5 + D21: Cursor host plugin is hooks only (T275/D33 dropped its MCP server),
 //! desktop+CLI, ketch if missing.
 //!
@@ -61,6 +65,7 @@ fn setup(args: &[&str], cfg: &Path, home: &Path) -> (String, String, i32) {
         .arg("--no-restart")
         .env("HOME", home)
         .env("USERPROFILE", home)
+        .env("PATH", common::agents::fake_hosts(home))
         .env("RTOK_HOME", home.join(".rtok"))
         .output()
         .expect("rtok setup");
@@ -275,7 +280,11 @@ fn hooks_resolve_rtok_from_path_then_ketch_else_exit_0() {
         serde_json::from_str(&fs::read_to_string(root().join("hooks/hooks.json")).unwrap())
             .unwrap();
     let hooks = hooks["hooks"].as_object().unwrap().clone();
-    assert_eq!(hooks.len(), 6, "{hooks:?}");
+    assert_eq!(
+        hooks.len(),
+        rtok::agents::hook_events::for_host("cursor").count(),
+        "{hooks:?}"
+    );
     let sh = common::HookShell::new("t250-cursor");
     // The heredoc replaces the harness's own stdin, as it does in Cursor.
     let run = |command: &str| {

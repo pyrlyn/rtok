@@ -1,11 +1,10 @@
 The retina PNG exports that lived here (hero shots, landing mock, favicons, apple-touch and
-android-chrome icons, app-icon logo, wordmark, feature icons @2x; 19 files) moved to the
-dedicated brand repo:
+android-chrome icons, app-icon logo, wordmark, feature icons @2x; 19 files) are kept as provenance
+snapshots in pyrlyn/brand at tag v0.3.0:
 
-  ~/GitHub/listepo/brand/sources/rtok/docs/assets/landing-retina/
+  https://github.com/pyrlyn/brand/tree/v0.3.0/brands/rtok/sources/rtok/docs/assets/landing-retina
 
-Logo and icon exports are also under ~/GitHub/listepo/brand/logo/png/ and
-~/GitHub/listepo/brand/icons/feature/. The Hugo docs site that served the remaining images is
-gone; the README logos now live in assets/. README.md stays here because the sync-docs workflow
-publishes docs/**/*.md to pyrlyn/landing. This note is a .txt file so that workflow does not
-publish it.
+The current logo and icon exports are brand/logo/png/ and brand/icons/feature/ (see brand/README.md).
+The Hugo docs site that served the remaining images is gone; the README logos now live in assets/.
+README.md stays here because the sync-docs workflow publishes docs/**/*.md to pyrlyn/landing. This
+note is a .txt file so that workflow does not publish it.

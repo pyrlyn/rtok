@@ -77,6 +77,7 @@ session_env = "CLAUDE_SESSION_ID"     # env var consulted for the session id whe
 call_io_inline_bytes = 65536          # MCP/API bodies larger than this go to archive (hooks never archive)
 hook_max_input_bytes = 8388608        # rtok hook <event> stdin cap (8 MiB); over it, exits 0 unmodified, no archiving or hashing (T201)
 retain_calls_days    = 30             # 0 = keep `calls` forever
+retain_hook_bodies_days = 3           # hook stdin bodies cleared after N days, rows kept; 0 = as long as `calls` (T352)
 
 [log]                                 # rtok's own log (D26); `rtok logs` reads it
 path      = "~/.rtok/logs/rtok.log"   # rotated siblings live beside it: rtok.log.1 … .5
@@ -100,10 +101,31 @@ host      = "claude"                  # claude | cursor | copilot | devin | clin
 max_ms    = 10                        # soft budget; over it, the event is logged as slow
 fail_open = true                      # any error → `{}` and exit 0; false only for debugging
 
-[agents]                              # the rtok agent registry (T282, D34)
+[agents]                              # the rtok agent registry (T282, D34); see agents-and-worktrees.md
 enabled    = true                     # false = hooks skip agent register/touch/end and message push (session bookkeeping is unaffected)
 idle       = "30m"                    # `live()`'s window: no `ended_at` and `last_seen` within this of now
 push_bytes = 1024                     # framed messages pushed per UserPromptSubmit/PostToolUse; the rest → "and N more" (T288)
+
+[agents.usage]                        # rtok agents usage (T358)
+source = "logs"                       # logs = the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI); rtok = what passed through rtok; both
+hosts  = []                           # [] = every host; else host ids, e.g. ["claude", "codex"]
+since  = ""                           # "" = all time; a date (2026-09-01, whole days in tz) or a duration (30d)
+until  = ""                           # "" = through today; a date, inclusive
+period = "monthly"                    # monthly | daily: the bottom table
+by     = "agent"                      # agent | model: what the middle table groups by
+tz     = ""                           # IANA zone for day and month boundaries; "" = the system zone
+
+[agents.usage.dirs]                   # where `rtok agents usage` reads each host's own records (T358.3); Claude Code and Codex use [stats] transcripts_dir / codex_dir
+opencode = ["~/.local/share/opencode"] # the opencode*.db files in it; an untouched default follows $XDG_DATA_HOME
+kilo     = ["~/.local/share/kilo"]     # the kilo*.db files in it; an untouched default follows $XDG_DATA_HOME
+copilot  = ["~/.copilot/session-state"] # */events.jsonl; an untouched default follows $COPILOT_HOME
+gemini   = ["~/.gemini/tmp"]           # */chats/session-*; an untouched default follows $GEMINI_CLI_HOME
+droid    = ["~/.factory/sessions"]     # listed as unsupported when present: Factory does not document the token fields
+pi       = ["~/.pi/agent/sessions"]    # */*.jsonl; an untouched default follows $PI_CODING_AGENT_SESSION_DIR, else $PI_CODING_AGENT_DIR/sessions
+kimi     = ["~/.kimi-code/sessions"]   # Kimi Code: */*/agents/*/wire.jsonl; an untouched default follows $KIMI_CODE_HOME
+grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI points at `grok usage`, which rtok does not run; follows $GROK_HOME
+zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
+antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
@@ -130,22 +152,14 @@ max_description_tokens = 60           # 0 = no truncate; sentence boundary; esti
 allow = []                            # empty = keep all names not in deny
 deny = []                             # drop these names from tools[]; later calls still forward
 
-# ── Batch / Flex / routing (planned — not loaded by the binary yet; see docs/batch-flex.md) ──
-# Copying these into ~/.rtok/config.toml will fail `rtok config validate` until the keys ship.
-# [proxy.batch]
-# enabled = true                      # fallback already forwards Batch paths today
-# observe = true                      # record create/poll/results (planned)
-# parse_results = false               # expand Batch result usage into ledger (planned)
-#
-# [proxy.flex]
-# enabled = false                     # prepare may set service_tier = "flex" (planned)
-# force = false                       # overwrite client service_tier
-# fallback = "none"                   # none | default on Flex 429 (TODO)
-#
-# [proxy.routing]
-# enabled = false                     # model/tier routing D9 (planned)
-# sticky = true                       # pin upstream for prompt-cache affinity (I-84)
-# default_model = ""                  # empty = leave client model
+[proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
+enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
+
+[proxy.batch]                         # no keys yet (T385.4)
+
+[proxy.flex]                          # no keys yet (T385.5)
+
+[proxy.routing]                       # no keys yet (D9)
 
 [web]                                 # rtok web (same data as rtok tui)
 host = "127.0.0.1"                    # --host
@@ -274,6 +288,10 @@ plugins_path     = "~/.gemini/config/plugins"          # Antigravity 2.0 / IDE: 
 cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # agy plugin install stages here; read only
 [setup.devin]
 config_path   = "~/.config/devin/config.json"  # mcp_config.json is read beside it; Windows: %APPDATA%\devin\
+[setup.roo]
+mcp_path      = ""                               # empty: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
+[setup.qwen]
+dir           = "~/.qwen"                    # settings.json (hooks, mcpServers); QWEN_HOME moves the directory
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
@@ -283,7 +301,8 @@ max_rate  = 0.05                      # re-read ceiling; above it the report fla
 cmd = ""                              # command family hint when the caller knows it (--cmd)
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
-root = ""                             # where `rtok worktree add` creates worktrees; "" = the nearest `_worktrees/` above the main checkout, else one next to it
+enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
+root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
 
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
 endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
@@ -313,6 +332,7 @@ enabled          = true
 default_mode     = "full"             # full | lines | map | signatures
 max_chars        = 20000              # above this, head/tail + archive id
 native_max_bytes = 32768              # PreToolUse(Read) deny threshold; never below this
+range_max_lines = 300              # T383: a native Read with limit 1..=N passes the hook; 0 = unranged only
 advice           = true               # false = never deny native Read
 allow_paths      = []                 # extra roots outside cwd
 search_max       = 50
@@ -344,6 +364,7 @@ modes         = []                    # same as [setup].modes; setup writes here
 enabled      = true
 window_turns = 8
 deny_grep_glob = false           # opt-in: deny native Grep/Glob, point at MCP search/tree (T50.4)
+grep_symbol = false              # opt-in: a Grep for one identifier (`foo`, `fn foo`, `class Foo`, `\bfoo\(`) is denied with its 1-5 indexed definitions + reference count; index lookup only (T369)
 skills = false                   # opt-in (Claude Code): deny a Skill whose SKILL.md exceeds skill_max_bytes with its map + `expand <id>` (T62.1)
 skill_max_bytes = 8192           # bodies at or under this load whole; so does any skill with allowed-tools / model / context / agent in its frontmatter
 
@@ -371,10 +392,15 @@ hybrid     = true                     # when enabled: RRF(fts5, knn); false = kn
 enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 map_tokens = 0                        # SessionStart repo map cap (D5 share next to memory.recall_tokens); 0 = off until a P7 A/B passes
+map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
+auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI
 backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
 watch      = "off"                    # off | notify: background re-index inside `rtok mcp` (P8d)
+auto_link_references = true           # T329.8: follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
+reference_depth = 3                   # T329.8: reference levels followed from the project (A -> B is 1); reaching it is shown and logged
+max_auto_projects = 20                # T329.8: most projects references may add to the registry; reaching it is shown and logged
 
 [plugins.toon]
 enabled  = true
@@ -419,12 +445,28 @@ cache_by_provider = true
 
 
 
+### `[proxy.lanes]`
+
+Every proxied request is classified into a lane and the lane is written to the ledger
+(`calls.kind`). The path decides first: Batch (`/v1/messages/batches`, `/v1/batches`,
+Gemini `:batchGenerateContent`), `files`, `embeddings` and `meta` (`/v1/models`,
+`count_tokens`) name their own lane. A sync chat call is an `agent` turn unless the caller
+says otherwise with an `x-rtok-lane: bulk|internal` header or a `/lane/<name>/` path prefix
+(`/lane/bulk/v1/messages`). Both are stripped before the request goes upstream. There are
+no heuristics: an unmarked request is `agent`, the lane every request had before lanes.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `enabled` | bool | `true` | `false` records every request as a plain `api_request` and forwards the header and prefix untouched |
+
+The agent lane keeps `calls.kind = api_request`; the others record `api_request:<lane>`
+(`api_request:bulk`, `api_request:batch`, ...). Request bytes are not changed by the lane.
+
 ### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — planned (see `docs/batch-flex.md`)
 
-These tables document the intended Batch pass-through, Flex `service_tier` rewrite, and
-model/sticky routing knobs. **They are not parsed yet** — adding them to a live config file
-fails `rtok config validate` until the corresponding `Config` fields land. The proxy
-fallback already forwards unknown paths (including `/v1/batches` and
+These three tables exist and are empty: an empty `[proxy.batch]` loads, but none has a key
+yet. The keys below are the **intended** ones; adding any of them to a live config file
+still fails `rtok config validate` until the matching step ships. The proxy fallback already forwards unknown paths (including `/v1/batches` and
 `/v1/messages/batches`) without a `Wire`; Flex injection and routing rewrites are future
 `prepare` / policy work. Full semantics: [`docs/batch-flex.md`](batch-flex.md).
 
@@ -543,7 +585,7 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 |-----------|------|-----|
 | global | `--config <path>` | (selects the file; not a key) |
 | global | `RTOK_HOME` | (selects the directory; env only, not a clap flag) |
-| reading | `--json` | `stats.format` on `stats`; otherwise an action (the `web::model` page as JSON, not a stored key). On `stats`, `info`, `config show`, `doctor`, `plugins`, `agents list`, `agents sessions`, `agents whoami`, `agents show`, `agents inbox`, `logs`, `demon status`, `otel status` |
+| reading | `--json` | `stats.format` on `stats`; otherwise an action (the `web::model` page as JSON, not a stored key). On `stats`, `info`, `config show`, `doctor`, `plugins`, `agents list`, `agents sessions`, `agents whoami`, `agents show`, `agents inbox`, `worktree whoami`, `logs`, `demon status`, `otel status` |
 | `hook` | `--host` | `hook.host` |
 | `proxy` | `--port`, `--upstream`, `--mode`, `--dry-run` | `proxy.port`, `proxy.upstream`, `proxy.mode`, `proxy.dry_run` |
 | `web` | `--host`, `--port` | `web.host`, `web.port` (`rtok dashboard` is the deprecated spelling) |
@@ -556,6 +598,8 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 | `agents remove` | `--dry-run` | `setup.dry_run` (the command itself is the `--remove` action) |
 | `agents list` | — | reads the host configs and `<bin> --version` (`--json` is the reading row) |
 | `agents whoami` | — | reads `RTOK_AGENT_ID` and resolves it through the store (T283); no key, no `setup.*` (`--json` is the reading row) |
+| `worktree whoami` | — | reads `RTOK_AGENT_ID` and `[worktree] root` (T411); no key of its own (`--json` is the reading row) |
+| `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, plus `.dirs.<host>` with no flag (`--unpriced` picks the view of one call, `--json` is the reading row) |
 | `agents sessions` | `--all` | (action: also lists ended sessions; live vs idle follows `agents.idle`) |
 | `agents show` | — | resolves an id prefix through the store (T284); live vs idle follows `agents.idle` (`--json` is the reading row) |
 | `agents status` | — | writes the calling agent's (`RTOK_AGENT_ID`) status text, ≤ 120 chars (T284); no key |

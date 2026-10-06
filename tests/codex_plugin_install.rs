@@ -1,12 +1,16 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T140 + D21: `rtok agents install codex` offers rtok's Codex plugin (`plugins/codex`) from
-//! the GitHub marketplace `listepo/rtok`, enabled by default once `codex` is on PATH — no flag
+//! the GitHub marketplace `pyrlyn/rtok`, enabled by default once `codex` is on PATH — no flag
 //! needed, mirroring T139's Claude flow (a fake `codex` first on PATH records the calls).
 //! Codex's docs at https://developers.openai.com/plugins/build/plugins name only `marketplace
 //! add|list|upgrade|remove`, but `codex plugin add --help` on the installed CLI (codex-cli
 //! 0.155.1) shows real `codex plugin add|remove` subcommands that enable/disable one plugin,
 //! verified empirically in a scratch `CODEX_HOME`; the offer runs `codex plugin marketplace
-//! add listepo/rtok && codex plugin add rtok@rtok`. A missing `codex` on PATH
-//! (`raw_without_claude` strips every fake and real CLI down to a bare system PATH) keeps the
+//! add pyrlyn/rtok && codex plugin add rtok@rtok`. A `codex` that fails the
+//! offer (`raw_without_claude` leaves only stub CLIs that fail past `--version`) keeps the
 //! offer open instead of failing the install, and the file-based hooks/MCP surfaces still go
 //! in.
 #![cfg(unix)]
@@ -23,7 +27,7 @@ fn dry_run_offers_the_codex_commands_and_touches_nothing() {
     let out = rtok_without_claude(&["agents", "install", "codex", "--dry-run"], &cfg, &home);
     assert!(out.contains("offer plugins/codex"), "{out}");
     assert!(
-        out.contains("codex plugin marketplace add listepo/rtok"),
+        out.contains("codex plugin marketplace add pyrlyn/rtok"),
         "{out}"
     );
     assert!(out.contains("codex plugin add rtok@rtok"), "{out}");
@@ -55,7 +59,7 @@ fn installs_the_plugin_by_default_as_the_only_call_path_and_remove_uninstalls() 
     let log = codex_log(&home);
     let calls: Vec<&str> = log.lines().collect();
     assert_eq!(calls.len(), 2, "{log}");
-    assert_eq!(calls[0], "plugin marketplace add listepo/rtok");
+    assert_eq!(calls[0], "plugin marketplace add pyrlyn/rtok");
     assert_eq!(calls[1], "plugin add rtok@rtok");
     let config = fs::read_to_string(&config_path).unwrap_or_default();
     assert!(
@@ -91,11 +95,14 @@ fn installs_the_plugin_by_default_as_the_only_call_path_and_remove_uninstalls() 
 }
 
 #[test]
-fn a_missing_codex_keeps_the_offer_open_and_the_file_surfaces_still_go_in() {
+fn a_failing_codex_keeps_the_offer_open_and_the_file_surfaces_still_go_in() {
     let home = tmp("codex-plugin-missing");
     let cfg = write_cfg(&home);
     let out = rtok_without_claude(&["agents", "install", "codex"], &cfg, &home);
-    assert!(out.contains("codex not found on PATH"), "{out}");
+    assert!(
+        out.contains("codex failed: fake host: unsupported"),
+        "{out}"
+    );
     let config = fs::read_to_string(home.join(".codex/config.toml")).unwrap_or_default();
     assert!(
         config.contains("[mcp_servers.rtok]"),

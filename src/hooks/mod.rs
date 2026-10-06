@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Claude Code hook surface: `rtok hook <event>`.
 //!
 //! - [`types`] — stdin/stdout JSON contract (plan T0.6)
@@ -154,7 +158,7 @@ fn agent_id_injection(agent: Option<&str>) -> Option<Injection> {
     Some(Injection {
         plugin: "agent_id",
         text: format!(
-            "rtok agent id: {short} (full: {id}). Use it with rtok's agent_* and worktree_* MCP tools."
+            "rtok agent id: {short} (full: {id}). Use it with rtok's agent_* and worktree_* MCP tools; agent_inbox reads messages sent to you."
         ),
         // Highest offered priority (`Inject`'s own compact/startup recall tops out at 9): a
         // few words wide, so it never meaningfully competes with a real offering for budget,
@@ -479,7 +483,8 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
         .then(|| cx.host_id())
         .flatten()
         .and_then(|host_id| {
-            cx.store
+            let id = cx
+                .store
                 .register_agent(
                     host_id,
                     &cx.session,
@@ -487,7 +492,17 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
                     cx.cwd.as_deref(),
                     agent_activity(input).as_deref(),
                 )
-                .ok()
+                .ok()?;
+            // T283.3: what lets an `rtok mcp` process find this row by its host ancestor.
+            if let Some(pid) = cx
+                .config
+                .hook_client_pid
+                .and_then(|p| i32::try_from(p).ok())
+            {
+                let chain = rtok_sys::ancestors(pid, crate::agents::link::ANCESTORS);
+                let _ = cx.store.set_agent_ancestors(&id, &chain);
+            }
+            Some(id)
         });
     let parent = match cx.record_call("hook", "hook", Some(&input.hook_event_name)) {
         Ok(id) => Some(id),
@@ -526,7 +541,22 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
         }
         "SessionStart" => {
             write_agent_env_file(agent.as_deref());
-            inject_event(input, cx, &registry, agent.as_deref())
+            // T329.6: one upsert beside `register_agent`'s; a locked store only skips it.
+            if cx.config.plugins.graph.auto_add_projects
+                && let Some(cwd) = cx.cwd.as_deref()
+            {
+                let _ = cx.store.auto_add_project(
+                    std::path::Path::new(cwd),
+                    crate::store::Origin::Session,
+                    None,
+                );
+            }
+            // T428: memory recall, the handoff and `inject` each record a measurement; one
+            // commit for the three instead of one lock wait each.
+            cx.defer_measurements();
+            let out = inject_event(input, cx, &registry, agent.as_deref());
+            cx.flush_measurements();
+            out
         }
         "UserPromptSubmit" | "PostCompact" | "SubagentStart" => {
             inject_event(input, cx, &registry, agent.as_deref())
@@ -722,7 +752,7 @@ fn post_tool(
 }
 
 /// Cursor reads a flat object: `{updated_mcp_tool_output}` after an MCP tool,
-/// `{additional_context}` on session/prompt hooks. Anything else (a guard deny, a
+/// `{additional_context}` on `sessionStart`/`postToolUse`. Anything else (a guard deny, a
 /// shell hook with no replacement) keeps the Claude `hookSpecificOutput` shape.
 pub fn cursor_output(out: &HookOutput) -> Vec<u8> {
     let nested = || serde_json::to_vec(out).unwrap_or_else(|_| b"{}".to_vec());
@@ -1504,6 +1534,55 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// T390: `sessionEnd` (stdin names it in camelCase) ends the agent row. T390.1: the
+    /// `beforeSubmitPrompt` hook an upgraded T390 install still has registered stays harmless,
+    /// still answering with valid JSON.
+    #[test]
+    fn cursor_session_end_hook_ends_the_agent_and_a_stale_prompt_hook_fails_open() {
+        let dir = unique_dir("rtok-hook-t390-cursor");
+        let mut cfg = cursor_cfg(&dir);
+        cfg.plugins.inject.modes = vec!["nudges".into()];
+        let run_event = |event: &str, stdin: serde_json::Value| {
+            dispatch_owned_strict(&serde_json::to_vec(&stdin).unwrap(), event, &cfg).unwrap()
+        };
+        let prompt = run_event(
+            "UserPromptSubmit",
+            serde_json::json!({
+                "hook_event_name": "beforeSubmitPrompt",
+                "conversation_id": "sess-cursor-390",
+                "cwd": dir.to_string_lossy(),
+                "prompt": "fix the build",
+                "attachments": [],
+            }),
+        );
+        assert!(json(prompt).is_object());
+
+        let host_id = Runtime::open(cfg.clone(), "irrelevant")
+            .unwrap()
+            .host_id()
+            .unwrap();
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        let id = store
+            .register_agent(host_id, "sess-cursor-390", None, None, None)
+            .unwrap();
+        assert_eq!(store.agent_row(&id).unwrap().unwrap().ended_at, None);
+
+        let end = run_event(
+            "SessionEnd",
+            serde_json::json!({
+                "hook_event_name": "sessionEnd",
+                "conversation_id": "sess-cursor-390",
+                "session_id": "sess-cursor-390",
+                "reason": "completed",
+                "duration_ms": 45000,
+            }),
+        );
+        assert_eq!(json(end), serde_json::json!({}));
+        let row = store.agent_row(&id).unwrap().unwrap();
+        assert!(row.ended_at.is_some(), "sessionEnd must end the agent row");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn mcp_stdin(server: &str, tool: &str, text: &str) -> Vec<u8> {
         let result = serde_json::json!({"content":[{"type":"text","text": text}]});
         serde_json::to_vec(&serde_json::json!({
@@ -1775,6 +1854,26 @@ mod tests {
         );
     }
 
+    /// T283.3: a hook that knows its client's pid records the ancestors above it on the agent
+    /// row; a hook without one (an old client) leaves the row without any.
+    #[test]
+    fn a_known_client_pid_records_its_ancestors_on_the_agent_row() {
+        let me = std::process::id();
+        let chain = rtok_sys::ancestors(me as i32, crate::agents::link::ANCESTORS);
+        let ancestors_after = |pid: Option<u32>, session: &str| {
+            let (_, stdin, input, mut cx) = agent_fixture(session);
+            cx.config.hook_client_pid = pid;
+            let _ = dispatch(&stdin, &input, &cx);
+            let id = cx
+                .store
+                .register_agent(cx.host_id().unwrap(), &cx.session, None, None, None)
+                .unwrap();
+            cx.store.agent_row(&id).unwrap().unwrap().ancestors
+        };
+        assert_eq!(ancestors_after(Some(me), "anc-sess-1"), chain);
+        assert!(ancestors_after(None, "anc-sess-2").is_empty());
+    }
+
     #[test]
     fn a_sub_agent_hook_event_registers_a_child_row_under_its_parent() {
         let (v, stdin, input, cx) = agent_fixture("agent-sess-2");
@@ -1912,7 +2011,7 @@ mod tests {
     /// spec's exact sentence, not just whatever the function happens to emit.
     fn expected_agent_line(id: &str) -> String {
         format!(
-            "rtok agent id: {} (full: {id}). Use it with rtok's agent_* and worktree_* MCP tools.",
+            "rtok agent id: {} (full: {id}). Use it with rtok's agent_* and worktree_* MCP tools; agent_inbox reads messages sent to you.",
             &id[..8]
         )
     }
@@ -1948,6 +2047,57 @@ mod tests {
         // whole line — stays byte-identical.
         let out2 = dispatch(&stdin, &input, &cx);
         assert_eq!(out, out2, "byte-stable across two runs of the same session");
+    }
+
+    /// T428: the recall and `inject` measurements reach the ledger in the order the plugins
+    /// recorded them, though SessionStart now writes them in one commit, and the queue is
+    /// closed afterwards so a later `record` is written at once.
+    #[test]
+    fn session_start_records_its_measurements_after_the_dispatch() {
+        let (stdin, input, cx) = session_start_fixture("t418-sess");
+        let _ = dispatch(&stdin, &input, &cx);
+        assert_eq!(cx.store.list_measurements("memory").unwrap().len(), 1);
+        assert_eq!(cx.store.list_measurements("inject").unwrap().len(), 1);
+        let m = rtok_plugin_sdk::Measurement {
+            plugin: "memory",
+            kind: "after",
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id: None,
+            call_id: None,
+        };
+        cx.record(&m).unwrap();
+        assert_eq!(cx.store.list_measurements("memory").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn deferred_measurements_wait_for_the_flush_and_keep_their_order() {
+        let cx = Runtime::in_memory("t418-defer").unwrap();
+        let row = |kind| rtok_plugin_sdk::Measurement {
+            plugin: "memory",
+            kind,
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id: None,
+            call_id: None,
+        };
+        cx.defer_measurements();
+        cx.record(&row("first")).unwrap();
+        cx.record(&row("second")).unwrap();
+        assert!(cx.store.list_measurements("memory").unwrap().is_empty());
+        cx.flush_measurements();
+        let kinds: Vec<_> = cx
+            .store
+            .list_measurements("memory")
+            .unwrap()
+            .into_iter()
+            .map(|m| m.kind)
+            .collect();
+        assert_eq!(kinds, ["first", "second"]);
     }
 
     #[test]
@@ -2056,7 +2206,7 @@ mod tests {
             cx.store.send_message(None, &id, body).unwrap();
         }
         let f = frames(&cx, &id);
-        let more = |n| format!("… and {n} more: run rtok agents inbox");
+        let more = |n| format!("… and {n} more: call agent_inbox (or run rtok agents inbox)");
         cx.config.agents.push_bytes = (f[0].len() + more(3).len() + 1) as u32;
         let ctx = || additional_context(&dispatch(&stdin, &input, &cx));
         assert_eq!(ctx(), format!("{}{}", f[0], more(2)));
@@ -2071,7 +2221,10 @@ mod tests {
         cx.store.send_message(None, &id, "hello").unwrap();
         cx.config.agents.push_bytes = 64;
         let ctx = additional_context(&dispatch(&stdin, &input, &cx));
-        assert_eq!(ctx, "… and 1 more: run rtok agents inbox");
+        assert_eq!(
+            ctx,
+            "… and 1 more: call agent_inbox (or run rtok agents inbox)"
+        );
         assert_eq!(dispatch(&stdin, &input, &cx), b"{}");
         assert_eq!(cx.store.inbox(&id, true, false).unwrap().len(), 1);
     }

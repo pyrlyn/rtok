@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T216: `tests/trycmd/agents-list*.toml` match `stdout` against a bare `"""...\n"""` /
 //! `[...]` wildcard, so a lost host row, a broken block header or a malformed `--json`
 //! array all pass silently — "re-blessing" is a no-op. These two tests assert the actual
@@ -51,6 +55,8 @@ const EXPECTED_VARIANTS: &[(&str, Kind, &str)] = &[
     ("antigravity", Kind::Desktop, "Antigravity"),
     ("devin", Kind::Cli, "Devin CLI"),
     ("devin", Kind::Desktop, "Devin"),
+    ("roo", Kind::Desktop, "Roo Code"),
+    ("qwen", Kind::Cli, "Qwen Code"),
 ];
 
 /// `agents list`'s text form: one `CLI: <name>` / `Desktop: <name>` header per variant, in

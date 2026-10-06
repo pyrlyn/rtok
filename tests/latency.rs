@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T2.2: spawn `rtok hook PreToolUse` 200×; p95 < 10 ms (release).
 //! Gate P17 asks the same of `PostToolUse`, T288 of `UserPromptSubmit`; each prints p50/p95/max under `--nocapture`.
 
@@ -11,14 +15,28 @@ const N: usize = 200;
 const P95_MAX: Duration = Duration::from_millis(10);
 
 fn p95_under_10ms(event: &str, fixture: &[u8]) {
+    p95_with(event, "", fixture, |_| {}, |out| out == b"{}");
+}
+
+/// `tag` keeps two cases of one event apart, as the tests of this file run on parallel threads;
+/// `setup` fills the home before the first spawn; `ok` checks every hook's stdout.
+fn p95_with(
+    event: &str,
+    tag: &str,
+    fixture: &[u8],
+    setup: impl FnOnce(&std::path::Path),
+    ok: impl Fn(&[u8]) -> bool,
+) {
     if cfg!(debug_assertions) {
         eprintln!("skip: T2.2 Check is `cargo test --release latency`");
         return;
     }
 
     let bin = env!("CARGO_BIN_EXE_rtok");
-    let tmp = std::env::temp_dir().join(format!("rtok-latency-{event}-{}", std::process::id()));
+    let tmp =
+        std::env::temp_dir().join(format!("rtok-latency-{event}{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).expect("temp home");
+    setup(&tmp);
 
     let spawn = || {
         let mut child = Command::new(bin)
@@ -46,7 +64,10 @@ fn p95_under_10ms(event: &str, fixture: &[u8]) {
         let out = spawn();
         samples.push(start.elapsed());
         assert!(out.status.success(), "hook must fail open with exit 0");
-        assert_eq!(out.stdout, b"{}");
+        // SessionStart injects the agent id and the memory line; the others stay `{}`.
+        if event != "SessionStart" {
+            assert!(ok(&out.stdout), "{}", String::from_utf8_lossy(&out.stdout));
+        }
     }
 
     samples.sort();
@@ -211,4 +232,182 @@ fn hook_returns_despite_exclusive_lock() {
     );
 
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T329.6: `SessionStart` with a real cwd also upserts the session's project (the
+/// `auto_add_projects` default); the fixture's own cwd does not exist and would skip it.
+#[test]
+fn latency_hook_session_start_with_project_registration_p95_under_10ms() {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
+    v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
+    p95_under_10ms("SessionStart", v.to_string().as_bytes());
+}
+
+/// T369: with `grep_symbol` on, a symbol-shaped `Grep` in an indexed project is answered on the
+/// hook path (one index lookup, one small file read) inside the same 10 ms budget.
+#[test]
+fn latency_hook_grep_symbol_answer_p95_under_10ms() {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/pre_tool_read.json")).unwrap();
+    let project =
+        std::env::temp_dir().join(format!("rtok-latency-grep-proj-{}", std::process::id()));
+    v["cwd"] = project.to_string_lossy().into_owned().into();
+    v["tool_name"] = "Grep".into();
+    v["tool_input"] = serde_json::json!({"pattern": "fn parse_since"});
+    let setup = |home: &std::path::Path| {
+        std::fs::create_dir_all(&project).unwrap();
+        let body = "pub fn parse_since(s: &str) -> u32 {\n    s.len() as u32\n}\n\npub fn run() -> u32 {\n    parse_since(\"1d\")\n}\n";
+        std::fs::write(project.join("lib.rs"), body).unwrap();
+        std::fs::write(
+            home.join("config.toml"),
+            "[plugins.guard]\ngrep_symbol = true\n",
+        )
+        .unwrap();
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_rtok"))
+            .args(["graph", "index"])
+            .arg(&project)
+            .env("RTOK_HOME", home)
+            .output()
+            .expect("rtok graph index");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    // A denial prints the hook's deny JSON, not `{}`.
+    let denied = |out: &[u8]| String::from_utf8_lossy(out).contains("answered from the rtok index");
+    p95_with(
+        "PreToolUse",
+        "-grep-symbol",
+        v.to_string().as_bytes(),
+        setup,
+        denied,
+    );
+    let _ = std::fs::remove_dir_all(&project);
+}
+
+/// T428: a real store holds note bodies of thousands of tokens and a `session:*` note, and
+/// SessionStart reads the recall titles, each body's size and the newest session note
+/// through them. An empty store (the case above) hides that cost.
+#[test]
+fn latency_hook_session_start_with_populated_notes_p95_under_10ms() {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
+    v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
+    p95_with(
+        "SessionStart",
+        "-notes",
+        v.to_string().as_bytes(),
+        |home| {
+            let store = rtok::store::Store::open(&home.join("rtok.db")).expect("open store");
+            let body = "recalled body line\n".repeat(900);
+            for i in 0..40 {
+                store
+                    .upsert_note(None, "note", &format!("note {i}"), &body)
+                    .expect("seed note");
+            }
+            store
+                .upsert_note(None, "session:seed", "compact", &body)
+                .expect("seed session note");
+        },
+        |out| out == b"{}",
+    );
+}
+
+/// T370: `map_rank = "pagerank"` reads one stored row and ranks in memory, with no scan of
+/// `symbols` and no process. The graph is about this repo's size (500 files, 40k edges at the
+/// time of writing) so the decode and the personalized iterations are paid in full.
+#[test]
+fn latency_hook_session_start_with_a_pagerank_map_p95_under_10ms() {
+    p95_with(
+        "SessionStart",
+        "-rank",
+        session_start_in_temp_dir().as_bytes(),
+        seed_pagerank_home,
+        |out| String::from_utf8_lossy(out).contains("repo map"),
+    );
+}
+
+/// T370: the configured hook prints the map from the stored graph, whatever the build profile.
+#[test]
+fn session_start_prints_the_pagerank_map_from_the_stored_graph() {
+    let home = std::env::temp_dir().join(format!("rtok-rank-map-{}", std::process::id()));
+    std::fs::create_dir_all(&home).expect("temp home");
+    seed_pagerank_home(&home);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .args(["hook", "SessionStart"])
+        .env("RTOK_HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn rtok");
+    let stdin = child.stdin.as_mut().expect("stdin");
+    stdin
+        .write_all(session_start_in_temp_dir().as_bytes())
+        .expect("write fixture");
+    let out = child.wait_with_output().expect("wait");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("repo map"), "{text}");
+    assert!(text.contains(".rs: sym"), "{text}");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+fn session_start_in_temp_dir() -> String {
+    let mut v: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/hooks/session_start.json")).unwrap();
+    v["cwd"] = std::env::temp_dir().to_string_lossy().into_owned().into();
+    v.to_string()
+}
+
+/// A config that turns the pagerank map on, and a stored graph about this repo's size (500
+/// files, 40k edges at the time of writing) so the decode and the personalized iterations are
+/// paid in full.
+fn seed_pagerank_home(home: &std::path::Path) {
+    std::fs::write(
+        home.join("config.toml"),
+        "[plugins.graph]\nmap_tokens = 1000\nmap_rank = \"pagerank\"\n",
+    )
+    .expect("write config");
+    let (files, names) = (500, 2000);
+    let mut scan = Vec::new();
+    for k in 0..names {
+        scan.push((format!("sym{k}"), format!("f{:03}.rs", k % files), true, 1));
+    }
+    for i in 0..files {
+        for j in 0..80 {
+            let k = (i * 31 + j * 17) % names;
+            scan.push((
+                format!("sym{k}"),
+                format!("f{i:03}.rs"),
+                false,
+                1 + (j % 3) as i64,
+            ));
+        }
+    }
+    // Eight files edited an hour ago are a working set, so the hook runs the personalized
+    // iterations instead of answering from the stored global ranks.
+    let hour = 3_600_000_000_000;
+    let mtimes = (0..files)
+        .map(|i| {
+            (
+                format!("f{i:03}.rs"),
+                if i < 8 { now_nanos() - hour } else { 1 },
+            )
+        })
+        .collect();
+    let graph = rtok::plugins::graph::rank::build(&scan, &mtimes);
+    let store = rtok::store::Store::open(&home.join("rtok.db")).expect("open store");
+    let root = rtok::store::canon_root(&std::env::temp_dir());
+    store
+        .file_rank_put(&root, &serde_json::to_string(&graph).unwrap())
+        .expect("seed graph");
+}
+
+fn now_nanos() -> i64 {
+    let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+    since.map_or(0, |d| d.as_nanos() as i64)
 }

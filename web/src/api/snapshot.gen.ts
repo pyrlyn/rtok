@@ -13,7 +13,42 @@ export type ClientMessage =
     }
   | {
       set: SetRequest;
+    }
+  | {
+      project: ProjectRequest;
+    }
+  | {
+      doctor: DoctorRequest;
     };
+/**
+ * The registry writes the graph page offers; `<project>` is an id or a
+ * root path, as in `rtok graph projects`.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ProjectRequest".
+ */
+export type ProjectRequest =
+  | {
+      action: "select";
+      project: string;
+    }
+  | {
+      action: "link";
+      both: boolean;
+      from: string;
+      to: string;
+    }
+  | {
+      action: "unlink";
+      both: boolean;
+      from: string;
+      to: string;
+    };
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DoctorAction".
+ */
+export type DoctorAction = "plan" | "apply";
 /**
  * A frame the server pushes besides the [`Snapshot`] itself.
  *
@@ -29,12 +64,39 @@ export type ServerFrame =
       id: string;
       text: string;
       type: "expand";
+    }
+  | {
+      plan: Plan;
+      type: "doctorplan";
+    }
+  | {
+      fixed: Fixed;
+      type: "doctorfixed";
     };
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ModuleState".
  */
 export type ModuleState = "installed" | "not_installed" | "not_supported";
+/**
+ * Whether Claude Code defers MCP tools (T388).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ToolSearchState".
+ */
+export type ToolSearchState = ("enabled" | "disabled") | "unknown";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "LinkKind".
+ */
+export type LinkKind = "manual" | "auto";
+/**
+ * How a project got into the registry (T329 §1).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Origin".
+ */
+export type Origin = "manual" | "session" | "worktree" | "mcp" | "reference";
 
 /**
  * Root of the schema: one property per direction, so every type lands in `$defs` once.
@@ -53,6 +115,93 @@ export interface SetRequest {
   value: boolean;
 }
 /**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DoctorRequest".
+ */
+export interface DoctorRequest {
+  action: DoctorAction;
+  selection: Selection;
+}
+/**
+ * What the user changed since the defaults.
+ */
+export interface Selection {
+  /**
+   * Entries made the kept copy of their duplicate.
+   */
+  keep: Ref[];
+  /**
+   * Entries whose selection is the opposite of their default.
+   */
+  toggled: Ref[];
+}
+/**
+ * An entry as the page names it: the file and the key path inside it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Ref".
+ */
+export interface Ref {
+  path: string;
+  source: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Plan".
+ */
+export interface Plan {
+  /**
+   * The diff of every file the selection would change.
+   */
+  diff: string;
+  items: Item[];
+  /**
+   * Selected entries the engine will not remove, with why.
+   */
+  refused: string[];
+}
+/**
+ * One line of the checklist.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Item".
+ */
+export interface Item {
+  agent: string;
+  /**
+   * Whether this copy may be made the kept one.
+   */
+  can_keep: boolean;
+  detail: string;
+  /**
+   * The file that holds the copy kept instead, for a duplicate.
+   */
+  kept_in: string | null;
+  kind: string;
+  /**
+   * What the entry runs or is called.
+   */
+  label: string;
+  path: string;
+  selected: boolean;
+  /**
+   * In a project's shared file: starts unselected.
+   */
+  shared: boolean;
+  source: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Fixed".
+ */
+export interface Fixed {
+  /**
+   * 1 when a selected entry was skipped or failed.
+   */
+  code: number;
+  text: string;
+}
+/**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface
  * paints while its first read is still running.
  *
@@ -60,6 +209,7 @@ export interface SetRequest {
  * via the `definition` "Snapshot".
  */
 export interface Snapshot {
+  agent_usage: UsagePage;
   /**
    * Calls page (T15.5): the last [`CALLS_ROWS`] ledger rows, newest first.
    */
@@ -108,6 +258,12 @@ export interface Snapshot {
    */
   plugins: PluginPage[];
   /**
+   * Project registry (T329.12): every registered project with its index state and links,
+   * the same rows `rtok graph projects --json` prints. `None` when the `graph` feature is
+   * off or the store read failed.
+   */
+  projects: ProjectRow[] | null;
+  /**
    * Archive ids keyed by `calls[].id` (T60.4). Both surfaces read this map; neither
    * queries the store for an expand handle (D23 / D27).
    */
@@ -147,6 +303,148 @@ export interface Snapshot {
    * stay CLI-only verdicts. `None` only when the current directory is unreadable.
    */
   worktrees: string | null;
+}
+/**
+ * Usage page (T358.5): what `rtok agents usage` reports, through [`usage_page`]. The
+ * overview's own `usage` key is the proxy's totals, so this one carries the page's name
+ * in its own words.
+ */
+export interface UsagePage {
+  report: Report2 | null;
+  text: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Report2".
+ */
+export interface Report2 {
+  agents: Agent[];
+  /**
+   * `--by model` only: the model rows the middle table shows instead of `agents`.
+   */
+  models?: ModelRow[] | null;
+  periods: Period[];
+  /**
+   * Hosts whose files exist but could not be read: named, counted nowhere.
+   */
+  skipped: Skipped[];
+  source: string;
+  /**
+   * The last day with usage, in `tz`.
+   */
+  through: string | null;
+  totals: Totals;
+  tz: string;
+  unpriced: Unpriced[];
+  /**
+   * Distinct model ids without a price.
+   */
+  unpriced_models: number;
+}
+/**
+ * Token legs and the estimated cost of one table row. `cost_usd` is `None` when no model in
+ * the row has a price: `-` in the table, `null` in JSON, never `$0.00` (that means free).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Agent".
+ */
+export interface Agent {
+  cache_read: number;
+  cache_write: number;
+  cost_usd: number | null;
+  /**
+   * `both` only: `through_rtok_tokens` over the logs' tokens, so an agent that bypasses
+   * the proxy reads low. `None` when the logs hold no tokens for it.
+   */
+  coverage?: number | null;
+  host: string;
+  input: number;
+  name: string;
+  output: number;
+  saved_tokens?: number;
+  saved_usd?: number | null;
+  /**
+   * `both` only: tokens of this agent that also passed through rtok.
+   */
+  through_rtok_tokens?: number | null;
+  tokens: number;
+}
+/**
+ * Token legs and the estimated cost of one table row. `cost_usd` is `None` when no model in
+ * the row has a price: `-` in the table, `null` in JSON, never `$0.00` (that means free).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ModelRow".
+ */
+export interface ModelRow {
+  cache_read: number;
+  cache_write: number;
+  cost_usd: number | null;
+  input: number;
+  model: string;
+  output: number;
+  tokens: number;
+}
+/**
+ * Token legs and the estimated cost of one table row. `cost_usd` is `None` when no model in
+ * the row has a price: `-` in the table, `null` in JSON, never `$0.00` (that means free).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Period".
+ */
+export interface Period {
+  cache_read: number;
+  cache_write: number;
+  cost_usd: number | null;
+  input: number;
+  output: number;
+  period: string;
+  tokens: number;
+}
+/**
+ * A host whose session files exist but could not be read: named once, counted nowhere.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Skipped".
+ */
+export interface Skipped {
+  host: string;
+  path: string;
+  reason: string;
+}
+/**
+ * Token legs and the estimated cost of one table row. `cost_usd` is `None` when no model in
+ * the row has a price: `-` in the table, `null` in JSON, never `$0.00` (that means free).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Totals".
+ */
+export interface Totals {
+  cache_read: number;
+  cache_write: number;
+  cost_usd: number | null;
+  /**
+   * Distinct `(agent, day)` pairs with usage, what ccusage calls daily rows.
+   */
+  daily_rows: number;
+  input: number;
+  output: number;
+  saved_tokens?: number;
+  saved_usd?: number | null;
+  /**
+   * Distinct session ids.
+   */
+  sessions: number;
+  tokens: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Unpriced".
+ */
+export interface Unpriced {
+  host: string;
+  model: string;
+  tokens: number;
 }
 /**
  * One `calls` row as the Calls page serves it ([`Store::recent_calls`], T15.5): the
@@ -205,8 +503,10 @@ export interface Report {
    * One probed MCP server: name, command, tool count, description tokens.
    */
   mcp: ServerInfo[];
+  mcp_tool_search: ToolSearch;
   /**
-   * `ANTHROPIC_BASE_URL` is set, so MCP tool search is likely disabled.
+   * MCP tool search is not confirmed on: `mcp_tool_search.state` is `disabled`, or `unknown`
+   * with a custom `ANTHROPIC_BASE_URL` (the heuristic).
    */
   mcp_tool_search_disabled: boolean;
   /**
@@ -215,6 +515,10 @@ export interface Report {
    * lines say "duplicate", never "saves N".
    */
   overlaps?: string[];
+  /**
+   * Hooks that lead nowhere or cannot be checked (T331.1); the list later detectors extend.
+   */
+  problems?: Problem[];
   /**
    * The proxy chain behind `ANTHROPIC_BASE_URL`, hops joined with `→`.
    */
@@ -284,6 +588,55 @@ export interface ServerInfo {
   desc_tokens: number;
   name: string;
   tools: number;
+}
+/**
+ * The tool-search state and where it came from; `source` is `None` for the default (nothing to
+ * report), so a plain install prints no line.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ToolSearch".
+ */
+export interface ToolSearch {
+  source?: string | null;
+  state: ToolSearchState;
+}
+/**
+ * One finding of a doctor config check. The list is shared by every T331 detector.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Problem".
+ */
+export interface Problem {
+  agent: string;
+  /**
+   * The command as written, never expanded.
+   */
+  command?: string;
+  detail: string;
+  event?: string;
+  /**
+   * Whether `doctor --fix` may remove it (T331.5): only `broken-hook`.
+   */
+  fixable: boolean;
+  /**
+   * Copies of one duplicate share a `group`; `keep` marks the copy to keep (T331.3).
+   */
+  group?: number | null;
+  keep?: boolean;
+  /**
+   * `broken-hook`, `suspect-hook`, `unverified-hook`, `duplicate-hook`, `duplicate-mcp`,
+   * `conflicting-mcp`, `stale-plugin` or `unreadable-config`.
+   */
+  kind: string;
+  matcher?: string | null;
+  /**
+   * The key path of the entry inside `source`.
+   */
+  path: string;
+  /**
+   * The config file the entry lives in.
+   */
+  source: string;
 }
 /**
  * Share of Read-class transcript tokens spent in native Grep/Glob (T50.4):
@@ -375,6 +728,51 @@ export interface Stats {
   rows: number;
 }
 /**
+ * One registry row as `graph projects` prints it and the `/ws` snapshot carries it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ProjectRow".
+ */
+export interface ProjectRow {
+  created_at: number;
+  id: number;
+  index: ProjectIndex | null;
+  last_used_at: number;
+  links: ProjectLink[];
+  missing: boolean;
+  name: string;
+  origin: Origin;
+  root: string;
+  selected: boolean;
+  state: string;
+}
+/**
+ * `graph status` numbers for one project; absent for a missing root, which has nothing
+ * readable to count.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ProjectIndex".
+ */
+export interface ProjectIndex {
+  files: number;
+  indexed_at: number | null;
+  pending: number;
+  rows: number;
+  watch: string;
+}
+/**
+ * One outgoing link of a project.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ProjectLink".
+ */
+export interface ProjectLink {
+  kind: LinkKind;
+  name: string;
+  reason: string | null;
+  to: number;
+}
+/**
  * One session's totals ([`Store::session_totals`], T25.1) — the rendering input of the
  * Sessions page and `rtok agent sessions` (T25.2). Everything below is one query's
  * output, so no renderer can re-derive a number differently (D27): tokens are whole-
@@ -459,7 +857,7 @@ export interface Overview {
  * The Overview page (T15.3): the usage totals plus what the tab draws from them —
  * context-token-turns and the per-turn series behind the sparkline. The totals stay
  * flat under the `usage` key, so the `/ws` frame keeps the shape P19 pinned and the
- * Slint UI reads on untouched.
+ * SPA reads on untouched.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "Overview".
@@ -493,6 +891,22 @@ export interface Overview1 {
   turns: number[];
 }
 /**
+ * What the user changed since the defaults.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Selection".
+ */
+export interface Selection1 {
+  /**
+   * Entries made the kept copy of their duplicate.
+   */
+  keep: Ref[];
+  /**
+   * Entries whose selection is the opposite of their default.
+   */
+  toggled: Ref[];
+}
+/**
  * Skills page (T63.1, D23): one row per skill the host lists.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -504,4 +918,18 @@ export interface SkillsPage1 {
    */
   header: string;
   rows: SkillPageRow[];
+}
+/**
+ * The Usage page: one [`usage::Report`] — the call `rtok agents usage` makes — read once and
+ * carried twice. `text` is that command's screen ([`usage::Report::to_text`]) for the tui and
+ * the Slint page; `report` is the same rows as data for the SPA's tables. Nothing is summed
+ * a second time (D27). Both are empty-handed while the first read runs or after it fails:
+ * `report` is `None` and `text` says why.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "UsagePage".
+ */
+export interface UsagePage1 {
+  report: Report2 | null;
+  text: string;
 }

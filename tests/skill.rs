@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T71.3 / T155: size limits for every shipped skill (`skills/<name>/SKILL.md`), and the
 //! `worktrees` skill names only commands `rtok worktree` really has, and
 //! (T234) no host plugin bundles a copy of a skill.
@@ -91,7 +95,7 @@ fn worktrees_skill_names_only_commands_rtok_worktree_has() {
         }
         seen.push(sub);
     }
-    for sub in ["add", "list", "gc", "clean"] {
+    for sub in ["add", "adopt", "list", "gc", "clean"] {
         assert!(
             seen.contains(&sub),
             "the skill must show `rtok worktree {sub}`"

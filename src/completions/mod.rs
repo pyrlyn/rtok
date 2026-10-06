@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok completions <shell>` (T53.2, T317): clap_complete's shells plus Clink, the completion
 //! system `cmd.exe` gets through <https://chrisant996.github.io/clink/>. All of them come from
 //! the same clap tree as `--help`.
@@ -9,6 +13,7 @@ use clap::{Arg, Command, ValueEnum, ValueHint};
 use clap_complete::Generator;
 
 pub mod install;
+pub mod picker;
 
 /// Shells `rtok completions` writes for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -20,6 +25,16 @@ pub enum Shell {
     Elvish,
     // `cmd.exe` through Clink (a Lua argmatcher)
     Clink,
+}
+
+impl Shell {
+    /// The name `rtok completions <shell>` takes.
+    pub fn name(self) -> String {
+        let v = self
+            .to_possible_value()
+            .expect("every shell is a listed value");
+        v.get_name().to_string()
+    }
 }
 
 /// Write the completion script for `shell` to `w`.

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Ivan Tugay
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 # Regenerate .github/workflows/release.yml from dist-workspace.toml, then map
 # dist's CODESIGN_* secret names to the MACOS_* secrets this repository uses
 # (same names as pyrlyn/ketch). CODESIGN_IDENTITY is not a secret: the
@@ -133,16 +137,19 @@ if "Report artifact sizes" not in text:
             sys.exit(1)
         text = text[:step_start] + REPORT + "\n" + text[step_start:]
 
-create_old = """          # Write and read notes from a file to avoid quoting breaking things
-          echo \"$ANNOUNCEMENT_BODY\" > $RUNNER_TEMP/notes.txt
+# create-release = false: bump.yml made the tag and a draft Release (notes from CHANGELOG.md);
+# dist uploads to it and undrafts it. Append the archive sizes to bump's notes on the way.
+create_old = """          # If we're editing a release in place, we need to upload things ahead of time
+          gh release upload \"${{ needs.plan.outputs.tag }}\" artifacts/*
 
-          gh release create \"${{ needs.plan.outputs.tag }}\" --target \"$RELEASE_COMMIT\" $PRERELEASE_FLAG --title \"$ANNOUNCEMENT_TITLE\" --notes-file \"$RUNNER_TEMP/notes.txt\" artifacts/*
+          gh release edit \"${{ needs.plan.outputs.tag }}\" --target \"$RELEASE_COMMIT\" $PRERELEASE_FLAG --draft=false
 """
 
-create_new = """          # Write and read notes from a file to avoid quoting breaking things
-          echo \"$ANNOUNCEMENT_BODY\" > $RUNNER_TEMP/notes.txt
+create_new = """          # If we're editing a release in place, we need to upload things ahead of time
+          gh release upload \"${{ needs.plan.outputs.tag }}\" artifacts/*
 
-          # Append archive sizes so the Release page shows MiB without opening Assets.
+          # bump.yml wrote the notes; append archive sizes so the Release page shows MiB.
+          gh release view \"${{ needs.plan.outputs.tag }}\" --json body --jq .body > \"$RUNNER_TEMP/notes.txt\"
           {
             echo
             echo \"## Download sizes\"
@@ -163,12 +170,12 @@ create_new = """          # Write and read notes from a file to avoid quoting br
           } >> \"$RUNNER_TEMP/notes.txt\"
           sed -n '/^## Download sizes$/,$p' \"$RUNNER_TEMP/notes.txt\" | tee -a \"$GITHUB_STEP_SUMMARY\"
 
-          gh release create \"${{ needs.plan.outputs.tag }}\" --target \"$RELEASE_COMMIT\" $PRERELEASE_FLAG --title \"$ANNOUNCEMENT_TITLE\" --notes-file \"$RUNNER_TEMP/notes.txt\" artifacts/*
+          gh release edit \"${{ needs.plan.outputs.tag }}\" --target \"$RELEASE_COMMIT\" $PRERELEASE_FLAG --notes-file \"$RUNNER_TEMP/notes.txt\" --draft=false
 """
 
 if "## Download sizes" not in text:
     if create_old not in text:
-        print("dist-generate patch: Create GitHub Release block missing/changed", file=sys.stderr)
+        print("dist-generate patch: Release upload block missing/changed (create-release = false?)", file=sys.stderr)
         sys.exit(1)
     text = text.replace(create_old, create_new, 1)
 
@@ -228,12 +235,12 @@ if "Check plugin manifest versions" not in text:
         sys.exit(1)
     text = text.replace(plan_checkout, plan_checkout_with_check, 1)
 
-# A last job that turns a failed release into a `release-failure` issue (pyrlyn/infra).
+# A last job that turns a failed release into a `release-failure` issue (pyrlyn/ci).
 NOTIFY = """
   # Added by tools/dist-generate.sh: a failed release (not a pull request or a dry run)
   # opens or comments on a `release-failure` issue that mentions and assigns @listepo. The
   # only release failure notification: GitHub cannot filter Actions notifications per
-  # workflow. Pinned to pyrlyn/infra's ci/notify-release-failure; repin to its merge commit.
+  # workflow. Pinned to pyrlyn/ci's ci/notify-release-failure; repin to its merge commit.
   notify-failure:
     needs: [plan, build-local-artifacts, build-global-artifacts, host, announce]
     if: >-
@@ -245,7 +252,7 @@ NOTIFY = """
       "actions": "read"
       "issues": "write"
     steps:
-      - uses: pyrlyn/infra/.github/actions/notify-release-failure@d709124d53dd4923eff8f594b3155842508b0049
+      - uses: pyrlyn/ci/.github/actions/notify-release-failure@d709124d53dd4923eff8f594b3155842508b0049
         with:
           ref: ${{ inputs.tag }}
           needs: ${{ toJSON(needs) }}

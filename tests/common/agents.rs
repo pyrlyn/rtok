@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! A throwaway home with every host's files under it, and the binary run against it.
 
 use serde_json::Value;
@@ -59,6 +63,8 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".gemini/config/plugins",
         ".gemini/antigravity-cli/plugins",
         "devin",
+        "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings",
+        ".qwen",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -93,7 +99,9 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.mimo]\nconfig_path = \"{h}/.config/mimocode/mimocode.json\"\n\
               [setup.antigravity]\nplugins_path = \"{h}/.gemini/config/plugins\"\n\
               cli_plugins_path = \"{h}/.gemini/antigravity-cli/plugins\"\n\
-              [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n"
+              [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n\
+              [setup.roo]\nmcp_path = \"{h}/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json\"\n\
+              [setup.qwen]\ndir = \"{h}/.qwen\"\n"
         ),
     )
     .unwrap();
@@ -111,15 +119,12 @@ pub fn raw(args: &[&str], cfg: &Path, home: &Path) -> Output {
     raw_with_path(args, cfg, home, fake_claude_path(home))
 }
 
-/// [`raw`], but on a PATH with no `claude` at all (fake or real) — a machine that never
-/// installed the Claude Code CLI, so `rtok agents install claude` falls back to the
-/// settings-file surfaces instead of the plugin (T139).
+/// [`raw`], but every host CLI on PATH is a [`fake_hosts`] stub that fails anything past
+/// `--version` — the host is installed (T426) yet `claude plugin install` and its kin fail, so
+/// `rtok agents install claude` falls back to the settings-file surfaces instead of the plugin
+/// (T139).
 pub fn raw_without_claude(args: &[&str], cfg: &Path, home: &Path) -> Output {
-    let path = if cfg!(windows) {
-        std::ffi::OsString::from(r"C:\Windows\System32")
-    } else {
-        std::ffi::OsString::from("/usr/bin:/bin")
-    };
+    let path = std::env::join_paths([fake_hosts(home)]).unwrap();
     raw_with_path(args, cfg, home, path)
 }
 
@@ -281,11 +286,60 @@ if "%ALLARGS%"=="extensions uninstall rtok" rmdir /s /q "%EXT%\rtok" 2>nul
     }
 }
 
+/// Every host variant installed under `home` (T426: setup refuses a host whose app or binary
+/// is missing): a stub per CLI in `<home>/.fake-hosts` that answers `--version` and fails
+/// anything else, as a host CLI rtok cannot drive; it goes on PATH after `.fake-bin` so the
+/// scripted fakes above win. App-only variants get an empty bundle at their first absolute app
+/// path, where the host sandbox looks for it.
+pub fn fake_hosts(home: &Path) -> PathBuf {
+    let dir = home.join(".fake-hosts");
+    fs::create_dir_all(&dir).unwrap();
+    for v in rtok::agents::HOSTS
+        .iter()
+        .filter_map(|id| rtok::agents::host(id))
+        .flat_map(|a| a.variants())
+    {
+        for bin in v.bins {
+            fake_stub(&dir, bin);
+        }
+        if v.bins.is_empty()
+            && let Some(app) = v.apps.iter().find_map(|a| a.strip_prefix('/'))
+        {
+            fs::create_dir_all(home.join(app)).unwrap();
+        }
+    }
+    dir
+}
+
+fn fake_stub(dir: &Path, name: &str) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = dir.join(name);
+        if !bin.exists() {
+            fs::write(&bin, "#!/bin/sh\n[ \"$1\" = --version ] && { echo 0.0.0; exit 0; }\necho \"fake host: unsupported\" >&2\nexit 1\n").unwrap();
+            fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    #[cfg(windows)]
+    {
+        let bin = dir.join(format!("{name}.cmd"));
+        if !bin.exists() {
+            fs::write(
+                &bin,
+                "@echo off\r\nif \"%~1\"==\"--version\" (\r\n  echo 0.0.0\r\n  exit /b 0\r\n)\r\necho fake host: unsupported 1>&2\r\nexit /b 1\r\n",
+            )
+            .unwrap();
+        }
+    }
+}
+
 pub fn fake_claude_path(home: &Path) -> std::ffi::OsString {
     // T168: the copilot shim lives beside claude/codex so every `raw`/`rtok` probe is
     // hermetic — without it `app_version` reached the real npm wrapper, whose
     // `Package extraction …` noise flakes the byte-compared `agents list` tables.
     fake_copilot(home);
+    let hosts = fake_hosts(home);
     let path = std::env::var_os("PATH").unwrap_or_default();
     #[cfg(unix)]
     {
@@ -341,7 +395,7 @@ esac
                 fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
             }
         }
-        let mut dirs = vec![dir];
+        let mut dirs = vec![dir, hosts];
         dirs.extend(std::env::split_paths(&path));
         return std::env::join_paths(dirs).unwrap();
     }
@@ -404,7 +458,7 @@ if "%ALLARGS%"=="plugin update rtok@rtok" (
                 .unwrap();
             }
         }
-        let mut dirs = vec![dir];
+        let mut dirs = vec![dir, hosts];
         dirs.extend(std::env::split_paths(&path));
         return std::env::join_paths(dirs).unwrap();
     }
@@ -422,15 +476,15 @@ cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
 mkdir -p "$(dirname "$cfg")"
 touch "$cfg"
 case "$*" in
-  "plugin marketplace add listepo/rtok")
-    if grep -q '^source = "https://github.com/listepo/rtok.git"$' "$cfg" 2>/dev/null; then
+  "plugin marketplace add pyrlyn/rtok")
+    if grep -q '^source = "https://github.com/pyrlyn/rtok.git"$' "$cfg" 2>/dev/null; then
       exit 0
     fi
     if grep -q '^\[marketplaces.rtok\]$' "$cfg" 2>/dev/null; then
       echo "rtok: already added from a different source" >&2
       exit 1
     fi
-    printf '\n[marketplaces.rtok]\nsource_type = "git"\nsource = "https://github.com/listepo/rtok.git"\n' >> "$cfg"
+    printf '\n[marketplaces.rtok]\nsource_type = "git"\nsource = "https://github.com/pyrlyn/rtok.git"\n' >> "$cfg"
     ;;
   "plugin marketplace remove rtok")
     grep -q '^\[marketplaces.rtok\]$' "$cfg" 2>/dev/null || { echo "rtok: no such marketplace" >&2; exit 1; }
@@ -462,16 +516,16 @@ for %%F in ("%CFG%") do if not exist "%%~dpF" mkdir "%%~dpF"
 type nul >> "%CFG%"
 set "ALLARGS=%*"
 echo %ALLARGS%>>"%HOME%\codex.log"
-if "%ALLARGS%"=="plugin marketplace add listepo/rtok" (
-  findstr /c:"source = \"https://github.com/listepo/rtok.git\"" "%CFG%" >nul 2>&1 && exit /b 0
+if "%ALLARGS%"=="plugin marketplace add pyrlyn/rtok" (
+  findstr /c:"source = \"https://github.com/pyrlyn/rtok.git\"" "%CFG%" >nul 2>&1 && exit /b 0
   findstr /c:"[marketplaces.rtok]" "%CFG%" >nul 2>&1 && (echo rtok: already added from a different source 1>&2 & exit /b 1)
   >>"%CFG%" echo([marketplaces.rtok]
   >>"%CFG%" echo source_type = "git"
-  >>"%CFG%" echo source = "https://github.com/listepo/rtok.git"
+  >>"%CFG%" echo source = "https://github.com/pyrlyn/rtok.git"
 )
 if "%ALLARGS%"=="plugin marketplace remove rtok" (
   findstr /c:"[marketplaces.rtok]" "%CFG%" >nul 2>&1 || (echo rtok: no such marketplace 1>&2 & exit /b 1)
-  findstr /v /c:"[marketplaces.rtok]" /c:"source_type = \"git\"" /c:"source = \"https://github.com/listepo/rtok.git\"" "%CFG%" > "%CFG%.tmp"
+  findstr /v /c:"[marketplaces.rtok]" /c:"source_type = \"git\"" /c:"source = \"https://github.com/pyrlyn/rtok.git\"" "%CFG%" > "%CFG%.tmp"
   move /y "%CFG%.tmp" "%CFG%" >nul
 )
 if "%ALLARGS%"=="plugin add rtok@rtok" (

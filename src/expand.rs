@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok expand <id>` (plan T3.5) and the shared fetch used by the MCP `expand` tool (T5.4).
 
 use crate::config::Config;
@@ -40,6 +44,19 @@ pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
         },
     )?;
     Ok(Some(bytes))
+}
+
+/// The error text for an id with no archive row. An id that cannot be one — `-`,
+/// `/dev/stdin`, anything but the 64-char hex sha256 — gets a hint (T354): agents guess a
+/// stdin form (`cmd | rtok expand -`) to reach raw output, and nothing reads stdin.
+pub fn unknown_id_message(id: &str) -> String {
+    if id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        format!("unknown archive id: {id}")
+    } else {
+        format!(
+            "unknown archive id: {id} (expand takes the hex id from an \"expand <id>\" trailer; it does not read stdin)"
+        )
+    }
 }
 
 /// 1-based inclusive line range over already-split lines.
@@ -174,7 +191,7 @@ pub fn run(
     }
     let cx = Runtime::open(cfg.clone(), "expand")?;
     let Some(bytes) = fetch(&cx, id)? else {
-        bail!("unknown archive id: {id}");
+        bail!(unknown_id_message(id));
     };
     let max_lines = cfg.expand.max_lines;
     if lines.is_none() && grep.is_none() && max_lines == 0 {
@@ -207,7 +224,14 @@ pub(crate) fn parse_range(spec: &str, n: usize) -> Result<(usize, usize)> {
     if spec.is_empty() {
         bail!("invalid line range `{spec}`: expected a positive line or a-b");
     }
-    let mut parts = spec.splitn(2, '-');
+    // `a,b` / `a, b` read as `a-b` (T353): models write the range the way they would a pair.
+    // The error text keeps the caller's spelling.
+    let norm = if spec.contains(',') {
+        spec.replacen(',', "-", 1).replace(' ', "")
+    } else {
+        spec.to_string()
+    };
+    let mut parts = norm.splitn(2, '-');
     let start = parts.next().unwrap_or_default();
     let end = parts.next();
     let a = if start.is_empty() {
@@ -268,6 +292,26 @@ mod tests {
         let c = cfg("unknown");
         let err = run(&c, "no-such", None, None, 0).unwrap_err();
         assert!(err.to_string().contains("unknown archive id"), "{err}");
+    }
+
+    #[test]
+    fn non_id_gets_the_trailer_hint_and_a_hex_id_does_not() {
+        let hint = unknown_id_message("-");
+        assert!(hint.starts_with("unknown archive id: - ("), "{hint}");
+        assert!(hint.contains("\"expand <id>\" trailer"), "{hint}");
+        assert!(hint.contains("does not read stdin"), "{hint}");
+        assert!(!hint.contains('\n'), "{hint}");
+        assert!(unknown_id_message("/dev/stdin").contains("trailer"));
+        let hex = "ab".repeat(32);
+        assert_eq!(
+            unknown_id_message(&hex),
+            format!("unknown archive id: {hex}")
+        );
+        let c = cfg("hint");
+        let err = run(&c, "-", None, None, 0).unwrap_err();
+        assert!(err.to_string().contains("does not read stdin"), "{err}");
+        let err = run(&c, &hex, None, None, 0).unwrap_err();
+        assert_eq!(err.to_string(), format!("unknown archive id: {hex}"));
     }
 
     #[test]
@@ -486,6 +530,20 @@ mod tests {
         // A lone or mismatched quote is not a pair — still rejected, not silently stripped.
         assert!(parse_range("\"5-10", 20).is_err());
         assert!(parse_range("\"5-10'", 20).is_err());
+    }
+
+    /// T353: `a,b` and `a, b` are the same range as `a-b`; the same checks still apply.
+    #[test]
+    fn parse_range_accepts_comma_pairs() {
+        assert_eq!(parse_range("5,10", 20).unwrap(), (5, 10));
+        assert_eq!(parse_range("5, 10", 20).unwrap(), (5, 10));
+        assert_eq!(parse_range("\"5, 10\"", 20).unwrap(), (5, 10));
+        assert_eq!(parse_range("5,", 20).unwrap(), (5, 20));
+        assert_eq!(parse_range("7,100", 10).unwrap(), (7, 10));
+        for spec in ["1,2,3", "3,2", "0,2", "a,b"] {
+            let err = parse_range(spec, 20).unwrap_err().to_string();
+            assert!(err.contains(&format!("`{spec}`")), "{err}");
+        }
     }
 
     #[test]

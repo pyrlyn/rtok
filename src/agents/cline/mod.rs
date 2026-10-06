@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Cline installer (`rtok agents install cline`, plan T96.1).
 //!
 //! Cline's CLI and VS Code extension both scan `~/Documents/Cline/Hooks`, so one
@@ -12,17 +16,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use serde_json::json;
 
+use super::hook_events;
 use super::plugin::HostPlugin;
-use super::{Agent, Kind, Mode, Support, Variant, apply};
+use super::{Agent, Kind, Mode, Support, Variant};
 use crate::config::Config;
 
 /// Cline: the `cline` CLI and the `saoudrizwan.claude-dev` VS Code extension.
 pub struct Cline;
-
-/// Cline MCP server name in `cline_mcp_settings.json`.
-const NAME: &str = "rtok";
 
 static VARIANTS: [Variant; 2] = [
     Variant {
@@ -39,55 +40,33 @@ static VARIANTS: [Variant; 2] = [
     },
 ];
 
-/// Event file names the installer links the hook as (T95 test pins the same set).
-pub const EVENTS: &[&str] = &[
-    "PreToolUse",
-    "PostToolUse",
-    "TaskStart",
-    "UserPromptSubmit",
-    "SessionEnd",
-];
+/// The file name of the `n`-th `cline` row of [`hook_events`] (T95: the event is the file name).
+/// `HostPlugin::dest` is a plain `fn` in a `static`, so each link names its row by index and
+/// `hooks_follow_the_table` pins that the indexes cover the table.
+fn event_file(n: usize) -> &'static str {
+    hook_events::installed("cline")
+        .nth(n)
+        .map(|(host_event, _)| host_event)
+        .expect("`hooks_follow_the_table` pins one HOOKS entry per cline row")
+}
 
-/// One hook link per event (T95: the event is the file name). `dest` cannot vary
-/// per event in a `static`, so each event gets its own descriptor.
+/// One hook link per event: `plugins/cline/hooks/rtok-hook` as `<hooks_path>/<Event>`.
 macro_rules! hook {
-    ($name:ident, $event:expr) => {
-        /// Link `plugins/cline/hooks/rtok-hook` as `<hooks_path>/<Event>`.
-        pub static $name: HostPlugin = HostPlugin {
+    ($n:expr) => {
+        HostPlugin {
             src_rel: "plugins/cline/hooks/rtok-hook",
             host: "Cline",
             label: None,
-            dest: $event,
+            dest: |cfg| cfg.setup.cline.hooks_path.join(event_file($n)),
             // Out of scope for T164: Cline is not one of the five local-link-only
             // hosts, so a hook link still asks with `--yes` like omp's plugin link.
             default_install: false,
-        };
+        }
     };
 }
 
-fn dest_pre(cfg: &Config) -> PathBuf {
-    cfg.setup.cline.hooks_path.join("PreToolUse")
-}
-fn dest_post(cfg: &Config) -> PathBuf {
-    cfg.setup.cline.hooks_path.join("PostToolUse")
-}
-fn dest_start(cfg: &Config) -> PathBuf {
-    cfg.setup.cline.hooks_path.join("TaskStart")
-}
-fn dest_prompt(cfg: &Config) -> PathBuf {
-    cfg.setup.cline.hooks_path.join("UserPromptSubmit")
-}
-fn dest_end(cfg: &Config) -> PathBuf {
-    cfg.setup.cline.hooks_path.join("SessionEnd")
-}
-hook!(HOOK_PRE, dest_pre);
-hook!(HOOK_POST, dest_post);
-hook!(HOOK_START, dest_start);
-hook!(HOOK_PROMPT, dest_prompt);
-hook!(HOOK_END, dest_end);
-
-/// Every per-event hook descriptor, in link order.
-pub const HOOKS: [&HostPlugin; 5] = [&HOOK_PRE, &HOOK_POST, &HOOK_START, &HOOK_PROMPT, &HOOK_END];
+/// Every per-event hook descriptor, in link order (the `cline` rows of [`hook_events`]).
+pub static HOOKS: [HostPlugin; 5] = [hook!(0), hook!(1), hook!(2), hook!(3), hook!(4)];
 
 impl Agent for Cline {
     fn id(&self) -> &'static str {
@@ -175,29 +154,17 @@ pub fn ext_mcp_path(cfg: &Config) -> PathBuf {
     user_dir.join("globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json")
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> serde_json::Value {
-    json!({"command": cmd, "args": ["mcp"]})
-}
-
-/// `mcpServers.rtok = {command, args}` in a `cline_mcp_settings.json` — Cline's
-/// documented shape carries no `type` (same call shape as kimi/omp).
+/// `mcpServers.rtok = {command, args}` in a `cline_mcp_settings.json`. Cline's documented
+/// shape carries no `type`; Roo Code (the fork) and Windsurf write the same JSON through
+/// [`super::register_stdio_mcp`].
 pub fn register_mcp(cfg: &Config, path: &Path) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        path,
-        "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
-    )
+    super::register_stdio_mcp(cfg, path, "cline")
 }
 
 /// Drop `mcpServers.rtok` from a `cline_mcp_settings.json`, unless the user edited
 /// it (T246.2) — only what rtok wrote goes, and foreign servers are left alone.
 pub fn unregister_mcp(cfg: &Config, path: &Path) -> Result<String> {
-    super::unregister_ours(cfg, path, "mcpServers", NAME, &mcp_entry("rtok"))
+    super::unregister_stdio_mcp(cfg, path, "cline")
 }
 
 #[cfg(test)]
@@ -222,10 +189,32 @@ mod tests {
     }
 
     #[test]
+    fn hooks_follow_the_table() {
+        let (c, dir) = cfg("table", true, false);
+        let files: Vec<_> = HOOKS
+            .iter()
+            .map(|h| {
+                h.path(&c)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        let want: Vec<_> = hook_events::installed("cline").map(|(e, _)| e).collect();
+        assert_eq!(files, want);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn dry_run_names_the_plugin_and_ketch_and_writes_nothing() {
         let (c, dir) = cfg("dry", true, false);
         let lines = Cline.apply(&c, Kind::Cli, Mode::Install).unwrap();
-        assert_eq!(lines.len(), EVENTS.len(), "{lines:?}");
+        assert_eq!(
+            lines.len(),
+            hook_events::installed("cline").count(),
+            "{lines:?}"
+        );
         for line in &lines {
             assert!(line.contains("plugins/cline"), "{lines:?}");
             assert!(line.contains("ketch install pyrlyn/rtok"), "{lines:?}");

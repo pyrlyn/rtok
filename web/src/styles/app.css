@@ -1,110 +1,121 @@
 /* rtok SPA — Tailwind CSS v4 entry.
- * Tokens: ./tokens.css, verbatim copy of design/html/css/tokens.css (design tokens).
- * @theme mapping below is ported from design/html/css/tailwind-v4.css. */
+ * Tokens and fonts come from the brand pack (`brand/`, T414): the semantic roles
+ * (`--pyr-*`) over the Pyrlyn base scales, and the base IBM Plex Mono faces. The @theme mapping
+ * below maps them onto Tailwind's scales. */
 @import "tailwindcss";
-@import "./tokens.css";
-@import "./fonts.css";
+@import "@brand/dist/tokens.css";
+@import "@brand/node_modules/@pyrlyn/brand/dist/base/fonts.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
 @theme inline {
-  --color-bg: var(--rtok-bg);
-  --color-surface: var(--rtok-surface);
-  --color-surface-2: var(--rtok-surface-2);
-  --color-surface-3: var(--rtok-surface-3);
-  --color-border: var(--rtok-border);
-  --color-border-strong: var(--rtok-border-strong);
-  --color-fg: var(--rtok-fg);
-  --color-fg-muted: var(--rtok-fg-muted);
-  --color-fg-subtle: var(--rtok-fg-subtle);
-  --color-accent: var(--rtok-accent);
-  --color-accent-fg: var(--rtok-accent-fg);
-  --color-accent-muted: var(--rtok-accent-muted);
-  --color-accent-on: var(--rtok-on-accent);
-  --color-delta: var(--rtok-delta);
-  --color-delta-fg: var(--rtok-delta-fg);
-  --color-danger: var(--rtok-danger);
-  --color-danger-fg: var(--rtok-danger-fg);
-  --color-success: var(--rtok-success);
-  --color-success-fg: var(--rtok-success-fg);
-  --color-warn: var(--rtok-warn);
-  --color-warn-fg: var(--rtok-warn-fg);
-  --color-focus: var(--rtok-focus);
-  --color-mark: var(--rtok-mark-tile);
-  --color-brand-cyan: #5CE1FF;
-  --color-brand-coral: #FF6B4A;
-  --color-brand-navy: #06101A;
-  --color-brand-ink: #0B1A24;
-  --color-brand-green: #3DDC97;
-  --color-brand-amber: #F5C451;
-  --font-mono: var(--rtok-font-mono);
-  --text-2xs: 0.6875rem;
-  --text-2xs--line-height: 1rem;
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1rem;
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base: 0.875rem;
-  --text-base--line-height: 1.5rem;
-  --text-lg: 1rem;
-  --text-lg--line-height: 1.5rem;
-  --text-xl: 1.25rem;
-  --text-xl--line-height: 1.75rem;
-  --text-2xl: 1.5rem;
-  --text-2xl--line-height: 2rem;
-  --text-3xl: 1.75rem;
-  --text-3xl--line-height: 2rem;
-  --tracking-kicker: 0.08em;
-  --tracking-table-head: 0.06em;
-  --tracking-wordmark: 0.06em;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius-full: 9999px;
-  --shadow-e1: var(--rtok-shadow-e1);
-  --shadow-e2: var(--rtok-shadow-e2);
-  --shadow-e3: var(--rtok-shadow-e3);
-  --shadow-ring: var(--rtok-ring);
-  --spacing-control: 32px;
-  --spacing-control-sm: 28px;
-  --spacing-row: 36px;
-  --spacing-touch: 44px;
+  --color-bg: var(--pyr-bg);
+  --color-surface: var(--pyr-surface);
+  --color-surface-2: var(--pyr-surface-2);
+  --color-surface-3: var(--pyr-surface-3);
+  --color-border: var(--pyr-border);
+  --color-border-strong: var(--pyr-border-strong);
+  --color-fg: var(--pyr-fg);
+  --color-fg-muted: var(--pyr-fg-muted);
+  --color-fg-subtle: var(--pyr-fg-subtle);
+  --color-accent: var(--pyr-accent);
+  --color-accent-fg: var(--pyr-accent-fg);
+  --color-accent-muted: var(--pyr-accent-muted);
+  --color-accent-on: var(--pyr-on-accent);
+  --color-delta: var(--pyr-delta);
+  --color-delta-fg: var(--pyr-delta-fg);
+  --color-danger: var(--pyr-danger);
+  --color-danger-fg: var(--pyr-danger-fg);
+  --color-success: var(--pyr-success);
+  --color-success-fg: var(--pyr-success-fg);
+  --color-warn: var(--pyr-warn);
+  --color-warn-fg: var(--pyr-warn-fg);
+  --color-focus: var(--pyr-focus);
+  --color-mark: var(--pyr-mark-tile);
+  --color-brand-cyan: var(--rtok-brand-cyan);
+  --color-brand-coral: var(--rtok-brand-coral);
+  --color-brand-navy: var(--rtok-brand-navy);
+  --color-brand-ink: var(--rtok-brand-ink);
+  --color-brand-green: var(--rtok-brand-green);
+  --color-brand-amber: var(--rtok-brand-amber);
+  --font-mono: var(--pyr-font-mono);
+  --text-2xs: var(--pyr-text-2xs);
+  --text-2xs--line-height: var(--pyr-leading-2xs);
+  --text-xs: var(--pyr-text-xs);
+  --text-xs--line-height: var(--pyr-leading-xs);
+  --text-sm: var(--pyr-text-sm);
+  --text-sm--line-height: var(--pyr-leading-sm);
+  --text-base: var(--pyr-text-base);
+  --text-base--line-height: var(--pyr-leading-base);
+  --text-lg: var(--pyr-text-lg);
+  --text-lg--line-height: var(--pyr-leading-lg);
+  --text-xl: var(--pyr-text-xl);
+  --text-xl--line-height: var(--pyr-leading-xl);
+  --text-2xl: var(--pyr-text-2xl);
+  --text-2xl--line-height: var(--pyr-leading-2xl);
+  --text-3xl: var(--pyr-text-3xl);
+  --text-3xl--line-height: var(--pyr-leading-3xl);
+  --tracking-kicker: var(--pyr-tracking-kicker);
+  --tracking-table-head: var(--pyr-tracking-table-head);
+  --tracking-wordmark: var(--pyr-tracking-wordmark);
+  --radius-sm: var(--pyr-radius-sm);
+  --radius-md: var(--pyr-radius-md);
+  --radius-lg: var(--pyr-radius-lg);
+  --radius-xl: var(--pyr-radius-xl);
+  --radius-full: var(--pyr-radius-full);
+  --shadow-e1: var(--pyr-shadow-e1);
+  --shadow-e2: var(--pyr-shadow-e2);
+  --shadow-e3: var(--pyr-shadow-e3);
+  --shadow-ring: var(--pyr-ring);
+  --spacing-control: var(--pyr-size-control);
+  --spacing-control-sm: var(--pyr-size-control-sm);
+  --spacing-row: var(--pyr-size-row);
+  --spacing-touch: var(--pyr-size-touch);
+  /* Literal: Tailwind compiles breakpoints into media queries, where var() does not resolve.
+     Same steps as the base --pyr-bp-* scale. */
   --breakpoint-xs: 360px;
   --breakpoint-sm: 640px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1440px;
   --breakpoint-2xl: 1920px;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: var(--pyr-ease-standard);
+  --ease-emphasized: var(--pyr-ease-emphasized);
 }
 
-@utility duration-fast { transition-duration: var(--rtok-duration-fast); }
-@utility duration-base { transition-duration: var(--rtok-duration-base); }
+@utility duration-fast { transition-duration: var(--pyr-duration-fast); }
+@utility duration-base { transition-duration: var(--pyr-duration-base); }
 
 @layer base {
-  html { background: var(--rtok-bg); color: var(--rtok-fg); font-family: var(--rtok-font-mono);
+  html { background: var(--pyr-bg); color: var(--pyr-fg); font-family: var(--pyr-font-mono);
          -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 16px;
          -webkit-tap-highlight-color: transparent; }
-  body { min-height: 100vh; font-size: var(--rtok-text-sm); line-height: var(--rtok-leading-sm); font-variant-numeric: tabular-nums; }
-  ::selection { background: var(--rtok-selection); }
+  body { min-height: 100vh; font-size: var(--pyr-text-sm); line-height: var(--pyr-leading-sm); font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--pyr-selection); }
   #root { min-height: 100vh; }
 }
 
 @layer components {
   /* Glass panel: mostly-opaque surface so text contrast never depends on the background. */
   .glass {
-    background: rgb(var(--rtok-surface-rgb) / var(--rtok-glass-alpha, 0.86));
+    background: rgb(var(--pyr-surface-rgb) / var(--pyr-glass-alpha, 0.86));
     -webkit-backdrop-filter: blur(14px) saturate(140%);
     backdrop-filter: blur(14px) saturate(140%);
-    border: 1px solid var(--rtok-border);
-    border-radius: var(--rtok-radius-lg);
-    box-shadow: var(--rtok-shadow-e2);
+    border: 1px solid var(--pyr-border);
+    border-radius: var(--pyr-radius-lg);
+    box-shadow: var(--pyr-shadow-e2);
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .glass { background: var(--rtok-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass { background: var(--pyr-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
-html.opaque .glass { background: var(--rtok-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html.opaque .glass { background: var(--pyr-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Orb strength per theme and viewport, tuned by eye against the dark and light themes. */
+:root { --orb-opacity: 0.22; }
+:root.dark, :root[data-theme="dark"] { --orb-opacity: 0.42; }
+@media (max-width: 767px) {
+  :root { --orb-opacity: 0.14; }
+  :root.dark, :root[data-theme="dark"] { --orb-opacity: 0.35; }
+}

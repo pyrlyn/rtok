@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Shared JSONC-safe surgical editor (T79, T117): add, replace, or remove one string-keyed
 //! member of a top-level object in a settings file that must keep its comments and trailing
 //! commas intact. Zed's `context_servers.<name>` and VS Code's `chat.pluginLocations.<path>`
@@ -121,11 +125,16 @@ fn skip_value(text: &str, i: usize) -> Option<usize> {
         b'"' => scan_string(bytes, i),
         _ => {
             let mut j = i;
-            while j < bytes.len() && !matches!(bytes[j], b',' | b'}' | b']') {
+            // A literal holds no whitespace or `/`, so it stops before a trailing comment and
+            // that comment stays outside the span a replace overwrites.
+            while j < bytes.len()
+                && !bytes[j].is_ascii_whitespace()
+                && !matches!(bytes[j], b',' | b'}' | b']' | b'/')
+            {
                 j += 1;
             }
             // A literal must end before a delimiter, not at end of input.
-            (j > i && j < bytes.len()).then_some(j)
+            (j > i && skip_trivia(text, j) < bytes.len()).then_some(j)
         }
     }
 }
@@ -403,11 +412,7 @@ pub fn remove_member(
     };
     let body = excise_member(raw, rks, rve);
     let drop_key = match find_key(&body, root_open(&body).unwrap_or(0), top_key) {
-        Some((_, cvs, cve)) => {
-            let inner = &body[cvs + 1..cve.saturating_sub(1)];
-            let stripped = strip_comments(inner);
-            stripped.trim().is_empty() && stripped.len() == inner.len()
-        }
+        Some((_, cvs, cve)) => is_blank(&body[cvs + 1..cve.saturating_sub(1)]),
         None => false,
     };
     let mut body = body;
@@ -416,6 +421,76 @@ pub fn remove_member(
         body = excise_member(&body, cks, cve);
     }
     Ok((body, true))
+}
+
+/// One step of a path into a JSONC document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Seg<'a> {
+    Key(&'a str),
+    Index(usize),
+}
+
+/// `(value_start, value_end)` of element `n` of the array opening at `open`, and where the
+/// element starts for an excision (the same offset: elements have no key).
+fn nth_element(text: &str, open: usize, n: usize) -> Option<(usize, usize)> {
+    let mut i = skip_trivia(text, open + 1);
+    for k in 0.. {
+        if text.as_bytes().get(i) == Some(&b']') {
+            return None;
+        }
+        let ve = skip_value(text, i)?;
+        if k == n {
+            return Some((i, ve));
+        }
+        i = skip_trivia(text, ve);
+        if text.as_bytes().get(i) == Some(&b',') {
+            i = skip_trivia(text, i + 1);
+        } else {
+            return None;
+        }
+    }
+    None
+}
+
+/// `(member_start, value_start, value_end)` of the value at `segs`; for an array element the
+/// member starts where its value does.
+fn locate(text: &str, segs: &[Seg]) -> Option<(usize, usize, usize)> {
+    let start = skip_trivia(text, 0);
+    let mut at = (start, start, skip_value(text, start)?);
+    for seg in segs {
+        let open = at.1;
+        at = match (seg, text.as_bytes().get(open)?) {
+            (Seg::Key(k), b'{') => find_key(text, open, k)?,
+            (Seg::Index(n), b'[') => {
+                let (vs, ve) = nth_element(text, open, *n)?;
+                (vs, vs, ve)
+            }
+            _ => return None,
+        };
+    }
+    Some(at)
+}
+
+/// Whether `inner` (the text between a container's brackets) is blank: no member, no element
+/// and no comment, so dropping the container destroys nothing the user wrote.
+fn is_blank(inner: &str) -> bool {
+    let stripped = strip_comments(inner);
+    stripped.trim().is_empty() && stripped.len() == inner.len()
+}
+
+/// Drop the member or array element at `segs`, with one adjacent comma, and nothing else: every
+/// other byte of `raw` stays. `false` when the path leads nowhere.
+pub fn remove_at(raw: &str, path: &Path, segs: &[Seg]) -> Result<(String, bool)> {
+    parse_at(raw, path)?;
+    let Some((ms, _, ve)) = locate(raw, segs) else {
+        return Ok((raw.to_string(), false));
+    };
+    Ok((excise_member(raw, ms, ve), true))
+}
+
+/// Whether the object or array at `segs` holds nothing, not even a comment.
+pub fn is_empty_at(raw: &str, segs: &[Seg]) -> bool {
+    locate(raw, segs).is_some_and(|(_, vs, ve)| is_blank(&raw[vs + 1..ve.saturating_sub(1)]))
 }
 
 #[cfg(test)]
@@ -441,6 +516,38 @@ mod tests {
             remove_member(&body, Path::new("t"), "context_servers", "rtok").unwrap();
         assert!(removed, "{back}");
         assert_eq!(strip_comments(raw), "{\n  \n  \"theme\": \"dark\"\n}\n");
+    }
+
+    /// T328: replacing a literal entry value must keep the comment that follows it, even when a
+    /// comma or newline sits between the literal and the next member.
+    #[test]
+    fn replacing_a_literal_entry_keeps_the_trailing_comment() {
+        let entry = entry();
+        let want_value = render_entry(&entry, 4);
+        for (before, after) in [
+            ("true // note\n,", "// note\n,"),
+            ("true // a, b\n,", "// a, b\n,"),
+            ("true /* keep */ ,", "/* keep */ ,"),
+        ] {
+            let raw = format!("{{\"s\": {{\"rtok\": {before}\"x\": 1}}}}");
+            let (body, edit) = upsert_member(&raw, Path::new("t"), "s", "rtok", &entry).unwrap();
+            assert_eq!(edit, Upsert::Replaced, "{body}");
+            let want = format!("{{\"s\": {{\"rtok\": {want_value} {after}\"x\": 1}}}}");
+            assert_eq!(body, want);
+        }
+    }
+
+    /// T328: a trailing comment after an object-valued entry is untouched by a replace.
+    #[test]
+    fn replacing_an_object_entry_keeps_the_trailing_comment() {
+        let raw = "{\"s\": {\"rtok\": {\"command\": \"old\"} /* keep */ , \"x\": 1}}";
+        let (body, edit) = upsert_member(raw, Path::new("t"), "s", "rtok", &entry()).unwrap();
+        assert_eq!(edit, Upsert::Replaced, "{body}");
+        let want = format!(
+            "{{\"s\": {{\"rtok\": {} /* keep */ , \"x\": 1}}}}",
+            render_entry(&entry(), 4)
+        );
+        assert_eq!(body, want);
     }
 
     /// White-box: the scanner finds keys through strings, comments and nesting, and an

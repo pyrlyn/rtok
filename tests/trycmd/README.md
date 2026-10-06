@@ -28,6 +28,8 @@ config; reading cases set `inherit = false` and `RTOK_HOME` under `target/tmp/`.
 - `config-validate.toml` — `config validate` on the bench fixture
 - `config-set.toml` — `config set --dry-run` diff for `proxy.port`
 - `completions-zsh.toml` — zsh completions
+- `completions-list.toml` — `completions --list` on an empty home: every shell `no`, per-user paths (T408)
+- `completions-no-shell.toml` — `completions` without a shell or a terminal: error, no picker (T408)
 - `completions-fish.toml` — fish completions
 - `completions-powershell.toml` — powershell completions
 - `man.toml` — man page (roff); version via `[..]`
@@ -35,6 +37,9 @@ config; reading cases set `inherit = false` and `RTOK_HOME` under `target/tmp/`.
 - `agents-info.toml` — `agents info` table for one host (host paths via `...`)
 - `agents-info-json.toml` — `agents info --json` for one host (host paths via `...`)
 - `agents-sessions.toml` — `agents sessions` on an empty store
+- `agents-usage.toml`, `agents-usage-json.toml` — `agents usage` on an empty store (T358.1)
+- `agents-usage-by-model.toml` — `agents usage --by model --daily` over the same fixture logs (T358.6)
+- `agents-usage-logs.toml`, `agents-usage-both.toml` — `agents usage --source logs|both` over the fixture Claude Code and Codex logs in `input/usage-logs/` (T358.2)
 - `agents-whoami.trycmd` — `agents whoami` with no `RTOK_AGENT_ID` (exit 1)
 - `agents-show.trycmd` — `agents show` with an unknown id prefix (exit 1)
 - `agents-status.trycmd` — `agents status` with no `RTOK_AGENT_ID` (exit 1)
@@ -45,6 +50,7 @@ config; reading cases set `inherit = false` and `RTOK_HOME` under `target/tmp/`.
 - `report-md.toml` — `report --format md`; dates via `[..]`
 - `proxy-dry-run.toml` — `proxy --dry-run` effective `[proxy]` settings
 - `expand.trycmd` — `run cat` of the fixture body, then `expand --lines --grep`
+- `expand-stdin.trycmd` — `expand -` is refused with the trailer-id hint (exit 1, T354)
 - `bad-args.trycmd` — a bad value or missing argument on every subcommand (exit 2, clap
   message) and the `parse_since` rejects `--since 5x` / `--since=-1d` / empty (exit 1)
 - `hook.toml` — `hook SessionStart` with fixture stdin JSON

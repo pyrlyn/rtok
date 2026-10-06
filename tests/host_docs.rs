@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Every host plugin (`plugins/<host>/`) and host installer (`src/agents/<host>/`) documents
 //! itself: a `README.md` with a `## Docs` list of live links to the host's config and plugin
 //! documentation (AGENTS.md, D21).
@@ -50,6 +54,7 @@ const DOC_DOMAINS: &[(&str, &str)] = &[
     ("plugins/kimi", "kimi.com"),
     ("plugins/opencode", "opencode.ai"),
     ("plugins/pi", "pi.dev"),
+    ("plugins/qwen", "qwenlm.github.io"),
     ("plugins/zcode", "zcode.z.ai"),
     ("src/agents/aider", "aider.chat"),
     ("src/agents/antigravity", "antigravity.google"),
@@ -69,6 +74,8 @@ const DOC_DOMAINS: &[(&str, &str)] = &[
     ("src/agents/omp", "github.com"),
     ("src/agents/opencode", "opencode.ai"),
     ("src/agents/pi", "pi.dev"),
+    ("src/agents/qwen", "qwenlm.github.io"),
+    ("src/agents/roo", "docs.roocode.com"),
     ("src/agents/vscode", "code.visualstudio.com"),
     ("src/agents/windsurf", "docs.windsurf.com"),
     ("src/agents/zcode", "zcode.z.ai"),

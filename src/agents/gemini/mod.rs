@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Gemini CLI installer (`rtok agents install gemini`, plan T118.2).
 //!
 //! Gemini CLI reads one file, `[setup.gemini] dir`/`settings.json` (default
@@ -23,23 +27,12 @@ use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
 use serde_json::{Value, json};
 
+use super::hook_events;
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
 
 const NAME: &str = "rtok";
 const PLUGIN_SRC: &str = "plugins/gemini";
-
-/// Gemini's own event names paired with the Claude event `rtok hook` runs for them (the
-/// reverse of `hooks::types::gemini_event`). `AfterAgent`/`BeforeModel`/`BeforeToolSelection`/
-/// `AfterModel`/`Notification` have no rtok plugin hook (T118.1) and are left uninstalled.
-pub const EVENTS: &[(&str, &str)] = &[
-    ("BeforeTool", "PreToolUse"),
-    ("AfterTool", "PostToolUse"),
-    ("BeforeAgent", "UserPromptSubmit"),
-    ("SessionStart", "SessionStart"),
-    ("SessionEnd", "SessionEnd"),
-    ("PreCompress", "PreCompact"),
-];
 
 /// Gemini CLI: one `settings.json`, no separate desktop app.
 pub struct Gemini;
@@ -84,7 +77,7 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 fn insert_ours(hooks: &mut Value, bin: &str, timeout_s: u64) -> String {
     let mut added = Vec::new();
     let mut updated = 0usize;
-    for &(gevent, cevent) in EVENTS {
+    for (gevent, cevent) in hook_events::installed("gemini") {
         let cmd = command(bin, cevent);
         let ms = timeout_s * 1000;
         // T242.5: an rtok hook on another binary path or timeout is rewritten in its slot.
@@ -131,7 +124,7 @@ fn strip_ours(apply: &Apply, path: &Path, hooks: &mut Value, timeout_s: u64) -> 
         return NO_CHANGES.into();
     };
     let (mut removed, mut kept) = (0usize, Vec::new());
-    for &(gevent, cevent) in EVENTS {
+    for (gevent, cevent) in hook_events::installed("gemini") {
         let Some(arr) = obj.get_mut(gevent).and_then(Value::as_array_mut) else {
             continue;
         };
@@ -163,7 +156,7 @@ fn strip_ours(apply: &Apply, path: &Path, hooks: &mut Value, timeout_s: u64) -> 
 
 /// The `mcpServers.rtok` entry [`register_mcp`] writes.
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
+    json!({"command": cmd, "args": super::mcp_args("gemini")})
 }
 
 /// `mcpServers.rtok = {command, args}` — the minimal stdio shape the Gemini MCP docs show.
@@ -175,7 +168,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         "mcpServers",
         NAME,
         mcp_entry(&bin),
-        &format!("{bin} mcp"),
+        &super::mcp_summary(&bin, "gemini"),
     )
 }
 
@@ -191,12 +184,12 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
 }
 
 /// `{hooks: {<Event>: [{hooks: [{type: "command", command, timeout}]}]}}` — the extension
-/// tree's own `hooks/hooks.json` (T118.3), built from the same [`EVENTS`] table `run` merges
+/// tree's own `hooks/hooks.json` (T118.3), built from the same [`hook_events`] table `run` merges
 /// into `settings.json`, so the two surfaces never drift apart. Pinned by
 /// `tests/gemini_plugin.rs`; no `matcher`, same reason as `insert_ours`.
 pub fn hooks_doc(bin: &str, timeout_s: u64) -> Value {
     let mut hooks = serde_json::Map::new();
-    for &(gevent, cevent) in EVENTS {
+    for (gevent, cevent) in hook_events::installed("gemini") {
         let cmd = command(bin, cevent);
         hooks.insert(
             gevent.into(),
@@ -441,7 +434,7 @@ mod tests {
     /// foreign hook in the same entry stays, and a second pass changes nothing.
     #[test]
     fn stale_rtok_hook_is_rewritten_in_place() {
-        let (gevent, cevent) = EVENTS[0];
+        let (gevent, cevent) = hook_events::installed("gemini").next().unwrap();
         let stale = command("/old/store/rtok/v0.1.0/rtok", cevent);
         let mut hooks = json!({gevent: [{"matcher": "run_shell_command", "hooks": [
             {"type": "command", "command": "audit.sh"},
@@ -464,11 +457,14 @@ mod tests {
 
     /// T118.3: the extension tree's `hooks/hooks.json` is exactly what `settings.json` merges
     /// in per event, minus the foreign-event preservation a shared file needs — one map
-    /// ([`EVENTS`]), two surfaces (D21).
+    /// ([`hook_events`]), two surfaces (D21).
     #[test]
     fn hooks_doc_uses_the_shared_event_table() {
         let doc = hooks_doc("rtok", 5);
-        assert_eq!(doc["hooks"].as_object().unwrap().len(), EVENTS.len());
+        assert_eq!(
+            doc["hooks"].as_object().unwrap().len(),
+            hook_events::installed("gemini").count()
+        );
         let before = &doc["hooks"]["BeforeTool"][0];
         assert!(before.get("matcher").is_none(), "{before}");
         assert_eq!(

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Tree-sitter-tags symbol index (plan T8.1).
 
 use std::collections::{BTreeMap, HashSet};
@@ -57,14 +61,9 @@ fn stat_key(md: &std::fs::Metadata) -> (i64, i64) {
     (mtime, md.len() as i64)
 }
 
-/// Canonical absolute path as one string: the index key of a root, and the match key of a
-/// file for `mark_symbols_stale` (T8.3). Rows are scoped to it so one store holds many repos.
-pub fn canon(p: &Path) -> String {
-    dunce::canonicalize(p)
-        .unwrap_or_else(|_| p.to_path_buf())
-        .to_string_lossy()
-        .replace('\\', "/")
-}
+// The index key of a root; defined next to the project registry, which keys on it too and
+// must build without the graph plugin.
+pub use crate::store::canon_root as canon;
 
 /// Incremental index of `root`. Returns how many rows were newly written.
 /// `dry_run` walks and parses exactly as a real run does but writes no rows, so the report
@@ -97,6 +96,8 @@ pub fn run_with(
     dry_run: bool,
     pb: &indicatif::ProgressBar,
 ) -> Result<Report> {
+    // T356: the one choke point for the CLI, the MCP tools, the watcher and `ensure`.
+    crate::plugins::read::walk_root_ok(root)?;
     let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let rk = canon(&root);
     let current_fp = extractor_fingerprint();
@@ -180,7 +181,7 @@ pub fn run_with(
         }
     }
     if !dry_run {
-        let _ = cx.delete_symbols_missing(&rk, &keep);
+        let removed = cx.delete_symbols_missing(&rk, &keep).unwrap_or(0);
         if fp_stale {
             cx.set_extractor_fingerprint(&rk, &current_fp)?;
         }
@@ -189,6 +190,10 @@ pub fn run_with(
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         cx.touch_symbol_indexed_at(&rk, ts)?;
+        // A failed rebuild leaves the previous graph; the map falls back, indexing still succeeds.
+        if report.inserted > 0 || removed > 0 || super::rank::missing(cx, &rk) {
+            let _ = super::rank::refresh(cx, &rk);
+        }
     }
     pb.finish_and_clear();
     Ok(report)
@@ -201,6 +206,7 @@ fn run_changed_with(
     dry_run: bool,
     pb: &indicatif::ProgressBar,
 ) -> Result<Report> {
+    crate::plugins::read::walk_root_ok(root)?;
     let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let rk = canon(&root);
     let mut report = Report::default();
@@ -266,6 +272,9 @@ fn run_changed_with(
         }
         Ok(())
     })?;
+    if !dry_run && report.inserted > 0 {
+        let _ = super::rank::refresh(cx, &rk);
+    }
     pb.finish_and_clear();
     Ok(report)
 }
@@ -409,12 +418,14 @@ fn extractor_fingerprint() -> String {
         bytes.extend_from_slice(tree_sitter_rust::TAGS_QUERY.as_bytes());
         bytes.extend_from_slice(outline::RUST_SCOPED_CALL.as_bytes());
         bytes.extend_from_slice(outline::RUST_IMPORT.as_bytes());
+        bytes.extend_from_slice(outline::RUST_EXTRA_REF.as_bytes());
     }
     #[cfg(feature = "lang-ts")]
     {
         bytes.extend_from_slice(tree_sitter_typescript::TAGS_QUERY.as_bytes());
         bytes.extend_from_slice(tree_sitter_typescript::LOCALS_QUERY.as_bytes());
         bytes.extend_from_slice(outline::JS_IMPORT.as_bytes());
+        bytes.extend_from_slice(outline::TS_CALL_TYPE_REF.as_bytes());
     }
     #[cfg(feature = "lang-java")]
     bytes.extend_from_slice(tree_sitter_java::TAGS_QUERY.as_bytes());
@@ -437,6 +448,15 @@ fn extractor_fingerprint() -> String {
 /// Rows for one file, each reference tagged with the innermost definition enclosing it
 /// (T8.5). Ties break to the smaller span, so a nested `fn` wins over the `impl` around it;
 /// a reference outside every definition gets `""`, which reads as file level.
+///
+/// T52.5 note: the extra `type` patterns overlap the upstream query on one node
+/// (`struct Foo;` is both `@definition.class` and a bare `type_identifier`;
+/// `impl Foo` is both `@reference.implementation` and a type site). No filter is
+/// needed here: tree-sitter-tags keeps one tag per node and the earlier pattern
+/// wins, and rtok's extras are appended after the upstream query — so the
+/// definition (or the upstream reference) always stands and no site counts twice.
+/// Verified on the `truth-constructs` fixture: `OnlyTyped:1` yields the def row
+/// only, `impl Recv` the implementation row only.
 fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
     let defs: Vec<(usize, usize, &str)> = hits
         .iter()
@@ -468,6 +488,7 @@ fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
 
 /// Index `root` only when it has no rows yet (first tool call in that repo).
 pub fn ensure(cx: &Ctx, root: &Path) -> Result<Report> {
+    crate::plugins::read::walk_root_ok(root)?;
     if cx.symbol_count(&canon(root))? > 0 {
         return Ok(Report::default());
     }
@@ -484,6 +505,26 @@ pub(crate) mod tests {
     /// Fresh DB + archive dir under the temp dir; shared with the `mod.rs` tool tests.
     pub(crate) fn cx(name: &str) -> (crate::plugin::Runtime, PathBuf) {
         crate::testutil::runtime(name)
+    }
+
+    /// T356: `/` and the real home directory are refused before any walk or write, by every
+    /// entry point (`run`, `run_changed`, `ensure`); a project directory is indexed.
+    #[test]
+    fn index_refuses_home_and_filesystem_root_but_accepts_a_project() {
+        let (cx, dir) = cx("t356-refuse");
+        let ctx = Ctx::new(&cx);
+        let mut bad = vec![PathBuf::from("/")];
+        bad.extend(std::env::home_dir());
+        for root in &bad {
+            let err = format!("{:#}", run(&ctx, root, false).unwrap_err());
+            assert!(err.contains("no project root"), "{}: {err}", root.display());
+            assert!(run_changed(&ctx, root, &HashSet::new()).is_err());
+            assert!(ensure(&ctx, root).is_err());
+            assert_eq!(ctx.symbol_count(&canon(root)).unwrap(), 0);
+        }
+        fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
+        assert_eq!(run(&ctx, &dir, false).unwrap().indexed, 1);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -635,6 +676,34 @@ pub(crate) mod tests {
         let r = run_with(&Ctx::new(&cx), &dir, false, &pb).unwrap();
         assert_eq!(r.indexed, 7);
         assert_eq!(pb.position(), 7, "the bar and the report must agree");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T370: an index run that changed the root stores the file graph, a dry run writes none,
+    /// and a run that finds nothing new leaves the stored document alone.
+    #[test]
+    fn an_index_run_stores_the_file_graph_when_it_changes_something() {
+        let (cx, dir) = cx("file-rank");
+        let ctx = Ctx::new(&cx);
+        let k = canon(&dir);
+        fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
+        fs::write(dir.join("b.rs"), "pub fn beta() { alpha(); }\n").unwrap();
+        run(&ctx, &dir, true).unwrap();
+        assert!(cx.store.file_rank_get(&k).unwrap().is_none(), "dry run");
+        run(&ctx, &dir, false).unwrap();
+        let first = cx.store.file_rank_get(&k).unwrap().expect("stored");
+        let top = super::super::rank::map(&ctx, &k, 500, &[], i64::MAX).expect("map");
+        assert!(top.lines().nth(1).unwrap().starts_with("a.rs"), "{top}");
+        cx.store.file_rank_put(&k, &format!("{first} ")).unwrap();
+        run(&ctx, &dir, false).unwrap();
+        assert_eq!(
+            cx.store.file_rank_get(&k).unwrap().unwrap(),
+            format!("{first} "),
+            "nothing changed, nothing rebuilt"
+        );
+        fs::write(dir.join("b.rs"), "pub fn beta() {}\n").unwrap();
+        run(&ctx, &dir, false).unwrap();
+        assert_ne!(cx.store.file_rank_get(&k).unwrap().unwrap(), first);
         let _ = fs::remove_dir_all(dir);
     }
 

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Grok Build installer (`rtok agents install grok`, plan T100, D21).
 //!
 //! Grok owns its plugin store — `grok plugin install <dir> --trust` writes
@@ -13,7 +17,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use rtok_agent_sdk::{KETCH_INSTALL, NO_CHANGES};
 use serde_json::{Value, json};
-use toml_edit::{DocumentMut, Table, value};
+use toml_edit::{DocumentMut, Item, Table, value};
 
 use super::{Agent, Kind, Mode, Support, Variant, apply, rtok_command};
 use crate::config::Config;
@@ -50,7 +54,7 @@ impl Agent for Grok {
             "plugin" => Support::Offer("--yes"),
             "mcp" => Support::Yes,
             "hooks" => Support::No(
-                "Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second (D21)",
+                "Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second set",
             ),
             _ => Support::No(
                 "Grok Build providers live in its own settings tables; setup does not edit them",
@@ -161,7 +165,7 @@ fn compat_claude(cfg: &Config, key: &str) -> bool {
 /// second set. Behind `--yes` like the offer line — guidance counts as a change only then.
 fn hooks_note(cfg: &Config) -> String {
     if covered(cfg, "hooks") && apply(cfg).yes {
-        "hooks: covered by rtok's Claude hooks ([compat.claude] hooks); no second set (D21)".into()
+        "hooks: covered by rtok's Claude hooks ([compat.claude] hooks); no second set".into()
     } else {
         NO_CHANGES.into()
     }
@@ -205,8 +209,7 @@ fn plugin_offer_windows_note(windows: bool) -> Option<&'static str> {
 pub fn register_mcp(cfg: &Config) -> Result<String> {
     if covered(cfg, "mcp") {
         return Ok(if apply(cfg).yes {
-            "mcp: covered by rtok's Claude MCP ([compat.claude] mcps); no second server (D21)"
-                .into()
+            "mcp: covered by rtok's Claude MCP ([compat.claude] mcps); no second server".into()
         } else {
             NO_CHANGES.into()
         });
@@ -218,17 +221,34 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         .or_insert_with(|| Table::new().into())
         .as_table_mut()
         .ok_or_else(|| anyhow::anyhow!("mcp_servers is not a table"))?;
-    if servers.contains_key("rtok") {
+    // An entry that is there stays, except the one an earlier rtok wrote without `--host`
+    // (T283.2): that exact shape is upgraded, a user's own edit is not touched.
+    if let Some(have) = servers.get("rtok")
+        && !is_legacy_entry(have)
+    {
         return Ok(NO_CHANGES.into());
     }
     let mut entry = Table::new();
     entry.insert("command", value(rtok_command()));
-    entry.insert("args", value(toml_edit::Array::from_iter(["mcp"])));
+    entry.insert(
+        "args",
+        value(toml_edit::Array::from_iter(super::mcp_args("grok"))),
+    );
     servers.insert("rtok", entry.into());
-    let summary = format!("{} mcp", rtok_command());
+    let summary = super::mcp_summary(&rtok_command(), "grok");
     let report = format!("mcp_servers.rtok: {summary}");
     rtok_agent_sdk::write(&apply(cfg), path, &doc.to_string(), &report)?;
     Ok(report)
+}
+
+/// True for `[mcp_servers.rtok]` as rtok wrote it before `--host` joined the entry: the rtok
+/// binary and exactly `["mcp"]`.
+fn is_legacy_entry(item: &Item) -> bool {
+    let have = super::mcp::toml_item_to_json(item);
+    have.get("command")
+        .and_then(Value::as_str)
+        .is_some_and(super::is_rtok_bin)
+        && have.get("args") == Some(&json!(["mcp"]))
 }
 
 /// The `[mcp_servers.rtok]` table [`register_mcp`] writes, as JSON: the shape
@@ -236,7 +256,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
 /// for the comparison — `judge_owned` treats every rtok binary string as the same one, so the
 /// literal command never matters.
 fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
+    json!({"command": cmd, "args": super::mcp_args("grok")})
 }
 
 /// Take back the `rtok` slot only as far as rtok wrote it: [`rtok_agent_sdk::judge_owned`]
@@ -459,6 +479,27 @@ mod tests {
                 register_mcp(&c)
             },
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_entry_without_host_is_upgraded_and_a_user_edit_is_left() {
+        let dir = tmp("legacy-host");
+        let c = cfg(&dir, false, false);
+        let path = c.setup.grok.config_path.clone();
+        let seed = "# keep me\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.rtok]\ncommand = \"rtok\"\nargs = [\"mcp\"]\n";
+        crate::agents::mcp::assert_legacy_entry_upgraded(
+            &path,
+            seed,
+            "grok",
+            &["# keep me", "[mcp_servers.other]\ncommand = \"x\"\n"],
+            || register_mcp(&c),
+            || unregister_mcp(&c),
+        );
+        let edited = "[mcp_servers.rtok]\ncommand = \"rtok\"\nargs = [\"mcp\", \"--extra\"]\n";
+        fs::write(&path, edited).unwrap();
+        assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES, "a user's edit stays");
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
         let _ = fs::remove_dir_all(dir);
     }
 }

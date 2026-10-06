@@ -1,4 +1,12 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Clap tree. `tests/config_coverage.rs` walks [`Cli::command`] (plan T12.4).
+//!
+//! Plan ids sit in plain `//` lines above the `///` they belong to: clap turns doc comments
+//! into help, man pages and completion scripts, and users never see plan ids (T409,
+//! `tests/no_plan_ids.rs`).
 
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
@@ -38,7 +46,8 @@ enum Cmd {
         /// Overlay `[hook] host` (`claude` | `cursor` | `copilot` | `devin` | `cline`)
         #[arg(long)]
         host: Option<String>,
-        /// Run the resident hook process `rtok-hook` talks to (T178, D32)
+        // T178, D32
+        /// Run the resident hook process `rtok-hook` talks to
         #[arg(long, hide = true, conflicts_with_all = ["event", "host"])]
         serve: bool,
     },
@@ -46,12 +55,18 @@ enum Cmd {
     Mcp {
         #[command(subcommand)]
         action: Option<McpCmd>,
-        /// Call one listed tool and print the text result (pi `registerTool` shim, T70.3)
+        // T70.3
+        /// Call one listed tool and print the text result (pi `registerTool` shim)
         #[arg(long, value_name = "TOOL")]
         call: Option<String>,
         /// JSON arguments for `--call`
         #[arg(long, value_name = "ARGS")]
         json: Option<String>,
+        // T283.1
+        /// The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays `[hook] host` so
+        /// the process can find its rtok agent
+        #[arg(long, value_name = "HOST")]
+        host: Option<String>,
         /// Foreign stdio MCP server to wrap losslessly (`rtok mcp -- npx some-server`)
         #[arg(last = true)]
         wrap: Vec<String>,
@@ -71,7 +86,7 @@ enum Cmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Local web UI over the same data as `rtok tui` (WebSocket API + Slint/WASM)
+    /// Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)
     Web {
         /// Override `[web] host`
         #[arg(long)]
@@ -80,7 +95,8 @@ enum Cmd {
         #[arg(long)]
         port: Option<u16>,
     },
-    /// Terminal UI over the same data as `rtok web` (D23: one model, two renderings)
+    // D23
+    /// Terminal UI over the same data as `rtok web` (one model, two renderings)
     Tui {
         /// Start on this tab (a page name both surfaces carry)
         #[arg(long)]
@@ -136,12 +152,28 @@ enum Cmd {
     },
     /// Inspect hooks, MCP servers and the proxy chain
     Doctor {
-        /// Also run the instruction-file audit (T7.2)
+        // T7.2
+        /// Also run the instruction-file audit
         #[arg(long)]
         instructions: bool,
         /// JSON instead of the table
-        #[arg(long)]
+        #[arg(long, conflicts_with = "fix")]
         json: bool,
+        /// Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a checklist, a pipe the diff; --yes writes without asking
+        #[arg(long)]
+        fix: bool,
+        /// With --fix: write the changes (a copy goes to `_backup/` first)
+        #[arg(long, requires = "fix")]
+        yes: bool,
+        /// With --fix --yes: print the diffs and write nothing
+        #[arg(long, requires = "yes")]
+        dry_run: bool,
+        /// With --fix: limit it to these problems (repeatable; default: all of them)
+        #[arg(long, requires = "fix", value_enum)]
+        only: Vec<FixClass>,
+        /// Check (and with --fix, repair) the hooks of one host only (an id of `rtok agents list`)
+        #[arg(long, value_name = "HOST")]
+        agent: Option<String>,
     },
     /// Git worktrees of this repository: owner, state and disk cost
     Worktree {
@@ -165,7 +197,8 @@ enum Cmd {
     Setup(SetupArgs),
     /// Execute a command, archive its raw output, print the filtered version
     Run {
-        /// Sub-agent id from PreToolUse; scopes the dedup pointer (T127)
+        // T127
+        /// Sub-agent id from PreToolUse; scopes the dedup pointer
         #[arg(long, value_name = "ID")]
         agent: Option<String>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -196,23 +229,32 @@ enum Cmd {
         #[arg(long)]
         context: Option<u32>,
     },
-    /// The archive live zone (`rtok archive rewrite` — pi `context` carrier, T70.2)
+    // T70.2
+    /// The archive live zone (`rtok archive rewrite` — pi `context` carrier)
     #[cfg(feature = "archive")]
     Archive {
         #[command(subcommand)]
         action: ArchiveCmd,
     },
-    /// Print shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
+    /// Print, install or pick shell completions (bash, zsh, fish, powershell, elvish; clink for Windows cmd)
+    ///
+    /// With a shell, prints its script. With `--install` or `--uninstall`, writes or removes the
+    /// script in that shell's per-user completions directory (default shell: `$SHELL`). With
+    /// nothing, in a terminal, opens a list of the shells: the ones with completions installed
+    /// are checked; checking one installs it, unchecking removes it. `--list` shows the same
+    /// state without a terminal.
     Completions {
         /// Shell to complete for (with `--install`/`--uninstall`: default `$SHELL`)
-        #[arg(required_unless_present_any = ["install", "uninstall"])]
         shell: Option<crate::completions::Shell>,
         /// Write the script to the shell's per-user completions directory
-        #[arg(long, conflicts_with = "uninstall")]
+        #[arg(long, conflicts_with_all = ["uninstall", "list"])]
         install: bool,
         /// Remove what `--install` wrote
-        #[arg(long)]
+        #[arg(long, conflicts_with = "list")]
         uninstall: bool,
+        /// Print each shell, whether its completions are installed (yes/no) and the file
+        #[arg(long, conflicts_with = "shell")]
+        list: bool,
     },
     /// Print the man page (roff), or write every page with `--dir`
     Man {
@@ -243,7 +285,8 @@ enum Cmd {
         #[command(subcommand)]
         action: GraphCmd,
     },
-    /// Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path, T70.5)
+    // T70.5
+    /// Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
     #[cfg(feature = "guard")]
     Guard {
         #[command(subcommand)]
@@ -278,7 +321,8 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// The operator model as one document (D24): Markdown, HTML and PDF
+    // D24
+    /// The operator model as one document: Markdown, HTML and PDF
     Report {
         /// Output format
         #[arg(long, value_enum, default_value = "md")]
@@ -289,7 +333,8 @@ enum Cmd {
         /// How far back the report reads (`30d`, `24h`)
         #[arg(long)]
         since: Option<String>,
-        /// Model-shaped rendering of the same document instead of `--format` (T22.4)
+        // T22.4
+        /// Model-shaped rendering of the same document instead of `--format`
         #[arg(long)]
         ai: bool,
     },
@@ -341,7 +386,8 @@ enum DemonCmd {
 enum OtelCmd {
     /// Post rows past the watermarks to the endpoint, once
     Flush {
-        /// T143: hook-spawned only. Coalesces concurrent hook flushes to at most one
+        // T143
+        /// Hook-spawned only. Coalesces concurrent hook flushes to at most one
         /// running + one queued process instead of one per `Stop`/`SessionEnd` event.
         /// A manual `rtok otel flush` never passes this — it always flushes.
         #[arg(long, hide = true)]
@@ -361,6 +407,20 @@ enum LogsCmd {
     Export,
     /// Print the last lines, then follow: new lines arrive above the old, newest first
     Watch,
+}
+
+/// `--only` for `rtok doctor --fix` (D14: a `ValueEnum`); each is a `Problem::kind` of the check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum FixClass {
+    BrokenHooks,
+    DuplicateHooks,
+    DuplicateMcp,
+}
+
+impl FixClass {
+    fn kind(self) -> &'static str {
+        crate::doctor::fix::KINDS[self as usize]
+    }
 }
 
 /// `--format` for `rtok report` (D14: a `ValueEnum`, like `demon`'s `Service`, so clap
@@ -398,18 +458,22 @@ enum MemoryCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Retire a note: a tombstone — never recalled or searched, body kept (T69.1)
+    // T69.1
+    /// Retire a note: a tombstone — never recalled or searched, body kept
     Retire {
         id: i32,
         /// The replacement note id this one is superseded by
         #[arg(long)]
         superseded_by: Option<i32>,
     },
-    /// Pin a note so it leads SessionStart recall (T69.1)
+    // T69.1
+    /// Pin a note so it leads SessionStart recall
     Pin { id: i32 },
-    /// Drop a note back to newest-first recall order (T69.1)
+    // T69.1
+    /// Drop a note back to newest-first recall order
     Unpin { id: i32 },
-    /// Save a replacement (title, body) for a note and retire the old row (T69.1)
+    // T69.1
+    /// Save a replacement (title, body) for a note and retire the old row
     Revise {
         id: i32,
         /// The replacement title
@@ -419,7 +483,8 @@ enum MemoryCmd {
         #[arg(long)]
         body: String,
     },
-    /// Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block (T69.6)
+    // T69.6
+    /// Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block
     Sync {
         /// CLAUDE.md or AGENTS.md
         #[arg(long, default_value = "CLAUDE.md")]
@@ -437,7 +502,8 @@ enum MemoryCmd {
         #[arg(long)]
         force: bool,
     },
-    /// Notes live/pinned/retired, recall and MCP call counts (T69.4)
+    // T69.4
+    /// Notes live/pinned/retired, recall and MCP call counts
     Status {
         /// Only notes of this project
         #[arg(long)]
@@ -479,6 +545,25 @@ enum WorktreeCmd {
         #[arg(long)]
         owner: Option<String>,
     },
+    /// Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
+    /// pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only
+    Adopt {
+        /// The worktree, or a directory inside it; defaults to the current directory
+        path: Option<PathBuf>,
+        /// The task id, when the lock and the branch do not name one (a detached HEAD)
+        #[arg(long)]
+        task: Option<String>,
+        /// The rtok agent id (any unique prefix); defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// The owner the lock names, as `<provider> / <model>`. Defaults to `<host> / <model>`
+        /// of the agent
+        #[arg(long)]
+        owner: Option<String>,
+        /// Print the result as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Remove your own finished worktree: unlock, `git worktree remove`, delete the branch
     /// when merged, release the claim; refuses dirty, foreign-locked or current worktrees
     Remove {
@@ -504,17 +589,26 @@ enum WorktreeCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Your agent, where new worktrees go, the worktree you are in and the ones you hold
+    Whoami {
+        /// JSON instead of the text lines
+        #[arg(long)]
+        json: bool,
+    },
     /// Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
     Gc {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
         yes: bool,
-        /// Open locks whose reason starts with this owner; every other lock is a hard stop
+        /// Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`
         #[arg(long)]
         owner: Option<String>,
         /// Keep worktrees modified within this window (`24h`, `7d`)
         #[arg(long, default_value = "24h")]
         idle: String,
+        /// Treat someone else's lock as abandoned once its merged, clean worktree is untouched this long
+        #[arg(long, default_value = "7d")]
+        stale_lock: String,
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
@@ -548,17 +642,20 @@ enum GraphCmd {
     /// List unreferenced private definitions (skips pub, trait impls, tests, macros)
     Dead {
         path: Option<PathBuf>,
-        /// JSON rows instead of `path:line kind name` lines (T60.1, uncapped)
+        // T60.1
+        /// JSON rows instead of `path:line kind name` lines (uncapped)
         #[arg(long)]
         json: bool,
     },
-    /// Index health for the current or given root (T68.3)
+    // T68.3
+    /// Index health for the current or given root
     Status {
         path: Option<PathBuf>,
         #[arg(long)]
         json: bool,
     },
-    /// Symbol impact or call paths to a target (T68.4)
+    // T68.4
+    /// Symbol impact or call paths to a target
     Impact {
         name: String,
         #[arg(long, default_value_t = 2)]
@@ -566,6 +663,15 @@ enum GraphCmd {
         #[arg(long)]
         to: Option<String>,
         path: Option<PathBuf>,
+    },
+    // T329.2
+    /// The project registry: list, add, remove, select
+    Projects {
+        #[command(subcommand)]
+        action: Option<ProjectsCmd>,
+        /// JSON instead of a table
+        #[arg(long, global = true)]
+        json: bool,
     },
     /// Tests that reach files changed in git (`git diff --name-only`)
     Affected {
@@ -578,6 +684,48 @@ enum GraphCmd {
         /// JSON instead of `file ← via symbol` lines
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[cfg(feature = "graph")]
+#[derive(Subcommand)]
+enum ProjectsCmd {
+    /// Register a directory as a project (a known one only refreshes its last-used time)
+    Add { path: PathBuf },
+    /// Make a project the selected one; the page and later the CLI answer for it
+    Select {
+        /// Project id or directory
+        project: String,
+    },
+    /// Link a project into the selected one's graph scope (indexes it when it never was)
+    Link {
+        /// Project id or directory to link to
+        project: String,
+        /// Link from this project instead of the selected one
+        #[arg(long)]
+        from: Option<String>,
+        /// Also link the other way
+        #[arg(long)]
+        both: bool,
+        /// Why (shown next to the link)
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Remove a link; an auto link stays removed on re-index
+    Unlink {
+        /// Project id or directory to unlink
+        project: String,
+        /// Unlink from this project instead of the selected one
+        #[arg(long)]
+        from: Option<String>,
+        /// Also remove the link the other way
+        #[arg(long)]
+        both: bool,
+    },
+    /// Drop a project and its index rows; its files are never touched
+    Remove {
+        /// Project id or directory
+        project: String,
     },
 }
 
@@ -662,12 +810,49 @@ enum AgentCmd {
         #[command(subcommand)]
         action: Option<SessionsCmd>,
     },
-    /// Junk rtok owns under its own home: log siblings and archive payloads past retention
+    /// Tokens and estimated cost per agent and month (or day), from the agents' logs or rtok
+    ///
+    /// Prices come from `[stats.prices]`; a model without one counts in the tokens and is
+    /// left out of the cost (`--unpriced` names those).
+    Usage {
+        /// Data source: `logs` (the agents' own session files, the default), `rtok` (what passed through rtok) or `both`
+        #[arg(long, value_name = "SOURCE")]
+        source: Option<String>,
+        /// Only these hosts, comma-separated (`claude,codex`)
+        #[arg(long, value_name = "IDS")]
+        host: Option<String>,
+        /// From a date (`2026-09-01`, whole days in `--tz`) or a duration back from now (`30d`)
+        #[arg(long, value_name = "DATE|DUR")]
+        since: Option<String>,
+        /// Through this date, inclusive
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
+        /// Bottom table by day
+        #[arg(long, conflicts_with = "monthly")]
+        daily: bool,
+        /// Bottom table by month (the default)
+        #[arg(long)]
+        monthly: bool,
+        /// Middle table grouping: `agent` (the default) or `model`
+        #[arg(long, value_name = "AGENT|MODEL")]
+        by: Option<String>,
+        /// IANA time zone for day and month boundaries (default: the system zone)
+        #[arg(long, value_name = "ZONE")]
+        tz: Option<String>,
+        /// List the models without a price instead of the tables
+        #[arg(long)]
+        unpriced: bool,
+        /// One JSON document
+        #[arg(long)]
+        json: bool,
+    },
+    /// Junk and agent folders: `list` shows rtok's and every installed host's folders with sizes, `clear` removes rtok's own junk
     Junk {
         #[command(subcommand)]
         action: JunkCmd,
     },
-    /// This session's own rtok agent id (T283, D34): `RTOK_AGENT_ID`, resolved through the store
+    // T283, D34
+    /// This session's own rtok agent id: `RTOK_AGENT_ID`, resolved through the store
     Whoami {
         /// JSON instead of the text lines
         #[arg(long)]
@@ -686,7 +871,8 @@ enum AgentCmd {
         /// The status text; empty clears it
         text: String,
     },
-    /// Send a message to an agent (T287): `send <id-prefix> <text|->` or `send --all-live <text|->`
+    // T287
+    /// Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`
     Send {
         /// Recipient's rtok agent id (any unique prefix); with `--all-live`, the text instead
         to: Option<String>,
@@ -696,7 +882,8 @@ enum AgentCmd {
         #[arg(long)]
         all_live: bool,
     },
-    /// Read messages (T287): your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
+    // T287
+    /// Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an
     /// id that agent's queue (marks nothing)
     Inbox {
         /// An agent's rtok id (any unique prefix); omitted: `RTOK_AGENT_ID`
@@ -712,6 +899,18 @@ enum AgentCmd {
 
 #[derive(Subcommand)]
 enum JunkCmd {
+    /// Folders, junk kinds and sizes per agent, and the space `agents junk clear` would free
+    List {
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+        /// Exact byte counts instead of KB/MB/GB
+        #[arg(long)]
+        bytes: bool,
+        /// Also the hosts that are not installed
+        #[arg(long)]
+        all: bool,
+    },
     /// List what `agents junk clear` would remove; `--yes` applies it
     Clear {
         /// Apply; without it this is a dry run that changes nothing
@@ -740,10 +939,12 @@ struct RemoveArgs {
     /// Print what would be removed and exit
     #[arg(long)]
     dry_run: bool,
-    /// Skip closing/reopening a running desktop app around the write (T141)
+    // T141
+    /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
-    /// Also remove rtok entries you changed, without asking (T246)
+    // T246
+    /// Also remove rtok entries you changed, without asking
     #[arg(long)]
     yes: bool,
 }
@@ -764,13 +965,16 @@ struct UpdateArgs {
     /// All variants (the default when neither `--cli` nor `--desktop` is given)
     #[arg(long)]
     all: bool,
-    /// Skip closing/reopening a running desktop app around the write (T141)
+    // T141
+    /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
-    /// Reinstall the plugin even when it is already at the available version (T279)
+    // T279
+    /// Reinstall the plugin even when it is already at the available version
     #[arg(long)]
     force: bool,
-    /// Compare against this install source instead of the one on record (T279)
+    // T279
+    /// Compare against this install source instead of the one on record
     #[arg(long, value_enum)]
     source: Option<SourceArg>,
     /// List outdated plugins only (same output as `agents outdated`)
@@ -854,7 +1058,8 @@ struct SetupArgs {
     /// All variants (the default when neither `--cli` nor `--desktop` is given)
     #[arg(long)]
     all: bool,
-    /// Skip closing/reopening a running desktop app around the write (T141)
+    // T141
+    /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     no_restart: bool,
 }
@@ -904,7 +1109,8 @@ enum ConfigCmd {
     /// Print one key's effective value
     Get {
         key: String,
-        /// JSON `{key,value,source}` instead of the bare value (T228)
+        // T228
+        /// JSON `{key,value,source}` instead of the bare value
         #[arg(long)]
         json: bool,
     },
@@ -970,6 +1176,11 @@ pub fn run() -> Result<()> {
                     }
                 }
                 ConfigCmd::Validate { path } => {
+                    // T362: only the implicit default file is created, as `load_with` does;
+                    // a path the user typed must exist.
+                    if path.is_none() {
+                        Config::ensure_user_file(&home, config_file.as_deref())?;
+                    }
                     let path = path.unwrap_or(user);
                     let mut errs = validate::issues(&path)?;
                     // The filter drop-ins are deployment state, not part of the
@@ -979,6 +1190,10 @@ pub fn run() -> Result<()> {
                     // also appended to the log.
                     let layer = config_file.as_deref().or(Some(&path));
                     let cfg = crate::config::layers::load(&home, layer, None).unwrap_or_default();
+                    // Values from the project file, `.env` and the environment skip the file check.
+                    errs.extend(validate::layered_issues(crate::config::layers::sourced(
+                        &crate::config::layers::figment(&home, layer, None),
+                    )));
                     errs.extend(validate::rules_issues(
                         &cfg.plugins.cmd.rules,
                         &cfg.plugins.cmd.rules_dir,
@@ -1015,8 +1230,19 @@ pub fn run() -> Result<()> {
             }
         }
         Cmd::Hook { serve: true, .. } => crate::hooks::resident::serve()?,
+        // T159: these two events answer with a path and an exit code, not the JSON the hook
+        // dispatcher writes, so they skip it.
+        Cmd::Hook {
+            event: Some(event), ..
+        } if crate::worktree::host::handles(&event) => {
+            let cfg = Config::load_lenient(config_file.as_deref(), None);
+            if let Some(out) = crate::worktree::host::run(&event, io::stdin(), &cfg)? {
+                println!("{out}");
+            }
+        }
         Cmd::Hook { event, host, .. } => {
-            let cfg = Config::load_lenient(config_file.as_deref(), hook_host_flag(host));
+            let mut cfg = Config::load_lenient(config_file.as_deref(), hook_host_flag(host));
+            cfg.hook_client_pid = Some(std::process::id());
             crate::hooks::run(&event.unwrap_or_default(), io::stdin(), io::stdout(), &cfg);
             let _ = io::stdout().flush();
         }
@@ -1030,6 +1256,11 @@ pub fn run() -> Result<()> {
             cache,
             price,
         } => {
+            // The flag is parsed here, before it merges into `stats.since`, so a later parse error
+            // can only come from the config or the environment and says so.
+            if let Some(s) = &since {
+                crate::measure::stats::parse_since(s)?;
+            }
             let cfg = Config::load_with(
                 config_file.as_deref(),
                 stats_flags(since, json, plugin.clone(), compare.clone(), price),
@@ -1100,14 +1331,57 @@ pub fn run() -> Result<()> {
             )?;
             print!("{}", crate::bench::run(&cfg)?);
         }
-        Cmd::Doctor { instructions, json } => {
+        Cmd::Doctor {
+            instructions,
+            fix: true,
+            yes,
+            dry_run,
+            only,
+            agent,
+            ..
+        } => {
+            let agent = doctor_host(agent.as_deref())?;
             let cfg = Config::load_with(config_file.as_deref(), doctor_flags(instructions))?;
-            let report = model::doctor(&cfg)?;
+            let kinds: Vec<&str> = if only.is_empty() {
+                crate::doctor::fix::KINDS.to_vec()
+            } else {
+                only.iter().map(|c| c.kind()).collect()
+            };
+            // A terminal and no `--yes`: the user picks what goes. Pipes and CI keep the dry run.
+            let mut terminal = crate::doctor::checklist::Terminal;
+            let ask = (!yes && io::stdin().is_terminal() && io::stdout().is_terminal())
+                .then_some(&mut terminal as &mut dyn crate::doctor::checklist::Prompt);
+            let (text, code) = crate::doctor::fix::run(&cfg, yes && !dry_run, agent, &kinds, ask);
+            print!("{text}");
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
+        Cmd::Doctor {
+            instructions,
+            json,
+            agent,
+            ..
+        } => {
+            let agent = doctor_host(agent.as_deref())?;
+            let cfg = Config::load_with(config_file.as_deref(), doctor_flags(instructions))?;
+            let mut report = model::doctor(&cfg)?;
+            report
+                .problems
+                .retain(|p| agent.is_none_or(|a| p.agent == a));
             if json {
                 print_json(&report)?;
             } else {
                 print!("{}", report.to_console());
             }
+        }
+        // One gate for every subcommand, `list` included (T410).
+        Cmd::Worktree { .. }
+            if !Config::load_with(config_file.as_deref(), None)?
+                .worktree
+                .enabled =>
+        {
+            bail!(crate::worktree::DISABLED)
         }
         Cmd::Worktree {
             action:
@@ -1120,17 +1394,20 @@ pub fn run() -> Result<()> {
         } => {
             use crate::worktree::claim;
             let cfg = Config::load_with(config_file.as_deref(), None)?;
-            let root = Some(cfg.worktree.root.as_path()).filter(|r| !r.as_os_str().is_empty());
             let id = (task.as_str(), slug.as_deref());
             let store = crate::store::Store::open(&cfg.core.db_path).ok();
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
-            let owner = claim::owner(owner, agent.as_ref(), store.as_ref())?;
-            let agent_id = agent.as_ref().map(|a| a.id.as_str());
             let cwd = std::env::current_dir()?;
-            let plan = crate::worktree::add::run(&cwd, root, id, (&owner, agent_id))?;
-            if let Some(agent) = agent_id {
-                claim::remember(store.as_ref(), &plan.path, agent, &plan.task);
-            }
+            let root = &cfg.worktree.root;
+            let plan = claim::add(
+                store.as_ref(),
+                &cwd,
+                root,
+                id,
+                agent.as_ref(),
+                owner,
+                cfg.plugins.graph.auto_add_projects,
+            )?;
             println!("{}", plan.path.display());
         }
         Cmd::Worktree {
@@ -1142,10 +1419,51 @@ pub fn run() -> Result<()> {
             let Some(agent) = claim::caller(store.as_ref(), agent.as_deref())? else {
                 bail!("no agent to bind: pass --agent or set RTOK_AGENT_ID");
             };
-            let owner = claim::owner(owner, Some(&agent), store.as_ref())?;
-            let (path, task) = claim::run(&path, &owner, &agent.id)?;
-            claim::remember(store.as_ref(), &path, &agent.id, &task);
-            println!("{}", path.display());
+            let done = claim::bind(
+                store.as_ref(),
+                &path,
+                &agent,
+                owner,
+                None,
+                false,
+                cfg.plugins.graph.auto_add_projects,
+            )?;
+            println!("{}", done.path.display());
+        }
+        Cmd::Worktree {
+            action:
+                WorktreeCmd::Adopt {
+                    path,
+                    task,
+                    agent,
+                    owner,
+                    json,
+                },
+        } => {
+            use crate::worktree::claim;
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let store = crate::store::Store::open(&cfg.core.db_path).ok();
+            let Some(agent) = claim::caller(store.as_ref(), agent.as_deref())? else {
+                bail!("no agent to bind: pass --agent or set RTOK_AGENT_ID");
+            };
+            let path = match path {
+                Some(path) => path,
+                None => std::env::current_dir()?,
+            };
+            let done = claim::bind(
+                store.as_ref(),
+                &path,
+                &agent,
+                owner,
+                task.as_deref(),
+                true,
+                cfg.plugins.graph.auto_add_projects,
+            )?;
+            if json {
+                print_json(&done)?;
+            } else {
+                println!("{}", done.path.display());
+            }
         }
         Cmd::Worktree {
             action:
@@ -1161,24 +1479,14 @@ pub fn run() -> Result<()> {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let store = crate::store::Store::open(&cfg.core.db_path).ok();
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
-            // No agent and no `--owner`: no name to hold a lock by, so only an unlocked one goes.
-            let owner = match (owner, &agent) {
-                (None, None) => None,
-                (owner, agent) => Some(claim::owner(owner, agent.as_ref(), store.as_ref())?),
-            };
-            let who = remove::Caller {
-                agent: agent.as_ref().map(|a| a.id.as_str()),
-                owner: owner.as_deref(),
-            };
             let cwd = std::env::current_dir()?;
-            let done = remove::run(&cwd, &target, &who, keep_branch)?;
-            let released = store.as_ref().map(|s| s.release_worktree_claim(&done.path));
-            if let Some(Err(e)) = released {
-                eprintln!(
-                    "{}",
-                    style::warn(&format!("warning: claim not released: {e:#}"))
-                );
-            }
+            let done = remove::for_agent(
+                store.as_ref(),
+                &cwd,
+                &target,
+                (agent.as_ref(), owner),
+                keep_branch,
+            )?;
             if json {
                 print_json(&done)?;
             } else {
@@ -1186,19 +1494,32 @@ pub fn run() -> Result<()> {
             }
         }
         Cmd::Worktree {
+            action: WorktreeCmd::Whoami { json },
+        } => {
+            use crate::worktree::{claim, whoami};
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let store = crate::store::Store::open(&cfg.core.db_path).ok();
+            // An unknown `RTOK_AGENT_ID` still leaves the root and the cwd worth printing.
+            let agent = claim::caller(store.as_ref(), None).ok().flatten();
+            let cwd = std::env::current_dir()?;
+            let me = whoami::run(&cwd, &cfg.worktree.root, agent.as_ref(), store.as_ref());
+            if json {
+                print_json(&me)?;
+            } else {
+                print!("{}", whoami::to_text(&me));
+            }
+        }
+        Cmd::Worktree {
             action: WorktreeCmd::List { json },
         } => {
             let mut rows = crate::worktree::list::rows(&std::env::current_dir()?)?;
-            // T154: ownership from the sessions the hooks recorded. The listing must not
-            // depend on the store — without one it prints without attribution.
             let cfg = Config::load_with(config_file.as_deref(), None)?;
-            if let Ok(store) = crate::store::Store::open(&cfg.core.db_path)
-                && let Ok(seen) = store.sessions_by_cwd()
-            {
-                crate::worktree::list::attribute(&mut rows, &seen);
-                // T285: the bound agent's host and state; a store error leaves the ids bare.
-                let _ = crate::worktree::list::bind(&mut rows, &store, &cfg.agents.idle);
-            }
+            let store = crate::store::Store::open(&cfg.core.db_path).ok();
+            crate::worktree::list::attribute_with_store(
+                &mut rows,
+                store.as_ref(),
+                &cfg.agents.idle,
+            );
             if json {
                 print_json(&rows)?;
             } else {
@@ -1212,6 +1533,7 @@ pub fn run() -> Result<()> {
                     yes,
                     owner,
                     idle,
+                    stale_lock,
                     json,
                 },
         } => {
@@ -1226,6 +1548,8 @@ pub fn run() -> Result<()> {
             let policy = gc::Policy {
                 owner: owner.as_deref(),
                 idle: crate::measure::stats::parse_since(&idle).context("--idle")?,
+                stale_lock: crate::measure::stats::parse_since(&stale_lock)
+                    .context("--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
             };
@@ -1393,6 +1717,59 @@ pub fn run() -> Result<()> {
                     print!("{}", crate::render::sessions_table(&rows, all, now));
                 }
             }
+            AgentCmd::Usage {
+                source,
+                host,
+                since,
+                until,
+                daily,
+                monthly,
+                by,
+                tz,
+                unpriced,
+                json,
+            } => {
+                let period = daily.then_some("daily").or(monthly.then_some("monthly"));
+                let flags = usage_flags([
+                    ("source", source),
+                    ("hosts", host),
+                    ("since", since),
+                    ("until", until),
+                    ("period", period.map(str::to_string)),
+                    ("by", by),
+                    ("tz", tz),
+                ]);
+                let cfg = Config::load_with(config_file.as_deref(), flags)?;
+                let store = crate::store::Store::open(&cfg.core.db_path)?;
+                let report = crate::agents::usage::report(&cfg, &store, crate::log::now() as i64)?;
+                for s in &report.skipped {
+                    eprintln!("skipped {}: {} in {}", s.host, s.reason, s.path.display());
+                }
+                if json {
+                    print_json(&report)?;
+                } else if unpriced {
+                    print!("{}", report.unpriced_text());
+                } else {
+                    print!("{}", report.to_text());
+                }
+            }
+            AgentCmd::Junk {
+                action: JunkCmd::List { json, bytes, all },
+            } => {
+                let cfg = Config::load_with(config_file.as_deref(), None)?;
+                let report = crate::agents::junk::report_with(
+                    &cfg,
+                    &crate::agents::junk_map::Roots::from_env(),
+                    crate::agents::junk::Options { all },
+                    crate::agents::junk::AGENT_SCAN_LIMIT,
+                );
+                if json {
+                    print_json(&report)?;
+                } else {
+                    let links = io::stdout().is_terminal();
+                    print!("{}", crate::agents::junk::to_list(&report, bytes, links));
+                }
+            }
             AgentCmd::Junk {
                 action: JunkCmd::Clear { yes, json },
             } => {
@@ -1478,14 +1855,13 @@ pub fn run() -> Result<()> {
             let hint = cmd.unwrap_or_else(|| cfg.filter.cmd.clone());
             if archive {
                 let mut buf = Vec::new();
-                let _ = io::stdin().read_to_end(&mut buf);
+                io::stdin().read_to_end(&mut buf)?;
                 let argv: Vec<String> = hint.split_whitespace().map(str::to_string).collect();
                 // No dispatch-time context reaches this surface (OpenCode's
                 // `tool.execute.after`, not the Claude Code PreToolUse rewrite).
                 crate::plugins::cmd::run::emit_filtered(&cfg, &argv, &buf, 0, None);
             } else {
-                let mut buf = String::new();
-                let _ = io::stdin().read_to_string(&mut buf);
+                let buf = read_lossy(io::stdin())?;
                 print!(
                     "{}",
                     crate::plugins::cmd::filter::run_with_store(&cfg, &hint, &buf)
@@ -1496,9 +1872,10 @@ pub fn run() -> Result<()> {
             action,
             call,
             json,
+            host,
             wrap,
         } => {
-            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let cfg = Config::load_with(config_file.as_deref(), hook_host_flag(host))?;
             if let Some(McpCmd::Ping {
                 agent,
                 cli,
@@ -1577,9 +1954,14 @@ pub fn run() -> Result<()> {
             shell,
             install,
             uninstall,
+            list,
         } => {
             use crate::completions::install::{self as inst, Places};
-            let lines = if install || uninstall {
+            use crate::completions::picker;
+            use std::io::IsTerminal;
+            let lines = if list {
+                picker::list(&Places::from_env()?)
+            } else if install || uninstall {
                 let places = Places::from_env()?;
                 let shell = places.pick(shell)?;
                 if install {
@@ -1590,8 +1972,14 @@ pub fn run() -> Result<()> {
             } else if let Some(shell) = shell {
                 crate::completions::generate(shell, Cli::command(), &mut io::stdout());
                 Vec::new()
+            } else if io::stdin().is_terminal() && io::stdout().is_terminal() {
+                picker::run(&Places::from_env()?, Cli::command(), picker::ask_terminal)?
             } else {
-                unreachable!("clap requires a shell without --install/--uninstall")
+                // Never wait for input that cannot come (pipes, CI, agents).
+                anyhow::bail!(
+                    "no shell named and no terminal for the picker; run `rtok completions <shell>` \
+                     to print a script, `rtok completions --install` to write one, or `--list` for the state"
+                )
             };
             for line in lines {
                 println!("{line}");
@@ -1679,7 +2067,7 @@ pub fn run() -> Result<()> {
             let cx = crate::plugin::Runtime::open(cfg.clone(), "graph")?;
             match action {
                 GraphCmd::Index { path, dry_run } => {
-                    let root = path.unwrap_or(std::env::current_dir()?);
+                    let root = crate::plugins::graph::cli_root(path)?;
                     let pb = crate::render::spinner("indexing");
                     let r = crate::plugins::graph::index::run_with(
                         &crate::plugin::Ctx::new(&cx),
@@ -1698,9 +2086,12 @@ pub fn run() -> Result<()> {
                         r.extension_mapped,
                     );
                     println!("{}", style::success(&summary));
+                    if !dry_run {
+                        crate::plugins::graph::follow::report(&cx, &root);
+                    }
                 }
                 GraphCmd::Dead { path, json } => {
-                    let root = path.unwrap_or(std::env::current_dir()?);
+                    let root = crate::plugins::graph::cli_root(path)?;
                     let ctx = crate::plugin::Ctx::new(&cx);
                     if json {
                         let rows = crate::plugins::graph::dead_rows(&ctx, &root)?;
@@ -1712,13 +2103,43 @@ pub fn run() -> Result<()> {
                 GraphCmd::Status { path, json } => {
                     crate::plugins::graph::status::run(&cfg, path, json)?;
                 }
+                GraphCmd::Projects { action, json } => {
+                    use crate::plugins::graph::projects::{Action, run};
+                    let action = match action {
+                        None => Action::List,
+                        Some(ProjectsCmd::Add { path }) => Action::Add(path),
+                        Some(ProjectsCmd::Select { project }) => Action::Select(project),
+                        Some(ProjectsCmd::Remove { project }) => Action::Remove(project),
+                        Some(ProjectsCmd::Link {
+                            project,
+                            from,
+                            both,
+                            reason,
+                        }) => Action::Link {
+                            to: project,
+                            from,
+                            both,
+                            reason,
+                        },
+                        Some(ProjectsCmd::Unlink {
+                            project,
+                            from,
+                            both,
+                        }) => Action::Unlink {
+                            to: project,
+                            from,
+                            both,
+                        },
+                    };
+                    print!("{}", run(&cx, action, json)?);
+                }
                 GraphCmd::Impact {
                     name,
                     depth,
                     to,
                     path,
                 } => {
-                    let root = path.unwrap_or(std::env::current_dir()?);
+                    let root = crate::plugins::graph::cli_root(path)?;
                     let ctx = crate::plugin::Ctx::new(&cx);
                     print!(
                         "{}",
@@ -1856,6 +2277,11 @@ pub fn run() -> Result<()> {
             since,
             ai,
         } => {
+            // As for `stats`: the flag is parsed before it merges into `report.since`, so a later
+            // parse error can only come from the config or the environment and says so.
+            if let Some(s) = &since {
+                crate::measure::stats::parse_since(s)?;
+            }
             let cfg =
                 Config::load_with(config_file.as_deref(), report_flags(format, out, since, ai))?;
             // D24: the command picks the renderer and the sink; every number was already
@@ -1891,12 +2317,18 @@ pub fn run() -> Result<()> {
         }
         #[cfg(not(feature = "cmd"))]
         Cmd::Filter { .. } => {
-            let mut buf = String::new();
-            let _ = io::stdin().read_to_string(&mut buf);
-            print!("{buf}");
+            print!("{}", read_lossy(io::stdin())?);
         }
     }
     Ok(())
+}
+
+/// Lossy, because `read_to_string` empties the whole buffer on one invalid UTF-8
+/// byte and the agent would get a blank tool result nothing can expand (T360).
+fn read_lossy(mut r: impl Read) -> Result<String> {
+    let mut buf = Vec::new();
+    r.read_to_end(&mut buf)?;
+    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
 fn stats_flags(
@@ -1928,6 +2360,35 @@ fn stats_flags(
     }
     let mut flags = Dict::new();
     flags.insert("stats".into(), Value::from(stats));
+    Some(flags)
+}
+
+/// The `[agents.usage]` overlay for the flags the caller gave. `hosts` is the one list key,
+/// so its comma-separated flag is split here.
+fn usage_flags<const N: usize>(given: [(&str, Option<String>); N]) -> Option<figment::value::Dict> {
+    use figment::value::{Dict, Value};
+    let mut usage = Dict::new();
+    for (key, value) in given {
+        let Some(value) = value else { continue };
+        let value = if key == "hosts" {
+            Value::from(
+                value
+                    .split(',')
+                    .map(|h| h.trim().to_string())
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            Value::from(value)
+        };
+        usage.insert(key.into(), value);
+    }
+    if usage.is_empty() {
+        return None;
+    }
+    let mut agents = Dict::new();
+    agents.insert("usage".into(), Value::from(usage));
+    let mut flags = Dict::new();
+    flags.insert("agents".into(), Value::from(agents));
     Some(flags)
 }
 
@@ -2182,6 +2643,14 @@ fn setup_flags(
     Some(flags)
 }
 
+/// `rtok doctor --agent <HOST>`: the host id, or an error naming the valid ones.
+fn doctor_host(agent: Option<&str>) -> Result<Option<&'static str>> {
+    agent
+        .map(crate::doctor::hooks::host_id)
+        .transpose()
+        .map_err(anyhow::Error::msg)
+}
+
 pub(crate) fn hook_host_flag(host: Option<String>) -> Option<figment::value::Dict> {
     let host = host?;
     use figment::value::{Dict, Value};
@@ -2390,6 +2859,22 @@ fn show(rows: &[model::ConfigEntry], sources: bool, json: bool) -> Result<()> {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn read_lossy_keeps_bytes_around_invalid_utf8() {
+        assert_eq!(read_lossy(&b"a\xffb\n"[..]).unwrap(), "a\u{FFFD}b\n");
+    }
+
+    #[test]
+    fn read_lossy_surfaces_read_errors() {
+        struct Broken;
+        impl Read for Broken {
+            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::other("boom"))
+            }
+        }
+        assert!(read_lossy(Broken).is_err());
+    }
 
     #[test]
     fn mcp_ping_is_not_parsed_as_a_wrap_argv() {

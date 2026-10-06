@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T78: the installers against foreign configs that live only under the throwaway home.
 //!
 //! Each test writes a fixture (another tool's hook, server, or setting — never this
@@ -93,6 +97,16 @@ const HOSTS: &[Host] = &[
     Host {
         id: "devin",
         files: &[".config/devin/config.json", ".config/devin/mcp_config.json"],
+    },
+    Host {
+        id: "roo",
+        files: &[
+            "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
+        ],
+    },
+    Host {
+        id: "qwen",
+        files: &[".qwen/settings.json"],
     },
 ];
 
@@ -198,7 +212,10 @@ fn fixture(rel: &str) -> &'static str {
         | ".copilot/mcp-config.json"
         | ".codeium/windsurf/mcp_config.json"
         | ".config/devin/mcp_config.json"
-        | ".omp/agent/mcp.json" => r#"{"mcpServers":{"foreign":{"command":"x"}}}"#,
+        | ".omp/agent/mcp.json"
+        | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
+            r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
+        }
         ".claude/settings.json" => {
             r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"other-tool run"}]}]},"env":{"KEEP":"1"}}"#
         }
@@ -207,6 +224,9 @@ fn fixture(rel: &str) -> &'static str {
         | ".config/kilo/kilo.json"
         | ".config/mimocode/mimocode.json"
         | ".gemini/settings.json" => r#"{"env":{"KEEP":"1"}}"#,
+        ".qwen/settings.json" => {
+            r#"{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"echo other"}]}]},"mcpServers":{"foreign":{"command":"x"}},"env":{"KEEP":"1"}}"#
+        }
         ".kimi-code/config.toml" => "[[hooks]]\nevent = \"Stop\"\ncommand = \"echo other\"\n",
         ".aider.conf.yml" => "model: foreign\n",
         ".config/zed/settings.json" => {
@@ -319,6 +339,8 @@ real_config_round_trip! {
     mimo_keeps_the_real_mimocode_json => "mimo",
     omp_keeps_the_real_mcp_json => "omp",
     devin_keeps_the_real_config_and_mcp_json => "devin",
+    roo_keeps_the_real_mcp_settings_json => "roo",
+    qwen_keeps_the_real_settings_json => "qwen",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

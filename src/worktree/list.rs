@@ -1,13 +1,18 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok worktree list` (T151): what every worktree costs on disk, split into source and
 //! tagged build cache, plus the orphans git cannot see. Read-only — it deletes nothing.
 
 use std::collections::{BTreeSet, HashSet};
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
-use super::{Entry, inventory};
+use super::{Entry, inventory_with, par_map};
 use crate::info::human_bytes;
 use crate::render::{Col, duration, table};
 
@@ -40,17 +45,46 @@ pub struct Cache {
 
 pub fn usage(dir: &Path) -> Usage {
     let mut total = Usage::default();
-    walk(dir, None, &mut total);
+    let _ = walk(dir, true, None, &mut total, &|_| false);
     total
 }
 
-/// `cache` indexes `total.caches` once the walk is inside a tagged root.
-fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
+/// The newest mtime [`usage`] would report for `dir`, except that the walk ends at the first
+/// file whose mtime satisfies `enough`. `gc` only asks whether a worktree was touched within
+/// its idle window, which one recent file answers; `enough` must hold for every later mtime
+/// too, so that it holds for the newest exactly when it holds for this answer.
+pub fn newest_until(dir: &Path, enough: impl Fn(SystemTime) -> bool) -> Option<SystemTime> {
+    let mut total = Usage::default();
+    let _ = walk(dir, true, None, &mut total, &enough);
+    total.modified
+}
+
+/// `cache` indexes `total.caches` once the walk is inside a tagged root. The listing in hand
+/// answers "is there a `.git` or a `CACHEDIR.TAG` here", so most directories cost one
+/// `read_dir` and no probes; only a name that is present gets checked on disk.
+fn walk(
+    dir: &Path,
+    root: bool,
+    cache: Option<usize>,
+    total: &mut Usage,
+    enough: &dyn Fn(SystemTime) -> bool,
+) -> ControlFlow<()> {
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+        return ControlFlow::Continue(());
     };
+    let entries: Vec<_> = entries.flatten().collect();
+    let (mut git, mut tag) = (false, false);
+    for entry in &entries {
+        let name = entry.file_name();
+        git |= name == ".git";
+        tag |= name == "CACHEDIR.TAG";
+    }
+    // A nested checkout (another worktree, a submodule) is its own row.
+    if !root && git && dir.join(".git").exists() {
+        return ControlFlow::Continue(());
+    }
     let cache = cache.or_else(|| {
-        is_cache_dir(dir).then(|| {
+        (tag && is_cache_dir(dir)).then(|| {
             let root = Cache {
                 path: dir.to_path_buf(),
                 bytes: 0,
@@ -60,19 +94,19 @@ fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
             total.caches.len() - 1
         })
     });
-    for entry in entries.flatten() {
-        // `DirEntry::metadata` does not follow symlinks: a link costs its own length.
+    for entry in entries {
+        // Neither the listing's file type nor `DirEntry::metadata` follows symlinks: a link
+        // costs its own length.
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            walk(&entry.path(), false, cache, total, enough)?;
+            continue;
+        }
         let Ok(meta) = entry.metadata() else {
             continue;
         };
-        let path = entry.path();
-        if meta.is_dir() {
-            // A nested checkout (another worktree, a submodule) is its own row.
-            if !path.join(".git").exists() {
-                walk(&path, cache, total);
-            }
-            continue;
-        }
         let modified = meta.modified().ok();
         match cache {
             Some(i) => {
@@ -84,7 +118,11 @@ fn walk(dir: &Path, cache: Option<usize>, total: &mut Usage) {
             None => total.source += meta.len(),
         }
         total.modified = total.modified.max(modified);
+        if modified.is_some_and(enough) {
+            return ControlFlow::Break(());
+        }
     }
+    ControlFlow::Continue(())
 }
 
 /// Directories that look like a linked worktree but that git does not list: their `.git`
@@ -132,6 +170,8 @@ pub struct Row {
     pub locked: bool,
     /// T150's state, or `orphan`.
     pub state: &'static str,
+    /// Which tool made the worktree (T289): `main`, a host's pool, or `other`.
+    pub origin: &'static str,
     /// The rtok agent (T282) the worktree is bound to: the lock's, else a claim row (T285).
     pub agent: Option<Bound>,
     /// The newest session the hooks saw working here (T154); never set on the main checkout.
@@ -204,12 +244,18 @@ impl Row {
     fn new(path: PathBuf, state: &'static str) -> Self {
         let used = usage(&path);
         let unix = |t: SystemTime| t.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs());
+        let origin = if state == "main" {
+            "main"
+        } else {
+            super::origin::of(&path)
+        };
         Self {
             path,
             branch: None,
             owner: None,
             locked: false,
             state,
+            origin,
             agent: None,
             session: None,
             source_bytes: used.source,
@@ -246,8 +292,7 @@ pub fn attribute(rows: &mut [Row], sessions: &[crate::store::SessionSeen]) {
 
 /// Every worktree of the repository `cwd` belongs to, then the orphans.
 pub fn rows(cwd: &Path) -> anyhow::Result<Vec<Row>> {
-    let entries = inventory(cwd)?;
-    let listed = entries.iter().map(|e| {
+    let listed = inventory_with(cwd, |e| {
         let owner = e.record.owner();
         Row {
             branch: e.record.branch.clone(),
@@ -256,10 +301,25 @@ pub fn rows(cwd: &Path) -> anyhow::Result<Vec<Row>> {
             locked: e.record.locked.is_some(),
             ..Row::new(e.record.path.clone(), e.state.label())
         }
-    });
-    let mut rows: Vec<Row> = listed.collect();
-    rows.extend(orphans(&entries).into_iter().map(|p| Row::new(p, "orphan")));
+    })?;
+    let (entries, mut rows): (Vec<Entry>, Vec<Row>) = listed.into_iter().unzip();
+    let orphans = orphans(&entries);
+    rows.extend(par_map(&orphans, |_, p| Row::new(p.clone(), "orphan")));
     Ok(rows)
+}
+
+/// What the store knows about `rows`: T154's inferred session per worktree, then T285's bound
+/// agent. The listing must not depend on the store, so without one (or on a store error) the
+/// rows stay unattributed. Shared by `rtok worktree list` and MCP `worktree_list`. The caller
+/// scans first and opens the store after: a store opened under a worktree's own directory
+/// would otherwise show up in that worktree's scan.
+pub fn attribute_with_store(rows: &mut [Row], store: Option<&crate::store::Store>, idle: &str) {
+    if let Some(store) = store
+        && let Ok(seen) = store.sessions_by_cwd()
+    {
+        attribute(rows, &seen);
+        let _ = bind(rows, store, idle);
+    }
 }
 
 pub fn to_table(rows: &[Row], now: SystemTime) -> String {
@@ -273,6 +333,7 @@ pub fn to_table(rows: &[Row], now: SystemTime) -> String {
             "agent",
             "agent state",
             "state",
+            "origin",
             "seen",
             "modified",
             "source",
@@ -307,13 +368,14 @@ pub fn to_table(rows: &[Row], now: SystemTime) -> String {
             agent,
             agent_state,
             r.state.into(),
+            r.origin.into(),
             seen.unwrap_or_else(dash),
             age.unwrap_or_else(dash),
             human_bytes(r.source_bytes),
             human_bytes(r.cache_bytes),
         ]
     }));
-    let cols = [0; 8].map(Col::left).into_iter();
+    let cols = [0; 9].map(Col::left).into_iter();
     let cols: Vec<Col> = cols.chain([Col::right(0), Col::right(0)]).collect();
     let (source, cache) = rows
         .iter()
@@ -362,6 +424,27 @@ mod tests {
         // The root's newest file is at most as new as the worktree's newest file.
         assert!(root.modified.is_some() && root.modified <= used.modified);
         assert_eq!(usage(&dir.join("missing")), Usage::default());
+        // Nothing is ever enough: the whole walk, the same newest mtime.
+        assert_eq!(newest_until(&dir, |_| false), used.modified);
+    }
+
+    /// `gc`'s question: the walk stops at the first file young enough, and that file
+    /// answers it the same as the newest one would.
+    #[test]
+    fn newest_until_stops_at_the_first_file_that_is_enough() {
+        let dir = tmp_dir("wt-newest");
+        for name in ["a", "b", "c"] {
+            write(dir.join(name), b"x").unwrap();
+        }
+        let seen = std::cell::Cell::new(0);
+        let found = newest_until(&dir, |_| {
+            seen.set(seen.get() + 1);
+            true
+        });
+        assert_eq!(seen.get(), 1, "one recent file ends the walk");
+        assert!(found.is_some() && found <= usage(&dir).modified);
+        assert_eq!(newest_until(&dir.join("missing"), |_| true), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -372,6 +455,7 @@ mod tests {
             owner: owner.map(Into::into),
             locked,
             state,
+            origin: "other",
             agent: None,
             session,
             source_bytes: 1024,
@@ -405,13 +489,13 @@ mod tests {
             },
         ];
         let now = UNIX_EPOCH + std::time::Duration::from_secs(1_000 + 3 * 86_400 + 4 * 3_600);
-        insta::assert_snapshot!(to_table(&rows, now), @r"
-        path branch owner                 agent                agent state state    seen  modified source  cache
-        /w/x t1     Cursor / grok         seen claude b1e2c3d4 -           merged   4h00m 3d04h    1.0 KB 2.0 KB
-        /w/x t1     locked, owner unknown -                    -           dirty    -     3d04h    1.0 KB    0 B
-        /w/x t1     -                     seen claude b1e2c3d4 -           unmerged 4h00m 3d04h    1.0 KB    0 B
-        /w/x t1     -                     -                    -           orphan   -     3d04h    1.0 KB    0 B
-        /w/x t1     claude / sonnet       0193ab12 claude      live        unmerged -     3d04h    1.0 KB    0 B
+        insta::assert_snapshot!(to_table(&rows, now), @"
+        path branch owner                 agent                agent state state    origin seen  modified source  cache
+        /w/x t1     Cursor / grok         seen claude b1e2c3d4 -           merged   other  4h00m 3d04h    1.0 KB 2.0 KB
+        /w/x t1     locked, owner unknown -                    -           dirty    other  -     3d04h    1.0 KB    0 B
+        /w/x t1     -                     seen claude b1e2c3d4 -           unmerged other  4h00m 3d04h    1.0 KB    0 B
+        /w/x t1     -                     -                    -           orphan   other  -     3d04h    1.0 KB    0 B
+        /w/x t1     claude / sonnet       0193ab12 claude      live        unmerged other  -     3d04h    1.0 KB    0 B
 
         5 worktrees: 5.0 KB source, 2.0 KB build cache (logical bytes; clones and hard links count in full)
         ");

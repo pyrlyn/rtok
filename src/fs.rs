@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Narrow FS surface for `read()` resolve + content (T56.5 / post-T56.4) and for the
 //! project resolver (T133): read a file as text, canonicalize, and a lexical path join.
 //!
@@ -57,6 +61,17 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
     out
 }
 
+/// T263/T356: whether `root` is the filesystem root or `home`, which no index or walk may use as
+/// a project root. Lives here, not in `read`, so the store can apply it without the `read`
+/// feature; `home` is a parameter so tests need not touch `$HOME`.
+pub(crate) fn is_unwalkable_root(root: &Path, home: Option<&Path>) -> bool {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let is_home = home
+        .and_then(|h| h.canonicalize().ok())
+        .is_some_and(|h| h == root);
+    root.parent().is_none() || is_home
+}
+
 /// Forward-slash Vfs key from a [`Path`] (Windows separators normalized).
 pub(crate) fn path_key(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
@@ -85,5 +100,22 @@ impl ReadFs for crate::testutil::Vfs {
             return Some(PathBuf::from(key));
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// T356: `/` and the given home are unwalkable (also through a trailing `.`); a project is not.
+    #[test]
+    fn unwalkable_root_is_the_filesystem_root_or_home_only() {
+        let home = crate::testutil::tmp_dir("t356-fs-home");
+        let project = crate::testutil::tmp_dir("t356-fs-project");
+        assert!(is_unwalkable_root(Path::new("/"), None));
+        assert!(is_unwalkable_root(&home, Some(&home)));
+        assert!(is_unwalkable_root(&home.join("."), Some(&home)));
+        assert!(!is_unwalkable_root(&project, Some(&home)));
+        assert!(!is_unwalkable_root(&project, None));
     }
 }

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `rtok worktree gc` (T153): remove finished worktrees and their merged branches, and
 //! drop the records of worktrees whose directory is already gone. [`decide`] is pure;
 //! [`run`] applies one verdict at a time and never forces anything.
@@ -7,31 +11,49 @@ use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 
-use super::list::usage;
-use super::{Entry, State, inventory};
+use super::list::newest_until;
+use super::{Entry, State, inventory, par_map};
 use crate::render::Col;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     /// Merged, clean, idle and not held by anyone else: remove the worktree.
     Remove,
+    /// Merged, clean and idle past `stale_lock` under someone else's lock (T418): the
+    /// session that took it is gone and nothing is left to lose. Holds the lock's owner.
+    Reclaim(String),
     /// The directory is gone: drop this one record (never a blanket `prune`).
     DropRecord,
     Keep(String),
 }
 
 pub struct Policy<'a> {
-    /// Whose locks may be opened; every other lock is a hard stop.
+    /// Whose locks may be opened; any other lock holds until it goes stale (T418).
     pub owner: Option<&'a str>,
     pub idle: Duration,
+    /// Untouched this long, a foreign lock on a merged, clean worktree is abandoned.
+    pub stale_lock: Duration,
     pub now: SystemTime,
     /// Live rtok agents (T282): a worktree bound to one is never removed (T285).
     pub live: std::collections::HashSet<String>,
 }
 
-/// `modified` is the newest mtime under the worktree (T151) and `current` says the
-/// command runs from inside it.
-pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Policy) -> Verdict {
+impl Policy<'_> {
+    fn age(&self, modified: SystemTime) -> Duration {
+        self.now.duration_since(modified).unwrap_or_default()
+    }
+}
+
+/// `modified(within)` yields the newest mtime under the worktree (T151). It is a walk, so it
+/// is asked only once no cheaper rule has decided, and `within` is the age that settles the
+/// question asked: the walk may stop at the first file younger than that, which answers it
+/// as the newest file would. `current` says the command runs from inside the worktree.
+pub fn decide(
+    entry: &Entry,
+    modified: impl FnOnce(Duration) -> Option<SystemTime>,
+    current: bool,
+    p: &Policy,
+) -> Verdict {
     let keep = |why: &str| Verdict::Keep(why.into());
     let record = &entry.record;
     if entry.state == State::Main {
@@ -47,9 +69,18 @@ pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Po
     }
     if record.held_against(p.owner) {
         let owner = record.owner().map(|o| o.owner);
-        return keep(&owner.map_or("locked, owner unknown".into(), |o| format!("locked by {o}")));
+        let owner = owner.map_or(", owner unknown".into(), |o| format!(" by {o}"));
+        // Only a merged, clean worktree: a dirty, unmerged or vanished one may still be
+        // the only copy of someone's work, so its lock holds however old it is. An
+        // unreadable mtime is no evidence of age.
+        let fresh = p.idle.max(p.stale_lock);
+        let stale =
+            entry.state == State::Merged && modified(fresh).is_some_and(|m| p.age(m) >= fresh);
+        return match stale {
+            true => Verdict::Reclaim(owner),
+            false => keep(&format!("locked{owner}")),
+        };
     }
-    let active = modified.is_some_and(|m| p.now.duration_since(m).unwrap_or_default() < p.idle);
     match entry.state {
         State::Stale => Verdict::DropRecord,
         State::Dirty => keep("uncommitted changes"),
@@ -57,7 +88,9 @@ pub fn decide(entry: &Entry, modified: Option<SystemTime>, current: bool, p: &Po
             Some(b) => keep(&format!("not merged into the base; check `gh pr view {b}`")),
             None => keep("detached HEAD not merged into the base"),
         },
-        _ if active => keep("modified within the idle window"),
+        _ if modified(p.idle).is_some_and(|m| p.age(m) < p.idle) => {
+            keep("modified within the idle window")
+        }
         _ => Verdict::Remove,
     }
 }
@@ -80,16 +113,21 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
     let repo = entries
         .first()
         .map_or(cwd, |main| main.record.path.as_path());
-    let outcomes = entries.iter().map(|entry| {
+    // The walks are the expensive part: side by side, and stopped at the first recent file.
+    // Removals below stay one at a time — each takes the repository's locks.
+    let verdicts = par_map(&entries, |_, entry| {
         let path = &entry.record.path;
         let current = path.canonicalize().is_ok_and(|p| here.starts_with(p));
-        // The walk is the expensive part: only a removal candidate needs its mtime.
-        let modified = (entry.state == State::Merged).then(|| usage(path).modified);
-        let verdict = decide(entry, modified.flatten(), current, policy);
+        let modified = |within| newest_until(path, |m| policy.age(m) < within);
+        decide(entry, modified, current, policy)
+    });
+    let outcomes = entries.iter().zip(verdicts).map(|(entry, verdict)| {
+        let path = &entry.record.path;
         let (action, planned) = match &verdict {
-            Verdict::Remove => ("remove", "merged, clean and idle"),
-            Verdict::DropRecord => ("drop-record", "directory is gone"),
-            Verdict::Keep(why) => ("keep", why.as_str()),
+            Verdict::Remove => ("remove", "merged, clean and idle".into()),
+            Verdict::Reclaim(owner) => ("remove", format!("merged, clean, abandoned lock{owner}")),
+            Verdict::DropRecord => ("drop-record", "directory is gone".into()),
+            Verdict::Keep(why) => ("keep", why.clone()),
         };
         let done = (yes && action != "keep")
             .then(|| super::remove::detach(repo, &entry.record, entry.merged));
@@ -101,7 +139,7 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
             note: match done {
                 Some(Ok(note)) => note,
                 Some(Err(e)) => format!("failed, kept: {e:#}"),
-                None => planned.into(),
+                None => planned,
             },
         }
     });
@@ -152,8 +190,24 @@ mod tests {
     )]
     #[case::finished(State::Merged, None, false, 0, "remove")]
     #[case::my_lock(State::Merged, Some(MINE), false, 0, "remove")]
-    #[case::foreign_lock(State::Merged, Some(THEIRS), false, 0, "keep:locked by Cursor / grok")]
-    #[case::bare_lock(State::Merged, Some(""), false, 0, "keep:locked, owner unknown")]
+    #[case::foreign_lock(
+        State::Merged,
+        Some(THEIRS),
+        false,
+        600,
+        "keep:locked by Cursor / grok"
+    )]
+    #[case::bare_lock(State::Merged, Some(""), false, 600, "keep:locked, owner unknown")]
+    #[case::abandoned_lock(State::Merged, Some(THEIRS), false, 0, "reclaim: by Cursor / grok")]
+    #[case::abandoned_bare_lock(State::Merged, Some(""), false, 0, "reclaim:, owner unknown")]
+    #[case::dirty_theirs(State::Dirty, Some(THEIRS), false, 0, "keep:locked by Cursor / grok")]
+    #[case::unmerged_theirs(
+        State::Unmerged,
+        Some(THEIRS),
+        false,
+        0,
+        "keep:locked by Cursor / grok"
+    )]
     #[case::active(
         State::Merged,
         None,
@@ -207,15 +261,31 @@ mod tests {
         let policy = Policy {
             owner: Some(ME),
             idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
         };
-        let got = match decide(&entry, Some(at(modified)), current, &policy) {
+        let asked = std::cell::Cell::new(None);
+        let walk = |within| {
+            asked.set(Some(within));
+            Some(at(modified))
+        };
+        let got = match decide(&entry, walk, current, &policy) {
             Verdict::Remove => "remove".to_string(),
+            Verdict::Reclaim(owner) => format!("reclaim:{owner}"),
             Verdict::DropRecord => "drop-record".to_string(),
             Verdict::Keep(why) => format!("keep:{why}"),
         };
         assert_eq!(got, want);
+        // The walk runs only where its answer can still change the verdict, told the age
+        // that settles it: the idle window, or the stale-lock age under a foreign lock.
+        let held = want.starts_with("reclaim:") || want.starts_with("keep:locked");
+        let within = match want {
+            "remove" | "keep:modified within the idle window" => Some(100),
+            _ if held && state == State::Merged => Some(500),
+            _ => None,
+        };
+        assert_eq!(asked.get(), within.map(Duration::from_secs), "{want}");
     }
 
     #[test]
@@ -232,10 +302,11 @@ mod tests {
         let policy = Policy {
             owner: None,
             idle: Duration::ZERO,
+            stale_lock: Duration::ZERO,
             now: at(1_000),
             live: Default::default(),
         };
-        let verdict = decide(&entry, None, false, &policy);
+        let verdict = decide(&entry, |_| None, false, &policy);
         assert_eq!(verdict, Verdict::Keep(format!("locked by {ME}")));
     }
 }

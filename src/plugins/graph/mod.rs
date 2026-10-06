@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `graph` — `symbol` / `callers` / `outline` over a symbol index rtok builds itself
 //! with tree-sitter-tags, with capped output (plan P8).
 //!
@@ -25,8 +29,12 @@ use rtok_plugin_sdk::{
     Surface, ToolDef,
 };
 
+pub mod follow;
 pub mod index;
 pub mod lsp;
+pub mod projects;
+pub mod rank;
+pub mod scope;
 pub mod status;
 pub mod walk;
 pub mod watch;
@@ -65,22 +73,21 @@ impl Plugin for Graph {
         None
     }
 
-    fn session_start(&self, _ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
-        repo_map(cx)
+    fn session_start(&self, ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+        repo_map(ev, cx)
     }
 
     fn mcp_tools(&self) -> Vec<ToolDef> {
-        let named_path = json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"}},"required":["name"]});
         vec![
             ToolDef {
                 name: "symbol",
                 description: "Definitions of a symbol with their source: path:line kind, then the body. Optional path substring and kind narrow the match.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"}},"required":["name"]}),
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
             },
             ToolDef {
                 name: "callers",
                 description: "Which definitions reference a symbol: path, calling definition, count. Optional path substring keeps one subtree.",
-                input_schema: named_path,
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
             },
             ToolDef {
                 name: "impact",
@@ -200,20 +207,33 @@ pub(crate) fn with_stale(cx: &Ctx, root: &Path, text: String) -> Result<String> 
 }
 
 /// MCP dispatch for the four tools (`mcp.rs` `invoke`). An `Err` becomes an `isError` result.
-pub fn call(cx: &Ctx, name: &str, args: &Value) -> Result<String> {
+/// `scope` is the project scope of `symbol` and `callers` (T329.4.1), resolved by the caller
+/// because `Ctx` carries no project registry; the other tools still answer for the cwd.
+pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Result<String> {
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    // T263: every tool but `outline` walks `root` (index or LSP server).
-    if name != "outline" {
+    // T263: every tool but `outline` walks `root` (index or LSP server); `symbol` and
+    // `callers` check each member of their scope instead.
+    if !matches!(name, "outline" | "symbol" | "callers") {
         crate::plugins::read::walk_root_ok(&root)?;
     }
+    let own;
+    let scope = if scope.is_empty() {
+        own = [scope::Member {
+            name: String::new(),
+            root: root.clone(),
+        }];
+        &own[..]
+    } else {
+        scope
+    };
     let arg = |k: &str| args[k].as_str().unwrap_or("");
     let filter = Filter {
         path: arg("path").to_string(),
         kind: arg("kind").to_string(),
     };
     match name {
-        "symbol" => symbol_filtered(cx, &root, arg("name"), &filter),
-        "callers" => callers_filtered(cx, &root, arg("name"), &filter),
+        "symbol" => scope::symbol(cx, scope, arg("name"), &filter),
+        "callers" => scope::callers(cx, scope, arg("name"), &filter),
         "impact" => {
             let name = arg("name");
             if name.is_empty() {
@@ -274,7 +294,19 @@ pub fn symbol_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Re
     }
     let key = index::canon(root);
     let callees = cx.symbol_callees(&key, name)?;
-    with_stale(cx, root, cap(cx, defs_text(cx, root, &rows, &callees))?)
+    with_stale(
+        cx,
+        root,
+        cap(cx, defs_text(cx, root, &rows, &callees, &Tag::default()))?,
+    )
+}
+
+/// What a definition's `path:line kind` head carries in a multi-project answer: the
+/// `[project] ` label in front and the ambiguity `?` behind (T329.4.1).
+#[derive(Default)]
+pub(crate) struct Tag<'a> {
+    pub(crate) prefix: &'a str,
+    pub(crate) suffix: &'a str,
 }
 
 /// `{path}:{line} {kind}` per definition, then that definition's source, at most
@@ -310,14 +342,18 @@ fn mark_ambiguous_lines(out: &str) -> String {
 }
 
 fn annotate_ambiguous(cx: &Ctx, root: &Path, name: &str, out: String) -> Result<String> {
-    if cx.symbol_defs(&index::canon(root), name)?.len() > 1 {
-        Ok(format!(
-            "{}{}",
-            ambiguous_banner(1),
-            mark_ambiguous_lines(&out)
-        ))
+    Ok(flag_ambiguous(
+        cx.symbol_defs(&index::canon(root), name)?.len(),
+        out,
+    ))
+}
+
+/// `defs` is every definition of the name in the answer's scope, not only the shown ones.
+fn flag_ambiguous(defs: usize, out: String) -> String {
+    if defs > 1 {
+        format!("{}{}", ambiguous_banner(1), mark_ambiguous_lines(&out))
     } else {
-        Ok(out)
+        out
     }
 }
 
@@ -326,6 +362,7 @@ fn defs_text(
     root: &Path,
     rows: &[(String, String, i32, i32)],
     callees: &[(String, i32, String, i32)],
+    tag: &Tag,
 ) -> String {
     let budget = cx.plugin_config::<crate::config::Graph>("graph").body_lines as usize;
     let cap = budget / 2;
@@ -339,7 +376,6 @@ fn defs_text(
     let mut out = String::new();
     let mut cached: Option<(String, String)> = None;
     for (path, kind, line, end_line) in rows {
-        out.push_str(&format!("{path}:{line} {kind}\n"));
         if !cached.as_ref().is_some_and(|(p, _)| p == path) {
             symbol_src_reads_add(1);
             cached = Some((
@@ -347,17 +383,31 @@ fn defs_text(
                 std::fs::read_to_string(root.join(path)).unwrap_or_default(),
             ));
         }
-        out.push_str(&body_lines(
+        let def = def_text(
             &cached.as_ref().unwrap().1,
-            *line,
-            *end_line,
+            (path, kind, *line, *end_line),
             budget,
-        ));
+        );
+        let (head, body) = def.split_once('\n').unwrap_or((&def, ""));
+        out.push_str(&format!("{}{head}{}\n{body}", tag.prefix, tag.suffix));
         if let Some(names) = by_def.get(&(path.clone(), *line)) {
             out.push_str(&calls_line(names, cap));
         }
     }
     out
+}
+
+/// One definition as `symbol` prints it: the `{path}:{line} {kind}` head, then its source.
+/// Also the text a symbol-shaped `Grep` is answered with (T369), so both read the same.
+pub(crate) fn def_text(
+    src: &str,
+    (path, kind, line, end_line): (&str, &str, i32, i32),
+    budget: usize,
+) -> String {
+    format!(
+        "{path}:{line} {kind}\n{}",
+        body_lines(src, line, end_line, budget)
+    )
 }
 
 /// Source of one definition, `line..=end_line`, at most `budget` lines then `N more lines`.
@@ -512,6 +562,19 @@ pub(crate) fn impact_lines_text(rows: &[(u32, String, String)]) -> String {
     out
 }
 
+/// T367: the graph root a CLI subcommand works on: `path`, else the cwd. A missing or non-directory
+/// path is an error naming it, so a typo cannot report an empty index with exit 0. The T356 refusal
+/// of `/` and `$HOME` stays in `index::run_with`.
+pub fn cli_root(path: Option<PathBuf>) -> Result<PathBuf> {
+    let root = match path {
+        Some(p) => p,
+        None => std::env::current_dir()?,
+    };
+    let meta = std::fs::metadata(&root).map_err(|e| anyhow::anyhow!("{}: {e}", root.display()))?;
+    anyhow::ensure!(meta.is_dir(), "{}: not a directory", root.display());
+    Ok(root)
+}
+
 /// One `dead()` row (T52.4 / T230): an unreferenced private definition's location.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct DeadRow {
@@ -560,15 +623,7 @@ pub fn dead_candidates(cx: &Ctx, root: &Path) -> Result<Vec<DeadRow>> {
         if trimmed.starts_with("pub ") || trimmed.starts_with("pub(") || trimmed == "pub" {
             continue;
         }
-        if src[..(line.max(1) as usize - 1).min(src.len())]
-            .iter()
-            .rev()
-            .take(3)
-            .any(|l| {
-                let t = l.trim_start();
-                t.starts_with("#[test") || t.starts_with("#[cfg(test")
-            })
-        {
+        if has_test_attr(&src[..(line.max(1) as usize - 1).min(src.len())]) {
             continue;
         }
         #[cfg(feature = "lang-rust")]
@@ -596,6 +651,24 @@ pub fn dead_candidates(cx: &Ctx, root: &Path) -> Result<Vec<DeadRow>> {
     Ok(rows)
 }
 
+/// Whether the attribute/comment block right above a definition marks a test: `#[test]`,
+/// `#[rstest]`, `#[tokio::test]`, `#[cfg(test)]`, `#[case(..)]`, wherever it sits in the stack.
+fn has_test_attr(above: &[String]) -> bool {
+    above
+        .iter()
+        .rev()
+        .map(|l| l.trim_start())
+        .take_while(|t| t.starts_with("#[") || t.starts_with("//"))
+        .any(|t| {
+            ["#[test", "#[cfg(test", "#[rstest", "#[case"]
+                .iter()
+                .any(|p| t.starts_with(p))
+                || t.split(['(', ']'])
+                    .next()
+                    .is_some_and(|a| a.ends_with("::test"))
+        })
+}
+
 /// `dead()`: [`dead_rows`] as `path:line kind name` lines (T52.4), capped for hook /
 /// CLI text output. `graph dead --json` (T230) prints the same rows uncapped instead.
 pub fn dead(cx: &Ctx, root: &Path) -> Result<String> {
@@ -616,8 +689,13 @@ fn is_test_path(path: &str) -> bool {
     path == "tests"
         || path.starts_with("tests/")
         || path.contains("/tests/")
+        || path.contains("/__tests__/")
         || path.split('/').next_back().is_some_and(|f| {
-            f.starts_with("test_") || f.starts_with("_test") || f.contains("_test.")
+            f.starts_with("test_")
+                || f.starts_with("_test")
+                || f.contains("_test.")
+                || f.contains(".test.")
+                || f.contains(".spec.")
         })
 }
 
@@ -706,10 +784,17 @@ pub(crate) fn affected_from_paths(
 ) -> Result<String> {
     index_for(cx, root)?;
     let key = index::canon(root);
+    // T372: indexed paths for name-convention test links (existing files only).
+    let indexed: HashSet<String> = cx.symbol_stats(&key)?.into_keys().collect();
     let mut hits = BTreeSet::new();
     let mut starts = HashSet::new();
     for raw in paths {
         let rel = rel_of(root, raw);
+        for candidate in name_linked_tests(&rel) {
+            if indexed.contains(&candidate) && is_test_path(&candidate) {
+                hits.insert((candidate, "(by name)".to_string()));
+            }
+        }
         for name in defs_in_path(cx, root, &key, &rel)? {
             if is_test_path(&rel) {
                 hits.insert((rel.clone(), name.clone()));
@@ -730,6 +815,54 @@ pub(crate) fn affected_from_paths(
         }
     }
     Ok(format_affected(&hits, json))
+}
+
+/// T372: candidate test paths linked by naming convention to `rel` (same stem).
+fn name_linked_tests(rel: &str) -> Vec<String> {
+    let path = Path::new(rel);
+    let Some(stem) = path.file_stem().and_then(OsStr::to_str) else {
+        return Vec::new();
+    };
+    // `foo.test.ts` / `foo.spec.ts` → stem before the test suffix for reverse lookup is unused;
+    // we only map source → test here.
+    let parent = path
+        .parent()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .filter(|p| !p.is_empty() && p != ".")
+        .unwrap_or_default();
+    let join = |dir: &str, file: &str| -> String {
+        if dir.is_empty() {
+            file.to_string()
+        } else {
+            format!("{dir}/{file}")
+        }
+    };
+    let ext = path
+        .extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mut out = Vec::new();
+    match ext.as_str() {
+        "rs" => {
+            out.push(format!("tests/{stem}.rs"));
+            out.push(join(&parent, &format!("{stem}_test.rs")));
+        }
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => {
+            out.push(join(&parent, &format!("{stem}.test.{ext}")));
+            out.push(join(&parent, &format!("{stem}.spec.{ext}")));
+            out.push(join(&parent, &format!("__tests__/{stem}.{ext}")));
+        }
+        "py" => {
+            out.push(join(&parent, &format!("test_{stem}.py")));
+            out.push(join(&parent, &format!("{stem}_test.py")));
+        }
+        "go" => {
+            out.push(join(&parent, &format!("{stem}_test.go")));
+        }
+        _ => {}
+    }
+    out
 }
 
 fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<String>> {
@@ -1046,7 +1179,13 @@ impl ExploreParts for TagsExplore<'_> {
             ));
         }
         let callees = self.cx.symbol_callees(&self.key, name)?;
-        Ok(defs_text(self.cx, self.root, &rows, &callees))
+        Ok(defs_text(
+            self.cx,
+            self.root,
+            &rows,
+            &callees,
+            &Tag::default(),
+        ))
     }
 
     fn def_count(&mut self, name: &str) -> Result<usize> {
@@ -1076,9 +1215,11 @@ impl ExploreParts for TagsExplore<'_> {
 }
 
 /// T52.3: ranked repo map from existing `symbols` rows. `map_tokens = 0` is off;
-/// a missing index does not walk the tree (hook path).
-fn repo_map(cx: &Ctx) -> Option<Injection> {
-    let cap = cx.plugin_config::<crate::config::Graph>("graph").map_tokens;
+/// a missing index does not walk the tree (hook path). `map_rank = "pagerank"` (T370) reads the
+/// stored file graph instead and falls back to the reference counts when none is stored.
+fn repo_map(ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+    let cfg = cx.plugin_config::<crate::config::Graph>("graph");
+    let cap = cfg.map_tokens;
     if cap == 0 {
         return None;
     }
@@ -1086,6 +1227,24 @@ fn repo_map(cx: &Ctx) -> Option<Injection> {
         .cwd()
         .map(PathBuf::from)
         .or_else(|| std::env::current_dir().ok())?;
+    if cfg.map_rank == "pagerank" {
+        let root = index::canon(&cwd);
+        let seeds = if ev.source == "compact" {
+            crate::plugins::checkpoint::last_paths(cx, &root)
+        } else {
+            Vec::new()
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as i64);
+        if let Some(text) = rank::map(cx, &root, cap, &seeds, now) {
+            return Some(Injection {
+                plugin: "graph",
+                text,
+                priority: 1,
+            });
+        }
+    }
     let rows = cx
         .symbol_top_refs(&index::canon(&cwd), i64::from(cap))
         .ok()?;
@@ -1627,12 +1786,31 @@ mod tests {
         .unwrap();
         fs::write(dir.join("mac.rs"), "macro_rules! gen {\n    () => {};\n}\n").unwrap();
         fs::write(dir.join("tested.rs"), "#[test]\nfn my_test() {}\n").unwrap();
+        // Stacked attributes: the test marker is not the line right above the fn.
+        fs::write(
+            dir.join("param.rs"),
+            "#[rstest]\n#[case(1)]\n#[case(2)]\n#[case(3)]\n#[case(4)]\nfn param_test(#[case] n: u8) {}\n\
+             #[test]\n#[ignore]\n#[should_panic]\n#[cfg(unix)]\nfn stacked_test() {}\n\
+             #[tokio::test]\nasync fn async_test() {}\n",
+        )
+        .unwrap();
         fs::create_dir_all(dir.join("tests")).unwrap();
         fs::write(dir.join("tests/helper.rs"), "fn help_me() {}\n").unwrap();
         let out = dead(&Ctx::new(&cx), &dir).unwrap();
         assert!(out.contains("orphan"), "{out}");
         for kept in [
-            "used", "caller", "exported", "m", "gen", "my_test", "help_me", "T", "S",
+            "used",
+            "caller",
+            "exported",
+            "m",
+            "gen",
+            "my_test",
+            "param_test",
+            "stacked_test",
+            "async_test",
+            "help_me",
+            "T",
+            "S",
         ] {
             assert!(
                 !out.lines().any(|l| l.ends_with(&format!(" {kept}"))),
@@ -1946,6 +2124,62 @@ fn c() {}
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// T372: name-convention links list a test that never imports the source.
+    #[test]
+    fn affected_links_tests_by_naming_convention() {
+        let (cx, dir) = cx("affected-by-name");
+        fs::create_dir_all(dir.join("tests")).unwrap();
+        fs::create_dir_all(dir.join("src")).unwrap();
+        // Source with a sibling name-linked test that does not call it.
+        fs::write(dir.join("src/foo.rs"), "pub fn foo() {}\n").unwrap();
+        fs::write(
+            dir.join("tests/foo.rs"),
+            "fn test_foo_name_only() {\n    let _ = 1;\n}\n",
+        )
+        .unwrap();
+        // Negative: no matching test file for this source.
+        fs::write(dir.join("src/lonely.rs"), "pub fn lonely() {}\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        let out = affected_from_paths(&ctx, &dir, &["src/foo.rs".into()], 3, false).unwrap();
+        assert!(
+            out.contains("tests/foo.rs ← via (by name)"),
+            "rust name link missing: {out}"
+        );
+        let out = affected_from_paths(&ctx, &dir, &["src/lonely.rs".into()], 3, false).unwrap();
+        assert!(
+            !out.contains("(by name)"),
+            "lonely source must not invent a name link: {out}"
+        );
+        // Table-driven candidates for the four language conventions plus a negative.
+        assert_eq!(
+            name_linked_tests("src/foo.rs"),
+            vec!["tests/foo.rs".to_string(), "src/foo_test.rs".to_string()]
+        );
+        assert_eq!(
+            name_linked_tests("src/foo.ts"),
+            vec![
+                "src/foo.test.ts".to_string(),
+                "src/foo.spec.ts".to_string(),
+                "src/__tests__/foo.ts".to_string(),
+            ]
+        );
+        assert_eq!(
+            name_linked_tests("pkg/foo.py"),
+            vec!["pkg/test_foo.py".to_string(), "pkg/foo_test.py".to_string()]
+        );
+        assert_eq!(
+            name_linked_tests("pkg/foo.go"),
+            vec!["pkg/foo_test.go".to_string()]
+        );
+        assert!(name_linked_tests("readme.md").is_empty());
+        assert!(is_test_path("src/foo.test.ts"));
+        assert!(is_test_path("src/foo.spec.ts"));
+        assert!(is_test_path("src/__tests__/foo.ts"));
+        assert!(is_test_path("src/test_foo.py"));
+        assert!(is_test_path("src/foo_test.go"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
     /// T68.5: changed files come from `git diff --name-only`, not a library.
     #[test]
     fn affected_reads_git_diff_name_only() {
@@ -2091,6 +2325,25 @@ fn c() {}
         assert!(start(&empty).is_none(), "empty index must not inject");
         let _ = fs::remove_dir_all(dir);
         let _ = fs::remove_dir_all(empty_dir);
+    }
+
+    /// T370: `map_rank = "pagerank"` lists files from the stored graph, falls back to the
+    /// reference counts when none is stored, and is byte-stable.
+    #[test]
+    fn repo_map_pagerank_lists_files_and_falls_back_without_a_graph() {
+        let (mut rt, dir) = cx("map-rank");
+        rt.cwd = Some(dir.to_string_lossy().into_owned());
+        rt.config.plugins.graph.map_tokens = 2000;
+        rt.config.plugins.graph.map_rank = "pagerank".into();
+        seed_map(&rt, &dir);
+        let fallback = start(&rt).expect("refs fallback");
+        assert!(fallback.text.contains("hot a.rs:1 2"), "{}", fallback.text);
+        rank::refresh(&Ctx::new(&rt), &index::canon(&dir)).unwrap();
+        let ranked = start(&rt).expect("pagerank map");
+        assert_eq!(ranked.text, "repo map\na.rs: hot, mid");
+        assert_eq!(start(&rt).unwrap(), ranked);
+        assert_eq!(ranked.priority, 1);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

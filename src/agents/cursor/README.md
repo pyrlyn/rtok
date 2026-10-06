@@ -16,8 +16,8 @@ https://cursor.com/docs/cli/overview). `--desktop` checks `mcp.json` and prints 
 
 | Module | Support | Why |
 | --- | --- | --- |
-| hooks | yes | `beforeShellExecution` → PreToolUse, `afterShellExecution` → PostToolUse, `preCompact` → PreCompact; all `--host cursor`; in `hooks.json` only without the plugin — the linked plugin carries the same events, so setup strips ours there (T244) |
-| mcp | yes | `mcpServers.rtok` in `mcp.json` (off with `[setup] mcp = false`); independent of the plugin (T275/D33): written on every install/update regardless of plugin state, only remove takes it out |
+| hooks | yes | `beforeShellExecution` → PreToolUse, `afterShellExecution` → PostToolUse, `preCompact` → PreCompact, `sessionEnd` → SessionEnd (T390; one table, `src/agents/hook_events.rs`); all `--host cursor`. `beforeSubmitPrompt` and `subagentStart` are not registered: their output has no context field, so nothing they return reaches the model (`research.md` §23; https://cursor.com/docs/hooks, checked 2026-10-04), and `sessionStart` registers the agent. Install and remove still take back a `beforeSubmitPrompt` entry the T390 build wrote (T390.1); in `hooks.json` only without the plugin — the linked plugin carries the same events, so setup strips ours there (T244) |
+| mcp | yes | `mcpServers.rtok` → `rtok mcp --host cursor` in `mcp.json` (off with `[setup] mcp = false`); independent of the plugin (T275/D33): written on every install/update regardless of plugin state, only remove takes it out |
 | plugin | yes | links `plugins/cursor` (hooks only: T275/D33) by default, once Cursor itself is detected; a stale or foreign destination is never overwritten |
 | proxy | no | Cursor has no base-URL setting to point at the proxy |
 
@@ -35,7 +35,7 @@ Host documentation setup writes against; re-check the links when this host chang
 
 - Plugins (manifest `.cursor-plugin/plugin.json`, local install `~/.cursor/plugins/local/<name>`): https://cursor.com/docs/plugins
 - Manifest reference (`hooks` field): https://cursor.com/docs/reference/plugins
-- Hooks (`~/.cursor/hooks.json`, `"version": 1`, `beforeShellExecution`, `afterShellExecution`, `preCompact`): https://cursor.com/docs/agent/hooks
+- Hooks (`~/.cursor/hooks.json`, `"version": 1`, `beforeShellExecution`, `afterShellExecution`, `preCompact`, `sessionEnd`): https://cursor.com/docs/agent/hooks
 - MCP (`~/.cursor/mcp.json`, `mcpServers.<name>.command` / `args`): https://cursor.com/docs/context/mcp
 - Skills (`~/.cursor/skills/<name>/`): https://cursor.com/docs/skills
 - Non-interactive prompt (`cursor-agent -p` / `--print`; the docs' `agent -p` is the same flag; `rtok mcp ping cursor --cli`): https://cursor.com/docs/cli/using

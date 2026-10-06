@@ -55,7 +55,7 @@ second line</td><td>1</td></tr>
 </table>
 <p>Busts: 0 over 1 turns in 1 session(s).</p>
 <h2 id="expand">Expand</h2>
-<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows, T5.4).</p>
+<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows).</p>
 <p><code>rtok expand</code> froze 0 of 1 live-zone pointers (—%). Expanded: <code>&lt;script&gt;alert(1)&lt;/script&gt; | `tick`
 second line</code>.</p>
 <h2 id="config">Config</h2>
@@ -71,6 +71,9 @@ second line</td></tr>
 <h2 id="doctor">Doctor</h2>
 <p>Live probes (the <code>rtok doctor</code> page), not store rows.</p>
 <pre><code>hooks 0
+hooks check none found
+duplicate hooks none found
+duplicate mcp servers none found
 mcp
 proxy &lt;script&gt;alert(1)&lt;/script&gt; | `tick`
 second line

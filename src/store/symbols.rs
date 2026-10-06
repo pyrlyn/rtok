@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T8.10: the `graph` plugin's symbol index over SQLite (the only backend after P39).
 
 use std::collections::{HashMap, HashSet};
@@ -9,7 +13,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
 use super::Store;
-use super::schema::{extractor, symbol_stale, symbols};
+use super::schema::{extractor, file_rank, symbol_stale, symbols};
 
 const INSERT_CHUNK: usize = 999 / 11;
 
@@ -299,13 +303,18 @@ impl Store {
             return Ok(0);
         }
         let mut conn = self.lock()?;
-        Ok(conn.transaction::<usize, diesel::result::Error, _>(|conn| {
-            let mut inserted = 0usize;
-            for (path, file_sha, stat, rows) in files {
-                inserted += replace_one(conn, root, path, file_sha, *stat, rows)?;
-            }
-            Ok(inserted)
-        })?)
+        // T352: every write here is `immediate_transaction` (BEGIN IMMEDIATE): a deferred one that
+        // has to upgrade after another connection committed (the session-start housekeeping
+        // thread) gets SQLITE_BUSY at once in WAL, skipping the busy handler.
+        Ok(
+            conn.immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                let mut inserted = 0usize;
+                for (path, file_sha, stat, rows) in files {
+                    inserted += replace_one(conn, root, path, file_sha, *stat, rows)?;
+                }
+                Ok(inserted)
+            })?,
+        )
     }
 
     pub fn replace_symbols(
@@ -322,9 +331,11 @@ impl Store {
         // rows over 127 files). What: multi-row INSERTs chunked under SQLite's variable limit,
         // one transaction per batch of files. Why: ~140 single-row INSERTs per file. Not yet
         // measured apart from the parse — measure before changing.
-        Ok(conn.transaction::<usize, diesel::result::Error, _>(|conn| {
-            replace_one(conn, root, path, file_sha, stat, rows)
-        })?)
+        Ok(
+            conn.immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                replace_one(conn, root, path, file_sha, stat, rows)
+            })?,
+        )
     }
 
     pub fn delete_symbols_missing(&self, root: &str, keep: &HashSet<String>) -> Result<usize> {
@@ -361,7 +372,7 @@ impl Store {
     /// `WHERE ? = root || '/' || path` scanned the whole table on each `Edit`/`Write`.
     pub fn mark_symbols_stale(&self, abs_path: &str) -> Result<()> {
         let mut conn = self.lock()?;
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+        conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
             for (i, _) in abs_path.match_indices('/') {
                 let root = &abs_path[..i];
                 let rel = &abs_path[i + 1..];
@@ -378,7 +389,7 @@ impl Store {
     /// the root.
     pub fn mark_symbols_stale_in(&self, root: &str, rel_path: &str) -> Result<()> {
         let mut conn = self.lock()?;
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+        conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
             if delete_file(conn, root, rel_path)? > 0 {
                 note_stale(conn, root, rel_path)?;
             }
@@ -419,7 +430,7 @@ impl Store {
 
     pub fn touch_symbol_indexed_at(&self, root: &str, ts: i64) -> Result<()> {
         let mut conn = self.lock()?;
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+        conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
             let existing_fingerprint: Option<String> = extractor::table
                 .filter(extractor::root.eq(root))
                 .select(extractor::fingerprint)
@@ -648,6 +659,52 @@ impl Store {
             .into_iter()
             .map(|(name, refs, path, line)| (name, refs.unwrap_or(0), path, line))
             .collect())
+    }
+
+    /// T370: one row per `(name, path, is_def)` with its row count, imports and nameless rows
+    /// left out. The file graph is built from this single scan, in memory.
+    pub fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
+        let mut conn = self.lock()?;
+        let rows: Vec<(String, String, i32, i64)> = symbols::table
+            .filter(
+                symbols::root
+                    .eq(root)
+                    .and(symbols::name.ne(""))
+                    .and(symbols::kind.ne("import")),
+            )
+            .group_by((symbols::name, symbols::path, symbols::is_def))
+            .select((symbols::name, symbols::path, symbols::is_def, count_star()))
+            .order((
+                symbols::name.asc(),
+                symbols::path.asc(),
+                symbols::is_def.asc(),
+            ))
+            .load(&mut *conn)?;
+        Ok(rows
+            .into_iter()
+            .map(|(name, path, is_def, n)| (name, path, is_def != 0, n))
+            .collect())
+    }
+
+    /// T370: the stored file-graph document of `root`, if an index run wrote one.
+    pub fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
+        let mut conn = self.lock()?;
+        Ok(file_rank::table
+            .find(root)
+            .select(file_rank::graph)
+            .first(&mut *conn)
+            .optional()?)
+    }
+
+    pub fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::insert_into(file_rank::table)
+            .values((file_rank::root.eq(root), file_rank::graph.eq(graph)))
+            .on_conflict(file_rank::root)
+            .do_update()
+            .set(file_rank::graph.eq(graph))
+            .execute(&mut *conn)?;
+        Ok(())
     }
 
     /// T52.4: definitions with no same-name reference row under `root`,

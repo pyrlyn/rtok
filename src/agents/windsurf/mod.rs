@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Windsurf installer (`rtok agents install windsurf`, plan T48.5).
 //!
 //! Windsurf's Cascade agent reads MCP servers from `~/.codeium/windsurf/mcp_config.json`
@@ -10,15 +14,14 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use serde_json::{Value, json};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply};
+use super::{Agent, Kind, Mode, Support, Variant};
 use crate::config::Config;
-
-const NAME: &str = "rtok";
 
 /// Windsurf: MCP in one `mcp_config.json`; a desktop app only.
 pub struct Windsurf;
+
+const HOST: &str = "windsurf";
 
 static VARIANTS: [Variant; 1] = [Variant {
     kind: Kind::Desktop,
@@ -81,34 +84,15 @@ impl Agent for Windsurf {
     }
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": ["mcp"]})
-}
-
-/// `mcpServers.rtok = {command, args}` in `mcp_config.json` — the stdio shape the Windsurf
-/// MCP docs show carries no `type`.
+/// `mcpServers.rtok = {command, args}` in `mcp_config.json`. The stdio shape the Windsurf
+/// MCP docs show carries no `type`; the JSON itself is [`super::register_stdio_mcp`].
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &cfg.setup.windsurf.config_path,
-        "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &format!("{cmd} mcp"),
-    )
+    super::register_stdio_mcp(cfg, &cfg.setup.windsurf.config_path, HOST)
 }
 
 /// Drop `mcpServers.rtok` from `mcp_config.json`, unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &cfg.setup.windsurf.config_path,
-        "mcpServers",
-        NAME,
-        &mcp_entry("rtok"),
-    )
+    super::unregister_stdio_mcp(cfg, &cfg.setup.windsurf.config_path, HOST)
 }
 
 #[cfg(test)]
@@ -135,7 +119,10 @@ mod tests {
         let out = register_mcp(&c).unwrap();
         assert_eq!(
             out,
-            format!("mcpServers.rtok: {} mcp", super::super::rtok_command())
+            format!(
+                "mcpServers.rtok: {} mcp --host windsurf",
+                super::super::rtok_command()
+            )
         );
         assert!(!path.exists());
         assert!(Windsurf.installed(&c, Kind::Desktop).is_empty());

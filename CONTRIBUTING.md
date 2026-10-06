@@ -7,7 +7,8 @@ measurement invariants.
 ## Checks
 
 ```bash
-just check
+just check        # only what the change touches (diff against the merge base with main)
+just full-check   # every gate and the whole test suite, whatever changed; what CI runs
 just example
 just readme-check
 ```
@@ -100,7 +101,8 @@ On Windows the local gate is stricter than the Windows CI job and has a few
 machine-specific traps (line endings, a dart-gated test, antivirus warm-up) — see
 `docs/windows.md`.
 
-Run tests with `just test` — the default locally and in CI (`just check`):
+Run tests with `just test` — the default in CI and in `just full-check` (`just check` runs only
+the tests the change reaches, by name, via `just test-changed`):
 `-j` = logical CPUs (`--test-threads {{cpus}}`). Heavy tests (cold repo
 index, 100-session memory bench, 3 000-file graph bench) run alone via
 `threads-required = "num-test-threads"` in `.config/nextest.toml`; add a

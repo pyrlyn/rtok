@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! Shared MCP config-entry core (T275, the start of it — full table-driven core lands in
 //! T277). `has_entry` is the read side every host's `installed()` uses to say whether its own
 //! config file really carries rtok's MCP server, instead of a raw `contains("\"rtok\"")` on the
@@ -69,12 +73,15 @@ pub(crate) fn toml_item_to_json(item: &Item) -> Value {
     match item {
         Item::None => Value::Null,
         Item::Value(v) => toml_value_to_json(v),
-        Item::Table(t) => t
-            .iter()
-            .map(|(k, v)| (k.to_string(), toml_item_to_json(v)))
-            .collect(),
-        Item::ArrayOfTables(_) => Value::Null,
+        Item::Table(t) => table_to_json(t),
+        Item::ArrayOfTables(a) => a.iter().map(table_to_json).collect(),
     }
+}
+
+fn table_to_json(t: &toml_edit::Table) -> Value {
+    t.iter()
+        .map(|(k, v)| (k.to_string(), toml_item_to_json(v)))
+        .collect()
 }
 
 fn toml_value_to_json(v: &toml_edit::Value) -> Value {
@@ -226,6 +233,8 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
         "omp" => (s.omp.mcp_path.clone(), SERVERS),
         "opencode" if desktop => (opencode::desktop_path(), "mcp"),
         "opencode" => (s.opencode.config_path.clone(), "mcp"),
+        "qwen" => (super::qwen::settings_path(cfg), SERVERS),
+        "roo" => (super::roo::mcp_path(cfg), SERVERS),
         "windsurf" => (s.windsurf.config_path.clone(), SERVERS),
         "zcode" => (s.zcode.config_path.clone(), "mcp.servers"),
         "zed" => (s.zed.config_path.clone(), "context_servers"),
@@ -276,7 +285,7 @@ pub(crate) fn status(fs: &impl Fs, s: &McpSurface) -> McpRow {
         Ok(Entry::Present) => (EntryState::Present, None),
         Ok(Entry::Missing) => (EntryState::Missing, None),
         Ok(Entry::Stale(_)) => match rtok_mcp::config::read_entry(fs, &s.spec) {
-            Ok(Some(have)) => match stale_diff(&have) {
+            Ok(Some(have)) => match stale_diff(&have, s.spec.host) {
                 None => (EntryState::Present, None),
                 d => (EntryState::Stale, d),
             },
@@ -312,7 +321,7 @@ pub(crate) fn doctor_lines(cfg: &Config) -> Vec<String> {
     super::HOSTS
         .iter()
         .filter_map(|id| super::host(id))
-        .flat_map(|a| host_doctor_lines(a, cfg, |v| super::present(a, v, cfg)))
+        .flat_map(|a| host_doctor_lines(a, cfg, super::present))
         .collect()
 }
 
@@ -376,9 +385,10 @@ impl Fs for Disk {
     }
 }
 
-/// `None` when `have` runs `rtok mcp` (any path to the rtok binary, argv as `command` +
-/// `args` or as one `command` array); otherwise what it runs instead.
-fn stale_diff(have: &Value) -> Option<String> {
+/// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
+/// plus `args`, or as one `command` array), with `--host <host>` or, as written before T283.2,
+/// without it; otherwise what it runs instead.
+fn stale_diff(have: &Value, host: &str) -> Option<String> {
     let strs = |v: Option<&Value>| -> Vec<String> {
         v.and_then(Value::as_array)
             .map(|a| {
@@ -393,14 +403,12 @@ fn stale_diff(have: &Value) -> Option<String> {
         Some(Value::String(c)) => [vec![c.clone()], strs(have.get("args"))].concat(),
         c => strs(c),
     };
+    let want_args = [RTOK.args, &["--host", host]].concat();
     let ours = argv.split_first().is_some_and(|(bin, args)| {
-        super::is_rtok_bin(bin)
-            && args
-                .iter()
-                .map(String::as_str)
-                .eq(RTOK.args.iter().copied())
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        super::is_rtok_bin(bin) && (args == RTOK.args || args == want_args)
     });
-    let want = [&[RTOK.command], RTOK.args].concat().join(" ");
+    let want = [&[RTOK.command], want_args.as_slice()].concat().join(" ");
     (!ours).then(|| format!("runs `{}`, want `{want}`", argv.join(" ")))
 }
 
@@ -467,6 +475,51 @@ pub(crate) fn assert_json_entry_lifecycle(
     assert_entry_lifecycle(agent, cfg, kind, &label, file, edit, || {
         reseed().unwrap();
     });
+}
+
+/// T283.2: an entry an earlier rtok wrote, without `--host`, is replaced by the current one on
+/// install/update (once, then no change), keeping what else the file holds, and is still
+/// recognised as rtok's own on remove, which takes it out without asking.
+#[cfg(test)]
+pub(crate) fn assert_legacy_entry_upgraded(
+    file: &Path,
+    legacy: &str,
+    host: &str,
+    keep: &[&str],
+    register: impl Fn() -> anyhow::Result<String>,
+    unregister: impl Fn() -> anyhow::Result<String>,
+) {
+    use rtok_agent_sdk::NO_CHANGES;
+    std::fs::write(file, legacy).unwrap();
+    assert_ne!(
+        register().unwrap(),
+        NO_CHANGES,
+        "{host}: legacy entry upgraded"
+    );
+    let text = super::read(file);
+    assert!(
+        text.contains("--host") && text.contains(host),
+        "{host}: {text}"
+    );
+    for k in keep {
+        assert!(text.contains(k), "{host}: lost {k:?} in {text}");
+    }
+    assert_eq!(
+        register().unwrap(),
+        NO_CHANGES,
+        "{host}: second run is a no-op"
+    );
+    std::fs::write(file, legacy).unwrap();
+    let out = unregister().unwrap();
+    assert!(
+        out.starts_with('-'),
+        "{host}: legacy entry removed, got {out}"
+    );
+    let text = super::read(file);
+    assert!(!text.contains("rtok"), "{host}: entry gone, got {text}");
+    for k in keep {
+        assert!(text.contains(k), "{host}: lost {k:?} in {text}");
+    }
 }
 
 /// The user edit [`assert_entry_lifecycle`] expects, for a JSON config: `--extra` appended to
@@ -666,10 +719,12 @@ mod tests {
                     seen += 1;
                     let local = s.spec.key_path == ["mcp"];
                     let ours = if local {
-                        serde_json::json!({"type": "local", "command": ["/opt/bin/rtok", "mcp"], "enabled": true})
+                        serde_json::json!({"type": "local", "command": ["/opt/bin/rtok", "mcp", "--host", id], "enabled": true})
                     } else {
-                        serde_json::json!({"type": "stdio", "command": "/opt/bin/rtok", "args": ["mcp"]})
+                        serde_json::json!({"type": "stdio", "command": "/opt/bin/rtok", "args": ["mcp", "--host", id]})
                     };
+                    // Written before T283.2: no `--host`, still rtok's own.
+                    let legacy = serde_json::json!({"command": "rtok", "args": ["mcp"]});
                     let edited = serde_json::json!({"command": "rtok", "args": ["mcp", "--extra"]});
                     let name = s
                         .spec
@@ -679,7 +734,7 @@ mod tests {
                         .display()
                         .to_string();
                     let file = tilde(&s.spec.config_path);
-                    let cases: [(Option<&Value>, bool, EntryState, String); 5] = [
+                    let cases: [(Option<&Value>, bool, EntryState, String); 6] = [
                         (
                             None,
                             false,
@@ -687,11 +742,12 @@ mod tests {
                             format!("missing ({name} has no \"rtok\")"),
                         ),
                         (Some(&ours), false, Present, format!("entry {file}")),
+                        (Some(&legacy), false, Present, format!("entry {file}")),
                         (
                             Some(&edited),
                             false,
                             Stale,
-                            "stale (runs `rtok mcp --extra`, want `rtok mcp`)".into(),
+                            format!("stale (runs `rtok mcp --extra`, want `rtok mcp --host {id}`)"),
                         ),
                         (None, true, Missing, "plugin rtok (serves \"rtok\")".into()),
                         (
@@ -847,6 +903,17 @@ mod tests {
         assert_eq!(
             toml_item_to_json(&item),
             serde_json::json!({"command": "rtok", "args": ["mcp"]})
+        );
+    }
+
+    #[test]
+    fn toml_item_to_json_converts_an_array_of_tables() {
+        let doc: DocumentMut = "[[hooks]]\nevent = \"Stop\"\n[[hooks]]\nevent = \"Start\"\n"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            toml_item_to_json(doc.as_item()),
+            serde_json::json!({"hooks": [{"event": "Stop"}, {"event": "Start"}]})
         );
     }
 }

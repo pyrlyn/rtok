@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `src/proxy` — the local API proxy (plan P5). `rtok proxy` serves here.
 //!
 //! T5.1 scope: passthrough. Every request is forwarded byte-identical to
@@ -11,7 +15,8 @@
 //! it reports usage on its final `response.completed` event unasked.
 //!
 //! Bookkeeping per request (all fail-open, logged, never alter the response):
-//! one `calls` row (`kind = api_request`, `surface = proxy`) with provider+model
+//! one `calls` row (`kind = api_request`, or `api_request:<lane>` off the agent lane —
+//! T385.1; `surface = proxy`) with provider+model
 //! upserted from the request body; `call_io` with request/response bytes (inline
 //! under `core.call_io_inline_bytes`, else archived); a `tokens` row
 //! (`source = provider`) with the four counters; and one `usage` row whose
@@ -52,6 +57,7 @@ use wire::{API_ANTHROPIC, Wire, WireRequest, api_of, join_upstream};
 pub mod anthropic;
 pub mod cli;
 pub mod gemini;
+pub mod lane;
 pub mod live;
 pub use live::LiveCall;
 pub mod openai_chat;
@@ -170,14 +176,9 @@ pub fn serve_blocking(cfg: Config) -> Result<()> {
 /// [`app`] directly instead.
 pub async fn serve(cfg: &Config) -> Result<()> {
     let state = Arc::new(ProxyState::new(cfg)?);
-    // Retention is housekeeping with a next-start retry: the listener must not die on a
-    // contended store (T75) — requests still proxy while another process writes, and
-    // the purge queues behind it under the maintenance busy window.
-    if let Err(e) = state.store.run_retention(cfg.core.retain_calls_days) {
-        let msg = format!("retention skipped until next start: {e:#}");
-        eprintln!("rtok proxy: {msg}");
-        crate::log::append(cfg, "warn", "proxy", "retention", &msg);
-    }
+    // Background, own connection: housekeeping must neither delay the listener nor die on a
+    // contended store (T75, T352).
+    Store::spawn_retention(cfg, "proxy");
     // A plain thread, not a task: a flush is blocking SQLite plus a blocking `flock`, and on
     // this runtime it stalled whichever worker also served live requests.
     crate::otel::export::spawn_ticker(cfg);
@@ -216,10 +217,19 @@ async fn proxy(State(state): State<Arc<ProxyState>>, req: Request<Body>) -> Axum
 async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let start = Instant::now();
     let method = req.method().clone();
-    let path = req.uri().path().to_string();
     let query = req.uri().query().map(str::to_string);
     let (parts, body) = req.into_parts();
-    let headers = parts.headers.clone();
+    let mut headers = parts.headers.clone();
+    // The lane marker is for rtok, not the provider: it is read here and never forwarded.
+    // A path prefix is stripped the same way; with lanes off both pass through untouched.
+    let (req_lane, path) = if state.cfg.proxy.lanes.enabled {
+        let c = lane::classify(parts.uri.path(), &headers);
+        let classified = (c.lane, c.path.to_string());
+        headers.remove(lane::HEADER);
+        classified
+    } else {
+        (lane::Lane::Agent, parts.uri.path().to_string())
+    };
 
     let request_body = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(b) => b,
@@ -241,9 +251,10 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         let state_bg = state.clone();
         let path_bg = path.clone();
         let headers_bg = headers.clone();
+        let kind = req_lane.kind();
         let original_body = request_body.clone();
         match tokio::task::spawn_blocking(move || {
-            shape_request(&state_bg, wire, &path_bg, &headers_bg, request_body)
+            shape_request(&state_bg, wire, &path_bg, &headers_bg, kind, request_body)
         })
         .await
         {
@@ -256,11 +267,14 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     };
 
     let sc = &state.cfg.plugins.proxy.semantic_cache;
+    // Who asked (T323): part of the cache key on lookup and, below, on store.
+    let caller = semantic_cache::caller_identity(&headers);
     if sc.enabled
         && !plain
         && let (Some(wire), Ok(body)) = (wire, serde_json::from_slice::<Value>(&request_body))
         && semantic_cache::eligible(&body, sc)
-        && let Some(prompt) = semantic_cache::build_prompt(wire, &body, sc)
+        && let Some(prompt) =
+            semantic_cache::build_prompt(wire, &body, sc).map(|p| p.with_caller(&caller))
     {
         let cache_hit = state
             .cache
@@ -372,6 +386,9 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         // via `tx` once `buf` stops growing, so this is the only accurate byte count past
         // the cap (an upstream streaming gigabytes must not grow `buf` without bound).
         let mut total_bytes: usize = 0;
+        // False once the stream was cut short — client gone or upstream error — so a
+        // partial body is never taken for a response worth caching (T323).
+        let mut complete = true;
         let mut stream = body_stream;
         while let Some(chunk) = stream.next().await {
             match chunk {
@@ -382,16 +399,20 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
                         buf.extend_from_slice(&bytes[..bytes.len().min(room)]);
                     }
                     if tx.send(Ok(bytes)).await.is_err() {
+                        complete = false;
                         break; // client went away; record what we have
                     }
                 }
                 Err(e) => {
+                    complete = false;
                     let _ = tx.send(Err(io::Error::other(e))).await;
                     break;
                 }
             }
         }
         drop(tx);
+        // A body past the `buf` cap is incomplete as recorded too.
+        let complete = complete && total_bytes == buf.len();
         if plain {
             live::push(live::LiveCall {
                 ts: crate::log::now() as i64,
@@ -420,6 +441,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
                     &request_body,
                     &buf,
                     total_bytes,
+                    complete,
+                    &caller,
                 );
             })
             .await;
@@ -451,10 +474,19 @@ fn shape_request(
     wire: Option<&'static dyn Wire>,
     path: &str,
     headers: &HeaderMap,
+    kind: &str,
     request_body: Bytes,
 ) -> (Bytes, Option<Recorded>, bool) {
     let parsed = serde_json::from_slice::<Value>(&request_body).ok();
-    let recorded = record(state, wire, path, parsed.as_ref(), headers, &request_body);
+    let recorded = record(
+        state,
+        wire,
+        path,
+        parsed.as_ref(),
+        headers,
+        kind,
+        &request_body,
+    );
     // From here on `request_body` is what upstream sees (and what `call_io` records).
     let request_body = if state.mode == "compress" {
         wire.map_or(request_body.clone(), |wire| {
@@ -655,6 +687,7 @@ fn record(
     path: &str,
     body: Option<&Value>,
     headers: &HeaderMap,
+    kind: &str,
     raw: &[u8],
 ) -> Option<Recorded> {
     let session = session_for(wire, body, headers, raw);
@@ -681,7 +714,7 @@ fn record(
         let call_id = state.store.insert_call(
             &session,
             "proxy",
-            "api_request",
+            kind,
             state.host_id,
             provider_id,
             model_id,
@@ -760,12 +793,15 @@ fn record_usage(
     }
 }
 
-/// After the body was fully forwarded: `calls.ms`, `call_io`, then `usage` + provider
-/// `tokens` when the response carried a usage block. All best-effort.
+/// After the body was fully forwarded: `calls.ms`, `call_io`, the semantic cache, then
+/// `usage` + provider `tokens` when the response carried a usage block. All best-effort.
 ///
 /// `response_total_bytes` is the true response size; `response_body` may be a shorter,
 /// capped buffer (see `handle`'s tee task and `MAX_BODY_BYTES`) — a truncated buffer means
 /// `call_io` and usage parsing only see the retained prefix, never that they panic on it.
+///
+/// `complete` is whether the body arrived whole (T323): a cut or capped body is recorded but
+/// never cached. `caller` is the [`semantic_cache::caller_identity`] the lookup used.
 #[allow(clippy::too_many_arguments)]
 fn finish(
     state: &ProxyState,
@@ -777,6 +813,8 @@ fn finish(
     request_body: &[u8],
     response_body: &[u8],
     response_total_bytes: usize,
+    complete: bool,
+    caller: &str,
 ) {
     let Some(r) = recorded else { return };
     let session = r.session.clone();
@@ -817,6 +855,18 @@ fn finish(
     ) {
         log_err("call_io", e);
     }
+    // Fill the cache before the usage rows: a visible usage row then implies a warm cache.
+    let sc = &state.cfg.plugins.proxy.semantic_cache;
+    if sc.enabled
+        && let (Some(wire), Ok(body)) = (wire, serde_json::from_slice::<Value>(request_body))
+        && semantic_cache::eligible(&body, sc)
+        && complete
+        && let Some(prompt) =
+            semantic_cache::build_prompt(wire, &body, sc).map(|p| p.with_caller(caller))
+        && let Ok(mut guard) = state.cache.lock()
+    {
+        guard.store(&prompt, sc, response_body, content_type, status_code);
+    }
     match wire.and_then(|wire| {
         wire::usage_from_response(wire, content_type, response_body).map(|u| (wire, u))
     }) {
@@ -837,15 +887,6 @@ fn finish(
             );
         }
         None => {}
-    }
-    let sc = &state.cfg.plugins.proxy.semantic_cache;
-    if sc.enabled
-        && let (Some(wire), Ok(body)) = (wire, serde_json::from_slice::<Value>(request_body))
-        && semantic_cache::eligible(&body, sc)
-        && let Some(prompt) = semantic_cache::build_prompt(wire, &body, sc)
-        && let Ok(mut guard) = state.cache.lock()
-    {
-        guard.store(&prompt, sc, response_body, content_type, status_code);
     }
 }
 
@@ -1075,7 +1116,7 @@ mod tests {
         let state = ProxyState::new(&cfg).expect("proxy state");
         state
             .store
-            .run_retention(cfg.core.retain_calls_days)
+            .run_retention(cfg.core.retain_calls_days, cfg.core.retain_hook_bodies_days)
             .unwrap();
         assert_eq!(state.store.count_calls().unwrap(), 0);
         let _ = std::fs::remove_dir_all(&dir);

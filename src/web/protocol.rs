@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! The `/ws` contract (T310.2): the frames the server sends and the messages a client may send.
 //! Rust is the one source of truth — `web/src/api/ws.schema.json` is generated from these types
 //! (and [`model::Snapshot`]), and the SPA's `snapshot.gen.ts` from that schema.
@@ -7,6 +11,7 @@ use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
 
 use super::model::Snapshot;
+use crate::doctor::web::{Fixed, Plan, Selection};
 
 /// Committed schema, relative to the repository root.
 pub const SCHEMA_PATH: &str = "web/src/api/ws.schema.json";
@@ -19,6 +24,10 @@ pub enum ServerFrame {
     Message { text: String },
     /// The archived payload a client asked for with [`ClientMessage::Expand`].
     Expand { id: String, text: String },
+    /// The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).
+    DoctorPlan { plan: Plan },
+    /// What a confirmed `doctor` apply did.
+    DoctorFixed { fixed: Fixed },
 }
 
 impl ServerFrame {
@@ -35,6 +44,48 @@ pub enum ClientMessage {
     Expand { expand: String },
     /// Flip an allowlisted boolean key (`plugins.<id>.enabled`).
     Set { set: SetRequest },
+    /// Change the project registry (T329.12, T329.20): select a project, or link two of them.
+    Project { project: ProjectRequest },
+    /// The `doctor --fix` checklist: plan it, or write it once the user confirmed.
+    Doctor { doctor: DoctorRequest },
+}
+
+/// The registry writes the graph page offers; `<project>` is an id or a
+/// root path, as in `rtok graph projects`.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum ProjectRequest {
+    Select {
+        project: String,
+    },
+    Link {
+        from: String,
+        to: String,
+        #[serde(default)]
+        both: bool,
+    },
+    Unlink {
+        from: String,
+        to: String,
+        #[serde(default)]
+        both: bool,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum DoctorAction {
+    /// Return the items and the diff; nothing is written.
+    Plan,
+    /// Write the selection: the page sends this only after its confirmation.
+    Apply,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct DoctorRequest {
+    pub action: DoctorAction,
+    #[serde(default)]
+    pub selection: Selection,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -96,6 +147,23 @@ mod tests {
             matches!(m, ClientMessage::Set { set } if set.value && set.key == "plugins.x.enabled")
         );
         assert!(serde_json::from_str::<ClientMessage>(r#"{"set":{"value":"yes"}}"#).is_err());
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"project":{"action":"select","project":"2"}}"#).unwrap();
+        assert!(matches!(
+            m,
+            ClientMessage::Project {
+                project: ProjectRequest::Select { .. }
+            }
+        ));
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"project":{"action":"link","from":"1","to":"2"}}"#).unwrap();
+        assert!(matches!(
+            m,
+            ClientMessage::Project {
+                project: ProjectRequest::Link { both: false, .. }
+            }
+        ));
+        assert!(serde_json::from_str::<ClientMessage>(r#"{"project":{"action":"drop"}}"#).is_err());
     }
 
     #[test]

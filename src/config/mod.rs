@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! `~/.rtok/config.toml` — every setting rtok has (plan T0.2, T12.1, decision D12).
 //!
 //! `config/default.toml` is the reference file: it is embedded with `include_str!`, written
@@ -104,6 +108,9 @@ section! {
         /// payload (D1: ≤ 10 ms). 8 MiB default.
         hook_max_input_bytes: u32 = 8_388_608,
         retain_calls_days: u32 = 30,
+        /// T352: hook stdin bodies in `call_io` are cleared after this many days; the call row,
+        /// sizes and shas stay. 0 keeps bodies as long as `calls`.
+        retain_hook_bodies_days: u32 = 3,
         /// Removed in T24.5: it is now `log.to_db`. Accepted from an old file with a
         /// warning, then dropped.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -161,6 +168,95 @@ section! {
         /// T288: bytes of framed messages one `UserPromptSubmit`/`PostToolUse` pushes into
         /// the agent's context; the rest become one "and N more" line.
         push_bytes: u32 = 1024,
+        usage: AgentsUsage = AgentsUsage::default(),
+    }
+}
+
+section! {
+    /// `[agents.usage]` — `rtok agents usage` (T358): tokens and estimated cost per agent, day
+    /// and month. `source` is `logs` (the agents' own session files, read from
+    /// `[stats] transcripts_dir`, `codex_dir` and `[agents.usage.dirs]`), `rtok` (the store) or `both`. `hosts` empty = every
+    /// host; `since` / `until` are a date (`2026-09-01`, a whole day in `tz`) or, for `since`, a
+    /// duration (`30d`), empty = unbounded; `period` is `monthly` or `daily`; `by` groups
+    /// the middle table by `agent` or `model`; `tz` is an IANA zone, empty = the system zone.
+    AgentsUsage {
+        source: String = s("logs"),
+        hosts: Vec<String> = Vec::new(),
+        since: String = String::new(),
+        until: String = String::new(),
+        period: String = s("monthly"),
+        by: String = s("agent"),
+        tz: String = String::new(),
+        dirs: UsageDirs = UsageDirs::default(),
+    }
+}
+
+section! {
+    /// `[agents.usage.dirs]` — where `rtok agents usage` reads each host's own records (T358.3):
+    /// a list per host, every entry a directory. Claude Code and Codex keep reading `[stats]
+    /// transcripts_dir` and `codex_dir`. A default the file leaves untouched yields to the host's
+    /// own relocation variable (`XDG_DATA_HOME`, `COPILOT_HOME`, `GEMINI_CLI_HOME`,
+    /// `PI_CODING_AGENT_SESSION_DIR`, `PI_CODING_AGENT_DIR`, `KIMI_CODE_HOME`, `GROK_HOME`).
+    UsageDirs {
+        opencode: Vec<PathBuf> = vec![p("~/.local/share/opencode")],
+        kilo: Vec<PathBuf> = vec![p("~/.local/share/kilo")],
+        copilot: Vec<PathBuf> = vec![p("~/.copilot/session-state")],
+        gemini: Vec<PathBuf> = vec![p("~/.gemini/tmp")],
+        droid: Vec<PathBuf> = vec![p("~/.factory/sessions")],
+        pi: Vec<PathBuf> = vec![p("~/.pi/agent/sessions")],
+        kimi: Vec<PathBuf> = vec![p("~/.kimi-code/sessions")],
+        grok: Vec<PathBuf> = vec![p("~/.grok/sessions")],
+        zcode: Vec<PathBuf> = vec![p("~/.zcode")],
+        antigravity: Vec<PathBuf> = vec![p("~/.gemini/antigravity")],
+    }
+}
+
+impl UsageDirs {
+    /// Point each default the config file left untouched at the host's own relocation variable,
+    /// so a person who moved `~/.copilot` is read there without repeating it here. A relative
+    /// value is ignored, as the XDG spec says, and a key the file set always wins.
+    fn follow_env(&mut self, get: impl Fn(&str) -> Option<std::ffi::OsString>) {
+        let base = UsageDirs::default();
+        let abs = |key: &str| get(key).map(PathBuf::from).filter(|v| v.is_absolute());
+        let moved = |list: &mut Vec<PathBuf>, was: &[PathBuf], to: Option<PathBuf>| {
+            if let (true, Some(to)) = (list == was, to) {
+                *list = vec![to];
+            }
+        };
+        let xdg = abs("XDG_DATA_HOME");
+        moved(
+            &mut self.opencode,
+            &base.opencode,
+            xdg.as_ref().map(|d| d.join("opencode")),
+        );
+        moved(&mut self.kilo, &base.kilo, xdg.map(|d| d.join("kilo")));
+        moved(
+            &mut self.copilot,
+            &base.copilot,
+            abs("COPILOT_HOME").map(|d| d.join("session-state")),
+        );
+        moved(
+            &mut self.gemini,
+            &base.gemini,
+            abs("GEMINI_CLI_HOME").map(|d| d.join(".gemini").join("tmp")),
+        );
+        // pi: the sessions variable names the folder itself and outranks the agent-dir one.
+        moved(
+            &mut self.pi,
+            &base.pi,
+            abs("PI_CODING_AGENT_SESSION_DIR")
+                .or_else(|| abs("PI_CODING_AGENT_DIR").map(|d| d.join("sessions"))),
+        );
+        moved(
+            &mut self.kimi,
+            &base.kimi,
+            abs("KIMI_CODE_HOME").map(|d| d.join("sessions")),
+        );
+        moved(
+            &mut self.grok,
+            &base.grok,
+            abs("GROK_HOME").map(|d| d.join("sessions")),
+        );
     }
 }
 
@@ -186,6 +282,32 @@ section! {
 }
 
 section! {
+    /// `[proxy.lanes]` — request lanes (T385.1): each request is tagged agent, bulk, batch,
+    /// files, embeddings, meta or internal in the ledger (`calls.kind`). Off: every request is
+    /// an untagged `api_request` and the `x-rtok-lane` header and `/lane/<name>/` prefix are
+    /// forwarded as the client sent them.
+    Lanes {
+        enabled: bool = true,
+    }
+}
+
+section! {
+    /// `[proxy.batch]` — provider Batch observe (T385.4). No keys yet: the table exists so a
+    /// later step adds them without a schema break.
+    BatchPolicy {}
+}
+
+section! {
+    /// `[proxy.flex]` — Flex `service_tier` on bulk and internal lanes (T385.5). No keys yet.
+    FlexPolicy {}
+}
+
+section! {
+    /// `[proxy.routing]` — model routing (D9). No keys yet.
+    RoutingPolicy {}
+}
+
+section! {
     /// `[proxy]` — the proxy server itself; the usage-capture plugin is `[plugins.proxy]`.
     Proxy {
         /// When false the HTTP listener stays up but every request is byte-forwarded with
@@ -206,11 +328,15 @@ section! {
         context_management: bool = false,
         dry_run: bool = false,
         tools_rewrite: ToolsRewrite = ToolsRewrite::default(),
+        lanes: Lanes = Lanes::default(),
+        batch: BatchPolicy = BatchPolicy::default(),
+        flex: FlexPolicy = FlexPolicy::default(),
+        routing: RoutingPolicy = RoutingPolicy::default(),
     }
 }
 
 section! {
-    /// `[web]` — `rtok web` (P19). Slint WASM UI + WebSocket API, the same data as `rtok tui`.
+    /// `[web]` — `rtok web` (P19). React SPA + WebSocket API, the same data as `rtok tui`.
     Web {
         host: String = s("127.0.0.1"),
         port: u16 = 3333,
@@ -418,6 +544,8 @@ section! {
         mimo: SetupMimo = SetupMimo::default(),
         antigravity: SetupAntigravity = SetupAntigravity::default(),
         devin: SetupDevin = SetupDevin::default(),
+        roo: SetupRoo = SetupRoo::default(),
+        qwen: SetupQwen = SetupQwen::default(),
     }
 }
 
@@ -549,6 +677,19 @@ section! {
 }
 
 section! {
+    /// `[setup.roo]` — Roo Code's global `mcp_settings.json` (T413.1). Empty
+    /// `mcp_path` means the VS Code user dir plus
+    /// `globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`.
+    SetupRoo { mcp_path: PathBuf = PathBuf::new() }
+}
+
+section! {
+    /// `[setup.qwen]` — Qwen Code's `settings.json` (`hooks`, `mcpServers`) lives under
+    /// `dir` (T413.2). `QWEN_HOME` moves that directory; this key is the override.
+    SetupQwen { dir: PathBuf = p("~/.qwen") }
+}
+
+section! {
     /// `[setup.antigravity]` — Antigravity 2.0 / IDE plugin root (`plugins_path`, rtok links
     /// `plugins/antigravity` there) and the CLI's staged-plugin root (`cli_plugins_path`,
     /// written only by `agy plugin install`; read to detect it) (T91.1).
@@ -575,10 +716,13 @@ section! {
 }
 
 section! {
-    /// `[worktree]` — `rtok worktree add` (T158).
+    /// `[worktree]` — `rtok worktree …`, MCP `worktree_*` and Claude's worktree hooks (T158).
     Worktree {
-        /// Where worktrees are created; empty = discover `_worktrees/` from the main checkout.
-        root: PathBuf = PathBuf::new(),
+        /// Off: the commands refuse, MCP lists no `worktree_*` tool and the host hooks do what
+        /// the host does without rtok.
+        enabled: bool = true,
+        /// Where worktrees are created, as `<root>/<repo>-<task>`.
+        root: PathBuf = p("~/.rtok/worktrees"),
     }
 }
 
@@ -679,6 +823,8 @@ section! {
         default_mode: String = s("full"),
         max_chars: u32 = 20000,
         native_max_bytes: u64 = 32768,
+        /// T383: a native `Read` with `limit` 1..=this passes the read-advice hook.
+        range_max_lines: u32 = 300,
         advice: bool = true,
         allow_paths: Vec<PathBuf> = Vec::new(),
         search_max: u32 = 50,
@@ -756,6 +902,10 @@ section! {
         /// MCP `search`/`tree`. Off by default; also stays silent while the
         /// `read` plugin is disabled (no `search`/`tree` to point at).
         deny_grep_glob: bool = false,
+        /// Opt-in (T369): a native `Grep` for one identifier (`foo`, `fn foo`, `class Foo`) is
+        /// denied with that symbol's definitions from the index when it has one to five, so
+        /// the model skips a second round trip. Index lookup only: no walk, no indexing.
+        grep_symbol: bool = false,
         /// Opt-in (T62.1): on `PreToolUse(Skill)` a `SKILL.md` over `skill_max_bytes`
         /// is archived and denied with its markdown map plus the `expand` pointer,
         /// unless its frontmatter carries a key the host applies on invocation.
@@ -804,10 +954,21 @@ section! {
         enabled: bool = true,
         max_tokens: u32 = 2000,
         map_tokens: u32 = 0,
+        /// T370: how the SessionStart map orders files: `refs` counts references per name,
+        /// `pagerank` ranks files by personalized PageRank over the stored file graph.
+        map_rank: String = s("refs"),
         body_lines: u32 = 40,
         auto_index: bool = true,
+        auto_add_projects: bool = true,
         backend: String = s("tags"),
         watch: String = s("off"),
+        /// T329.8: follow the references a project's manifests make to other directories on this
+        /// machine, register them and link them into the graph scope.
+        auto_link_references: bool = true,
+        /// T329.8: how many reference levels are followed from the project; 0 follows none.
+        reference_depth: u32 = 3,
+        /// T329.8: the most projects references may add to the registry.
+        max_auto_projects: u32 = 20,
         exclude: Vec<String> = vec![],
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),
@@ -878,6 +1039,11 @@ pub struct Config {
     /// directory (D29).
     #[serde(skip)]
     pub plugin_receipt_path: Option<PathBuf>,
+    /// T283.3: the pid of the process that runs this hook call (the `rtok-hook` client, or
+    /// `rtok hook` itself), so the agent row can record its ancestors. Not part of the file:
+    /// each call sets it, and none (a test, an in-process run) records nothing.
+    #[serde(skip)]
+    pub hook_client_pid: Option<u32>,
 }
 
 impl Config {
@@ -1029,6 +1195,7 @@ impl Config {
             notes.push(format!("core.log_to_db is now log.to_db (using {to_db})"));
         }
         self.home = home.to_path_buf();
+        self.agents.usage.dirs.follow_env(|k| std::env::var_os(k));
         let user_home = env_user_home();
         self.expand_paths_with(home, user_home.as_deref());
         for note in &notes {
@@ -1095,6 +1262,7 @@ impl Config {
             setup.cline.hooks_path,
             setup.cline.mcp_path,
             setup.gemini.dir,
+            setup.qwen.dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
@@ -1120,6 +1288,25 @@ impl Config {
                 .enumerate()
                 .map(|(i, p)| (format!("plugins.read.allow_paths[{i}]").into(), p)),
         );
+        let dirs = &mut self.agents.usage.dirs;
+        for (host, list) in [
+            ("opencode", &mut dirs.opencode),
+            ("kilo", &mut dirs.kilo),
+            ("copilot", &mut dirs.copilot),
+            ("gemini", &mut dirs.gemini),
+            ("droid", &mut dirs.droid),
+            ("pi", &mut dirs.pi),
+            ("kimi", &mut dirs.kimi),
+            ("grok", &mut dirs.grok),
+            ("zcode", &mut dirs.zcode),
+            ("antigravity", &mut dirs.antigravity),
+        ] {
+            out.extend(
+                list.iter_mut()
+                    .enumerate()
+                    .map(|(i, p)| (format!("agents.usage.dirs.{host}[{i}]").into(), p)),
+            );
+        }
         out
     }
 
@@ -1257,6 +1444,47 @@ fn expand(path: &Path, home: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn usage_dirs_follow_a_hosts_relocation_variable_until_the_file_names_one() {
+        // Absolute on Windows needs a drive; the strings below compare with `/` separators.
+        let root = if cfg!(windows) { "C:" } else { "" };
+        let env = |k: &str| match k {
+            "XDG_DATA_HOME" => Some(format!("{root}/data").into()),
+            "COPILOT_HOME" => Some(format!("{root}/cop").into()),
+            "GEMINI_CLI_HOME" => Some("relative/is/ignored".into()),
+            "PI_CODING_AGENT_DIR" => Some(format!("{root}/pi").into()),
+            "KIMI_CODE_HOME" => Some(format!("{root}/kimi").into()),
+            _ => None,
+        };
+        let mut d = super::UsageDirs {
+            kilo: vec!["/mine".into()],
+            ..Default::default()
+        };
+        d.follow_env(env);
+        let one = |v: &Vec<std::path::PathBuf>| {
+            v.iter()
+                .map(|p| p.display().to_string().replace('\\', "/"))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(one(&d.opencode), [format!("{root}/data/opencode")]);
+        assert_eq!(one(&d.copilot), [format!("{root}/cop/session-state")]);
+        assert_eq!(one(&d.kilo), ["/mine"]);
+        assert_eq!(one(&d.gemini), ["~/.gemini/tmp"]);
+        assert_eq!(one(&d.droid), ["~/.factory/sessions"]);
+        assert_eq!(one(&d.pi), [format!("{root}/pi/sessions")]);
+        assert_eq!(one(&d.kimi), [format!("{root}/kimi/sessions")]);
+        assert_eq!(one(&d.grok), ["~/.grok/sessions"]);
+        // The narrower pi variable names the folder itself and wins over the agent dir.
+        let narrow = |k: &str| match k {
+            "PI_CODING_AGENT_SESSION_DIR" => Some(format!("{root}/s").into()),
+            "PI_CODING_AGENT_DIR" => Some(format!("{root}/pi").into()),
+            _ => None,
+        };
+        let mut d = super::UsageDirs::default();
+        d.follow_env(narrow);
+        assert_eq!(one(&d.pi), [format!("{root}/s")]);
+    }
+
     use super::*;
     use figment::Figment;
     use figment::providers::{Format, Toml};

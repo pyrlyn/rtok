@@ -271,6 +271,14 @@ diesel::table! {
     }
 }
 
+// 0030 (T370): the file graph and its global PageRank, one JSON document per root.
+diesel::table! {
+    file_rank (root) {
+        root -> Text,
+        graph -> Text,
+    }
+}
+
 // 0024 (T282, D34): the rtok agent id — one row per host session, one per sub-agent inside
 // it. `parent_key` is '' for the main window or the host's own sub-agent `agent_id`;
 // `parent_id` is the resolved rtok id of that sub-agent's parent row.
@@ -287,6 +295,7 @@ diesel::table! {
         ended_at -> Nullable<BigInt>,
         activity -> Nullable<Text>,
         status_text -> Nullable<Text>,
+        ancestors -> Nullable<Text>,
     }
 }
 
@@ -312,6 +321,31 @@ diesel::table! {
         created_at -> BigInt,
         delivered_at -> Nullable<BigInt>,
         read_at -> Nullable<BigInt>,
+    }
+}
+
+// 0027 (T329.1): the graph project registry; `name` NULL = the directory name, at most one `selected`.
+diesel::table! {
+    projects (id) {
+        id -> Integer,
+        root -> Text,
+        name -> Nullable<Text>,
+        origin -> Text,
+        created_at -> BigInt,
+        last_used_at -> BigInt,
+        selected -> Integer,
+    }
+}
+
+// 0028 (T329.3): directed project links; `unlinked = 1` is a remembered removal of an auto link.
+diesel::table! {
+    project_links (from_id, to_id) {
+        from_id -> Integer,
+        to_id -> Integer,
+        kind -> Text,
+        reason -> Nullable<Text>,
+        unlinked -> Integer,
+        created_at -> BigInt,
     }
 }
 
@@ -350,8 +384,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     logs,
     symbols,
     extractor,
+    file_rank,
     symbol_stale,
     agents,
     worktree_claims,
     messages,
+    projects,
+    project_links,
 );

@@ -35,7 +35,7 @@ No rows in window.
 
 ## Expand
 
-How often a live-zone pointer had to be expanded (`archive_decisions` rows, T5.4).
+How often a live-zone pointer had to be expanded (`archive_decisions` rows).
 
 No rows in window.
 
@@ -48,6 +48,23 @@ Every effective key with its origin — the `config show --sources` page.
 | agents.enabled | true | default |
 | agents.idle | 30m | default |
 | agents.push_bytes | 1024 | default |
+| agents.usage.by | agent | default |
+| agents.usage.dirs.antigravity | [~/.gemini/antigravity] | default |
+| agents.usage.dirs.copilot | [~/.copilot/session-state] | default |
+| agents.usage.dirs.droid | [~/.factory/sessions] | default |
+| agents.usage.dirs.gemini | [~/.gemini/tmp] | default |
+| agents.usage.dirs.grok | [~/.grok/sessions] | default |
+| agents.usage.dirs.kilo | [~/.local/share/kilo] | default |
+| agents.usage.dirs.kimi | [~/.kimi-code/sessions] | default |
+| agents.usage.dirs.opencode | [~/.local/share/opencode] | default |
+| agents.usage.dirs.pi | [~/.pi/agent/sessions] | default |
+| agents.usage.dirs.zcode | [~/.zcode] | default |
+| agents.usage.hosts | [] | default |
+| agents.usage.period | monthly | default |
+| agents.usage.since |  | default |
+| agents.usage.source | logs | default |
+| agents.usage.tz |  | default |
+| agents.usage.until |  | default |
 | bench.configs.a | bench/configs/legacy.json | default |
 | bench.configs.b | bench/configs/rtok.json | default |
 | bench.dry_run | false | default |
@@ -61,6 +78,7 @@ Every effective key with its origin — the `config show --sources` page.
 | core.enabled | true | default |
 | core.hook_max_input_bytes | 8388608 | default |
 | core.retain_calls_days | 30 | default |
+| core.retain_hook_bodies_days | 3 | default |
 | core.session_env | CLAUDE_SESSION_ID | default |
 | demon.backoff_ms | 1000 | default |
 | demon.healthy_ms | 10000 | default |
@@ -120,17 +138,23 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.cmd.shell |  | default |
 | plugins.cmd.trailer_min_lines | 40 | default |
 | plugins.compress.enabled | true | default |
+| plugins.graph.auto_add_projects | true | default |
 | plugins.graph.auto_index | true | default |
+| plugins.graph.auto_link_references | true | default |
 | plugins.graph.backend | tags | default |
 | plugins.graph.body_lines | 40 | default |
 | plugins.graph.enabled | true | default |
 | plugins.graph.exclude | [] | default |
 | plugins.graph.include | [] | default |
+| plugins.graph.map_rank | refs | default |
 | plugins.graph.map_tokens | 0 | default |
+| plugins.graph.max_auto_projects | 20 | default |
 | plugins.graph.max_tokens | 2000 | default |
+| plugins.graph.reference_depth | 3 | default |
 | plugins.graph.watch | off | default |
 | plugins.guard.deny_grep_glob | false | default |
 | plugins.guard.enabled | true | default |
+| plugins.guard.grep_symbol | false | default |
 | plugins.guard.skill_max_bytes | 8192 | default |
 | plugins.guard.skills | false | default |
 | plugins.guard.window_turns | 8 | default |
@@ -173,6 +197,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.read.languages | [] | default |
 | plugins.read.max_chars | 20000 | default |
 | plugins.read.native_max_bytes | 32768 | default |
+| plugins.read.range_max_lines | 300 | default |
 | plugins.read.search_max | 50 | default |
 | plugins.read.search_max_bytes | 1048576 | default |
 | plugins.read.tree_depth | 2 | default |
@@ -186,6 +211,7 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.enabled | true | default |
 | proxy.gemini_upstream | https://generativelanguage.googleapis.com | default |
 | proxy.include_usage | true | default |
+| proxy.lanes.enabled | true | default |
 | proxy.mode | passthrough | default |
 | proxy.openai_upstream | https://api.openai.com | default |
 | proxy.port | 8790 | default |
@@ -230,6 +256,8 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.pi.extensions_path | ~/.pi/agent/extensions | default |
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |
+| setup.qwen.dir | ~/.qwen | default |
+| setup.roo.mcp_path |  | default |
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |
 | setup.vscode.insiders_user_dir |  | default |
@@ -267,9 +295,10 @@ Every effective key with its origin — the `config show --sources` page.
 | ui.emoji | true | default |
 | web.host | 127.0.0.1 | default |
 | web.port | 3333 | default |
-| worktree.root |  | default |
+| worktree.enabled | true | default |
+| worktree.root | ~/.rtok/worktrees | default |
 
-223 keys.
+252 keys.
 
 ## Doctor
 
@@ -277,8 +306,11 @@ Live probes (the `rtok doctor` page), not store rows.
 
 ```text
 hooks 0
+hooks check none found
+duplicate hooks none found
+duplicate mcp servers none found
 mcp
-  rtok (15 tools, ~274 desc tokens) [CWD]/target/[..]
+  rtok (25 tools, ~663 desc tokens) [CWD]/target/[..]
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)
@@ -356,7 +388,7 @@ agents
     proxy   not supported: Kimi Code providers are [providers.<name>] tables with their own base_url and keys; setup does not edit them
     plugin  not installed (--yes)
   grok (cli)
-    hooks   not supported: Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second (D21)
+    hooks   not supported: Grok fires one hook set — the plugin's, or rtok's Claude hooks through [compat.claude] hooks — and setup adds no second set
     mcp     not installed
     proxy   not supported: Grok Build providers live in its own settings tables; setup does not edit them
     plugin  not installed (--yes)
@@ -449,6 +481,16 @@ agents
     hooks   not installed
     mcp     not installed
     proxy   not supported: Devin's proxy key is an HTTP proxy for CLI traffic, not a model API base URL
+    plugin  not installed (--yes)
+  roo (desktop)
+    hooks   not supported: Roo Code's docs describe mcp_settings.json and .roo/mcp.json, not shell hook events
+    mcp     not installed
+    proxy   not supported: Roo Code has no documented model base-URL file; roo-cline.debugProxy is a debug proxy, not the model endpoint
+    plugin  not supported: Roo Code has no documented local plugin directory to link; modes live in the extension
+  qwen (cli)
+    hooks   not installed
+    mcp     not installed
+    proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
     plugin  not installed (--yes)
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   dry-refactoring project desc 154c body 2772B calls - WARN never invoked

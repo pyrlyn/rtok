@@ -1,35 +1,18 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
 //! T150: the worktree inventory against a real repository — a squash-merged branch, a
 //! dirty worktree locked by another owner, and a record whose directory was deleted.
 
 use std::path::Path;
 use std::process::Command;
 
+mod common;
+
+use common::git::{commit, run};
+
 use rtok::worktree::{Entry, State, git, inventory};
-
-fn run(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-        .args([
-            "-c",
-            "commit.gpgsign=false",
-            "-c",
-            "init.defaultBranch=main",
-        ])
-        .args(args)
-        .output()
-        .expect("git runs");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(out.status.success(), "git {args:?}: {err}");
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn commit(dir: &Path, file: &str) {
-    std::fs::write(dir.join(file), file).unwrap();
-    run(dir, &["add", file]);
-    run(dir, &["commit", "-q", "-m", file]);
-}
 
 fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
     let found = entries.iter().find(|e| e.record.path.ends_with(name));
@@ -183,7 +166,10 @@ fn list_splits_cache_from_source_and_reports_an_orphan() {
     std::fs::remove_dir_all(work.join(".git/worktrees/wt-orphan")).unwrap();
 
     // From a linked worktree: git resolves the repository, whichever checkout we stand in.
-    let rows = json(&cache, &["worktree", "list", "--json"]);
+    // `$HOME` stays outside it: the `[worktree] enabled` gate loads the config first, and a
+    // fresh `~/.rtok` inside `wt-cache` would make it dirty.
+    let home = tmp.join("home");
+    let rows = json_in(&home, &cache, &["worktree", "list", "--json"]);
     let row = |name: &str| by_name(&rows, name);
     assert_eq!(rows.as_array().unwrap().len(), 4, "{rows}");
     assert_eq!(row("work")["state"], "main");
@@ -286,7 +272,9 @@ fn worktrees_page_shows_a_locked_worktree_s_owner() {
     let cfg = rtok::testutil::config_file_in(&tmp);
     let prev = std::env::current_dir().unwrap();
     std::env::set_current_dir(&work).unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    // The read runs `git worktree list` on a background thread; on a loaded machine (parallel
+    // cargo builds, a full nextest run) it has taken over 10 s, so the bound is generous.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
     let page = loop {
         let page = rtok::web::model::snapshot(&cfg)
             .worktrees
@@ -398,6 +386,15 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     assert_eq!(planned("wt-gone"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-mine"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-theirs"), "keep: locked by Cursor / grok");
+    // T418: past `--stale-lock` a foreign lock on a merged, clean worktree is abandoned;
+    // on a dirty, unmerged or vanished one it still holds.
+    let stale = json_in(&tmp, &work, &[&idle0[..], &["--stale-lock", "0h"]].concat());
+    let abandoned = |name: &str| by_name(&stale, name)["note"].as_str().unwrap().to_owned();
+    let reclaimed = "merged, clean, abandoned lock by Cursor / grok";
+    assert_eq!(abandoned("wt-theirs"), reclaimed);
+    let reclaimed = "merged, clean, abandoned lock, owner unknown";
+    assert_eq!(abandoned("wt-bare-lock"), reclaimed);
+    assert_eq!(abandoned("wt-gone-theirs"), "locked by Cursor / grok");
     assert_eq!(listed(), before);
 
     // No `--owner`, default idle window: only the unlocked stale record may go.
@@ -480,14 +477,16 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     commit(&tmp.join("other"), "b.txt");
     run(&tmp.join("other"), &["push", "-q", "origin", "main"]);
     let tip = run(&tmp.join("other"), &["rev-parse", "HEAD"]);
-    let root = tmp.join("_worktrees");
-    std::fs::create_dir_all(&root).unwrap();
+    // T410: the default root is `~/.rtok/worktrees`; a `_worktrees/` beside the repository
+    // no longer pulls the worktree there.
+    std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let root = home.join(".rtok/worktrees");
 
     let owner = "Claude Code / sonnet";
-    let out = rtok(
-        &work,
-        &["worktree", "add", "T158", "Worktree-Add", "--owner", owner],
-    );
+    let add = ["worktree", "add", "T158", "Worktree-Add", "--owner", owner];
+    let out = rtok_in(&home, &work, &add, b"");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
     let printed = String::from_utf8_lossy(&out.stdout);
@@ -526,15 +525,18 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     );
     assert!(!added.record.held_against(Some(owner)));
 
-    let again = rtok(&work, &["worktree", "add", "t158", "--owner", owner]);
+    let again = rtok_in(
+        &home,
+        &work,
+        &["worktree", "add", "t158", "--owner", owner],
+        b"",
+    );
     assert!(!again.status.success());
     let err = String::from_utf8_lossy(&again.stderr);
     assert!(err.contains("one worktree per task"), "{err}");
     assert_eq!(inventory(&work).unwrap().len(), 2);
 
-    // `[worktree] root` wins over discovery; `~` expands.
-    let home = tmp.join("home");
-    std::fs::create_dir_all(&home).unwrap();
+    // `[worktree] root` wins over the default; `~` expands.
     std::fs::write(home.join("config.toml"), "[worktree]\nroot = \"~/wt\"\n").unwrap();
     let cfg = home.join("config.toml").display().to_string();
     let out = rtok(
@@ -753,6 +755,91 @@ fn claim_takes_a_free_or_own_worktree_and_refuses_a_foreign_owner() {
     assert!(String::from_utf8_lossy(&main.stderr).contains("not a linked worktree"));
 }
 
+/// T289: `adopt` binds the worktree a host's own tool made — from any directory inside it. A
+/// pool the host evicts gets a store claim and no lock; any other pool gets the v2 lock. A
+/// detached HEAD needs `--task`, a foreign lock is refused, and `list` shows the origin.
+#[test]
+fn adopt_binds_a_host_made_worktree_and_lists_its_origin() {
+    let tmp = rtok::testutil::tmp_dir("worktree-adopt");
+    run(&tmp, &["init", "-q", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    let (store, ids) = agents(&tmp, &["sess-me"]);
+    let me = ids[0].as_str();
+    let cursor = tmp.join(".cursor/worktrees/work/abc");
+    let kilo = tmp.join(".kilo/worktrees/t7-x");
+    let held = tmp.join(".cursor/worktrees/work/held");
+    for (args, dir) in [
+        (vec!["--detach"], &cursor),
+        (vec!["-b", "t7-x"], &kilo),
+        (
+            vec![
+                "--detach",
+                "--lock",
+                "--reason",
+                "Cursor / grok | t3 | 2026-09-22",
+            ],
+            &held,
+        ),
+    ] {
+        let mut cmd = vec!["worktree", "add", "-q"];
+        cmd.extend(args);
+        cmd.push(dir.to_str().unwrap());
+        run(&work, &cmd);
+    }
+    let adopt = |dir: &Path, extra: &[&str]| {
+        let mut args = vec!["worktree", "adopt", "--json"];
+        args.extend(extra);
+        rtok_as(&tmp, dir, Some(me), &args, b"")
+    };
+
+    let out = adopt(&cursor, &[]);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("name it with --task"));
+    let out = adopt(&held, &["--task", "t9"]);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not taken"));
+
+    let out = adopt(&cursor, &["--task", "t9"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let got: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(
+        (got["origin"].as_str(), got["locked"].as_bool()),
+        (Some("cursor"), Some(false))
+    );
+    let entries = inventory(&work).unwrap();
+    assert!(
+        find(&entries, "abc").record.locked.is_none(),
+        "a Cursor-pool worktree gets no lock"
+    );
+    let claims = store.open_worktree_claims().unwrap();
+    let want = cursor.canonicalize().unwrap().display().to_string();
+    assert!(
+        claims.iter().any(|(p, a)| *p == want && a == me),
+        "{claims:?}"
+    );
+
+    std::fs::create_dir(kilo.join("sub")).unwrap();
+    let out = adopt(&kilo.join("sub"), &[]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let lock = lock_of(&work, "t7-x");
+    assert_eq!(
+        (lock.task.as_str(), lock.agent.as_deref()),
+        ("t7", Some(me))
+    );
+
+    let rows = json_in(&tmp, &work, &["worktree", "list", "--json"]);
+    for (name, origin) in [("work", "main"), ("abc", "cursor"), ("t7-x", "kilo")] {
+        assert_eq!(by_name(&rows, name)["origin"], origin, "{name}");
+    }
+}
+
 /// T285: `list --json` names the bound agent with its state — live, ended, none, or an old
 /// lock without one — and `gc` keeps a live agent's merged worktree.
 #[test]
@@ -868,4 +955,728 @@ fn remove_takes_only_the_caller_s_own_clean_worktree() {
         assert!(tmp.join(name).exists(), "{name}");
     }
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T412: what `remove` guards beyond `git worktree remove` + `git branch -d`. `--keep-branch`
+/// never lets a detached HEAD's commits or uncommitted files go; ignored build output does not
+/// make a worktree dirty; a merged branch `git branch -D` cannot delete (checked out in a second
+/// worktree) leaves a removal that is reported as done, branch kept, claim released; an
+/// unreachable `origin` is a warning, and the local base still decides.
+#[test]
+fn remove_guards_commits_and_reports_a_branch_it_could_not_delete() {
+    let tmp = rtok::testutil::tmp_dir("worktree-remove-edges");
+    let work = common::git::repo(&tmp);
+    std::fs::write(work.join(".git/info/exclude"), "target/\n").unwrap();
+    let (store, ids) = agents(&tmp, &["sess-me"]);
+    let me = ids[0].as_str();
+    add(
+        &work,
+        "twice",
+        Some(&format!("claude | t1 | 2026-10-04 | agent {me}")),
+    );
+    run(
+        &work,
+        &["worktree", "add", "-q", "-f", "../wt-twice-2", "t-twice"],
+    );
+    for name in ["built", "kept", "dirty"] {
+        add(&work, name, None);
+    }
+    std::fs::create_dir_all(tmp.join("wt-built/target")).unwrap();
+    std::fs::write(tmp.join("wt-built/target/bin"), "x").unwrap();
+    std::fs::write(tmp.join("wt-dirty/a.txt"), "edited").unwrap();
+    run(
+        &work,
+        &["worktree", "add", "-q", "--detach", "../wt-detached"],
+    );
+    commit(&tmp.join("wt-detached"), "d.txt");
+    let twice = tmp.join("wt-twice").canonicalize().unwrap();
+    store
+        .claim_worktree(&twice.display().to_string(), me, "t1")
+        .unwrap();
+    let remove = |args: &[&str]| {
+        let args = [&["worktree", "remove", "--json"][..], args].concat();
+        rtok_as(&tmp, &work, Some(me), &args, b"")
+    };
+    let removed = |args: &[&str]| {
+        let out = remove(args);
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(out.status.success(), "{args:?}: {err}");
+        let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        (v["note"].as_str().unwrap().to_owned(), err)
+    };
+    let branch = |name: &str| !run(&work, &["branch", "--list", name]).is_empty();
+
+    for (path, why) in [
+        ("../wt-detached", "its commits would be lost"),
+        ("../wt-dirty", "uncommitted or untracked"),
+    ] {
+        let out = remove(&[path, "--keep-branch"]);
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.code() == Some(1) && err.contains(why), "{err}");
+        assert!(work.join(path).exists(), "{path}");
+    }
+
+    let (note, _) = removed(&["../wt-built"]);
+    assert_eq!(note, "removed with its branch");
+    assert!(!tmp.join("wt-built").exists() && !branch("t-built"));
+
+    let (note, _) = removed(&["t1"]);
+    assert!(note.starts_with("removed; branch kept: "), "{note}");
+    assert!(note.contains("wt-twice-2"), "{note}");
+    assert!(!twice.exists() && branch("t-twice"));
+    assert!(store.open_worktree_claims().unwrap().is_empty());
+
+    let missing = tmp.join("missing.git");
+    run(
+        &work,
+        &["remote", "set-url", "origin", missing.to_str().unwrap()],
+    );
+    let (note, err) = removed(&["../wt-kept", "--keep-branch"]);
+    assert_eq!(note, "removed; branch kept");
+    assert!(
+        err.contains("judged against the local origin/main"),
+        "{err}"
+    );
+    assert!(!tmp.join("wt-kept").exists() && branch("t-kept"));
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T285 PR 2: MCP `worktree_add` creates the worktree for the session's linked agent (lock
+/// and claim row name it, as on the CLI) and `worktree_list` shows it bound; a session that
+/// is linked to no agent gets an error and creates nothing.
+#[test]
+fn mcp_worktree_tools_act_for_the_linked_agent() {
+    let tmp = rtok::testutil::tmp_dir("worktree-mcp");
+    run(&tmp, &["init", "-q", "--bare", "origin.git"]);
+    run(&tmp, &["clone", "-q", "origin.git", "rtok"]);
+    let work = tmp.join("rtok");
+    commit(&work, "a.txt");
+    run(&work, &["push", "-q", "-u", "origin", "main"]);
+    run(&work, &["remote", "set-head", "origin", "main"]);
+    std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
+    let (store, _) = agents(&tmp, &[]);
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let cwd = work.canonicalize().unwrap();
+    let calls = [
+        ("worktree_add", r#"{"task":"t9","slug":"mcp"}"#),
+        ("worktree_list", "{}"),
+        ("worktree_add", r#"{"task":"t9"}"#),
+    ];
+    let mut me = String::new();
+    let hooks = || {
+        me = store
+            .register_agent(claude, "sess-mcp", None, cwd.to_str(), None)
+            .unwrap();
+    };
+    let got = common::mcp::session(&tmp, &work, hooks, &calls);
+    let (is_err, text) = &got[0];
+    assert!(!is_err, "{text}");
+    let added: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(added["branch"], "t9-mcp");
+    assert_eq!(added["agent"], me);
+    assert!(Path::new(added["path"].as_str().unwrap()).is_dir());
+    let lock = lock_of(&work, "rtok-t9");
+    assert_eq!(lock.agent.as_deref(), Some(me.as_str()));
+    let real = Path::new(added["path"].as_str().unwrap())
+        .canonicalize()
+        .unwrap()
+        .display()
+        .to_string();
+    assert_eq!(store.open_worktree_claims().unwrap(), [(real, me.clone())]);
+
+    let (is_err, text) = &got[1];
+    assert!(!is_err, "{text}");
+    let rows: serde_json::Value = serde_json::from_str(text).unwrap();
+    let row = by_name(&rows, "rtok-t9");
+    assert_eq!(
+        (&row["agent"]["id"], &row["agent"]["state"]),
+        (&serde_json::json!(me), &serde_json::json!("live"))
+    );
+
+    let (is_err, text) = &got[2];
+    assert!(*is_err && text.contains("already exists"), "{text}");
+
+    // No agent row for this cwd: the worktree has no one to belong to.
+    let elsewhere = tmp.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let got = common::mcp::session(
+        &tmp,
+        &elsewhere,
+        || (),
+        &[("worktree_add", r#"{"task":"t10"}"#)],
+    );
+    assert!(
+        got[0].0 && got[0].1 == "not linked to an agent session",
+        "{got:?}"
+    );
+    assert_eq!(inventory(&work).unwrap().len(), 2);
+}
+
+/// T410: `[worktree] enabled = false` turns every `rtok worktree` command, `list` included,
+/// into one error, and MCP no longer offers the `worktree_*` tools.
+#[test]
+fn disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools() {
+    let tmp = rtok::testutil::tmp_dir("worktree-disabled");
+    let work = origin_clone(&tmp, "rtok");
+    std::fs::create_dir_all(tmp.join(".rtok")).unwrap();
+    std::fs::write(
+        tmp.join(".rtok/config.toml"),
+        "[worktree]\nenabled = false\n",
+    )
+    .unwrap();
+    let commands: [&[&str]; 4] = [
+        &["worktree", "list"],
+        &["worktree", "add", "t1", "--owner", "me"],
+        &["worktree", "gc"],
+        &["worktree", "clean"],
+    ];
+    for args in commands {
+        let out = rtok_in(&tmp, &work, args, b"");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !out.status.success() && err.contains("worktrees are not enabled"),
+            "{args:?}: {err}"
+        );
+    }
+    assert!(!tmp.join(".rtok/worktrees").exists());
+
+    let (store, _) = agents(&tmp, &[]);
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let cwd = work.canonicalize().unwrap();
+    let hooks = || {
+        store
+            .register_agent(claude, "sess-off", None, cwd.to_str(), None)
+            .unwrap();
+    };
+    let calls = [
+        ("worktree_list", "{}"),
+        ("worktree_add", r#"{"task":"t1"}"#),
+    ];
+    for (is_err, text) in common::mcp::session(&tmp, &work, hooks, &calls) {
+        assert!(
+            is_err && text.starts_with("unknown tool: worktree_"),
+            "{text}"
+        );
+    }
+    assert_eq!(inventory(&work).unwrap().len(), 1);
+}
+
+/// T411: `worktree whoami` names the caller, the root, the worktree the cwd is in and the
+/// worktrees bound to the caller, by lock or by claim, but not another agent's.
+#[test]
+fn whoami_shows_the_root_and_only_the_caller_s_worktrees() {
+    let tmp = rtok::testutil::tmp_dir("worktree-whoami");
+    let work = origin_clone(&tmp, "rtok");
+    let (store, ids) = agents(&tmp, &["sess-me", "sess-other"]);
+    let (me, other) = (ids[0].as_str(), ids[1].as_str());
+    let as_me = |cwd: &Path, args: &[&str]| rtok_as(&tmp, cwd, Some(me), args, b"");
+    let add = as_me(&work, &["worktree", "add", "t1", "--owner", "me"]);
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let locked = std::path::PathBuf::from(String::from_utf8_lossy(&add.stdout).trim_end());
+    // Unlocked worktrees held through claim rows: one mine, one another agent's.
+    let (claimed, foreign) = (tmp.join("claimed"), tmp.join("foreign"));
+    for (dir, branch, agent) in [(&claimed, "c", me), (&foreign, "f", other)] {
+        let path = dir.to_str().unwrap();
+        run(&work, &["worktree", "add", "-q", "-b", branch, path]);
+        store.claim_worktree(path, agent, branch).unwrap();
+    }
+
+    let out = as_me(&claimed, &["worktree", "whoami", "--json"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let real = |p: &serde_json::Value| Path::new(p.as_str().unwrap()).canonicalize().unwrap();
+    assert_eq!(v["agent"], me);
+    assert_eq!(
+        Path::new(v["root"].as_str().unwrap()),
+        tmp.join(".rtok/worktrees")
+    );
+    assert_eq!(real(&v["here"]), claimed.canonicalize().unwrap());
+    let mut held: Vec<std::path::PathBuf> = v["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| real(&w["path"]))
+        .collect();
+    held.sort();
+    let mut want = vec![
+        locked.canonicalize().unwrap(),
+        claimed.canonicalize().unwrap(),
+    ];
+    want.sort();
+    assert_eq!(held, want);
+
+    let out = as_me(&work, &["worktree", "whoami"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains(&format!("agent: {} (claude)\n", &me[..8])),
+        "{text}"
+    );
+    assert!(text.contains("here: -\n"), "{text}");
+    assert_eq!(text.matches("worktree: ").count(), 2, "{text}");
+}
+
+/// T286 PR 2: MCP `worktree_remove` for the linked agent: a merged clean worktree goes with
+/// its branch; an unmerged one is refused until `keep_branch`; another agent's lock and a
+/// call that names nothing are refused.
+#[test]
+fn mcp_worktree_remove_takes_only_the_linked_agent_s_clean_worktree() {
+    let tmp = rtok::testutil::tmp_dir("worktree-mcp-remove");
+    run(&tmp, &["init", "-q", "--bare", "origin.git"]);
+    run(&tmp, &["clone", "-q", "origin.git", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    run(&work, &["push", "-q", "-u", "origin", "main"]);
+    run(&work, &["remote", "set-head", "origin", "main"]);
+    let (store, ids) = agents(&tmp, &["sess-other"]);
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let cwd = work.canonicalize().unwrap();
+    let register = || {
+        store
+            .register_agent(claude, "sess-me", None, cwd.to_str(), None)
+            .unwrap()
+    };
+    let me = register();
+    let lock = |task: &str, agent: &str| format!("claude | {task} | 2026-10-03 | agent {agent}");
+    add(&work, "done", Some(&lock("t1", &me)));
+    add(&work, "open", Some(&lock("t2", &me)));
+    add(&work, "theirs", Some(&lock("t3", &ids[0])));
+    commit(&tmp.join("wt-done"), "done.txt");
+    commit(&tmp.join("wt-open"), "open.txt");
+    squash(&work, "t-done");
+    run(&work, &["push", "-q", "origin", "main"]);
+
+    let calls = [
+        ("worktree_remove", r#"{"task":"t1"}"#),
+        ("worktree_remove", r#"{"task":"t2"}"#),
+        ("worktree_remove", r#"{"task":"t2","keep_branch":true}"#),
+        ("worktree_remove", r#"{"task":"t3"}"#),
+        ("worktree_remove", "{}"),
+    ];
+    let got = common::mcp::session(&tmp, &work, || drop(register()), &calls);
+    let branch = |name: &str| !run(&work, &["branch", "--list", name]).is_empty();
+    assert!(!got[0].0, "{}", got[0].1);
+    assert!(got[0].1.contains("removed with its branch"), "{}", got[0].1);
+    assert!(!tmp.join("wt-done").exists() && !branch("t-done"));
+    assert!(got[1].0 && got[1].1.contains("not merged"), "{}", got[1].1);
+    assert!(!got[2].0, "{}", got[2].1);
+    assert!(!tmp.join("wt-open").exists() && branch("t-open"));
+    assert!(got[3].0 && got[3].1.contains("locked by"), "{}", got[3].1);
+    assert!(tmp.join("wt-theirs").exists());
+    assert!(got[4].0 && got[4].1.contains("required"), "{}", got[4].1);
+}
+
+/// The payload Claude Code sends a command hook (`research.md` §18.3, docs checked 2026-10-02).
+fn host_payload(event: &str, session: &str, cwd: &Path, extra: serde_json::Value) -> Vec<u8> {
+    let mut v = serde_json::json!({
+        "session_id": session,
+        "transcript_path": "/t.jsonl",
+        "cwd": cwd,
+        "hook_event_name": event,
+    });
+    v.as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    v.to_string().into_bytes()
+}
+
+fn hook(
+    home: &Path,
+    cwd: &Path,
+    event: &str,
+    session: &str,
+    extra: serde_json::Value,
+) -> std::process::Output {
+    let stdin = host_payload(event, session, cwd, extra);
+    rtok_in(home, cwd, &["hook", event], &stdin)
+}
+
+fn origin_clone(tmp: &Path, name: &str) -> std::path::PathBuf {
+    run(tmp, &["init", "-q", "--bare", "origin.git"]);
+    run(tmp, &["clone", "-q", "origin.git", name]);
+    let work = tmp.join(name);
+    commit(&work, "a.txt");
+    run(&work, &["push", "-q", "-u", "origin", "main"]);
+    run(&work, &["remote", "set-head", "origin", "main"]);
+    work
+}
+
+/// T159: `WorktreeCreate` goes through `worktree add` — one location, one name, the session's
+/// agent on the lock and the claim — and answers with the path alone on stdout.
+#[test]
+fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
+    let tmp = rtok::testutil::tmp_dir("worktree-hook-create");
+    let work = origin_clone(&tmp, "rtok");
+    let (store, ids) = agents(&tmp, &["sess-host"]);
+    let create = |name: &str| {
+        let extra = serde_json::json!({"name": name});
+        hook(&tmp, &work, "WorktreeCreate", "sess-host", extra)
+    };
+
+    let out = create("bold-oak-a3f2");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{err}");
+    let path = std::str::from_utf8(&out.stdout)
+        .unwrap()
+        .trim_end()
+        .to_string();
+    let want = tmp.join(".rtok/worktrees/rtok-bold-oak-a3f2");
+    assert_eq!(
+        Path::new(&path).canonicalize().unwrap(),
+        want.canonicalize().unwrap()
+    );
+    let lock = lock_of(&work, "rtok-bold-oak-a3f2");
+    assert_eq!(
+        (lock.owner.as_str(), lock.agent.as_deref()),
+        ("claude", Some(ids[0].as_str()))
+    );
+    let claims = store.open_worktree_claims().unwrap();
+    assert_eq!(
+        claims,
+        [(
+            want.canonicalize().unwrap().display().to_string(),
+            ids[0].clone()
+        )]
+    );
+
+    // A resumed `--worktree bold-oak-a3f2` asks again and gets the same worktree.
+    let again = create("bold-oak-a3f2");
+    assert_eq!(
+        again.stdout,
+        out.stdout,
+        "{}",
+        String::from_utf8_lossy(&again.stderr)
+    );
+    assert_eq!(inventory(&work).unwrap().len(), 2);
+
+    // A name `add` refuses fails the hook (non-zero, nothing printed); the launcher falls back.
+    let bad = create("two words");
+    assert!(!bad.status.success() && bad.stdout.is_empty());
+    assert_eq!(inventory(&work).unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T159 (D31): whatever goes wrong inside rtok, `scripts/worktree.sh` still hands the host a
+/// usable worktree at the host's own default path, and exits 0.
+#[cfg(unix)]
+#[test]
+fn worktree_launcher_creates_a_plain_worktree_when_rtok_cannot() {
+    use std::io::Write as _;
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::process::Stdio;
+
+    let tmp = rtok::testutil::tmp_dir("worktree-hook-launcher");
+    let work = origin_clone(&tmp, "rtok");
+    let bin = |name: &str, body: &str| {
+        let dir = tmp.join(format!("bin-{name}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("rtok");
+        std::fs::write(&file, format!("#!/bin/sh\ncat >/dev/null\n{body}\n")).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        dir
+    };
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins/claude/scripts/worktree.sh");
+    let launch = |dir: &Path, event: &str, extra: serde_json::Value| {
+        let mut child = Command::new("/bin/sh")
+            .arg(&script)
+            .arg(event)
+            .env("HOME", &tmp)
+            .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let stdin = host_payload(event, "sess-launch", &work, extra);
+        child.stdin.take().unwrap().write_all(&stdin).unwrap();
+        child.wait_with_output().unwrap()
+    };
+    let same =
+        |a: &str, b: &Path| Path::new(a).canonicalize().unwrap() == b.canonicalize().unwrap();
+
+    // rtok fails: the plain worktree on `worktree-<name>`, a name made safe for a path.
+    let failing = bin("failing", "echo boom >&2; exit 1");
+    let out = launch(
+        &failing,
+        "WorktreeCreate",
+        serde_json::json!({"name": "feature/auth"}),
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{err}");
+    let plain = work.join(".claude/worktrees/feature-auth");
+    assert!(
+        same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &plain),
+        "{out:?}"
+    );
+    assert_eq!(
+        run(&plain, &["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "worktree-feature-auth"
+    );
+
+    // An rtok too old to know the event answers `{}`: not a path, so the same fallback.
+    let old = bin("old", "echo '{}'");
+    let out = launch(
+        &old,
+        "WorktreeCreate",
+        serde_json::json!({"name": "second"}),
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(work.join(".claude/worktrees/second/.git").exists());
+
+    // The real rtok on PATH: the T158 location, no `.claude/worktrees` entry.
+    let real = tmp.join("bin-real");
+    std::fs::create_dir_all(&real).unwrap();
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_rtok"), real.join("rtok")).unwrap();
+    let out = launch(
+        &real,
+        "WorktreeCreate",
+        serde_json::json!({"name": "third"}),
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{err}");
+    let want = tmp.join(".rtok/worktrees/rtok-third");
+    assert!(
+        same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &want),
+        "{out:?}"
+    );
+    assert!(!work.join(".claude/worktrees/third").exists());
+
+    // T410: `[worktree] enabled = false` — the real rtok prints no path, so the host's own
+    // worktree with no "failed" warning; its remove is a plain `git worktree remove`.
+    std::fs::write(
+        tmp.join(".rtok/config.toml"),
+        "[worktree]\nenabled = false\n",
+    )
+    .unwrap();
+    let out = launch(&real, "WorktreeCreate", serde_json::json!({"name": "off"}));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success() && !err.contains("failed"), "{err}");
+    let own = work.join(".claude/worktrees/off");
+    assert!(
+        same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &own),
+        "{out:?}"
+    );
+    let path = serde_json::json!({"worktree_path": own});
+    let gone = launch(&real, "WorktreeRemove", path);
+    assert!(gone.status.success() && !own.exists(), "{gone:?}");
+    std::fs::remove_file(tmp.join(".rtok/config.toml")).unwrap();
+
+    // Remove: no rtok means plain `git worktree remove`, never forced.
+    let none = tmp.join("bin-none");
+    std::fs::create_dir_all(&none).unwrap();
+    std::fs::write(plain.join("new.txt"), "x").unwrap();
+    let path = serde_json::json!({"worktree_path": plain});
+    let kept = launch(&none, "WorktreeRemove", path.clone());
+    assert!(!kept.status.success() && plain.exists());
+    std::fs::remove_file(plain.join("new.txt")).unwrap();
+    let gone = launch(&none, "WorktreeRemove", path);
+    assert!(gone.status.success() && !plain.exists());
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T159: `WorktreeRemove` removes a clean worktree its session owns, keeps a dirty one and a
+/// foreign-locked one with the reason on stderr, and sheds the tagged cache in all three.
+#[test]
+fn worktree_remove_hook_removes_only_what_the_session_owns_and_cleans_caches() {
+    let tmp = rtok::testutil::tmp_dir("worktree-hook-remove");
+    let work = origin_clone(&tmp, "work");
+    std::fs::write(work.join(".git/info/exclude"), "target/\n").unwrap();
+    let (store, ids) = agents(&tmp, &["sess-me", "sess-other"]);
+    let (me, other) = (ids[0].as_str(), ids[1].as_str());
+    let claude = store.host_id("claude").unwrap().unwrap();
+    // A sub-agent's worktree is removed under its parent's `session_id`.
+    let sub = store
+        .register_agent(claude, "sess-me", Some("sub-1"), None, None)
+        .unwrap();
+    let lock = |task: &str, agent: &str| format!("claude | {task} | 2026-10-02 | agent {agent}");
+    add(&work, "done", Some(&lock("t1", me)));
+    add(&work, "open", Some(&lock("t2", me)));
+    add(&work, "dirty", Some(&lock("t3", me)));
+    add(&work, "theirs", Some(&lock("t4", other)));
+    add(&work, "sub", Some(&lock("t5", &sub)));
+    commit(&tmp.join("wt-done"), "done.txt");
+    commit(&tmp.join("wt-open"), "open.txt");
+    std::fs::write(tmp.join("wt-dirty/new.txt"), "x").unwrap();
+    squash(&work, "t-done");
+    run(&work, &["push", "-q", "origin", "main"]);
+    let tag = "Signature: 8a477f597d28d172789f06886806bc55\n";
+    for name in ["done", "open", "dirty", "theirs", "sub"] {
+        let target = tmp.join(format!("wt-{name}/target"));
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("CACHEDIR.TAG"), tag).unwrap();
+        std::fs::write(target.join("bin"), [0; 64]).unwrap();
+    }
+    let done = tmp.join("wt-done").canonicalize().unwrap();
+    store
+        .claim_worktree(&done.display().to_string(), me, "t1")
+        .unwrap();
+    let remove = |name: &str| {
+        let path = tmp.join(format!("wt-{name}"));
+        // The session's cwd is the worktree itself: the realistic case, and one `worktree
+        // remove` refuses, so the hook must run from the main checkout.
+        hook(
+            &tmp,
+            &path,
+            "WorktreeRemove",
+            "sess-me",
+            serde_json::json!({"worktree_path": path}),
+        )
+    };
+    let branch = |name: &str| !run(&work, &["branch", "--list", name]).is_empty();
+    let kept = |name: &str, why: &str| {
+        let out = remove(name);
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            out.status.code() == Some(1) && err.contains(why),
+            "{name}: {err}"
+        );
+        assert!(tmp.join(format!("wt-{name}")).exists());
+        assert!(
+            !tmp.join(format!("wt-{name}/target")).exists(),
+            "{name}: cache stays"
+        );
+    };
+
+    let out = remove("done");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.stdout.is_empty(), "the host reads only the exit code");
+    assert!(!done.exists() && !branch("t-done"));
+    assert!(store.open_worktree_claims().unwrap().is_empty());
+
+    let out = remove("open");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !tmp.join("wt-open").exists() && branch("t-open"),
+        "unmerged: worktree goes, branch stays"
+    );
+
+    let out = remove("sub");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!tmp.join("wt-sub").exists());
+
+    kept("dirty", "uncommitted or untracked");
+    assert!(
+        tmp.join("wt-dirty/new.txt").exists(),
+        "the work itself is untouched"
+    );
+    kept("theirs", other);
+
+    let out = hook(
+        &tmp,
+        &work,
+        "WorktreeRemove",
+        "sess-me",
+        serde_json::json!({"worktree_path": done}),
+    );
+    assert!(
+        out.status.success(),
+        "a worktree that is already gone counts as removed"
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// T289.2: MCP `worktree_adopt` for the linked agent, same code as the CLI: a Cursor-pool
+/// worktree is claimed without a lock, any other pool gets the v2 lock, a detached HEAD needs
+/// `task`, and a foreign lock is refused.
+#[test]
+fn mcp_worktree_adopt_binds_a_host_made_worktree_for_the_linked_agent() {
+    let tmp = rtok::testutil::tmp_dir("worktree-mcp-adopt");
+    run(&tmp, &["init", "-q", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    let (store, _) = agents(&tmp, &[]);
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let cwd = work.canonicalize().unwrap();
+    let register = || {
+        store
+            .register_agent(claude, "sess-me", None, cwd.to_str(), None)
+            .unwrap()
+    };
+    let me = register();
+    let cursor = tmp.join(".cursor/worktrees/work/abc");
+    let kilo = tmp.join(".kilo/worktrees/t7-x");
+    let held = tmp.join(".cursor/worktrees/work/held");
+    run(
+        &work,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            cursor.to_str().unwrap(),
+        ],
+    );
+    run(
+        &work,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "t7-x",
+            kilo.to_str().unwrap(),
+        ],
+    );
+    let reason = "Cursor / grok | t3 | 2026-09-22";
+    let held_args = [
+        "worktree", "add", "-q", "--detach", "--lock", "--reason", reason,
+    ];
+    run(&work, &[&held_args[..], &[held.to_str().unwrap()]].concat());
+
+    let call = |args: serde_json::Value| ("worktree_adopt", args.to_string());
+    let calls = [
+        call(serde_json::json!({"path": cursor})),
+        call(serde_json::json!({"path": cursor, "task": "t9"})),
+        call(serde_json::json!({"path": kilo})),
+        call(serde_json::json!({"path": held, "task": "t9"})),
+    ];
+    let calls: Vec<(&str, &str)> = calls.iter().map(|(n, a)| (*n, a.as_str())).collect();
+    let got = common::mcp::session(&tmp, &work, || drop(register()), &calls);
+    assert!(
+        got[0].0 && got[0].1.contains("name it with"),
+        "{}",
+        got[0].1
+    );
+    assert!(!got[1].0, "{}", got[1].1);
+    let v: serde_json::Value = serde_json::from_str(&got[1].1).unwrap();
+    assert_eq!(
+        (v["origin"].as_str(), v["locked"].as_bool()),
+        (Some("cursor"), Some(false))
+    );
+    assert!(!got[2].0, "{}", got[2].1);
+    let lock = lock_of(&work, "t7-x");
+    assert_eq!(
+        (lock.task.as_str(), lock.agent.as_deref()),
+        ("t7", Some(me.as_str()))
+    );
+    assert!(got[3].0 && got[3].1.contains("not taken"), "{}", got[3].1);
+    let claims = store.open_worktree_claims().unwrap();
+    let want = cursor.canonicalize().unwrap().display().to_string();
+    assert!(
+        claims.iter().any(|(p, a)| *p == want && *a == me),
+        "{claims:?}"
+    );
 }
