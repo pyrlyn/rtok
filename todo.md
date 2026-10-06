@@ -44,7 +44,6 @@
 - T333. Investigate: T271 desktop-entry sweep vs D33/T275
 - T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
-- T336. Investigate: T329: default project for CLI/MCP is the selected project or the cwd
 - T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 - T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
 - T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
