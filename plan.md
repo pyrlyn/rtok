@@ -71,7 +71,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
 | T380 | todo | P2 | 3 | 30% | |
-| T381 | todo | P2 | 3 | 30% | |
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.2 | todo | P2 | 3 | 20% | |
@@ -1634,19 +1633,6 @@ Done means:
 - Not ours to change: the creator's global `AGENTS.md` names the `worktrees` skill; the creator updates it after this lands (say so in the PR).
 
 Check: the naming test (every `SKILLS` entry except `rtok` starts with `rtok-`) and the install/remove/migration tests in `tests/skill.rs` and `tests/pi_plugin.rs` pass; an install into a scratch `$HOME` holding a legacy marked `worktrees`, a foreign `worktrees` symlink and a stray `rtok-x` directory shows the expected install, skip and remove lines; `just check`.
-
-### T381. `rtok config init` must not freeze today's defaults into the user's file
-
-Ivan, 2026-10-04: a user's `config.toml` keeps whatever defaults were current on the day it was written. `Config::init_maybe` (`src/config/mod.rs`) writes `config/default.toml` verbatim, every key uncommented, so each value is an explicit setting. When a default changes later, the user never gets it. Seen on the creator's machine: T127 (#144) turned `toon` on by default, but `~/.rtok/config.toml` still said `[plugins.toon] enabled = false`, so `toon` stayed off with nothing pointing at the cause.
-
-Done means:
-
-- `rtok config init` writes a file that documents without pinning: every key and its comment stay, but the default values are commented out (`# enabled = true`), so a key the user never touched follows the current default. `rtok config validate` accepts the new file, and an empty `config.toml` behaves the same as one written by `config init`.
-- Existing files: `rtok doctor` (or `rtok config validate`) lists each explicit key whose value differs from the current default. It is a note, not an error, and names the key, the value, the default and the line. Nothing is rewritten automatically: rtok cannot tell a stale default from a deliberate choice, so the user decides.
-- Stale docs fixed in the same change: `src/plugins/toon/AGENTS.md` ("Stays `default_on: false` until …", while `default_on` has been `true` since T127) and `research.md` §16.1 table row "JSON tables → TOON (off by default)".
-- Tests: `tests/trycmd/config-init.toml` re-blessed; a unit test checks that every default in `DEFAULT_TOML` is commented out and that parsing it yields `Config::default()`; a doctor fixture with `toon` pinned off shows the note.
-
-Check: the `DEFAULT_TOML` unit test (every default commented out, parsing yields `Config::default()`), the re-blessed `tests/trycmd/config-init.toml` and the doctor fixture with `toon` pinned off pass; `rtok config init --dry-run` on a scratch home shows only commented values; `just check`.
 
 ### T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 

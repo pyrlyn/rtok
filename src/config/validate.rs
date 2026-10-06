@@ -106,8 +106,15 @@ pub fn set_all_with(
         }
         Config::init_maybe(home, config_file, false, false)?;
     }
-    let before = std::fs::read_to_string(&path)?;
-    let mut doc: DocumentMut = before.parse().with_context(|| path.display().to_string())?;
+    let original = std::fs::read_to_string(&path)?;
+    // A fresh init leaves defaults commented. Uncomment the target line first so the
+    // in-place swap below keeps its padding and trailing comment instead of appending
+    // a second key.
+    let mut source = original.clone();
+    for (key, _) in pairs {
+        source = reveal_commented_key(&source, key);
+    }
+    let mut doc: DocumentMut = source.parse().with_context(|| path.display().to_string())?;
     for (key, raw) in pairs {
         assign(&mut doc, key, parse_value(raw))?;
     }
@@ -116,7 +123,7 @@ pub fn set_all_with(
     if !errs.is_empty() {
         bail!("{}", errs.join("\n"));
     }
-    let diff = crate::render::file_diff(&path, &before, &after);
+    let diff = crate::render::file_diff(&path, &original, &after);
     if !dry_run {
         super::write_file(&path, &after)?;
     }
@@ -159,6 +166,236 @@ fn assign(doc: &mut DocumentMut, key: &str, value: TomlValue) -> Result<()> {
             .ok_or_else(|| anyhow::anyhow!("{key}: {part} is not a table"))?;
     }
     bail!("empty key");
+}
+
+/// A fresh init comments defaults out. Reveal each documented assignment on the path so
+/// [`assign`] edits the leaf in place. An intermediate scalar has to be visible too:
+/// `set proxy.port.foo` used to report "not a table" because `port` was a live number;
+/// leaving it commented made assign invent a table. A key that is already set is left
+/// alone (uncommenting it too would duplicate).
+fn reveal_commented_key(text: &str, dotted: &str) -> String {
+    let parts: Vec<&str> = dotted.split('.').collect();
+    let mut out = text.to_string();
+    for (i, leaf) in parts.iter().enumerate() {
+        let table = (i > 0).then(|| parts[..i].join("."));
+        if live_key_present(&out, table.as_deref(), leaf) {
+            continue;
+        }
+        out = reveal_assignment(&out, table.as_deref(), leaf);
+    }
+    out
+}
+
+fn reveal_assignment(text: &str, table: Option<&str>, leaf: &str) -> String {
+    let mut current: Option<String> = None;
+    let mut revealed = false;
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let raw = line.trim_end_matches(['\r', '\n']);
+        let trimmed = raw.trim();
+        if let Some(header) = table_header(trimmed) {
+            current = Some(header);
+            out.push_str(line);
+            continue;
+        }
+        let here = match table {
+            None => current.is_none(),
+            Some(want) => current.as_deref() == Some(want),
+        };
+        if !revealed
+            && here
+            && let Some(bare) = reveal_line(raw, leaf)
+        {
+            revealed = true;
+            out.push_str(&bare);
+            if line.ends_with('\n') {
+                out.push('\n');
+            }
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
+}
+
+fn live_key_present(text: &str, table: Option<&str>, leaf: &str) -> bool {
+    let mut current: Option<String> = None;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(header) = table_header(trimmed) {
+            current = Some(header);
+            continue;
+        }
+        let here = match table {
+            None => current.is_none(),
+            Some(want) => current.as_deref() == Some(want),
+        };
+        if !here || trimmed.starts_with('#') {
+            continue;
+        }
+        let code = trimmed.split('#').next().unwrap_or("").trim();
+        if code
+            .split_once('=')
+            .is_some_and(|(key, _)| key.trim() == leaf)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn table_header(trimmed: &str) -> Option<String> {
+    let code = trimmed.split('#').next()?.trim();
+    let inner = code.strip_prefix('[')?.strip_suffix(']')?.trim();
+    if inner.is_empty() || inner.contains('[') {
+        return None;
+    }
+    Some(inner.to_string())
+}
+
+fn reveal_line(raw: &str, leaf: &str) -> Option<String> {
+    let trimmed = raw.trim_start();
+    let indent = raw.len() - trimmed.len();
+    let rest = trimmed.strip_prefix("# ")?;
+    let code = rest.split('#').next()?.trim();
+    let key = code.split_once('=')?.0.trim();
+    if key != leaf {
+        return None;
+    }
+    Some(format!("{}{rest}", &raw[..indent]))
+}
+
+/// Explicit keys whose value is not the current default. A note, not an error: rtok cannot
+/// tell a stale init from a deliberate pin, so nothing here is rewritten. Unreadable or
+/// unparsable files yield nothing — [`issues`] is the error path, and doctor stays up.
+pub(crate) fn pinned_notes(path: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    pinned_notes_in(path, &text)
+}
+
+pub(crate) fn pinned_notes_in(path: &Path, text: &str) -> Vec<String> {
+    let Ok(doc) = text.parse::<toml_edit::Document<String>>() else {
+        return Vec::new();
+    };
+    let schema = FigValue::serialize(Config::default())
+        .expect("Config serializes")
+        .into_dict()
+        .expect("Config is a table");
+    let mut notes = Vec::new();
+    note_table(path, text, "", doc.as_table(), &schema, &mut notes);
+    notes
+}
+
+fn note_table(
+    path: &Path,
+    src: &str,
+    prefix: &str,
+    table: &dyn TableLike,
+    schema: &Dict,
+    notes: &mut Vec<String>,
+) {
+    for (k, item) in TableLike::iter(table) {
+        let dotted = if prefix.is_empty() {
+            k.to_string()
+        } else {
+            format!("{prefix}.{k}")
+        };
+        match schema.get(k) {
+            Some(FigValue::Dict(_, nested)) => {
+                if let Some(t) = item.as_table_like() {
+                    note_table(path, src, &dotted, t, nested, notes);
+                }
+            }
+            Some(expected) if !same_leaf(item, expected) => {
+                notes.push(format!(
+                    "note {}: {dotted} = {} (default {})",
+                    loc(path, src, item),
+                    shown(item),
+                    super::layers::display(expected)
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+fn same_leaf(item: &Item, expected: &FigValue) -> bool {
+    let Some(value) = item.as_value() else {
+        return false;
+    };
+    // An f64 literal stored as f32 does not share bits with the TOML float, but both
+    // read as `4.2`. The note is about that reading.
+    value_matches(value, expected) || shown_value(value) == super::layers::display(expected)
+}
+
+fn value_matches(value: &TomlValue, expected: &FigValue) -> bool {
+    match expected {
+        FigValue::String(_, s) => value.as_str() == Some(s.as_str()),
+        FigValue::Bool(_, b) => value.as_bool() == Some(*b),
+        FigValue::Num(_, n) => num_matches(value, n),
+        FigValue::Array(_, items) => value.as_array().is_some_and(|arr| {
+            arr.len() == items.len() && arr.iter().zip(items).all(|(v, e)| value_matches(v, e))
+        }),
+        _ => false,
+    }
+}
+
+fn num_matches(value: &TomlValue, num: &figment::value::Num) -> bool {
+    use figment::value::Num;
+    if let Some(i) = value.as_integer() {
+        return match *num {
+            Num::I64(n) => i == n,
+            Num::I32(n) => i == i64::from(n),
+            Num::I16(n) => i == i64::from(n),
+            Num::I8(n) => i == i64::from(n),
+            Num::I128(n) => i128::from(i) == n,
+            Num::ISize(n) => i64::try_from(n).ok() == Some(i),
+            Num::U64(n) => u64::try_from(i).ok() == Some(n),
+            Num::U32(n) => u32::try_from(i).ok() == Some(n),
+            Num::U16(n) => u16::try_from(i).ok() == Some(n),
+            Num::U8(n) => u8::try_from(i).ok() == Some(n),
+            Num::U128(n) => u128::try_from(i).ok() == Some(n),
+            Num::USize(n) => u64::try_from(i).ok() == u64::try_from(n).ok(),
+            Num::F64(n) => f_eq(i as f64, n),
+            Num::F32(n) => f_eq(i as f64, f64::from(n)),
+        };
+    }
+    if let Some(f) = value.as_float() {
+        return match *num {
+            Num::F64(n) => f_eq(f, n),
+            Num::F32(n) => f_eq(f, f64::from(n)),
+            _ => false,
+        };
+    }
+    false
+}
+
+/// `4.2` from TOML and `4.2` from a Rust literal are not the same bits, but they are the
+/// same default a person would read. The note is about that reading.
+fn f_eq(a: f64, b: f64) -> bool {
+    a == b || a.to_string() == b.to_string()
+}
+
+fn shown(item: &Item) -> String {
+    item.as_value()
+        .map(shown_value)
+        .unwrap_or_else(|| item.to_string())
+}
+
+fn shown_value(value: &TomlValue) -> String {
+    match value {
+        TomlValue::String(s) => format!("\"{}\"", s.value()),
+        TomlValue::Integer(i) => i.value().to_string(),
+        TomlValue::Float(f) => f.value().to_string(),
+        TomlValue::Boolean(b) => b.value().to_string(),
+        TomlValue::Array(a) => {
+            let parts: Vec<_> = a.iter().map(shown_value).collect();
+            format!("[{}]", parts.join(", "))
+        }
+        other => other.to_string(),
+    }
 }
 
 /// [`issues`] over the values the merged config takes from a layer other than the defaults and

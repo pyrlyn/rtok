@@ -1393,7 +1393,7 @@ Creator request: what else can save LLM tokens in an agent product like rtok (Ai
 | Memory without stuffing | `memory` | FTS5 notes; SessionStart injects `id title` only; bodies via `mem_get` |
 | Code navigation instead of dumps | `graph` | `symbol` / `callers` / `outline` / `impact` from tree-sitter-tags in SQLite |
 | Measurement | `measure`, proxy usage | Context-token-turns + provider usage; `stats` / `report` / doctor |
-| Optional tabular encode | `toon` | JSON tables → TOON (off by default) |
+| Optional tabular encode | `toon` | JSON tables → TOON (on by default since T127) |
 | Optional extractive shrink | `compress` | P28 gate; off until semantic compress clears a bench |
 | Host install surface | `agents install` | Hooks + MCP + proxy so the above actually see traffic |
 

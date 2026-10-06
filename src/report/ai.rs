@@ -424,6 +424,7 @@ mod tests {
                 overlaps: vec![],
                 agents: vec![],
                 problems: vec![],
+                config_notes: vec![],
             },
             recommendations: vec![
                 crate::report::Recommendation {
