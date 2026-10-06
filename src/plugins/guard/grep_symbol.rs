@@ -62,10 +62,17 @@ fn symbol_name(input: &Value) -> Option<&str> {
         return None;
     }
     let pattern = input.get("pattern")?.as_str()?.trim();
-    let name = match pattern.split_once(char::is_whitespace) {
+    let rest = match pattern.split_once(char::is_whitespace) {
         Some((word, rest)) if DEF_WORDS.contains(&word) => rest.trim_start(),
         _ => pattern,
     };
+    // `\bfoo\b`, `\bfoo\(`, `foo\(` and `\bfoo` match the same word a bare `foo` does; any
+    // other metacharacter is a real regex and stays with Grep.
+    let rest = rest.strip_prefix("\\b").unwrap_or(rest);
+    let name = ["\\b", "\\("]
+        .into_iter()
+        .find_map(|tail| rest.strip_suffix(tail))
+        .unwrap_or(rest);
     is_identifier(name).then_some(name)
 }
 
@@ -82,17 +89,32 @@ fn is_identifier(s: &str) -> bool {
 /// The text the deny carries, or `None` to let the Grep run.
 fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<String> {
     let (key, rows) = definitions(cx, cwd, name)?;
+    let root = Path::new(&key);
+    // A `path` that is a directory inside the project keeps only what lies under it; a file,
+    // a missing path or one outside the project asks something the index cannot answer.
+    let under = match scope.map(str::trim).filter(|p| !p.is_empty()) {
+        None => String::new(),
+        Some(p) => {
+            let abs = dunce::canonicalize(cwd.join(p)).ok()?;
+            let rel = abs.strip_prefix(root).ok()?;
+            if !abs.is_dir() {
+                return None;
+            }
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if rel.is_empty() {
+                rel
+            } else {
+                format!("{rel}/")
+            }
+        }
+    };
+    let rows: Defs = rows
+        .into_iter()
+        .filter(|(path, ..)| path.starts_with(&under))
+        .collect();
     if rows.is_empty() || rows.len() > MAX_DEFS {
         return None;
     }
-    // A Grep scoped to a subdirectory or a file asks about that place only.
-    if let Some(p) = scope.map(str::trim).filter(|p| !p.is_empty()) {
-        let abs = cwd.join(p);
-        if crate::store::canon_root(&abs) != key {
-            return None;
-        }
-    }
-    let root = Path::new(&key);
     let budget = cx.plugin_config::<crate::config::Graph>("graph").body_lines as usize;
     let mut defs = String::new();
     let mut src: Option<(&str, String)> = None;
@@ -117,6 +139,7 @@ fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<Strin
         .symbol_ref_groups(&key, name)
         .ok()?
         .iter()
+        .filter(|g| g.0.starts_with(&under))
         .map(|g| g.2)
         .sum();
     let head = format!(
@@ -176,6 +199,19 @@ mod tests {
     #[case(json!({"pattern": "interface IFoo", "output_mode": "content"}), Some("IFoo"))]
     #[case(json!({"pattern": "func Run", "path": "."}), Some("Run"))]
     #[case(json!({"pattern": "TODO|FIXME"}), None)]
+    #[case(json!({"pattern": "\\bfoo\\b"}), Some("foo"))]
+    #[case(json!({"pattern": "\\bfoo\\("}), Some("foo"))]
+    #[case(json!({"pattern": "foo\\("}), Some("foo"))]
+    #[case(json!({"pattern": "\\bfoo"}), Some("foo"))]
+    #[case(json!({"pattern": "fn foo\\("}), Some("foo"))]
+    #[case(json!({"pattern": "foo\\b"}), Some("foo"))]
+    #[case(json!({"pattern": "\\bfoo|bar\\b"}), None)]
+    #[case(json!({"pattern": "\\b\\bfoo"}), None)]
+    #[case(json!({"pattern": "^foo$"}), None)]
+    #[case(json!({"pattern": "foo.*"}), None)]
+    #[case(json!({"pattern": "\\bfoo.*\\b"}), None)]
+    #[case(json!({"pattern": "[fF]oo"}), None)]
+    #[case(json!({"pattern": "\\b\\b"}), None)]
     #[case(json!({"pattern": "fn parse_since("}), None)]
     #[case(json!({"pattern": "foo.bar"}), None)]
     #[case(json!({"pattern": "impl Foo"}), None)]
@@ -276,6 +312,51 @@ mod tests {
         assert_eq!(grep(&rt, json!({"pattern": "parse_since"})), None);
         fs::remove_file(root.join("lib.rs")).unwrap();
         assert_eq!(grep(&rt, json!({"pattern": "parse_since"})), None);
+    }
+
+    #[test]
+    fn a_directory_path_keeps_only_the_definitions_under_it() {
+        let (rt, root) = project("t369-dir", true, &[("lib.rs", LIB)]);
+        let sub = root.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("m.rs"), "pub fn parse_since() {}\n").unwrap();
+        fs::create_dir_all(root.join("other")).unwrap();
+        graph::index::run(&Ctx::new(&rt), &root, false).unwrap();
+        let reason = |path: &str| grep(&rt, json!({"pattern": "parse_since", "path": path}));
+        // Two definitions project-wide, one under `sub`: relative and absolute spellings agree.
+        let wide = grep(&rt, json!({"pattern": "parse_since"})).unwrap();
+        assert!(
+            wide.contains("lib.rs:1") && wide.contains("sub/m.rs:1"),
+            "{wide}"
+        );
+        for spelling in ["sub", "sub/", "./sub", sub.to_str().unwrap()] {
+            let r = reason(spelling).expect(spelling);
+            assert!(r.contains("sub/m.rs:1") && !r.contains("lib.rs:1"), "{r}");
+        }
+        // Nothing under the directory, outside the project, or a file: the Grep runs.
+        assert_eq!(reason("other"), None);
+        assert_eq!(reason("../outside"), None);
+        assert_eq!(reason("/"), None);
+        assert_eq!(reason("sub/m.rs"), None);
+        assert_eq!(reason("missing"), None);
+    }
+
+    #[test]
+    fn word_boundary_and_call_spellings_are_answered() {
+        let (rt, _) = project("t369-spell", true, &[("lib.rs", LIB)]);
+        for pattern in [
+            "\\bparse_since\\b",
+            "\\bparse_since\\(",
+            "parse_since\\(",
+            "\\bparse_since",
+        ] {
+            let r = grep(&rt, json!({"pattern": pattern})).expect(pattern);
+            assert!(r.contains("lib.rs:1 function"), "{pattern}: {r}");
+        }
+        assert_eq!(
+            grep(&rt, json!({"pattern": "\\bparse_since|caller\\b"})),
+            None
+        );
     }
 
     #[test]

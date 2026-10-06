@@ -57,7 +57,7 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
-- T369. Answer a symbol-shaped `Grep` with the definition instead of a deny
+- T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T371. Git co-change pairs feed `impact` and the repo map
 - T372. Link tests to sources by naming convention in `affected_from_paths`

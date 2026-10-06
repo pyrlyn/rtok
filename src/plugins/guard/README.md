@@ -29,7 +29,8 @@ apply them). Measured 2026-09-17 on this machine: 17 bodies, median 8,863 B, max
 (`research.md` §10.2).
 
 Opt-in (T369): with `grep_symbol = true` a native `Grep` for one identifier (`foo`, `fn foo`,
-`class Foo`; no `glob`, `type`, `-i`, multiline or path other than the project root) is denied
+`class Foo`, also `\bfoo\b`, `\bfoo\(`, `foo\(`; no `glob`, `type`, `-i`, multiline, and a `path` only
+when it is a directory inside the project, which keeps the definitions under it) is denied
 with that symbol's definitions from the index, the same `path:line kind` and source `symbol`
 prints, plus the reference count, within `plugins.inject.budget_tokens`. One to five
 definitions only; none, more, a missing index or an index that no longer matches the file
