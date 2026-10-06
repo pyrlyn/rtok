@@ -670,6 +670,66 @@ fn overlap_lines(
     out
 }
 
+/// A skills root the audit scans, and the hosts that read it (`research.md` §10.1). One table
+/// feeds both the scan and the duplicate rule, so a root cannot be scanned without saying who
+/// lists it.
+struct SkillRoot {
+    /// Relative to `$HOME`, and to the working directory when `project` is set.
+    dir: &'static str,
+    project: bool,
+    hosts: &'static [&'static str],
+}
+
+const SKILL_ROOTS: [SkillRoot; 6] = [
+    SkillRoot {
+        dir: ".claude/skills",
+        project: true,
+        hosts: &["claude"],
+    },
+    // The shared root: Codex, Gemini and Copilot read it, Claude does not.
+    SkillRoot {
+        dir: ".agents/skills",
+        project: true,
+        hosts: &["codex", "gemini", "copilot"],
+    },
+    SkillRoot {
+        dir: ".codex/skills",
+        project: false,
+        hosts: &["codex"],
+    },
+    SkillRoot {
+        dir: ".cursor/skills",
+        project: false,
+        hosts: &["cursor"],
+    },
+    SkillRoot {
+        dir: ".gemini/skills",
+        project: false,
+        hosts: &["gemini"],
+    },
+    SkillRoot {
+        dir: ".copilot/skills",
+        project: false,
+        hosts: &["copilot"],
+    },
+];
+
+/// Plugin skill dirs come from Claude's `installed_plugins.json`, so only Claude lists them.
+const PLUGIN_SKILL_HOSTS: &[&str] = &["claude"];
+
+/// Hosts that list `dir`; none for a root outside [`SKILL_ROOTS`].
+fn root_hosts(dir: &str, plugin: bool) -> &'static [&'static str] {
+    if plugin {
+        return PLUGIN_SKILL_HOSTS;
+    }
+    // Windows paths use `\`; the table uses `/`.
+    let dir = dir.replace('\\', "/");
+    SKILL_ROOTS
+        .iter()
+        .find(|r| dir.ends_with(r.dir))
+        .map_or(&[], |r| r.hosts)
+}
+
 /// The skills audit probe (T61.3): the documented roots of every host on this
 /// machine (`research.md` §10.1), the enabled plugin skill dirs, and the T61.1
 /// invocation counts from the transcripts. Fail open: unreadable roots are skipped.
@@ -678,20 +738,14 @@ fn skills_audit(cfg: &Config) -> Option<SkillsAudit> {
     // host's dir, `~/.rtok` never holds skills.
     let home = crate::config::env_user_home().unwrap_or_else(|| cfg.home.clone());
     let cwd = std::env::current_dir().ok()?;
-    let user = [
-        ".claude/skills",
-        ".agents/skills",
-        ".codex/skills",
-        ".cursor/skills",
-        ".gemini/skills",
-        ".copilot/skills",
-    ]
-    .iter()
-    .map(|p| home.join(p).display().to_string())
-    .collect();
-    let project = [".claude/skills", ".agents/skills"]
+    let user = SKILL_ROOTS
         .iter()
-        .map(|p| cwd.join(p).display().to_string())
+        .map(|r| home.join(r.dir).display().to_string())
+        .collect();
+    let project = SKILL_ROOTS
+        .iter()
+        .filter(|r| r.project)
+        .map(|r| cwd.join(r.dir).display().to_string())
         .collect();
     let roots = vec![
         ("user".to_string(), user),
@@ -775,6 +829,7 @@ fn audit_from(
                 Some((d, id)) => (d, Some(format!("plugin:{}", id.trim_end_matches(']')))),
                 None => (dir.as_str(), None),
             };
+            let hosts = root_hosts(dir, plugin.is_some());
             let source = plugin.as_deref().unwrap_or(source);
             for sub in subdirs(dir) {
                 // `file_name`, not `rsplit('/')`: Windows paths end in `\<name>` (T83.7).
@@ -788,6 +843,7 @@ fn audit_from(
                 listings.push(Listing {
                     row: row.clone(),
                     dir: sub.clone(),
+                    hosts,
                     md,
                 });
                 rows.push(row);
@@ -813,44 +869,61 @@ fn audit_from(
 struct Listing {
     row: SkillRow,
     dir: String,
+    /// Hosts that read the root this came from ([`SKILL_ROOTS`]).
+    hosts: &'static [&'static str],
     md: String,
 }
 
-/// Names found at more than one real path (T392). The `(source, name)` dedup above hides the
-/// second copy from the rows, so this reads the raw listings; two roots that resolve to the
-/// same directory (a symlinked mirror) are still one copy.
+/// Names ONE host lists from two distinct real paths (T392, `research.md` §10.1). Copies in
+/// roots no single host reads together (`~/.claude/skills` and `~/.agents/skills`: rtok installs
+/// its skills per host) cost nothing twice, so each host is judged on its own roots and a finding
+/// names only the copies that host lists. The `(source, name)` dedup above hides the second copy
+/// from the rows, so this reads the raw listings; two roots that resolve to the same directory
+/// (a symlinked mirror) are still one copy.
 fn skill_duplicates(listings: &[Listing]) -> Vec<SkillDuplicate> {
-    let mut by_name: BTreeMap<&str, Vec<&Listing>> = BTreeMap::new();
-    for l in listings {
-        let copies = by_name.entry(&l.row.name).or_default();
-        let real = crate::fs::canon(Path::new(&l.dir));
-        if !copies
-            .iter()
-            .any(|c| crate::fs::same_path(&crate::fs::canon(Path::new(&c.dir)), &real))
-        {
-            copies.push(l);
+    let hosts: std::collections::BTreeSet<&str> = listings
+        .iter()
+        .flat_map(|l| l.hosts.iter().copied())
+        .collect();
+    let mut out: Vec<SkillDuplicate> = Vec::new();
+    for host in hosts {
+        let mut by_name: BTreeMap<&str, Vec<&Listing>> = BTreeMap::new();
+        for l in listings.iter().filter(|l| l.hosts.contains(&host)) {
+            let copies = by_name.entry(&l.row.name).or_default();
+            let real = crate::fs::canon(Path::new(&l.dir));
+            if !copies
+                .iter()
+                .any(|c| crate::fs::same_path(&crate::fs::canon(Path::new(&c.dir)), &real))
+            {
+                copies.push(l);
+            }
         }
-    }
-    by_name
-        .into_iter()
-        .filter(|(_, copies)| copies.len() > 1)
-        .map(|(name, copies)| SkillDuplicate {
-            name: name.to_string(),
-            identical: copies
-                .iter()
-                .all(|c| frontmatter_body(&c.md) == frontmatter_body(&copies[0].md)),
-            // The first listing is the one worth keeping; the rest are what a request pays extra.
-            extra_tokens: copies[1..]
-                .iter()
-                .map(|c| c.row.desc_chars as u64)
-                .sum::<u64>()
-                / 4,
-            copies: copies
+        for (name, copies) in by_name.into_iter().filter(|(_, c)| c.len() > 1) {
+            let copies_of: Vec<(String, String)> = copies
                 .iter()
                 .map(|c| (c.row.source.clone(), c.dir.clone()))
-                .collect(),
-        })
-        .collect()
+                .collect();
+            // Codex, Gemini and Copilot read the same pair: one finding, not three.
+            if out.iter().any(|d| d.name == name && d.copies == copies_of) {
+                continue;
+            }
+            out.push(SkillDuplicate {
+                name: name.to_string(),
+                identical: copies
+                    .iter()
+                    .all(|c| frontmatter_body(&c.md) == frontmatter_body(&copies[0].md)),
+                // The first listing is the one worth keeping; the rest are what a request pays extra.
+                extra_tokens: copies[1..]
+                    .iter()
+                    .map(|c| c.row.desc_chars as u64)
+                    .sum::<u64>()
+                    / 4,
+                copies: copies_of,
+            });
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
 }
 
 /// One row: frontmatter `description:` length, body bytes, and the flags the
@@ -1694,6 +1767,7 @@ mod tests {
         let same = "---\ndescription: shared body\n---\n# s\n";
         vfs.write("home/.claude/skills/twin/SKILL.md", same);
         vfs.write("proj/.agents/skills/twin/SKILL.md", same);
+        vfs.write("home/.agents/skills/twin/SKILL.md", same);
         vfs.write(
             "home/.claude/skills/fork/SKILL.md",
             "---\ndescription: the old copy\n---\n# a\n",
@@ -1707,7 +1781,13 @@ mod tests {
             "---\ndescription: alone\n---\n# c\n",
         );
         let roots = vec![
-            ("user".to_string(), vec!["home/.claude/skills".to_string()]),
+            (
+                "user".to_string(),
+                vec![
+                    "home/.claude/skills".to_string(),
+                    "home/.agents/skills".to_string(),
+                ],
+            ),
             (
                 "project".to_string(),
                 vec![
@@ -1743,6 +1823,17 @@ mod tests {
         let twin = &audit.duplicates[1];
         assert!(twin.identical, "{twin:?}");
         assert_eq!(twin.extra_tokens, 2);
+        assert_eq!(
+            twin.copies,
+            [
+                ("user".to_string(), "home/.agents/skills/twin".to_string()),
+                (
+                    "project".to_string(),
+                    "proj/.agents/skills/twin".to_string()
+                ),
+            ],
+            "Claude's own copy is not one that Codex, Gemini or Copilot list"
+        );
 
         let mut r = report_fixture();
         r.skills = Some(audit);
@@ -1754,6 +1845,53 @@ mod tests {
         assert!(
             text.contains("`twin`: 2 listings, bodies identical"),
             "{text}"
+        );
+    }
+
+    /// Duplicate names found when the same skill `dup` sits in every one of `roots` (a root
+    /// may carry a ` [plugin-id]` suffix), scanned in that order under one source label.
+    fn duplicate_names(roots: &[&str]) -> Vec<String> {
+        let mut vfs = crate::testutil::Vfs::new();
+        for r in roots {
+            vfs.write(
+                format!("{}/dup/SKILL.md", r.split(" [").next().unwrap()),
+                "---\ndescription: d\n---\n# d\n",
+            );
+        }
+        let roots = vec![(
+            "user".to_string(),
+            roots.iter().map(|r| r.to_string()).collect(),
+        )];
+        vfs_audit(&vfs, &roots, &None)
+            .duplicates
+            .into_iter()
+            .map(|d| d.name)
+            .collect()
+    }
+
+    /// T392, `research.md` §10.1: rtok installs a skill per host, and no host reads both
+    /// `~/.claude/skills` and `~/.agents/skills`, so that pair costs nothing twice.
+    #[test]
+    fn a_skill_in_claude_and_agents_roots_is_not_a_duplicate() {
+        assert!(duplicate_names(&["home/.claude/skills", "home/.agents/skills"]).is_empty());
+        assert!(duplicate_names(&["home/.codex/skills", "home/.claude/skills"]).is_empty());
+    }
+
+    /// T392: Codex, Gemini and Copilot all read both agents roots, so that pair is one finding.
+    #[test]
+    fn a_skill_in_user_and_project_agents_roots_is_a_duplicate() {
+        assert_eq!(
+            duplicate_names(&["home/.agents/skills", "proj/.agents/skills"]),
+            ["dup"]
+        );
+    }
+
+    /// T392: Claude lists its user root and its plugins' skill dirs together.
+    #[test]
+    fn a_skill_in_the_claude_root_and_a_plugin_is_a_duplicate() {
+        assert_eq!(
+            duplicate_names(&["home/.claude/skills", "plug/skills [x@market]"]),
+            ["dup"]
         );
     }
 
