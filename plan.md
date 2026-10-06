@@ -40,7 +40,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.3 | todo | P2 | 3 | 0% | |
-| T330.3.2 | todo | P2 | 3 | 0% | |
+| T330.3.2 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -1133,6 +1133,8 @@ Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag 
 Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item model: `temp` (entries older than 24 h and not open by a running process), `build` (tagged build caches in agent worktrees under T152's rules, untagged `dist/`, `.next/`, `__pycache__/` listed only, D36), `locks` (stale agent lock files, only when no process holds them), `swap` (editor swap files whose owning process is gone) and version-numbered plugin staging caches no host config references (T279). Depends on T330.3.1.
 
 Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
+
+Execution plan: (1) new `src/agents/junk_kinds.rs` over T330.3.1's `Item` model: `temp` = entries of a §22 `Temp` dir older than the idle window and not flock-held; `locks` and `swap` = a bounded walk of each agent's folders (never into `.git`, `node_modules` or a symlink), package-manager lockfiles skipped, a held lock and a swap file whose pid (vim header, emacs `.#` link) is alive kept with that reason; D36 (§22 has no lock or swap row) makes every other lock/swap find read-only, "not documented: not cleared", counted in no total; `build` = tagged caches of agent worktrees judged by `kept_because` (T152), untagged `dist/`, `.next/`, `__pycache__/` listed read-only; plugin staging = `<claude>/plugins/cache/rtok/rtok/<version>` dirs `installed_plugins.json` no longer names, fed to `cache_items` on the `rtok` row (idle rule applies). (2) `junk.rs`: generalise `cache_row` to one `KindRow` per kind, wire the scans into `host_rows` and `report_with`, group read-only finds per kind in `to_list`. (3) Tests under `testutil::tmp_dir` (lock held by the test process via `rtok_sys`, live and dead swap pids, lockfiles skipped, current-worktree `target/` kept, unreferenced staging dir), `just check`, trycmd/golden only if the surface changes.
 
 ### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
 
