@@ -238,23 +238,26 @@ mod tests {
             SystemTime::now(),
         );
         let items = cache_items(&owned, std::slice::from_ref(&root), &elsewhere, limit);
-        let row = |name: &str| items.iter().find(|i| i.path.ends_with(name)).unwrap();
+        // Component-wise, so a Windows `\` path matches the same name.
+        let row = |name: &str| {
+            items
+                .iter()
+                .find(|i| Path::new(&i.path).ends_with(name))
+                .unwrap_or_else(|| panic!("no item ending in {name}: {items:?}"))
+        };
         assert_eq!(
             items.len(),
             3,
             "bad signature and nested item are not listed: {items:?}"
         );
+        assert_eq!((row("old").evidence, row("old").kept.clone()), (TAG, None));
+        assert_eq!(row("owned").evidence, SECTION_22);
         assert_eq!(
-            (row("/old").evidence, row("/old").kept.clone()),
-            (TAG, None)
-        );
-        assert_eq!(row("/owned").evidence, SECTION_22);
-        assert_eq!(
-            row("/new").kept.as_deref(),
+            row("new").kept.as_deref(),
             Some("modified within the idle window")
         );
         assert_eq!(
-            row("/old").bytes,
+            row("old").bytes,
             disk_usage_until(&root.join("old"), None).bytes
         );
 
