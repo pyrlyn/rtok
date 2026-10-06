@@ -2518,6 +2518,16 @@ Deviations: `impact --to` and the call paths of `explore` are found inside one p
 Status: done 2026-10-06 · Model: Claude Code / sonnet-5.5
 
 
+### T329.4. `project` argument and scoped traversal for symbol, callers, impact, explore and outline (CLI and MCP)
+
+T329 §6 (first half), §7 and the tags-backend half of §6a mode 2. Every graph command and graph MCP tool takes `project` (id or path); without it the project is the caller's cwd and its links are in scope (T336: the web UI selection never replaces the cwd). Queries run over the scope as one graph, rows carry `project` (JSON field, `[name]` text prefix), same-named symbols across projects are grouped and flagged ambiguous with the selected project first. Depends on T329.3.
+
+Check: fixture repos from the T329 Check list; `callers` of a function in C returns call sites in A and B labelled by project; `impact` walks up into A; a same-named symbol is grouped and flagged; MCP `project` set to D does not cross; `just check`.
+
+Split (2026-10-06, complexity 3 each): T329.4.1 and T329.4.2 below. This card stays the specification and the parent; it closes with the second subtask.
+
+Closed 2026-10-07 with its last subtask: T329.4.1 (#778) and T329.4.2 (#794).
+
 ## T329.12 — `/ws` project messages and the SPA graph page: selector and index indicator (links panel split to T329.20)
 
 T329 §2, §3, §5 page parts and §8 `/ws` messages, first half of the card (the links panel is T329.20, split because the whole was over 300 LOC). The snapshot gains `projects` (the rows `rtok graph projects --json` prints, read each tick, so a second tab sees a selection on its next frame) and `ClientMessage::Project` carries `select`. The server runs it through `graph::projects::run`, the same code as the CLI, off the executor in `spawn_blocking`; a refused request comes back as a `message` frame. The schema and `snapshot.gen.ts` are regenerated from the Rust types. On the graph page, `Projects.tsx` adds the selector (a search box above ten projects) and the current-project header with the index state pill and counts; the pure rules (filter, state tones and the reducer that mirrors the server) are in `projectLogic.ts`, and the sample server applies the request so `?sample` and the stories run the real round trip. No new client state library: `useProjectMutation` sits on the existing TanStack Query data layer.
@@ -8056,6 +8066,16 @@ Part of T330.3. The rest of the T330.3 safe kinds on top of T330.3.1's item mode
 Check: the T330 fixtures for these kinds (a lock held by a test process and a swap file of a live process skipped with reasons, package-manager lockfiles never junk, a `target/` of the current worktree kept); `just check`.
 
 Result (2026-10-06, Claude Code / sonnet-5.5): `rtok agents junk list` gains the `temp`, `build`, `locks` and `swap` kinds (`src/agents/junk_kinds.rs`, over T330.3.1's `Item` model). `temp`: each entry of a §22 temp dir (Claude Code `shell-snapshots`, ZCode `cli/exec`) is an item, kept while touched within the idle window (24 h) or, for a file, while another process holds a lock on it (`rtok_sys::try_lock_exclusive`); a symlink is no item. `build`: the tagged caches of every agent worktree (bound by claim or lock, seen by a session, or made in a host's pool: `junk_kinds::agent_worktrees` over `worktree::list::{rows, attribute_with_store}`) are judged by `kept_because` (idle, never the worktree the command runs from); untagged `dist/`, `.next/` and `__pycache__/` are listed read-only. `locks` and `swap`: a bounded walk of each agent's folders (never `.git`, `node_modules` or a symlink; package-manager lockfiles such as `Cargo.lock` are never listed). D36 and §22 name no lock or swap path, so every such find is read-only, "not documented: not cleared", in no "Freed" total; a held lock or a swap file whose owner is alive (Vim's `b0` pid, Emacs' `.#` link target, checked with `rtok_sys::process_alive`) says so instead, and a `.crswap` or headerless swap reads "owner unknown". Plugin staging: the version directories under `<claude>/plugins/cache/rtok/rtok` that `installed_plugins.json` no longer names as an `installPath` are `cache` items of the `rtok` row (idle rule applies); a missing, unreadable or rtok-less record lists none. Reused: `junk_cache::{cache_items, make_item, drop_nested}`, `usage_until`, `kept_because`, `disk_usage_until`, `junk_map::specs` and `Roots`, `plugin_install::PLUGIN_CACHE` (now shared). `to_list` prints a read-only find as one line per kind. Not done: Codex's staging caches (its config names no version), the "agent running" skip and `[agents.junk]` `temp_min_age_hours` (T330.4, T330.5); `clear` still removes only T182's logs and archives. No new dependency.
+
+### T330.3. Junk: `cache`, `temp`, `build`, `locks`, `swap` kinds and rtok's own caches
+
+Split into T330.3.1 (done) and T330.3.2 (one PR each); this card stays the spec and the parent.
+
+Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg/{cache,pub-cache}`, `$XDG_CACHE_HOME/rtok`, `CACHEDIR.TAG` dirs, T329 registry roots) and each agent's cache: §22 dirs and `CACHEDIR.TAG` dirs are cleared; platform cache roots and Electron cache folders without a §22 row are listed as `not documented: not cleared` (D36). A bad `CACHEDIR.TAG` signature is not cache; settings, extensions and downloaded models are `never`. Depends on T330.2 (T339 closed: D36; T342 closed: `build` and `CACHEDIR.TAG` dirs follow T152's idle, own-worktree and one-root rules).
+
+Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
+
+Closed 2026-10-07 with its last subtask: T330.3.1 and T330.3.2 (#793).
 
 ### T248. Plugin READMEs must link the host's official documentation
 
