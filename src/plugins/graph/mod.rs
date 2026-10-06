@@ -33,6 +33,7 @@ pub mod follow;
 pub mod index;
 pub mod lsp;
 pub mod projects;
+pub mod rank;
 pub mod scope;
 pub mod status;
 pub mod walk;
@@ -72,8 +73,8 @@ impl Plugin for Graph {
         None
     }
 
-    fn session_start(&self, _ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
-        repo_map(cx)
+    fn session_start(&self, ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+        repo_map(ev, cx)
     }
 
     fn mcp_tools(&self) -> Vec<ToolDef> {
@@ -1214,9 +1215,11 @@ impl ExploreParts for TagsExplore<'_> {
 }
 
 /// T52.3: ranked repo map from existing `symbols` rows. `map_tokens = 0` is off;
-/// a missing index does not walk the tree (hook path).
-fn repo_map(cx: &Ctx) -> Option<Injection> {
-    let cap = cx.plugin_config::<crate::config::Graph>("graph").map_tokens;
+/// a missing index does not walk the tree (hook path). `map_rank = "pagerank"` (T370) reads the
+/// stored file graph instead and falls back to the reference counts when none is stored.
+fn repo_map(ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
+    let cfg = cx.plugin_config::<crate::config::Graph>("graph");
+    let cap = cfg.map_tokens;
     if cap == 0 {
         return None;
     }
@@ -1224,6 +1227,24 @@ fn repo_map(cx: &Ctx) -> Option<Injection> {
         .cwd()
         .map(PathBuf::from)
         .or_else(|| std::env::current_dir().ok())?;
+    if cfg.map_rank == "pagerank" {
+        let root = index::canon(&cwd);
+        let seeds = if ev.source == "compact" {
+            crate::plugins::checkpoint::last_paths(cx, &root)
+        } else {
+            Vec::new()
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as i64);
+        if let Some(text) = rank::map(cx, &root, cap, &seeds, now) {
+            return Some(Injection {
+                plugin: "graph",
+                text,
+                priority: 1,
+            });
+        }
+    }
     let rows = cx
         .symbol_top_refs(&index::canon(&cwd), i64::from(cap))
         .ok()?;
@@ -2304,6 +2325,25 @@ fn c() {}
         assert!(start(&empty).is_none(), "empty index must not inject");
         let _ = fs::remove_dir_all(dir);
         let _ = fs::remove_dir_all(empty_dir);
+    }
+
+    /// T370: `map_rank = "pagerank"` lists files from the stored graph, falls back to the
+    /// reference counts when none is stored, and is byte-stable.
+    #[test]
+    fn repo_map_pagerank_lists_files_and_falls_back_without_a_graph() {
+        let (mut rt, dir) = cx("map-rank");
+        rt.cwd = Some(dir.to_string_lossy().into_owned());
+        rt.config.plugins.graph.map_tokens = 2000;
+        rt.config.plugins.graph.map_rank = "pagerank".into();
+        seed_map(&rt, &dir);
+        let fallback = start(&rt).expect("refs fallback");
+        assert!(fallback.text.contains("hot a.rs:1 2"), "{}", fallback.text);
+        rank::refresh(&Ctx::new(&rt), &index::canon(&dir)).unwrap();
+        let ranked = start(&rt).expect("pagerank map");
+        assert_eq!(ranked.text, "repo map\na.rs: hot, mid");
+        assert_eq!(start(&rt).unwrap(), ranked);
+        assert_eq!(ranked.priority, 1);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
