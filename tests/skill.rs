@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! T71.3 / T155: size limits for every shipped skill (`skills/<name>/SKILL.md`), and the
-//! `worktrees` skill names only commands `rtok worktree` really has, and
+//! `rtok-worktrees` skill names only commands `rtok worktree` really has, and
 //! (T234) no host plugin bundles a copy of a skill.
 
 mod common;
@@ -75,7 +75,7 @@ fn every_skill_body_is_at_most_2kb_and_has_no_disable_model_invocation() {
 fn worktrees_skill_names_only_commands_rtok_worktree_has() {
     let cli = Cli::command();
     let worktree = cli.find_subcommand("worktree").expect("rtok worktree");
-    let content = hub_skill("worktrees");
+    let content = hub_skill("rtok-worktrees");
     let (_, body) = split_frontmatter(&content);
     let mut seen = Vec::new();
     for span in body.split('`').skip(1).step_by(2) {
@@ -103,6 +103,21 @@ fn worktrees_skill_names_only_commands_rtok_worktree_has() {
     }
 }
 
+/// T380: the hub skill keeps the name `rtok`; every other shipped skill is `rtok-<name>`.
+#[test]
+fn shipped_skills_except_the_hub_start_with_rtok_prefix() {
+    assert!(SKILLS.contains(&"rtok"));
+    for name in SKILLS {
+        if *name == "rtok" {
+            continue;
+        }
+        assert!(
+            name.starts_with("rtok-"),
+            "{name} must be prefixed so it cannot collide with a user's skill"
+        );
+    }
+}
+
 /// T155: one install copies every shipped skill under the host's skill root and one remove
 /// takes them all away (codex: no plugin offer, so no flags).
 #[test]
@@ -119,6 +134,69 @@ fn install_copies_every_skill_and_remove_takes_them_away() {
     for name in SKILLS {
         assert!(!root.join(name).exists(), "{name}: {out}");
     }
+}
+
+/// T380: install removes a legacy marked `worktrees`, leaves a foreign `worktrees` symlink
+/// (and a stray `rtok-x` directory) and still copies the prefixed skills.
+#[test]
+fn install_retires_our_legacy_worktrees_and_leaves_a_foreign_one() {
+    let home = tmp("skills-migrate");
+    let cfg = write_cfg(&home);
+
+    let codex = home.join(".codex/skills");
+    let legacy = codex.join("worktrees");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(legacy.join("SKILL.md"), "old skill\n").unwrap();
+    fs::write(legacy.join(".rtok-owned"), "").unwrap();
+    let stray = codex.join("rtok-x");
+    fs::create_dir_all(&stray).unwrap();
+    fs::write(stray.join("SKILL.md"), "stray\n").unwrap();
+
+    let out = rtok(&["agents", "install", "codex"], &cfg, &home);
+    assert!(codex.join("rtok/SKILL.md").is_file(), "{out}");
+    assert!(codex.join("rtok-worktrees/SKILL.md").is_file(), "{out}");
+    assert!(!legacy.exists(), "marked legacy worktrees must go: {out}");
+    assert!(
+        out.lines().any(|l| {
+            let l = l.replace('\\', "/");
+            l.starts_with("- skill ") && l.ends_with("/skills/worktrees")
+        }),
+        "{out}"
+    );
+    assert_eq!(
+        fs::read_to_string(stray.join("SKILL.md")).unwrap(),
+        "stray\n"
+    );
+    assert!(
+        !out.contains("rtok-x"),
+        "a stray prefixed directory we do not ship is not a destination: {out}"
+    );
+
+    #[cfg(unix)]
+    {
+        // Cursor's installer does not copy skills; Command Code does, into its own root.
+        let cc = home.join(".commandcode/skills");
+        fs::create_dir_all(&cc).unwrap();
+        let personal = home.join("personal-worktrees");
+        fs::create_dir_all(&personal).unwrap();
+        fs::write(personal.join("SKILL.md"), "mine\n").unwrap();
+        let link = cc.join("worktrees");
+        std::os::unix::fs::symlink(&personal, &link).unwrap();
+        let out = rtok(&["agents", "install", "commandcode"], &cfg, &home);
+        assert!(
+            link.symlink_metadata().unwrap().file_type().is_symlink(),
+            "{out}"
+        );
+        assert_eq!(
+            fs::read_to_string(personal.join("SKILL.md")).unwrap(),
+            "mine\n"
+        );
+        assert!(out.contains(&format!("leave {}", link.display())), "{out}");
+        assert!(cc.join("rtok-worktrees/SKILL.md").is_file(), "{out}");
+        assert!(cc.join("rtok/SKILL.md").is_file(), "{out}");
+    }
+
+    let _ = fs::remove_dir_all(&home);
 }
 
 /// T234: a skill lives only in `skills/<name>/`. Host plugins get it from `rtok agents install`

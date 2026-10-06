@@ -763,13 +763,7 @@ impl PluginLink<'_> {
     /// once that already said yes, whether for a genuine uninstall or to clear a stale
     /// version before a relink (T164).
     fn unlink(&self) -> Result<()> {
-        let meta = self.dest.symlink_metadata()?;
-        if meta.file_type().is_symlink() || meta.file_type().is_file() {
-            fs::remove_file(&self.dest)?;
-        } else if meta.is_dir() {
-            fs::remove_dir_all(&self.dest)?;
-        }
-        Ok(())
+        unlink_at(&self.dest)
     }
 
     /// True when the destination already carries exactly this build's plugin: the same
@@ -796,7 +790,8 @@ impl PluginLink<'_> {
 /// can drive the same decision as the installer without touching the host disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillPlan {
-    /// Copy the hub tree and write [`OWNED_MARKER`].
+    /// Copy the hub tree and write [`OWNED_MARKER`]. Replaces a destination [`SkillView::ours`]
+    /// already holds when the bytes are not the current hub.
     Copy,
     /// Already installed, already gone, or a foreign tree on remove.
     NoChanges,
@@ -806,28 +801,75 @@ pub enum SkillPlan {
     Remove,
 }
 
-/// Decide install / reinstall / remove from destination flags only.
-pub fn skill_plan(remove: bool, dest_exists: bool, owned: bool) -> SkillPlan {
+/// Destination facts for [`skill_plan`]. A symlink is never followed: its target is not proof
+/// and is not deleted (T380).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkillView {
+    pub present: bool,
+    pub symlink: bool,
+    /// Last path component starts with `rtok`. That name is ours, beside the marker and a
+    /// byte-for-byte copy, because an unprefixed name collides with a user's own skill.
+    pub prefixed: bool,
+    pub marked: bool,
+    pub same_bytes: bool,
+}
+
+impl SkillView {
+    /// Marker, byte-for-byte copy, or a `rtok` directory name. A symlink counts only when the
+    /// link's own name is prefixed — the target is never rtok's.
+    pub fn ours(self) -> bool {
+        if !self.present {
+            return false;
+        }
+        if self.symlink {
+            return self.prefixed;
+        }
+        self.prefixed || self.marked || self.same_bytes
+    }
+}
+
+/// Decide install / reinstall / remove from [`SkillView`].
+pub fn skill_plan(remove: bool, view: SkillView) -> SkillPlan {
+    if !view.present {
+        return if remove {
+            SkillPlan::NoChanges
+        } else {
+            SkillPlan::Copy
+        };
+    }
     if remove {
-        return if owned {
+        return if view.ours() {
             SkillPlan::Remove
         } else {
             SkillPlan::NoChanges
         };
     }
-    if owned {
-        SkillPlan::NoChanges
-    } else if dest_exists {
-        SkillPlan::LeaveForeign
-    } else {
-        SkillPlan::Copy
+    if view.symlink {
+        return if view.prefixed {
+            SkillPlan::Copy
+        } else {
+            SkillPlan::LeaveForeign
+        };
     }
+    if view.same_bytes {
+        return SkillPlan::NoChanges;
+    }
+    // The prefix is the slot: a foreign or stale tree under a `rtok` name is replaced.
+    // An unprefixed marked copy stays, so an edit there is not clobbered on install.
+    if view.prefixed {
+        return SkillPlan::Copy;
+    }
+    if view.marked {
+        return SkillPlan::NoChanges;
+    }
+    SkillPlan::LeaveForeign
 }
 
 /// Hub skill directory (`skills/rtok/`) copied into a host's documented skill root.
 ///
-/// Always an owned directory copy marked with [`OWNED_MARKER`]; foreign skill trees are
-/// left alone on install and remove.
+/// A directory whose name starts with `rtok` is ours. Anything else is ours only with
+/// [`OWNED_MARKER`] or a byte-for-byte copy of `src` ([`tree_copies`]), the same two proofs
+/// a plugin directory uses. A symlink is unlinked and never followed.
 pub struct SkillCopy {
     /// Absolute source directory in this repo (`skills/rtok`).
     pub src: PathBuf,
@@ -839,8 +881,41 @@ pub struct SkillCopy {
 }
 
 impl SkillCopy {
-    fn owned(&self) -> bool {
-        self.dest.join(OWNED_MARKER).is_file()
+    fn prefixed(&self) -> bool {
+        self.dest
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("rtok"))
+    }
+
+    /// `symlink_metadata` only. Following a link would treat the user's target as ours.
+    fn view(&self) -> SkillView {
+        let Ok(meta) = fs::symlink_metadata(&self.dest) else {
+            return SkillView {
+                present: false,
+                symlink: false,
+                prefixed: self.prefixed(),
+                marked: false,
+                same_bytes: false,
+            };
+        };
+        if meta.file_type().is_symlink() {
+            return SkillView {
+                present: true,
+                symlink: true,
+                prefixed: self.prefixed(),
+                marked: false,
+                same_bytes: false,
+            };
+        }
+        let dir = meta.is_dir();
+        SkillView {
+            present: true,
+            symlink: false,
+            prefixed: self.prefixed(),
+            marked: dir && self.dest.join(OWNED_MARKER).is_file(),
+            same_bytes: dir && tree_copies(&self.src, &self.dest),
+        }
     }
 
     fn dest_desc(&self) -> String {
@@ -853,14 +928,17 @@ impl SkillCopy {
     /// Copy or remove the hub skill tree. Returns one report line; a dry run describes the
     /// change and touches nothing.
     pub fn run(&self, apply: &Apply, remove: bool) -> Result<String> {
-        match skill_plan(remove, self.dest.exists(), self.owned()) {
+        let view = self.view();
+        match skill_plan(remove, view) {
             SkillPlan::NoChanges => Ok(NO_CHANGES.into()),
             SkillPlan::LeaveForeign => Ok(format!(
                 "leave {} (not an rtok skill; remove by hand)",
                 self.dest.display()
             )),
             SkillPlan::Remove => {
-                if edited_since_marked(&self.dest)
+                // A symlink has no marker of its own; do not stat the target.
+                if !view.symlink
+                    && edited_since_marked(&self.dest)
                     && let Some(leave) = keep_edited(apply, &self.dest.display().to_string())
                 {
                     return Ok(leave);
@@ -871,13 +949,16 @@ impl SkillCopy {
                     format!("- skill {}", self.dest.display())
                 };
                 if apply.writes(&report) {
-                    fs::remove_dir_all(&self.dest)?;
+                    unlink_at(&self.dest)?;
                 }
                 Ok(report)
             }
             SkillPlan::Copy => {
                 let report = format!("+ skill → {}", self.dest_desc());
                 if apply.writes(&report) {
+                    if view.present {
+                        unlink_at(&self.dest)?;
+                    }
                     if let Some(dir) = self.dest.parent() {
                         fs::create_dir_all(dir).ok();
                     }
@@ -887,6 +968,17 @@ impl SkillCopy {
             }
         }
     }
+}
+
+/// Remove `dest` itself. A symlink is `remove_file`d so its target is left untouched.
+fn unlink_at(dest: &Path) -> Result<()> {
+    let meta = fs::symlink_metadata(dest)?;
+    if meta.file_type().is_symlink() || meta.file_type().is_file() {
+        fs::remove_file(dest).with_context(|| format!("unlink {}", dest.display()))?;
+    } else if meta.is_dir() {
+        fs::remove_dir_all(dest).with_context(|| format!("remove {}", dest.display()))?;
+    }
+    Ok(())
 }
 
 /// True when something under the owned copy `dest` is newer than its [`OWNED_MARKER`] (T246.4):
@@ -1965,15 +2057,70 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    fn skill_view(
+        present: bool,
+        symlink: bool,
+        prefixed: bool,
+        marked: bool,
+        same_bytes: bool,
+    ) -> SkillView {
+        SkillView {
+            present,
+            symlink,
+            prefixed,
+            marked,
+            same_bytes,
+        }
+    }
+
     #[test]
     fn skill_plan_covers_install_reinstall_remove_and_foreign() {
         use SkillPlan::*;
-        assert_eq!(skill_plan(false, false, false), Copy);
-        assert_eq!(skill_plan(false, true, true), NoChanges);
-        assert_eq!(skill_plan(false, true, false), LeaveForeign);
-        assert_eq!(skill_plan(true, true, true), Remove);
-        assert_eq!(skill_plan(true, true, false), NoChanges);
-        assert_eq!(skill_plan(true, false, false), NoChanges);
+        let absent = skill_view(false, false, false, false, false);
+        assert_eq!(skill_plan(false, absent), Copy);
+        assert_eq!(skill_plan(true, absent), NoChanges);
+        // Unprefixed + marker, bytes differ: already installed, do not clobber the edit.
+        assert_eq!(
+            skill_plan(false, skill_view(true, false, false, true, false)),
+            NoChanges
+        );
+        assert_eq!(
+            skill_plan(false, skill_view(true, false, false, false, false)),
+            LeaveForeign
+        );
+        assert_eq!(
+            skill_plan(true, skill_view(true, false, false, true, false)),
+            Remove
+        );
+        assert_eq!(
+            skill_plan(true, skill_view(true, false, false, false, true)),
+            Remove
+        );
+        assert_eq!(
+            skill_plan(true, skill_view(true, false, false, false, false)),
+            NoChanges
+        );
+        // Prefix replaces a stale or foreign tree and a symlink; an unprefixed symlink is not ours.
+        assert_eq!(
+            skill_plan(false, skill_view(true, false, true, false, false)),
+            Copy
+        );
+        assert_eq!(
+            skill_plan(false, skill_view(true, true, true, false, false)),
+            Copy
+        );
+        assert_eq!(
+            skill_plan(false, skill_view(true, true, false, false, false)),
+            LeaveForeign
+        );
+        assert_eq!(
+            skill_plan(true, skill_view(true, true, true, false, false)),
+            Remove
+        );
+        assert_eq!(
+            skill_plan(true, skill_view(true, true, false, false, false)),
+            NoChanges
+        );
     }
 
     #[test]
@@ -2047,7 +2194,7 @@ mod tests {
     fn skill_copy_leaves_a_foreign_skill_tree() {
         let dir = tmp("skill-foreign");
         let src = dir.join("src");
-        let dest = dir.join("skills/rtok");
+        let dest = dir.join("skills/notes");
         fs::create_dir_all(&src).unwrap();
         fs::write(src.join("SKILL.md"), "hub body\n").unwrap();
         fs::create_dir_all(&dest).unwrap();
@@ -2064,6 +2211,124 @@ mod tests {
         assert_eq!(
             fs::read_to_string(dest.join("SKILL.md")).unwrap(),
             "# foreign\n"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T380: a destination named `rtok…` is ours, so a foreign tree there is replaced.
+    #[test]
+    fn skill_copy_overwrites_a_prefixed_foreign_tree() {
+        let dir = tmp("skill-prefix");
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("SKILL.md"), "hub body\n").unwrap();
+        let dest = dir.join("skills/rtok-x");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(dest.join("SKILL.md"), "# foreign\n").unwrap();
+
+        let copy = SkillCopy {
+            src,
+            dest: dest.clone(),
+            label: None,
+        };
+        let out = copy.run(&apply(), false).unwrap();
+        assert!(out.starts_with("+ skill"), "{out}");
+        assert_eq!(
+            fs::read_to_string(dest.join("SKILL.md")).unwrap(),
+            "hub body\n"
+        );
+        assert!(dest.join(OWNED_MARKER).is_file());
+        assert!(copy.run(&apply(), true).unwrap().starts_with("- skill"));
+        assert!(!dest.exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T380: an unprefixed directory that matches `src` byte for byte is ours without a marker.
+    #[test]
+    fn skill_copy_remove_takes_an_unprefixed_byte_copy() {
+        let dir = tmp("skill-bytes");
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("SKILL.md"), "hub body\n").unwrap();
+        let dest = dir.join("skills/worktrees");
+        fs::create_dir_all(&dest).unwrap();
+        fs::copy(src.join("SKILL.md"), dest.join("SKILL.md")).unwrap();
+
+        let copy = SkillCopy {
+            src,
+            dest: dest.clone(),
+            label: None,
+        };
+        assert_eq!(copy.run(&apply(), false).unwrap(), NO_CHANGES);
+        assert_eq!(
+            copy.run(&apply(), true).unwrap(),
+            format!("- skill {}", dest.display())
+        );
+        assert!(!dest.exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T380: a prefixed symlink is replaced; the target stays.
+    #[test]
+    #[cfg(unix)]
+    fn skill_copy_unlinks_a_prefixed_symlink_and_leaves_its_target() {
+        let dir = tmp("skill-prefix-link");
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("SKILL.md"), "hub body\n").unwrap();
+        let target = dir.join("personal");
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("SKILL.md"), "mine\n").unwrap();
+        let dest = dir.join("skills/rtok-worktrees");
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&target, &dest).unwrap();
+
+        let copy = SkillCopy {
+            src,
+            dest: dest.clone(),
+            label: None,
+        };
+        let out = copy.run(&apply(), false).unwrap();
+        assert!(out.starts_with("+ skill"), "{out}");
+        assert!(!dest.symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(
+            fs::read_to_string(dest.join("SKILL.md")).unwrap(),
+            "hub body\n"
+        );
+        assert_eq!(
+            fs::read_to_string(target.join("SKILL.md")).unwrap(),
+            "mine\n"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T380: an unprefixed symlink is not ours. Install and remove both leave the link and target.
+    #[test]
+    #[cfg(unix)]
+    fn skill_copy_leaves_an_unprefixed_symlink() {
+        let dir = tmp("skill-foreign-link");
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("SKILL.md"), "hub body\n").unwrap();
+        let target = dir.join("personal");
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("SKILL.md"), "mine\n").unwrap();
+        let dest = dir.join("skills/worktrees");
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&target, &dest).unwrap();
+
+        let copy = SkillCopy {
+            src,
+            dest: dest.clone(),
+            label: None,
+        };
+        let installed = copy.run(&apply(), false).unwrap();
+        assert!(installed.contains("leave"), "{installed}");
+        assert!(dest.symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(copy.run(&apply(), true).unwrap(), NO_CHANGES);
+        assert_eq!(
+            fs::read_to_string(target.join("SKILL.md")).unwrap(),
+            "mine\n"
         );
         let _ = fs::remove_dir_all(dir);
     }

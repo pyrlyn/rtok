@@ -5,7 +5,7 @@
 //! T71.3 / T155: install the skills this repo ships (`skills/<name>/`) into each host's
 //! documented skill root (`research.md` §10.1).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{NO_CHANGES, SkillCopy};
@@ -15,7 +15,12 @@ use crate::config::Config;
 use super::{apply, home_dir, skill_src};
 
 /// Skills this repo ships under `skills/`, installed and removed together.
-pub const SKILLS: &[&str] = &["rtok", "worktrees"];
+/// Every name but the hub `rtok` starts with `rtok-` so it cannot collide with a user's skill (T380).
+pub const SKILLS: &[&str] = &["rtok", "rtok-worktrees"];
+
+/// Unprefixed install from before T380. Retired on install only when the marker or a byte copy
+/// already proves it ours; a foreign directory or symlink keeps its name and is reported once.
+const LEGACY_SKILL: &str = "worktrees";
 
 /// User skill root for a host that documents the Agent Skills format; `None` = untouched.
 pub fn root(host: &str, cfg: &Config) -> Option<PathBuf> {
@@ -96,6 +101,10 @@ pub fn sync(host: &str, cfg: &Config, remove: bool) -> Result<String> {
             lines.push(line);
         }
     }
+    // Install only: a later remove has nothing named `worktrees` in `SKILLS` to take back.
+    if !remove && let Some(line) = retire_legacy(host, &root, cfg)? {
+        lines.push(line);
+    }
     Ok(if lines.is_empty() {
         NO_CHANGES.into()
     } else {
@@ -103,12 +112,34 @@ pub fn sync(host: &str, cfg: &Config, remove: bool) -> Result<String> {
     })
 }
 
+/// Drop the pre-T380 `worktrees` install when [`SkillCopy`] can already prove it ours.
+/// A foreign directory or a symlink (never followed) stays, and is named once.
+fn retire_legacy(host: &str, root: &Path, cfg: &Config) -> Result<Option<String>> {
+    let dest = root.join(LEGACY_SKILL);
+    if std::fs::symlink_metadata(&dest).is_err() {
+        return Ok(None);
+    }
+    let copy = SkillCopy {
+        src: skill_src("rtok-worktrees"),
+        dest: dest.clone(),
+        label: label(host).map(|l| format!("{l}/{LEGACY_SKILL}")),
+    };
+    let line = copy.run(&apply(cfg), true)?;
+    if line != NO_CHANGES {
+        return Ok(Some(line));
+    }
+    Ok(Some(format!(
+        "leave {} (not an rtok skill; remove by hand)",
+        dest.display()
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::agents::HOSTS;
     use crate::testutil::Vfs;
-    use rtok_agent_sdk::{NO_CHANGES, OWNED_MARKER, SkillPlan, skill_plan};
+    use rtok_agent_sdk::{NO_CHANGES, OWNED_MARKER, SkillPlan, SkillView, skill_plan};
 
     const HUB: &str = "src/SKILL.md";
     const DEST: &str = "skills/rtok";
@@ -124,7 +155,18 @@ mod tests {
     }
 
     fn vfs_sync(vfs: &mut Vfs, remove: bool) -> String {
-        match skill_plan(remove, dest_exists(vfs), vfs.exists(&marker())) {
+        let same_bytes = vfs.read_str(HUB) == vfs.read_str(DEST_MD);
+        match skill_plan(
+            remove,
+            SkillView {
+                present: dest_exists(vfs),
+                symlink: false,
+                // `skills/rtok` starts with `rtok`, so the slot is ours (T380).
+                prefixed: true,
+                marked: vfs.exists(&marker()),
+                same_bytes,
+            },
+        ) {
             SkillPlan::NoChanges => NO_CHANGES.into(),
             SkillPlan::LeaveForeign => {
                 format!("leave {DEST} (not an rtok skill; remove by hand)")
@@ -172,15 +214,15 @@ mod tests {
     }
 
     #[test]
-    fn leaves_a_foreign_skill_tree() {
+    fn overwrites_a_foreign_tree_at_a_prefixed_name() {
         let mut vfs = Vfs::new();
         vfs.write(HUB, "hub body\n");
         vfs.write(DEST_MD, "# foreign\n");
 
         let out = vfs_sync(&mut vfs, false);
-        assert!(out.contains("leave"), "{out}");
-        assert_eq!(vfs.read_str(DEST_MD), Some("# foreign\n"));
-        assert!(!vfs.exists(&marker()));
+        assert!(out.starts_with("+ skill"), "{out}");
+        assert_eq!(vfs.read_str(DEST_MD), Some("hub body\n"));
+        assert!(vfs.exists(&marker()));
     }
 
     #[test]
