@@ -83,7 +83,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
-| T400 | in progress | P2 | 2 | 40% | Claude Code / claude-sonnet-5-5 |
 | T401 | todo | P3 | 4 | 20% | |
 | T402 | todo | P3 | 2 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
@@ -1713,21 +1712,6 @@ From `research.md`:
 Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
 
 Check: dated sources in §10.1, §23 and §26.
-
-### T400. Fix stale and broken statements in `research.md` and related docs
-
-The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
-
-- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
-- §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
-- §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
-- §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
-- §22–§28: T283.3 shipped (line "Not shipped yet: (b)"); T330.1 no longer "PR #651, open"; host counts (22, not 17 or 21; plain host names, not autolinked URLs).
-- `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
-
-Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
-
-Execution plan (Claude Code / claude-sonnet-5-5, 2026-10-08): for each bullet, verify the claim against `done.md`, the code and `git log`, then edit `research.md` in place with a date or a "shipped as Txx" pointer (keeping each fact's source). The §2 T241 numbers wait for T397 (not done), so that one item is left and reported. Edit `docs/config.md` and its `docs/ru`/`docs/uk` copies together, `ideas.md` I-90/I-99 and `plan.md` T156 for the lead and the 14 % figure. Verify with `just check`.
 
 ### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
 
