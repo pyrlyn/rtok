@@ -128,7 +128,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T441 | todo | P2 | 5 | 0% | |
 | T441.11 | todo | P3 | 3 | 0% | |
 | T441.12 | todo | P3 | 3 | 0% | |
-| T441.8 | todo | P3 | 4 | 0% | |
+| T441.8 | in progress | P3 | 4 | 5% | Claude Code / claude-opus-5-5 |
 | T441.9 | todo | P3 | 1 | 0% | |
 | T441.10 | todo | P3 | 2 | 0% | |
 
@@ -2388,6 +2388,7 @@ project = "group/name"
 6. **T441.6 MCP tools** — `task_*` on `rtok mcp`, parity test. The server entry is already what `rtok agents install` writes for every host, so the tools need no install of their own.
 7. **T441.7 GitHub adapter** — issues, sub-issues, label mapping, collision check. Done; Projects v2 Status split into T441.11, `sync` into T441.12.
 8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
+   Plan: `src/tasks/gitlab.rs` on top of `remote.rs` (labels, titles, token, paced `Http`): REST v4 `/projects/:id/issues` with the URL-encoded project from `[tasks.gitlab] project` or the origin remote under `[tasks.gitlab] url`; `status::in-progress`, `status::done` and `status::wont-do` labels swapped through `add_labels`/`remove_labels` (scoped on Premium, plain on Free), `state_event=close|reopen`; collision check by the `rtok:<id>` label with `state=all` returns `Taken`; a subtask gets a `relates_to` link to its parent's issue (every tier; the GraphQL hierarchy stays out). Wire `adapter = "gitlab"` in `run.rs`; httpmock tests like `github.rs`; `docs/config.md` (en/ru/uk). Verify: `cargo test --lib tasks::`, `just check`.
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
