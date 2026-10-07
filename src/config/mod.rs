@@ -787,7 +787,9 @@ section! {
     TasksGithub {
         /// `owner/name`. Empty: the `origin` remote.
         repo: String = String::new(),
-        /// Projects v2 number for the Status field, read from T441.11 on; 0 = issues only.
+        /// Projects v2 number under the repo owner (user or organization): each issue joins it and its
+        /// `Status` single-select follows the task (open → Todo, in-progress → In Progress, done and
+        /// closed → Done). Needs the `project` token scope; any failure only warns. 0 = issues only.
         project: u32 = 0,
     }
 }

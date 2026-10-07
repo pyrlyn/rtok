@@ -333,7 +333,7 @@ dir = "tasks"                         # один Markdown-файл на зада
 
 [tasks.github]
 repo = ""                             # owner/name; порожньо: remote origin
-project = 0                           # номер Projects v2 для поля Status (читається з T441.11); 0 = лише issues
+project = 0                           # номер Projects v2 власника репо: issues потрапляють у нього, поле Status слідує за задачею; 0 = лише issues
 
 [tasks.gitlab]
 url = "https://gitlab.com"            # базова URL; задайте для власного інстансу
