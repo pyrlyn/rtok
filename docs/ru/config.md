@@ -323,6 +323,21 @@ cmd = ""                              # command family hint when the caller know
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
 root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
 
+[tasks]                               # адаптеры задач (T441); обычно задаются для проекта в .rtok.toml
+adapter = "disk"                      # disk | github | gitlab
+prefix = ""                           # префикс id задач, 1–8 ASCII-букв (R → R12, R2.1); пусто: первая буква имени проекта
+
+[tasks.disk]
+dir = "tasks"                         # один Markdown-файл на задачу, относительно корня проекта; выполненные уходят в <dir>/done
+
+[tasks.github]
+repo = ""                             # owner/name; пусто: remote origin
+project = 0                           # номер Projects v2, чьё поле Status ведёт задачи; 0 = только issues
+
+[tasks.gitlab]
+url = "https://gitlab.com"            # базовый URL; задайте для своего инстанса
+project = ""                          # group/name или числовой id; пусто: remote origin
+
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
 endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS

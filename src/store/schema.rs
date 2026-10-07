@@ -349,6 +349,15 @@ diesel::table! {
     }
 }
 
+// 0031 (T441.3): task id counters, one per project and parent ('' = top level).
+diesel::table! {
+    task_counters (project, parent) {
+        project -> Text,
+        parent -> Text,
+        last -> BigInt,
+    }
+}
+
 diesel::joinable!(archive_decisions -> archive (archive_id));
 diesel::joinable!(models -> providers (provider_id));
 diesel::joinable!(sessions -> hosts (host_id));
@@ -391,4 +400,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     messages,
     projects,
     project_links,
+    task_counters,
 );

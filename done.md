@@ -9132,6 +9132,28 @@ Result: `research.md` §35. Corrections to the card: Backlog.md (v1.53.0) and Ta
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T441.2. Task core types and config
+
+Second subtask of T441 (task adapters): the domain types every adapter, the CLI and the MCP tools share, plus the `[tasks]` config section, with unit tests.
+
+Check: `TaskId` parse/print round-trip, ordering and invalid input; `Status` round-trip; the config section in `default.toml`, `docs/config.md` (ru, uk) and the validator; `just check` green.
+
+Result: new `src/tasks/mod.rs` with `TaskId` (ASCII-letter prefix of 1–8, dotted path of depth ≤ 2, numbers from 1 without leading zeros, case-insensitive in, upper case out, numeric ordering, serialized as a string), `Status` (`open`, `in-progress`, `done`, `closed`; also takes the hosts' `pending`/`in_progress`/`completed`), `Task`, `NewTask`, `ExternalRef`, `check_prefix` and `default_prefix` (first letter of the project name). `[tasks]` in `src/config/mod.rs`: `adapter` (`disk` default), `prefix`, `[tasks.disk] dir`, `[tasks.github] repo, project`, `[tasks.gitlab] url, project`; `config validate`/`set` reject an unknown adapter and a prefix ids could not carry through the same `check_prefix`. Creator decisions recorded in the T441 card §12: `Closed` is its own status; this repo's prefix is `A`, written by T441.5's `rtok task init` rather than now, because installed builds before T441.2 reject an unknown `[tasks]` table in `.rtok.toml`. trycmd snapshots for `config init`, `config show` and `report --md` gained the seven keys.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T441.3. Singleton task id allocator
+
+Third subtask of T441 (task adapters): one task id counter per project, shared by every process on the machine, with subtask counters, the project key, the prefix rule and a seeding hook.
+
+Check: N processes × M allocations in parallel give unique, dense ids; two projects with the same prefix keep separate counters; seeding starts above the existing max; `just check` green.
+
+Result: migration `0031_task_counters` (`project`, `parent`, `last`; `parent` is `''` for the top level or the parent's number path, so a prefix change keeps the numbering). `Store::allocate_task_id(project, prefix, parent)` reads, increments and writes in one `exclusive_transaction`; a bad prefix, a depth past 2 or a parent above the top counter is refused before a number is spent, and a lock held past `busy_timeout` names the allocator. `Store::seed_task_counter` only raises a counter (seeding from an existing tracker, skipping past another machine's id). `project::project_key` is the `origin` remote canonicalized to `host/owner/repo` across ssh, scp and https forms, else the main checkout's path; linked worktrees share their main checkout's key; `project_name` now shares the same `.git` walk. `tasks::resolve_prefix` takes `[tasks] prefix`, else the project name's first letter. `tests/task_allocator.rs` re-runs its own test binary as 8 processes × 25 allocations against one store file: 200 unique ids `R1`–`R200`. The card's crash case (write then rename) does not arise: SQLite's transaction is the atomic step.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.
