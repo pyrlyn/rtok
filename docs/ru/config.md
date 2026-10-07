@@ -632,6 +632,8 @@ color = false   # RTOK_UI_COLOR=false
 | `agents list` | — | читает конфигурации хостов и `<bin> --version` (`--json` — строка «чтение») |
 | `agents whoami` | — | читает `RTOK_AGENT_ID` и разрешает его через хранилище (T283); нет ключа, нет `setup.*` (`--json` — строка «чтение») |
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
+| `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
+| `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |
 | `agents sessions` | `--all` | (действие: также перечисляет завершённые сессии; live или idle — по `agents.idle`) |
 | `agents show` | — | разрешает префикс id через хранилище (T284); live или idle — по `agents.idle` (`--json` — строка «чтение») |

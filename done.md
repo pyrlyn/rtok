@@ -9154,6 +9154,28 @@ Result: migration `0031_task_counters` (`project`, `parent`, `last`; `parent` is
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T441.4. Adapter trait and the disk adapter
+
+Fourth subtask of T441 (task adapters): the `TaskAdapter` trait every backend implements, and the offline `disk` adapter with archive on done.
+
+Check: create/list/get/status/archive on a temp dir; done tasks are never listed; `just check` green.
+
+Result: `src/tasks/adapter.rs` — `TaskAdapter` (`create`, `list`, `get`, `write_status`, `max_id`), `Filter` (active tasks by default; `all`, explicit statuses, `parent`) and `set_status`, the one place that refuses to finish a parent with active subtasks unless `force`, naming them. The card's separate `archive` is `write_status` to `done`/`closed`, since every adapter archives as part of the status change. `src/tasks/disk.rs` — one `<id> - <slug>.md` per task under `[tasks.disk] dir`, YAML front matter (`id`, `title`, `status`, `parent`, `created_at`, `updated_at`; `serde-saphyr`, already a dependency) and the description as the body; writes go through `rtok_agent_sdk::write_atomic`; done and closed tasks move to `<dir>/done/` and back when reopened, new file first; files that are not `<id> - <slug>.md` are left alone, and a broken task file is named in the error. Slugs are lower-case ASCII, at most 48 characters, so a title cannot reach outside the directory.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T441.5. `rtok task` CLI
+
+Fifth subtask of T441 (task adapters): `rtok task create/list/show/status/next/init`, with `--json`.
+
+Check: the commands work end to end on the disk adapter in a temp checkout; `just check` green.
+
+Result: `src/tasks/run.rs` holds what the commands do, so T441.6's MCP tools call the same functions: `Project::open` (git root, `project_key`, the prefix from `[tasks] prefix` or the project name, the adapter; `github`/`gitlab` say they are not built yet), `create` (checks the parent exists, raises the store counter past every id the adapter holds at that depth, then allocates), `show` (task plus subtask ids), `next` (lowest open task with no active subtask), and `init`, which writes `[tasks] adapter`/`prefix` into `<git root>/.rtok.toml` with `toml_edit`, keeping the rest of the file. `src/cli.rs` adds `rtok task …`; `--body-file -` reads stdin. `[tasks] adapter` is validated against the same `ADAPTERS` list. The card's `create --status` is left out (a new task is open; `status` sets the rest), and `sync` stays with T441.7. `tests/task_cli.rs` runs the binary from init to done, including the parent refusal and a hand-deleted file whose id is not reused. README command rows and the `docs/config.md` flag table (en/ru/uk) list the commands.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.

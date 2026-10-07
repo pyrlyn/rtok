@@ -137,6 +137,15 @@ const ALLOW_KEYS: &[&str] = &[
     "graph.projects.link.reason",
     "graph.projects.unlink.from",
     "graph.projects.unlink.both",
+    // `task create|list|status` (T441.5): what one task is and which rows one call shows;
+    // `[tasks]` holds the adapter and the prefix, which `task init` writes.
+    "task.create.description",
+    "task.create.body_file",
+    "task.create.parent",
+    "task.list.status",
+    "task.list.all",
+    "task.list.parent",
+    "task.status.force",
 ];
 
 #[test]
@@ -214,6 +223,8 @@ fn config_key(path: &[&str], long: &str) -> String {
         },
         // `rtok agents install|remove` keeps the `[setup]` table it had as `rtok setup`.
         ["agents", ..] => format!("setup.{name}"),
+        // `rtok task init --adapter/--prefix` write `[tasks]` itself (T441.5).
+        ["task", "init"] => format!("tasks.{name}"),
         // `rtok dashboard` is the hidden deprecated spelling of `rtok web`; one table, `[web]`.
         ["dashboard", ..] => format!("web.{name}"),
         // `rtok mcp --host` (T283.1) overlays `[hook] host`, as `rtok hook --host` does.
