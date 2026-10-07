@@ -1167,4 +1167,101 @@ Options:
       --json           JSON instead of the text line
   -h, --help           Print help
 
+$ rtok task --help
+This project's tasks: numbered by rtok, stored by the `[tasks]` adapter
+
+Usage: rtok task [OPTIONS] <COMMAND>
+
+Commands:
+  create  Create a task under the next free id and print the id
+  list    The plan: open and in-progress tasks, subtasks under their parent
+  show    One task: title, status, parent, subtasks, link and description
+  status  Print a task's status, or set it; done and closed move it out of the plan
+  next    The task to work on next: the lowest open one with no open subtask
+  init    Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -h, --help           Print help
+
+$ rtok task create --help
+Create a task under the next free id and print the id
+
+Usage: rtok task create [OPTIONS] <TITLE>
+
+Arguments:
+  <TITLE>  One-line title
+
+Options:
+      --config <PATH>              User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -d, --description <DESCRIPTION>  Description: why the task exists and what done means
+      --body-file <PATH>           Read the description from this file (`-` for stdin)
+      --parent <ID>                Make it a subtask of this task, e.g. `R2` → `R2.1`
+      --json                       Print the task as JSON instead of the id
+  -h, --help                       Print help
+
+$ rtok task list --help
+The plan: open and in-progress tasks, subtasks under their parent
+
+Usage: rtok task list [OPTIONS]
+
+Options:
+      --config <PATH>    User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --status <STATUS>  Only these statuses (comma-separated: open, in-progress, done, closed)
+      --all              Done and closed tasks too
+      --parent <ID>      Only the subtasks of this task
+      --json             JSON instead of the table
+  -h, --help             Print help
+
+$ rtok task show --help
+One task: title, status, parent, subtasks, link and description
+
+Usage: rtok task show [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Task id, e.g. `R12` or `R2.1`
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           JSON instead of the text
+  -h, --help           Print help
+
+$ rtok task status --help
+Print a task's status, or set it; done and closed move it out of the plan
+
+Usage: rtok task status [OPTIONS] <ID> [STATUS]
+
+Arguments:
+  <ID>      Task id, e.g. `R12` or `R2.1`
+  [STATUS]  open, in-progress, done or closed
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --force          Finish a parent even though subtasks are still open
+      --json           Print the task as JSON
+  -h, --help           Print help
+
+$ rtok task next --help
+The task to work on next: the lowest open one with no open subtask
+
+Usage: rtok task next [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           JSON instead of the text
+  -h, --help           Print help
+
+$ rtok task init --help
+Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
+
+Usage: rtok task init [OPTIONS]
+
+Options:
+      --adapter <ADAPTER>  disk, github or gitlab (default: disk, or what the file already says)
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --prefix <PREFIX>    Task id prefix, 1–8 ASCII letters (default: the project name's first
+                           letter)
+  -h, --help               Print help
+
 ```

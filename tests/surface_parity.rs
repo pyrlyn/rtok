@@ -459,6 +459,32 @@ const EXEMPT: &[(&str, &str)] = &[
         "worktree gc",
         "removes finished git worktrees and their merged branches (T153)",
     ),
+    // T441.5: tasks live in the project's adapter (files, GitHub, GitLab), not the store's
+    // snapshot the web and TUI pages render; MCP `task_*` (T441.6) is their second surface.
+    (
+        "task create",
+        "allocates an id and writes a task through the adapter (T441.5)",
+    ),
+    (
+        "task list",
+        "reads the project's adapter, not the store snapshot (T441.5)",
+    ),
+    (
+        "task show",
+        "reads the project's adapter, not the store snapshot (T441.5)",
+    ),
+    (
+        "task status",
+        "moves a task's status through the adapter (T441.5)",
+    ),
+    (
+        "task next",
+        "reads the project's adapter, not the store snapshot (T441.5)",
+    ),
+    (
+        "task init",
+        "writes [tasks] into the checkout's .rtok.toml (T441.5)",
+    ),
     (
         "worktree add",
         "creates a locked git worktree and prints its path (T158)",
@@ -646,6 +672,9 @@ const JSON_READERS: &[&str] = &[
     "agents usage",
     "graph status",
     "graph dead",
+    "task list",
+    "task show",
+    "task next",
 ];
 
 fn command_at<'a>(root: &'a Command, path: &str) -> &'a Command {

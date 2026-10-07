@@ -35,6 +35,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
+            [CompletionResult]::new('task', 'task', [CompletionResultType]::ParameterValue, 'This project''s tasks: numbered by rtok, stored by the `[tasks]` adapter')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Version, effective paths, disk usage, error count and proxy status')
             [CompletionResult]::new('agents', 'agents', [CompletionResultType]::ParameterValue, 'Agent hosts (`rtok agents install|uninstall|list|info …`)')
             [CompletionResult]::new('agent', 'agent', [CompletionResultType]::ParameterValue, 'Agent hosts (`rtok agents install|uninstall|list|info …`)')
@@ -284,6 +285,101 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;worktree;help;help' {
+            break
+        }
+        'rtok;task' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a task under the next free id and print the id')
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
+            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rtok;task;create' {
+            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Description: why the task exists and what done means')
+            [CompletionResult]::new('--description', '--description', [CompletionResultType]::ParameterName, 'Description: why the task exists and what done means')
+            [CompletionResult]::new('--body-file', '--body-file', [CompletionResultType]::ParameterName, 'Read the description from this file (`-` for stdin)')
+            [CompletionResult]::new('--parent', '--parent', [CompletionResultType]::ParameterName, 'Make it a subtask of this task, e.g. `R2` → `R2.1`')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON instead of the id')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;list' {
+            [CompletionResult]::new('--status', '--status', [CompletionResultType]::ParameterName, 'Only these statuses (comma-separated: open, in-progress, done, closed)')
+            [CompletionResult]::new('--parent', '--parent', [CompletionResultType]::ParameterName, 'Only the subtasks of this task')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'Done and closed tasks too')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;show' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;status' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Finish a parent even though subtasks are still open')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;next' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;init' {
+            [CompletionResult]::new('--adapter', '--adapter', [CompletionResultType]::ParameterName, 'disk, github or gitlab (default: disk, or what the file already says)')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Task id prefix, 1–8 ASCII letters (default: the project name''s first letter)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;help' {
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a task under the next free id and print the id')
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
+            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rtok;task;help;create' {
+            break
+        }
+        'rtok;task;help;list' {
+            break
+        }
+        'rtok;task;help;show' {
+            break
+        }
+        'rtok;task;help;status' {
+            break
+        }
+        'rtok;task;help;next' {
+            break
+        }
+        'rtok;task;help;init' {
+            break
+        }
+        'rtok;task;help;help' {
             break
         }
         'rtok;info' {
@@ -1581,6 +1677,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
+            [CompletionResult]::new('task', 'task', [CompletionResultType]::ParameterValue, 'This project''s tasks: numbered by rtok, stored by the `[tasks]` adapter')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Version, effective paths, disk usage, error count and proxy status')
             [CompletionResult]::new('agents', 'agents', [CompletionResultType]::ParameterValue, 'Agent hosts (`rtok agents install|uninstall|list|info …`)')
             [CompletionResult]::new('setup', 'setup', [CompletionResultType]::ParameterValue, 'Deprecated spelling of `rtok agents install <host>`; still runs, still prints where to go')
@@ -1664,6 +1761,33 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;worktree;clean' {
+            break
+        }
+        'rtok;help;task' {
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a task under the next free id and print the id')
+            [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
+            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
+            break
+        }
+        'rtok;help;task;create' {
+            break
+        }
+        'rtok;help;task;list' {
+            break
+        }
+        'rtok;help;task;show' {
+            break
+        }
+        'rtok;help;task;status' {
+            break
+        }
+        'rtok;help;task;next' {
+            break
+        }
+        'rtok;help;task;init' {
             break
         }
         'rtok;help;info' {

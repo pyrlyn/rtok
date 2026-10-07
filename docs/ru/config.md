@@ -323,6 +323,21 @@ cmd = ""                              # command family hint when the caller know
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
 root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
 
+[tasks]                               # адаптеры задач (T441); обычно задаются для проекта в .rtok.toml
+adapter = "disk"                      # disk | github | gitlab
+prefix = ""                           # префикс id задач, 1–8 ASCII-букв (R → R12, R2.1); пусто: первая буква имени проекта
+
+[tasks.disk]
+dir = "tasks"                         # один Markdown-файл на задачу, относительно корня проекта; выполненные уходят в <dir>/done
+
+[tasks.github]
+repo = ""                             # owner/name; пусто: remote origin
+project = 0                           # номер Projects v2, чьё поле Status ведёт задачи; 0 = только issues
+
+[tasks.gitlab]
+url = "https://gitlab.com"            # базовый URL; задайте для своего инстанса
+project = ""                          # group/name или числовой id; пусто: remote origin
+
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
 endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
@@ -617,6 +632,8 @@ color = false   # RTOK_UI_COLOR=false
 | `agents list` | — | читает конфигурации хостов и `<bin> --version` (`--json` — строка «чтение») |
 | `agents whoami` | — | читает `RTOK_AGENT_ID` и разрешает его через хранилище (T283); нет ключа, нет `setup.*` (`--json` — строка «чтение») |
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
+| `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
+| `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |
 | `agents sessions` | `--all` | (действие: также перечисляет завершённые сессии; live или idle — по `agents.idle`) |
 | `agents show` | — | разрешает префикс id через хранилище (T284); live или idle — по `agents.idle` (`--json` — строка «чтение») |

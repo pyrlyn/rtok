@@ -46,6 +46,9 @@ Inspect hooks, MCP servers and the proxy chain
 rtok/-worktree(1)
 Git worktrees of this repository: owner, state and disk cost
 .TP
+rtok/-task(1)
+This project/*(Aqs tasks: numbered by rtok, stored by the `[tasks]` adapter
+.TP
 rtok/-info(1)
 Version, effective paths, disk usage, error count and proxy status
 .TP
@@ -108,6 +111,7 @@ v[..] ([..])
 /fBrtok-bench/fR(1),
 /fBrtok-doctor/fR(1),
 /fBrtok-worktree/fR(1),
+/fBrtok-task/fR(1),
 /fBrtok-info/fR(1),
 /fBrtok-agents/fR(1),
 /fBrtok-run/fR(1),

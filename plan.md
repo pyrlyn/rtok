@@ -127,10 +127,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.2 | todo | P2 | 2 | 0% | |
-| T441.3 | todo | P1 | 4 | 0% | |
-| T441.4 | todo | P2 | 3 | 0% | |
-| T441.5 | todo | P2 | 2 | 0% | |
 | T441.6 | todo | P2 | 3 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
@@ -2303,14 +2299,14 @@ T441.1 done means: the table above re-checked, plus answers to the open question
 
 - `TaskId { prefix: String, path: Vec<u32> }` — `R12` = prefix `R`, path `[12]`; `R2.1` = `[2, 1]`. Parse/print round-trip; case-insensitive input, canonical upper-case output.
 - `Task { id, title, description, status, parent: Option<TaskId>, created_at, updated_at, external: Option<ExternalRef> }`.
-- `Status { Open, InProgress, Done }` (+ `Closed` as an alias of done that means "won't do", open question). Maps to Claude Code / Codex `pending/in_progress/completed`.
+- `Status { Open, InProgress, Done, Closed }`: `Closed` is "won't do"; both it and `Done` leave the plan (T441.2, `src/tasks/mod.rs`). Maps to Claude Code / Codex `pending/in_progress/completed`.
 - `ExternalRef { adapter, number_or_iid, url, node_id }` — the GitHub/GitLab issue the task lives in.
 - Allocator state: `{ project_key → { prefix, next_top: u32, next_sub: map<top, u32> } }`.
 
 #### 5. ID allocation
 
 - One allocator per machine: a Diesel table in rtok's existing store (T441.1, `research.md` §35.4). Allocation is one `exclusive_transaction` (read → increment → write); the store already runs WAL with `busy_timeout`, so it is atomic across processes and crash-safe on macOS, Linux and Windows without a second file or lock.
-- The project key is the canonical repo root (or remote URL), not the prefix, so two projects with the same first letter keep separate counters.
+- The project key is the `origin` remote as `host/owner/repo` (two clones share it), else the main checkout's path, never the prefix, so two projects with the same first letter keep separate counters (T441.3, `project::project_key`).
 - Prefix: first letter of the project name, upper-cased (rtok → `R`), overridable in config. Two projects with the same prefix are allowed (counters are per project) but `rtok task init` warns; a two-letter override is recommended for cross-project references.
 - Subtasks: `R2.1`, `R2.2` from the parent's own sub-counter; depth limit 2 at first.
 - Seeding: on `init` for an existing tracker the counter starts above the highest id already present (scan disk files / GitHub titles / labels).
@@ -2330,6 +2326,8 @@ trait TaskAdapter {
 }
 ```
 
+As built in T441.4 (`src/tasks/adapter.rs`): `archive` is folded into `write_status` (done/closed archive), and the free `set_status` guards parents for every adapter.
+
 Sync and blocking HTTP is fine for a CLI; errors carry the adapter name and the external URL. No adapter shells out to `gh`/`glab` unless T441.1 decides to (token handling).
 
 #### 7. Adapters
@@ -2348,7 +2346,7 @@ Sync and blocking HTTP is fine for a CLI; errors carry the adapter name and the 
 
 #### 9. Config
 
-Project `rtok.toml` (rtok's own TOML, schema from types, one config module — T238):
+Project `.rtok.toml` (rtok's own TOML, schema from types, one config module — T238; the `[tasks]` section landed in T441.2):
 
 ```toml
 [tasks]
@@ -2389,10 +2387,10 @@ project = "group/name"
 #### 12. Open questions
 
 - ~~Build or adopt (from T441.1): beads already has hash ids, a CLI, an MCP server and GitHub/GitLab sync; Backlog.md has the Markdown layout and per-repo locked ids.~~ Creator decision 2026-10-07: build rtok's own core as this card designs it (human `R12` ids, one counter per project in the store, `rtok mcp` + CLI, disk/GitHub/GitLab adapters); no beads or Backlog.md dependency.
-- AirTalk's own prefix: the creator's example is "AirTalk → R" (the binary is `rtok`); the product name starts with `A`. Keep `R` for this repo by override?
+- ~~AirTalk's own prefix: the creator's example is "AirTalk → R" (the binary is `rtok`); the product name starts with `A`. Keep `R` for this repo by override?~~ Creator decision 2026-10-07: `A` for this repo. T441.5's `rtok task init` writes `[tasks] prefix = "A"` into `.rtok.toml`; not committed earlier, since installed rtok builds older than T441.2 reject an unknown `[tasks]` table there.
 - ~~Allocator in a JSON file + lock or in rtok's SQLite store?~~ Settled by T441.1: the store (§5).
 - Is per-machine allocation plus the remote label check enough for several machines, or should GitHub/GitLab adapters allocate remotely (e.g. a counter issue)?
-- Does `closed`/won't-do need its own status, distinct from `done`? T441.1: both providers have it natively (GitHub `not_planned`, GitLab "Won't do"), so it maps cleanly; recommended yes.
+- ~~Does `closed`/won't-do need its own status, distinct from `done`? T441.1: both providers have it natively (GitHub `not_planned`, GitLab "Won't do"), so it maps cleanly; recommended yes.~~ Creator decision 2026-10-07: yes, `Status::Closed` (T441.2).
 - Should the disk adapter also keep this workspace's `plan.md`/`todo.md`/`done.md` in sync, or replace them?
 - How are tasks that agents create outside rtok (directly in GitHub) adopted — import on `sync`?
 
