@@ -29,6 +29,7 @@ lang: uk
 | `rtok graph impact <name> [--project <id\|dir>]` | що зламається при зміні символу, по проєкту й пов'язаних із ним проєктах; `--project` є й у `index`, `dead`, `status`, `affected` |
 | `rtok memory import <file>` | імпортує нотатки як JSONL з дедуплікацією за гешем тексту |
 | `rtok otel flush\|status` | експортує журнали обліку через OTLP/HTTP або повідомляє позначки (watermarks) |
+| `rtok task create\|list\|show\|status\|next\|sync\|init` | план проєкту в адаптері `[tasks]`; `sync` піднімає лічильники id до найбільших id в адаптері й повідомляє про розбіжності, нічого не записуючи в адаптер |
 | `rtok bench` | A/B-порівняння двох конфігурацій хоста на фіксованих задачах |
 
 ## Кожен прапорець — це ключ конфігурації

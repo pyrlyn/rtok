@@ -56,6 +56,16 @@ impl std::fmt::Display for Taken {
 
 impl std::error::Error for Taken {}
 
+/// A remote issue that carries rtok's label but no id label: its `rtok:<id>` was removed, or
+/// the issue was labelled by hand. Every later call skips it, so `rtok task sync` names it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Stray {
+    pub title: String,
+    pub url: String,
+    /// The id the title starts with, when it still does: the label to put back.
+    pub id: Option<TaskId>,
+}
+
 /// A task storage backend: plain files on disk, GitHub Issues or GitLab Issues. Ids come from
 /// the store's allocator; an adapter only stores them.
 pub trait TaskAdapter {
@@ -71,6 +81,11 @@ pub trait TaskAdapter {
     fn write_status(&self, id: &TaskId, status: Status) -> Result<Task>;
     /// The highest id with `prefix`, done ones included: seeding and collision checks.
     fn max_id(&self, prefix: &str) -> Result<Option<TaskId>>;
+    /// Items the adapter holds that no id names, for `rtok task sync`. Reads only. Files on
+    /// disk are the ids, so only remote adapters have any.
+    fn unlabelled(&self) -> Result<Vec<Stray>> {
+        Ok(Vec::new())
+    }
 }
 
 /// Set a task's status. A parent with active subtasks cannot finish unless `force`: the error

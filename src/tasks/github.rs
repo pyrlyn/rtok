@@ -15,8 +15,8 @@ use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::adapter::{Filter, Taken, TaskAdapter};
-use super::remote::{Http, LABEL, id_label, issue_title, label_id, task_title};
+use super::adapter::{Filter, Stray, Taken, TaskAdapter};
+use super::remote::{Http, LABEL, id_label, issue_title, label_id, task_title, title_id};
 use super::{ExternalRef, NewTask, Status, Task, TaskId};
 
 /// The public GitHub REST API.
@@ -269,6 +269,19 @@ impl TaskAdapter for GithubAdapter {
             .filter_map(Issue::task_id)
             .filter(|id| id.prefix() == prefix)
             .max())
+    }
+
+    fn unlabelled(&self) -> Result<Vec<Stray>> {
+        Ok(self
+            .issues(LABEL, "all")?
+            .into_iter()
+            .filter(|i| i.task_id().is_none())
+            .map(|i| Stray {
+                id: title_id(&i.title),
+                title: i.title,
+                url: i.html_url,
+            })
+            .collect())
     }
 }
 

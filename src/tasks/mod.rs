@@ -20,6 +20,7 @@ pub mod disk;
 pub mod github;
 pub mod remote;
 pub mod run;
+pub mod sync;
 
 /// Subtasks go one level deep (`R2.1`) until a second level is asked for (T441 §5).
 pub const MAX_DEPTH: usize = 2;

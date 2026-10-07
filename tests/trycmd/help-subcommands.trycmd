@@ -1178,6 +1178,8 @@ Commands:
   show    One task: title, status, parent, subtasks, link and description
   status  Print a task's status, or set it; done and closed move it out of the plan
   next    The task to work on next: the lowest open one with no open subtask
+  sync    Raise the id counters to the adapter's highest ids and report drift; never writes the
+          adapter
   init    Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
   help    Print this message or the help of the given subcommand(s)
 
@@ -1246,6 +1248,16 @@ $ rtok task next --help
 The task to work on next: the lowest open one with no open subtask
 
 Usage: rtok task next [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           JSON instead of the text
+  -h, --help           Print help
+
+$ rtok task sync --help
+Raise the id counters to the adapter's highest ids and report drift; never writes the adapter
+
+Usage: rtok task sync [OPTIONS]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)

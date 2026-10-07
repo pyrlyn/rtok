@@ -354,6 +354,7 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok task create <title> [-d <text> \| --body-file <path\|->] [--parent <id>] [--json]` | add a task under the next free id (`A12`, or `A12.3` under `--parent`); ids come from a per-project counter in the store, raised past every id the adapter already holds, so parallel agents never collide |
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` / `show <id>` / `next` | active tasks with subtasks indented; one task with its subtasks; the lowest open task with no active subtask |
 | `rtok task status <id> [<status>] [--force] [--json]` | read or set `open`, `in-progress`, `done` or `closed`; finishing a parent with active subtasks is refused unless `--force`; on disk, finished tasks move to `tasks/done/` |
+| `rtok task sync [--json]` | raise the store's id counters to the highest ids the adapter holds (never lower them) and report drift: ids above the counter, duplicate ids, issues that kept the `rtok` label but lost `rtok:<id>`; reads the adapter only |
 | `rtok run -- <cmd>` | run, archive, and format a command result |
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode) |
 | `rtok expand <id>` | retrieve an archived original (`--lines`, `--grep`) |

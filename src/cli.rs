@@ -583,6 +583,12 @@ enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Raise the id counters to the adapter's highest ids and report drift; never writes the adapter
+    Sync {
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
     /// Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
     Init {
         /// disk, github or gitlab (default: disk, or what the file already says)
@@ -3065,6 +3071,15 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
                 print_json(&task)?;
             } else {
                 println!("{}: {}", task.id, task.status);
+            }
+        }
+        TaskCmd::Sync { json } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let report = crate::tasks::sync::sync(&open()?, &store)?;
+            if json {
+                print_json(&report)?;
+            } else {
+                print!("{}", crate::tasks::sync::text(&report));
             }
         }
         TaskCmd::Next { json } => {

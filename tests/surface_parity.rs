@@ -486,6 +486,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "writes [tasks] into the checkout's .rtok.toml (T441.5)",
     ),
     (
+        "task sync",
+        "raises the store's id counters to the adapter's highest ids; agents get that for free, since task_create seeds first (T441.12)",
+    ),
+    (
         "worktree add",
         "creates a locked git worktree and prints its path (T158)",
     ),
