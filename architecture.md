@@ -157,6 +157,7 @@ migration is forbidden; add the next directory.
 |-------|-----------|---------|
 | `hosts`, `providers`, `models`, `sessions` | `Store` upsert | every `calls` row |
 | `calls` + `call_io` | dispatcher, mcp, proxy | `rtok stats`, doctor |
+| `hook_sessions` | dispatcher: a hook stdin's session fields, once per distinct set (not with `store_raw`) | `call_io` readers, which splice them back into the body |
 | `tokens` | same surfaces (`before`/`after`/`mcp`) | `rtok stats --plugin <id>` |
 | `logs` | core + plugins via `Ctx::log` | doctor, debug |
 | `events` | (superseded; 0001 leftover) | — |

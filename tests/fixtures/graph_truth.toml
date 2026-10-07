@@ -42,6 +42,10 @@
 # T392 (2026-10-07): the guard plugin overrides `Plugin::session_start` to forget its skill-load
 # marks after a compaction, so `src/plugins/guard/mod.rs` joined the `session_start` defs -- a
 # definition the scan could not have seen, not an index regression.
+#
+# T433 (2026-10-08): the hook dispatcher saves its stdin through `insert_hook_call_io`, which
+# splits off the session fields and falls back to `insert_call_io` from
+# `src/store/hook_fields.rs`; that file takes over the `src/hooks/mod.rs` ref.
 
 [[symbol]]
 name = "Manifest"
@@ -201,7 +205,7 @@ refs = ["src/mcp.rs", "tests/proxy.rs"]
 name = "insert_call_io"
 kind = "fn"
 defs = ["src/store/mod.rs"]
-refs = ["src/hooks/mod.rs", "src/mcp.rs", "src/measure/cache.rs", "src/proxy/mod.rs"]
+refs = ["src/mcp.rs", "src/measure/cache.rs", "src/proxy/mod.rs", "src/store/hook_fields.rs"]
 
 [[symbol]]
 name = "int_field"

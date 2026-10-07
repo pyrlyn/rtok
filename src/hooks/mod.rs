@@ -608,9 +608,7 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
     if let Some(id) = parent {
         let _ = cx.store.set_call_ms(id, ms);
         let cap = cx.config.core.call_io_inline_bytes as usize;
-        let _ = cx
-            .store
-            .insert_call_io(id, Some(stdin), Some(&bytes), cap, None);
+        let _ = cx.store.insert_hook_call_io(id, stdin, Some(&bytes), cap);
     }
     if matches!(input.hook_event_name.as_str(), "Stop" | "SessionEnd") {
         crate::otel::export::spawn_child(cx);
