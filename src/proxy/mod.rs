@@ -26,6 +26,10 @@
 //! When `proxy.enabled` or `core.enabled` is false the listener still serves, but every
 //! request is a plain reverse proxy (no record / compress / prepare). Only killing the
 //! process stops HTTP — flipping those flags never shuts the listener down.
+//!
+//! Every forwarded request carries `x-rtok-proxied: <hops>` (T442). One that arrives
+//! already marked is forwarded the plain way with a `warn` log line, so a chain of rtok
+//! proxies shapes and records it once; at `MAX_HOPS` the proxy answers 508 instead.
 
 use std::io;
 use std::path::PathBuf;
@@ -75,6 +79,25 @@ const MAX_BODY_BYTES: usize = 256 * 1024 * 1024;
 
 /// TCP connect deadline; `proxy.timeout_s` bounds reads only.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How many rtok proxies a request has passed through (T442). A second pass must not
+/// rewrite or record the request again, and a proxy whose upstream is itself must not
+/// recurse forever, so every forwarded request carries the count.
+pub const HOP_HEADER: &str = "x-rtok-proxied";
+
+/// A chain this long is a loop, not a deployment: answer 508 instead of forwarding.
+const MAX_HOPS: u32 = 8;
+
+/// The incoming hop count. Anything but a number still says another rtok saw the
+/// request, so it counts as one hop rather than none.
+fn hops_of(headers: &HeaderMap) -> u32 {
+    headers.get(HOP_HEADER).map_or(0, |v| {
+        v.to_str()
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(1)
+    })
+}
 
 /// Shared server state: the DB, the upstream client and the effective `[proxy]` settings.
 pub struct ProxyState {
@@ -232,6 +255,22 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     } else {
         (lane::Lane::Agent, parts.uri.path().to_string())
     };
+    let hops = hops_of(&headers);
+    headers.remove(HOP_HEADER);
+    if hops >= MAX_HOPS {
+        let msg = format!(
+            "{method} {path}: {hops} rtok proxy hops, refusing a loop (check proxy.upstream)"
+        );
+        log_off_worker(&state, "error", msg.clone());
+        return error_response(StatusCode::LOOP_DETECTED, &msg);
+    }
+    if hops > 0 {
+        log_off_worker(
+            &state,
+            "warn",
+            format!("{method} {path}: already through {hops} rtok proxy hop(s), forwarding as is"),
+        );
+    }
 
     let request_body = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(b) => b,
@@ -241,7 +280,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let wire = wire::for_path(&path);
     // Plain mode (`proxy.enabled` / `core.enabled` false): byte-identical forward, no
     // bookkeeping, compress, or request shaping. Listener stays up until process exit.
-    let plain = state.plain();
+    // An earlier rtok hop already shaped and recorded this request (T442).
+    let plain = state.plain() || hops > 0;
     let (request_body, recorded, context_armed) = if plain {
         (request_body, None, false)
     } else {
@@ -306,6 +346,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         }
     }
     rb = rb.header(ACCEPT_ENCODING, "identity");
+    rb = rb.header(HOP_HEADER, (hops + 1).to_string());
     // The platform path needs its beta (T51.2) — unless the client already opted in,
     // in which case appending a duplicate value is pointless.
     if context_armed
@@ -968,6 +1009,13 @@ fn log(state: &ProxyState, session: &str, call_id: Option<i32>, level: &str, mes
     );
 }
 
+/// [`log`] from the async handler: its store write is synchronous, so it runs on the
+/// blocking pool and the request does not wait for it.
+fn log_off_worker(state: &Arc<ProxyState>, level: &'static str, message: String) {
+    let state = Arc::clone(state);
+    tokio::task::spawn_blocking(move || log(&state, "?", None, level, &message));
+}
+
 struct Recorded {
     session: String,
     model: Option<String>,
@@ -1309,6 +1357,123 @@ mod tests {
             .expect("request");
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
         mock.assert();
+        task.abort();
+    }
+
+    /// The proxy in `compress` mode in front of `upstream`, listening on a free port.
+    async fn compress_proxy(
+        upstream: String,
+        tag: &str,
+    ) -> (
+        String,
+        Arc<ProxyState>,
+        tokio::task::JoinHandle<io::Result<()>>,
+    ) {
+        let dir = std::env::temp_dir().join(format!("rtok-proxy-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut cfg = Config::load_from(&dir).expect("config");
+        cfg.proxy.upstream = upstream;
+        cfg.proxy.mode = "compress".to_string();
+        let state = Arc::new(ProxyState::new(&cfg).expect("proxy state"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr").to_string();
+        let task = tokio::spawn(axum::serve(listener, app(state.clone())).into_future());
+        (addr, state, task)
+    }
+
+    /// T442: an unmarked request is shaped and recorded and leaves marked as one hop; a
+    /// marked one (a junk value counts as one hop) reaches upstream byte-identical, one hop
+    /// further, with no `calls` row and a `warn` line.
+    #[rstest]
+    #[case::first_hop(None, "1", false)]
+    #[case::second_hop(Some("2"), "3", true)]
+    #[case::junk_value(Some("yes"), "2", true)]
+    #[tokio::test]
+    async fn hop_marker_counts_and_skips_shaping_on_a_later_pass(
+        #[case] incoming: Option<&str>,
+        #[case] outgoing: &str,
+        #[case] passthrough: bool,
+    ) {
+        use httpmock::prelude::*;
+
+        let noisy = serde_json::json!({"model": "claude-test", "messages": [
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "t1", "content": "\u{1b}[31mFAIL\u{1b}[0m"}
+            ]}
+        ]})
+        .to_string();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            let when = when
+                .method(POST)
+                .path("/v1/messages")
+                .header(HOP_HEADER, outgoing);
+            let _when = if passthrough {
+                when.body(&noisy)
+            } else {
+                when.body_excludes("\u{1b}")
+            };
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"type":"message","usage":{"input_tokens":1,"output_tokens":2}}"#);
+        });
+        let (addr, state, task) =
+            compress_proxy(server.base_url(), &format!("hop-{outgoing}-{passthrough}")).await;
+        let mut req = reqwest::Client::new()
+            .post(format!("http://{addr}/v1/messages"))
+            .header("content-type", "application/json")
+            .body(noisy.clone());
+        if let Some(v) = incoming {
+            req = req.header(HOP_HEADER, v);
+        }
+        let resp = req.send().await.expect("request");
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        let _ = resp.bytes().await;
+        mock.assert();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(state.store.count_calls().unwrap() == 0, passthrough);
+        let warned = state
+            .store
+            .logs_after(0, 10)
+            .unwrap()
+            .iter()
+            .any(|r| r.level == "warn" && r.message.contains("rtok proxy hop"));
+        assert_eq!(warned, passthrough);
+        task.abort();
+    }
+
+    /// T442: a request already `MAX_HOPS` deep is a loop — 508, never forwarded, an
+    /// `error` line naming the setting to check.
+    #[tokio::test]
+    async fn hop_marker_at_the_cap_answers_loop_detected() {
+        use httpmock::prelude::*;
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.any_request();
+            then.status(200);
+        });
+        let (addr, state, task) = compress_proxy(server.base_url(), "hop-cap").await;
+        let resp = reqwest::Client::new()
+            .post(format!("http://{addr}/v1/messages"))
+            .header("content-type", "application/json")
+            .header(HOP_HEADER, MAX_HOPS.to_string())
+            .body(r#"{"model":"claude-test"}"#)
+            .send()
+            .await
+            .expect("request");
+        assert_eq!(resp.status(), reqwest::StatusCode::LOOP_DETECTED);
+        mock.assert_calls(0);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let logged = state
+            .store
+            .logs_after(0, 10)
+            .unwrap()
+            .iter()
+            .any(|r| r.level == "error" && r.message.contains("proxy.upstream"));
+        assert!(logged);
         task.abort();
     }
 }
