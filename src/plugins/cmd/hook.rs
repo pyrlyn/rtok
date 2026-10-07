@@ -108,6 +108,18 @@ fn changes_shell_state(cmd: &str) -> bool {
     })
 }
 
+/// T437: true when `git` is a word anywhere in the command text. Matches the raw text
+/// rather than parsed stages because the host guard reads that same text: a stage or
+/// stem match would still wrap `bash -c 'git status'`, `$(git rev-parse HEAD)` or
+/// `env X=1 git status`, which the guard refuses just the same. A word is a run of
+/// alphanumerics and `_`, so `/usr/bin/git`, `git.exe` and `git-lfs` match, `github`
+/// does not. Over-matching only costs compression, and any doubt leaves the command
+/// unwrapped.
+fn runs_git(cmd: &str) -> bool {
+    cmd.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .any(|w| w.eq_ignore_ascii_case("git"))
+}
+
 /// Wrap a Bash command unless the skip rules fire.
 pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
     let cfg = cx.plugin_config::<crate::config::Cmd>("cmd");
@@ -116,6 +128,13 @@ pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
     }
     let full = ev.tool_input.get("command")?.as_str()?;
     if skip_wrap(full, &cfg) {
+        return None;
+    }
+    // T437: Claude Code runs sub-agents in isolated worktrees behind a guard that must
+    // prove every git command stays inside the worktree; it cannot see through the
+    // `rtok run` wrapper and refuses the command, so no sub-agent could commit. The main
+    // session has no such guard and keeps its wrapped git.
+    if cx.agent_id().is_some() && runs_git(full) {
         return None;
     }
     // The host keeps its shell's cwd between calls, so leading `cd <dir> &&` hops stay in
@@ -402,8 +421,8 @@ mod tests {
     /// its dedup pointer to the same window that dispatched the command.
     #[test]
     fn sub_agent_dispatch_embeds_its_agent_id() {
-        let d = decide_as(Some("agent-a1"), "git status").unwrap();
-        assert_eq!(wrapped(&d), "rtok run --agent agent-a1 -- 'git status'");
+        let d = decide_as(Some("agent-a1"), "cargo test").unwrap();
+        assert_eq!(wrapped(&d), "rtok run --agent agent-a1 -- 'cargo test'");
     }
 
     /// The main window carries no `agent_id`; the rewrite is unchanged from before T127.
@@ -418,8 +437,44 @@ mod tests {
     #[test]
     fn malformed_agent_id_is_dropped() {
         for bad in ["has space", "semi;colon", "", &"a".repeat(65), "quote'here"] {
-            let d = decide_as(Some(bad), "git status").unwrap();
-            assert_eq!(wrapped(&d), "rtok run -- 'git status'", "bad id: {bad:?}");
+            let d = decide_as(Some(bad), "cargo test").unwrap();
+            assert_eq!(wrapped(&d), "rtok run -- 'cargo test'", "bad id: {bad:?}");
         }
+    }
+
+    /// T437: the host guard of an isolated sub-agent refuses `rtok run -- 'git ...'`, so
+    /// every shape of a git command from a sub-agent must reach the host unwrapped.
+    #[test]
+    fn sub_agent_git_commands_are_never_wrapped() {
+        for cmd in [
+            "git status",
+            "cd /repo/.claude/worktrees/agent-a1 && git status",
+            "/usr/bin/git add -A",
+            "git -C /repo/.claude/worktrees/agent-a1 commit -m x",
+            "cargo test && git status",
+            "C:\\Program Files\\Git\\cmd\\git.exe status",
+            "bash -c 'git status'",
+            "echo $(git rev-parse HEAD)",
+            "env GIT_DIR=x GIT_PAGER=cat git log",
+        ] {
+            assert!(decide_as(Some("agent-a1"), cmd).is_none(), "wrapped: {cmd}");
+        }
+    }
+
+    /// Only git is exempt: the sub-agent still gets compressed output for everything
+    /// else, including words that merely contain the letters.
+    #[test]
+    fn sub_agent_non_git_commands_stay_wrapped() {
+        for cmd in ["cargo test", "cargo test github", "ls my_git digit"] {
+            let d = decide_as(Some("agent-a1"), cmd).unwrap();
+            assert_eq!(wrapped(&d), format!("rtok run --agent agent-a1 -- '{cmd}'"));
+        }
+    }
+
+    /// The main session has no guard, so its git output keeps being compressed.
+    #[test]
+    fn main_session_git_commands_stay_wrapped() {
+        let d = decide_as(None, "cd /repo && git status").unwrap();
+        assert_eq!(wrapped(&d), "cd /repo && rtok run -- 'git status'");
     }
 }
