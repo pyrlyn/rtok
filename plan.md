@@ -2280,6 +2280,8 @@ The 14 portable ideas and where each landed:
 
 Creator request 2026-10-07 (voice). Plan only: no code until the creator approves the design that comes out of T441.1. Every subtask below builds on the T441.1 research findings.
 
+Check: T441.1's findings are recorded in `research.md` and the creator approves the design; each later subtask closes only when its §10 tests and `just check` pass.
+
 #### Goal
 
 Agents in any project create, read and close tasks only through rtok (AirTalk). rtok intercepts task creation, hands out a unique task number from one allocator, and stores the task through the project's configured **adapter**: plain files on disk, GitHub Issues + Projects, or GitLab Issues. Many agents work in parallel, so numbering must never collide. When a task is done, the adapter archives it (disk) or moves it to a done state (GitHub/GitLab) so it no longer shows up in the plan.
