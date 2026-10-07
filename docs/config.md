@@ -332,7 +332,7 @@ dir = "tasks"                         # one Markdown file per task, relative to 
 
 [tasks.github]
 repo = ""                             # owner/name; empty: the origin remote
-project = 0                           # Projects v2 number for the Status field (read from T441.11 on); 0 = issues only
+project = 0                           # Projects v2 number for the Status field (not read yet); 0 = issues only
 
 [tasks.gitlab]
 url = "https://gitlab.com"            # base URL; set it for a self-hosted instance
