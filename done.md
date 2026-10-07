@@ -9156,6 +9156,17 @@ Result: `src/tasks/run.rs` holds what the commands do, so T441.6's MCP tools cal
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T441.6. MCP task tools
+
+Sixth subtask of T441 (task adapters): `task_create`, `task_list`, `task_get`, `task_status` and `task_next` on `rtok mcp`, with the same JSON as the CLI.
+
+Check: CLI ↔ MCP parity (same inputs, same JSON); `just check` green.
+
+Result: `src/mcp/tasks.rs` lists the five tools beside the worktree and agent tools and calls the same `tasks::run` functions as `rtok task …`; `Project::get`, `Project::status` and `run::filter` moved there from the CLI so neither front-end keeps its own copy, and `show` now fails with `no task <id>` itself. Each call re-reads the config for the current cwd, because `roots/list` can move the server into the project after launch and `[tasks] prefix` lives in that project's `.rtok.toml`. `tests/task_cli.rs` drives the tools through `rtok mcp --call` and compares their answers with `--json`. The server entry `rtok agents install` already writes covers every host, so the tools need no install of their own; the AGENTS.md/CLAUDE.md instruction line was split into T441.10.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.
