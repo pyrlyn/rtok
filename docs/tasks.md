@@ -62,7 +62,7 @@ Why the task exists and what done means.
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` | active tasks, with subtasks indented under their parent; `--status` takes a comma-separated list |
 | `rtok task show <id> [--json]` | one task with its subtasks, link and description |
 | `rtok task status <id> [<status>] [--force] [--json]` | reads the status, or sets it to `open`, `in-progress`, `done` or `closed` |
-| `rtok task next [--json]` | the lowest open task with no open subtask |
+| `rtok task next [--json]` | the lowest open task with no active (open or in-progress) subtask |
 
 Without `--json` the commands print text. With `--json` they print the task as JSON.
 

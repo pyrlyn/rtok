@@ -66,7 +66,7 @@ Why the task exists and what done means.
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` | активні завдання, підзавдання виводяться з відступом під батьком; `--status` приймає список через кому |
 | `rtok task show <id> [--json]` | одне завдання з підзавданнями, посиланням і описом |
 | `rtok task status <id> [<status>] [--force] [--json]` | читає статус або встановлює `open`, `in-progress`, `done` чи `closed` |
-| `rtok task next [--json]` | найменше відкрите завдання без відкритих підзавдань |
+| `rtok task next [--json]` | відкрите завдання з найменшим номером, яке не має активних (відкритих або в роботі) підзавдань |
 
 Без `--json` команди друкують текст. З `--json` друкують завдання як JSON.
 
