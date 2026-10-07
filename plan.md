@@ -116,7 +116,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
-| T433 | in progress | P2 | 4 | 5% | Claude Code / claude-opus-5-5 |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -1964,20 +1963,6 @@ Check: unit tests for the CSV writer (quoting, escaping, empty table); a story a
 Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
-
-### T433. Save hook session fields once instead of in every hook body
-
-Every saved hook stdin repeats the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Done when they are stored once per distinct value set in their own table referenced from the call, the saved body keeps only the event's own fields, and the full stdin can be rebuilt for readers (OTel, web). `[core] store_raw = true` keeps the full body. Design (table, migration, readers) is written into this card before code.
-
-Check: a store test saves two hook calls of one session and reads back both full bodies from one session row.
-
-Design and execution plan:
-
-1. Migration `0032_hook_sessions`: table `hook_sessions (id INTEGER PRIMARY KEY, fields TEXT NOT NULL UNIQUE)` holding the session fields as one compact JSON object with sorted keys; `call_io.hook_session_id INTEGER NULL REFERENCES hook_sessions(id)`. Old rows keep `NULL` and their full body, so they read exactly as before.
-2. Write (`src/hooks/mod.rs` → new `Store::insert_hook_call_io`): unless `store_raw` is on, a JSON-object stdin within `call_io_inline_bytes` is parsed once (the parse `sanitize::body` already does), cleaned, and split into event body and session fields. Inside the existing `call_io` transaction: `INSERT … ON CONFLICT(fields) DO NOTHING` plus a PK-sized `SELECT id`; no extra lock round trip. Sizes and sha describe the saved event body (as since T431). Any other body, or no session field present, takes the old path.
-3. Readers rebuild by splicing the two JSON objects as text (no reparse): `call_io_request`, `recent_hook_inputs` / `recent_hook_inputs_for_event` (left join), OTel `call_detail`. Web, `expand` and stats never read hook stdin bodies (hooks never archive), so nothing changes there.
-4. Retention: `clear_hook_bodies` also clears `hook_session_id`; `run_retention` drops `hook_sessions` rows no `call_io` row references.
-5. Tests: the card's check, `store_raw` keeps the full body, an old full-body row still reads back, retention drops orphans. Bless `schema_snapshot.txt`; `just check`.
 
 ### T416. Shared `change-preview` crate for dry-run output
 
