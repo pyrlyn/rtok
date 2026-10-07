@@ -126,7 +126,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436 | todo | P2 | 3 | 0% | |
 | T436.1 | todo | P2 | 3 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.1 | todo | P1 | 3 | 0% | |
 | T441.2 | todo | P2 | 2 | 0% | |
 | T441.3 | todo | P1 | 4 | 0% | |
 | T441.4 | todo | P2 | 3 | 0% | |
@@ -2248,7 +2247,7 @@ The 14 portable ideas and where each landed:
 
 ### T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 
-Creator request 2026-10-07 (voice). Plan only: no code until the creator approves the design that comes out of T441.1. Every subtask below builds on the T441.1 research findings.
+Creator request 2026-10-07 (voice). Plan only: no code until the creator approves the design that comes out of T441.1. Approved 2026-10-07 after T441.1: own core (§12); the remaining §12 questions are settled in the subtask they affect. Every subtask below builds on the T441.1 research findings.
 
 Check: T441.1's findings are recorded in `research.md` and the creator approves the design; each later subtask closes only when its §10 tests and `just check` pass.
 
@@ -2269,16 +2268,16 @@ Findings so far (verified 2026-10-07; T441.1 finishes them with a short `researc
 
 | Prior art | Storage | IDs under parallel agents | Surface | Statuses | GitHub/GitLab sync | What we take |
 | --- | --- | --- | --- | --- | --- | --- |
-| [Backlog.md](https://github.com/MrLesk/Backlog.md) | One Markdown file per task in `backlog/`, config `backlog.config.yml` | Sequential with a configurable prefix (`TASK-1`, `BACK-1`), subtasks `task-1.01`; no cross-process allocator | CLI first (`backlog task create/list/edit`, `--plain`/`--json`), optional stdio MCP (`backlog mcp start`) over the same core ([MCP README](https://github.com/MrLesk/Backlog.md/blob/main/src/mcp/README.md)) | Configurable, default To Do / In Progress / Done; archive folder | None built in | Markdown-file disk layout, configurable prefix, one core with CLI + MCP as thin wrappers, `claude mcp add` / `codex mcp add` one-liners, agent instructions pointing at a workflow doc |
-| [Taskmaster AI](https://github.com/eyaltoledano/claude-task-master) | `.taskmaster/tasks/tasks.json` | Numeric per tag, subtasks `1.2`, `1.2.1` ([task structure](https://github.com/eyaltoledano/claude-task-master/blob/main/docs/task-structure.md)); read-modify-write of one JSON file, no lock | CLI `task-master list/show/set-status` and MCP `get_tasks`, `get_task`, `next_task`, `set_task_status`; tool tiers via `TASK_MASTER_TOOLS` to keep tool lists small | pending, in-progress, done, review, deferred, cancelled | None built in | Dotted subtask ids, `next` command, small default MCP tool set; avoid the single unlocked JSON file |
-| [beads](https://github.com/steveyegge/beads) | Dolt (versioned SQL) per repo | Hash ids (`bd-a1b2`) from content + time + creator + nonce, retried on collision, length grows with the DB ([FAQ](https://github.com/steveyegge/beads/blob/main/docs/FAQ.md)); hierarchical `bd-a3f8.1` | CLI `bd` with JSON output | open, in progress, blocked, closed | Import/sync adapters (e.g. Linear) | The reason sequential ids fail across branches/machines; we keep human `R12` ids from one allocator but adopt its import + external-id mapping and "same id = update" rule |
+| [Backlog.md](https://github.com/MrLesk/Backlog.md) | One Markdown file per task in `backlog/`, config `backlog.config.yml` | Sequential with a configurable prefix (`TASK-1`), subtasks `TASK-5.3`; allocation under `withCreateLock()`, counting other worktrees' uncommitted files (per repo) | CLI first (`backlog task create/list/edit`, `--plain`/`--json`), optional stdio MCP (`backlog mcp start`) over the same core ([MCP README](https://github.com/MrLesk/Backlog.md/blob/main/src/mcp/README.md)) | Configurable, default To Do / In Progress / Done; archive folder | None built in | Markdown-file disk layout, configurable prefix, one core with CLI + MCP as thin wrappers, `claude mcp add` / `codex mcp add` one-liners, agent instructions pointing at a workflow doc |
+| [Taskmaster AI](https://github.com/eyaltoledano/claude-task-master) | `.taskmaster/tasks/tasks.json` | Numeric per tag, subtasks `1.2`, `1.2.1` ([task structure](https://github.com/eyaltoledano/claude-task-master/blob/main/docs/task-structure.md)); read-modify-write of one JSON file under its own `.lock` file (`withFileLock`) | CLI `task-master list/show/set-status` and MCP `get_tasks`, `get_task`, `next_task`, `set_task_status`; tool tiers via `TASK_MASTER_TOOLS` to keep tool lists small | pending, in-progress, done, review, deferred, cancelled | None built in | Dotted subtask ids, `next` command, small default MCP tool set; avoid one JSON file per repo as the only state |
+| [beads](https://github.com/steveyegge/beads) | Dolt (versioned SQL) per repo | Hash ids (`bd-a1b2`) from content + time + creator + nonce, retried on collision, length grows with the DB ([FAQ](https://github.com/steveyegge/beads/blob/main/docs/FAQ.md)); hierarchical `bd-a3f8.1` | CLI `bd` with JSON output | open, in progress, blocked, closed | `bd github`, `bd gitlab`, `bd linear`, `bd jira`, … with pull/push/sync | The reason sequential ids fail across branches/machines; we keep human `R12` ids from one allocator but adopt its import + external-id mapping and "same id = update" rule |
 | [GitHub MCP server](https://github.com/github/github-mcp-server) | GitHub | GitHub's own per-repo issue number | MCP toolsets `issues` (`issue_read`, `issue_write`, `list_issues`, `sub_issue_write`) and `projects` (`projects_get/list/write`, needs a PAT with `project` scope) | open/closed + Project Status field | Native | The GitHub adapter can call the same REST/GraphQL endpoints; sub-issues map to `R2.1`; Projects need the `project` scope |
 | [Linear MCP](https://linear.app/docs/mcp) | Linear (hosted) | Linear's team key + number (`ENG-123`) | Remote MCP over Streamable HTTP at `mcp.linear.app/mcp`, `save_issue` create-or-update | Team workflow states | Native | Upsert tool shape (`save` with/without id); hosted ids keyed by a short team prefix, like our project prefix |
 | [Claude Code tasks](https://code.claude.com/docs/en/agent-sdk/todo-tracking) (TodoWrite; TaskCreate/TaskGet/TaskUpdate/TaskList) | Session or shared list (`CLAUDE_CODE_TASK_LIST_ID`, [env vars](https://code.claude.com/docs/en/env-vars)) | Host-internal | Built-in tools only | pending, in_progress, completed | None | Agents already think in these three statuses; our status names map 1:1 |
 | [Codex CLI `update_plan`](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/plan_tool.rs) | In-session only | None (whole plan resent each call) | Built-in tool | pending, in_progress, completed; one step in progress | None | Same status vocabulary; our tasks are durable and shared, theirs are a per-turn checklist — keep both, do not replace |
 | [AGENTS.md](https://agents.md/) | Markdown convention | — | — | — | — | Install writes a short `AGENTS.md`/`CLAUDE.md` rule: "create and update tasks only through `rtok task`" |
 
-Generic MCP task servers follow the same split: a local stdio server over a file or DB, no cross-process id guarantee. None gives human-readable, collision-free ids across many concurrent agent processes on one machine — that is what rtok adds.
+Re-checked in T441.1 (`research.md` §35.1): Backlog.md and Taskmaster lock id allocation per repository and beads uses hash ids, and beads already syncs GitHub and GitLab. What none has is one counter per project shared by every checkout, worktree and agent host on the machine, served through the MCP server and CLI the agents already have — that is what rtok adds, and §12 asks whether it is worth building rather than adopting beads.
 
 T441.1 done means: the table above re-checked, plus answers to the open questions it can settle (GitLab work items API vs issues, GitHub sub-issues limits, rate limits), recorded in `research.md`; the design below adjusted to the findings.
 
@@ -2315,7 +2314,7 @@ T441.1 done means: the table above re-checked, plus answers to the open question
 
 #### 5. ID allocation
 
-- One allocator per machine in rtok's data dir (`tasks/ids.json` + `ids.lock`), or in rtok's existing SQLite store through Diesel (no raw SQL); T441.1/T441.3 pick one. Allocation = lock → read → increment → write temp → fsync → atomic rename → unlock. Exclusive OS lock (`flock`/`LockFileEx`) with a timeout; works across processes on macOS, Linux, Windows.
+- One allocator per machine: a Diesel table in rtok's existing store (T441.1, `research.md` §35.4). Allocation is one `exclusive_transaction` (read → increment → write); the store already runs WAL with `busy_timeout`, so it is atomic across processes and crash-safe on macOS, Linux and Windows without a second file or lock.
 - The project key is the canonical repo root (or remote URL), not the prefix, so two projects with the same first letter keep separate counters.
 - Prefix: first letter of the project name, upper-cased (rtok → `R`), overridable in config. Two projects with the same prefix are allowed (counters are per project) but `rtok task init` warns; a two-letter override is recommended for cross-project references.
 - Subtasks: `R2.1`, `R2.2` from the parent's own sub-counter; depth limit 2 at first.
@@ -2341,8 +2340,8 @@ Sync and blocking HTTP is fine for a CLI; errors carry the adapter name and the 
 #### 7. Adapters
 
 - **disk** (default, offline): one Markdown file per task under `tasks/` in the project, `R12 - <slug>.md` with a small front matter (id, status, parent) and the description as body, the Backlog.md layout. Writes are temp + rename. Optionally renders `plan.md`/`todo.md` rows in this workspace's format (open question).
-- **github**: issues via REST; status via a Projects v2 Status field (`Todo` / `In Progress` / `Done`) via GraphQL; subtasks as sub-issues. Token from `GH_TOKEN`/`GITHUB_TOKEN` or `gh auth token`; Projects need the `project` scope. Config names the owner/repo and project number; field and option ids are looked up once and cached.
-- **gitlab**: issues via REST v4 (`/projects/:id/issues`), status as a scoped label (`status::in-progress`) or board list, done = closed; subtasks as tasks/child items if the work items API allows (T441.1). Token `GITLAB_TOKEN`; self-hosted base URL in config.
+- **github**: issues via REST; status via a Projects v2 Status field (`Todo` / `In Progress` / `Done`) via GraphQL; subtasks as sub-issues (100 per parent; REST takes the sub-issue's database id). Token from `GH_TOKEN`, then `GITHUB_TOKEN`, then `gh auth token`; Projects need the `project` scope, and user-owned projects a classic token. Writes are paced (500 content-creating requests/hour, one per second). Config names the owner/repo and project number; field and option ids are looked up once and cached.
+- **gitlab**: issues via REST v4 (`/projects/:id/issues`), done = closed. Subtasks are tasks under the issue, linked through the GraphQL work item hierarchy (REST has no parent field). Status: native Status through GraphQL on Premium/Ultimate 18.4+, else a `status::in-progress` label the adapter swaps itself (scoped labels are Premium too). Token `GITLAB_TOKEN`, scope `api`; self-hosted base URL in config.
 
 #### 8. Done / archival flow
 
@@ -2394,10 +2393,11 @@ project = "group/name"
 
 #### 12. Open questions
 
+- ~~Build or adopt (from T441.1): beads already has hash ids, a CLI, an MCP server and GitHub/GitLab sync; Backlog.md has the Markdown layout and per-repo locked ids.~~ Creator decision 2026-10-07: build rtok's own core as this card designs it (human `R12` ids, one counter per project in the store, `rtok mcp` + CLI, disk/GitHub/GitLab adapters); no beads or Backlog.md dependency.
 - AirTalk's own prefix: the creator's example is "AirTalk → R" (the binary is `rtok`); the product name starts with `A`. Keep `R` for this repo by override?
-- Allocator in a JSON file + lock or in rtok's SQLite store?
+- ~~Allocator in a JSON file + lock or in rtok's SQLite store?~~ Settled by T441.1: the store (§5).
 - Is per-machine allocation plus the remote label check enough for several machines, or should GitHub/GitLab adapters allocate remotely (e.g. a counter issue)?
-- Does `closed`/won't-do need its own status, distinct from `done`?
+- Does `closed`/won't-do need its own status, distinct from `done`? T441.1: both providers have it natively (GitHub `not_planned`, GitLab "Won't do"), so it maps cleanly; recommended yes.
 - Should the disk adapter also keep this workspace's `plan.md`/`todo.md`/`done.md` in sync, or replace them?
 - How are tasks that agents create outside rtok (directly in GitHub) adopted — import on `sync`?
 
