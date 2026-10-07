@@ -126,7 +126,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436 | todo | P2 | 3 | 0% | |
 | T436.1 | todo | P2 | 3 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.3 | todo | P1 | 4 | 0% | |
 | T441.4 | todo | P2 | 3 | 0% | |
 | T441.5 | todo | P2 | 2 | 0% | |
 | T441.6 | todo | P2 | 3 | 0% | |
@@ -2314,7 +2313,7 @@ T441.1 done means: the table above re-checked, plus answers to the open question
 #### 5. ID allocation
 
 - One allocator per machine: a Diesel table in rtok's existing store (T441.1, `research.md` §35.4). Allocation is one `exclusive_transaction` (read → increment → write); the store already runs WAL with `busy_timeout`, so it is atomic across processes and crash-safe on macOS, Linux and Windows without a second file or lock.
-- The project key is the canonical repo root (or remote URL), not the prefix, so two projects with the same first letter keep separate counters.
+- The project key is the `origin` remote as `host/owner/repo` (two clones share it), else the main checkout's path, never the prefix, so two projects with the same first letter keep separate counters (T441.3, `project::project_key`).
 - Prefix: first letter of the project name, upper-cased (rtok → `R`), overridable in config. Two projects with the same prefix are allowed (counters are per project) but `rtok task init` warns; a two-letter override is recommended for cross-project references.
 - Subtasks: `R2.1`, `R2.2` from the parent's own sub-counter; depth limit 2 at first.
 - Seeding: on `init` for an existing tracker the counter starts above the highest id already present (scan disk files / GitHub titles / labels).

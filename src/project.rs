@@ -24,6 +24,33 @@ pub fn project_name(cwd: &Path) -> Option<String> {
 }
 
 pub(crate) fn project_name_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
+    let common = common_git_dir(fs, cwd)?;
+    let main = common.parent()?;
+    origin_url(fs, &common)
+        .and_then(|url| url_name(&url))
+        .or_else(|| main.file_name().map(|s| s.to_string_lossy().into_owned()))
+}
+
+/// The key rtok's per-project state is filed under (T441.3 task counters): the `origin`
+/// remote as `host/owner/repo`, lower case, so two clones of one repository share it whatever
+/// protocol they cloned with; without an `origin`, the main checkout's path. A linked worktree
+/// resolves to its main checkout's key.
+pub fn project_key(cwd: &Path) -> Option<String> {
+    project_key_with(&HostFs, cwd)
+}
+
+pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
+    let common = common_git_dir(fs, cwd)?;
+    if let Some(url) = origin_url(fs, &common).and_then(|u| canonical_url(&u)) {
+        return Some(url);
+    }
+    let main = common.parent()?;
+    let main = fs.canonicalize(main).unwrap_or_else(|| main.to_path_buf());
+    Some(main.to_string_lossy().into_owned())
+}
+
+/// `<main>/.git` of the checkout `cwd` lies in, through a linked worktree's `commondir`.
+fn common_git_dir(fs: &impl ReadFs, cwd: &Path) -> Option<PathBuf> {
     let mut root = cwd.to_path_buf();
     let common = loop {
         let dot = root.join(".git");
@@ -42,8 +69,7 @@ pub(crate) fn project_name_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> 
             return None;
         }
     };
-    let main = common.parent()?;
-    origin_name(fs, &common).or_else(|| main.file_name().map(|s| s.to_string_lossy().into_owned()))
+    Some(common)
 }
 
 /// `<main>/.git` for a worktree whose `.git` file reads `gitdir: <admin dir>`; both that path
@@ -58,8 +84,8 @@ fn common_dir(fs: &impl ReadFs, root: &Path, dot_git: &str) -> Option<PathBuf> {
     Some(normalize(&gitdir, Path::new(common.trim())))
 }
 
-/// Last path segment of `[remote "origin"] url` in `<common>/config`, without `.git`.
-fn origin_name(fs: &impl ReadFs, common: &Path) -> Option<String> {
+/// `[remote "origin"] url` in `<common>/config`.
+fn origin_url(fs: &impl ReadFs, common: &Path) -> Option<String> {
     let config = fs.read_to_string(&common.join("config")).ok()?;
     let mut in_origin = false;
     for line in config.lines() {
@@ -71,18 +97,46 @@ fn origin_name(fs: &impl ReadFs, common: &Path) -> Option<String> {
         let Some((key, url)) = line.split_once('=') else {
             continue;
         };
-        if !in_origin || key.trim() != "url" {
-            continue;
+        if in_origin && key.trim() == "url" {
+            return Some(url.trim().to_string());
         }
-        let name = url
-            .trim()
-            .trim_end_matches('/')
-            .rsplit(['/', ':'])
-            .next()?
-            .trim_end_matches(".git");
-        return (!name.is_empty()).then(|| name.to_string());
     }
     None
+}
+
+/// Last path segment of a remote URL, without `.git`.
+fn url_name(url: &str) -> Option<String> {
+    let name = url
+        .trim_end_matches('/')
+        .rsplit(['/', ':'])
+        .next()?
+        .trim_end_matches(".git");
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// `git@github.com:Owner/Repo.git`, `ssh://git@github.com/owner/repo` and
+/// `https://user@github.com/owner/repo/` → `github.com/owner/repo`. A `file://` or plain path
+/// remote keeps its path. `None` for an empty URL.
+fn canonical_url(url: &str) -> Option<String> {
+    let url = url.trim().trim_end_matches('/');
+    let url = url.strip_suffix(".git").unwrap_or(url);
+    let (rest, scp) = match url.split_once("://") {
+        Some((_, rest)) => (rest, false),
+        None => (url, true),
+    };
+    // Userinfo sits before the host; an `@` later in the path is part of the path.
+    let rest = match rest.find('@') {
+        Some(i) if !rest[..i].contains('/') => &rest[i + 1..],
+        _ => rest,
+    };
+    // scp form `host:owner/repo`; a local path (`/srv/repo`, `C:\repo`) has no host part.
+    let rest = match rest.split_once(':') {
+        Some((host, path)) if scp && !host.contains(['/', '\\']) && host.len() > 1 => {
+            format!("{host}/{}", path.trim_start_matches('/'))
+        }
+        _ => rest.to_string(),
+    };
+    (!rest.is_empty()).then(|| rest.to_ascii_lowercase())
 }
 
 #[cfg(test)]
@@ -180,5 +234,33 @@ mod tests {
             project_name_with(&vfs, Path::new("/home/me/rtok/vendor/dep/src")).as_deref(),
             Some("dep")
         );
+    }
+
+    #[rstest]
+    #[case("git@github.com:Pyrlyn/rtok.git", "github.com/pyrlyn/rtok")]
+    #[case("ssh://git@github.com/pyrlyn/rtok", "github.com/pyrlyn/rtok")]
+    #[case("https://me@github.com/pyrlyn/rtok/", "github.com/pyrlyn/rtok")]
+    #[case("https://gitlab.example.com/g/sub/n.git", "gitlab.example.com/g/sub/n")]
+    #[case("https://host/a/b@v2", "host/a/b@v2")]
+    #[case("file:///srv/git/rtok.git", "/srv/git/rtok")]
+    #[case("/srv/git/rtok", "/srv/git/rtok")]
+    fn remotes_canonicalize_across_protocols(#[case] url: &str, #[case] key: &str) {
+        assert_eq!(canonical_url(url).as_deref(), Some(key));
+    }
+
+    #[test]
+    fn worktrees_share_the_remote_key_and_fall_back_to_the_main_path() {
+        let vfs = fixture("git@github.com:listepo/rtok.git");
+        let main = project_key_with(&vfs, Path::new("/home/me/rtok/src"));
+        let linked = project_key_with(&vfs, Path::new("/home/me/_worktrees/rtok-t133/src"));
+        assert_eq!(main.as_deref(), Some("github.com/listepo/rtok"));
+        assert_eq!(linked, main);
+
+        let mut vfs = Vfs::new();
+        vfs.write("/home/me/local-only/.git/HEAD", "ref: refs/heads/main\n");
+        vfs.write("/home/me/local-only/a.rs", "");
+        let key = project_key_with(&vfs, Path::new("/home/me/local-only"));
+        assert_eq!(key.as_deref(), Some("/home/me/local-only"));
+        assert_eq!(project_key_with(&vfs, Path::new("/home/me")), None);
     }
 }

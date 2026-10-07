@@ -153,6 +153,21 @@ pub fn default_prefix(project: &str) -> Option<String> {
         .map(|c| c.to_ascii_uppercase().to_string())
 }
 
+/// The prefix new ids get: `[tasks] prefix` when set, else [`default_prefix`] of `project`
+/// (its name, [`crate::project::project_name`]).
+pub fn resolve_prefix(configured: &str, project: Option<&str>) -> Result<String> {
+    if !configured.is_empty() {
+        check_prefix(configured)?;
+        return Ok(configured.to_ascii_uppercase());
+    }
+    match project.and_then(default_prefix) {
+        Some(p) => Ok(p),
+        None => {
+            bail!("no task prefix: set [tasks] prefix, since the project name has no ASCII letter")
+        }
+    }
+}
+
 /// Where a task stands. `Done` and `Closed` both leave the plan; `Closed` is "won't do",
 /// which GitHub (`not_planned`) and GitLab ("Won't do") record natively.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -317,6 +332,15 @@ mod tests {
     #[case("123", None)]
     fn default_prefix_is_the_first_letter(#[case] project: &str, #[case] want: Option<&str>) {
         assert_eq!(default_prefix(project).as_deref(), want);
+    }
+
+    #[test]
+    fn a_configured_prefix_wins_over_the_project_name() {
+        assert_eq!(resolve_prefix("at", Some("rtok")).unwrap(), "AT");
+        assert_eq!(resolve_prefix("", Some("rtok")).unwrap(), "R");
+        assert!(resolve_prefix("", Some("123")).is_err());
+        assert!(resolve_prefix("", None).is_err());
+        assert!(resolve_prefix("R2", Some("rtok")).is_err());
     }
 
     #[test]
