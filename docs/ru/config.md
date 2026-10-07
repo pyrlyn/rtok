@@ -334,8 +334,8 @@ dir = "tasks"                         # один Markdown-файл на зада
 repo = ""                             # owner/name; пусто: remote origin
 project = 0                           # номер Projects v2 для поля Status (читается с T441.11); 0 = только issues
 
-[tasks.gitlab]
-url = "https://gitlab.com"            # базовый URL; задайте для своего инстанса
+[tasks.gitlab]                        # метки status::in-progress | status::done | status::wont-do; подзадача связана с родителем (relates_to)
+url = "https://gitlab.com"            # https базовый URL; задайте для своего инстанса; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, иначе glab
 project = ""                          # group/name или числовой id; пусто: remote origin
 
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
