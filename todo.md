@@ -7,7 +7,6 @@
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T262.3. Codex: spawn brief on `SubagentStart`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
-- T271. The Claude desktop Code tab sees rtok's MCP twice while the plugin is installed
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
@@ -37,7 +36,6 @@
 - T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
 - T331.10. Doctor: rtok's own MCP entry in the duplicate check
 - T332. Investigate: rtok's own MCP duplicate: T331 keep rule vs D33/T275
-- T333. Investigate: T271 desktop-entry sweep vs D33/T275
 - T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 - T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
