@@ -127,7 +127,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.1 | todo | P2 | 3 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.11 | todo | P3 | 3 | 0% | |
-| T441.12 | in progress | P3 | 3 | 90% | Claude Code / claude-sonnet-5-5 |
 | T441.8 | todo | P3 | 4 | 0% | |
 | T441.9 | todo | P3 | 1 | 0% | |
 | T441.10 | todo | P3 | 2 | 0% | |
@@ -2391,8 +2390,7 @@ project = "group/name"
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
-12. **T441.12 `rtok task sync`** (split from T441.7) — reconcile a remote adapter with the store counter and report drift: issues labelled by hand, ids above the counter, tasks whose `rtok:<id>` label was removed.
-    - Execution plan (T441.12): `Project::sync` reads the adapter through the trait only (`list` all) and raises the top-level and per-parent counters with `seed_task_counter` (never lowers); `Store::task_counter` is the new read-only getter. The report lists ids above the counter before the raise, duplicate ids, and issues that carry the `rtok` label but no `rtok:<id>` label (new defaulted trait method `unlabelled`, implemented for GitHub next to `max_id`; the disk adapter has none). Read-only on the remote. `rtok task sync [--json]` in `src/cli.rs`; no MCP tool (CLI only, parity exemption). Verify: unit tests with a disk project and a mock GitHub server, `tests/task_cli.rs`, trycmd help case, `just check`.
+12. **T441.12 `rtok task sync`** (split from T441.7) — done: counters raised to what the adapter holds, drift reported, the adapter never written (#820).
 
 #### 12. Open questions
 

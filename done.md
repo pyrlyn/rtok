@@ -9198,6 +9198,17 @@ Result: `src/tasks/remote.rs` holds what the GitHub and GitLab adapters share: t
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5
 
+### T441.12. `rtok task sync`
+
+Split from T441.7: reconcile the store's task id counters with the project's `[tasks]` adapter and report drift, so ids made by hand, by another machine or by a checkout whose store this one never saw are not numbered over, and issues that lost their `rtok:<id>` label are named.
+
+Check: `tasks::sync` unit tests (disk, counter ahead, fake adapter, GitHub mock, JSON); `tests/task_cli.rs` brings a lost counter back and a second sync is quiet; the trycmd help case, completion goldens, `surface_parity` and `config_coverage` pass; `just check` green.
+
+Result: `rtok task sync [--json]` (`src/tasks/sync.rs`) lists every task through the `TaskAdapter` trait, finished ones included, and raises the top-level and each per-parent counter to the highest number found with `seed_task_counter`; it never lowers a counter and never writes to the adapter. `Store::task_counter` is the new read-only getter (Diesel). The report names the counters raised, ids above their counter, duplicate ids, and issues that kept the `rtok` label but lost `rtok:<id>` (new defaulted `TaskAdapter::unlabelled`, implemented for GitHub, with the id still in the title shown as the label to restore). Drift is reported with exit 0. CLI only: `surface_parity` exempts it because `task_create` already seeds the counter first. README and `docs/commands.md` (en, ru, uk) list the `rtok task` commands. GitLab's `unlabelled` is not implemented yet and reports none. #820.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.

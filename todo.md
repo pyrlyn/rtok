@@ -125,7 +125,6 @@
 - T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T441.11. GitHub Projects v2 Status
-- T441.12. `rtok task sync`
 - T441.8. GitLab adapter
 - T441.9. Task adapter docs
 - T441.10. Task instruction line through `rtok agents install`
