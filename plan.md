@@ -126,7 +126,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436 | todo | P2 | 3 | 0% | |
 | T436.1 | todo | P2 | 3 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.11 | todo | P3 | 3 | 0% | |
+| T441.11 | in progress | P3 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T441.12 | todo | P3 | 3 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
 | T441.9 | todo | P3 | 1 | 0% | |
@@ -2391,6 +2391,7 @@ project = "group/name"
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
+    - Plan (Claude Code / claude-sonnet-5-5): new `src/tasks/github_project.rs` holds a `ProjectSync` the adapter owns (`with_project(n)`); one GraphQL query resolves the user- or org-owned project from the repo owner plus its `Status` field and option ids, cached per adapter; `create` and `write_status` call `sync` after the REST write, which does `addProjectV2ItemById` (idempotent) then `updateProjectV2ItemFieldValue`. open → Todo, in-progress → In Progress, done and closed → Done. Any failure (no project, scope, field, option) warns and never fails the task write. `run.rs` drops the "not used yet" warning; config docs (en/ru/uk, default.toml, `config/mod.rs`) reworded. Verify: mock-server tests in the new module, `cargo test --lib tasks::`, `config_coverage`, `just check`.
 12. **T441.12 `rtok task sync`** (split from T441.7) — reconcile a remote adapter with the store counter and report drift: issues labelled by hand, ids above the counter, tasks whose `rtok:<id>` label was removed.
 
 #### 12. Open questions
