@@ -482,6 +482,7 @@ pub fn agent_message_end(id: i32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::SessionTotals;
 
     /// Off a terminal indicatif draws nothing, so the wait leaves no byte behind and the closure's
     /// value (and its error) passes through untouched.
@@ -492,7 +493,6 @@ mod tests {
         let err: Result<(), &str> = with_loader("x", || Err("boom"));
         assert_eq!(err, Err("boom"));
     }
-    use crate::store::SessionTotals;
 
     #[test]
     fn a_message_frame_names_the_sender_and_quotes_every_body_line() {

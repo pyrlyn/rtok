@@ -9132,6 +9132,17 @@ Result: `research.md` §35. Corrections to the card: Backlog.md (v1.53.0) and Ta
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T436. Operation icons and a spinner on every wait, the way ketch draws them
+
+Creator request 2026-10-07: a spinner on every wait and ketch-style operation icons in the rtok CLI. Split on closing: the remaining waits and `agents install/update` icons are T436.2, the crate shared with ketch is T436.3.
+
+Check: `src/ui/style.rs` unit tests (the icon of each verb, the `Kind` fallback, one width and one text column for every icon, bare text off a terminal); `tests/ui_style.rs` asserts no tone or operation icon reaches a pipe; `src/render.rs` loader test; CI `gate` green.
+
+Result: `style.rs` has a verb → icon table on ketch's model (ketch's rows plus index, worktree, compress, expand, bench, start, stop), substring-matched in order so `uninstall` wins over `install`; a line that names an operation takes its icon, any other its `Kind` icon. Warn is now the single wide code point ❗ (as in ketch) instead of ⚠️, whose width depends on U+FE0F. Icons pad to a measured 2-column gutter. The daemon start/stop lines, the `graph index` summary and the references line go through it. The CLI's loader became the public `render::with_loader` and also wraps `bench` and `worktree add/remove`; it draws nothing off a terminal, so hook, MCP, `--json` and piped output and the trycmd snapshots are unchanged. `unicode-width` (already in the tree through indicatif) became a direct dependency.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.
