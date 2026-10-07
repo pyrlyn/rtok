@@ -761,6 +761,48 @@ section! {
 }
 
 section! {
+    /// `[tasks]` — task adapters (T441): where `rtok task …` and MCP `task_*` store tasks.
+    /// Usually set per project in `.rtok.toml`.
+    Tasks {
+        /// `disk`, `github` or `gitlab`.
+        adapter: String = s("disk"),
+        /// Task id prefix (`R` → `R12`). Empty: the project name's first letter.
+        prefix: String = String::new(),
+        disk: TasksDisk = TasksDisk::default(),
+        github: TasksGithub = TasksGithub::default(),
+        gitlab: TasksGitlab = TasksGitlab::default(),
+    }
+}
+
+section! {
+    /// `[tasks.disk]` — one Markdown file per task.
+    TasksDisk {
+        /// Relative to the project root; done tasks move to `<dir>/done`.
+        dir: PathBuf = p("tasks"),
+    }
+}
+
+section! {
+    /// `[tasks.github]` — GitHub Issues, sub-issues and a Projects v2 Status field.
+    TasksGithub {
+        /// `owner/name`. Empty: the `origin` remote.
+        repo: String = String::new(),
+        /// Projects v2 number whose Status field tracks the task; 0 = issues only.
+        project: u32 = 0,
+    }
+}
+
+section! {
+    /// `[tasks.gitlab]` — GitLab Issues; tasks under an issue are subtasks.
+    TasksGitlab {
+        /// Base URL, for self-hosted instances.
+        url: String = s("https://gitlab.com"),
+        /// `group/name` path or numeric id. Empty: the `origin` remote.
+        project: String = String::new(),
+    }
+}
+
+section! {
     /// `[otel]` — OpenTelemetry export (D19, P16). Off until `endpoint` resolves.
     Otel {
         endpoint: String = String::new(),
@@ -1072,6 +1114,7 @@ pub struct Config {
     pub expand: Expand,
     pub filter: Filter,
     pub worktree: Worktree,
+    pub tasks: Tasks,
     pub otel: Otel,
     pub plugins: Plugins,
     /// Directory the config was loaded from; not part of the file.

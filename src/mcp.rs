@@ -24,6 +24,7 @@ pub mod ping;
 
 mod agents;
 mod messages;
+mod tasks;
 mod worktrees;
 
 use crate::agents::link;
@@ -405,6 +406,12 @@ impl Server {
                 def: agents::status_def(),
             },
         ];
+        // T441.6: the project's tasks, same functions as `rtok task …`.
+        listed.extend(
+            tasks::defs()
+                .into_iter()
+                .map(|def| Listed { plugin: "mcp", def }),
+        );
         let builtin: Vec<&str> = crate::plugins::all()
             .iter()
             .map(|p| p.manifest().id)
@@ -507,6 +514,7 @@ impl Server {
                 .agent()
                 .and_then(|(agent, _)| agents::set_status(&self.cx, &agent, args)),
             "worktree_list" => worktrees::list(&self.cx),
+            n if n.starts_with("task_") => tasks::call(&self.cx, n, args),
             _ => return invoke_text(&self.cx, name, args),
         };
         match own {

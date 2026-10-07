@@ -48,6 +48,7 @@ pub mod render;
 pub mod report;
 pub mod sanitize;
 pub mod store;
+pub mod tasks;
 /// Test helpers, also for the integration tests under `tests/`; not part of the public API.
 #[doc(hidden)]
 pub mod testutil;
