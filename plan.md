@@ -83,7 +83,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
-| T400 | todo | P2 | 2 | 40% | |
+| T400 | in progress | P2 | 2 | 40% | Claude Code / claude-sonnet-5-5 |
 | T401 | todo | P3 | 4 | 20% | |
 | T402 | todo | P3 | 2 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
@@ -1726,6 +1726,8 @@ The research sweep (2026-10-04) found statements that shipped work made false. F
 - `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
 
 Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
+
+Execution plan (Claude Code / claude-sonnet-5-5, 2026-10-08): for each bullet, verify the claim against `done.md`, the code and `git log`, then edit `research.md` in place with a date or a "shipped as Txx" pointer (keeping each fact's source). The §2 T241 numbers wait for T397 (not done), so that one item is left and reported. Edit `docs/config.md` and its `docs/ru`/`docs/uk` copies together, `ideas.md` I-90/I-99 and `plan.md` T156 for the lead and the 14 % figure. Verify with `just check`.
 
 ### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
 
