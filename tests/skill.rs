@@ -155,6 +155,7 @@ fn install_retires_our_legacy_worktrees_and_leaves_a_foreign_one() {
     let out = rtok(&["agents", "install", "codex"], &cfg, &home);
     assert!(codex.join("rtok/SKILL.md").is_file(), "{out}");
     assert!(codex.join("rtok-worktrees/SKILL.md").is_file(), "{out}");
+    assert!(codex.join("rtok-tasks/SKILL.md").is_file(), "{out}");
     assert!(!legacy.exists(), "marked legacy worktrees must go: {out}");
     assert!(
         out.lines().any(|l| {

@@ -4,8 +4,8 @@
 `~/.pi/agent/extensions` tree.
 
 No config file is edited: the install is one linked extension, `<extensions_path>/rtok` →
-`plugins/pi/` from the rtok install (D21). The hub skills (`skills/rtok`, `skills/rtok-worktrees`) are copied into
-`~/.pi/agent/skills/` like every other skill host (T234); the bundle carries none. Nothing to back up; `remove` unlinks.
+`plugins/pi/` from the rtok install (D21). The hub skills
+(`skills/rtok`, `skills/rtok-worktrees`, `skills/rtok-tasks`) are copied into `~/.pi/agent/skills/` like every other skill host (T234); the bundle carries none. Nothing to back up; `remove` unlinks.
 
 ## Modules
 

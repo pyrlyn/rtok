@@ -85,6 +85,12 @@ Plan:
 
 Result: `SKILLS` is `["rtok", "rtok-worktrees"]`. `SkillCopy` reuses `tree_copies` (the byte-copy proof) and `OWNED_MARKER`, and `unlink_at` (the same symlink-safe remove plugins already use). A destination whose name starts with `rtok` is overwritten on install and removed on uninstall; a symlink is unlinked and its target is left. Install drops a legacy `worktrees` only when the marker or a byte copy of the current hub proves it ours, and reports a foreign one once. `plugins/pi/skills/` is already gone (T234), so there was no bundle to move; the README references moved, and `skill_src` still falls back to `plugins/pi/skills/<name>` for an older ketch archive. `just check`: 2485 passed. The creator updates the `worktrees` skill name in the global `AGENTS.md` after this lands.
 
+### T443. `rtok-tasks` skill: the plan.md / todo.md / done.md workflow for every host
+
+Ivan, 2026-10-07 (`research.md` §28.5 decisions: tasks stay in `plan.md`, the task code goes to a crate in `packages/`, agents may not edit the three files directly in any project, handoff travels on the task branch): ship the task workflow as a hub skill now, so every host gets it from `rtok agents install`. The skill describes manual edits until the task commands exist; then it is rewritten to the commands and direct edits are denied.
+
+Done: `skills/rtok-tasks/SKILL.md` — claim (read the table, ask when unclear, blockers first, `in progress` + agent, plan in the card, sync `todo.md`), id allocation from `origin/main` and open PRs, the table / card / `todo.md` format, close into `done.md`, the never list. `SKILLS` in `src/agents/skill.rs` gains `rtok-tasks`, so install and remove carry it on every skill host; the size and naming tests in `tests/skill.rs` cover it, and the codex install test asserts the copy. Antigravity and pi READMEs list it.
+
 ### T392. Warn when the same skill is listed twice or loaded more than once
 
 Ivan, 2026-10-04: warn when a skill is loaded more than once or exists as a duplicate. On the creator's machine `~/.claude/skills/worktrees` (a stale personal copy) and rtok's `worktrees` skill had the same name; today `doctor`'s skill audit silently keeps one row per `(source, name)` (`audit_from` in `src/doctor.rs`), and nothing notices a skill body loaded twice in one session (`src/plugins/guard/skill.rs` does not track it).
