@@ -6,8 +6,8 @@
 //! left behind past `[log] files` and archive payloads past `core.retain_calls_days`. With
 //! `--yes` it also clears old hook bodies (`core.retain_hook_bodies_days`) and converts the
 //! store to incremental vacuum if it is not already (T352; `mcp`/`proxy` do the same in the
-//! background at session start). Dry run by default; `--yes` applies. `clear` never touches a
-//! host directory. `list` (T330.1, T330.2) also shows every installed host's folders from
+//! background at session start). Dry run by default; `--yes` applies. Bare `clear` never
+//! touches a host directory; with filters it is `junk_clear` (T330.4). `list` (T330.1, T330.2) also shows every installed host's folders from
 //! the `junk_map` of `research.md` §22, read-only, sized with a per-agent time limit.
 //!
 //! Inventory for T182 found nothing else unbounded in `~/.rtok`: log rotation (`src/log.rs`)
@@ -81,21 +81,23 @@ fn outcome(kind: &'static str, path: PathBuf, note: String) -> Outcome {
 /// Everything `clear` would touch. Read-only; an unreadable path is skipped, not fatal
 /// (fail open).
 pub fn scan(cfg: &Config) -> Vec<Outcome> {
+    scan_with(cfg, cfg.core.retain_calls_days)
+}
+
+/// [`scan`] with the archive retention window `days` (`clear --older-than` may only widen it).
+pub fn scan_with(cfg: &Config, days: u32) -> Vec<Outcome> {
     let mut out: Vec<Outcome> = stale_log_siblings(cfg)
         .into_iter()
         .map(|p| outcome("log", p, format!("past `[log] files` = {}", cfg.log.files)))
         .collect();
     if let Ok(store) = Store::open(&cfg.core.db_path)
-        && let Ok(paths) = store.archives_pending_retention(cfg.core.retain_calls_days)
+        && let Ok(paths) = store.archives_pending_retention(days)
     {
         out.extend(paths.into_iter().map(|p| {
             outcome(
                 "archive",
                 p,
-                format!(
-                    "past `core.retain_calls_days` = {}",
-                    cfg.core.retain_calls_days
-                ),
+                format!("past `core.retain_calls_days` = {days}"),
             )
         }));
     }
@@ -586,8 +588,8 @@ impl Default for Options {
 }
 
 /// Read-only: the same [`scan`] `clear` runs, summed per kind for rtok, plus every installed
-/// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` itself removes
-/// only rtok's logs and archives until T330.4.
+/// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` with filters
+/// plans from this report (`junk_clear`, T330.4).
 pub fn report(cfg: &Config) -> Report {
     let opts = Options::default();
     let worktrees = junk_kinds::agent_worktrees(cfg, &opts.cwd);

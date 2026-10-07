@@ -943,7 +943,7 @@ enum AgentCmd {
         #[arg(long)]
         json: bool,
     },
-    /// Junk and agent folders: `list` shows rtok's and every installed host's folders with sizes, `clear` removes rtok's own junk
+    /// Junk and agent folders: `list` shows rtok's and every installed host's folders with sizes, `clear` removes rtok's own junk or, filtered, any agent's
     Junk {
         #[command(subcommand)]
         action: JunkCmd,
@@ -1009,6 +1009,9 @@ enum JunkCmd {
         all: bool,
     },
     /// List what `agents junk clear` would remove; `--yes` applies it
+    ///
+    /// Without `--agent`, `--kind`, `--include` or `--older-than` (or with `--agent rtok`
+    /// alone) only rtok's own logs and archives: other agents' junk needs a filter.
     Clear {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
@@ -1016,6 +1019,21 @@ enum JunkCmd {
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
+        /// Only this agent: `rtok` or a host id (repeatable)
+        #[arg(long = "agent", value_name = "AGENT", value_parser = crate::agents::junk_clear::agent_arg)]
+        agents: Vec<String>,
+        /// Only this junk kind (repeatable)
+        #[arg(long = "kind", value_name = "KIND", value_parser = clap::builder::PossibleValuesParser::new(crate::agents::junk_clear::KINDS))]
+        kinds: Vec<String>,
+        /// Also the review kinds
+        #[arg(long, value_name = "CLASS", value_parser = ["review"])]
+        include: Option<String>,
+        /// Only items not modified for this long (`7d`, `12h`)
+        #[arg(long, value_name = "AGE", value_parser = humantime::parse_duration)]
+        older_than: Option<std::time::Duration>,
+        /// Move to the OS trash instead of deleting
+        #[arg(long)]
+        trash: bool,
     },
 }
 
@@ -1876,18 +1894,46 @@ pub fn run() -> Result<()> {
                 }
             }
             AgentCmd::Junk {
-                action: JunkCmd::Clear { yes, json },
+                action:
+                    JunkCmd::Clear {
+                        yes,
+                        json,
+                        agents,
+                        kinds,
+                        include,
+                        older_than,
+                        trash,
+                    },
             } => {
                 let cfg = Config::load_with(config_file.as_deref(), None)?;
-                let outcomes = crate::agents::junk::run(&cfg, yes);
-                let failed = outcomes.iter().any(|o| o.failed);
-                if json {
-                    print_json(&outcomes)?;
+                let filter = crate::agents::junk_clear::Filter {
+                    agents,
+                    kinds,
+                    include_review: include.is_some(),
+                    older_than,
+                    trash,
+                };
+                if !filter.is_t182() || trash {
+                    let cleared = crate::agents::junk_clear::run(&cfg, &filter, yes)?;
+                    if json {
+                        print_json(&cleared)?;
+                    } else {
+                        print!("{}", crate::agents::junk_clear::to_text(&cleared));
+                    }
+                    if cleared.failed() {
+                        bail!("some junk could not be removed");
+                    }
                 } else {
-                    print!("{}", crate::agents::junk::to_table(&outcomes, yes));
-                }
-                if failed {
-                    bail!("some junk could not be removed");
+                    let outcomes = crate::agents::junk::run(&cfg, yes);
+                    let failed = outcomes.iter().any(|o| o.failed);
+                    if json {
+                        print_json(&outcomes)?;
+                    } else {
+                        print!("{}", crate::agents::junk::to_table(&outcomes, yes));
+                    }
+                    if failed {
+                        bail!("some junk could not be removed");
+                    }
                 }
             }
             AgentCmd::Whoami { json } => {

@@ -25,6 +25,7 @@ lang: ru
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | установить в хост с резервными копиями; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | убрать rtok из хоста с резервными копиями; `--dry-run` |
 | `rtok agents list` | каждое известное приложение: тип и имя, путь и версия, файлы конфигурации, модули rtok |
+| `rtok agents junk list\|clear` | папки каждого агента, виды мусора и размеры; `clear` — пробный прогон до `--yes`, без `--agent`, `--kind`, `--include review` или `--older-than` чистит только собственные логи и архивы rtok, перепроверяет каждый элемент прямо перед удалением, `--trash` переносит в корзину ОС, код выхода 1, если запланированное осталось |
 | `rtok graph index [path]` | построить индекс символов tree-sitter для дерева |
 | `rtok graph impact <name> [--project <id\|dir>]` | что сломается при изменении символа, по проекту и связанным с ним проектам; `--project` есть и у `index`, `dead`, `status`, `affected` |
 | `rtok memory import <file>` | импортировать заметки в формате JSONL с дедупликацией по хешу тела |

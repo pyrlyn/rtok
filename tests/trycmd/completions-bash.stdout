@@ -1331,12 +1331,28 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__agents__subcmd__junk__subcmd__clear)
-            opts="-h --yes --json --config --help"
+            opts="-h --yes --json --agent --kind --include --older-than --trash --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --agent)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --kind)
+                    COMPREPLY=($(compgen -W "log archive cache temp build locks swap" -- "${cur}"))
+                    return 0
+                    ;;
+                --include)
+                    COMPREPLY=($(compgen -W "review" -- "${cur}"))
+                    return 0
+                    ;;
+                --older-than)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
