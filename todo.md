@@ -113,7 +113,6 @@
 - T414.12. Live status: snapshot age and pause
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
-- T414.16. Linked hover across charts and live values elsewhere
 - T433. Save hook session fields once instead of in every hook body
 - T416. Shared `change-preview` crate for dry-run output
 - T416.1. rtok renders previews through `change-preview`
