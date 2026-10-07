@@ -8502,6 +8502,16 @@ Plan:
 
 Result: `proxy::noise::strip` cleans every tool result and user text block of the outgoing request through `sanitize::terminal_noise` (escapes, control and zero-width characters only; whitespace, CR and wrappers stay), in `proxy.mode = "compress"` only, with no new config key; assistant turns are never touched, and an unparseable or clean body keeps its original bytes. Tests: cleaner unit cases, `proxy::noise` unit tests, and `compress_mode_strips_terminal_noise_byte_stably`, which matches the exact upstream body on two identical turns.
 
+### T442. Proxy hop marker: forward an already-proxied request untouched
+
+A request can pass through `rtok proxy` twice: two proxies chained (`proxy.upstream` pointing at another rtok), or one pointed at itself. The second pass must not compress, reshape, cache or record the request again — that double-rewrites the body and double-counts tokens — and a self-loop must not recurse forever.
+
+Done means: every request the proxy forwards carries `x-rtok-proxied: <hops>` (incoming value + 1, missing = 0). A request that arrives with the header is forwarded as in plain mode (no `record` / `compress` / `prepare` / semantic cache, live view only) and logs one `warn` line. At `hops >= 8` the proxy answers `508 Loop Detected` without forwarding and logs an `error` line. A header value that is not a number counts as one hop.
+
+Check: `hop_marker_*` tests in `src/proxy/mod.rs` — a first-hop request reaches upstream shaped with `x-rtok-proxied: 1`; a marked request in `compress` mode reaches upstream byte-identical with the count bumped, writes no `calls` row and one `warn` line; a junk value counts as one hop; a request at the cap gets 508 and never reaches upstream; `just check`.
+
+Result: `src/proxy/mod.rs` reads `x-rtok-proxied` in `handle`, drops the client's copy and sets `hops + 1` on the upstream request; `hops > 0` takes the existing plain path, `hops >= MAX_HOPS` (8) returns 508. Log lines go through the `log` funnel on the blocking pool. Not configurable: the header always goes upstream, including to the provider.
+
 ### T204. A panicking plugin is dropped silently — the error never reaches the log
 
 Found 2026-09-22 in the core pass: every plugin call is wrapped in `catch_unwind` (`src/hooks/mod.rs:340-344, 381-385, 493-508, 202-205`) but the payload is discarded with `.ok()`/`let _` — no `logs` row, no stderr. architecture.md §4 and the Working agreement promise "that plugin's output is dropped, **the event is logged with the error**". Today a panicking plugin is indistinguishable from one returning `None`, so T233-class failures stay invisible in `rtok doctor` / `rtok logs`.
