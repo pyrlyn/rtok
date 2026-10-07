@@ -5,6 +5,7 @@
 import { useMemo, type ReactNode } from "react";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
+import { Mark, MarkRows } from "../charts/Mark";
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
@@ -35,18 +36,33 @@ function savingColumns(max: number): Column<Saving>[] {
             align: "right",
             cell: (r) => compact(r.saved),
         },
-        { id: "share", header: "share", cell: (r) => <Share value={r.saved} max={max} /> },
+        {
+            id: "share",
+            header: "share",
+            cell: (r) => <Share id={r.plugin.id} value={r.saved} max={max} />,
+        },
     ];
 }
 
-function Share({ value, max }: { value: number; max: number }) {
+function Share({ id, value, max }: { id: string; value: number; max: number }) {
     return (
-        <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
+        <Mark
+            tip={
+                <MarkRows
+                    title={id}
+                    rows={[
+                        ["saved", compact(value)],
+                        ["of the top plugin", pct(max ? value / max : 0, 0)],
+                    ]}
+                />
+            }
+            className="h-1.5 overflow-hidden rounded-full bg-surface-3"
+        >
             <div
                 className="h-full rounded-full bg-delta-fg/80"
                 style={{ width: `${max ? (value / max) * 100 : 0}%` }}
             />
-        </div>
+        </Mark>
     );
 }
 
@@ -157,6 +173,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
             label="calls"
             value={fmt(snap.calls.length)}
             sub={`${o.failed} failed · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+            readout={{ group: CALLS_SYNC, x: times, values: perBucket, unit: "calls" }}
             viz={
                 <MiniBars
                     values={perBucket}
@@ -177,6 +194,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${o.hosts} hosts`}
+            readout={{ group: CALLS_SYNC, x: times, values: o.liveSeries, unit: "live" }}
             viz={
                 <Sparkline
                     values={o.liveSeries}
