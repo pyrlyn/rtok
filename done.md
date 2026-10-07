@@ -1169,6 +1169,17 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just js` green; `gr
 
 Result: `web/src/ui/Unknown.tsx` renders the label at once and the "?" with its React Aria `Tooltip` from a lazy chunk (`UnknownWhy`, 5.8 kB gzip; entry +1 kB), so a chunk that fails leaves the word. `orUnknown(value, why, label?)` turns null, "" and the CLI's "-" into it; zero passes through. Every reason lives in `web/src/pages/missing.ts`, each restating where Rust leaves the field null (`src/store` call and session rows, `src/web/model.rs` plugin stats, hosts and services, `src/worktree/list.rs`). Where absence is a fact the label says so with the same tooltip: "top-level" parent, "none" ref_id, host config, worktree branch, owner, agent and pid, "never" seen, "not found" host app, "n/a" saved for plugins that save no tokens, "not set" OTel endpoint. Plugins now show a measured zero or negative saving instead of "-". Covered: Calls, Sessions, Overview's recent sessions, Plugins, Hosts, Worktrees, Services and Stats. Tooltip opens on hover, keyboard focus and touch tap (checked in the dev server at phone width with touch pointer events). `ui/lazyPart.ts` is the shared fail-open lazy loader, now also used by the command palette in `Shell.tsx`. The calls tokens column widened to fit "Unknown ?". The card's grep still finds `web/src/pages/text.ts`, the parser that fills absent CLI columns with "-"; pages render those through `orUnknown`.
 
+### T414.8. Sidebar groups and a collapsible sidebar
+
+The 14 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme, through one shared storage helper (`web/src/storage.ts`) that the theme now uses too. The bottom bar on phones stays one scrolling row.
+
+Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
+
+Result: `web/src/Sidebar.tsx` holds the groups (`NAV_GROUPS`), a labelled `role="group"` per group, and a toggle with `aria-expanded` and a visible focus ring; collapsed links keep their name (screen-reader-only text plus `title`). A unit test pins that every page sits in exactly one group, and blocked storage still works. `Sidebar.stories.tsx` covers expanded, collapsed, phone and toggle. New rtok-only icon `brand/icons/ui/sidebar.svg`, since `@pyrlyn/brand` has no panel icon. `just check` green, `just spa-stories` 131 passed (axe), `just spa-e2e` 17 passed. #821.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
