@@ -126,7 +126,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436 | todo | P2 | 3 | 0% | |
 | T436.1 | todo | P2 | 3 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.4 | todo | P2 | 3 | 0% | |
 | T441.5 | todo | P2 | 2 | 0% | |
 | T441.6 | todo | P2 | 3 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
@@ -2332,6 +2331,8 @@ trait TaskAdapter {
     fn max_id(&self, prefix: &str) -> Result<Option<TaskId>>; // seeding, collisions
 }
 ```
+
+As built in T441.4 (`src/tasks/adapter.rs`): `archive` is folded into `write_status` (done/closed archive), and the free `set_status` guards parents for every adapter.
 
 Sync and blocking HTTP is fine for a CLI; errors carry the adapter name and the external URL. No adapter shells out to `gh`/`glab` unless T441.1 decides to (token handling).
 

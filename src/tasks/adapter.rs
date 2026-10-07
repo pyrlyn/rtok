@@ -1,0 +1,78 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
+//! The task adapter trait (T441 §6) and the rules every adapter shares: what `list` hides and
+//! when a parent may close.
+
+use anyhow::{Result, bail};
+
+use super::{NewTask, Status, Task, TaskId};
+
+/// What `list` returns. The default is the plan: every active task, top level and subtasks.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Filter {
+    /// Only these statuses; empty means active ones, unless `all`.
+    pub statuses: Vec<Status>,
+    /// Done and closed tasks too.
+    pub all: bool,
+    /// Only the subtasks of this task.
+    pub parent: Option<TaskId>,
+}
+
+impl Filter {
+    pub fn matches(&self, task: &Task) -> bool {
+        let status = if self.statuses.is_empty() {
+            self.all || task.status.is_active()
+        } else {
+            self.statuses.contains(&task.status)
+        };
+        status && (self.parent.is_none() || task.parent == self.parent)
+    }
+
+    /// Whether finished tasks can match, so an adapter knows to read its archive.
+    pub fn wants_finished(&self) -> bool {
+        self.all || self.statuses.iter().any(|s| !s.is_active())
+    }
+}
+
+/// A task storage backend: plain files on disk, GitHub Issues or GitLab Issues. Ids come from
+/// the store's allocator; an adapter only stores them.
+pub trait TaskAdapter {
+    /// `disk`, `github` or `gitlab`, for error messages.
+    fn name(&self) -> &'static str;
+    /// Store a new task under `id`; fails when `id` is already taken.
+    fn create(&self, task: &NewTask, id: &TaskId) -> Result<Task>;
+    /// Tasks matching `filter`, sorted by id.
+    fn list(&self, filter: &Filter) -> Result<Vec<Task>>;
+    fn get(&self, id: &TaskId) -> Result<Option<Task>>;
+    /// Move a task to `status`; done and closed leave the plan (T441 §8). Callers go
+    /// through [`set_status`], which guards parents.
+    fn write_status(&self, id: &TaskId, status: Status) -> Result<Task>;
+    /// The highest id with `prefix`, done ones included: seeding and collision checks.
+    fn max_id(&self, prefix: &str) -> Result<Option<TaskId>>;
+}
+
+/// Set a task's status. A parent with active subtasks cannot finish unless `force`: the error
+/// lists them, so the plan never shows orphans under a finished task.
+pub fn set_status(
+    adapter: &dyn TaskAdapter,
+    id: &TaskId,
+    status: Status,
+    force: bool,
+) -> Result<Task> {
+    if !status.is_active() && !force {
+        let open = adapter.list(&Filter {
+            parent: Some(id.clone()),
+            ..Filter::default()
+        })?;
+        if !open.is_empty() {
+            let ids: Vec<String> = open.iter().map(|t| t.id.to_string()).collect();
+            bail!(
+                "{id} has open subtasks: {}; finish them first or pass --force",
+                ids.join(", ")
+            );
+        }
+    }
+    adapter.write_status(id, status)
+}
