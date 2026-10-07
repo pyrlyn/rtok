@@ -302,6 +302,13 @@ Every effective key with its origin — the `config show --sources` page.
 | stats.prices.gpt-5.output | 10 | default |
 | stats.since | 30d | default |
 | stats.transcripts_dir | tests/trycmd/input/stats-price-tx | user |
+| tasks.adapter | disk | default |
+| tasks.disk.dir | tasks | default |
+| tasks.github.project | 0 | default |
+| tasks.github.repo |  | default |
+| tasks.gitlab.project |  | default |
+| tasks.gitlab.url | https://gitlab.com | default |
+| tasks.prefix |  | default |
 | tui.tab |  | default |
 | tui.tick_secs | 2 | default |
 | ui.color | true | default |
@@ -311,7 +318,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-265 keys.
+272 keys.
 
 ## Doctor
 

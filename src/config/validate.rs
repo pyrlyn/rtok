@@ -656,6 +656,15 @@ fn check_leaf(
             "plugins.graph.watch" if !matches!(s, "off" | "notify") => {
                 errors.push(format!("{at}: {dotted} must be off or notify"));
             }
+            "tasks.adapter" if !matches!(s, "disk" | "github" | "gitlab") => {
+                errors.push(format!("{at}: {dotted} must be disk, github, or gitlab"));
+            }
+            // Empty means "the project name's first letter"; anything else must parse as ids.
+            "tasks.prefix" if !s.is_empty() => {
+                if let Err(e) = crate::tasks::check_prefix(s) {
+                    errors.push(format!("{at}: {dotted}: {e}"));
+                }
+            }
             // The one parser every reader of these windows uses, so `set` cannot store a value
             // that `rtok stats`, `rtok report`, `doctor` and the web model then refuse.
             "stats.since" | "report.since" => {
@@ -722,6 +731,27 @@ mod tests {
             std::fs::write(&path, format!("[log]\ntspin = \"{ok}\"\n")).unwrap();
             assert!(issues(&path).unwrap().is_empty(), "{ok}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T441.2: the adapter is a closed set and the prefix must be one ids can carry.
+    #[test]
+    fn tasks_adapter_and_prefix_are_checked() {
+        let dir = tmp("tasks");
+        let path = dir.join("c.toml");
+        for (body, key) in [
+            ("adapter = \"jira\"", "tasks.adapter"),
+            ("prefix = \"R2\"", "tasks.prefix"),
+            ("prefix = \"TOOLONGPX\"", "tasks.prefix"),
+        ] {
+            std::fs::write(&path, format!("[tasks]\n{body}\n")).unwrap();
+            let errs = issues(&path).unwrap();
+            assert!(errs.iter().any(|e| e.contains(key)), "{body}: {errs:?}");
+        }
+        let ok =
+            "[tasks]\nadapter = \"gitlab\"\nprefix = \"at\"\n[tasks.gitlab]\nproject = \"g/n\"\n";
+        std::fs::write(&path, ok).unwrap();
+        assert!(issues(&path).unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

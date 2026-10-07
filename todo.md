@@ -124,7 +124,6 @@
 - T436. Operation icons and a spinner on every wait, the way ketch draws them
 - T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T441.2. Task core types and config
 - T441.3. Singleton task id allocator
 - T441.4. Adapter trait and the disk adapter
 - T441.5. `rtok task` CLI
