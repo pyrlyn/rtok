@@ -656,8 +656,9 @@ fn check_leaf(
             "plugins.graph.watch" if !matches!(s, "off" | "notify") => {
                 errors.push(format!("{at}: {dotted} must be off or notify"));
             }
-            "tasks.adapter" if !matches!(s, "disk" | "github" | "gitlab") => {
-                errors.push(format!("{at}: {dotted} must be disk, github, or gitlab"));
+            "tasks.adapter" if !crate::tasks::run::ADAPTERS.contains(&s) => {
+                let all = crate::tasks::run::ADAPTERS.join(", ");
+                errors.push(format!("{at}: {dotted} must be one of {all}"));
             }
             // Empty means "the project name's first letter"; anything else must parse as ids.
             "tasks.prefix" if !s.is_empty() => {

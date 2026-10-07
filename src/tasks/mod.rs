@@ -17,6 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod adapter;
 pub mod disk;
+pub mod run;
 
 /// Subtasks go one level deep (`R2.1`) until a second level is asked for (T441 §5).
 pub const MAX_DEPTH: usize = 2;
