@@ -115,7 +115,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.12 | todo | P2 | 2 | 0% | |
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
-| T414.16 | todo | P2 | 3 | 0% | |
+| T414.16 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
@@ -1964,6 +1964,8 @@ Check: unit tests for the CSV writer (quoting, escaping, empty table); a story a
 Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
+
+Plan: 1) Chart layer: `Hover` carries the stacked segment under the pointer (`seriesAt` in `spec.ts`, found by value in `echarts.ts`, so no library event is needed); a chart inside a card takes the card's scope as its owner. 2) `charts/Readout.tsx`: `Scoped` and `HoverSub` swap a KPI subline for "time - value" while another chart of the group is hovered, except in the card whose own mini shows the tooltip; the original subline stays in the tree for assistive tech (the tooltip stays the accessible reading). 3) Overview: readouts on the calls and live-sessions KPIs; the calls legend lights the hovered series. 4) `charts/Mark.tsx`: DOM marks share `Tooltip` (budget grid, plugin bitset replacing `title`, token mix segments, share bars). 5) Unit test for `seriesAt`; a story on Overview hovers the calls chart and reads the minis' `data-pointer` and subline, plus a legend and a marks story; axe.
 
 ### T433. Save hook session fields once instead of in every hook body
 
