@@ -75,22 +75,10 @@ pub fn run(cfg: &Config) -> Result<()> {
         };
     let stop = AtomicBool::new(false);
     std::thread::scope(|s| {
+        // T329.5: the project's scope is watched, not just its root.
         #[cfg(feature = "graph")]
         if let Some(root) = &watch_root {
-            // T263: never watch `/` or the home directory.
-            if let Err(e) = crate::plugins::read::walk_root_ok(root) {
-                let msg = format!("watcher skipped for {}: {e:#}", root.display());
-                eprintln!("rtok mcp: {msg}");
-                crate::log::append(cfg, "warn", "mcp", "watch", &msg);
-            } else {
-                s.spawn(|| {
-                    crate::plugins::graph::watch::run(
-                        &crate::plugin::Ctx::new(&server.cx),
-                        root,
-                        &stop,
-                    )
-                });
-            }
+            s.spawn(|| crate::plugins::graph::watch::run_scope(&server.cx, root, &stop));
         }
         // T329.8: register, link and index what the project's manifests reference, off the
         // request path so `initialize` and the first tool call are not delayed. Detached with its

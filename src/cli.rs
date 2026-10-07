@@ -2127,14 +2127,18 @@ pub fn run() -> Result<()> {
                     project,
                     json,
                 } => {
-                    let root =
-                        crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
+                    // T329.5: the project asked for (else `path`, else the cwd) and what it links to.
+                    let root = crate::plugins::graph::cli_root(path)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.project.as_deref(),
+                        &root,
+                    )?;
                     let ctx = crate::plugin::Ctx::new(&cx);
                     if json {
-                        let rows = crate::plugins::graph::dead_rows(&ctx, &root)?;
-                        println!("{}", serde_json::to_string_pretty(&rows)?);
+                        println!("{}", crate::plugins::graph::scope::dead_json(&ctx, &scope)?);
                     } else {
-                        print!("{}", crate::plugins::graph::dead(&ctx, &root)?);
+                        print!("{}", crate::plugins::graph::scope::dead(&ctx, &scope)?);
                     }
                 }
                 GraphCmd::Status {
@@ -2209,12 +2213,17 @@ pub fn run() -> Result<()> {
                     json,
                     project,
                 } => {
-                    let root = crate::plugins::graph::cli_root_for(&cx.store, None, project)?;
+                    let root = crate::plugins::graph::cli_root(None)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.as_deref(),
+                        &root,
+                    )?;
                     print!(
                         "{}",
-                        crate::plugins::graph::affected(
+                        crate::plugins::graph::scope::affected_git(
                             &crate::plugin::Ctx::new(&cx),
-                            &root,
+                            &scope,
                             since.as_deref(),
                             staged,
                             json,
