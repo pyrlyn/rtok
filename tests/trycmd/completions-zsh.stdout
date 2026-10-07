@@ -323,6 +323,130 @@ esac
     ;;
 esac
 ;;
+(task)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+":: :_rtok__subcmd__task_commands" /
+"*::: :->task" /
+&& ret=0
+
+    case $state in
+    (task)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-task-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : /
+'(--body-file)-d+[Description/: why the task exists and what done means]:DESCRIPTION:_default' /
+'(--body-file)--description=[Description/: why the task exists and what done means]:DESCRIPTION:_default' /
+'--body-file=[Read the description from this file (/`-/` for stdin)]:PATH:_files' /
+'--parent=[Make it a subtask of this task, e.g. /`R2/` → /`R2.1/`]:ID:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[Print the task as JSON instead of the id]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':title -- One-line title:_default' /
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : /
+'*--status=[Only these statuses (comma-separated/: open, in-progress, done, closed)]:STATUS:_default' /
+'--parent=[Only the subtasks of this task]:ID:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--all[Done and closed tasks too]' /
+'--json[JSON instead of the table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the text]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Task id, e.g. `R12` or `R2.1`:_default' /
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--force[Finish a parent even though subtasks are still open]' /
+'--json[Print the task as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Task id, e.g. `R12` or `R2.1`:_default' /
+'::status -- open, in-progress, done or closed:_default' /
+&& ret=0
+;;
+(next)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the text]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
+(init)
+_arguments "${_arguments_options[@]}" : /
+'--adapter=[disk, github or gitlab (default/: disk, or what the file already says)]:ADAPTER:_default' /
+'--prefix=[Task id prefix, 1–8 ASCII letters (default/: the project name'/''s first letter)]:PREFIX:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__task__subcmd__help_commands" /
+"*::: :->help" /
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-task-help-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(next)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(init)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (info)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -2207,6 +2331,46 @@ _arguments "${_arguments_options[@]}" : /
     ;;
 esac
 ;;
+(task)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__help__subcmd__task_commands" /
+"*::: :->task" /
+&& ret=0
+
+    case $state in
+    (task)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-help-task-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(next)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(init)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (info)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -2672,6 +2836,7 @@ _rtok_commands() {
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
+'task:This project'/''s tasks/: numbered by rtok, stored by the /`/[tasks/]/` adapter' /
 'info:Version, effective paths, disk usage, error count and proxy status' /
 'agents:Agent hosts (/`rtok agents install|uninstall|list|info …/`)' /
 'agent:Agent hosts (/`rtok agents install|uninstall|list|info …/`)' /
@@ -3462,6 +3627,7 @@ _rtok__subcmd__help_commands() {
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
+'task:This project'/''s tasks/: numbered by rtok, stored by the /`/[tasks/]/` adapter' /
 'info:Version, effective paths, disk usage, error count and proxy status' /
 'agents:Agent hosts (/`rtok agents install|uninstall|list|info …/`)' /
 'setup:Deprecated spelling of /`rtok agents install <host>/`; still runs, still prints where to go' /
@@ -3964,6 +4130,48 @@ _rtok__subcmd__help__subcmd__stats_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help stats commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__help__subcmd__task_commands] )) ||
+_rtok__subcmd__help__subcmd__task_commands() {
+    local commands; commands=(
+'create:Create a task under the next free id and print the id' /
+'list:The plan/: open and in-progress tasks, subtasks under their parent' /
+'show:One task/: title, status, parent, subtasks, link and description' /
+'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
+'next:The task to work on next/: the lowest open one with no open subtask' /
+'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
+    )
+    _describe -t commands 'rtok help task commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__create_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task create commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__init_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task init commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__list_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__next_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__next_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__show_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task show commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__status_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task status commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__help__subcmd__tui_commands] )) ||
 _rtok__subcmd__help__subcmd__tui_commands() {
     local commands; commands=()
@@ -4304,6 +4512,97 @@ _rtok__subcmd__setup_commands() {
 _rtok__subcmd__stats_commands() {
     local commands; commands=()
     _describe -t commands 'rtok stats commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task_commands] )) ||
+_rtok__subcmd__task_commands() {
+    local commands; commands=(
+'create:Create a task under the next free id and print the id' /
+'list:The plan/: open and in-progress tasks, subtasks under their parent' /
+'show:One task/: title, status, parent, subtasks, link and description' /
+'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
+'next:The task to work on next/: the lowest open one with no open subtask' /
+'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok task commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__create_commands] )) ||
+_rtok__subcmd__task__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task create commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help_commands] )) ||
+_rtok__subcmd__task__subcmd__help_commands() {
+    local commands; commands=(
+'create:Create a task under the next free id and print the id' /
+'list:The plan/: open and in-progress tasks, subtasks under their parent' /
+'show:One task/: title, status, parent, subtasks, link and description' /
+'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
+'next:The task to work on next/: the lowest open one with no open subtask' /
+'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok task help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__create_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help create commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__help_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__init_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help init commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__list_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__next_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__next_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__show_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help show commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__status_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help status commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__init_commands] )) ||
+_rtok__subcmd__task__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task init commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__list_commands] )) ||
+_rtok__subcmd__task__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__next_commands] )) ||
+_rtok__subcmd__task__subcmd__next_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__show_commands] )) ||
+_rtok__subcmd__task__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task show commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__status_commands] )) ||
+_rtok__subcmd__task__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task status commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__tui_commands] )) ||
 _rtok__subcmd__tui_commands() {

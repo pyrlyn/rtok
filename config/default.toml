@@ -265,6 +265,21 @@
 # enabled = true                        # false: rtok worktree and MCP worktree_* are off; Claude's worktree hooks act as without rtok
 # root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>
 
+[tasks]                               # task adapters; usually set per project in .rtok.toml
+# adapter = "disk"                      # disk | github | gitlab
+# prefix  = ""                          # task id prefix (R → R12); empty: first letter of the project name
+
+[tasks.disk]
+# dir = "tasks"                         # one Markdown file per task, relative to the project root; done ones go to <dir>/done
+
+[tasks.github]
+# repo    = ""                          # owner/name; empty: the origin remote
+# project = 0                           # Projects v2 number whose Status field tracks tasks; 0 = issues only
+
+[tasks.gitlab]
+# url     = "https://gitlab.com"        # base URL; set it for a self-hosted instance
+# project = ""                          # group/name or numeric id; empty: the origin remote
+
 [otel]                                # OpenTelemetry export; off until endpoint resolves
 # endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 # headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS

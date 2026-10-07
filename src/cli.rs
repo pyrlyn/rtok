@@ -180,6 +180,11 @@ enum Cmd {
         #[command(subcommand)]
         action: WorktreeCmd,
     },
+    /// This project's tasks: numbered by rtok, stored by the `[tasks]` adapter
+    Task {
+        #[command(subcommand)]
+        action: TaskCmd,
+    },
     /// Version, effective paths, disk usage, error count and proxy status
     Info {
         /// JSON instead of the text lines
@@ -514,6 +519,78 @@ enum MemoryCmd {
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TaskCmd {
+    /// Create a task under the next free id and print the id
+    Create {
+        /// One-line title
+        title: String,
+        /// Description: why the task exists and what done means
+        #[arg(short = 'd', long, conflicts_with = "body_file")]
+        description: Option<String>,
+        /// Read the description from this file (`-` for stdin)
+        #[arg(long, value_name = "PATH")]
+        body_file: Option<PathBuf>,
+        /// Make it a subtask of this task, e.g. `R2` → `R2.1`
+        #[arg(long, value_name = "ID")]
+        parent: Option<String>,
+        /// Print the task as JSON instead of the id
+        #[arg(long)]
+        json: bool,
+    },
+    /// The plan: open and in-progress tasks, subtasks under their parent
+    List {
+        /// Only these statuses (comma-separated: open, in-progress, done, closed)
+        #[arg(long, value_delimiter = ',')]
+        status: Vec<String>,
+        /// Done and closed tasks too
+        #[arg(long)]
+        all: bool,
+        /// Only the subtasks of this task
+        #[arg(long, value_name = "ID")]
+        parent: Option<String>,
+        /// JSON instead of the table
+        #[arg(long)]
+        json: bool,
+    },
+    /// One task: title, status, parent, subtasks, link and description
+    Show {
+        /// Task id, e.g. `R12` or `R2.1`
+        id: String,
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print a task's status, or set it; done and closed move it out of the plan
+    Status {
+        /// Task id, e.g. `R12` or `R2.1`
+        id: String,
+        /// open, in-progress, done or closed
+        status: Option<String>,
+        /// Finish a parent even though subtasks are still open
+        #[arg(long)]
+        force: bool,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// The task to work on next: the lowest open one with no open subtask
+    Next {
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
+    Init {
+        /// disk, github or gitlab (default: disk, or what the file already says)
+        #[arg(long)]
+        adapter: Option<String>,
+        /// Task id prefix, 1–8 ASCII letters (default: the project name's first letter)
+        #[arg(long)]
+        prefix: Option<String>,
     },
 }
 
@@ -1399,6 +1476,7 @@ pub fn run() -> Result<()> {
                 print!("{}", report.to_console());
             }
         }
+        Cmd::Task { action } => run_task(action, config_file.as_deref())?,
         // One gate for every subcommand, `list` included (T410).
         Cmd::Worktree { .. }
             if !Config::load_with(config_file.as_deref(), None)?
@@ -2896,6 +2974,108 @@ fn agents_inbox(cfg: &Config, id: Option<String>, unread: bool, json: bool) -> R
 
 fn print_json(value: &(impl serde::Serialize + ?Sized)) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);
+    Ok(())
+}
+
+/// `rtok task …` (T441.5): every subcommand but `init` opens the project's adapter.
+fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()> {
+    use crate::tasks::run::{Project, details, filter, init, table};
+    use crate::tasks::{NewTask, Status, TaskId};
+    use anyhow::Context as _;
+
+    let cwd = std::env::current_dir()?;
+    let cfg = Config::load_with(config_file, None)?;
+    let open = || Project::open(&cfg.tasks, &cwd);
+    let id_of = |s: &str| s.parse::<TaskId>();
+    match action {
+        TaskCmd::Init { adapter, prefix } => {
+            let path = init(&cwd, adapter.as_deref(), prefix.as_deref())?;
+            // Re-read: the file just changed what `[tasks]` says.
+            let cfg = Config::load_with(config_file, None)?;
+            let project = Project::open(&cfg.tasks, &cwd)?;
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let last = project.seed(&store, None)?;
+            println!(
+                "{}: adapter {}, next id {}{}",
+                path.display(),
+                cfg.tasks.adapter,
+                project.prefix,
+                last + 1
+            );
+        }
+        TaskCmd::Create {
+            title,
+            description,
+            body_file,
+            parent,
+            json,
+        } => {
+            let description = match body_file {
+                Some(p) if p.as_os_str() == "-" => std::io::read_to_string(std::io::stdin())?,
+                Some(p) => std::fs::read_to_string(&p).with_context(|| p.display().to_string())?,
+                None => description.unwrap_or_default(),
+            };
+            let new = NewTask {
+                title,
+                description,
+                parent: parent.as_deref().map(id_of).transpose()?,
+            };
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let task = open()?.create(&store, &new)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{}", task.id);
+            }
+        }
+        TaskCmd::List {
+            status,
+            all,
+            parent,
+            json,
+        } => {
+            let tasks = open()?
+                .adapter()
+                .list(&filter(&status, all, parent.as_deref())?)?;
+            if json {
+                print_json(&tasks)?;
+            } else {
+                print!("{}", table(&tasks));
+            }
+        }
+        TaskCmd::Show { id, json } => {
+            let id = id_of(&id)?;
+            let shown = open()?.show(&id)?;
+            if json {
+                print_json(&shown)?;
+            } else {
+                print!("{}", details(&shown));
+            }
+        }
+        TaskCmd::Status {
+            id,
+            status,
+            force,
+            json,
+        } => {
+            let id = id_of(&id)?;
+            let status = status.as_deref().map(str::parse::<Status>).transpose()?;
+            let task = open()?.status(&id, status, force)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{}: {}", task.id, task.status);
+            }
+        }
+        TaskCmd::Next { json } => {
+            let next = open()?.next()?;
+            match (next, json) {
+                (next, true) => print_json(&next)?,
+                (Some(t), false) => println!("{}  {}", t.id, t.title),
+                (None, false) => println!("no open task"),
+            }
+        }
+    }
     Ok(())
 }
 
