@@ -36,7 +36,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.4 | in progress | P2 | 4 | 90% | Claude Code / claude-opus-5-5 |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
@@ -1083,20 +1082,6 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - Permission-denied and timeout folders are reported, not fatal; exit code 1 when anything planned was not removed.
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
-
-### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
-
-Part of T330. `clear` takes the same scan as `list`, filters it (`--agent` repeatable, `--kind`, `--include review`, `--older-than`), re-checks every item before deleting (still there, not open, not a symlink out, not modified in the last minute), skips a running agent's temp/locks/swap/index, clears `explicit` kinds only when named with `--kind` and paths without D36 evidence never, supports `--trash`, prints the planned and freed bytes per agent and kind, and exits 1 when something planned was not removed. `agents junk clear` with no flags and `--agent rtok` keep T182's behaviour (the existing tests stay green). Depends on T330.3 and the investigations T340/T344.
-
-Check: dry run changes no file (tree hash), `--yes` removes exactly the planned safe items, lockfiles/settings/`rtok.db` untouched, a changed item is skipped; `just check`.
-
-Execution plan (Claude Code / claude-opus-5-5):
-
-1. `src/agents/junk_clear.rs`: a `Filter` (`--agent` host or `rtok`, `--kind`, `--include review`, `--older-than`, `--trash`) over the `report_with` scan of `list` (no second scanner). No filter, or `--agent rtok` alone, runs T182's `junk::run` unchanged (output and JSON as today, T344 read conservatively); any other filter plans items: rtok's `log`/`archive` from `junk::scan`, every counted `Item` of the chosen agents and kinds; class gate (`safe` by default, `review` with `--include review` or `--kind`, `explicit` only by `--kind`, `never` and items without D36 evidence never).
-2. Running agent: a live rtok session of that host (store) or its CLI/app process (`restart::Procs`; off under `RTOK_HOST_SANDBOX`, so tests fake it through the store) skips its `temp`, `locks`, `swap` and §22 caches with "agent running"; tagged caches keep T152's idle rule.
-3. Re-check right before each removal: gone ("already gone", not an error), a symlink or a changed real path, modified in the last minute, a file another process holds a lock on, a tagged cache whose tag is gone, a path that is or holds `rtok.db`, a host settings file or a package-manager lockfile. Cache and build dirs are emptied (top folder and `CACHEDIR.TAG` kept), temp entries and log siblings removed, archives through the store's retention. `--trash` moves them with the `trash` crate.
-4. Output: item table, planned and freed bytes per agent and kind, "Freed X of Y planned"; `--json`; exit 1 when a planned item was not removed, 2 on a bad flag (clap).
-5. Tests in temp homes only (unit: plan, class gate, re-check, running skip; binary: dry run tree hash, `--yes` removes exactly the plan, protected files stay, bad flag exits 2, `--trash` on Linux). trycmd help, surface parity, config coverage; `docs/commands.md` en/ru/uk.
 
 ### T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 
