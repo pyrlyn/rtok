@@ -109,7 +109,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
-| T414.8 | todo | P2 | 2 | 0% | |
+| T414.8 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
@@ -1928,6 +1928,8 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
 
 Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
+
+Execution plan: `web/src/Sidebar.tsx` takes the nav out of `Shell.tsx` (groups table keyed by page id, a labelled `<ul>` per group, a collapse toggle with `aria-expanded`, `title` plus `aria-label` on every link so the collapsed icon-only links keep a name). The collapsed flag persists through new `web/src/storage.ts` helpers that `theme.ts` is moved onto (one try/catch storage path, no second mechanism); the Shell grid column is 56px collapsed. Phones keep the one-row bottom bar: group labels and the toggle are `md:` only. A test pins that every page sits in exactly one group; `app.test.tsx` expects the grouped order; `Sidebar.stories.tsx` has expanded, collapsed and phone states (axe). Verify: `just check`, `just spa-stories`, `just spa-e2e`.
 
 ### T414.10. Table filters and sort in the URL
 
