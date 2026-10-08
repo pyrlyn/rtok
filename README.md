@@ -1,3 +1,6 @@
+> [!NOTE]
+> This project is under active development. We need "testing volunteers": try it and report what breaks.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-wordmark-dark.svg">
   <img src="assets/logo-wordmark.svg" alt="rtok" width="200">
