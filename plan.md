@@ -64,7 +64,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.5 | todo | P2 | 3 | 20% | |
 | T385.6 | todo | P2 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
-| T385.8 | todo | P2 | 2 | 20% | |
+| T385.8 | in progress | P2 | 2 | 20% | Claude Code / claude-sonnet-5-5 |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
@@ -1427,6 +1427,13 @@ Check: with a slow mock upstream, agent request latency is unchanged while a bul
 optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
 
 Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
+
+Execution plan:
+
+1. "Old enough" is the live-zone archive rule that ships today (`plugins.archive`: older than `keep_turns = 4` and at least `min_tokens = 1500`), the same rule `rtok stats` already replays. Measure with `rtok stats --json` (transcripts, read-only) for the denominator and the replay totals, plus one read-only ad hoc pass over the transcripts for the eligible token-turns, weighted by the requests that follow each result (the T402 "resident" method). Aggregates only; the query stays in the report, not in the repo.
+2. Add a dated `research.md` section: eligible share of input, code vs prose mix, the size floor sensitivity, caveats.
+3. Add a hand-written must-keep fixture `tests/fixtures/p28_must_keep.toml` (identifiers, paths, numbers, error lines, rustc spans; synthetic) and a test `tests/p28_must_keep.rs` that loads it and checks that every span occurs verbatim in its body and that the current extractive `compress` and `archive` pointer views are scored against it as a baseline (report only, no gate).
+4. Verify: the new test, `just docs-check`.
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
