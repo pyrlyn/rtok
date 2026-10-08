@@ -159,6 +159,38 @@ deny = []                             # прибрати ці назви з tool
 [proxy.lanes]                         # T385.1; позначати смугу кожного запиту в журналі обліку (calls.kind); байти лишаються ідентичними
 enabled = true                        # false = кожен запит — непозначений api_request; x-rtok-lane і /lane/<name>/ пересилаються як надіслано
 
+[proxy.lanes.bulk]                    # синхронні скрипти; смуга agent слідує глобальним перемикачам, batch і files не переписуються ніколи
+compress            = false           # переписування proxy.mode = "compress" (archive, compress, зачистка шуму)
+toon                = false           # фільтр toon всередині цього проходу; потрібен compress
+tools_rewrite       = false           # proxy.tools_rewrite
+context_management  = false           # proxy.context_management
+semantic_cache      = false           # plugins.proxy.semantic_cache, читання і запис
+timeout_s           = 0               # таймаут читання для цієї смуги; 0 = proxy.timeout_s
+
+[proxy.lanes.embeddings]              # ті самі ключі, що в bulk
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.meta]                    # ті самі ключі, що в bulk (models, підрахунок токенів)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.internal]                # ті самі ключі, що в bulk (власні виклики моделі rtok)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
 [proxy.batch]                         # ключів ще немає (T385.4)
 
 [proxy.flex]                          # ключів ще немає (T385.5)
@@ -497,6 +529,26 @@ Gemini `:batchGenerateContent`), `files`, `embeddings` і `meta` (`/v1/models`,
 Смуга agent лишає `calls.kind = api_request`; інші записують `api_request:<lane>`
 (`api_request:bulk`, `api_request:batch`, ...). Байти запиту смуга не змінює.
 
+Смуга `agent` таблиці не має: для неї кожен глобальний перемикач вирішує так само, як до
+появи смуг (стабільність prompt-кешу). `batch` і `files` її теж не мають: їхні тіла
+(Batch JSONL, завантаження) завжди пересилаються без змін, а правка `stream_options` для них
+теж пропускається. `bulk`, `embeddings`, `meta` і `internal` читають кожна свою таблицю
+`[proxy.lanes.<lane>]`, і всі перемикачі в ній типово вимкнені, тому ці смуги пересилаються
+байт у байт, доки ви не ввімкнете одну з них. Перемикач смуги лише звужує глобальний:
+переписування виконується на смузі, коли ввімкнені глобальний перемикач *і* перемикач смуги.
+
+| Ключ | Який глобальний перемикач звужує | Типово | Значення |
+|-----|--------------------------|---------|---------|
+| `compress` | `proxy.mode = "compress"` | `false` | archive, compress і зачистка шуму термінала |
+| `toon` | `plugins.toon.enabled` | `false` | фільтр `toon` усередині цього проходу; потрібен `compress` |
+| `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | переписування описів у `tools[]` |
+| `context_management` | `proxy.context_management` | `false` | серверне редагування контексту Anthropic |
+| `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | читання і запис кешу |
+| `timeout_s` | `proxy.timeout_s` | `0` | таймаут читання цієї смуги в секундах; `0` = `proxy.timeout_s` |
+
+Flex, маршрутизації та upstream для окремої смуги тут поки немає: кожен з'явиться в цій
+таблиці власним кроком (`[proxy.flex]`, `[proxy.routing]` нижче).
+
 ### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
 
 Ці три таблиці існують і порожні: порожній `[proxy.batch]` завантажується, але жодна
@@ -583,7 +635,7 @@ Rust (rust-analyzer) і Dart (Dart SDK): `docs/lsp.md`.
 
 Власні рядки rtok для людини за терміналом — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, підсумок `graph index`, `--help` — типово мають емодзі й колір:
-✅ успіх (зелений), 💡 статус (блакитний), ⚠️ попередження (жовтий), ❌ помилка (червоний).
+✅ успіх (зелений), 💡 статус (блакитний), ❗ попередження (жовтий), ❌ помилка (червоний). Рядок з назвою операції отримує її значок (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), вирівняний так, що текст після нього починається в одній колонці.
 
 ```toml
 [ui]

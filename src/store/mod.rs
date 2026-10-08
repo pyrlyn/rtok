@@ -11,6 +11,8 @@ pub use agents::{AgentDetail, AgentRow, idle_secs};
 mod messages;
 pub use messages::{Message, short_agent_id};
 pub mod embed;
+// T433: hook session fields saved once, spliced back into the stdin on read.
+mod hook_fields;
 mod migrations;
 pub mod models;
 pub mod otel;
@@ -48,8 +50,8 @@ pub use crate::plugin::{ArchiveDecision, NoteHit};
 // `models` (the schema::models table) is not imported bare: it collides with this file's
 // own `pub mod models` of Diesel row structs, so upsert_model qualifies it as `schema::models`.
 use schema::{
-    archive, archive_decisions, call_io, calls, hosts, kv, logs, measurements, notes, providers,
-    read_cache, sessions, tokens, usage,
+    archive, archive_decisions, call_io, calls, hook_sessions, hosts, kv, logs, measurements,
+    notes, providers, read_cache, sessions, tokens, usage,
 };
 
 pub(crate) use sql_ext::{coalesce, length, substr, sum_bigint, unixepoch};
@@ -634,7 +636,6 @@ impl Store {
         inline_cap: usize,
         archive_dir: Option<&Path>,
     ) -> Result<()> {
-        let session = self.call_session(call_id)?;
         // T431: cleaned before the spill, so the sha, the size and the archive file all
         // describe the bytes that were saved.
         let raw = self.store_raw.load(std::sync::atomic::Ordering::Relaxed);
@@ -642,8 +643,31 @@ impl Store {
             true => std::borrow::Cow::Borrowed(r),
             false => crate::sanitize::body(r),
         });
+        self.write_call_io(
+            call_id,
+            request.as_deref(),
+            None,
+            response,
+            inline_cap,
+            archive_dir,
+        )
+    }
+
+    /// The write behind [`Store::insert_call_io`] and [`Store::insert_hook_call_io`]:
+    /// `request` is already the bytes to save; `hook_fields` (T433) the session fields split
+    /// off it, saved once in `hook_sessions` inside the same transaction.
+    fn write_call_io(
+        &self,
+        call_id: i32,
+        request: Option<&[u8]>,
+        hook_fields: Option<&str>,
+        response: Option<&[u8]>,
+        inline_cap: usize,
+        archive_dir: Option<&Path>,
+    ) -> Result<()> {
+        let session = self.call_session(call_id)?;
         let (req_json, req_arch, req_bytes, req_sha, req_path, req_created, req_raw) =
-            self.spill(request.as_deref(), inline_cap, archive_dir)?;
+            self.spill(request, inline_cap, archive_dir)?;
         let (res_json, res_arch, res_bytes, res_sha, res_path, res_created, res_raw) =
             self.spill(response, inline_cap, archive_dir)?;
         let mut created_files = Vec::new();
@@ -661,6 +685,9 @@ impl Store {
             if let (Some(sha), Some(path)) = (&res_arch, &res_path) {
                 insert_archive_row_conn(&mut *conn, sha, &session, res_bytes, path, None)?;
             }
+            let hook_session = hook_fields
+                .map(|f| hook_fields::upsert(&mut *conn, f))
+                .transpose()?;
             diesel::insert_into(call_io::table)
                 .values((
                     call_io::call_id.eq(call_id),
@@ -674,6 +701,7 @@ impl Store {
                     call_io::response_archive.eq(res_arch.as_deref()),
                     call_io::request_raw.eq(req_raw.as_deref()),
                     call_io::response_raw.eq(res_raw.as_deref()),
+                    call_io::hook_session_id.eq(hook_session),
                 ))
                 .execute(&mut *conn)?;
             Ok(())
@@ -952,25 +980,35 @@ impl Store {
     /// — an inline body that was not valid UTF-8), else inline `request_json` (valid UTF-8,
     /// so its bytes already are the wire bytes), else the archive. A row written before T211
     /// has no `request_raw` and falls back to the lossy `request_json` text, lazily.
+    /// T433: a hook body saved without its session fields comes back with them spliced in.
     pub fn call_io_request(&self, call_id: i32) -> Result<Option<Vec<u8>>> {
-        // `(request_json, request_raw, request_archive)`.
-        type RequestRow = (Option<String>, Option<Vec<u8>>, Option<String>);
+        // `(request_json, request_raw, request_archive, hook_sessions.fields)`.
+        type RequestRow = (
+            Option<String>,
+            Option<Vec<u8>>,
+            Option<String>,
+            Option<String>,
+        );
         let row: Option<RequestRow> = {
             let mut conn = self.lock()?;
             call_io::table
-                .find(call_id)
+                .left_join(hook_sessions::table)
+                .filter(call_io::call_id.eq(call_id))
                 .select((
                     call_io::request_json,
                     call_io::request_raw,
                     call_io::request_archive,
+                    hook_sessions::fields.nullable(),
                 ))
                 .first(&mut *conn)
                 .optional()?
         };
         match row {
-            Some((_, Some(raw), _)) => Ok(Some(raw)),
-            Some((Some(json), None, _)) => Ok(Some(json.into_bytes())),
-            Some((None, None, Some(id))) => self.get_archive(&id, None),
+            Some((_, Some(raw), _, _)) => Ok(Some(raw)),
+            Some((Some(json), None, _, fields)) => Ok(Some(
+                hook_fields::rebuild(json, fields.as_deref()).into_bytes(),
+            )),
+            Some((None, None, Some(id), _)) => self.get_archive(&id, None),
             _ => Ok(None),
         }
     }
@@ -1569,15 +1607,15 @@ impl Store {
     /// a deny.
     pub fn recent_hook_inputs(&self, session: &str, limit: i64) -> Result<Vec<String>> {
         let mut conn = self.lock()?;
-        let rows: Vec<Option<String>> = calls::table
-            .inner_join(call_io::table)
+        let rows: Vec<HookInputRow> = calls::table
+            .inner_join(call_io::table.left_join(hook_sessions::table))
             .filter(calls::session_id.eq(session))
             .filter(calls::kind.eq("hook"))
             .order(calls::id.desc())
             .limit(limit)
-            .select(call_io::request_json)
+            .select((call_io::request_json, hook_sessions::fields.nullable()))
             .load(&mut *conn)?;
-        Ok(rows.into_iter().map(Option::unwrap_or_default).collect())
+        Ok(rebuild_hook_inputs(rows))
     }
 
     /// Like [`Store::recent_hook_inputs`], but filtered to rows whose `hook_event_name` is
@@ -1592,16 +1630,16 @@ impl Store {
         limit: i64,
     ) -> Result<Vec<String>> {
         let mut conn = self.lock()?;
-        let rows: Vec<Option<String>> = calls::table
-            .inner_join(call_io::table)
+        let rows: Vec<HookInputRow> = calls::table
+            .inner_join(call_io::table.left_join(hook_sessions::table))
             .filter(calls::session_id.eq(session))
             .filter(calls::kind.eq("hook"))
             .filter(calls::name.eq(event))
             .order(calls::id.desc())
             .limit(limit)
-            .select(call_io::request_json)
+            .select((call_io::request_json, hook_sessions::fields.nullable()))
             .load(&mut *conn)?;
-        Ok(rows.into_iter().map(Option::unwrap_or_default).collect())
+        Ok(rebuild_hook_inputs(rows))
     }
 
     /// Hook/call rows in this session at or after `ts` (window for `guard`).
@@ -2371,6 +2409,8 @@ impl Store {
     ) -> Result<usize> {
         let purged = self.purge_calls_older_than(i64::from(retain_calls_days))?;
         self.clear_hook_bodies_older_than(i64::from(retain_hook_bodies_days))?;
+        // T433: after both, since either can leave a session-fields row unreferenced.
+        self.maintenance(|c| Ok(hook_fields::drop_orphans(c)?))?;
         self.drop_dead_symbol_roots(std::env::home_dir().as_deref())?;
         self.maintenance(|c| sql_ext::pragma_incremental_vacuum(c).map_err(Into::into))?;
         Ok(purged)
@@ -2522,6 +2562,19 @@ type Spill = (
     bool,
     Option<Vec<u8>>,
 );
+
+/// `(call_io.request_json, hook_sessions.fields)` — [`Store::recent_hook_inputs`] (T433).
+type HookInputRow = (Option<String>, Option<String>);
+
+/// A missing body stays `""` (see [`Store::recent_hook_inputs`]); a split one is made whole.
+fn rebuild_hook_inputs(rows: Vec<HookInputRow>) -> Vec<String> {
+    rows.into_iter()
+        .map(|(body, fields)| {
+            body.map(|b| hook_fields::rebuild(b, fields.as_deref()))
+                .unwrap_or_default()
+        })
+        .collect()
+}
 
 /// `(host slug, project, cwd)` — [`Store::session_row`].
 #[cfg(test)]

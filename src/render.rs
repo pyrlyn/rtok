@@ -89,6 +89,15 @@ pub fn loader(what: &str) -> indicatif::ProgressBar {
     pb
 }
 
+/// Run `f` behind a [`loader`] and clear it before returning, so the finished line the caller
+/// prints next takes its place. Silent off a terminal, as [`loader`] is.
+pub fn with_loader<T>(msg: &str, f: impl FnOnce() -> T) -> T {
+    let pb = loader(msg);
+    let out = f();
+    pb.finish_and_clear();
+    out
+}
+
 /// Colour a stored log line's level (`<date> <time> <level> <source>/<name>: <message>`, T24.0's
 /// `log::line`): red error, yellow warn, dim debug, info plain. `rtok logs export` prints the same
 /// line through no such call, so piping stays byte-plain.
@@ -474,6 +483,16 @@ pub fn agent_message_end(id: i32) -> String {
 mod tests {
     use super::*;
     use crate::store::SessionTotals;
+
+    /// Off a terminal indicatif draws nothing, so the wait leaves no byte behind and the closure's
+    /// value (and its error) passes through untouched.
+    #[test]
+    fn a_wait_off_a_terminal_hides_the_loader_and_passes_the_result_through() {
+        assert!(loader("x").is_hidden());
+        assert_eq!(with_loader("x", || 7), 7);
+        let err: Result<(), &str> = with_loader("x", || Err("boom"));
+        assert_eq!(err, Err("boom"));
+    }
 
     #[test]
     fn a_message_frame_names_the_sender_and_quotes_every_body_line() {

@@ -158,6 +158,38 @@ deny = []                             # drop these names from tools[]; later cal
 [proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
 enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
 
+[proxy.lanes.bulk]                    # синхронные скрипты; lane agent следует глобальным переключателям, batch и files не переписываются никогда
+compress            = false           # перезаписи proxy.mode = "compress" (archive, compress, зачистка шума)
+toon                = false           # фильтр toon внутри этого прохода; нужен compress
+tools_rewrite       = false           # proxy.tools_rewrite
+context_management  = false           # proxy.context_management
+semantic_cache      = false           # plugins.proxy.semantic_cache, чтение и запись
+timeout_s           = 0               # таймаут чтения для этой lane; 0 = proxy.timeout_s
+
+[proxy.lanes.embeddings]              # те же ключи, что у bulk
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.meta]                    # те же ключи, что у bulk (models, подсчёт токенов)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.internal]                # те же ключи, что у bulk (собственные вызовы модели rtok)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
 [proxy.batch]                         # no keys yet (T385.4)
 
 [proxy.flex]                          # no keys yet (T385.5)
@@ -494,6 +526,27 @@ Gemini `:batchGenerateContent`), `files`, `embeddings` и `meta` (`/v1/models`,
 Lane agent сохраняет `calls.kind = api_request`; остальные записывают `api_request:<lane>`
 (`api_request:bulk`, `api_request:batch`, ...). Байты запроса из-за lane не меняются.
 
+У lane `agent` таблицы нет: для неё каждый глобальный переключатель решает ровно так, как до
+появления lanes (стабильность prompt-кэша). У `batch` и `files` её тоже нет: их тела
+(Batch JSONL, загрузки) всегда пересылаются без изменений, а правка `stream_options` для них
+тоже пропускается. `bulk`, `embeddings`, `meta` и `internal` читают каждая свою таблицу
+`[proxy.lanes.<lane>]`, и все переключатели в ней по умолчанию выключены, поэтому эти lanes
+пересылаются байт в байт, пока вы не включите одну из них. Переключатель lane лишь сужает
+глобальный: перезапись выполняется на lane, когда включены глобальный переключатель *и*
+переключатель lane.
+
+| Ключ | Какой глобальный переключатель сужает | По умолчанию | Значение |
+|-----|--------------------------|---------|---------|
+| `compress` | `proxy.mode = "compress"` | `false` | archive, compress и зачистка шума терминала |
+| `toon` | `plugins.toon.enabled` | `false` | фильтр `toon` внутри этого прохода; нужен `compress` |
+| `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | переписывание описаний в `tools[]` |
+| `context_management` | `proxy.context_management` | `false` | серверное редактирование контекста Anthropic |
+| `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | чтение и запись кэша |
+| `timeout_s` | `proxy.timeout_s` | `0` | таймаут чтения этой lane в секундах; `0` = `proxy.timeout_s` |
+
+Flex, маршрутизации и upstream для отдельной lane здесь пока нет: каждый появится в этой
+таблице своим шагом (`[proxy.flex]`, `[proxy.routing]` ниже).
+
 ### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
 
 Эти три таблицы существуют и пусты: пустая `[proxy.batch]` загружается, но ни в одной пока нет
@@ -580,7 +633,7 @@ Rust (rust-analyzer) и Dart (Dart SDK): `docs/lsp.md`.
 
 Собственные строки rtok для человека за терминалом — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, сводка `graph index`, `--help` — по умолчанию снабжены эмодзи и цветом:
-✅ успех (зелёный), 💡 статус (голубой), ⚠️ предупреждение (жёлтый), ❌ ошибка (красный).
+✅ успех (зелёный), 💡 статус (голубой), ❗ предупреждение (жёлтый), ❌ ошибка (красный). Строка с названием операции получает её значок (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), выровненный так, что текст после него начинается в одной колонке.
 
 ```toml
 [ui]
