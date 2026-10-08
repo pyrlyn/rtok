@@ -107,7 +107,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
-| T414.16 | todo | P2 | 3 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -1762,12 +1761,6 @@ Check: Rust test for the bucketed series against fixture rows; regenerated `web/
 An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
 
 Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
-
-### T414.16. Linked hover across charts and live values elsewhere
-
-Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
-
-Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
 ### T416. Shared `change-preview` crate for dry-run output
 

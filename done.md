@@ -1151,6 +1151,17 @@ Pages describe a chart, they never call a chart library. `web/src/charts/` holds
 
 Result: ECharts 6.1.0 (tree-shaken `echarts/core`, canvas) in its own lazy chunk (525 kB / 178 kB gzip); the entry chunk grew 18 kB. Its own tooltip box stays off; our React tooltip is placed with `@floating-ui/react-dom` 2.1.9 (positioning only, instead of the planned `@floating-ui/react`). Canvas reads the `--pyr-*` roles and redraws on a theme switch. The calls chart, the calls KPI mini and the live sessions mini share one sync group: hovering one draws the pointer in the others, and only the hovered chart shows a tooltip. Charts are focusable `role="img"`; arrows, Home and End move the hover, Escape leaves, the tooltip is linked by `aria-describedby`. A unit test keeps `from "echarts` inside `charts/echarts.ts`. Checked in light and dark themes in the dev server.
 
+### T414.16. Linked hover across charts and live values elsewhere
+
+Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
+
+Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
+
+Result: `web/src/charts/` gained `Readout.tsx` (`Scoped`, `HoverSub`) and `Mark.tsx` (DOM marks on the shared `Tooltip`). The calls and live-sessions KPIs swap their subline for "hh:mm:ss · N calls|live" while another chart of the `calls` group is hovered; the card whose own mini shows the tooltip stays still, and the original subline stays in the tree as `sr-only`, so the tooltip (keyboard: arrows, Home, End, Escape; `aria-describedby`) remains the accessible reading. The pointer's stacked segment travels with the shared hover (`Hover.series`, `seriesAt` in `spec.ts`, found by value in `echarts.ts`, no library series events) and lights its entry in the calls legend; a keyboard hover has no segment, so it lights none. The budget grid, plugin bitset (replacing the native `title`), token mix segments and savings share bars share the chart tooltip; their figures also stay in labels or visible text. Charts expose `data-pointer` for tests. Stories `HoverCallsChart`, `HoverMini`, `HoverLightsLegend` and `MarkTooltips` plus a `seriesAt` unit test; `just check`, `just spa-stories` (axe) and `just spa-e2e` green. #824.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
 
 A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on React Aria Components (`Autocomplete`, `Menu`, `Modal`; creator decision), styled on the `--pyr-*` roles.

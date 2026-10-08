@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { useSnapshot } from "../api/query";
+import { Mark, MarkRows } from "../charts/Mark";
 import type { Snapshot } from "../api/snapshot.gen";
 import { Loading } from "../states";
 import { Chip } from "../ui/Chip";
@@ -13,7 +14,7 @@ import { focusRing } from "../ui/cx";
 import type { Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
-import { compact, pct } from "./format";
+import { compact, fmt, pct } from "./format";
 import type { CheckState } from "./model";
 
 /** Renders `children` once a snapshot exists; while offline the shell renders no page at all. */
@@ -114,7 +115,20 @@ export function TokenMix({ tokens }: { tokens: Tokens }) {
                 className="flex h-2 overflow-hidden rounded-full bg-surface-3"
             >
                 {parts.map(([k, v, cls]) => (
-                    <div key={k} className={cls} style={{ width: `${(v / total) * 100}%` }} />
+                    <Mark
+                        key={k}
+                        tip={
+                            <MarkRows
+                                title={k}
+                                rows={[
+                                    ["tokens", fmt(v)],
+                                    ["share", pct(v / total, 1)],
+                                ]}
+                            />
+                        }
+                        className={cls}
+                        style={{ width: `${(v / total) * 100}%` }}
+                    />
                 ))}
             </div>
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-2xs text-fg-muted">
