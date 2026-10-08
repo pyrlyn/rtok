@@ -5,7 +5,10 @@
 import { useMemo, type ReactNode } from "react";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
+import { ExportButtons } from "../ui/ExportButtons";
+
 import { Mark, MarkRows } from "../charts/Mark";
+
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
@@ -16,18 +19,25 @@ import { compact, fmt, hms, pct } from "./format";
 import { overview } from "./model";
 import { CallsPanel, DoctorPanel, SessionsPanel } from "./OverviewPanels";
 import { PanelLink, TokenMix, tokenTotal, WithSnapshot } from "./parts";
+import { tableLink } from "../tableSearch";
 import { SavingsTrend } from "./SavingsTrend";
 
 type Saving = ReturnType<typeof overview>["measured"][number];
 
 function savingColumns(max: number): Column<Saving>[] {
     return [
-        { id: "plugin", header: "plugin", cell: (r) => <b>{r.plugin.id}</b> },
+        {
+            id: "plugin",
+            header: "plugin",
+            exportValue: (r) => r.plugin.id,
+            cell: (r) => <b>{r.plugin.id}</b>,
+        },
         {
             id: "rows",
             header: "rows",
             width: "64px",
             align: "right",
+            exportValue: (r) => r.plugin.stats?.rows,
             cell: (r) => fmt(r.plugin.stats?.rows),
         },
         {
@@ -35,6 +45,7 @@ function savingColumns(max: number): Column<Saving>[] {
             header: "saved",
             width: "72px",
             align: "right",
+            exportValue: (r) => r.saved,
             cell: (r) => compact(r.saved),
         },
         {
@@ -173,7 +184,23 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
             key="calls"
             label="calls"
             value={fmt(snap.calls.length)}
-            sub={`${o.failed} failed · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+            to={tableLink("calls", {})}
+            sub={
+                <>
+                    {o.failed ? (
+                        // Lifted above the card's overlay so it is its own link; underlined because it sits inside a sentence.
+                        <PanelLink
+                            {...tableLink("calls", { result: "failed" })}
+                            className="relative z-10 underline"
+                        >
+                            {o.failed} failed
+                        </PanelLink>
+                    ) : (
+                        "0 failed"
+                    )}
+                    {` · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+                </>
+            }
             readout={{ group: CALLS_SYNC, x: times, values: perBucket, unit: "calls" }}
             viz={
                 <MiniBars
@@ -195,6 +222,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${o.hosts} hosts`}
+            to={tableLink("sessions", { show: "live" })}
             readout={{ group: CALLS_SYNC, x: times, values: o.liveSeries, unit: "live" }}
             viz={
                 <Sparkline
@@ -216,6 +244,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${snap.plugins.length - o.enabled} disabled`}
+            to={tableLink("plugins", { show: "on" })}
             viz={<Bitset items={snap.plugins} />}
         />,
     ];
@@ -246,7 +275,16 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 <Panel
                     title="savings by plugin"
                     hint="Σ est before − after, measured plugins only"
-                    action={<PanelLink to="/plugins">plugins →</PanelLink>}
+                    action={
+                        <span className="flex items-center gap-3">
+                            <ExportButtons
+                                label="savings by plugin"
+                                rows={o.measured}
+                                columns={columns}
+                            />
+                            <PanelLink to="/plugins">plugins →</PanelLink>
+                        </span>
+                    }
                     className="xl:col-span-7"
                 >
                     <DataTable

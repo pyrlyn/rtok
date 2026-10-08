@@ -30,6 +30,16 @@ Check: unit test on a scripted temp repo (three commits, one over the 20-file ca
 
 Result (2026-10-06, Claude Code / sonnet-5.5): `src/plugins/graph/cochange.rs` counts pairs from `git log` (shared `git_stdout` helper, no dependency) and keeps them as one `kv` document per root (`plugin:graph:cochange:<root>`), recounted only when `git rev-parse HEAD` moves; no new table, so no migration. New `Host::plugin_state_get` is the read half of `plugin_state_set`. `impact` appends `changes with: ...` after the cap; `rank::build` adds both directions of each pair at `0.3 x (1 + ln count)`. Backtest over the last 100 commits of this repo, partners counted from the 300 commits before each one: hit@5 76 % (76 of 100; target 30 %), the first file had a partner in 91. Cold build on this repo: 54 ms in a debug build at a host load of 34 (target 300 ms). Note: `plan.md`, `todo.md` and `done.md` change with most commits here, which lifts the hit rate. The map sees a new HEAD from the next index run that changes the root.
 
+### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
+
+From the Empryo study (idea-only, clean-room). `Checkpoint` recorded paths without what happened to them, so after compact the agent re-read files it only looked at and could miss the ones it changed. The checkpoint now lists every file with its action, `path <p> (edited|created|deleted|read[ a-b])`, changed files first (edited, created, deleted, then read, each group by path, byte-stable). Actions are folded from the transcript's `tool_use` blocks: Read is read (with its offset/limit range), Edit/MultiEdit is edited, Write is edited unless its result says the file was created, Bash `rm` / `git rm` is deleted (shlex; globs, variables, `~`, `--cached`, `-n` and relative paths after a `cd` are skipped). Rows written before the change decode as reads; `last_paths` drops deleted files from the repo-map personalization. No schema change: the checkpoint is note text.
+
+Check: unit tests for the event to action mapping and old-row decode; the checkpoint rendering snapshot (`insta`); `just check`.
+Result: after a session that reads A and edits B the checkpoint lists `B (edited)` before `A (read)`; `cargo test --lib checkpoint` 30 passed; `just check` 433 passed. #833.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T376. Graph LSP backend falls back to tags per call when the server is not ready or dies
 
 From the Empryo study (idea-only, clean-room; Empryo's intelligence router tries LSP, then tree-sitter, then regex per call and records which one answered). With `plugins.graph.backend = "lsp"`, `symbol_filtered`, `callers`, `impact`, `outline` and `explore` (`src/plugins/graph/mod.rs` around `:260`, `:390`, `:441`, `:897`, `:1015`) return `lsp::…` directly; a server that is missing, still indexing past `READY` (40 s, `src/plugins/graph/lsp.rs`) or dead turns the call into an error instead of a tags answer (to verify: whether `lsp.rs` already degrades internally).
@@ -175,6 +185,29 @@ Check: on the creator's machine today `rtok agents outdated` prints `claude 0.0.
 Execution: the code landed earlier through `fb214cf9` ("merge open pull requests into main", the work of the closed PR #513): `src/agents/outdated.rs` (`outdated`/`report`/`print_human`), the `agents outdated` subcommand and `agents update --check` in `src/cli.rs`, the `src/ui/agents.rs` wording, the `docs/agents.md` section and the first `outdated_*` tests in `tests/plugin_versions.rs`. This PR verifies that code against the card item by item and closes the card: it fixes the one behavioural mismatch found, closes the test gaps the card names, and writes the `docs/plugin-versions.md` section the card requires. Fixture homes only, no real agent.
 
 Result (2026-10-03, Claude Code / sonnet-5): checked against `fb214cf9`: the no-plugins and all-current messages, the table columns, the `run: rtok agents update <hosts>` footer, `--json` schema, `--exit-code` 10/0, host list and `--cli`/`--desktop` selection, `update --check` equal to `outdated`, SemVer comparison that ignores build metadata and hides newer installs, and the surface_parity, `cli_trycmd`, `completions`/man and `config_coverage` gates (all green without a golden change, the CLI surface did not change). Mismatch fixed: a Claude install with no version file but a dated host record (`installed_plugins.json` says `0.0.1`) was printed as `legacy`; the card lists `legacy` only when nothing records a version, and its Check prints `claude 0.0.1 0.10.0 github`, so `installed_row` now treats a receipt row or a parseable host-record version as recorded (JSON `legacy: false`, `installed: "0.0.1"`); `agents info`'s "legacy (no version file)" is a different state and is unchanged. Test gaps closed in `tests/plugin_versions.rs`: the "no host CLI is spawned" test had no fake CLI on `PATH`, so it could not fail; it now puts logging shims for `claude`, `codex`, `gemini`, `cursor-agent` and `copilot` first on `PATH` (unix) and asserts the log is empty after a run that lists a row, and every `run_outdated` call points `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` at a closed port (the card's offline case); the legacy test uses an install with no recorded version and checks the human row and the JSON; the all-current case also checks `--json --exit-code` (`outdated: []`, exit 0, `installed: 2`). `docs/plugin-versions.md` "Listing outdated plugins" (the placeholder) is written from real runs against a fixture home: what is listed and hidden, `legacy`, both "nothing to do" messages, host selection, `--json` fields, `--exit-code`, why it works offline; `docs/agents.md` links to it, `README.md` and `docs/release.md` already linked the page, and `CHANGELOG.md` is generated from commit subjects. Fail-first: with the old `outdated.rs` the json and mixed-table tests fail, with the fix they pass. Checked: `tests/plugin_versions.rs` 16 passed (9 `outdated_*`), the rest of 33 across `plugin_versions`, `surface_parity` and `config_coverage` passed, `cli_trycmd` and `completions` 6 passed; the touched binary run against a fixture home printed the table, the up-to-date line, `no rtok plugins installed`, the `legacy` row and `exit=10`. Not done: nothing the card requires; the T279 progress note's open items (the installed copy's version file is only read through the install probe, Codex, Copilot and Gemini are not wired into the plugin lookup) belong to T279 itself, so `agents outdated` lists those hosts only as far as T279's lookup knows them.
+
+### T382. Installed plugin version in `rtok agents list` and on the web Hosts page
+
+Ivan, 2026-10-04: `rtok agents list` and `rtok web` `#/hosts` must show which version of the rtok plugin each host has installed. Today the `plugin` row says only `✓ plugin  installed`, so a stale plugin (older than the binary) is invisible without opening the host's own records (for Claude `~/.claude/plugins/installed_plugins.json`: `version`, `installPath`, `gitCommitSha`).
+
+Depends on T279: it defines where the installed version comes from (the installed copy's `.rtok-plugin-version`, then the install receipt, then the host record). Reuse that lookup; do not add a second one.
+
+Done means:
+
+- `agents::list`: the `plugin` row of every host that has a plugin carries the installed version and its source, e.g. `✓ plugin  installed 0.15.1 (marketplace)`. When the version differs from the running binary it says so: `installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude`. An install with no version anywhere shows `installed (legacy, no version)`, matching T279's `agents info` wording. Hosts with `− plugin not supported` are unchanged.
+- `rtok agents list --json` gains `plugin_version` and `plugin_source` fields; absent rather than empty when unknown.
+- Web: the Hosts page reads `agents::list` verbatim (`hosts_page_text` in `src/web/model.rs`), so the version arrives with the text; `parseHosts` in `web/src/pages/text.ts` keeps it in the module row's state and `Hosts.tsx` shows it, with the outdated case visibly marked. The TUI Hosts page shows the same text.
+- Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
+
+Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
+
+Execution: the per-variant body of `agents outdated` (`install_probe` + `read_installed`, T279/T279.1) became one shared `installed_plugin` in `src/agents/outdated.rs`; `agents::block` appends `plugin_status`'s note to the `plugin` module row, `web/model.rs::agent_row` adds `plugin_version`/`plugin_source`, `parseHosts` keeps the row value and `moduleState` in `Hosts.tsx` marks the outdated case. No second lookup.
+
+Result (2026-10-08, Claude Code / claude-sonnet-5-5): `rtok agents list` and `agents info` print `✓ plugin  installed 0.15.1 (github)`; older: `installed 0.14.0 (github), rtok is 0.15.1 — rtok agents update claude`; newer: `, rtok is 0.15.1` without the hint; no version anywhere: `installed (legacy, no version)`. `--json` rows carry `plugin_version`/`plugin_source`, absent when no plugin is installed or no version is recorded. The Hosts page shows the note and marks an older plugin with a warn `outdated` pill (a newer one `newer`). The live Hosts text leads every module row with a state mark (`✓`, `✗`, `−`) that `parseHosts` did not skip (fixtures had none), so `parseHosts` now skips it and the fixture carries marks. Tests: `tests/agents_plugin_version.rs` (fake Claude home: current, older, newer, no version, no plugin, text and JSON), `parseHosts` and `moduleState` cases. Docs: `docs/plugin-versions.md`, `docs/commands.md` and the `ru`/`uk` copies. Checked: `just check` (2792 tests passed, oxlint/oxfmt clean), `npm run typecheck`, the Hosts stories (21 passed); `rtok agents list` on this machine prints `installed 0.15.1 (github)` for Claude Code.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
 
 ### T163. Replace raw SQL in `src/store/` with Diesel's query builder
 
@@ -1222,6 +1255,30 @@ Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables li
 Check: unit tests for search-param parsing (bad values fall back to defaults), page tests for URL-driven rows and back/forward, a DataTable story (axe), and an e2e that opens a filtered and sorted Calls link, reloads and steps back.
 
 Result: one shared module (`web/src/tableSearch.ts`) holds a spec per page, the parse (untrusted values fall back to defaults, text capped at 200 chars) and the `useTableSearch` hook. Params: `q`, `sort` (`col` / `-col`), `surface` and `result` on Calls, `show` on Sessions and Plugins, `level` on Logs; defaults never appear in the URL, and the palette's `?id=` survives every change. `DataTable` gained opt-in sortable headers (`sortValue`, `aria-sort`, exported `sortRows`); Logs got an "oldest first" chip (`sort=-line`). `just check` 2706 passed, 8 skipped; unit 197 passed; `just spa-stories` 128 passed (axe); `just spa-e2e` 18 passed. #826.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T414.11. Clickable KPIs and panels open the filtered page
+
+Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
+
+Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
+
+Result: `tableLink(page, filter)` in `web/src/tableSearch.ts` builds typed links from `TABLE_SPECS`; `Kpi` takes `to` and becomes a stretched link whose overlay carries the focus ring while the focusable chart stays above it (no nested interactive elements). The calls, live sessions and plugins on KPIs link to `/calls`, `/sessions?show=live` and `/plugins?show=on`, the failed count to `/calls?result=failed`; the calls legend entries and a live link in the sessions header use the same helper; panels keep their header links; input tok, output tok and cache hit have no matching page and stay plain. `Pages/Overview/Overview Links` story asserts all seven targets with axe; unit tests cover `tableLink` and its round trip; e2e `a KPI card on the Overview opens its page already filtered`. Web unit 201 passed, `just spa-stories` 129 passed, `just spa-e2e` 19 passed, `just dup js` clean. #832.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T414.14. CSV and JSON export of tables
+
+An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
+
+Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
+
+Result: `web/src/ui/tableExport.ts` builds the file from the same filtered rows, columns and sort that `DataTable` renders (`sortRows` reused; optional `Column.exportValue`, falling back to `sortValue`; value-less columns such as the share bar are left out). The RFC 4180 CSV writer quotes and doubles quotes, writes CRLF lines, and writes an empty table as its header row. Text cells starting with `=`, `+`, `-`, `@`, tab, CR, LF or a full-width variant are quoted behind an apostrophe per the OWASP CSV injection page (checked 2026-10-08); numbers are never escaped. `ui/ExportButtons.tsx` is a CSV/JSON button group ("Export <table> as CSV|JSON", disabled with no rows) in the `Panel` action slot of Calls, Sessions and Overview's savings by plugin. Web unit tests 223 passed, `just spa-stories` 130 passed (axe), `just spa-e2e` 18 passed; `just dup js` green. #830.
 
 Status: done 2026-10-08
 
@@ -7418,6 +7475,15 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T452. Recall notes linked to a file the prompt names, without a text match
+
+Creator decision on T374 (2026-10-08). A file named in the prompt (a path `files::mentioned` finds, relative, inside the root) recalls up to 2 notes linked to it even with no text match. They take slots from the existing `prompt_recall` budget (`n` titles, `recall_tokens`) and never enlarge it; output is byte-stable. Files the session merely read only re-rank notes that already matched the prompt text, so T374's recall of read-file notes with no text match is gone. The wider variant, recall by every read file without a text match, is parked as I-115 until a `Measurement` shows a saving. `files::recall_hits` replaces `linked_notes`; no config keys, no SDK change.
+
+Check: `cargo test --lib memory` (named file recalls an unmatched note, no named file recalls nothing extra, cap of 2, hits within `n` and `recall_tokens`, byte-identical on repeat, read file alone recalls nothing); `cargo test --test p29_memory --test memory_bench --test memory_status --test hook_fail_open`; clippy `--all-targets`; `cargo fmt --check`.
+Result: lib memory 57 passed; integration targets green; clippy and fmt clean. #852.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
 ### T413.1. `rtok agents install roo` — Roo Code
 
 VS Code extension forked from Cline. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
@@ -7869,12 +7935,36 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
+
+optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
+
+Done: `Store::usage_by_lane` groups `usage` by `calls.kind` (Diesel join) and `lane::lane_of_kind` maps a kind back to its lane; `stats::attach_lanes` fills `Report.lanes` with the same `ApiRow` counters and hit rate as `api`. `rtok stats` prints a `lane` table and `--json` a `lanes` field once traffic ran off the agent lane; agent-only stores print byte-identical output. `tests/proxy_cache_replay.rs` replays a 9-turn growing conversation through the proxy against a mock upstream (compress mode, archive, toon, compress, tools_rewrite and the noise strip on, with context management off and armed) and asserts that tools, system, top-level fields and every message before the previous turn's live edge reach upstream byte for byte the same. `Sink` moved to `tests/common/proxy.rs`. docs/prompt-cache.md (en/ru/uk) describes both.
+
+Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
+Result: `stats_shows_the_cache_hit_rate_per_lane` and `stats_has_no_lane_table_for_agent_only_traffic` in `tests/stats_model.rs`; `agent_prefix_stays_byte_stable_*` (2) in `tests/proxy_cache_replay.rs`; `just check` green (2764 tests). PR #848.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T385.13. Measure cross-session read duplication
 
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Measured 2026-10-08 (window 2026-10-05 to 2026-10-08, 38 sessions, 3,049 reads, 13.6 MB; same content = equal SHA-256 of the returned text, within a day = same UTC day): 38 cross-session duplicate reads, 56,561 B (about 14,140 tokens), 0.42 % of the bytes read, 0.00034 % of input counted once and 0.25 % to 0.60 % of input resident-weighted (input 4,139,214,544 tokens, main plus sub-agents). Cross-checks over 25 days (MCP read, 0.28 %) and via `read_cache` (0.84 % of bytes) agree; keyed on path plus content only 2 reads repeat, because worktrees give the same file different paths. Under the 1 % gate, so no build task; the optimization.md §5 row records the number.
 
 Check: the dated `research.md` row (§36).
 Result: cross-session read duplication is 0.25 % to 0.60 % of input, below 1 %; not built (research.md §36). #838.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T385.8. P28 Phase 1: measure what LLM compression could save
+
+optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
+
+Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
+
+Result: old enough is the shipped archive rule (`keep_turns` 4, `min_tokens` 1500). Over 2026-09-08 to 2026-10-08 (2,148 Claude Code transcripts, 144,452 requests, 21.16 G real input tokens, compaction modelled) that set is 6.54 % of input (6.13 % at keep 8, 3.23 % at min 3000, 13.76 % at min 300), about half code or diffs and half prose or logs; a 2x-5x compressor would remove 3.3 % to 5.2 % of input tokens at most (ceiling 6.5 %), in tokens not dollars (98.4 % cache hit). 8,625 of 163,019 results (99.5 MB, 0.12 % of input volume as compressor input) ever become eligible; the proxy rewrite has never run here (`archive_decisions` empty). `research.md` §16.8. Must-keep fixture `tests/fixtures/p28_must_keep.toml` (7 synthetic tool results, 54 spans of six kinds) with `tests/p28_must_keep.rs`: the fixture is validated, and the shipped lossless pointer keeps 14 of 54 spans while `expand` returns all 54 (the baseline Gate P28 starts from). Follow-up: I-116 (bench the `min_tokens` floor).
+
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
@@ -7887,6 +7977,16 @@ Check: fixture result streams (Anthropic and OpenAI) produce the expected `usage
 
 Result: `[proxy.batch] parse_results` (default `false`, needs `[proxy.lanes] enabled`) reads a forwarded results file after the fact, so the body is byte-for-byte unchanged. Anthropic `GET /v1/messages/batches/{id}/results` gives one `usage` row per `succeeded` line through the existing Anthropic wire parser. OpenAI `GET /v1/files/{id}/content` gives one row per 2xx `response.body` line through the Chat Completions or Responses parser, and a download that held such lines is re-tagged `api_request:batch` (any other download stays `files`). Errored, expired, cancelled, malformed and truncated lines are skipped; a store error is logged, never fatal. Rows are written in one transaction (`Store::insert_usage_rows`, `Store::set_call_kind`, Diesel); no `tokens` rows. Create, poll, list and cancel calls were already tagged `batch` by T385.1. Code in `src/proxy/batch_results.rs`; tests there and in `tests/proxy_batch_results.rs`. Config template, `docs/config.md` (en, ru, uk) and trycmd snapshots updated. `just check`: 2722 tests run, 2722 passed, 8 skipped. #829.
 
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
+
+optimization.md §2.2 L4 (roadmap S4). Inject `service_tier = "flex"` only on `bulk`/`internal` (never silently on `agent`), OpenAI only (Anthropic has no Flex tier). On `429 Resource Unavailable`: retry policy `none` / `backoff` / `default` (retry with `service_tier = "auto"`). Cite the OpenAI Flex docs with the date checked.
+
+Check: mock upstream — omit/force/respect matrix and each 429 policy; `just check`.
+Result: `flex` is a column of `LanePolicy` (`[proxy.lanes.<lane>] flex`, `agent` always false) and `[proxy.flex]` has `force`, `on_429` (`none`/`backoff`/`default`), `retries` and `backoff_ms`. `src/proxy/flex.rs` splices an omitted `service_tier` in after the opening brace on the OpenAI wires only, respects any client value unless `force`, and `flex::send` retries a Flex 429 that rtok itself set, within bounds (at most 5 retries, delay capped at 30 s; `Retry-After` is not read). OpenAI Flex guide (https://developers.openai.com/api/docs/guides/flex-processing) checked 2026-10-08; it names no 429 error code, so the status alone identifies the capacity miss. 7 mock-upstream tests plus unit tests; `just check`: 2735 passed, 8 skipped. #836.
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
@@ -8280,6 +8380,17 @@ Part of T330. The safe kinds of the T330 table plus rtok's cache (`.rtok-lsp-xdg
 Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag handling); `just check`.
 
 Closed 2026-10-07 with its last subtask: T330.3.1 and T330.3.2 (#793).
+
+### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
+
+Part of T330. `rtok agents junk clear` filters the same report `list` builds (`--agent` rtok or a host id, `--kind`, `--include review`, `--older-than`), re-checks every item right before removal, skips a running agent's temp/locks/swap and §22 caches, supports `--trash`, prints planned and freed bytes per agent and kind, and exits 1 when something planned was not removed. Bare `clear` and `--agent rtok` keep T182's behaviour.
+
+Check: dry run changes no file (tree compared before and after), `--yes` empties exactly the planned cache and keeps its top folder and `CACHEDIR.TAG`, `rtok.db` and a lockfile untouched, a file modified in the last minute is skipped with exit 1, bad flags exit 2, `--trash` lands in the fixture home's freedesktop trash (Linux), a running agent (faked through a live store session) keeps its temp and §22 cache, a shared folder of a running agent stays; `just check`.
+
+Result: new `src/agents/junk_clear.rs` (`Filter`, `plan`, `apply`, `to_text`) over `junk::report`, with `junk::scan_with` for rtok's logs and archives (`--older-than` only lengthens `core.retain_calls_days`, 0 stays 0). The plan takes only counted items with D36 evidence and applies the T330 class gate (`safe` by default, `review` with `--include review` or when named, `explicit` only when named). A host counts as running when a live rtok session names it (T284) or its CLI or installed app process is up (`restart::host_running`; the process check is off under `RTOK_HOST_SANDBOX`). The re-check refuses: gone (not an error), symlink, changed real path, modified in the last minute, held lock, lost `CACHEDIR.TAG`, or a path that is or holds `rtok.db` (or its -wal/-shm), a host settings file or a package-manager lockfile. Cache and build folders are emptied keeping the top folder and tag; archives go through store retention as in T182. New dependency `trash` 5.2.9 (NSFileManager on macOS, no Finder prompt). Bare `clear` and `--agent rtok` run T182's clear unchanged (T344 read conservatively; T340 untouched). Not done: agent-id `--agent`, per-host "tolerates running" caches, `index` (T330.5), "changed since plan" across separate runs (T330.6). #822.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
 
 ### T248. Plugin READMEs must link the host's official documentation
 
@@ -9422,6 +9533,18 @@ Result: `style.rs` has a verb → icon table on ketch's model (ketch's rows plus
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
+
+Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
+
+Done: one `Spinner` in `web/src/ui` (stories), and `Loading` draws through it. Every request-sending control spins from click to answer, is disabled meanwhile and sets `aria-busy`: the plugin switch, project select/link/unlink in `Projects.tsx` and `ProjectsOverview` (the graph canvas and menu get a "Selecting…" status line), doctor Confirm and "Fix selected", Calls expand. A switch stays where it was until the server answers and on a refusal stays and shows the error. `api.set` and `api.project` now settle on the next snapshot frame, reject on a message frame, or time out after 30 s (`WRITE_TIMEOUT_MS`); `messageKey`/`useServerMessage` are gone, pages show `error.message` through `Result`. `operations.ts` maps verbs to icons with a kind fallback, same stems and order as the CLI table; `Button` and `Result` carry the operation's icon; 17 SVGs added under `brand/icons/ui/`. `operations.test.ts` parses `OPERATION_ICONS` out of `src/ui/style.rs` and compares the stems. Known limit: a periodic snapshot already in flight at the click can end a spinner a few ms early; the next snapshot shows the true state.
+
+Check: web unit tests 208 passed; `just spa-stories` 148 passed (axe); `just spa-e2e` 20 passed, two new tests hold the WebSocket with `routeWebSocket` and see the spinner on the plugin switch and doctor apply until the answer; `just check` 2759 passed.
+Result: PR #849.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T441.2. Task core types and config
 
 Second subtask of T441 (task adapters): the domain types every adapter, the CLI and the MCP tools share, plus the `[tasks]` config section, with unit tests.
@@ -9484,6 +9607,26 @@ Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) an
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T451. Graph cold index: ship the 200-file batch T59.3 claimed
+
+`done.md` T59.3 and `research.md` §2 said the cold graph index commits symbols and edges once per 200 files, but `src/plugins/graph/index.rs` still flushed at a hard-coded 64 and a test comment named a `SYMBOL_BATCH_FILES` constant that did not exist (found by T397). Added `const SYMBOL_BATCH_FILES: usize = 200`, used at the flush site, and recorded the 64 vs 200 measurement in `research.md` §2. The warm path and the hook budget are unchanged.
+
+Check: `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers`, 16 interleaved pairs of 64 and 200 at load 40-88; `cargo test -q --lib graph` (125 passed); `cargo clippy --all-targets`; `cargo fmt --check`.
+Result: cold index of 3 000 files, median 360 ms at 64 files/txn vs 384 ms at 200 (within load noise); 200 kept, as T59.3 claimed; re-measure on an idle machine before tuning further. PR #850.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T397. Re-measure numbers that shipped fixes made stale
+
+Three numbers in `research.md` §2 and §19 predated the fixes they describe. Re-measured on `main` at `1d6961541` (Apple M3 Max, 2026-10-08, load average 80–200). Graph cold index, 3,000 files: median 911 ms over five `graph_bench` runs and 479 ms over fifteen in-process runs, against 172 ms (T35.2); slower, but the old run's load is unknown and the cold run now also rebuilds the symbol IDF (T368) and refreshes ranks. T59.3's 200-file batch never shipped (`index.rs` flushes at 64), so there was nothing to keep or revert and 64 vs 200 is unmeasured. T241 `replay_bench` row: `cmd` 82.7 % (trailer counted since T247, was 84.2 %), `read` 52.3 %, total 79.7 %, unchanged since 2026-09-25; `search` records a row only when `max_chars` cuts (T300). Hook cancellations after T178 (new §19.8): 114 of 165,669 runs (0.069 %) vs 10 of 13,091 (0.076 %) before; the lock-wait fix fires on the real store (7 `skipped: store locked` events) but does not explain the cancellations, whose cause stays open.
+
+Check: three dated rows in `research.md` (§2 cold index, §2 replay_bench, §19.8).
+Result: `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers` ×5; `cargo test --test replay_bench -- --nocapture` ×3; read-only `jq` count of `hook_cancelled`/`hook_success` attachments and `grep` of `rtok.log`; `docs_structure` green. #846.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T402. Measure how much tool output a structured schema would shrink
 
 Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. Measured ad hoc, read-only, on the stored `calls` payloads (2026-10-05 to 2026-10-08, 23,148 tool-result bodies, 45.8 MB, 31.4 % of the 3.32 G session input when weighted by later API requests) and on the 61,369-body archive (340 MB). Free text is 61.4 % of result bytes (19.5 % of input resident, 91 % of it from `Bash`), file content 31.2 %, `path:line` records 4.8 %, tables 2.2 %, all JSON 0.4 % (0.15 % of input). Four bodies were `toon`-eligible in the window (395 B saved); on the 16 archived structured bodies the encoder logic cuts 30.6 %. The prose a tool schema can reach (MCP) is at most 0.64 % of input before any saving (0.20 % at the 30.6 % ratio), below the 1 % gate; the rest is external program output that only the `cmd` rules can shorten. No build task filed.
@@ -9494,9 +9637,20 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T403. A/B a path and identifier dictionary in proxy requests
+
+Promoted from I-110 (Ivan, 2026-10-04). From `research.md` §16.3 #8: repeated long paths and identifiers could be replaced with short codes plus one legend per request, if that does not cost answer quality or break the prompt cache. Done meant: measure first; build it behind a proxy flag and A/B it only if it is above 1 % of input.
+
+The creator's database holds no proxy request bodies, so the measurement runs on the transcripts, which carry the message array the proxy would forward. A new `dictionary` row in `rtok stats` (`src/measure/dictionary.rs`) rebuilds up to 6 requests per session (reset at compaction) and counts paths (`/` runs of 16+ bytes) and identifiers (snake_case or camelCase of 12+ bytes) repeated in a request. The row is absent, and the JSON omits it, when nothing repeats, so existing goldens hold. Over 30 days (306 sessions, 1,672 requests, 233 M billed input tokens) repeated bytes are a 2.05 % ceiling, but the cache-safe saving (a code defined at a token's second use in a tool result, earlier bytes never rewritten) is 0.44 %: under the gate, so the dictionary is not built and no A/B was run. `research.md` §16.7.
+
+Check: `rtok stats --since 30d` dictionary row; dictionary unit tests; `stats_model` goldens unchanged; `just check`.
+Result: 0.44 % cache-safe (paths 0.26 %, identifiers 0.18 %), 2.05 % ceiling; `just check` green (306 tests passed); not built. #853.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
 ### T399. Re-check host docs for three open host questions
 
-Re-checked the three open host questions in `research.md` against primary sources (2026-10-08). Skills (§10.1, §10.6): Cursor documents `disable-model-invocation`; OpenCode, Copilot, Gemini and the Agent Skills spec do not; Codex uses `agents/openai.yaml` `allow_implicit_invocation: false`. Subagent-start hooks (§23): Grok and Antigravity still document no output schema and no subagent-start context hook, so the verdicts stay. Hook ancestry (§26): Devin and Command Code document no parent process, still unverified. Windows: the no-ancestor limit is written in `docs/agents-and-worktrees.md`. No code changed; `doctor` cites no `disable-model-invocation` advice today, so the card's doctor premise was stale.
+Re-checked the three open host questions in `research.md` against primary sources (2026-10-08). Skills (§10.1, §10.6): Cursor documents `disable-model-invocation`; OpenCode, Copilot, Gemini and the Agent Skills spec do not; Codex uses `agents/openai.yaml` `allow_implicit_invocation: false`. Subagent-start hooks (§23): Grok and Antigravity still document no output schema and no subagent-start context hook, so the verdicts stay. Hook ancestry (§26): Devin and Command Code document no parent process, still unverified. Cline (§26) has been a hook host since 2026-09-24 (`src/agents/cline`), so the ancestor rule applies to it, and its hooks docs name no parent process or session id (checked 2026-10-08, https://docs.cline.bot/customization/hooks), so it stays unverified. Windows: the no-ancestor limit is written in `docs/agents-and-worktrees.md`. No code changed; `doctor` cites no `disable-model-invocation` advice today, so the card's doctor premise was stale.
 
 Check: `mise exec -- just docs-check`.
 Result: exit 0, 11 suites ok. #842.

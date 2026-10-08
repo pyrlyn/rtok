@@ -4,7 +4,8 @@
 
 //! T374: which project files a note, a prompt or the session is about. A note linked to a file
 //! the session has read, or the prompt names, is preferred by recall over an unlinked note that
-//! matches the text equally well.
+//! matches the text equally well. T452: a file the prompt names also recalls its notes (at most 2)
+//! when the text found none of them.
 //!
 //! Everything here reads untrusted text (a note body, a prompt, a transcript's paths), so a
 //! path only counts once it is relative, free of `..` and inside the project root; paths are
@@ -115,14 +116,20 @@ pub(super) fn link_note(cx: &Ctx, id: i32, body: &str) {
     let _ = cx.set_note_files(id, &files);
 }
 
-/// Notes linked to the files in play: those the session has read plus those `prompt` names.
-/// Any failure is an empty list, so recall falls back to the text match alone.
-pub(super) fn linked_notes(cx: &Ctx, prompt: &str, limit: u32) -> Vec<NoteHit> {
+/// Named-file notes recalled without a text match, per prompt. A cap keeps a prompt that names
+/// a heavily linked file from crowding out the text hits.
+const MAX_NAMED_EXTRA: usize = 2;
+
+/// At most `n` hits for `prompt`. The session's read files only re-rank `text`; a file the prompt
+/// names is a stronger signal, so up to `MAX_NAMED_EXTRA` of its notes that `text` missed take
+/// slots from the end of the same `n`, never beyond it. Any failure leaves the text hits.
+pub(super) fn recall_hits(cx: &Ctx, prompt: &str, text: Vec<NoteHit>, n: usize) -> Vec<NoteHit> {
     let Some(root) = project_root(cx.cwd()) else {
-        return Vec::new();
+        return boost(text, Vec::new(), n);
     };
     let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
-    let mut files = mentioned(&root, &canon, prompt);
+    let named = mentioned(&root, &canon, prompt);
+    let mut files = named.clone();
     for key in cx.read_cache_keys().unwrap_or_default() {
         if let Some(rel) = key_path(&key).and_then(|p| relative(&root, &canon, p))
             && !files.contains(&rel)
@@ -132,8 +139,24 @@ pub(super) fn linked_notes(cx: &Ctx, prompt: &str, limit: u32) -> Vec<NoteHit> {
     }
     files.truncate(MAX_FILES);
     let project = crate::project::project_name(&root);
-    cx.notes_for_files(project.as_deref(), &files, limit)
-        .unwrap_or_default()
+    let limit = u32::try_from(n.saturating_mul(2)).unwrap_or(u32::MAX);
+    let notes = |files: &[String]| {
+        cx.notes_for_files(project.as_deref(), files, limit)
+            .unwrap_or_default()
+    };
+    let in_text = |h: &NoteHit| text.iter().any(|t| t.id == h.id);
+    let mut extra = notes(&named);
+    extra.retain(|h| !in_text(h));
+    extra.truncate(MAX_NAMED_EXTRA.min(n));
+    let mut linked = notes(&files);
+    linked.retain(in_text);
+    let mut hits = if n > extra.len() {
+        boost(text, linked, n - extra.len())
+    } else {
+        Vec::new()
+    };
+    hits.extend(extra);
+    hits
 }
 
 /// The text hits with the file-linked notes fused in (RRF): a note in both lists outranks an

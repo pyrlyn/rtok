@@ -5,7 +5,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSelectFromUrl } from "./selectFromUrl";
 import { SHOW, useTableSearch } from "../tableSearch";
-import { useServerMessage, useSetMutation } from "../api/query";
+import { useSetMutation } from "../api/query";
 import type { PluginPage } from "../api/snapshot.gen";
 import { Empty } from "../states";
 import { Chip } from "../ui/Chip";
@@ -13,6 +13,7 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
+import { Result } from "../ui/Result";
 import { Switch } from "../ui/Switch";
 import { Unknown } from "../ui/Unknown";
 import { compact, fmt, pct } from "./format";
@@ -52,8 +53,8 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
     const { show } = filter;
     const [selectedId, setSelectedId] = useState<string>();
     useSelectFromUrl(setSelectedId);
-    const { mutate } = useSetMutation();
-    const message = useServerMessage();
+    const { mutate, error, inFlight } = useSetMutation();
+    const pending = useMemo(() => new Set(inFlight.map((r) => r.key)), [inFlight]);
 
     const rows = useMemo(
         () => plugins.filter((p) => matchesPlugin(p, show, query)),
@@ -61,7 +62,8 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
     );
     const selected = plugins.find((p) => p.id === selectedId) ?? plugins[0];
 
-    // The server owns the state: the switch only asks, and the next snapshot moves it.
+    // The server owns the state: the switch only asks, and the next snapshot moves it. Until
+    // then it stays where it was, spinning; a refusal leaves it there and shows the error.
     const toggle = useCallback(
         (p: PluginPage) => (next: boolean) =>
             mutate({ key: `plugins.${p.id}.enabled`, value: next }),
@@ -79,6 +81,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                     <Switch
                         checked={p.enabled}
                         label={`toggle ${p.id}`}
+                        pending={pending.has(`plugins.${p.id}.enabled`)}
                         onCheckedChange={toggle(p)}
                     />
                 ),
@@ -115,7 +118,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 },
             },
         ],
-        [toggle],
+        [toggle, pending],
     );
 
     if (plugins.length === 0)
@@ -149,10 +152,10 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 </div>
                 <Count>{rows.length} shown</Count>
             </Toolbar>
-            {message && (
-                <p role="status" className="text-xs text-warn-fg">
-                    {message}
-                </p>
+            {error && (
+                <Result verb="toggle" kind="error">
+                    {error.message}
+                </Result>
             )}
             <Split
                 list={
