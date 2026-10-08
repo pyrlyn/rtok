@@ -115,6 +115,17 @@ fn four_tools_byte_exact() {
         call(&home, &a, "symbol", name("b")),
         "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
+    // T473: several names in one call; a lone `name` stays byte-exact above.
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "symbol",
+            serde_json::json!({"names": ["b", "c"]})
+        ),
+        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+         = c\nchain.rs:7 function\nfn c() {}\n"
+    );
     assert_eq!(
         call(&home, &a, "callers", name("c")),
         "chain.rs  b \u{d7}1 (L5)\nother.rs  d \u{d7}2 (L2)\n"

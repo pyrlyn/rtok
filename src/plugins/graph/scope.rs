@@ -113,6 +113,33 @@ fn walkable(m: &Member) -> Result<()> {
     crate::plugins::read::walk_root_ok(&m.root)
 }
 
+/// One or many symbols. A single name keeps today's byte-exact answer; several names
+/// are headed with `= name` and capped with the usual graph archive helper (T473).
+pub fn symbols(cx: &Ctx, scope: &[Member], names: &[String], filter: &Filter) -> Result<String> {
+    if names.is_empty() {
+        bail!("symbol needs name or names");
+    }
+    if names.len() == 1 {
+        return symbol(cx, scope, &names[0], filter);
+    }
+    let max = cx.plugin_config::<crate::config::Graph>("graph").max_tokens;
+    let mut out = String::new();
+    for (i, name) in names.iter().enumerate() {
+        if i > 0 && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&format!("= {name}\n"));
+        match symbol(cx, scope, name, filter) {
+            Ok(body) => out.push_str(&body),
+            Err(_) => out.push_str(&format!("no definition of {name}{}\n", filter.scope_note())),
+        }
+        if cx.estimate(&out, Class::Code) > max {
+            break;
+        }
+    }
+    cap(cx, out)
+}
+
 pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
     let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {

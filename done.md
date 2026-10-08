@@ -1,5 +1,12 @@
 # rtok — completed tasks
 
+### T473. `symbol` accepts `names` (repowise borrow)
+
+One MCP `symbol` call can take `names: [str]`. Unknown names are lines in the answer, not Err. One `name` stays byte-exact. Cap with existing graph max_tokens / archive helper. Description total ≤ 150 est tokens.
+
+Check: `graph_contract`; `names:["b","c"]` shape; `name:"b"` unchanged; `graph_surface_is_five_tools_under_150_tokens`; `just check`.
+Result: four_tools_byte_exact + names case green; surface gate green.
+
 ### T472. Peel env and tool wrappers before the cmd family (repowise borrow)
 
 Extend `visible_argv` with `FOO=1`, `uv`/`npx`/`pnpm`/`yarn`/`poetry`/`pipenv`/`hatch`/`python -m`/`cmd /c`. Reuse `cmd_stem`. No regex crate.

@@ -84,8 +84,17 @@ impl Plugin for Graph {
         vec![
             ToolDef {
                 name: "symbol",
-                description: "Definitions of a symbol with their source: path:line kind, then the body. Optional path substring and kind narrow the match.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
+                description: "Definitions and bodies. Pass name, or names for several. Optional path and kind.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "names": {"type": "array", "items": {"type": "string"}},
+                        "path": {"type": "string"},
+                        "kind": {"type": "string"},
+                        "project": {"type": "string"}
+                    }
+                }),
             },
             ToolDef {
                 name: "callers",
@@ -316,7 +325,7 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
         all: args["all"].as_bool().unwrap_or(false),
     };
     match name {
-        "symbol" => scope::symbol(cx, scope, arg("name"), &filter),
+        "symbol" => scope::symbols(cx, scope, &symbol_names(args), &filter),
         "callers" => scope::callers(cx, scope, arg("name"), &filter),
         "impact" => {
             let name = arg("name");
@@ -1522,6 +1531,25 @@ fn repo_map(ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
         text,
         priority: 1,
     })
+}
+
+/// Names for one `symbol` call: `names` wins when non-empty, else a single `name`.
+fn symbol_names(args: &Value) -> Vec<String> {
+    let mut names: Vec<String> = args["names"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if names.is_empty()
+        && let Some(one) = args["name"].as_str()
+        && !one.is_empty()
+    {
+        names.push(one.to_string());
+    }
+    names
 }
 
 /// Cap at `plugins.graph.max_tokens`: whole head lines that fit, then `N more, expand <id>`.

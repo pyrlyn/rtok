@@ -116,8 +116,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T473 | in progress | P1 | 3 | 0% | Cursor / composer |
-| T474 | todo | P1 | 2 | 0% | |
+| T474 | in progress | P1 | 2 | 0% | Cursor / composer |
 | T475 | todo | P1 | 3 | 0% | |
 
 
@@ -1652,12 +1651,6 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
-
-### T473. `symbol` accepts `names` (repowise borrow)
-
-One MCP `symbol` call can take `names: [str]`. Unknown names are lines in the answer, not Err. One `name` stays byte-exact. Cap with existing graph max_tokens / archive helper. Description total ≤ 150 est tokens.
-
-Check: `cargo nextest run -p rtok --test graph_contract`; `names:["b","c"]` shape; `name:"b"` unchanged; description budget ≤ 150; `just check`.
 
 ### T474. Stale HEAD line on graph answers (repowise borrow)
 
