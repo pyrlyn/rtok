@@ -189,6 +189,13 @@ section! {
         keep_logs_days: u32 = 30,
         /// `temp` entries touched within this many hours stay.
         temp_min_age_hours: u32 = 24,
+        /// `sessions` (only with `--kind sessions`) older than this many days are junk; time
+        /// is the only criterion (D36, T330 "Old sessions: time only"). `--session-days` is
+        /// the one-run override.
+        stale_session_days: u32 = 30,
+        /// A crash dump in an `extra` crash folder older than this many days is `safe`; a
+        /// younger one is `review`.
+        crash_dump_min_age_days: u32 = 7,
         /// Globs of paths never touched, nor any folder that holds one.
         exclude: Vec<String> = Vec::new(),
         extra: Vec<JunkExtra> = Vec::new(),
@@ -205,7 +212,7 @@ section! {
 }
 
 /// The kinds an `[agents.junk] extra` entry may name: folders whose content ages out.
-pub const JUNK_EXTRA_KINDS: [&str; 3] = ["cache", "temp", "logs"];
+pub const JUNK_EXTRA_KINDS: [&str; 4] = ["cache", "temp", "logs", "crash-dumps"];
 
 section! {
     /// `[agents.usage]` — `rtok agents usage` (T358): tokens and estimated cost per agent, day

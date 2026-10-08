@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,466 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -72,8 +72,10 @@ target/tmp/t60-2-config-init.toml
 +[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
 +# keep_logs_days          = 30          # `logs` entries modified within this many days stay (0-3650)
 +# temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay (0-87600)
++# stale_session_days      = 30          # `--kind sessions` only: sessions not touched for more than this many days are junk (0-3650); `--session-days N` for one run
++# crash_dump_min_age_days = 7           # a crash dump in an `extra` crash-dumps folder older than this is safe to clear, a younger one is review (0-3650)
 +# exclude                 = []          # globs never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]
-+# extra                   = []          # paths you vouch for as junk, e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = a host id or rtok
++# extra                   = []          # paths you vouch for as junk, e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs | crash-dumps; host = a host id or rtok
 +
 +[mcp]                                 # rtok mcp
 +# tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed

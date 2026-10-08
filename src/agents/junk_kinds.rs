@@ -29,7 +29,7 @@ pub const NOT_DOCUMENTED: &str =
     "not documented: not cleared (add to [agents.junk] extra to clear)";
 
 /// The evidence column of a find nothing documents.
-const NO_EVIDENCE: &str = "none";
+pub(super) const NO_EVIDENCE: &str = "none";
 
 /// How deep a walk for lock, swap and build leftovers goes: an agent folder is shallow, and a
 /// deep tree is a checkout, not state.
@@ -141,6 +141,13 @@ fn is_lock(name: &str, kind: &FileType) -> bool {
             || name.ends_with(".lock") && !PACKAGE_LOCKS.contains(&name))
 }
 
+/// A language server's folder and the journal files of a SQLite database. A journal beside a
+/// database that is still open is live data, and nothing here can tell which one is closed.
+fn is_index(name: &str, kind: &FileType) -> bool {
+    let journal = kind.is_file() && (name.ends_with("-wal") || name.ends_with("-shm"));
+    journal || (kind.is_dir() && name == ".rust-analyzer")
+}
+
 /// An editor's or a tool's copy of a file (`*.bak`, `*.bak-<ts>`, `*~`); rtok's own `_backup`
 /// generations are `junk_review::backup_items`, never walked here.
 fn is_backup(name: &str, kind: &FileType) -> bool {
@@ -152,6 +159,8 @@ fn lock_or_swap(name: &str, kind: &FileType) -> Option<&'static str> {
         Some("swap")
     } else if is_lock(name, kind) {
         Some("locks")
+    } else if is_index(name, kind) {
+        Some("index")
     } else if is_backup(name, kind) {
         Some("backups")
     } else {
@@ -204,9 +213,9 @@ fn swap_reason(path: &Path) -> Option<String> {
     }
 }
 
-/// Lock, swap and backup files under an agent's folders. None has D36 evidence, so each is
-/// kept: a live owner or a held lock says so, the rest read "not documented". Package-manager
-/// lockfiles are not junk and are not listed.
+/// Lock, swap and backup files and the file-based `index` leftovers under an agent's folders.
+/// None has D36 evidence, so each is kept: a live owner or a held lock says so, the rest read
+/// "not documented". Package-manager lockfiles are not junk and are not listed.
 pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
     let deadline = Instant::now() + limit;
     let ours = |p: &Path| {
@@ -227,7 +236,11 @@ pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
                 None
             };
             let kept = reason.unwrap_or_else(|| NOT_DOCUMENTED.into());
-            let class = if kind == "backups" { "review" } else { "safe" };
+            let class = if kind == "index" || kind == "backups" {
+                "review"
+            } else {
+                "safe"
+            };
             Item {
                 class,
                 ..make_item(kind, &path, NO_EVIDENCE, Some(kept), limit)

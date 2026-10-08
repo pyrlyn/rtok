@@ -12,8 +12,10 @@ use std::time::{Duration, Instant};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
+use super::Agent;
 use super::junk_cache::{Ctx, Item, Owned, RTOK_OWN, SECTION_22, is_symlink, make_item};
-use super::junk_kinds::aged_items;
+use super::junk_clear::newest;
+use super::junk_kinds::{NO_EVIDENCE, NOT_DOCUMENTED, aged_items};
 use super::junk_map::Roots;
 use crate::config::AgentsJunk;
 
@@ -85,6 +87,81 @@ pub fn snapshot_items(roots: &Roots, limit: Duration) -> Vec<Item> {
         .collect()
 }
 
+/// Crash reports macOS writes for a crashed process.
+const REPORT_EXT: [&str; 4] = ["ips", "crash", "dmp", "diag"];
+
+/// The entries of an `extra` crash folder. Dumps can hold memory with secrets, so they are
+/// only sized and removed, never read. One older than `[agents.junk] crash_dump_min_age_days`
+/// is `safe`; a younger one (or one whose age cannot be read) is `review`.
+pub fn crash_dump_items(
+    dirs: &[PathBuf],
+    junk: &AgentsJunk,
+    cx: &Ctx,
+    limit: Duration,
+) -> Vec<Item> {
+    let old = days(junk.crash_dump_min_age_days);
+    let items = aged_items("crash-dumps", dirs, EXTRA, Duration::ZERO, cx, limit);
+    let age = |i: &Item| {
+        let touched = newest(Path::new(&i.path)).flatten();
+        touched.and_then(|t| cx.policy.now.duration_since(t).ok())
+    };
+    let class = |i: &Item| {
+        if age(i).is_some_and(|a| a > old) {
+            "safe"
+        } else {
+            "review"
+        }
+    };
+    items
+        .into_iter()
+        .map(|i| Item {
+            class: class(&i),
+            ..i
+        })
+        .collect()
+}
+
+/// The lowercase names a host's processes go by in a crash report: its binaries and the file
+/// stem of its desktop apps (`Cursor` for `Cursor.app`).
+pub fn process_names(host: &dyn Agent) -> Vec<String> {
+    let variants = host.variants().iter();
+    let apps = variants.clone().flat_map(|v| v.apps.iter().copied());
+    let stems = apps.filter_map(|a| Path::new(a).file_stem()?.to_str());
+    let bins = variants.flat_map(|v| v.bins.iter().copied());
+    bins.chain(stems).map(str::to_lowercase).collect()
+}
+
+/// macOS `~/Library/Logs/DiagnosticReports` files named for one of `names` (`Cursor-2026-…ips`,
+/// `claude_2026-…crash`). §22 has no row for them, so each is listed and kept (D36).
+pub fn diagnostic_reports(names: &[String], roots: &Roots, limit: Duration) -> Vec<Item> {
+    let dir = roots.resolve("{home}/Library/Logs/DiagnosticReports");
+    let found = std::fs::read_dir(dir).into_iter().flatten().flatten();
+    let named = |file: &str| {
+        let file = file.to_lowercase();
+        let ext = file.rsplit_once('.').map(|(_, e)| e);
+        let rest = |n: &String| file.strip_prefix(n.as_str()).and_then(|r| r.chars().next());
+        ext.is_some_and(|e| REPORT_EXT.contains(&e))
+            && names
+                .iter()
+                .any(|n| rest(n).is_some_and(|c| "-_. ".contains(c)))
+    };
+    found
+        .filter(|e| {
+            e.file_name().to_str().is_some_and(named) && e.file_type().is_ok_and(|t| t.is_file())
+        })
+        .map(|e| Item {
+            class: "review",
+            ..make_item(
+                "crash-dumps",
+                &e.path(),
+                NO_EVIDENCE,
+                Some(NOT_DOCUMENTED.into()),
+                limit,
+            )
+        })
+        .collect()
+}
+
 /// The `[agents.junk] extra` entries of `agent` (a host id or `rtok`): a `cache` folder joins
 /// the owned caches (emptied, its top folder kept); a `temp` or `logs` folder
 /// gives its entries by that kind's age rule. A relative path or an unknown kind, which
@@ -118,6 +195,7 @@ pub fn extra_items(
                 let aged = aged_items("logs", one, EXTRA, days(junk.keep_logs_days), cx, limit);
                 items.extend(classed(aged, "review"));
             }
+            "crash-dumps" => items.extend(crash_dump_items(one, junk, cx, limit)),
             _ => {}
         }
     }
@@ -374,5 +452,88 @@ mod tests {
                 .iter()
                 .all(|i| i.kept.as_deref().unwrap().starts_with("invalid"))
         );
+    }
+
+    #[test]
+    fn an_extra_crash_folder_gives_safe_old_dumps_and_review_young_ones() {
+        let home = tmp_dir("review-crash");
+        let dumps = home.join("dumps");
+        put(&dumps.join("old.dmp"), b"x");
+        put(&dumps.join("young.dmp"), b"x");
+        aged(&dumps.join("old.dmp"), 10 * DAY);
+        aged(&dumps.join("young.dmp"), 2 * DAY);
+        let junk = AgentsJunk {
+            extra: vec![JunkExtra {
+                host: "cursor".into(),
+                kind: "crash-dumps".into(),
+                path: "~/dumps".into(),
+            }],
+            ..AgentsJunk::default()
+        };
+
+        let get = |junk: &AgentsJunk| {
+            let (_, items) = extra_items(
+                junk,
+                "cursor",
+                &home.join(".rtok"),
+                &home,
+                &cx(&home),
+                LIMIT,
+            );
+            items
+        };
+        let items = get(&junk);
+
+        assert_eq!(items.len(), 2, "{items:?}");
+        assert!(
+            items
+                .iter()
+                .all(|i| i.kind == "crash-dumps" && i.counted() && i.evidence == EXTRA)
+        );
+        assert_eq!(named(&items, "old.dmp").class, "safe");
+        assert_eq!(named(&items, "young.dmp").class, "review");
+        let week = AgentsJunk {
+            crash_dump_min_age_days: 1,
+            ..junk
+        };
+        assert!(get(&week).iter().all(|i| i.class == "safe"));
+    }
+
+    #[test]
+    fn macos_reports_named_for_a_host_are_listed_and_never_cleared() {
+        let home = tmp_dir("review-reports");
+        let dir = home.join("Library/Logs/DiagnosticReports");
+        for f in [
+            "Cursor-2026-10-01-1200.ips",
+            "cursor-agent_2026-10-01.crash",
+            "Cursor Helper-1.diag",
+            "Cursorless-1.ips",
+            "Cursor-2026.txt",
+            "Safari-2026.ips",
+        ] {
+            put(&dir.join(f), b"x");
+        }
+        let names = process_names(crate::agents::host("cursor").unwrap());
+
+        let items = diagnostic_reports(&names, &roots(&home), LIMIT);
+
+        let mut found: Vec<_> = items
+            .iter()
+            .map(|i| Path::new(&i.path).file_name().unwrap().to_str().unwrap())
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                "Cursor Helper-1.diag",
+                "Cursor-2026-10-01-1200.ips",
+                "cursor-agent_2026-10-01.crash"
+            ]
+        );
+        for i in &items {
+            assert!(
+                !i.counted() && i.kept.as_deref() == Some(NOT_DOCUMENTED) && i.class == "review"
+            );
+        }
     }
 }
