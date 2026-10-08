@@ -165,6 +165,9 @@ tools_rewrite       = false           # proxy.tools_rewrite
 context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
 timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
+upstream            = ""              # base URL for every request on this lane, any wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+max_in_flight       = 0               # requests upstream at once; 0 = no cap (the agent lane is never capped)
+max_queued          = 8               # with max_in_flight: requests that wait for a slot; one more gets 429 + Retry-After
 
 [proxy.lanes.embeddings]              # same keys as bulk
 compress            = false
@@ -173,6 +176,9 @@ tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.meta]                    # same keys as bulk (models, token counting)
 compress            = false
@@ -181,6 +187,9 @@ tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
 compress            = false
@@ -189,6 +198,9 @@ tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.batch]                         # provider Batch result files
 parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
@@ -545,9 +557,20 @@ counterpart: a rewrite runs on a lane when the global switch *and* the lane swit
 | `context_management` | `proxy.context_management` | `false` | Anthropic server-side context editing |
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | cache lookup and store |
 | `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s` |
+| `upstream` | `proxy.upstream`, `openai_upstream`, `gemini_upstream` | `""` | base URL for every request on this lane, whatever its wire (a gateway or local server that speaks them); `""` = the wire's own upstream |
+| `max_in_flight` | none | `0` | requests on this lane upstream at once, counted until the response stream ends; `0` = no cap |
+| `max_queued` | none | `8` | with `max_in_flight`: requests that wait for a slot; one more is answered `429` with `Retry-After: 1` and never reaches upstream |
 
-Flex, routing and a per-lane upstream are not here yet: each joins this table with its own
-step (`[proxy.flex]`, `[proxy.routing]` below).
+Each lane has its own slots and its own queue, and the `agent` lane has neither, so a bulk
+burst can fill its own lane but never delays an agent turn. A request turned away by a full
+queue gets an Anthropic-shaped `rate_limit_error` that the provider SDKs back off and retry
+on; it writes no `calls` row (it never went upstream), only a `warn` log line. With the proxy
+switched off (`proxy.enabled`, `core.enabled` or `plugins.proxy.enabled` false) no request is
+capped or queued. `batch` and `files` have no `upstream`: a Batch job's create, poll and
+results always go to the provider that owns it.
+
+Flex and routing are not here yet: each joins this table with its own step (`[proxy.flex]`,
+`[proxy.routing]` below).
 
 ### `[proxy.batch]`
 

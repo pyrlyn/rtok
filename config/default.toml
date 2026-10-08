@@ -96,6 +96,9 @@
 # context_management  = false           # proxy.context_management
 # semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
 # timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
+# upstream            = ""              # base URL for every request on this lane, any wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+# max_in_flight       = 0               # requests upstream at once; 0 = no cap (the agent lane is never capped)
+# max_queued          = 8               # with max_in_flight: requests that wait for a slot; one more gets 429 + Retry-After
 
 [proxy.lanes.embeddings]              # same keys as bulk
 # compress            = false
@@ -104,6 +107,9 @@
 # context_management  = false
 # semantic_cache      = false
 # timeout_s           = 0
+# upstream            = ""
+# max_in_flight       = 0
+# max_queued          = 8
 
 [proxy.lanes.meta]                    # same keys as bulk (models, token counting)
 # compress            = false
@@ -112,6 +118,9 @@
 # context_management  = false
 # semantic_cache      = false
 # timeout_s           = 0
+# upstream            = ""
+# max_in_flight       = 0
+# max_queued          = 8
 
 [proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
 # compress            = false
@@ -120,6 +129,9 @@
 # context_management  = false
 # semantic_cache      = false
 # timeout_s           = 0
+# upstream            = ""
+# max_in_flight       = 0
+# max_queued          = 8
 
 [proxy.batch]                         # provider Batch result files
 # parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
