@@ -54,6 +54,16 @@ Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend c
 
 Result: with `backend = "lsp"`, `symbol`, `callers`, `impact`, `outline` and `explore` go through one `lsp_or_tags` wrapper in `src/plugins/graph/mod.rs`; an `Err` or a none-answer for a name `tags_know` finds returns the tags answer headed `(tags; lsp: <reason>)` and records `graph` / `lsp_fallback`. Tests: `lsp_backend_falls_back_to_tags_for_every_tool`, `lsp_empty_answer_falls_back_only_for_a_known_name`.
 
+### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
+
+From the Empryo study (idea-only, clean-room). `impact` past `plugins.graph.impact_tokens` (default 1500) groups the BFS result by file, orders files by (depth asc, stored T370 file rank, ref count desc), prints `path (N refs, depth d)` with the first 3 lines per file and stops at the budget with `+K files, M refs not shown — impact <name> --all`. The budget covers the finished answer (ambiguity banner and marks, other-definitions and co-change lines come off it first). `--all` (CLI) / `all` (MCP) and `impact_tokens = 0` keep the flat listing; a listing that fits is unchanged; the LSP backend is unchanged; in a multi-project scope the order falls back to depth then ref count. A cut records a `Measurement` (kind `impact`).
+
+Check: unit tests on a synthetic hub (fits, cut line, ordering by depth/rank/refs, marks and overhead, `all`/0 flat) and on an indexed 60-file hub; trycmd goldens (completions, help, mcp, config-init/show, report-md); `just check`.
+Result: blast + graph + impact tests 122 passed; `just check` exit 0 (nextest 2765 passed, 8 skipped); on this repo `graph impact estimate --depth 2` is ≈1470 tokens ending in the cut line. #844.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T429. Find installed agents on Windows
 
 `rtok agents list` missed hosts whose Windows install is a `PATHEXT` shim or an `.exe` beside an extensionless app path, and `--version` never ran a `.cmd` (`CreateProcess` only appends `.exe`).
@@ -1322,6 +1332,25 @@ Plan (approved mockup: the T414.2 shell and Overview, built on the Pyrlyn base c
 9. Stories for the states the base specs name, then `just js`, `spa-test`, `spa-stories`, `spa-e2e`.
 
 Result (2026-10-08, Claude Code / claude-sonnet-5-5): the components follow the Pyrlyn base component specs the T414.2 mockup is built on. `Chip`: `radius-md`, pressed border `accent`/50%, `size-control-sm`, 44px below 768px, colours over `duration-fast`. `Pill`: `fail` on the `danger` roles, washes at 10%. `Switch`: on track and border solid `accent`, knob and spinner `on-accent`, knob over `duration-base` with `ease-emphasized`, 44px hit area below 768px instead of only on coarse pointers. `Search`: `size-control`, `bg`/60%, 44px and `text-sm` below 768px. `DataTable`: row rule at 60%, selected row `accent`/10%, hover over `duration-fast`. `Kpi`: a linked card takes `border-strong` on hover. `Panel`: header rule at 60%. `BudgetGrid` cells use the `accent` and `delta` roles instead of `--rtok-brand-*` (same values). `Sparkline` already drew on the `accent` role and needed no change. `theme.ts` reads the `theme-color` from `--pyr-bg` and `stage3d.ts` reads `--pyr-fg-subtle`, so `web/src` holds no hex literal outside tests. New stories: `Chip` OnLight, `Switch` OnLight and PendingOnLight, `DataTable` SelectedRow and SelectedRowLight, `BudgetGrid` Budget and BudgetLight. `just js`, `spa-typecheck`, `spa-test`, `spa-stories` (168) and `spa-e2e` green.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
+
+As T414.4; the Graph 3D view keeps its renderer and takes its colours from the roles.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page and state.
+
+Plan (shared components stay as T414.3 left them; T414.4 and T414.5 own the other pages):
+1. `states.tsx`: `Empty` becomes a dashed, centred block with no nested glass, `ErrorState` and `Missing` take the `danger` roles (border and wash at 50% and 10%, `danger-fg` text), `Offline` reuses `Button` (solid, 44px below 768px) instead of a hand-made one.
+2. Logs: the error row and message on the `danger` roles, row rules at 60%, a placeholder on the filter. Config: row rules at 60%. Doctor: removed diff lines on `danger-fg`, module cells on `bg`/60%, checkboxes on the `accent` colour.
+3. Graph: view and fit/reset controls become `Chip` and `Button`, the tooltip and menu take `tooltipBox`, the 3D fallback notice the `warn` roles; project colours come from the `accent`, `delta`, `success` and `fg-muted` roles (hash of the root picks one) instead of an HSL hue, resolved from the tokens in the 3D stage.
+4. Tests and stories for the new behaviour; stories in both themes for each state.
+5. Verify with `just spa-test`, `just spa-stories`, `just spa-e2e`, `just check`; dark and light screenshots of Config, Doctor, Logs, Graph from `?sample` and of the states from Storybook.
+
+Result (2026-10-08, Claude Code / claude-sonnet-5-5): `Empty` is a dashed, centred block with an icon and no second glass layer; `ErrorState` and the `Missing` alert of the text pages take the `danger` roles with the error icon; `Offline` sits on a glass card and reuses `Button` (solid, 44px below 768px) with its pending spinner instead of a hand-made button. Logs: error rows and messages on `danger`, row rules at 60%, a placeholder on the filter. Config rules at 60%. Doctor: removed diff lines on `danger-fg`, module cells on `bg`/60%, checkboxes on the `accent` colour. Graph: the 3D/2D/List switch is `Chip`, Fit all and Reset view are `Button`, the hover tooltip is the shared `tooltipBox`, the menu and the 3D-unavailable notice use the `surface`, `e3` and `warn` roles, and project colours come from four brand roles (`accent-fg`, `delta-fg`, `success-fg`, `fg-muted`) picked by the root hash instead of an HSL hue; the 3D stage resolves the `var()` with `resolveRole`, and its selection ring and in-scope edges take `accent-fg`. Shared files touched: `states.tsx` and `Missing` in `pages/parts.tsx`, because they are the shared states; no other shared component changed. New: `states.test.tsx`, a `resolveRole` test, and light, reconnecting and loading stories for the states. `just js`, `spa-typecheck`, `spa-test`, `spa-stories` (173) and `spa-e2e` (22) green.
 
 Status: done 2026-10-08
 

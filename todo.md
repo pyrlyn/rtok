@@ -51,7 +51,6 @@
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T372. Link tests to sources by naming convention in `affected_from_paths`
 - T373. `rrf_merge` breaks score ties by note id
-- T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
@@ -82,7 +81,6 @@
 - T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
 - T416.1. rtok renders previews through `change-preview`

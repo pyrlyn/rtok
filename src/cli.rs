@@ -812,6 +812,9 @@ enum GraphCmd {
         depth: u32,
         #[arg(long)]
         to: Option<String>,
+        /// Every reached row, not the file-grouped answer cut at `plugins.graph.impact_tokens`
+        #[arg(long)]
+        all: bool,
         path: Option<PathBuf>,
         #[command(flatten)]
         project: ProjectFlag,
@@ -2403,6 +2406,7 @@ pub fn run() -> Result<()> {
                     name,
                     depth,
                     to,
+                    all,
                     path,
                     project,
                 } => {
@@ -2421,7 +2425,10 @@ pub fn run() -> Result<()> {
                             &scope,
                             &name,
                             depth,
-                            &crate::plugins::graph::Filter::none(),
+                            &crate::plugins::graph::Filter {
+                                all,
+                                ..crate::plugins::graph::Filter::none()
+                            },
                             to.as_deref(),
                         )?
                     );

@@ -7,19 +7,19 @@
 //! its own index, so the scope is a loop over the per-root queries; the answer is one text under
 //! one cap. `Ctx` carries no project registry, so the scope is resolved by the caller (`mcp.rs`).
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 
-use rtok_plugin_sdk::Ctx;
+use rtok_plugin_sdk::{Class, Ctx};
 
 use super::{
     DeadRow, ExploreParts, Filter, Hits, Tag, TagsExplore, ambiguous_banner, assemble_explore,
-    callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous, format_affected,
-    git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots, index, index_for,
-    is_test_path, lsp, lsp_backend, outline_in, projects, rel_of, reverse_call_chain, stale_banner,
-    symbol_filtered, tests_json, via_of, with_stale,
+    blast, callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous,
+    format_affected, git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots,
+    index, index_for, is_test_path, lsp, lsp_backend, outline_in, projects, rel_of,
+    reverse_call_chain, stale_banner, symbol_filtered, tests_json, via_of, with_stale,
 };
 use crate::store::Store;
 
@@ -262,7 +262,12 @@ pub fn impact(
             let text = format!("nothing reaches {name}{}", filter.scope_note());
             return Ok(head + &flag_ambiguous(defs, text));
         }
-        impact_lines_text(&rows)
+        let budget = blast::Budget {
+            overhead: cx.estimate(&format!("{head}{}", ambiguous_banner(1)), Class::Code),
+            mark: defs > 1,
+            ..blast::Budget::new(cx, filter.all)
+        };
+        blast::render(cx, &rows, name, &budget, HashMap::new)?
     };
     capped(cx, &head, flag_ambiguous(defs, body))
 }

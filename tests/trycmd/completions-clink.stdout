@@ -525,8 +525,8 @@ clink.argmatcher("rtok")
         "impact" .. clink.argmatcher()
           :addarg({})
           :addarg(clink.filematches)
-          :addflags({ "--depth" .. clink.argmatcher():addarg({}), "--to" .. clink.argmatcher():addarg({}), "--project" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--depth"] = "", ["--to"] = "", ["--project"] = "Project id or directory (see `rtok graph projects`)", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--depth" .. clink.argmatcher():addarg({}), "--to" .. clink.argmatcher():addarg({}), "--all", "--project" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--depth"] = "", ["--to"] = "", ["--all"] = "Every reached row, not the file-grouped answer cut at `plugins.graph.impact_tokens`", ["--project"] = "Project id or directory (see `rtok graph projects`)", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "projects" .. clink.argmatcher()
           :addarg({
             "add" .. clink.argmatcher()

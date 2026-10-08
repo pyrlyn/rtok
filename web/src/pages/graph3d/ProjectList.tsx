@@ -39,7 +39,7 @@ export function ProjectList({
                             aria-busy={pending || undefined}
                             disabled={n.hollow || pending}
                             onClick={() => select(n.id)}
-                            className={`${focusRing} flex w-full flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs hover:border-border-strong aria-pressed:border-accent disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:disabled:opacity-100`}
+                            className={`${focusRing} flex w-full flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs transition-colors duration-fast ease-standard hover:border-border-strong aria-pressed:border-accent/50 aria-pressed:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:disabled:opacity-100`}
                         >
                             {pending && <Spinner size="sm" />}
                             <span

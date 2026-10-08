@@ -258,6 +258,20 @@ pub fn refresh(cx: &Ctx, root: &str) -> Result<()> {
     cx.file_rank_put(root, &serde_json::to_string(&g)?)
 }
 
+/// T377: the stored global rank of each file, empty when no graph is stored or it is of an older
+/// shape. `impact` orders files at one depth by it.
+pub fn ranks(cx: &Ctx, root: &str) -> HashMap<String, f32> {
+    let g: Option<FileGraph> = cx
+        .file_rank_get(root)
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    match g {
+        Some(g) if g.v == VERSION => g.paths.into_iter().zip(g.rank).collect(),
+        _ => HashMap::new(),
+    }
+}
+
 /// Whether the root has no stored graph yet, as after an upgrade over an index that is current.
 pub fn missing(cx: &Ctx, root: &str) -> bool {
     cx.file_rank_get(root).ok().flatten().is_none()

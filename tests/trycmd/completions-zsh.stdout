@@ -1800,6 +1800,7 @@ _arguments "${_arguments_options[@]}" : /
 '--to=[]:TO:_default' /
 '()--project=[Project id or directory (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--all[Every reached row, not the file-grouped answer cut at /`plugins.graph.impact_tokens/`]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':name:_default' /

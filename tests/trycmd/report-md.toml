@@ -156,6 +156,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.graph.body_lines | 40 | default |
 | plugins.graph.enabled | true | default |
 | plugins.graph.exclude | [] | default |
+| plugins.graph.impact_tokens | 1500 | default |
 | plugins.graph.include | [] | default |
 | plugins.graph.map_rank | refs | default |
 | plugins.graph.map_tokens | 0 | default |
@@ -409,7 +410,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-363 keys.
+364 keys.
 
 ## Doctor
 
@@ -421,7 +422,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (30 tools, ~793 desc tokens) [CWD]/target/[..]
+  rtok (30 tools, ~808 desc tokens) [CWD]/target/[..]
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)

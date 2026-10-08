@@ -159,7 +159,7 @@ const diffTone = (line: string) =>
     line.startsWith("+") && !line.startsWith("+++")
         ? "text-success-fg"
         : line.startsWith("-") && !line.startsWith("---")
-          ? "text-delta-fg"
+          ? "text-danger-fg"
           : "text-fg-muted";
 
 function Row({
@@ -176,7 +176,7 @@ function Row({
         <li className="flex items-start gap-3 px-4 py-2.5">
             <input
                 type="checkbox"
-                className="mt-1"
+                className="mt-1 accent-accent"
                 aria-label={`${item.label} in ${item.source}`}
                 checked={item.selected}
                 disabled={busy}

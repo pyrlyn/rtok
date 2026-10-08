@@ -856,6 +856,8 @@ Options:
       --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --depth <DEPTH>      [default: 2]
       --to <TO>            
+      --all                Every reached row, not the file-grouped answer cut at
+                           `plugins.graph.impact_tokens`
       --project <PROJECT>  Project id or directory (see `rtok graph projects`)
   -h, --help               Print help
 

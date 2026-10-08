@@ -540,6 +540,7 @@ hybrid     = true                     # коли ввімкнено: RRF(fts5, k
 [plugins.graph]
 enabled    = true
 max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"
+impact_tokens = 1500                  # impact: файли згруповано й ранжовано в межах цього бюджету, далі "+K files, M refs not shown"; --all або 0 = усі рядки
 map_tokens = 0                        # обмеження карти репозиторію на SessionStart (частка D5 поряд із memory.recall_tokens); 0 = вимкнено, доки не пройде A/B P7
 map_rank   = "refs"                   # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
 body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
