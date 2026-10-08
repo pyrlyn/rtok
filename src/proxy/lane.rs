@@ -62,7 +62,9 @@ impl Lane {
     /// What the proxy may change on this lane (T385.2). The `agent` lane is the baseline:
     /// every rewrite is allowed and the global switches alone decide, which is how the proxy
     /// behaved before lanes. `batch` and `files` carry JSONL and uploads the proxy must never
-    /// rewrite, so no setting can open them. The rest read their `[proxy.lanes.<lane>]` table.
+    /// rewrite, so no setting can open them — nor move them to another upstream, since a
+    /// Batch job's create, poll and results must all reach the provider that owns it. The
+    /// rest read their `[proxy.lanes.<lane>]` table.
     pub fn policy(self, lanes: &Lanes) -> LanePolicy {
         match self {
             Lane::Agent => LanePolicy {
@@ -74,6 +76,11 @@ impl Lane {
                 // Never silently: an agent turn is Flex only when the client asks for it.
                 flex: false,
                 timeout_s: 0,
+                // The interactive lane is never capped or queued, and keeps the wire's
+                // upstream: isolation exists so other lanes cannot slow it down (T385.7).
+                upstream: String::new(),
+                max_in_flight: 0,
+                max_queued: 0,
             },
             Lane::Batch | Lane::Files => LanePolicy::default(),
             Lane::Bulk => lanes.bulk.clone(),
@@ -294,6 +301,32 @@ mod tests {
             assert_eq!(lane.policy(&lanes), LanePolicy::default());
         }
         assert!(!Lane::Bulk.passes_through());
+    }
+
+    #[test]
+    fn agent_batch_and_files_keep_their_upstream_and_no_cap() {
+        let moved = LanePolicy {
+            upstream: "http://elsewhere".into(),
+            max_in_flight: 1,
+            ..LanePolicy::default()
+        };
+        let lanes = Lanes {
+            bulk: moved.clone(),
+            embeddings: moved.clone(),
+            meta: moved.clone(),
+            internal: moved.clone(),
+            ..Lanes::default()
+        };
+        for lane in [Lane::Agent, Lane::Batch, Lane::Files] {
+            let p = lane.policy(&lanes);
+            assert_eq!(
+                (p.upstream.as_str(), p.max_in_flight),
+                ("", 0),
+                "{}",
+                lane.name()
+            );
+        }
+        assert_eq!(Lane::Bulk.policy(&lanes), moved);
     }
 
     #[test]
