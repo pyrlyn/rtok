@@ -81,7 +81,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
-| T402 | in progress | P3 | 2 | 20% | Claude Code / claude-sonnet-5-5 |
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
@@ -1565,16 +1564,6 @@ Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/resear
 Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
 
 Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
-
-### T402. Measure how much tool output a structured schema would shrink
-
-Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. No number says how much tool output is prose a schema could replace.
-
-Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
-
-Check: the dated §16 row; the build task filed or the card closed with its number.
-
-Execution plan: copy the stored `calls` database read-only into scratch and classify each result body per tool (JSON or table vs free prose) with a stated heuristic. Estimate the `toon` saving on a sample with rtok's own encoder, and record the dated row in `research.md` §16 with the window, rows and per-tool shares. Close with the number, or propose the build task if the share clears 1 % of input.
 
 ### T403. A/B a path and identifier dictionary in proxy requests
 
