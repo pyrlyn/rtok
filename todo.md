@@ -51,7 +51,6 @@
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T372. Link tests to sources by naming convention in `affected_from_paths`
 - T373. `rrf_merge` breaks score ties by note id
-- T374. Memory notes linked to files: recall boosted by the files in play
 - T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
 - T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)

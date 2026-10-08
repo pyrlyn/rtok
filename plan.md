@@ -55,7 +55,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T374 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -1343,18 +1342,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
-
-### T374. Memory notes linked to files: recall boosted by the files in play
-
-From the Empryo study (idea-only, clean-room; Empryo memory DB file links and recall boosting). P29 recall matches on the prompt text only; a note about `src/proxy/semantic_cache.rs` is not preferred when the session is editing that file. Low priority while the store holds few notes (18 on the creator's machine, 2026-10-02).
-
-Plan: new `note_files (note_id, path)` table (migration); filled at `mem_save` (`src/plugins/memory/mod.rs:266`) from paths found in the note body that exist under the root, and from the current checkpoint's paths. In `prompt_recall` (`memory/mod.rs:163`), add a third ranked list — notes linked to files read this session (`read_cache`) or named in the prompt — to the RRF merge (`src/store/embed.rs:198`, after T373).
-
-Done when: a note linked to a file the session has read ranks above an equally text-matching unlinked note.
-
-Check: new cases in `tests/fixtures/p29_memory.toml` with file context; recall@5 on the file-context cases ≥ 0.6 and no drop on the existing cases; `just check`.
-
-Execution plan: (1) Migration `0033_note_files` (`note_files (note_id REFERENCES notes ON DELETE CASCADE, path, PRIMARY KEY (note_id, path))` plus an index on `path`; 0032 is taken by open PR #823), `schema.rs`, `schema_snapshot.txt`. (2) Store (`src/store/note_files.rs`, Diesel): `set_note_files` replaces a note's links, `notes_for_files` returns live notes linked to any of the paths (most matching paths first), `read_cache_paths` lists the session's read keys. Host trait methods with default bodies (`Notes::set_note_files`, `Notes::notes_for_files`, `ReadCache::read_cache_paths`) so a host without them fails open; Runtime impls. (3) `src/plugins/memory/files.rs`: root-relative paths found in text that exist under the root (no `..`, nothing outside the root, 32 candidates at most) plus the checkpoint's paths through `checkpoint::last_paths`; used by `mem_save` and the hook's `remember:` save, and by `prompt_recall` (read-cache files plus files named in the prompt). (4) `rrf_merge_lists` in `src/store/embed.rs` (`rrf_merge` becomes a two-list wrapper); `prompt_recall` merges the FTS list with the linked list, and any error in the linked list is skipped. (5) Tests: store round trip and cascade, extractor guards, a linked note outranks an equally matching unlinked one, recall@5 on file-context cases added to `tests/fixtures/p29_memory.toml` and `tests/p29_memory.rs`, existing cases unchanged. Verify with the touched tests, then `just check`.
 
 ### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
 
