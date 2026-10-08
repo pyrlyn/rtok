@@ -20,6 +20,11 @@ if split out per T2.5.
   (`ORDER BY pinned DESC, id DESC`).
 - MCP `mem_update` and `rtok memory retire|pin|unpin|revise` call the same functions here —
   one call path per capability (D21); `revise` is `mem_save` + `retire_note`, nothing else.
+- An upsert that changes the body keeps the previous title and body in `note_versions`
+  (T472, migration `0035_note_versions`). `rtok memory history <id>` prints them oldest
+  first. `checkpoint:*` and `session:*` are not versioned, and a same-body upsert writes
+  nothing. Recall and `mem_get` stay on the current body. There is no MCP tool. Versions
+  are not part of the JSONL export.
 - Recall injects titles and ids only; bodies are fetched on demand with `mem_get`.
 - Notes are linked to files (T374, `note_files`, `files.rs`): at `mem_save` and `remember:`,
   to the existing files the body names and the session checkpoint's paths, root-relative and
