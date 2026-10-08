@@ -1169,6 +1169,17 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just js` green; `gr
 
 Result: `web/src/ui/Unknown.tsx` renders the label at once and the "?" with its React Aria `Tooltip` from a lazy chunk (`UnknownWhy`, 5.8 kB gzip; entry +1 kB), so a chunk that fails leaves the word. `orUnknown(value, why, label?)` turns null, "" and the CLI's "-" into it; zero passes through. Every reason lives in `web/src/pages/missing.ts`, each restating where Rust leaves the field null (`src/store` call and session rows, `src/web/model.rs` plugin stats, hosts and services, `src/worktree/list.rs`). Where absence is a fact the label says so with the same tooltip: "top-level" parent, "none" ref_id, host config, worktree branch, owner, agent and pid, "never" seen, "not found" host app, "n/a" saved for plugins that save no tokens, "not set" OTel endpoint. Plugins now show a measured zero or negative saving instead of "-". Covered: Calls, Sessions, Overview's recent sessions, Plugins, Hosts, Worktrees, Services and Stats. Tooltip opens on hover, keyboard focus and touch tap (checked in the dev server at phone width with touch pointer events). `ui/lazyPart.ts` is the shared fail-open lazy loader, now also used by the command palette in `Shell.tsx`. The calls tokens column widened to fit "Unknown ?". The card's grep still finds `web/src/pages/text.ts`, the parser that fills absent CLI columns with "-"; pages render those through `orUnknown`.
 
+### T414.8. Sidebar groups and a collapsible sidebar
+
+The 14 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme, through one shared storage helper (`web/src/storage.ts`) that the theme now uses too. The bottom bar on phones stays one scrolling row.
+
+Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
+
+Result: `web/src/Sidebar.tsx` holds the groups (`NAV_GROUPS`), a labelled `role="group"` per group, and a toggle with `aria-expanded` and a visible focus ring; collapsed links keep their name (screen-reader-only text plus `title`). A unit test pins that every page sits in exactly one group, and blocked storage still works. `Sidebar.stories.tsx` covers expanded, collapsed, phone and toggle. New rtok-only icon `brand/icons/ui/sidebar.svg`, since `@pyrlyn/brand` has no panel icon. `just check` green, `just spa-stories` 131 passed (axe), `just spa-e2e` 17 passed. #821.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T414.10. Table filters and sort in the URL
 
 Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
@@ -9056,6 +9067,149 @@ Check: `surface_parity` passes with `agents usage` in `COMMAND_PAGES`; the page 
 
 Result (2026-10-03, Claude Code / sonnet-5): the model has a Usage page: `pages()` offers `("usage", "agent_usage")` (the key `usage` is the Overview's) and the snapshot carries `UsagePage { text, report }`, both from the one `agents::usage::report` call `rtok agents usage` makes over `[agents.usage]`: `text` is `Report::to_text()` (the CLI's screen), `report` the same rows as data, so nothing is aggregated twice. The read runs in a `Background` thread with its own 120 s TTL like Hosts and Worktrees (agent logs are slow); the first ticks say "reading usage…", and a bad `[agents.usage]` value or an unopenable store becomes the page's text instead of a failed snapshot. `Report` and its row types derive `JsonSchema`; `ws.schema.json` and `snapshot.gen.ts` are regenerated. The tui renders `text` verbatim (`"usage" =>` in `view.rs`), the Slint page the same text (`usage_text`) until T310.12 removes it, and the SPA gets `web/src/pages/Usage.tsx` on `report`: KPIs (tokens, estimated cost, sessions, daily rows, rtok saved), the unpriced-model warning, the per-agent table (`via rtok`/`coverage` only for `both`, saved columns only unless `logs`) or per-model table (`--by model`), the daily or monthly totals with share bars, and the unreadable hosts; `usageFixtures.ts` feeds `?sample`, the stories (default, light, logs only, by model, nothing recorded, reading, failed) and Vitest. `tests/surface_parity.rs`: `agents usage` leaves `EXEMPT` for `COMMAND_PAGES` and `JSON_READERS`, plus `usage_page_exists_on_both_surfaces`. Checked: model unit tests (`usage_page_carries_the_cli_report_and_its_text`, `usage_page_names_a_failed_read`), tui `usage_tab_renders_the_cli_screen`, `surface_parity`, `web`, `web_e2e`, `worktree`, `config_coverage` (44 passed), the schema test, the `rtok-webui` crate's own tests, spa-typecheck, spa-test (105), `just js`, spa-build, spa-stories (93).
 
+### T358. `rtok agents usage`: tokens and estimated cost across every coding agent
+
+Ivan, 2026-10-02: one terminal screen with token usage and estimated cost across all coding agents, modelled on `npx ccusage` (screenshot: [`docs/assets/t358-agents-usage-ccusage.png`](docs/assets/t358-agents-usage-ccusage.png)). Two data sources: what the agents themselves logged on disk, and what rtok recorded passing through it. No product code in this card: it is the spec; split when claiming (below).
+
+Today, nothing answers "how much did all my agents spend": `rtok stats` reads Claude Code transcripts (`[stats] transcripts_dir`) and Codex sessions (`measure::codex`, T49.2) as two `api` rows over a `--since` window, and `rtok stats --price` (T49.1) prices only the proxy `usage` rows by model; there is no per-agent, per-day or per-month view, no other host's logs, and no count of unpriced models outside that table. `rtok agents sessions` (T25.2) shows tokens per live session of this project, not totals. `rtok report` (D24) renders the operator model and has no usage-by-agent section.
+
+#### What the screen shows (default text output)
+
+Illustrative: the numbers are the screenshot's, not a measurement.
+
+```text
+$ rtok agents usage
+rtok agents usage — logs from 8 agents, through 2026-10-02 (Europe/Kyiv)
+
+  63.76B tokens
+  $52,020.90 estimated cost
+  10,137 sessions
+  220 daily rows
+
+! Cost is incomplete: 15 models have no price in [stats.prices], so their tokens are not in
+  the estimate. `rtok agents usage --unpriced` lists them.
+
+Agent               Tokens   Estimated cost
+Droid               26.52B       $30,571.46
+Codex               24.21B       $13,249.69
+Claude Code         12.69B        $7,978.15
+OpenCode           155.45M          $142.04
+GitHub Copilot CLI 121.49M           $63.69
+Gemini CLI          20.04M            $8.97
+Grok                43.43M            $6.90
+ZCode                22.1K            $0.00
+
+Monthly totals
+Month               Tokens   Estimated cost
+Feb 2026             2.56B          $888.02
+Mar 2026             9.88B        $4,682.41
+...
+```
+
+1. **Header:** the source (`logs from N agents`, `through rtok`, or both), the last day covered and the time zone used for day and month boundaries.
+2. **Summary lines:** total tokens; estimated cost (USD); sessions (distinct session ids across agents); daily rows (distinct `(agent, day)` pairs with usage, the same count ccusage calls "daily rows").
+3. **Unpriced warning:** printed only when at least one model has no price: the number of such models (as in the screenshot's "no pricing for 15 models"), never a guessed price. `--unpriced` prints the model ids with their agent and tokens.
+4. **Per-agent table:** agent (display name), tokens, estimated cost; sorted by cost descending, then tokens. An agent whose every model is unpriced shows `-` for cost, not `$0.00`; `$0.00` means priced and free or rounded.
+5. **Monthly totals:** month, tokens, estimated cost, oldest first. `--daily` swaps it for day rows (`2026-10-02`), `--monthly` is the default view; `--by agent` (default) and `--by model` change the grouping of the middle table.
+
+Numbers use the same short units in text (`22.1K`, `155.45M`, `26.52B`, decimal SI, two decimals above 1K) and exact integers in JSON. Tokens = input + cache write + cache read + output (+ reasoning where the host logs it separately); the four legs stay separate in JSON.
+
+#### Two modes
+
+`--source logs|rtok|both` (config `[agents.usage] source`, default `logs`).
+
+1. **`logs` — the agents' own records (like ccusage).** Read each host's local session files on the fly; never written to the store, so a re-read is idempotent (the T49.2 rule). One reader per host in `src/measure/usage/<host>.rs`, all returning one row type `(host, session, model, ts, input, cache_write, cache_read, output, reasoning)`. Claude Code reuses `measure::jsonl` (`message.usage`, dedup by message id + request id, as `stats::collect` already does) and Codex reuses `measure::codex` (`last_token_usage` per `token_count` line). The others start from ccusage's documented locations (https://ccusage.com/guide/, fetched 2026-10-02) and each is verified against the host's own files before it lands:
+
+   | Host | Default location (env override) |
+   | --- | --- |
+   | Claude Code | `~/.claude/projects/`, `~/.config/claude/projects/` (`CLAUDE_CONFIG_DIR`) |
+   | Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` (`CODEX_HOME`); `sessions/` wins over an archived copy |
+   | Droid | `~/.factory/sessions` (`DROID_SESSIONS_DIR`) |
+   | OpenCode | `${XDG_DATA_HOME:-~/.local/share}/opencode` (`OPENCODE_DATA_DIR`) |
+   | Kilo | `~/.local/share/kilo` (`KILO_DATA_DIR`) |
+   | Copilot CLI | `~/.copilot/session-state/*/events.jsonl`, `~/.copilot/otel/**/*.jsonl` (`COPILOT_HOME`) |
+   | Gemini CLI | `~/.gemini/tmp` (`GEMINI_DATA_DIR`) |
+   | Grok | `~/.grok` (`GROK_HOME`) |
+   | ZCode | `~/.zcode` (`ZCODE_HOME`) |
+   | Kimi | `~/.kimi`, `~/.kimi-code` (`KIMI_DATA_DIR`) |
+   | pi | `~/.pi/agent/sessions` (`PI_AGENT_DIR`) |
+   | Antigravity | `~/.gemini/antigravity*`, `~/.config/antigravity` (`ANTIGRAVITY_DATA_DIR`) |
+
+   Every path is also a config key (`[agents.usage.dirs] <host> = [...]`, D12); an env override wins over the default and loses to the config file, like every other key. A host whose files are missing is skipped silently; a host whose files exist but cannot be parsed is named once on stderr (`skipped grok: unknown format in ~/.grok/...`) and counts nowhere. The `measure::codex` header (2026-09-17) says OpenCode's `opencode.db` and Copilot CLI's `data.db` carry no token counts: the readers use the files ccusage reads (OpenCode's message storage, Copilot's `events.jsonl`/OTel export), and if a host really has no counts it is listed as `unsupported`, never estimated. Hosts outside `agents::HOSTS` (Droid) still get a reader: this is about usage on the machine, not about what rtok installs into. D6 holds: rtok reads the files itself; it never spawns or imports ccusage or any other tool.
+
+2. **`rtok` — what passed through rtok.** Read only the store: proxy `usage` rows (input, cache write, cache read, output, model, `api`) grouped by host through `usage.session → sessions.host_id` (rows with no session host go under `unattributed (<api>)`), plus the `measurements` ledger for what rtok removed (`est_before - est_after`, `expand` counted as a cost, as `ReportSavings::saved` does, T207). Two extra columns, **saved tokens** and **saved estimate** (saved tokens priced at that host's input price, labelled as an estimate), and one extra summary line: `rtok saved 1.23B tokens (≈ $812.40)`. Uses the existing reads (`Store::usage_by_model`, `measurement_totals`); new reads go through Diesel, grouped in SQL (no raw SQL, no second recorder, D19).
+
+3. **`both`:** the per-agent table gets `logs tokens`, `through rtok`, and `coverage` (through rtok ÷ logs), so it is visible which agents bypass the proxy. Costs come from the logs side; saved columns from the rtok side.
+
+#### Flags (each one a config key under `[agents.usage]`, D12)
+
+| Flag | Key | Default | Meaning |
+| --- | --- | --- | --- |
+| `--source logs\|rtok\|both` | `source` | `logs` | Data source, above. |
+| `--host <ids>` | `hosts` | all | Comma-separated host ids (`claude,codex,droid`); unknown ids are an error listing the known ones. Named `--host` like `agents info <host>`; if T348 settles on `--agent` for hosts, this follows. |
+| `--since <date\|dur>` / `--until <date>` | `since`, `until` | all time | `2026-09-01` or a duration (`30d`, `24h`, `stats::parse_since`); dates are whole days in `--tz`. |
+| `--daily` / `--monthly` | `period` | `monthly` | Bottom table: day rows or month rows. |
+| `--by agent\|model` | `by` | `agent` | Middle table grouping. |
+| `--tz <IANA>` | `tz` | system zone | Time zone for day/month boundaries and the header. |
+| `--unpriced` | — | off | List models without a price instead of the tables. |
+| `--json` | — | off | One JSON document, below. |
+
+#### Models without a price
+
+Prices come only from `[stats.prices."<model>"]` (T49.1); nothing is fetched from the network and nothing is guessed. Model ids are normalised before lookup (provider prefix such as `anthropic/` or `openai/` stripped, a trailing date suffix such as `-20260901` dropped) and the raw id is kept in JSON. A model with no row: its tokens count in every token total, its cost is `null`, it is counted once per model id in `unpriced_models`, and the warning line names the count (the tokens left out are in `--unpriced` and JSON). Extending the shipped price table (or importing one) is a separate decision, not this task.
+
+#### Time zone
+
+Usage timestamps are stored and emitted in UTC (unix seconds and RFC 3339 `Z` in JSON). Day and month buckets are cut in `--tz` (default: the system zone; `TZ` respected), DST-aware, so a session that crosses midnight splits by each request's own timestamp. The header and JSON `tz` field name the zone used. Parsing IANA zones needs a time-zone crate (`jiff`, one-line reason in `Cargo.toml`: IANA zones with DST for day/month buckets); `chrono`/`time` are not in the tree today.
+
+#### `--json`
+
+```json
+{
+  "source": "logs",
+  "tz": "Europe/Kyiv",
+  "through": "2026-10-02",
+  "totals": {"tokens": 63760000000, "input": 0, "cache_write": 0, "cache_read": 0,
+             "output": 0, "cost_usd": 52020.90, "sessions": 10137, "daily_rows": 220},
+  "unpriced_models": 15,
+  "unpriced": [{"model": "<model id>", "host": "zcode", "tokens": 22100}],
+  "agents": [{"host": "droid", "name": "Droid", "tokens": 26520000000, "cost_usd": 30571.46}],
+  "periods": [{"period": "2026-02", "tokens": 2560000000, "cost_usd": 888.02}],
+  "skipped": [{"host": "grok", "reason": "unknown format", "path": "~/.grok/..."}]
+}
+```
+
+With `--source rtok|both` each agent and the totals also carry `saved_tokens` and `saved_usd`, and `both` adds `through_rtok_tokens` and `coverage`. Field names are stable; a golden test pins them.
+
+#### Relationship to existing commands
+
+- `rtok agents list` / `info` say what is installed; `rtok agents sessions` says what is running now in this project; `rtok agents usage` says what has been spent, over time, on the whole machine. No overlap in rows.
+- `rtok stats` stays the measurement report (D3) and keeps its `api`/`--price` sections; `agents usage` reuses its readers (`measure::jsonl`, `measure::codex`), `row_cost` and `[stats.prices]` instead of copying them (no duplicated logic). `stats --price` keeps working unchanged.
+- D23/D27: the same rows become a Usage page on `rtok web` and `rtok tui` (T358.5), built from one model function both surfaces and the CLI call.
+
+#### Split when claiming (≤300 LOC, ≤10 files each)
+
+- **T358.1** `--source rtok`: CLI skeleton, `[agents.usage]` config section, store reads by host/day/month, summary + both tables + `--json`, unpriced count, `--tz`.
+- **T358.2** `--source logs` for Claude Code and Codex, reusing `measure::jsonl`/`measure::codex`; `--source both`.
+- **T358.3** Readers for Droid, OpenCode, Kilo, Copilot CLI, Gemini CLI (one per PR if over budget), each verified on real files and pinned by a fixture.
+- **T358.4** Readers for Grok, ZCode, Kimi, pi, Antigravity; `unsupported` hosts listed in `docs/agents.md`.
+- **T358.5** The Usage page on `rtok web` and `rtok tui` (D23/D27).
+
+Check: every item below passes.
+
+- Fixture homes per host (no real agents in tests): a fixed set of session files gives exact totals, per-agent and per-month numbers in text and JSON goldens (`trycmd`); re-running gives the same output.
+- Unpriced: a fixture with one priced and two unpriced models prints the warning with `2 models`, costs only the priced one, and `--unpriced` lists the two.
+- Time zone: one request at 23:30 UTC on 2026-09-30 lands in October with `--tz Europe/Kyiv` and in September with `--tz UTC`; a DST change day buckets correctly.
+- `--source rtok` on a store fixture matches `rtok stats --price` totals for the same rows; `both` coverage is through-rtok ÷ logs.
+- `rtok config validate` accepts every new key; each has its `default.toml` row and `docs/config.md` row; `just check` green.
+- The screenshot's layout (summary, warning, per-agent table, monthly totals) is what `rtok agents usage` prints for the fixture.
+
+
+Result: shipped in six subtasks, all in this file: T358.1 `--source rtok`, the command and `[agents.usage]` (#656); T358.2 `--source logs|both` for Claude Code and Codex (#660); T358.6 `--by`, saved columns and `skipped` (#663); T358.5 the Usage page on `rtok web` and `rtok tui` (#667); T358.3 the OpenCode, Kilo, Copilot CLI and Gemini CLI readers with `[agents.usage.dirs]` (#672); T358.4 the pi and Kimi readers, with Grok, ZCode and Antigravity marked `unsupported` (#678). Checking the readers against real files is T396.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
 ### T325. Bash rewrite keeps `cd` in the host shell; shell-state builtins stay unwrapped
 
 Found by a bug-hunt pass over `src/plugins/cmd/hook.rs`. The PreToolUse rewrite turned `cd crates/x && cargo test` into `rtok run -- 'cd crates/x && cargo test'`, so the `cd` ran in `rtok run`'s child shell. Hosts that keep the shell's cwd between Bash calls (Claude Code) lost it: the next call ran in the old directory. `export`, `source`, `unset`, `alias`, `pushd`/`popd` had the same problem.
@@ -9196,6 +9350,35 @@ Fifth subtask of T441 (task adapters): `rtok task create/list/show/status/next/i
 Check: the commands work end to end on the disk adapter in a temp checkout; `just check` green.
 
 Result: `src/tasks/run.rs` holds what the commands do, so T441.6's MCP tools call the same functions: `Project::open` (git root, `project_key`, the prefix from `[tasks] prefix` or the project name, the adapter; `github`/`gitlab` say they are not built yet), `create` (checks the parent exists, raises the store counter past every id the adapter holds at that depth, then allocates), `show` (task plus subtask ids), `next` (lowest open task with no active subtask), and `init`, which writes `[tasks] adapter`/`prefix` into `<git root>/.rtok.toml` with `toml_edit`, keeping the rest of the file. `src/cli.rs` adds `rtok task …`; `--body-file -` reads stdin. `[tasks] adapter` is validated against the same `ADAPTERS` list. The card's `create --status` is left out (a new task is open; `status` sets the rest), and `sync` stays with T441.7. `tests/task_cli.rs` runs the binary from init to done, including the parent refusal and a hand-deleted file whose id is not reused. README command rows and the `docs/config.md` flag table (en/ru/uk) list the commands.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T400. Fix stale and broken statements in `research.md` and related docs
+
+The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
+
+- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
+- §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
+- §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
+- §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
+- §22–§28: T283.3 shipped (line "Not shipped yet: (b)"); T330.1 no longer "PR #651, open"; host counts (22, not 17 or 21; plain host names, not autolinked URLs).
+- `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
+
+Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
+
+Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) and `docs/config.md` (with the ru/uk copies) was checked against `done.md`, the code and `git log`, then dated or given a "shipped as Txx" pointer; the P14 table is one table; stale "12 hosts" cells in §9.3, §11 and §14 were dated too. Not done here: the §2 T241 `replay_bench` caveats, which T397 already owns (its re-run replaces them). Left for later: `README.md`, `docs/comparison.md` (en/ru/uk) and `roadmap.md` still quote the old 0.351 reference recall, and `src/plugins/read/README.md` says five MCP tools where it lists three. #818.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
+### T441.6. MCP task tools
+
+Sixth subtask of T441 (task adapters): `task_create`, `task_list`, `task_get`, `task_status` and `task_next` on `rtok mcp`, with the same JSON as the CLI.
+
+Check: CLI ↔ MCP parity (same inputs, same JSON); `just check` green.
+
+Result: `src/mcp/tasks.rs` lists the five tools beside the worktree and agent tools and calls the same `tasks::run` functions as `rtok task …`; `Project::get`, `Project::status` and `run::filter` moved there from the CLI so neither front-end keeps its own copy, and `show` now fails with `no task <id>` itself. Each call re-reads the config for the current cwd, because `roots/list` can move the server into the project after launch and `[tasks] prefix` lives in that project's `.rtok.toml`. `tests/task_cli.rs` drives the tools through `rtok mcp --call` and compares their answers with `--json`. The server entry `rtok agents install` already writes covers every host, so the tools need no install of their own; the AGENTS.md/CLAUDE.md instruction line was split into T441.10.
 
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
