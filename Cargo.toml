@@ -136,7 +136,7 @@ futures-util = "0.3.34"
 ratatui = "0.30.2" # `rtok tui`, the terminal rendering of the D23 model (T15.1); default backend is crossterm
 inquire = { version = "0.9", default-features = false, features = ["crossterm"] } # `rtok completions` shell picker (T408): maintained (0.9.4, 2026-02), most-used prompt crate; shares the crossterm 0.29 copy below, no fuzzy/macros
 crossterm = "0.29" # key and tick events for the TUI loop (T15.1); same major as ratatui 0.30's backend, so one copy links
-reqwest = { version = "0.13.4", default-features = false, features = ["stream", "rustls"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["stream", "rustls", "blocking"] } # blocking: the sync task adapters (T441.7)
 rustls = "0.23" # preconfigured webpki TLS for proxy/otel (T53.3)
 rustls-pemfile = "2.2" # SSL_CERT_FILE bundle parsing (T53.3)
 webpki-roots = "1" # Mozilla roots without the platform verifier (T53.3)

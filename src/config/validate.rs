@@ -717,6 +717,15 @@ fn check_leaf(
                     "{at}: {dotted} must be error, warn, info, or debug"
                 ));
             }
+            // Caught here, not as a 400 on every request of that lane once the proxy runs.
+            lane if lane.starts_with("proxy.lanes.")
+                && lane.ends_with(".upstream")
+                && !s.trim().is_empty()
+                && !reqwest::Url::parse(s.trim())
+                    .is_ok_and(|u| matches!(u.scheme(), "http" | "https")) =>
+            {
+                errors.push(format!("{at}: {dotted} must be empty or an http(s) URL"));
+            }
             _ => {}
         }
     }
@@ -945,6 +954,29 @@ mod tests {
         )
         .unwrap();
         assert!(issues(&path).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_lane_upstream_must_be_an_http_url() {
+        let dir = tmp("laneup");
+        let path = dir.join("c.toml");
+        for bad in ["localhost:8080", "ftp://mirror", "not a url"] {
+            std::fs::write(&path, format!("[proxy.lanes.bulk]\nupstream = \"{bad}\"\n")).unwrap();
+            let errs = issues(&path).unwrap();
+            assert!(
+                errs.iter().any(|e| e.contains("proxy.lanes.bulk.upstream")),
+                "{bad}: {errs:?}"
+            );
+        }
+        for good in ["", "http://127.0.0.1:4000", "https://gateway.example/v1"] {
+            std::fs::write(
+                &path,
+                format!("[proxy.lanes.bulk]\nupstream = \"{good}\"\n"),
+            )
+            .unwrap();
+            assert!(issues(&path).unwrap().is_empty(), "{good}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
