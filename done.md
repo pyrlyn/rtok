@@ -7607,7 +7607,7 @@ Model: Claude Code / claude-sonnet-5-5
 
 Check: `mise exec rust -- cargo test --lib -- plugins::memory store::embed` (66 passed). `mise exec rust -- cargo clippy --all-targets -- -D warnings` clean. `mise exec rust -- cargo test --test latency --release` missed 10 ms on this host for every event, including PreToolUse (p95 13.8 ms, min 6.7 ms, `--test-threads=1`), which this change does not touch — the same spawn-floor miss T428 records on a loaded host.
 
-Result: lib tests 66 passed; clippy clean. #894.
+Result: lib tests 66 passed; clippy clean; `tests/trycmd/config-init.toml` matches the new `hybrid` comment. #894.
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
 
