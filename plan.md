@@ -110,7 +110,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.8 | todo | P2 | 2 | 0% | |
-| T414.10 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
 | T414.13 | todo | P2 | 4 | 0% | |
@@ -1928,14 +1927,6 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
 
 Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
-
-### T414.10. Table filters and sort in the URL
-
-Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
-
-Check: unit tests for search-param parsing (bad values fall back to defaults); e2e opens a filtered URL and sees the filtered rows.
-
-Execution plan: one shared module `web/src/tableSearch.ts` holds a per-page spec (text `q`, enum filters, `sort` as `col` / `-col` against the table's column ids), a pure parse (untrusted values fall back to defaults, numeric-looking strings coerced back to strings) and a `useTableSearch` hook over TanStack Router (`useSearch`/`useNavigate`; chips push a history entry, typing replaces it). The router's `validateSearch` uses the same parse. `DataTable` gets opt-in sortable headers (`sortValue` per column, `aria-sort`). Calls, Sessions, Plugins and Logs read their state from the hook instead of `useState`. Verify: unit tests for parse/serialize, a page test for back/forward, an e2e that opens a filtered URL and reloads, `just check`, `spa-stories`, `spa-e2e`.
 
 ### T414.11. Clickable KPIs and panels open the filtered page
 
