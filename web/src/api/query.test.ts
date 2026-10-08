@@ -4,7 +4,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { connectionKey, createApi, messageKey, snapshotKey, type Api } from "./query";
+import { connectionKey, createApi, messageKey, pausedKey, snapshotKey, type Api } from "./query";
 import { connectSample, isSampleRequested, sampleSnapshot } from "./sample";
 import type { Snapshot } from "./snapshot.gen";
 import type { Connect, Connection, Handlers } from "./ws";
@@ -66,6 +66,75 @@ describe("cache wiring", () => {
     expect(connect).toHaveBeenCalledTimes(1);
     api.close();
     expect(queryClient.getQueryData(connectionKey)).toBe("closed");
+  });
+});
+
+describe("pause", () => {
+  const rows = (n: number): Snapshot => ({
+    ...sampleSnapshot,
+    logs: Array.from({ length: n }, (_, i) => String(i)),
+  });
+  const shown = () => queryClient.getQueryData<Snapshot>(snapshotKey)?.logs;
+
+  function paused() {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    s.server().onFrame({ type: "snapshot", snapshot: rows(1) });
+    api.pause();
+    return { s, api };
+  }
+
+  test("rows stay stable while frames arrive and the newest one lands on resume", () => {
+    const { s, api } = paused();
+    s.server().onFrame({ type: "snapshot", snapshot: rows(2) });
+    s.server().onFrame({ type: "snapshot", snapshot: rows(3) });
+    expect(queryClient.getQueryData(pausedKey)).toBe(true);
+    expect(shown()).toEqual(["0"]);
+
+    api.resume();
+    expect(queryClient.getQueryData(pausedKey)).toBe(false);
+    expect(shown()).toEqual(["0", "1", "2"]);
+    s.server().onFrame({ type: "snapshot", snapshot: rows(4) });
+    expect(shown()).toHaveLength(4);
+  });
+
+  test("the cache keeps its update time while paused, so the age is the shown snapshot's", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    const { s, api } = paused();
+    const at = queryClient.getQueryState(snapshotKey)?.dataUpdatedAt;
+    vi.setSystemTime(1_009_000);
+    s.server().onFrame({ type: "snapshot", snapshot: rows(2) });
+    expect(queryClient.getQueryState(snapshotKey)?.dataUpdatedAt).toBe(at);
+    api.resume();
+    expect(queryClient.getQueryState(snapshotKey)?.dataUpdatedAt).toBe(1_009_000);
+  });
+
+  test("a tick error that arrives while paused waits for resume, like any other frame", () => {
+    const { s, api } = paused();
+    s.server().onFrame({ type: "snapshot_error", error: "boom" });
+    expect(queryClient.getQueryData<Snapshot>(snapshotKey)?.error).toBeUndefined();
+    api.resume();
+    expect(queryClient.getQueryData<Snapshot>(snapshotKey)).toMatchObject({ error: "boom" });
+  });
+
+  test("there is nothing to freeze before the first snapshot", () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    api.pause();
+    expect(queryClient.getQueryData(pausedKey)).toBeUndefined();
+    s.server().onFrame({ type: "snapshot", snapshot: rows(1) });
+    expect(shown()).toEqual(["0"]);
+  });
+
+  test("the socket stays open and server replies still settle while paused", async () => {
+    const { s, api } = paused();
+    const text = api.expand("abc");
+    s.server().onFrame({ type: "expand", id: "abc", text: "full" });
+    await expect(text).resolves.toBe("full");
+    expect(s.sent).toEqual([{ expand: "abc" }]);
   });
 });
 

@@ -121,7 +121,8 @@
 # semantic_cache      = false
 # timeout_s           = 0
 
-[proxy.batch]                         # no keys yet
+[proxy.batch]                         # provider Batch result files
+# parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 
 [proxy.flex]                          # no keys yet
 

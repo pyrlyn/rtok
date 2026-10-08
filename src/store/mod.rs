@@ -23,6 +23,7 @@ mod sql_ext;
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
 // T329.1: the graph project registry.
+mod note_files;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
@@ -1930,6 +1931,52 @@ impl Store {
                 usage::output.eq(output),
                 usage::call_id.eq(call_id),
             ))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
+    /// Many `usage` rows for one call in a single transaction — a Batch results file (T385.4)
+    /// carries one per request. Each row is `(model, api, [input, cache_create, cache_read,
+    /// output])`, the same four counters as [`Store::insert_usage`].
+    pub fn insert_usage_rows(
+        &self,
+        session: &str,
+        call_id: i32,
+        rows: &[(Option<&str>, &str, [i64; 4])],
+    ) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.transaction::<_, anyhow::Error, _>(|conn| {
+            // 8 binds per row, well under SQLite's 32766-variable cap per statement.
+            for chunk in rows.chunks(500) {
+                let values: Vec<_> = chunk
+                    .iter()
+                    .map(|(model, api, [input, cache_create, cache_read, output])| {
+                        (
+                            usage::session.eq(session),
+                            usage::model.eq(*model),
+                            usage::api.eq(*api),
+                            usage::input.eq(*input),
+                            usage::cache_create.eq(*cache_create),
+                            usage::cache_read.eq(*cache_read),
+                            usage::output.eq(*output),
+                            usage::call_id.eq(call_id),
+                        )
+                    })
+                    .collect();
+                diesel::insert_into(usage::table)
+                    .values(&values)
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Re-tag a call once its response showed what it was (T385.4: an OpenAI file download
+    /// that held Batch results).
+    pub fn set_call_kind(&self, id: i32, kind: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(calls::table.filter(calls::id.eq(id)))
+            .set(calls::kind.eq(kind))
             .execute(&mut *conn)?;
         Ok(())
     }

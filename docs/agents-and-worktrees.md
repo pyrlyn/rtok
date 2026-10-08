@@ -85,3 +85,7 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | `zed` | no | MCP | threads can point at a worktree you make | `worktree_adopt` |
 
 Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add` (CLI); a host with no agent row passes `--owner` on the CLI. A worktree whose path matches none of the pools above is listed with origin `other` and adopted the same way.
+
+### Windows
+
+On Windows rtok cannot read a process's parent pid (`rtok-sys::parent_pid` returns nothing; the Windows snapshot value is not updated after the parent exits), so no ancestor chain is read and only the cwd rule decides which agent a hook call belongs to. No host doc records this limit. Sources and dates are in `research.md` §26.

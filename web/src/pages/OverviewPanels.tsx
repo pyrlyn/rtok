@@ -3,10 +3,11 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { swatch } from "../charts/Chart";
+import { useHover } from "../charts/hover";
 import { Empty } from "../states";
 import { Panel } from "../ui/Panel";
 import { orUnknown } from "../ui/Unknown";
-import { SERIES, CallsChart } from "./CallsChart";
+import { SERIES, CALLS_SYNC, CallsChart } from "./CallsChart";
 import { ago, compact, nowSecs } from "./format";
 import { why } from "./missing";
 import { SURFACES, type overview } from "./model";
@@ -16,6 +17,9 @@ import { tableLink } from "../tableSearch";
 type Overview = ReturnType<typeof overview>;
 
 export function CallsPanel({ o, calls }: { o: Overview; calls: number }) {
+    // The series under the pointer lights its legend entry; the tooltip stays on the chart, so the
+    // legend repeats none of its numbers (T414.16).
+    const lit = useHover(CALLS_SYNC)?.series;
     return (
         <Panel
             title="calls over time"
@@ -28,10 +32,14 @@ export function CallsPanel({ o, calls }: { o: Overview; calls: number }) {
                     <CallsChart buckets={o.buckets} step={o.step} failed={o.failed} />
                     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-fg-muted">
                         {SURFACES.map((s) => (
-                            <li key={s} className="flex items-center gap-1.5">
+                            <li
+                                key={s}
+                                data-lit={lit === s ? "" : undefined}
+                                className={`flex items-center gap-1.5 ${lit === s ? "text-fg" : ""}`}
+                            >
                                 <span
                                     aria-hidden="true"
-                                    className={`size-2.5 rounded-sm ${swatch[SERIES[s]]}`}
+                                    className={`size-2.5 rounded-sm ${swatch[SERIES[s]]} ${lit === s ? "ring-2 ring-fg-muted" : lit ? "opacity-40" : ""}`}
                                 />
                                 <PanelLink {...tableLink("calls", { surface: s })}>
                                     {s} {o.bySurface[s].n}
