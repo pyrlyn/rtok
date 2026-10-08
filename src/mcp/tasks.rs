@@ -101,3 +101,26 @@ pub fn call(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
     };
     Ok(out.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::defs;
+
+    /// The shipped skill is the rule line that sends agents here (T441.10): it must name every
+    /// tool this server lists, and no `task_*` tool it lacks.
+    #[test]
+    fn the_task_skill_names_exactly_these_tools() {
+        let skill = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/skills/rtok-tasks/SKILL.md"
+        ));
+        let named: std::collections::BTreeSet<&str> = skill
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            .filter(|s| s.starts_with("task_"))
+            .collect();
+        let listed: std::collections::BTreeSet<&str> = defs().iter().map(|d| d.name).collect();
+        assert_eq!(named, listed);
+    }
+}

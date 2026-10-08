@@ -27,6 +27,7 @@ import { Usage } from "./pages/Usage";
 import { Worktrees } from "./pages/Worktrees";
 import { PAGES, type Page } from "./pages";
 import { NotFound, Shell } from "./Shell";
+import { validateTableSearch } from "./tableSearch";
 
 const screens: Record<Page["id"], RouteComponent> = {
     overview: Overview,
@@ -59,8 +60,12 @@ const pageRoutes = PAGES.map((page) =>
         path: page.id,
         component: screens[page.id],
         // The palette opens a page on one row (`?id=`); kept a string even when it looks numeric.
-        validateSearch: (s: Record<string, unknown>): { id?: string } =>
-            s.id == null ? {} : { id: String(s.id) },
+        // The list pages add their filters, search text and sort (T414.10), which are untrusted
+        // like any link, so they are validated here and not only where a page reads them.
+        validateSearch: (s: Record<string, unknown>): Record<string, string | undefined> => ({
+            ...(s.id == null ? {} : { id: String(s.id) }),
+            ...validateTableSearch(page.id, s),
+        }),
     }),
 );
 
