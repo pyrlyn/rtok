@@ -56,22 +56,17 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
-| T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.6 | todo | P2 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
-| T385.8 | todo | P2 | 2 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
-| T391 | todo | P3 | 2 | 30% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T401 | todo | P3 | 4 | 20% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
@@ -94,14 +89,12 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
-| T414.11 | todo | P2 | 2 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.1 | todo | P2 | 3 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
@@ -1338,21 +1331,6 @@ Done when: a literal `search` on a 50k-file repo scans only candidate files and 
 
 Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
 
-### T382. Installed plugin version in `rtok agents list` and on the web Hosts page
-
-Ivan, 2026-10-04: `rtok agents list` and `rtok web` `#/hosts` must show which version of the rtok plugin each host has installed. Today the `plugin` row says only `✓ plugin  installed`, so a stale plugin (older than the binary) is invisible without opening the host's own records (for Claude `~/.claude/plugins/installed_plugins.json`: `version`, `installPath`, `gitCommitSha`).
-
-Depends on T279: it defines where the installed version comes from (the installed copy's `.rtok-plugin-version`, then the install receipt, then the host record). Reuse that lookup; do not add a second one.
-
-Done means:
-
-- `agents::list`: the `plugin` row of every host that has a plugin carries the installed version and its source, e.g. `✓ plugin  installed 0.15.1 (marketplace)`. When the version differs from the running binary it says so: `installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude`. An install with no version anywhere shows `installed (legacy, no version)`, matching T279's `agents info` wording. Hosts with `− plugin not supported` are unchanged.
-- `rtok agents list --json` gains `plugin_version` and `plugin_source` fields; absent rather than empty when unknown.
-- Web: the Hosts page reads `agents::list` verbatim (`hosts_page_text` in `src/web/model.rs`), so the version arrives with the text; `parseHosts` in `web/src/pages/text.ts` keeps it in the module row's state and `Hosts.tsx` shows it, with the outdated case visibly marked. The TUI Hosts page shows the same text.
-- Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
-
-Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
-
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -1382,23 +1360,11 @@ optimization.md §5. `rtok bench` cost per passed task for each setting on and o
 
 Check: one dated `research.md` row per setting.
 
-### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
-
-optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
-
-Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
-
 ### T385.7. Per-lane upstream and in-flight cap
 
 optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
 
 Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
-
-### T385.8. P28 Phase 1: measure what LLM compression could save
-
-optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
-
-Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
@@ -1423,14 +1389,6 @@ Check: per-wire tests and a dated bench row; `just check`.
 optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
 
 Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
-
-### T391. Junk map: the five missing hosts and VS Code `CachedData`
-
-From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
-
-Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
-
-Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
 
 ### T394. Run the paid live benches and record them
 
@@ -1463,14 +1421,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
-
-Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
-
-Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
-
-Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
 
 ### T404. Evaluate a local draft model that the cloud model only verifies
 
@@ -1645,12 +1595,6 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
 
-### T414.11. Clickable KPIs and panels open the filtered page
-
-Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
-
-Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
-
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -1704,21 +1648,6 @@ Execution plan:
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
-### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
-
-Creator request 2026-10-07: the same as T436, in the `rtok web` SPA.
-
-Today only page loads show a spinner (`Loading` in `web/src/states.tsx`, T407). Actions that call the API show nothing while they wait: the plugin switch (`pages/Plugins.tsx`, `useSetMutation`), project select and link (`pages/Projects.tsx`, `pages/graph3d/ProjectsOverview.tsx`, `useProjectMutation`), and doctor plan/apply (`pages/DoctorFix.tsx`) and expand (`pages/Calls.tsx`), which only disable their buttons.
-
-Done means:
-
-1. One `Spinner` in `web/src/ui`, with a story; `Loading` draws its ring through it, so there is one spinner in the SPA.
-2. Every control that sends a request shows the spinner on itself from the click until the answer, is disabled meanwhile and sets `aria-busy`. A switch stays in its old position until the server answers; on error it stays there and the error is shown.
-3. Operation icons: a verb → icon map in `web/src/ui` with the same operations as ketch's `OPERATION_ICONS` (install, remove/prune, update, fetch, link, roll back, search, doctor) plus rtok's own from T436, falling back to the success/warning/error/info icon. The web draws them as brand SVG icons through `Icon`, not emoji; missing ones are added under `brand/icons/ui/` (source rule of T414: no copies in `web/`). Action buttons and the result of an action carry their operation's icon.
-4. One list of operations: the web map and the CLI table of T436 name the same operations, checked by a test.
-5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
-
-Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
 
 ### T436.3. Shared operation-icon crate for rtok and ketch
 
