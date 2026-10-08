@@ -12,7 +12,7 @@
 use std::fs::FileType;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use super::HOSTS;
 use super::junk_cache::{
@@ -386,6 +386,29 @@ pub fn staging_caches(claude: &Path) -> Vec<Owned> {
         .collect()
 }
 
+/// The `<commit>` folders of a per-commit cache (VS Code's `CachedData`, §22.2) that are not
+/// the newest. VS Code's own cleaner is told the running commit; rtok is not, so the folder
+/// touched last stands for it and stays. A folder whose time cannot be read stays too, and a
+/// link is never followed. T152's idle rule still applies to each one.
+pub fn stale_code_caches(dir: &Path) -> Vec<Owned> {
+    let dirs: Vec<(PathBuf, Option<SystemTime>)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| (e.path(), e.metadata().and_then(|m| m.modified()).ok()))
+        .collect();
+    let newest = dirs.iter().filter_map(|(_, m)| *m).max();
+    dirs.into_iter()
+        .filter(|(_, m)| m.is_some_and(|m| Some(m) < newest))
+        .map(|(path, _)| Owned {
+            path,
+            evidence: SECTION_22,
+            idle_rule: true,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,6 +427,80 @@ mod tests {
         let f = std::fs::File::options().write(true).open(path).unwrap();
         f.set_modified(SystemTime::now() - Duration::from_secs(secs))
             .unwrap();
+    }
+
+    #[cfg(unix)]
+    fn old_dir(root: &Path, name: &str, secs: u64) -> PathBuf {
+        let d = root.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        let file = d.join("x.js.cache");
+        std::fs::write(&file, b"v8").unwrap();
+        age(&file, secs);
+        // A directory cannot be opened for writing, but a read handle can set its times.
+        let when = SystemTime::now() - Duration::from_secs(secs);
+        std::fs::File::open(&d).unwrap().set_modified(when).unwrap();
+        d
+    }
+
+    /// The newest commit folder is the current one and stays; older ones are owned by §22 and
+    /// still pass T152's idle rule through `cache_items`; a file or a link is never a commit.
+    #[cfg(unix)]
+    #[test]
+    fn code_cache_keeps_the_newest_commit_and_offers_the_older_ones() {
+        let root = tmp_dir("junk-code-cache");
+        let cur = old_dir(&root, "cccc", 3_600);
+        let old = old_dir(&root, "aaaa", 40 * 86_400);
+        let older = old_dir(&root, "bbbb", 80 * 86_400);
+        std::fs::write(root.join("stray-file"), b"x").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&cur, root.join("link")).unwrap();
+        let mut paths: Vec<PathBuf> = stale_code_caches(&root)
+            .into_iter()
+            .map(|o| o.path)
+            .collect();
+        paths.sort();
+        assert_eq!(paths, [old, older]);
+        assert!(
+            stale_code_caches(&root)
+                .iter()
+                .all(|o| o.idle_rule && o.evidence == SECTION_22)
+        );
+        // One commit, or none, is current: nothing to offer.
+        assert!(stale_code_caches(&cur).is_empty());
+        assert!(stale_code_caches(&root.join("missing")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_commit_folder_edited_inside_the_idle_window_is_kept_by_cache_items() {
+        let root = tmp_dir("junk-code-cache-idle");
+        old_dir(&root, "cccc", 60);
+        let busy = old_dir(&root, "aaaa", 40 * 86_400);
+        std::fs::write(busy.join("fresh"), b"x").unwrap();
+        // The write bumped the folder's own time; the newest folder is the current one.
+        let when = SystemTime::now() - Duration::from_secs(40 * 86_400);
+        std::fs::File::open(&busy)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+        let gone = old_dir(&root, "bbbb", 80 * 86_400);
+        let items = crate::agents::junk_cache::cache_items(
+            &stale_code_caches(&root),
+            &[],
+            &cx(&root),
+            LIMIT,
+        );
+        let kept = |p: &Path| {
+            items
+                .iter()
+                .find(|i| Path::new(&i.path) == p)
+                .unwrap()
+                .kept
+                .is_some()
+        };
+        assert!(kept(&busy));
+        assert!(!kept(&gone));
+        assert_eq!(items.len(), 2);
     }
 
     fn cx(cwd: &Path) -> Ctx {

@@ -15,6 +15,7 @@ import {
     parseSort,
     parseTableSearch,
     TABLE_SPECS,
+    tableLink,
     toSearch,
     validateTableSearch,
 } from "./tableSearch";
@@ -23,6 +24,22 @@ import { nextSort, sortRows } from "./ui/DataTable";
 afterEach(cleanup);
 
 const calls = TABLE_SPECS.calls;
+
+describe("tableLink", () => {
+    test("sets the named filters and leaves every other param out", () => {
+        expect(tableLink("calls", { result: "failed" })).toEqual({
+            to: "/calls",
+            search: { q: undefined, sort: undefined, surface: undefined, result: "failed" },
+        });
+        expect(tableLink("sessions", { show: "live" }).search.show).toBe("live");
+        expect(tableLink("plugins", {}).search.show).toBeUndefined();
+    });
+
+    test("what it builds survives the route's validation unchanged", () => {
+        const { search } = tableLink("plugins", { show: "on" });
+        expect(validateTableSearch("plugins", search)).toEqual(search);
+    });
+});
 
 describe("table search params", () => {
     test("a plain URL parses to the defaults", () => {

@@ -35,6 +35,8 @@ Options:
       --json <ARGS>    JSON arguments for `--call`
       --host <HOST>    The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays
                        `[hook] host` so the process can find its rtok agent
+      --http [<ADDR>]  Serve over Streamable HTTP at `IP:PORT` (default `[mcp] http`) instead of
+                       stdio; the bearer token comes from `[mcp] token` or `RTOK_MCP_TOKEN`
   -h, --help           Print help
 
 $ rtok proxy --help

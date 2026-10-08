@@ -4681,7 +4681,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__mcp)
-            opts="-h --call --json --host --config --help ping help"
+            opts="-h --call --json --host --http --config --help ping help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4696,6 +4696,10 @@ _rtok() {
                     return 0
                     ;;
                 --host)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --http)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
