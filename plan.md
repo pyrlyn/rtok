@@ -61,7 +61,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T378 | todo | P3 | 3 | 0% | |
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.2 | todo | P2 | 3 | 20% | |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.4 | todo | P2 | 3 | 20% | |
 | T385.5 | todo | P2 | 3 | 20% | |
@@ -1420,12 +1419,6 @@ Also: a cross-session read-dedup measurement from `calls` (optimization.md §5, 
 Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id order (T385.3, T385.8 and T385.13 are measurements and may run in parallel with the build steps). Boundaries from `docs/batch-flex.md` hold throughout: never convert a live agent turn into a Batch job, never rewrite Batch JSONL, everything lives under `src/proxy/`.
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
-
-### T385.2. Per-lane policy table
-
-optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
-
-Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
 
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 
