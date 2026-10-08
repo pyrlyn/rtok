@@ -38,7 +38,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T330.5 | todo | P2 | 4 | 30% | |
 | T330.5.2 | todo | P2 | 3 | 0% | |
 | T330.5.3 | todo | P2 | 3 | 0% | |
-| T330.5.4 | in progress | P2 | 2 | 10% | Claude Code / claude-sonnet-5-5 |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
@@ -1068,16 +1067,6 @@ Part of T330. The review-class kinds with their keeps (worktrees through `git wo
 Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rejected naming the key; `just check`.
 
 Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. T330.5.4 was split from T330.5.1 later the same day. It closes when all four are done.
-
-### T330.5.4. Junk: the `backups` kind
-
-Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 500-line cap; depends on T330.5.1. `backups` (review) over the T330.5.1 report, plan, re-check and apply: rtok's own `_backup/<name>.bak-<ts>` generations in the folders of a host's config files that `setup.backup_files` has no room for (a cap lowered after the copies were taken; the newest copy of a file always stays), with a read-only `rtok-agent-sdk::stale_backups` twin of `prune_backups`; other `*.bak`, `*.bak-<ts>` and `*~` files under an agent's folders are listed read-only (no D36 evidence), and rtok's own `_backup` folder is never walked for them. `backups` joins the `--kind` values. The code was written in T330.5.1 and saved as a patch; re-apply it over T330.5.1.
-
-Plan: apply the saved patch over T330.5.1; check `stale_backups` (SDK twin of `prune_backups`), `junk_review::backup_items`, the `*.bak`/`*.bak-<ts>`/`*~` find in `junk_kinds::found_items`, `"backups"` in both `KINDS`, the completions goldens and `help-subcommands`; add `backups` to any docs that list the kinds; run `just check`-equivalent gates (fmt, clippy, junk lib tests, agents_junk, cli_trycmd, surface_parity, config_coverage, rtok-agent-sdk).
-
-Done means: `rtok agents junk list` shows the `backups` rows, `clear --include review` or `--kind backups` plans the generations past the cap and never the newest, a running host does not hold back rtok's own copies.
-
-Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
 
 ### T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
 
