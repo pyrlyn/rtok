@@ -82,7 +82,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
-| T400 | todo | P2 | 2 | 40% | |
 | T401 | todo | P3 | 4 | 20% | |
 | T402 | todo | P3 | 2 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
@@ -155,7 +154,7 @@ No product code. Two open questions from `research.md` §18.3–18.4: (1) Claude
 
 Plan: throwaway hook script (scratch, not committed) that logs the payloads for `claude --worktree`, a sub-agent worktree and the desktop app, and returns a path under `_worktrees/`. For (2): two fresh worktrees of this repo, one seeded with `cp -c -R target`, one cold; record wall time of `just check` and physical disk delta (`df`, not `du` — clones are double-counted) for each. Write the payloads, the numbers and the dated commands into `research.md` §18. `reflink-copy` is a new dependency: adopting it is a creator decision taken on those numbers, not part of this task.
 
-Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured. Cold `just check` took 185 s and +6.28 GiB; seeded took 371 s and +3.35 GiB. The clone skipped every dependency rebuild (≈ 23 s saved), but T236's `dunnage` pass then compressed the cloned files (≈ 215 s). Parked as I-99, with no follow-up task. Part (1), the hook payloads from `claude --worktree`, a sub-agent worktree and the desktop app, is still open: it needs live sessions of the creator's.
+Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured. Cold `just check` took 185 s and +6.28 GiB; seeded took 371 s and +3.35 GiB. The clone skipped every dependency rebuild (≈ 23 s saved), but T236's `dunnage` pass then compressed the cloned files (≈ 215 s). Parked as I-99, with no follow-up task. Lead (unmeasured, 2026-10-08): the installed `dunnage` 0.1.0 has its own `seed` and `worktree add` subcommands (`dunnage --help`), so seeding may not need `reflink-copy`. Part (1), the hook payloads from `claude --worktree`, a sub-agent worktree and the desktop app, is still open: it needs live sessions of the creator's.
 
 Check: `research.md` §18 gains the hook payloads and a dated table (cold vs seeded: seconds, bytes); T159's card is corrected against the recorded payloads; seeding gets a follow-up task or an `ideas.md` entry from the numbers; no file under `src/` changes.
 
@@ -1574,19 +1573,6 @@ From `research.md`:
 Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
 
 Check: dated sources in §10.1, §23 and §26.
-
-### T400. Fix stale and broken statements in `research.md` and related docs
-
-The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
-
-- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
-- §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
-- §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
-- §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
-- §22–§28: T283.3 shipped (line "Not shipped yet: (b)"); T330.1 no longer "PR #651, open"; host counts (22, not 17 or 21; plain host names, not autolinked URLs).
-- `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
-
-Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
 
 ### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
 
