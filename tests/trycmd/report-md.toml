@@ -112,8 +112,12 @@ Every effective key with its origin — the `config show --sources` page.
 | log.path | ~/.rtok/logs/rtok.log | default |
 | log.to_db | true | default |
 | log.tspin | auto | default |
+| mcp.http | 127.0.0.1:8791 | default |
+| mcp.http_tools | [read, search, tree] | default |
 | mcp.max_description_tokens | 60 | default |
 | mcp.max_result_chars | 20000 | default |
+| mcp.public_url |  | default |
+| mcp.token |  | default |
 | mcp.tools | [] | default |
 | otel.content | true | default |
 | otel.content_bytes | 65536 | default |
@@ -387,7 +391,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-341 keys.
+345 keys.
 
 ## Doctor
 

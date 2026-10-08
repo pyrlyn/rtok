@@ -74,6 +74,10 @@ pub struct Report {
     pub archive_candidates: u64,
     #[serde(default)]
     pub api: BTreeMap<String, ApiRow>,
+    /// T385.6: the same counters per proxy lane. Present only once traffic ran off the agent
+    /// lane, so a store of agent turns alone prints exactly what it did before lanes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lanes: BTreeMap<String, ApiRow>,
     /// `Some` only for `rtok stats --price`: the default report is byte-identical
     /// with and without the price table (T49.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -483,37 +487,8 @@ impl Report {
                 ));
             }
         }
-        if !self.api.is_empty() {
-            // The old fixed widths ride along as column floors, so the bytes a golden
-            // pinned do not move (T25.2 moved the padding into `render::table`).
-            let cols = [
-                Col::left(24),
-                Col::right(8),
-                Col::right(12),
-                Col::right(10),
-                Col::right(6),
-                Col::right(6),
-            ];
-            let mut rows = vec![vec![
-                "api".into(),
-                "input".into(),
-                "cache_create".into(),
-                "cache_read".into(),
-                "output".into(),
-                "hit".into(),
-            ]];
-            for (api, r) in &self.api {
-                rows.push(vec![
-                    api.clone(),
-                    r.input.to_string(),
-                    r.cache_create.to_string(),
-                    r.cache_read.to_string(),
-                    r.output.to_string(),
-                    format!("{:.1}%", r.hit * 100.0),
-                ]);
-            }
-            s.push_str(&table(&cols, &rows));
-        }
+        s.push_str(&api_table("api", &self.api));
+        s.push_str(&api_table("lane", &self.lanes));
         if self.ctt_total > 0 {
             let pct =
                 100.0 * (self.ctt_total as f64 - self.ctt_archive as f64) / self.ctt_total as f64;
@@ -856,6 +831,42 @@ fn skills_section(skills: &BTreeMap<String, SkillRow>) -> String {
     table(&cols, &out)
 }
 
+/// The `api` / `lane` counters table; empty input prints nothing.
+fn api_table(label: &str, rows: &BTreeMap<String, ApiRow>) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    // The old fixed widths ride along as column floors, so the bytes a golden
+    // pinned do not move (T25.2 moved the padding into `render::table`).
+    let cols = [
+        Col::left(24),
+        Col::right(8),
+        Col::right(12),
+        Col::right(10),
+        Col::right(6),
+        Col::right(6),
+    ];
+    let mut out = vec![vec![
+        label.into(),
+        "input".into(),
+        "cache_create".into(),
+        "cache_read".into(),
+        "output".into(),
+        "hit".into(),
+    ]];
+    for (name, r) in rows {
+        out.push(vec![
+            name.clone(),
+            r.input.to_string(),
+            r.cache_create.to_string(),
+            r.cache_read.to_string(),
+            r.output.to_string(),
+            format!("{:.1}%", r.hit * 100.0),
+        ]);
+    }
+    table(&cols, &out)
+}
+
 /// `<n>`, `<n>d` or `<n>h` from the `--since` flag.
 pub fn parse_since(s: &str) -> Result<Duration> {
     parse_since_from(s, "--since")
@@ -879,27 +890,52 @@ pub fn parse_since_from(s: &str, source: &str) -> Result<Duration> {
     Ok(Duration::from_secs(secs))
 }
 
+/// The counters of one bucket with its prompt-cache hit rate: cache reads over every input
+/// token the provider billed (uncached, written and read).
+fn api_row(input: i64, cache_create: i64, cache_read: i64, output: i64) -> ApiRow {
+    let denom = cache_read
+        .saturating_add(cache_create)
+        .saturating_add(input);
+    let hit = if denom == 0 {
+        0.0
+    } else {
+        cache_read as f64 / denom as f64
+    };
+    ApiRow {
+        input,
+        cache_create,
+        cache_read,
+        output,
+        hit,
+    }
+}
+
 pub fn attach_api(report: &mut Report, store: &Store) -> Result<()> {
     for row in store.usage_by_api()? {
-        let denom = row
-            .cache_read
-            .saturating_add(row.cache_create)
-            .saturating_add(row.input);
-        let hit = if denom == 0 {
-            0.0
-        } else {
-            row.cache_read as f64 / denom as f64
-        };
         report.api.insert(
             row.api,
-            ApiRow {
-                input: row.input,
-                cache_create: row.cache_create,
-                cache_read: row.cache_read,
-                output: row.output,
-                hit,
-            },
+            api_row(row.input, row.cache_create, row.cache_read, row.output),
         );
+    }
+    Ok(())
+}
+
+/// Per-lane cache-hit rows (T385.6). Left empty while every request ran on the agent lane:
+/// the `api` table already says the same, and the default report stays byte-identical.
+pub fn attach_lanes(report: &mut Report, store: &Store) -> Result<()> {
+    let lanes: BTreeMap<String, ApiRow> = store
+        .usage_by_lane()?
+        .into_iter()
+        .map(|row| {
+            let lane = crate::proxy::lane::lane_of_kind(&row.kind).to_string();
+            (
+                lane,
+                api_row(row.input, row.cache_create, row.cache_read, row.output),
+            )
+        })
+        .collect();
+    if lanes.keys().any(|lane| lane != "agent") {
+        report.lanes = lanes;
     }
     Ok(())
 }

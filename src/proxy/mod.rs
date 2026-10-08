@@ -1608,14 +1608,22 @@ mod tests {
             .expect("request");
         assert_eq!(resp.status(), reqwest::StatusCode::LOOP_DETECTED);
         mock.assert_calls(0);
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let logged = state
+        // The log row is written off the response path; a fixed sleep lost that race on a
+        // loaded CI runner, so wait for it with a generous deadline instead.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while !state
             .store
             .logs_after(0, 10)
             .unwrap()
             .iter()
-            .any(|r| r.level == "error" && r.message.contains("proxy.upstream"));
-        assert!(logged);
+            .any(|r| r.level == "error" && r.message.contains("proxy.upstream"))
+        {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "no proxy.upstream error row"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
         task.abort();
     }
 }

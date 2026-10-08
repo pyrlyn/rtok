@@ -221,6 +221,13 @@ pub struct AgentListRow {
     /// T278: the `mcp` module per surface — `surface`, `entry`, `plugin`.
     pub mcp: Vec<crate::agents::mcp::McpRow>,
     pub plugins: Vec<crate::agents::PluginRow>,
+    /// T382: the installed rtok plugin's version; absent when none is installed or no version
+    /// is recorded anywhere.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_version: Option<String>,
+    /// T382: where that plugin came from (`github`, `local` or `marketplace`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_source: Option<String>,
 }
 
 /// Skills page (T63.1, D23): one row per skill the host lists.
@@ -444,6 +451,7 @@ pub fn stats_report(cfg: &Config) -> Result<stats::Report> {
     )?;
     if let Ok(store) = Store::open(&cfg.core.db_path) {
         let _ = stats::attach_api(&mut report, &store);
+        let _ = stats::attach_lanes(&mut report, &store);
         let _ = stats::attach_bash_cmd(&mut report, &store);
         let _ = stats::attach_checkpoint_notes(&mut report, &store);
         if cfg.stats.price {
@@ -957,6 +965,9 @@ fn agent_row(
     } else {
         (Vec::new(), Vec::new(), Vec::new())
     };
+    let status = present
+        .then(|| crate::agents::plugin_status(a, v.kind, cfg))
+        .flatten();
     AgentListRow {
         host: a.id(),
         kind: v.kind.as_str(),
@@ -968,6 +979,8 @@ fn agent_row(
         modules,
         mcp,
         plugins,
+        plugin_version: status.as_ref().and_then(|s| s.version.clone()),
+        plugin_source: status.and_then(|s| s.source),
     }
 }
 
