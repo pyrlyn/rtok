@@ -24,7 +24,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.11 | todo | P2 | 3 | 0% | |
@@ -36,7 +35,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
@@ -54,39 +52,21 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T347 | todo | research | 1 | 0% | |
 | T348 | todo | research | 1 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
-| T358 | todo | P2 | 4 | 0% | |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T374 | todo | P3 | 2 | 0% | |
-| T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
-| T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.2 | todo | P2 | 3 | 20% | |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.4 | todo | P2 | 3 | 20% | |
-| T385.5 | todo | P2 | 3 | 20% | |
-| T385.6 | todo | P2 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
-| T385.8 | todo | P2 | 2 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
-| T385.13 | todo | P3 | 2 | 20% | |
-| T391 | todo | P3 | 2 | 30% | |
-| T393 | todo | P3 | 1 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
-| T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T399 | todo | P3 | 1 | 30% | |
-| T400 | todo | P2 | 2 | 40% | |
-| T401 | todo | P3 | 4 | 20% | |
-| T402 | todo | P3 | 2 | 20% | |
-| T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
@@ -109,27 +89,17 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
-| T414.8 | todo | P2 | 2 | 0% | |
-| T414.10 | todo | P2 | 3 | 0% | |
-| T414.11 | todo | P2 | 2 | 0% | |
-| T414.12 | todo | P2 | 2 | 0% | |
-| T414.13 | todo | P2 | 4 | 0% | |
-| T414.14 | todo | P3 | 2 | 0% | |
-| T414.16 | todo | P2 | 3 | 0% | |
-| T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436 | todo | P2 | 3 | 0% | |
-| T436.1 | todo | P2 | 3 | 0% | |
+| T436.2 | todo | P2 | 2 | 0% | |
+| T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.11 | todo | P3 | 3 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
-| T441.9 | todo | P3 | 1 | 0% | |
-| T441.10 | todo | P3 | 2 | 0% | |
 
 
 
@@ -157,7 +127,7 @@ No product code. Two open questions from `research.md` §18.3–18.4: (1) Claude
 
 Plan: throwaway hook script (scratch, not committed) that logs the payloads for `claude --worktree`, a sub-agent worktree and the desktop app, and returns a path under `_worktrees/`. For (2): two fresh worktrees of this repo, one seeded with `cp -c -R target`, one cold; record wall time of `just check` and physical disk delta (`df`, not `du` — clones are double-counted) for each. Write the payloads, the numbers and the dated commands into `research.md` §18. `reflink-copy` is a new dependency: adopting it is a creator decision taken on those numbers, not part of this task.
 
-Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured. Cold `just check` took 185 s and +6.28 GiB; seeded took 371 s and +3.35 GiB. The clone skipped every dependency rebuild (≈ 23 s saved), but T236's `dunnage` pass then compressed the cloned files (≈ 215 s). Parked as I-99, with no follow-up task. Part (1), the hook payloads from `claude --worktree`, a sub-agent worktree and the desktop app, is still open: it needs live sessions of the creator's.
+Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured. Cold `just check` took 185 s and +6.28 GiB; seeded took 371 s and +3.35 GiB. The clone skipped every dependency rebuild (≈ 23 s saved), but T236's `dunnage` pass then compressed the cloned files (≈ 215 s). Parked as I-99, with no follow-up task. Lead (unmeasured, 2026-10-08): the installed `dunnage` 0.1.0 has its own `seed` and `worktree add` subcommands (`dunnage --help`), so seeding may not need `reflink-copy`. Part (1), the hook payloads from `claude --worktree`, a sub-agent worktree and the desktop app, is still open: it needs live sessions of the creator's.
 
 Check: `research.md` §18 gains the hook payloads and a dated table (cold vs seeded: seconds, bytes); T159's card is corrected against the recorded payloads; seeding gets a follow-up task or an `ideas.md` entry from the numbers; no file under `src/` changes.
 
@@ -844,13 +814,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback the backend component reads 0.6; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
-
-T329 §6 (second half): `dead` over the scope (a symbol in B used only from A is not dead while A links B, still reported per project), `affected` reading `git diff` in every git project of the scope, caps and token budgets applied to the whole answer, `watch` updating every project in the scope. Depends on T329.4.
-
-Check: `dead` over A's scope spares B's function only A calls, selecting B alone reports it; `affected` maps per project; an MCP reply stays under the cap with three linked projects; an edit in C updates its index under `watch`; `just check`.
-
-
 ### T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
 
 T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's strict behaviour. Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 (default backend decision) must be answered first. Depends on T329.4.
@@ -1083,12 +1046,6 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - Permission-denied and timeout folders are reported, not fatal; exit code 1 when anything planned was not removed.
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
-
-### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
-
-Part of T330. `clear` takes the same scan as `list`, filters it (`--agent` repeatable, `--kind`, `--include review`, `--older-than`), re-checks every item before deleting (still there, not open, not a symlink out, not modified in the last minute), skips a running agent's temp/locks/swap/index, clears `explicit` kinds only when named with `--kind` and paths without D36 evidence never, supports `--trash`, prints the planned and freed bytes per agent and kind, and exits 1 when something planned was not removed. `agents junk clear` with no flags and `--agent rtok` keep T182's behaviour (the existing tests stay green). Depends on T330.3 and the investigations T340/T344.
-
-Check: dry run changes no file (tree hash), `--yes` removes exactly the planned safe items, lockfiles/settings/`rtok.db` untouched, a changed item is skipped; `just check`.
 
 ### T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 
@@ -1330,143 +1287,6 @@ Check: graph tests for both refused roots and an accepted project root; a store 
 
 Execution plan (after T352 lands — it adds `drop_vanished_symbol_roots` to retention): reuse `plugins::read::walk_root_ok` (T263: refuses `/` and the home directory for the watcher) in the graph's root choice (`src/plugins/graph/mod.rs`, the `current_dir()` call sites) and return `no project: pass path or open a project (roots)`; extend T352's root drop so a root that fails `walk_root_ok` is dropped like a vanished one. Tests: graph refuses home and `/`, accepts a temp project; retention drops a home-root row.
 
-### T358. `rtok agents usage`: tokens and estimated cost across every coding agent
-
-Ivan, 2026-10-02: one terminal screen with token usage and estimated cost across all coding agents, modelled on `npx ccusage` (screenshot: [`docs/assets/t358-agents-usage-ccusage.png`](docs/assets/t358-agents-usage-ccusage.png)). Two data sources: what the agents themselves logged on disk, and what rtok recorded passing through it. No product code in this card: it is the spec; split when claiming (below).
-
-Today, nothing answers "how much did all my agents spend": `rtok stats` reads Claude Code transcripts (`[stats] transcripts_dir`) and Codex sessions (`measure::codex`, T49.2) as two `api` rows over a `--since` window, and `rtok stats --price` (T49.1) prices only the proxy `usage` rows by model; there is no per-agent, per-day or per-month view, no other host's logs, and no count of unpriced models outside that table. `rtok agents sessions` (T25.2) shows tokens per live session of this project, not totals. `rtok report` (D24) renders the operator model and has no usage-by-agent section.
-
-#### What the screen shows (default text output)
-
-Illustrative: the numbers are the screenshot's, not a measurement.
-
-```text
-$ rtok agents usage
-rtok agents usage — logs from 8 agents, through 2026-10-02 (Europe/Kyiv)
-
-  63.76B tokens
-  $52,020.90 estimated cost
-  10,137 sessions
-  220 daily rows
-
-! Cost is incomplete: 15 models have no price in [stats.prices], so their tokens are not in
-  the estimate. `rtok agents usage --unpriced` lists them.
-
-Agent               Tokens   Estimated cost
-Droid               26.52B       $30,571.46
-Codex               24.21B       $13,249.69
-Claude Code         12.69B        $7,978.15
-OpenCode           155.45M          $142.04
-GitHub Copilot CLI 121.49M           $63.69
-Gemini CLI          20.04M            $8.97
-Grok                43.43M            $6.90
-ZCode                22.1K            $0.00
-
-Monthly totals
-Month               Tokens   Estimated cost
-Feb 2026             2.56B          $888.02
-Mar 2026             9.88B        $4,682.41
-...
-```
-
-1. **Header:** the source (`logs from N agents`, `through rtok`, or both), the last day covered and the time zone used for day and month boundaries.
-2. **Summary lines:** total tokens; estimated cost (USD); sessions (distinct session ids across agents); daily rows (distinct `(agent, day)` pairs with usage, the same count ccusage calls "daily rows").
-3. **Unpriced warning:** printed only when at least one model has no price: the number of such models (as in the screenshot's "no pricing for 15 models"), never a guessed price. `--unpriced` prints the model ids with their agent and tokens.
-4. **Per-agent table:** agent (display name), tokens, estimated cost; sorted by cost descending, then tokens. An agent whose every model is unpriced shows `-` for cost, not `$0.00`; `$0.00` means priced and free or rounded.
-5. **Monthly totals:** month, tokens, estimated cost, oldest first. `--daily` swaps it for day rows (`2026-10-02`), `--monthly` is the default view; `--by agent` (default) and `--by model` change the grouping of the middle table.
-
-Numbers use the same short units in text (`22.1K`, `155.45M`, `26.52B`, decimal SI, two decimals above 1K) and exact integers in JSON. Tokens = input + cache write + cache read + output (+ reasoning where the host logs it separately); the four legs stay separate in JSON.
-
-#### Two modes
-
-`--source logs|rtok|both` (config `[agents.usage] source`, default `logs`).
-
-1. **`logs` — the agents' own records (like ccusage).** Read each host's local session files on the fly; never written to the store, so a re-read is idempotent (the T49.2 rule). One reader per host in `src/measure/usage/<host>.rs`, all returning one row type `(host, session, model, ts, input, cache_write, cache_read, output, reasoning)`. Claude Code reuses `measure::jsonl` (`message.usage`, dedup by message id + request id, as `stats::collect` already does) and Codex reuses `measure::codex` (`last_token_usage` per `token_count` line). The others start from ccusage's documented locations (https://ccusage.com/guide/, fetched 2026-10-02) and each is verified against the host's own files before it lands:
-
-   | Host | Default location (env override) |
-   | --- | --- |
-   | Claude Code | `~/.claude/projects/`, `~/.config/claude/projects/` (`CLAUDE_CONFIG_DIR`) |
-   | Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` (`CODEX_HOME`); `sessions/` wins over an archived copy |
-   | Droid | `~/.factory/sessions` (`DROID_SESSIONS_DIR`) |
-   | OpenCode | `${XDG_DATA_HOME:-~/.local/share}/opencode` (`OPENCODE_DATA_DIR`) |
-   | Kilo | `~/.local/share/kilo` (`KILO_DATA_DIR`) |
-   | Copilot CLI | `~/.copilot/session-state/*/events.jsonl`, `~/.copilot/otel/**/*.jsonl` (`COPILOT_HOME`) |
-   | Gemini CLI | `~/.gemini/tmp` (`GEMINI_DATA_DIR`) |
-   | Grok | `~/.grok` (`GROK_HOME`) |
-   | ZCode | `~/.zcode` (`ZCODE_HOME`) |
-   | Kimi | `~/.kimi`, `~/.kimi-code` (`KIMI_DATA_DIR`) |
-   | pi | `~/.pi/agent/sessions` (`PI_AGENT_DIR`) |
-   | Antigravity | `~/.gemini/antigravity*`, `~/.config/antigravity` (`ANTIGRAVITY_DATA_DIR`) |
-
-   Every path is also a config key (`[agents.usage.dirs] <host> = [...]`, D12); an env override wins over the default and loses to the config file, like every other key. A host whose files are missing is skipped silently; a host whose files exist but cannot be parsed is named once on stderr (`skipped grok: unknown format in ~/.grok/...`) and counts nowhere. The `measure::codex` header (2026-09-17) says OpenCode's `opencode.db` and Copilot CLI's `data.db` carry no token counts: the readers use the files ccusage reads (OpenCode's message storage, Copilot's `events.jsonl`/OTel export), and if a host really has no counts it is listed as `unsupported`, never estimated. Hosts outside `agents::HOSTS` (Droid) still get a reader: this is about usage on the machine, not about what rtok installs into. D6 holds: rtok reads the files itself; it never spawns or imports ccusage or any other tool.
-
-2. **`rtok` — what passed through rtok.** Read only the store: proxy `usage` rows (input, cache write, cache read, output, model, `api`) grouped by host through `usage.session → sessions.host_id` (rows with no session host go under `unattributed (<api>)`), plus the `measurements` ledger for what rtok removed (`est_before - est_after`, `expand` counted as a cost, as `ReportSavings::saved` does, T207). Two extra columns, **saved tokens** and **saved estimate** (saved tokens priced at that host's input price, labelled as an estimate), and one extra summary line: `rtok saved 1.23B tokens (≈ $812.40)`. Uses the existing reads (`Store::usage_by_model`, `measurement_totals`); new reads go through Diesel, grouped in SQL (no raw SQL, no second recorder, D19).
-
-3. **`both`:** the per-agent table gets `logs tokens`, `through rtok`, and `coverage` (through rtok ÷ logs), so it is visible which agents bypass the proxy. Costs come from the logs side; saved columns from the rtok side.
-
-#### Flags (each one a config key under `[agents.usage]`, D12)
-
-| Flag | Key | Default | Meaning |
-| --- | --- | --- | --- |
-| `--source logs\|rtok\|both` | `source` | `logs` | Data source, above. |
-| `--host <ids>` | `hosts` | all | Comma-separated host ids (`claude,codex,droid`); unknown ids are an error listing the known ones. Named `--host` like `agents info <host>`; if T348 settles on `--agent` for hosts, this follows. |
-| `--since <date\|dur>` / `--until <date>` | `since`, `until` | all time | `2026-09-01` or a duration (`30d`, `24h`, `stats::parse_since`); dates are whole days in `--tz`. |
-| `--daily` / `--monthly` | `period` | `monthly` | Bottom table: day rows or month rows. |
-| `--by agent\|model` | `by` | `agent` | Middle table grouping. |
-| `--tz <IANA>` | `tz` | system zone | Time zone for day/month boundaries and the header. |
-| `--unpriced` | — | off | List models without a price instead of the tables. |
-| `--json` | — | off | One JSON document, below. |
-
-#### Models without a price
-
-Prices come only from `[stats.prices."<model>"]` (T49.1); nothing is fetched from the network and nothing is guessed. Model ids are normalised before lookup (provider prefix such as `anthropic/` or `openai/` stripped, a trailing date suffix such as `-20260901` dropped) and the raw id is kept in JSON. A model with no row: its tokens count in every token total, its cost is `null`, it is counted once per model id in `unpriced_models`, and the warning line names the count (the tokens left out are in `--unpriced` and JSON). Extending the shipped price table (or importing one) is a separate decision, not this task.
-
-#### Time zone
-
-Usage timestamps are stored and emitted in UTC (unix seconds and RFC 3339 `Z` in JSON). Day and month buckets are cut in `--tz` (default: the system zone; `TZ` respected), DST-aware, so a session that crosses midnight splits by each request's own timestamp. The header and JSON `tz` field name the zone used. Parsing IANA zones needs a time-zone crate (`jiff`, one-line reason in `Cargo.toml`: IANA zones with DST for day/month buckets); `chrono`/`time` are not in the tree today.
-
-#### `--json`
-
-```json
-{
-  "source": "logs",
-  "tz": "Europe/Kyiv",
-  "through": "2026-10-02",
-  "totals": {"tokens": 63760000000, "input": 0, "cache_write": 0, "cache_read": 0,
-             "output": 0, "cost_usd": 52020.90, "sessions": 10137, "daily_rows": 220},
-  "unpriced_models": 15,
-  "unpriced": [{"model": "<model id>", "host": "zcode", "tokens": 22100}],
-  "agents": [{"host": "droid", "name": "Droid", "tokens": 26520000000, "cost_usd": 30571.46}],
-  "periods": [{"period": "2026-02", "tokens": 2560000000, "cost_usd": 888.02}],
-  "skipped": [{"host": "grok", "reason": "unknown format", "path": "~/.grok/..."}]
-}
-```
-
-With `--source rtok|both` each agent and the totals also carry `saved_tokens` and `saved_usd`, and `both` adds `through_rtok_tokens` and `coverage`. Field names are stable; a golden test pins them.
-
-#### Relationship to existing commands
-
-- `rtok agents list` / `info` say what is installed; `rtok agents sessions` says what is running now in this project; `rtok agents usage` says what has been spent, over time, on the whole machine. No overlap in rows.
-- `rtok stats` stays the measurement report (D3) and keeps its `api`/`--price` sections; `agents usage` reuses its readers (`measure::jsonl`, `measure::codex`), `row_cost` and `[stats.prices]` instead of copying them (no duplicated logic). `stats --price` keeps working unchanged.
-- D23/D27: the same rows become a Usage page on `rtok web` and `rtok tui` (T358.5), built from one model function both surfaces and the CLI call.
-
-#### Split when claiming (≤300 LOC, ≤10 files each)
-
-- **T358.1** `--source rtok`: CLI skeleton, `[agents.usage]` config section, store reads by host/day/month, summary + both tables + `--json`, unpriced count, `--tz`.
-- **T358.2** `--source logs` for Claude Code and Codex, reusing `measure::jsonl`/`measure::codex`; `--source both`.
-- **T358.3** Readers for Droid, OpenCode, Kilo, Copilot CLI, Gemini CLI (one per PR if over budget), each verified on real files and pinned by a fixture.
-- **T358.4** Readers for Grok, ZCode, Kimi, pi, Antigravity; `unsupported` hosts listed in `docs/agents.md`.
-- **T358.5** The Usage page on `rtok web` and `rtok tui` (D23/D27).
-
-Check: every item below passes.
-
-- Fixture homes per host (no real agents in tests): a fixed set of session files gives exact totals, per-agent and per-month numbers in text and JSON goldens (`trycmd`); re-running gives the same output.
-- Unpriced: a fixture with one priced and two unpriced models prints the warning with `2 models`, costs only the priced one, and `--unpriced` lists the two.
-- Time zone: one request at 23:30 UTC on 2026-09-30 lands in October with `--tz Europe/Kyiv` and in September with `--tz UTC`; a DST change day buckets correctly.
-- `--source rtok` on a store fixture matches `rtok stats --price` totals for the same rows; `both` coverage is through-rtok ÷ logs.
-- `rtok config validate` accepts every new key; each has its `default.toml` row and `docs/config.md` row; `just check` green.
-- The screenshot's layout (summary, warning, per-agent table, monthly totals) is what `rtok agents usage` prints for the fixture.
-
 ### T369.1. Measure grep_symbol follow-up rate after an opt-in window
 
 Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of follow-up Grep/Read on the same name within 3 calls (`guard/grep_symbol` rows against the transcripts). At most 25 % means propose default-on to the creator; above it, keep the flag opt-in and record why. Also re-measure the PreToolUse hook p95 on an idle machine (`cargo test --release --test latency -- --test-threads=1`; the flag-on test is `latency_hook_grep_symbol_answer_p95_under_10ms`); on 2026-10-06 the load average was 46 and even the baseline run failed the 10 ms gate. Record the result as a dated row in `research.md` §29.5.
@@ -1492,26 +1312,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
-### T374. Memory notes linked to files: recall boosted by the files in play
-
-From the Empryo study (idea-only, clean-room; Empryo memory DB file links and recall boosting). P29 recall matches on the prompt text only; a note about `src/proxy/semantic_cache.rs` is not preferred when the session is editing that file. Low priority while the store holds few notes (18 on the creator's machine, 2026-10-02).
-
-Plan: new `note_files (note_id, path)` table (migration); filled at `mem_save` (`src/plugins/memory/mod.rs:266`) from paths found in the note body that exist under the root, and from the current checkpoint's paths. In `prompt_recall` (`memory/mod.rs:163`), add a third ranked list — notes linked to files read this session (`read_cache`) or named in the prompt — to the RRF merge (`src/store/embed.rs:198`, after T373).
-
-Done when: a note linked to a file the session has read ranks above an equally text-matching unlinked note.
-
-Check: new cases in `tests/fixtures/p29_memory.toml` with file context; recall@5 on the file-context cases ≥ 0.6 and no drop on the existing cases; `just check`.
-
-### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
-
-From the Empryo study (idea-only, clean-room; Empryo `compaction/working-state.ts`, `extractor.ts`: a deterministic working state built from tool calls, not from an LLM). `Checkpoint` (`src/plugins/checkpoint.rs:11`) records paths without what happened to them, so after compact the agent re-reads files it only looked at and may miss the ones it changed.
-
-Plan: extend the checkpoint's path list to `(path, action, last_line_range)` from PostToolUse events (Read → read, Edit/MultiEdit → edited, Write on a new path → created, `rm`/`git rm` in Bash → deleted); render edited/created first. Backward-compatible decode of old rows (missing action = read).
-
-Done when: after a session that reads A and edits B, the checkpoint lists `B (edited)` before `A (read)`.
-
-Check: unit tests for the event → action mapping and old-row decode; the checkpoint rendering snapshot (`insta`) updated; `just check`.
-
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
 From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
@@ -1531,21 +1331,6 @@ Plan: per-root trigram posting lists (`file_id` bitmaps, `roaring` only with a `
 Done when: a literal `search` on a 50k-file repo scans only candidate files and returns the same hits.
 
 Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
-
-### T382. Installed plugin version in `rtok agents list` and on the web Hosts page
-
-Ivan, 2026-10-04: `rtok agents list` and `rtok web` `#/hosts` must show which version of the rtok plugin each host has installed. Today the `plugin` row says only `✓ plugin  installed`, so a stale plugin (older than the binary) is invisible without opening the host's own records (for Claude `~/.claude/plugins/installed_plugins.json`: `version`, `installPath`, `gitCommitSha`).
-
-Depends on T279: it defines where the installed version comes from (the installed copy's `.rtok-plugin-version`, then the install receipt, then the host record). Reuse that lookup; do not add a second one.
-
-Done means:
-
-- `agents::list`: the `plugin` row of every host that has a plugin carries the installed version and its source, e.g. `✓ plugin  installed 0.15.1 (marketplace)`. When the version differs from the running binary it says so: `installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude`. An install with no version anywhere shows `installed (legacy, no version)`, matching T279's `agents info` wording. Hosts with `− plugin not supported` are unchanged.
-- `rtok agents list --json` gains `plugin_version` and `plugin_source` fields; absent rather than empty when unknown.
-- Web: the Hosts page reads `agents::list` verbatim (`hosts_page_text` in `src/web/model.rs`), so the version arrives with the text; `parseHosts` in `web/src/pages/text.ts` keeps it in the module row's state and `Hosts.tsx` shows it, with the outdated case visibly marked. The TUI Hosts page shows the same text.
-- Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
-
-Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
@@ -1570,47 +1355,17 @@ Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id ord
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
 
-### T385.2. Per-lane policy table
-
-optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
-
-Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
-
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
 Check: one dated `research.md` row per setting.
 
-### T385.4. Batch observe and `parse_results` into `usage`
-
-optimization.md §2.2 L3 (roadmap S2/S3). Tag Batch create/poll/list/cancel/results calls on the `batch` lane; with `parse_results = true`, parse result lines into `usage` rows. Fail open on malformed lines.
-
-Check: fixture result streams (Anthropic and OpenAI) produce the expected `usage` rows; a malformed line is skipped, not fatal; `just check`.
-
-### T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
-
-optimization.md §2.2 L4 (roadmap S4). Inject `service_tier = "flex"` only on `bulk`/`internal` (never silently on `agent`), OpenAI only (Anthropic has no Flex tier). On `429 Resource Unavailable`: retry policy `none` / `backoff` / `default` (retry with `service_tier = "auto"`). Cite the OpenAI Flex docs with the date checked.
-
-Check: mock upstream — omit/force/respect matrix and each 429 policy; `just check`.
-
-### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
-
-optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
-
-Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
-
 ### T385.7. Per-lane upstream and in-flight cap
 
 optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
 
 Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
-
-### T385.8. P28 Phase 1: measure what LLM compression could save
-
-optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
-
-Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
@@ -1636,28 +1391,6 @@ optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through 
 
 Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
 
-### T385.13. Measure cross-session read duplication
-
-optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
-
-Check: the dated `research.md` row.
-
-### T391. Junk map: the five missing hosts and VS Code `CachedData`
-
-From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
-
-Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
-
-Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
-
-### T393. `doctor` shows the saving a 120-character skill description cap would give
-
-From `research.md` §10.4: descriptions over 120 characters cost about 1.3 K tokens per request for 66 skills. `doctor` flags only `desc > 200` and `body > 8192` (`skill_row` in `src/doctor.rs`) and prints no saving.
-
-Done means: the skills section adds one line, "descriptions over 120 chars: N skills, ≈ X tokens/request recoverable", using the same token estimate as the rest of the audit; the per-row flag threshold matches the 120-character guidance rtok's own skills follow. Advice only.
-
-Check: a doctor fixture with one long and one short description shows the line; `just check`.
-
 ### T394. Run the paid live benches and record them
 
 From `research.md` §3 (coaching nudges A/B) and §2 (A/B bench T9.2, `graph` T68.9): every live arm is unrun ("No live token, cache, or USD rows … the gate is do not enable"; T68.9 "Live API clause remains open"). Gate P9 and P8b clause 4 stay open until they run. Needs the creator's session and API spend: an agent sandbox cannot run them (OAuth expired).
@@ -1682,18 +1415,6 @@ Done means: each reader runs once on a real file from a machine with that host; 
 
 Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
-### T397. Re-measure numbers that shipped fixes made stale
-
-From `research.md` §2 and §19, three numbers predate the fix they describe:
-
-- Graph cold index: T59.3 (200 files per transaction) required a re-run next to the old 172 ms for 3,000 files and a revert if slower; §2 still carries the placeholder.
-- The T241 `replay_bench` row: it says the `cmd` trailer "is not counted" (fixed by T247) and that `search` "records no row" (changed by T300).
-- Hook cancellations: §19.4 and §19.6 found ten cancelled rtok hooks before T178 and validated the lock-wait fix only synthetically.
-
-Done means: each is re-run on current `main` (`cargo test --release --test graph_bench -- --ignored`, `replay_bench`, the §19.1 jq query over a post-T178 window) and the dated result replaces the stale text; T59.3's batch size is kept or reverted on its number.
-
-Check: three dated rows in `research.md`.
-
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
 From `research.md` §18.2 (T157): every non-interactive reader opens a relative-link worktree, but VS Code, Zed, Cursor and lazygit are untested, so the setting stays opt-in. It is the setting that would have prevented the 18 GB orphaned `graph-perf` worktree.
@@ -1701,55 +1422,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T399. Re-check host docs for three open host questions
-
-From `research.md`:
-
-- §10.6: which hosts besides Claude Code and Cursor honour `disable-model-invocation` in a skill (OpenCode, Copilot, Gemini, Codex are "not documented"); `doctor`'s skill advice relies on it.
-- §23: Grok and Antigravity subagent-start hooks rest on missing docs; re-read for an output schema or an `invoke_subagent` hook.
-- §26: Devin, Command Code and Cline are "unverified; probe pending" for hook ancestry but are not in T281's host list; and on Windows only the cwd rule applies (`rtok-sys` returns no ancestors), which no doc records.
-
-Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
-
-Check: dated sources in §10.1, §23 and §26.
-
-### T400. Fix stale and broken statements in `research.md` and related docs
-
-The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
-
-- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
-- §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
-- §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
-- §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
-- §22–§28: T283.3 shipped (line "Not shipped yet: (b)"); T330.1 no longer "PR #651, open"; host counts (22, not 17 or 21; plain host names, not autolinked URLs).
-- `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
-
-Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
-
-### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
-
-Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
-
-Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
-
-Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
-
-### T402. Measure how much tool output a structured schema would shrink
-
-Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. No number says how much tool output is prose a schema could replace.
-
-Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
-
-Check: the dated §16 row; the build task filed or the card closed with its number.
-
-### T403. A/B a path and identifier dictionary in proxy requests
-
-Promoted from I-110 (Ivan, 2026-10-04). From `research.md` §16.3 #8: repeated long paths and identifiers could be replaced with short codes plus one legend per request. It may cost answer quality and must not break the prompt cache.
-
-Done means: first measure, from stored requests, how many bytes repeated paths and identifiers take (§16 row). If above 1 % of input, build it behind a proxy flag (off by default) with a byte-stable legend (cache-safe) and run an A/B on the bench set with a pass-rate gate; the flag turns on only if pass rate holds and tokens fall.
-
-Check: the dated measurement row; if built, the A/B row and a byte-stability test for the legend.
 
 ### T404. Evaluate a local draft model that the cloud model only verifies
 
@@ -1923,53 +1595,6 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
-### T414.8. Sidebar groups and a collapsible sidebar
-
-The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
-
-Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
-
-### T414.10. Table filters and sort in the URL
-
-Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
-
-Check: unit tests for search-param parsing (bad values fall back to defaults); e2e opens a filtered URL and sees the filtered rows.
-
-### T414.11. Clickable KPIs and panels open the filtered page
-
-Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
-
-Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
-
-### T414.12. Live status: snapshot age and pause
-
-The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
-
-Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
-
-### T414.13. Δtok savings trend on Overview and Stats
-
-A time series of `Measurement` savings (est before − after per bucket), total and per plugin, added to the snapshot by the Rust model next to `Stats` and drawn on Overview and Stats. Buckets come from the existing aggregation helper; no second aggregation path. No `Measurement` rows → an empty state, never a zero line that reads as a claim.
-
-Check: Rust test for the bucketed series against fixture rows; regenerated `web/src/api/snapshot.gen.ts` committed; story with sample data and with no rows.
-
-### T414.14. CSV and JSON export of tables
-
-An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
-
-Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
-
-### T414.16. Linked hover across charts and live values elsewhere
-
-Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
-
-Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
-
-### T433. Save hook session fields once instead of in every hook body
-
-Every saved hook stdin repeats the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Done when they are stored once per distinct value set in their own table referenced from the call, the saved body keeps only the event's own fields, and the full stdin can be rebuilt for readers (OTel, web). `[core] store_raw = true` keeps the full body. Design (table, migration, readers) is written into this card before code.
-
-Check: a store test saves two hook calls of one session and reads back both full bodies from one session row.
 
 ### T416. Shared `change-preview` crate for dry-run output
 
@@ -2024,39 +1649,17 @@ Execution plan:
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
-### T436. Operation icons and a spinner on every wait, the way ketch draws them
+### T436.2. Spinners on the remaining waits and icons on `agents install/update`
 
-Creator request 2026-10-07: a loader spinner on every operation where the user waits, and icons like ketch's.
+Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
 
-Today `src/ui/style.rs` marks a line only by what it means (`Kind`: ✅ success, 💡 info, ⚠️ warning, ❌ error). ketch (`apps/ketch/src/ui.rs`, `OPERATION_ICONS` and `icon()`) first looks up the verb of the line: install 📦, uninstall/remove/prune 🧹, upgrade/update ⏫, download/fetch ⏬, link 🔗, roll back ⏪, search 🔍, doctor 🩺; only then falls back to the tone icon. Work in progress has no icon; each icon is measured with `unicode-width` and padded to one column count so verbs line up even where a terminal ignores U+FE0F.
+Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
 
-Done means:
+### T436.3. Shared operation-icon crate for rtok and ketch
 
-1. Operation icons: `style.rs` gets a verb → icon table on ketch's model (substring match in order, `uninstall` before `install`), extended with rtok's own verbs (index, worktree add/remove, compress/expand, bench, proxy start). A line takes its operation's icon when the verb names one, else its `Kind` icon. Every rtok status line that names an operation goes through it; no command picks its own emoji.
-2. Alignment: icons are padded to a fixed measured width, as in ketch, so the text after the icon starts in the same column for every icon.
-3. Spinner on every wait: T276 owns external commands (`ProgressRunner`); this task covers the waits it does not — rtok's own slow work (network fetches, store migrations, index rebuilds, large reads) — with the same runner or helper, no second spinner implementation. When the wait ends the spinner is replaced by the finished line with its operation icon.
-4. Same rules as today: icons need `[ui] emoji` and a terminal on that stream; spinners draw nothing when stderr is not a TTY; hook output, MCP JSON, `--json` and piped output stay byte-for-byte unchanged.
-5. Reuse first: if the icon table and width padding are the same code in ketch and rtok, extract them into a shared crate in `packages/` and use it from both (workspace rule); otherwise say in the PR why not.
+Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
 
-Depends on T276 for the spinner runner.
-
-Check: snapshot tests for the icon of each verb and the fallback to `Kind`; a width test that every icon pads to the same column; a non-TTY test that no icon and no spinner bytes reach a pipe; manual run of `rtok agents install`, `rtok worktree add`, `rtok graph index` in a terminal shows the spinner during the wait and the icon on the result; `just check`.
-
-### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
-
-Creator request 2026-10-07: the same as T436, in the `rtok web` SPA.
-
-Today only page loads show a spinner (`Loading` in `web/src/states.tsx`, T407). Actions that call the API show nothing while they wait: the plugin switch (`pages/Plugins.tsx`, `useSetMutation`), project select and link (`pages/Projects.tsx`, `pages/graph3d/ProjectsOverview.tsx`, `useProjectMutation`), and doctor plan/apply (`pages/DoctorFix.tsx`) and expand (`pages/Calls.tsx`), which only disable their buttons.
-
-Done means:
-
-1. One `Spinner` in `web/src/ui`, with a story; `Loading` draws its ring through it, so there is one spinner in the SPA.
-2. Every control that sends a request shows the spinner on itself from the click until the answer, is disabled meanwhile and sets `aria-busy`. A switch stays in its old position until the server answers; on error it stays there and the error is shown.
-3. Operation icons: a verb → icon map in `web/src/ui` with the same operations as ketch's `OPERATION_ICONS` (install, remove/prune, update, fetch, link, roll back, search, doctor) plus rtok's own from T436, falling back to the success/warning/error/info icon. The web draws them as brand SVG icons through `Icon`, not emoji; missing ones are added under `brand/icons/ui/` (source rule of T414: no copies in `web/`). Action buttons and the result of an action carry their operation's icon.
-4. One list of operations: the web map and the CLI table of T436 name the same operations, checked by a test.
-5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
-
-Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
+Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
 
 ## Reference
 

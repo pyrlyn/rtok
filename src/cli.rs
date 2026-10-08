@@ -15,6 +15,7 @@ use crate::config::Config;
 use crate::config::layers;
 use crate::config::validate;
 use crate::demon::Service;
+use crate::render::with_loader;
 use crate::ui::style;
 use crate::web::model;
 use anyhow::{Result, bail};
@@ -67,6 +68,11 @@ enum Cmd {
         /// the process can find its rtok agent
         #[arg(long, value_name = "HOST")]
         host: Option<String>,
+        // T401
+        /// Serve over Streamable HTTP at `IP:PORT` (default `[mcp] http`) instead of stdio; the
+        /// bearer token comes from `[mcp] token` or `RTOK_MCP_TOKEN`
+        #[arg(long, value_name = "ADDR", num_args = 0..=1, conflicts_with_all = ["call", "json"])]
+        http: Option<Option<String>>,
         /// Foreign stdio MCP server to wrap losslessly (`rtok mcp -- npx some-server`)
         #[arg(last = true)]
         wrap: Vec<String>,
@@ -949,7 +955,7 @@ enum AgentCmd {
         #[arg(long)]
         json: bool,
     },
-    /// Junk and agent folders: `list` shows rtok's and every installed host's folders with sizes, `clear` removes rtok's own junk
+    /// Junk and agent folders: `list` shows rtok's and every installed host's folders with sizes, `clear` removes rtok's own junk or, filtered, any agent's
     Junk {
         #[command(subcommand)]
         action: JunkCmd,
@@ -1015,6 +1021,9 @@ enum JunkCmd {
         all: bool,
     },
     /// List what `agents junk clear` would remove; `--yes` applies it
+    ///
+    /// Without `--agent`, `--kind`, `--include` or `--older-than` (or with `--agent rtok`
+    /// alone) only rtok's own logs and archives: other agents' junk needs a filter.
     Clear {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
@@ -1022,6 +1031,21 @@ enum JunkCmd {
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
+        /// Only this agent: `rtok` or a host id (repeatable)
+        #[arg(long = "agent", value_name = "AGENT", value_parser = crate::agents::junk_clear::agent_arg)]
+        agents: Vec<String>,
+        /// Only this junk kind (repeatable)
+        #[arg(long = "kind", value_name = "KIND", value_parser = clap::builder::PossibleValuesParser::new(crate::agents::junk_clear::KINDS))]
+        kinds: Vec<String>,
+        /// Also the review kinds
+        #[arg(long, value_name = "CLASS", value_parser = ["review"])]
+        include: Option<String>,
+        /// Only items not modified for this long (`7d`, `12h`)
+        #[arg(long, value_name = "AGE", value_parser = humantime::parse_duration)]
+        older_than: Option<std::time::Duration>,
+        /// Move to the OS trash instead of deleting
+        #[arg(long)]
+        trash: bool,
     },
 }
 
@@ -1436,7 +1460,10 @@ pub fn run() -> Result<()> {
                 config_file.as_deref(),
                 bench_flags(tasks, runs, dry_run, timeout, suite),
             )?;
-            print!("{}", crate::bench::run(&cfg)?);
+            print!(
+                "{}",
+                with_loader("running bench", || crate::bench::run(&cfg))?
+            );
         }
         Cmd::Doctor {
             instructions,
@@ -1507,15 +1534,17 @@ pub fn run() -> Result<()> {
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
             let cwd = std::env::current_dir()?;
             let root = &cfg.worktree.root;
-            let plan = claim::add(
-                store.as_ref(),
-                &cwd,
-                root,
-                id,
-                agent.as_ref(),
-                owner,
-                cfg.plugins.graph.auto_add_projects,
-            )?;
+            let plan = with_loader("adding worktree", || {
+                claim::add(
+                    store.as_ref(),
+                    &cwd,
+                    root,
+                    id,
+                    agent.as_ref(),
+                    owner,
+                    cfg.plugins.graph.auto_add_projects,
+                )
+            })?;
             println!("{}", plan.path.display());
         }
         Cmd::Worktree {
@@ -1588,13 +1617,15 @@ pub fn run() -> Result<()> {
             let store = crate::store::Store::open(&cfg.core.db_path).ok();
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
             let cwd = std::env::current_dir()?;
-            let done = remove::for_agent(
-                store.as_ref(),
-                &cwd,
-                &target,
-                (agent.as_ref(), owner),
-                keep_branch,
-            )?;
+            let done = with_loader("removing worktree", || {
+                remove::for_agent(
+                    store.as_ref(),
+                    &cwd,
+                    &target,
+                    (agent.as_ref(), owner),
+                    keep_branch,
+                )
+            })?;
             if json {
                 print_json(&done)?;
             } else {
@@ -1882,18 +1913,46 @@ pub fn run() -> Result<()> {
                 }
             }
             AgentCmd::Junk {
-                action: JunkCmd::Clear { yes, json },
+                action:
+                    JunkCmd::Clear {
+                        yes,
+                        json,
+                        agents,
+                        kinds,
+                        include,
+                        older_than,
+                        trash,
+                    },
             } => {
                 let cfg = Config::load_with(config_file.as_deref(), None)?;
-                let outcomes = crate::agents::junk::run(&cfg, yes);
-                let failed = outcomes.iter().any(|o| o.failed);
-                if json {
-                    print_json(&outcomes)?;
+                let filter = crate::agents::junk_clear::Filter {
+                    agents,
+                    kinds,
+                    include_review: include.is_some(),
+                    older_than,
+                    trash,
+                };
+                if !filter.is_t182() || trash {
+                    let cleared = crate::agents::junk_clear::run(&cfg, &filter, yes)?;
+                    if json {
+                        print_json(&cleared)?;
+                    } else {
+                        print!("{}", crate::agents::junk_clear::to_text(&cleared));
+                    }
+                    if cleared.failed() {
+                        bail!("some junk could not be removed");
+                    }
                 } else {
-                    print!("{}", crate::agents::junk::to_table(&outcomes, yes));
-                }
-                if failed {
-                    bail!("some junk could not be removed");
+                    let outcomes = crate::agents::junk::run(&cfg, yes);
+                    let failed = outcomes.iter().any(|o| o.failed);
+                    if json {
+                        print_json(&outcomes)?;
+                    } else {
+                        print!("{}", crate::agents::junk::to_table(&outcomes, yes));
+                    }
+                    if failed {
+                        bail!("some junk could not be removed");
+                    }
                 }
             }
             AgentCmd::Whoami { json } => {
@@ -1984,9 +2043,19 @@ pub fn run() -> Result<()> {
             call,
             json,
             host,
+            http,
             wrap,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), hook_host_flag(host))?;
+            if let Some(addr) = http {
+                if action.is_some() || !wrap.is_empty() {
+                    bail!(
+                        "rtok mcp --http serves rtok's own tools; it takes no subcommand or `--`"
+                    );
+                }
+                let addr = addr.unwrap_or_else(|| cfg.mcp.http.clone());
+                return crate::mcp::http::serve_blocking(&cfg, &addr);
+            }
             if let Some(McpCmd::Ping {
                 agent,
                 cli,
@@ -2201,7 +2270,7 @@ pub fn run() -> Result<()> {
                         r.include_added,
                         r.extension_mapped,
                     );
-                    println!("{}", style::success(&summary));
+                    println!("{}", style::success_op("index", &summary));
                     if !dry_run {
                         crate::plugins::graph::follow::report(&cx, &root);
                     }
@@ -2211,14 +2280,18 @@ pub fn run() -> Result<()> {
                     project,
                     json,
                 } => {
-                    let root =
-                        crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
+                    // T329.5: the project asked for (else `path`, else the cwd) and what it links to.
+                    let root = crate::plugins::graph::cli_root(path)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.project.as_deref(),
+                        &root,
+                    )?;
                     let ctx = crate::plugin::Ctx::new(&cx);
                     if json {
-                        let rows = crate::plugins::graph::dead_rows(&ctx, &root)?;
-                        println!("{}", serde_json::to_string_pretty(&rows)?);
+                        println!("{}", crate::plugins::graph::scope::dead_json(&ctx, &scope)?);
                     } else {
-                        print!("{}", crate::plugins::graph::dead(&ctx, &root)?);
+                        print!("{}", crate::plugins::graph::scope::dead(&ctx, &scope)?);
                     }
                 }
                 GraphCmd::Status {
@@ -2293,12 +2366,17 @@ pub fn run() -> Result<()> {
                     json,
                     project,
                 } => {
-                    let root = crate::plugins::graph::cli_root_for(&cx.store, None, project)?;
+                    let root = crate::plugins::graph::cli_root(None)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.as_deref(),
+                        &root,
+                    )?;
                     print!(
                         "{}",
-                        crate::plugins::graph::affected(
+                        crate::plugins::graph::scope::affected_git(
                             &crate::plugin::Ctx::new(&cx),
-                            &root,
+                            &scope,
                             since.as_deref(),
                             staged,
                             json,
@@ -2570,13 +2648,6 @@ fn bench_flags(
     let mut flags = Dict::new();
     flags.insert("bench".into(), Value::from(bench));
     Some(flags)
-}
-
-fn with_loader<T>(msg: &str, f: impl FnOnce() -> T) -> T {
-    let pb = crate::render::loader(msg);
-    let out = f();
-    pb.finish_and_clear();
-    out
 }
 
 fn parse_hosts(host: &str) -> Result<Vec<String>> {

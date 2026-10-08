@@ -31,7 +31,7 @@ Estimator: 4 chars/token (heuristic). Usage counters are real API numbers.
 | Cache | read 1,367 M, creation 26.7 M, uncached input 42 K → 98.1 % hit rate |
 | Median final context | 167 K tokens per session |
 | rtk-wrapped commands visible in transcripts | 3 of 3,658 (the PreToolUse rewrite happens after the transcript records the call, so this under-counts) |
-| Replay bench: saving over a session mix (T241, 2026-09-24, `cargo test --test replay_bench -- --nocapture`) | `tests/fixtures/replay/session.jsonl`: 30 hand-written events (23 Bash cargo/git/grep/ls/npm/pytest-style + 5 MCP `read` + 2 `search`), tool-mix shares from `rtok stats --since 7d --json` on this machine (129 sessions, 21,046 tool_use calls: Bash 64.7 %, Read 7.3 %; MCP share raised to cover `read`'s `stripped`/`dedup` paths — see the fixture's header comment). Replayed through the real hook/run/mcp surfaces: `cmd` 23 calls, 23,075 → 3,648 est. tokens (**84.2 %**), `read` 5 calls, 2,482 → 1,183 (**52.3 %**), total 25,557 → 4,831 (**81.1 %**) — `tests/replay_bench.rs`'s floor is 76 %. `search` records no row (`src/plugins/read/search.rs` never calls `cx.record`). Caveat: `emit_filtered`'s `[rtok <id> · N lines · expand …]` trailer (`src/plugins/cmd/run.rs`) is not counted in `after_bytes`/`est_after`, so `cmd`'s (and the total's) share is an upper bound until that bug is fixed. Mutation check: disabling `[plugins.cmd]` drops the total to `read`-only 52.3 %, below the floor, confirming the floor is load-bearing. Rerun 2026-09-25 on main (0bb62f4f): `cmd` 23,075 → 3,994 (**82.7 %**), `read` unchanged, total 25,557 → 5,177 (**79.7 %**) — still above the floor. |
+| Replay bench: saving over a session mix (T241, 2026-09-24, `cargo test --test replay_bench -- --nocapture`) | `tests/fixtures/replay/session.jsonl`: 30 hand-written events (23 Bash cargo/git/grep/ls/npm/pytest-style + 5 MCP `read` + 2 `search`), tool-mix shares from `rtok stats --since 7d --json` on this machine (129 sessions, 21,046 tool_use calls: Bash 64.7 %, Read 7.3 %; MCP share raised to cover `read`'s `stripped`/`dedup` paths — see the fixture's header comment). Replayed through the real hook/run/mcp surfaces: `cmd` 23 calls, 23,075 → 3,648 est. tokens (**84.2 %**), `read` 5 calls, 2,482 → 1,183 (**52.3 %**), total 25,557 → 4,831 (**81.1 %**) — `tests/replay_bench.rs`'s floor is 76 %. `search` records no row on these two calls: since T300 (2026-09-28) `search` records a `search_cap` row only when `max_chars` cuts its output, and neither fixture search is cut (was: never called `cx.record`). The first run left `emit_filtered`'s `[rtok <id> · N lines · expand …]` trailer out of `after_bytes`/`est_after`, so `cmd`'s 84.2 % was an upper bound; T247 (`bc33fd13b`, 2026-09-24) counts it, which is the 82.7 % below. Mutation check: disabling `[plugins.cmd]` drops the total to `read`-only 52.3 %, below the floor, confirming the floor is load-bearing. Rerun 2026-09-25 on main (0bb62f4f): `cmd` 23,075 → 3,994 (**82.7 %**), `read` unchanged, total 25,557 → 5,177 (**79.7 %**) — still above the floor. Rerun 2026-10-08 (T397) on `1d6961541`, debug test profile, `RTOK_HOST_SANDBOX=1`, three runs, identical each time: `cmd` 23 calls 23,075 → 3,994 (**82.7 %**), `read` 5 calls 2,482 → 1,183 (**52.3 %**), total 28 calls 25,557 → 5,177 (**79.7 %**); the 2026-09-25 numbers still hold, so nothing after T247 and T300 moved this fixture. |
 
 ### `guard` read-only stems (T57.1, 2026-09-18)
 
@@ -204,7 +204,7 @@ Release build. The 3 000-file repo is generated, each file one function calling 
 | Cold index, 3 000 files / 9 000 rows | 22.1 s | not gated |
 | Warm `symbol` / `callers` / `impact` | 23 / 24 / 26 ms | < 100 ms |
 | Definition recall, precision | 1.000, 1.000 | ≥ 0.9 |
-| Reference recall | 0.351 | published, not gated |
+| Reference recall | 0.351 (2026-09-04; 0.924 on 2026-10-04 after T387, see the T8.8 table above) | published, not gated |
 
 The fourth clause — fewer tool calls per multi-file task on the P9 set — is not measured, so
 the gate is open. `callers("estimate")` on this repo fell from 1 959 bytes at v0.1 to 793.
@@ -255,7 +255,7 @@ Numbers from `cargo test --release --test graph_bench -- --ignored --nocapture`.
 | (1) `tests/graph_contract.rs` | 3 passed | 3 passed | unchanged, both |
 | (2) `rtok hook PostToolUse` p95, n=100 | 8.07 ms | 96.6 ms | ≤ 10 ms |
 | (3) warm `symbol` / `callers` / `impact(2)` | 17.9 / 17.5 / 26.8 ms | 797 / 776 / 873 ms | < 100 ms |
-| (3) cold index, 3 000 files | 13.8 s; 341 ms after T35.1, 172 ms after T35.2 (2026-09-11); **T59.3** batches 200 files/txn (was 64) — re-run `cargo test --release --test graph_bench -- --ignored` when the tree compiles | 33.7 s | not gated |
+| (3) cold index, 3 000 files | 13.8 s; 341 ms after T35.1, 172 ms after T35.2 (2026-09-11). **Re-measured 2026-10-08 (T397)** on `1d6961541`, release, Apple M3 Max, load average 80–200 from other agents' builds: `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers` five times gave 656 / 909 / 911 / 1,130 / 9,177 ms (**median 911 ms**); the same fixture and `index::run` call fifteen times in one process (scratch test, not committed) gave **median 479 ms** (min 301, max 2,226). Slower than 172 ms, but not comparable: the 172 ms run's load was not recorded, and the cold run now also rebuilds the symbol IDF (T368) and refreshes the rank. **T59.3's 200-file batch never shipped**: the code kept a hard-coded 64 (T35.3, `eb92c9dba`; `45c4531` only added a doc comment) until **T451** introduced `SYMBOL_BATCH_FILES`. T451 (2026-10-08, base `60cef680b`, M3 Max 16 cores/64 GB, the same `p8c_numbers` run, 16 interleaved pairs, load average 40-88 from other agents' builds): cold index median 64 files/txn **360 ms**, 200 files/txn **384 ms** (range 207-3544 ms vs 209-1703 ms; the last 10 pairs at load 40-85: 280 ms vs 324 ms; 200 was slower in 9 pairs, faster in 4, 3 within 2 %). The gap is inside the load noise, so 200 stays (fewer transactions); re-measure on an idle machine before tuning further | 33.7 s | not gated |
 | (4) `impact(4)` on fan-out fixture | CTE 28.5 s | path 371 ms (**77×**) | lbug ≥ 2× CTE |
 | (4) same fixture, Rust BFS | 2.61 s | 2.35 s | baseline |
 | (5) `just check` (liblbug already built) | 16.9 s | same command (clippy `--all-features`) | ≤ 2× default |
@@ -786,7 +786,7 @@ claude -p "say hi" --model haiku --output-format json
 Reproduced with zero custom flags (no hook, no `--settings`, no `--mcp-config`), so it is
 not this probe's setup — a `claude -p` child process gets no live model turn from inside
 the agent's sandboxed shell, the same failure already on record for the T53.1 live
-A/B (line ~691 above, 2026-09-18). A `--permission-mode bypassPermissions` variant was
+A/B ("Coaching nudges A/B (T53.1, 2026-09-18)" above). A `--permission-mode bypassPermissions` variant was
 separately refused by the auto-mode classifier ("Create Unsafe Agents") before the auth
 call was even reached — nested `claude` invocations are not available from inside a CCD
 session, by design or not.
@@ -795,7 +795,7 @@ session, by design or not.
 the CLI's own `PostToolUse` JSON schema omits `updatedToolOutput` while the Agent SDK page
 documents it as an Agent-SDK-level construct ("in both SDKs" reads as Python/TypeScript
 Agent SDK, not the `claude` CLI's command-hook schema). That is consistent with the
-standing rtok rule (line 593) but does not prove it for the CLI surface. Re-run needs a
+standing rtok rule (the first bullet of §3) but does not prove it for the CLI surface. Re-run needs a
 `claude -p` invocation outside this sandbox — a real terminal or CI runner with its own
 OAuth session — to get an actual Bash/Read/MCP transcript.
 
@@ -835,10 +835,10 @@ Stars/language/license from the GitHub API on 2026-09-01. "Claimed" is the vendo
 | Hooks | 81 across 16 events (token-optimizer 27 Python, orca 12, caveman-proxy 11, holdmylid 10, lean-ctx 9, cbm 7, tokenbar 2, rtk 1, caveman shrink 1, codegraph 1) | ≤ 8 token-related (`rtok hook <event>`), non-token hooks untouched |
 | Per-tool-call overhead | up to ~30 subprocesses per event chain, several Python | one Rust process < 10 ms |
 | Bash filtering | rtk + lean-ctx ctx_shell + token-optimizer bash_compress | `cmd` (delegates to rtk filters, archives raw, measures) |
-| Reads | lean-ctx (78 tools, 3.1 K/turn) + token-optimizer read_cache + headroom audit | `read` (5 tools, no banner, dedup) |
+| Reads | lean-ctx (78 tools, 3.1 K/turn) + token-optimizer read_cache + headroom audit | `read` (3 tools: `read`, `search`, `tree` as of 2026-10-08, per `src/plugins/read/README.md` Tools; no banner, dedup) |
 | Proxies | headroom :8788 → caveman :8787 (inert on Max) → Anthropic; Docker: headroom → bifrost | `rtok proxy :8790` (passthrough → compress), chainable for A/B |
 | Memory | claude-mem (LLM) + engram | one, agent-written, FTS5 |
-| Code graph | code-review-graph + codebase-memory-mcp + serena (+codegraph stale) ≈ 85 MCP tools | `graph`: native tags index, 3 tools (D6; was “adapter” before D6 was rewritten) |
+| Code graph | code-review-graph + codebase-memory-mcp + serena (+codegraph stale) ≈ 85 MCP tools | `graph`: native tags index, 5 tools as of 2026-09-18 (`symbol`, `callers`, `impact`, `outline`, `explore` (T68.1), 127 description tokens; D6; was “adapter” before D6 was rewritten) |
 | Injection per turn | lean-ctx 3.1 K + engram + claude-mem + ponytail + caveman + token-optimizer nudges | one budget (800 tokens), byte-stable |
 | Measurement | 5 incompatible meters, none the bill | usage from proxy + transcripts; context-token-turns; A/B bench |
 | Reversibility | partial (headroom retrieve, token-optimizer expand) | every rewrite has `expand <id>` |
@@ -852,7 +852,7 @@ Stars/language/license from the GitHub API on 2026-09-01. "Claimed" is the vendo
 5. Command output filtering — real but small in the bill (JetBrains); keep it lossless.
 6. Tabular JSON → TOON where results are tables (−40 %).
 7. Memory with progressive disclosure (titles → ids → bodies), never bodies at SessionStart.
-8. Code graph queries instead of grep-and-read chains — plausible, unmeasured; adapter first.
+8. Code graph queries instead of grep-and-read chains — plausible, not measured end to end (the T68.9 live run is not done, §2); native index per D6, never an adapter.
 9. LLM-based compression — negative until proven; **v0.2+**, not v0.1 (`ideas.md` I-21).
 
 
@@ -872,7 +872,6 @@ Every alternative in `src/plugins/*/PLAN.md` with the survey date. Stars/version
 | claude-mem | 2026-09-01 | inject, memory |
 | ponytail | 2026-09-01 | inject, `src/modes` ladder |
 | rtok modes terse/yagni (native) | fixture bench 2026-09-10 | inject, `src/modes`, `tests/mode_bench.rs` |
-
 | codebase-memory-mcp | v0.7.0 · 2026-09-04 | graph |
 | codegraph | 2026-09-04 | graph |
 | code-review-graph | 2.3.7 · 2026-09-04 | graph |
@@ -925,9 +924,9 @@ Method: five Haiku web-scan agents (rtk/headroom/caveman; MCP read+graph servers
 
 | Host | Native now | Effect on rtok |
 |------|-----------|----------------|
-| Claude Code | Tool Search defers MCP tools (~3 K tokens loaded per query instead of every schema); auto-memory `MEMORY.md` (v2.1.59+, on by default); `PreCompact` / `PostCompact` / `Setup` / `CwdChanged` / `FileChanged` / `PreModelSwitch` hooks; `promptCacheTtl`; images/PDFs auto-dropped near the limit | Description-token compression (Portkey-style) is not worth building — `doctor` already flags `mcp_tool_search_disabled`. Auto-memory overlaps `memory` recall on this host. rtok already registers `PreCompact`/`PostCompact` here (T2.5: checkpoint of prompts, paths, errors; modes re-injected on `source = compact`); the checkpoint has no archive ids, and no other host registers its compaction event (T58.2). |
+| Claude Code | Tool Search defers MCP tools (~3 K tokens loaded per query instead of every schema); auto-memory `MEMORY.md` (v2.1.59+, on by default); `PreCompact` / `PostCompact` / `Setup` / `CwdChanged` / `FileChanged` / `PreModelSwitch` hooks; `promptCacheTtl`; images/PDFs auto-dropped near the limit | Description-token compression (Portkey-style) is not worth building — `doctor` already flags `mcp_tool_search_disabled`. Auto-memory overlaps `memory` recall on this host. rtok already registers `PreCompact`/`PostCompact` here (T2.5: checkpoint of prompts, paths, errors; modes re-injected on `source = compact`); shipped as T58.2 (2026-09-18): the checkpoint lists the live archive ids (`id <archive-id> <tool> <bytes>`), and Codex (`PreCompact`/`PostCompact`), Cursor (`preCompact`) and Copilot CLI (`preCompact`) register their compaction events; Cursor and Copilot have no post event, ZCode has none, pi/OpenCode follow T70.6. |
 | Claude API | context editing (`clear_tool_uses`, `clear_thinking`), server-side compaction, memory tool (~2.5 K overhead), 1h cache TTL at 2× write, Fable/Mythos 5.1 cache read 0.025× | `archive` and context editing do the same job; T51.2 (emit native context editing) is the reconciliation. |
-| Cursor | `afterMCPExecution` fires after the tool response and before it enters context; `preCompact`; "Dynamic Context" (v3.11, claims 46.9 %, no method published) | A hook that can see an MCP result before context is the surface `PostToolUse` lacks on Claude Code — verify whether it may modify the result (unverified). |
+| Cursor | `afterMCPExecution` fires after the tool response and before it enters context; `preCompact`; "Dynamic Context" (v3.11, claims 46.9 %, no method published) | Resolved 2026-09-24 (T190, https://cursor.com/docs/agent/hooks, read that day): `afterMCPExecution` documents no output, so rtok treats it as audit-only (`{}`). Only `postToolUse` can replace an MCP result, through `updated_mcp_tool_output` (verified 2026-09-18, T70.4). |
 | Codex CLI | `PreCompact`/`PostCompact`, `SubagentStart/Stop`, hooks may call MCP tools | Same compaction surface as Claude Code. |
 | OpenCode | Two-phase compaction: non-destructive "marking" of old verbose tool outputs (trigger when >20 K freed, keeps newest 40 K), then LLM summary; `experimental.session.compacting` hook | Overlaps `archive` on this host; a pointer inside a marked result is harmless (fail open) but the saving is double-counted unless measured per host. |
 | Gemini CLI / Copilot CLI | context-compression hook before summarization; Copilot auto-compacts at 80 % and has `/context` | Same as above; `/context` is what `rtok doctor` prints. |
@@ -938,29 +937,29 @@ Grounded in §2 (this workload: tool results 2.83 M est. tokens, Bash 35 %, Read
 
 | Category | rtok better | rtok worse | Missing, and whether it is worth building |
 |----------|-------------|------------|-------------------------------------------|
-| Command output | lossless (`expand`), measured per family, one process ≤ 10 ms; a default rule (40 lines, head/tail, dedupe) caps every stem, so nothing passes through whole | 24 TOML rules + 13 formatters keep signal by meaning; remaining families are cut by position, so an error line can fall in the gap; rtk has 100+ per-command filters | Per-family rules chosen by measured after-bytes — **T50.1**; table formatters (`docker ps` 3147→1190, `kubectl get` 4542→1731, `ps aux` 2341→870, each beating `Rule::default()` on the same fixture) — **T58.5**. |
-| Reads | 4 modes, sha256 dedup, root guard, ~223 desc tokens for 12 tools (`rtok doctor`, 2026-09-18); no banner | lean-ctx: `diff` mode; token-optimizer: delta reads; lean-ctx re-read 13 tokens (rtok's "unchanged since" line is comparable) | **Delta since last read**: rtok already keeps the sha256 and archive id of the previous read, so a changed file can return a unified diff against that archive instead of 9.5–17 K tokens again — **T58.1**. |
+| Command output | lossless (`expand`), measured per family, one process ≤ 10 ms; a default rule (40 lines, head/tail, dedupe) caps every stem, so nothing passes through whole | 24 TOML rules + 13 formatters keep signal by meaning; remaining families are cut by position, so an error line can fall in the gap; rtk has 100+ per-command filters | Shipped 2026-09-18: per-family rules chosen by measured after-bytes (**T50.1**); table formatters (`docker ps` 3147→1190, `kubectl get` 4542→1731, `ps aux` 2341→870, each beating `Rule::default()` on the same fixture) (**T58.5**). |
+| Reads | 4 modes at 2026-09-17 (6 by 2026-10-08: `full`, `lines`, `map`, `signatures`, `diff`, `stripped`), sha256 dedup, root guard, ~223 desc tokens for 12 tools (`rtok doctor`, 2026-09-18); no banner | lean-ctx: `diff` mode; token-optimizer: delta reads; lean-ctx re-read 13 tokens (rtok's "unchanged since" line is comparable) | Shipped as **T58.1** (2026-09-18): a changed file returns a unified diff against the archived previous read (plus `previous <id>` / `expand <id>`) instead of 9.5–17 K tokens again; measured 7.3 % of Read bytes (§2). |
 | Model output (the code it writes) | typed `yagni` ladder 14/14 on fixtures; modes inside the 800-token budget | nothing targets the 96 % tool-input share | **Measured 2026-09-17 (T58.3):** `old_string` is 3.8 % of tool-input bytes and ≈ 1.3 % of output tokens, so an anchored `patch` tool (serena `replace_symbol_body`, lean-ctx `ctx_patch`) would move at most ~1 % of the output slice; not built (I-43 keeps the number). The output lever that remains is fewer and smaller writes — modes (T53.1) and the read side. |
-| Injection / compaction | byte-stable 800-token budget; progressive-disclosure memory; on Claude Code a `PreCompact` checkpoint (prompts, paths, errors) and modes re-injected after the summary (T2.5) — rtk, headroom and caveman have nothing here | the checkpoint exists on Claude Code only (Codex, Cursor, Gemini, Copilot events are not registered); it carries no archive ids, so `expand` of a summarized-away result depends on the model remembering the id | Register the compaction events on every host that has them and add the live archive ids to the checkpoint — **T58.2**. |
-| Foreign MCP results | old ones shrink in the proxy live zone like any `tool_result` | fresh results of other servers pass whole (atlassian mcp-compressor wraps any server) | Not worth it on this workload: MCP results were 15 K of 2.83 M (§2). Idea I-44. |
+| Injection / compaction | byte-stable 800-token budget; progressive-disclosure memory; on Claude Code a `PreCompact` checkpoint (prompts, paths, errors) and modes re-injected after the summary (T2.5) — rtk, headroom and caveman have nothing here | at 2026-09-17 the checkpoint existed on Claude Code only and carried no archive ids (both fixed by T58.2, 2026-09-18, see the next column) | Shipped as **T58.2** (2026-09-18): compaction events registered on Codex, Cursor and Copilot CLI (the hosts that have them) and the live archive ids added to the checkpoint. Gemini CLI was not a host on 2026-09-18 (it is since 2026-09-24); ZCode has no event. |
+| Foreign MCP results | old ones shrink in the proxy live zone like any `tool_result` | fresh results of other servers pass whole (atlassian mcp-compressor wraps any server) | 2026-09-17 estimate: not worth it, MCP results were 15 K of 2.83 M (§2). The T59.4 re-measure the same day (§2, 885 sessions) put lean-ctx at ≈ 27 % of the tool table, so I-44 was promoted and shipped as T59.4 (2026-09-17). |
 | Tool descriptions | 12 tools / ~223 tokens (`rtok doctor`, 2026-09-18); `doctor` prices every server | — | **Measured 2026-09-18 (T59.5):** on this host Tool Search is off (`ANTHROPIC_BASE_URL` set); MCP description tokens × API turns = **6.2 %** of session input (§2) → `proxy.tools_rewrite` ships, off by default. |
-| Memory | agent-written, FTS5, no model calls, titles-first | claude-mem/mem0 have vectors (P29 landed hash-embed; no ONNX); Claude Code auto-memory is free on that host | `doctor` should say when auto-memory makes rtok recall a duplicate injection. Idea I-47. |
-| Code graph | 5 tools / 127 tokens (2026-09-18, T68.1 added `explore`), SQLite only, hook ≤ 10 ms | reference recall 0.351 vs LSP-grade (serena, codebase-memory-mcp hybrid LSP) | Already T52.5 / T30.2 (LSP optional). jCodeMunch's measured 96.5 % vs grep-read is the same claim class as `graph`; no new task. |
-| Learning from history | `stats`, `report` rules (D24), `doctor --instructions` | caveman `learn`, lean-ctx mode predictor, context-budget plugin rank *sinks* and *recommend* | `report` already renders recommendations; a per-file / per-command sink ranking is idea I-48 until `stats` shows a sink the existing rows do not name. |
-| Sub-agents | — | lean-ctx `ctx_handoff`/`ctx_agent`; theme "sub-agent isolation" | Agent+Task results were 0.7 % of tool-result tokens on 30d (T59.6, §2); not a lever. Idea I-46, parked with the number. |
+| Memory | agent-written, FTS5, no model calls, titles-first | claude-mem/mem0 have vectors (P29 landed hash-embed; no ONNX); Claude Code auto-memory is free on that host | Shipped as T59.7 (2026-09-18, from I-47): `doctor` names the host-native feature that duplicates a rtok surface, auto-memory included. |
+| Code graph | 5 tools / 127 tokens (2026-09-18, T68.1 added `explore`), SQLite only, hook ≤ 10 ms | reference recall 0.351 vs LSP-grade (serena, codebase-memory-mcp hybrid LSP); 0.924 on 2026-10-04 after T387 re-landed the T52.5 type-position queries (§2, T8.8 table) | Shipped as T52.5 (re-landed as T387) / T30.2 (LSP optional). jCodeMunch's measured 96.5 % vs grep-read is the same claim class as `graph`; no new task. |
+| Learning from history | `stats`, `report` rules (D24), `doctor --instructions` | caveman `learn`, lean-ctx mode predictor, context-budget plugin rank *sinks* and *recommend* | `report` already renders recommendations; shipped as T59.8 (2026-09-18, from I-48): a top-10 token-sink rule in `report`. |
+| Sub-agents | — | lean-ctx `ctx_handoff`/`ctx_agent`; theme "sub-agent isolation" | Agent+Task results were 0.7 % of tool-result tokens on 30d (T59.6, §2); not a lever. I-46 was promoted as T59.6 and closed evidence-only on 2026-09-18 with that number; the `handoff` tool was not built for it. |
 | Gateways / caches | 4 wires, usage capture, semantic cache off (P31: 0 hits at 0.99) | — | Nothing to add; bifrost/Portkey/LiteLLM are routing products. |
-| Hosts | 11 hosts with a reversible installer; per-host `support()` table | rtk/caveman list 30+ hosts (Windsurf/Cline/Aider/Qwen/OpenClaw/Hermes) | T48.8 (VS Code) is the only one with a measured user; the rest wait for a request. |
+| Hosts | 11 hosts with a reversible installer at 2026-09-17 (24 on 2026-10-08, §26); per-host `support()` table | rtk/caveman list 30+ hosts (Windsurf/Cline/Aider/Qwen/OpenClaw/Hermes) | T48.8 (VS Code) is the only one with a measured user; the rest wait for a request. |
 
 ### 9.4 Ranking of the gaps by expected effect on this workload
 
 Estimates, not measurements — each task's first step is the measurement that replaces the estimate.
 
 1. **Anchored patch — measured and dropped (T58.3).** Output is 39 % of the Fable/Mythos bill and 96 % of output is tool input, but `old_string` is only 3.8 % of tool-input bytes (≈ 1.3 % of output tokens) over 925 sessions, so T58.4 was not built. `new_string` is 2.2× `old_string`: the model's output is the code it writes, not what it quotes back.
-2. **Delta reads (T58.1).** Read is 15 % of tool-result tokens and the top-8 single results are all Reads; the dedup already handles unchanged re-reads, so the win is the changed-file re-read after an Edit — count it from transcripts before building.
-3. **Compaction checkpoint everywhere (T58.2).** Cheap (the T2.5 checkpoint and restore exist; the work is host registration and one more field); the effect is keeping the measured mode savings and `expand` reachability alive after compaction on Codex, Cursor and Copilot the way they already are on Claude Code.
-4. **Filter families (T50.1, then T58.5).** Real but small: JetBrains measured rtk at +7.6 % to 0 % on the bill, and rtok's default rule already caps every stem; the win is the error line that the positional cut drops. Data first (TOML rules), Rust only for table and grouped outputs.
+2. **Delta reads (T58.1) — shipped 2026-09-18.** Read is 15 % of tool-result tokens and the top-8 single results are all Reads; the dedup already handles unchanged re-reads, so the win is the changed-file re-read after an Edit. Counted from transcripts first: 7.3 % of Read bytes (§2), above the 3 % gate.
+3. **Compaction checkpoint everywhere (T58.2) — shipped 2026-09-18.** Cheap (the T2.5 checkpoint and restore existed; the work was host registration and one more field); the effect is keeping the measured mode savings and `expand` reachability alive after compaction on Codex, Cursor and Copilot the way they already are on Claude Code.
+4. **Filter families (T50.1, then T58.5) — both shipped 2026-09-18.** Real but small: JetBrains measured rtk at +7.6 % to 0 % on the bill, and rtok's default rule already caps every stem; the win is the error line that the positional cut drops. Data first (TOML rules), Rust only for table and grouped outputs.
 
-Promoted: I-41 → T58.1, I-42 → T58.2, I-43 → T58.3 (measured; T58.4 dropped with the number). Not promoted: I-44 foreign-MCP compression, I-45 description compression, I-46 handoff, I-47 doctor overlap audit, I-48 sink ranking — each with the number that parks it in `ideas.md`.
+Promoted: I-41 → T58.1, I-42 → T58.2, I-43 → T58.3 (measured; T58.4 dropped with the number). I-44–I-48 were not promoted on 2026-09-17 (each parked with its number in `ideas.md`), but all five were promoted the same day or the next and are closed: I-44 → T59.4 (foreign-MCP wrapper, 2026-09-17), I-45 → T59.5 (`tools[]` rewrite, 2026-09-18), I-46 → T59.6 (closed evidence-only, 0.7 %, 2026-09-18), I-47 → T59.7 (`doctor` overlap audit, 2026-09-18), I-48 → T59.8 (token-sink ranking in `report`, 2026-09-18).
 
 ## 10. Skill loading: where the tokens go (2026-09-17)
 
@@ -975,10 +974,10 @@ otherwise.
 | --- | --- | --- | --- | --- |
 | Claude Code | `~/.claude/skills/<n>/SKILL.md`, `.claude/skills/`, `<plugin>/skills/` (listed as `/plugin:skill`) | name + description of every listed skill in the system prompt (docs: "~100 tokens per skill") | the whole `SKILL.md` body; `references/`, `scripts/`, `assets/` only when the model reads them (script output enters context, script code does not) | `disable-model-invocation: true` (only `/name` by a human), project-scoped skills, plugin enable/disable |
 | Cursor | `.cursor/skills/`, `.agents/skills/`, user equivalents | name + description | body on demand, resources lazily | `paths:` globs scope a skill to matching files; `disable-model-invocation` |
-| OpenCode | `.opencode/skills/`, `~/.config/opencode/skills/`, Claude paths | Agent Skills standard (not documented in detail) | body on demand | `opencode.json` permission `allow` / `deny` / `ask` per skill pattern |
-| Copilot CLI / VS Code | `.github/skills/`, `.agents/skills/`, `~/.copilot/skills/` | metadata for discovery | body when relevant or on `/name` | not documented |
-| Gemini CLI | `~/.gemini/skills/`, `.gemini/skills/`, `.agents/skills/`, extensions | metadata only | `activate_skill` tool loads the body | `/skills disable <n>` per session; precedence built-in > extension > user > workspace |
-| Codex / ChatGPT | `.agents/skills/`, plugins | not documented | not documented | not documented |
+| OpenCode | `.opencode/skills/`, `~/.config/opencode/skills/`, Claude paths | Agent Skills standard (not documented in detail) | body on demand | `opencode.json` permission `allow` / `deny` / `ask` per skill pattern; `deny` hides the skill, custom agents can set `tools: skill: false`. No per-skill `disable-model-invocation` documented; unknown frontmatter fields are ignored (https://opencode.ai/docs/skills/, checked 2026-10-08) |
+| Copilot CLI / VS Code | `.github/skills/`, `.agents/skills/`, `~/.copilot/skills/` | metadata for discovery | body when relevant or on `/name` | not documented as of 2026-10-08: no frontmatter field and no hide option (https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
+| Gemini CLI | `~/.gemini/skills/`, `.gemini/skills/`, `.agents/skills/`, extensions | metadata only | `activate_skill` tool loads the body | `/skills disable <n>` per session ("Prevents a specific skill from being used"); no frontmatter field; precedence built-in > extension > user > workspace (https://geminicli.com/docs/cli/skills/, checked 2026-10-08) |
+| Codex / ChatGPT | `.agents/skills/`, plugins | not documented | not documented | `agents/openai.yaml` under `policy:` with `allow_implicit_invocation: false` (explicit `$skill` still works); no `SKILL.md` frontmatter field (https://learn.chatgpt.com/docs/build-skills, checked 2026-10-08) |
 
 Docs: https://code.claude.com/docs/en/skills, https://cursor.com/docs/skills,
 https://opencode.ai/docs/skills/, https://docs.github.com/en/copilot/concepts/agents/about-agent-skills,
@@ -1010,8 +1009,12 @@ the conversation for every later request of that session.
    for every later request. A body over ~8 KB is almost always documentation pasted into
    `SKILL.md` instead of a `references/` file the model reads only when needed.
 3. **Resources loaded through `Read`** are ordinary tool results: rtok's `read` plugin
-   (dedup, modes) and the archive live zone already apply. Skill bodies do not pass through
-   any rtok surface today: they are not tool results and not hook output.
+   (dedup, modes) and the archive live zone already apply. When this was written
+   (2026-09-17) skill bodies passed through no rtok surface: they are not tool results and not
+   hook output. Since 2026-09-18 three surfaces reach them: the proxy archives old skill-body
+   user messages outside the live zone (T61.2), Claude Code `PreToolUse(Skill)` can answer with
+   a digest (T62.1) and OpenCode `tool.execute.after` shortens the `skill` tool output
+   (T62.3); `stats` folds the bodies into a `skill` family (T61.1).
 4. **Requests** are not the cost: a skill invocation is one tool call inside the turn, and
    the listing adds zero requests. The only request-shaped waste is a `Read` of a
    `SKILL.md` the host would have injected anyway (8 in 30 d).
@@ -1021,16 +1024,16 @@ the conversation for every later request of that session.
 | Technique | Lever | Evidence / limit |
 | --- | --- | --- |
 | Description ≤ 120 chars, one sentence: what it does and when to pick it | listing | median here is 200 chars; a 120-char cap on 66 skills is ≈ −1.3 K tokens per request, byte-stable once set |
-| `disable-model-invocation: true` for skills only a human runs (setup, onboarding, release checklists) | listing | Claude Code and Cursor document it; the skill keeps working as `/name` |
+| `disable-model-invocation: true` for skills only a human runs (setup, onboarding, release checklists) | listing | Claude Code and Cursor document it (Cursor re-checked 2026-10-08); Codex has `allow_implicit_invocation: false` in `agents/openai.yaml` instead; the skill keeps working as `/name`. Other hosts: not documented as of 2026-10-08 |
 | Project-level skills for project-only knowledge; user-level only for cross-project ones | listing | Claude Code lists project skills only inside that project; Cursor `paths:` scopes further |
 | Enable plugins per project, not globally | listing | 41 of the 66 listed skills here come from 5 plugins; a plugin unused in a repo still lists all its skills there |
 | Body ≤ 2 K tokens: hub `SKILL.md` + `references/*.md` read on demand; scripts in `scripts/` (only their output enters context) | body | the 248 KB `update-config` body is the ceiling case; agentskills.io recommends ≤ 500 lines |
 | One skill per task family, not per sub-step | listing + body | fewer lines in the listing; the body loads once instead of three times |
 | Do not restate `CLAUDE.md` in a skill | body | `CLAUDE.md` is already in every request; a skill that repeats it pays twice |
 | Pin plugin versions / update in one batch | cache | each listing change is a full prefix rewrite for every open session |
-| Measure before trimming | all | `rtok stats` cannot see skill bodies today (10.2); I-49 makes them a row |
+| Measure before trimming | all | on 2026-09-17 `rtok stats` could not see skill bodies (10.2); shipped as T61.1 (2026-09-18, I-49): they are a `skill` row now |
 
-### 10.5 What rtok can add (ideas I-49–I-52)
+### 10.5 What rtok can add (ideas I-49–I-52; all four promoted and shipped 2026-09-18 as T61.1, T61.3, T61.2 and T71.3)
 
 - **I-49 `stats` skill row.** Count the user message that follows a `Skill` tool_use (marker
   `Base directory for this skill:` or the `/plugin:skill` header) as a `skill` family: calls,
@@ -1058,6 +1061,14 @@ the conversation for every later request of that session.
   constant; listing bytes per request = description bytes + `N × 92`.
 - Whether hosts other than Claude Code and Cursor honour `disable-model-invocation` in the
   listing is not documented (10.1).
+- **T399 (2026-10-08):** re-checked. OpenCode, Copilot, Gemini and the Agent Skills spec
+  (https://agentskills.io/specification: frontmatter is name, description, license,
+  compatibility, metadata, allowed-tools) have no per-skill disable field; Codex's equivalent
+  is `allow_implicit_invocation: false` in `agents/openai.yaml`, not in the frontmatter. So the
+  flag is only honoured by Claude Code and Cursor in the frontmatter form. The `doctor` skill
+  advice the card names is not in origin/main `699b1279f`: `src/doctor.rs` flags only
+  description length, body size and never-invoked, with no advice that cites the flag. No
+  code change follows from this check; the creator decides whether the flag is worth adding.
 
 ### 10.7 Working around the blind spot (2026-09-17)
 
@@ -1081,7 +1092,7 @@ and the model re-invokes — which is the cheap outcome, not a loss.
 
 Order: measure first (T61.1), shrink behind the measurement (T61.2, gate: the `resident`
 column shows skill bodies above 2 % of input tokens on a real window), advise in parallel
-(T61.3). The 248 KB `update-config` body alone is ≈ 62 K tokens resident in every request of
+(T61.3). All three shipped on 2026-09-18. The 248 KB `update-config` body alone is ≈ 62 K tokens resident in every request of
 that session; at the measured 97.5 % cache hit it is cache-read, at each cache miss it is
 a full re-send.
 
@@ -1095,9 +1106,9 @@ and `plugins/opencode/rtok.ts` (`tool.execute.after` already rewrites bash outpu
 
 | Host | Interception point | What rtok can do there | Task |
 | --- | --- | --- | --- |
-| Claude Code | `PreToolUse` with matcher `Skill` (`tool_input.skill = <name>`), fires before the body is injected; the hook may answer `permissionDecision: deny` with a reason the model reads | for a body over a byte cap: archive it, answer deny with a digest (headings + first line per section) and the `expand <id>` trailer — the model gets the map, not the 248 KB, and pulls sections on demand. Off by default: a denied skill does not apply its frontmatter (`allowed-tools`, `model`, `context`), so skills carrying those keys always pass | T62.1 |
-| Claude Code | `PreCompact` reads the transcript (T2.5 checkpoint already extracts prompts, paths, errors); the `isMeta` + `sourceToolUseID` records name the skills loaded so far | the restore line after compaction lists them with sizes so the model re-invokes only what the next step needs, instead of guessing which skill it had | T62.2 |
-| OpenCode | `tool.execute.after` (`plugins/opencode/rtok.ts`) receives every tool's output, including the tool that loads a skill if OpenCode delivers skills as a tool call | shorten the body the way bash output is shortened, with an archive id so the full text is one `expand` away | T62.3 (step 1 verifies the delivery path) |
+| Claude Code | `PreToolUse` with matcher `Skill` (`tool_input.skill = <name>`), fires before the body is injected; the hook may answer `permissionDecision: deny` with a reason the model reads | for a body over a byte cap: archive it, answer deny with a digest (headings + first line per section) and the `expand <id>` trailer — the model gets the map, not the 248 KB, and pulls sections on demand. Off by default: a denied skill does not apply its frontmatter (`allowed-tools`, `model`, `context`), so skills carrying those keys always pass | T62.1 (shipped 2026-09-18) |
+| Claude Code | `PreCompact` reads the transcript (T2.5 checkpoint already extracts prompts, paths, errors); the `isMeta` + `sourceToolUseID` records name the skills loaded so far | the restore line after compaction lists them with sizes so the model re-invokes only what the next step needs, instead of guessing which skill it had | T62.2 (shipped 2026-09-18) |
+| OpenCode | `tool.execute.after` (`plugins/opencode/rtok.ts`) receives every tool's output, including the tool that loads a skill if OpenCode delivers skills as a tool call | shorten the body the way bash output is shortened, with an archive id so the full text is one `expand` away | T62.3 (step 1 verified the delivery path: OpenCode's native `skill` tool; shipped 2026-09-18) |
 | Cursor, Codex, Copilot, Gemini | no hook fires on skill activation (Cursor hooks: shell, MCP, file read; Codex: none; Gemini: `activate_skill` is a tool, hooks not documented for it) | nothing on the plugin side; the proxy path (T61.2) is the only lever | — |
 
 `PostToolUse(Skill)` stays useless for this: it can only add context, and the body is
@@ -1123,7 +1134,7 @@ in `src/plugins/cmd/{rules,formatters}.rs`, `src/plugins/guard/mod.rs`, `src/age
 | sqz JSON pipeline (nulls, arrays) | JSON compact then line cut (0.21 % of Bash bytes, 30 d, this machine) | — | T65.2 |
 | sqz table compaction | none | padding collapse | T65.3 |
 | sqz safe mode (traces, secrets pass whole) | single `panic`/`traceback` lines kept, frames cut; secrets never redacted | keep the block | T65.4 |
-| sqz hosts: Windsurf, Cline, Gemini CLI, Kiro, Zed, Copilot CLI; browser and IDE extensions | 12 hosts in `src/agents/` (no Cline, Kiro, Gemini); no extensions | hosts on request; extensions out of scope (one binary, D21) | — |
+| sqz hosts: Windsurf, Cline, Gemini CLI, Kiro, Zed, Copilot CLI; browser and IDE extensions | 12 hosts in `src/agents/` on 2026-09-18 (no Cline, Kiro, Gemini; Cline and Gemini CLI are hosts since 2026-09-24, 24 hosts on 2026-10-08, §26); no extensions | hosts on request; extensions out of scope (one binary, D21) | — |
 | sqz `gain` / `stats --breakdown` | `stats`, `report`, `dashboard`, one ledger | none | — |
 
 Order by expected effect on this workload (§2: Bash 35 % of result tokens): T65.4 and T64.3
@@ -1176,13 +1187,13 @@ is useful. engram's own docs carry no token-saving number; its value is recall, 
 
 | engram feature | rtok `memory` today | Verdict | Where |
 | --- | --- | --- | --- |
-| `topic_key` upsert: same `project + scope + topic_key` updates the row, `revision_count++` | every `mem_save` inserts; a re-saved decision leaves two rows with one title in the 5-title recall | adopt, zero-LLM, no schema: the title is the key, upsert on `(project, kind, title)` | T66.1 |
-| Git Sync: gzipped JSONL chunks + manifest, `engram sync --import` | `memory import <file.jsonl>` exists (T6.3); nothing produces that file from `rtok.db` | adopt the missing half: `memory export` in the shape `import` reads; no chunk manifest (a file in git is the manifest) | T66.2 |
-| `mem_context` at session start: pinned + recent observations + sessions + prompts, 16 KiB default budget | SessionStart recall: 5 titles + ids ≤ 200 tokens; compaction checkpoint ≤ 400 tokens, same session only; SessionEnd writes `session:<id>` (T71.2); `startup_recall` restores the newest project note on `source=startup`, off by default | keep rtok's shape (D5 budget, titles not bodies); handoff stays off until a P7-style A/B. Measured 2026-09-18: `rtok stats --since 30d` → 0/939 sessions with a joinable checkpoint note (25 legacy unscoped `checkpoint` rows) | T71.2 |
+| `topic_key` upsert: same `project + scope + topic_key` updates the row, `revision_count++` | every `mem_save` inserted when this was written (2026-09-18); a re-saved decision left two rows with one title in the 5-title recall. Shipped as T66.1 (2026-09-18): `mem_save` updates the `(project, kind, title)` row in place and returns `{id, updated}` | adopt, zero-LLM, no schema: the title is the key, upsert on `(project, kind, title)` | T66.1 (shipped 2026-09-18) |
+| Git Sync: gzipped JSONL chunks + manifest, `engram sync --import` | `memory import <file.jsonl>` exists (T6.3); nothing produced that file from `rtok.db` until T66.2 shipped `rtok memory export` (2026-09-18; T304, 2026-09-28, made it skip retired notes) | adopt the missing half: `memory export` in the shape `import` reads; no chunk manifest (a file in git is the manifest) | T66.2 (shipped 2026-09-18) |
+| `mem_context` at session start: pinned + recent observations + sessions + prompts, 16 KiB default budget | SessionStart recall: 5 titles + ids ≤ 200 tokens; compaction checkpoint ≤ 400 tokens, same session only; SessionEnd writes `session:<id>` (T71.2); `startup_recall` restores the newest project note on `source=startup`, off by default | keep rtok's shape (D5 budget, titles not bodies); handoff stays off until a P7-style A/B. Measured 2026-09-18: `rtok stats --since 30d` → 0/939 sessions with a joinable checkpoint note (25 legacy `kind = checkpoint` rows with no session suffix, so not joinable to a session; they sit under project `rtok`, §14.1) | T71.2 |
 | `pinned` observations first in context | recency only | parked; `kind = "pin"` would do it without a column | I-57 |
 | project identity from the normalised `origin` remote, `.engram/config.json` override, child-repo scan | git-root basename | parked; one checkout per repo is the workflow here | I-58 |
-| `mem_update(id)` | none | covered by T66.1: re-save the same title | — |
-| `normalized_hash` dedupe on save | `import` dedupes by body sha256; `mem_save` did not | covered by T66.1 (identical re-save is a no-op update) | — |
+| `mem_update(id)` | none when written; covered by T66.1 (re-save the same title), and a `mem_update` MCP tool exists since (`src/plugins/memory/mod.rs`) | covered by T66.1: re-save the same title | — |
+| `normalized_hash` dedupe on save | `import` dedupes by body sha256; `mem_save` did not until T66.1 (2026-09-18) | covered by T66.1 (identical re-save is a no-op update) | — |
 | `scope` project / personal / global | `project` column, `NULL` = no project | not needed: recall filters by project; a global note is a `project = NULL` row | — |
 | `mem_judge` / `mem_compare` / `mem_review`: relations (`supersedes`, `conflicts_with`, …) judged by the model, `judgment_required` envelopes | none | rejected: every judgment is model output spent on bookkeeping, and the tool descriptions ride every turn (D15 target: fewer description tokens than engram) | — |
 | `mem_session_summary` (mandatory before "done": goal, discoveries, next steps, files) | PreCompact checkpoint extracted mechanically from the transcript (prompts, paths, errors, skills) | rejected as a protocol; an agent may still `mem_save` a summary note by hand | — |
@@ -1212,18 +1223,18 @@ numbers are the useful ones. rtok's own plant-and-recall numbers are the T69.3 t
 
 | Their feature | rtok today | Gap | Task |
 | --- | --- | --- | --- |
-| Hybrid recall: vector + keyword + recency, top-8, per-signal receipts | FTS5 BM25; optional hash-embed RRF (P29); SessionStart = newest 5 ids of the project; no recency, no receipts | ranking by age and use | T69.2 |
-| 30-day decay half-life; never hard-delete; pinned facts exempt | none: every note is live forever, no pin | lifecycle | T69.1 (pin, retire), T69.2 (decay) |
-| `revise` / `forget` as tombstones; corrections recorded | insert-only; the in-place update by title is the memory card "`mem_save` updates a note in place" | retire + supersede | T69.1 |
+| Hybrid recall: vector + keyword + recency, top-8, per-signal receipts | FTS5 BM25; optional hash-embed RRF (P29); SessionStart = newest 5 ids of the project; no recency, no receipts | ranking by age and use — T69.2 closed without a scorer on 2026-09-18 (no project exceeds `recall_titles`, §14.1) | T69.2 (closed) |
+| 30-day decay half-life; never hard-delete; pinned facts exempt | none when written (2026-09-18); shipped as T69.1 the same day: retire, supersede, pin, never delete | lifecycle | T69.1 (shipped 2026-09-18), T69.2 (decay, closed without code) |
+| `revise` / `forget` as tombstones; corrections recorded | insert-only when written; the in-place update by title shipped as T66.1 ("`mem_save` updates a note in place") and retire + supersede as T69.1 (both 2026-09-18) | retire + supersede | T69.1 (shipped) |
 | Benchmark: tokens/session vs full injection, plant-and-recall, superseded = 0 | FTS5 and P29 hybrid 20/20 at N=1/10/30/100; superseded 0; SessionStart 100 B vs 371 866 B full injection at N=100 (`tests/memory_bench.rs`, 2026-09-18) | — | T69.3 |
-| Claude Code hooks: SessionStart facts + conventions; UserPromptSubmit top-3 + `remember:`; PreCompact checkpoint; SessionEnd checkpoint + consolidation; errors to `hooks.log`, never break the session | SessionStart titles (T6.2); PreCompact checkpoint (T2.5); SessionEnd `session:<id>` note (T71.2, restore off by default); fail open ≤ 10 ms; nothing on UserPromptSubmit | `remember:`; per-turn recall (A/B) | T69.5; I-56 (engram `mem_context`) |
-| `context-sync`: budgeted managed block in CLAUDE.md / AGENTS.md, hand-edit detection, backup | none (hook injection only; hosts without a SessionStart hook get no recall) | a sync command | T69.6 |
-| `status` / 4-tab `tui`: facts, KB, recall counts, health, weights | Memory page shows two config keys; no `memory status` | store rows on the page | T69.4 |
+| Claude Code hooks: SessionStart facts + conventions; UserPromptSubmit top-3 + `remember:`; PreCompact checkpoint; SessionEnd checkpoint + consolidation; errors to `hooks.log`, never break the session | SessionStart titles (T6.2); PreCompact checkpoint (T2.5); SessionEnd `session:<id>` note (T71.2, restore off by default); fail open ≤ 10 ms; nothing on UserPromptSubmit when written, `remember:` prompts save a note since T69.5 (2026-09-18; per-turn recall stays off, `prompt_recall = 0`, §27) | `remember:`; per-turn recall (A/B) | T69.5 (shipped); I-56 (engram `mem_context`) |
+| `context-sync`: budgeted managed block in CLAUDE.md / AGENTS.md, hand-edit detection, backup | none when written (hook injection only; hosts without a SessionStart hook get no recall); `rtok memory sync` shipped as T69.6 (2026-09-18) | a sync command | T69.6 (shipped) |
+| `status` / 4-tab `tui`: facts, KB, recall counts, health, weights | Memory page showed two config keys and there was no `memory status` when written; shipped as T69.4 (2026-09-18) | store rows on the page | T69.4 (shipped) |
 | Knowledge graph: entities, co-mentions, Obsidian export, HTML force graph | `graph` is the code index | — | I-72 |
 | Consolidation: summarise + decay + prune + extract (Ollama; OpenAI / Anthropic / keyword fallback) | no LLM (P28 is Later) | the mechanical half only | T69.1 / T69.2; I-73 |
 | Embedding chain Ollama → OpenAI → Voyage → keyword | hash-embed local or `openai` (P29) | — | I-75 |
 | `export --format obsidian` | JSONL import (T6.3); JSONL export is the memory card "`rtok memory export`" | markdown | I-74 |
-| MCP wiring: Claude Code, Cursor, Codex, OpenCode, Antigravity, Windsurf, VS Code Copilot | 12 hosts in `src/agents/`; VS Code is T48.8; Antigravity is T91 (plugin MCP and skills); Windsurf on request | — | — |
+| MCP wiring: Claude Code, Cursor, Codex, OpenCode, Antigravity, Windsurf, VS Code Copilot | 12 hosts in `src/agents/` on 2026-09-18; VS Code (T48.8) and Antigravity are hosts since; Windsurf is one on 2026-10-08 (24 hosts, §26) | — | — |
 | Security: loopback + bearer on network surfaces; recalled facts fenced, never in the system prompt | `rtok mcp` is stdio; recall is `id title` lines in the hook's `additionalContext`, bodies only via `mem_get` | — | — |
 | Go library in three lines | `rtok-plugin-sdk` (D25) | — | — |
 
@@ -1264,7 +1275,7 @@ Result: **0 rows**. Live notes: **0**. Projects with more than `[plugins.memory]
 The same file holds 25 `checkpoint` rows under project `rtok` (title `compact`, none retired);
 T69.4 excludes them from the live count. SessionStart still injects those titles
 (`list_note_titles` does not filter kind). Ranking order among live facts never matters here,
-so T69.2 ships no scorer and no `uses` / `last_used` columns.
+so T69.2 ships no scorer and no `uses` / `last_used` columns. Since then `memory status` also leaves out `session:<id>` handoff notes and `memory export` leaves out retired notes (T304, 2026-09-28).
 
 ## 15. What a host plugin can do that rtok's own surfaces cannot (2026-09-18)
 
@@ -1289,7 +1300,7 @@ capability is not there.**
 | --- | --- | --- |
 | PostToolUse can only add context, never modify a tool result | §3, D2, `plan.md` working agreement | On Claude Code only `Bash` shrinks (PreToolUse rewrite → `rtok run`); `Read`, `Grep`, `Glob`, `WebFetch`, `Task` and every foreign MCP result enter context whole |
 | The live zone needs the proxy | §9.3, `archive` plugin docs | A host with no base-URL setting (Cursor, Claude Desktop, pi, Windsurf, Zed, ZCode, Kimi, Copilot) never shrinks an old tool result — the lever §1 ranks first |
-| A host without hook events reaches no hook plugin | `src/agents/<host>/README.md` module tables | `inject`, `guard` unreachable on pi, OpenCode, Codex; `guard` unreachable on every MCP-only host |
+| A host without hook events reaches no hook plugin | `src/agents/<host>/README.md` module tables | `inject`, `guard` unreachable on pi, OpenCode, Codex; `guard` unreachable on every MCP-only host (as of 2026-09-18; `guard` has reached pi and OpenCode through their plugins since T70.5, the same day) |
 
 ### 15.2 What each plugin API offers against those constraints
 
@@ -1309,19 +1320,20 @@ Scan of 2026-09-18, unverified against a running host. "—" is "not documented"
 
 | Parked item | Why it was parked | Host plugin that reaches it | Task |
 | --- | --- | --- | --- |
-| Shrink results of tools other than Bash on a host with no proxy | PostToolUse cannot modify results (§3) | pi `tool_result` (all tools) | T70.1 |
-| `archive` live zone without a proxy | proxy-only (§9.3) | pi `context` rewrites the message array per call — the same job the proxy live zone does | T70.2 |
-| pi reaches only `measure`, `cmd` (`src/agents/pi/README.md`) | "pi philosophy is no MCP" | `pi.registerTool` is not MCP: `read` / `search` / `graph` / `memory` can be pi tools | T70.3 |
-| Foreign MCP results the **host** launched | T59.4 wraps only servers rtok itself spawns (`rtok mcp -- <argv>`); lean-ctx measured at ≈ 27 % of tool-result bytes over 30 d (§2) | Cursor's post-MCP output replacement | T70.4 |
-| `guard` unreachable on pi and OpenCode | no hook events on either host | pi `tool_call` block, OpenCode `tool.execute.before` | T70.5 |
-| Compaction outside Claude Code (T58.2 (a)) | T58.2 registers host **hook** events; pi and OpenCode have none | pi `session_before_compact`, OpenCode `experimental.session.compacting` — both stronger than a note: they own the summary | T70.6 |
-| `inject` claimed reachable on Cursor | `reaches()` counts declared surfaces, and Cursor supports hooks — but the installer registers only the two shell events, which never carry a session start or a prompt | Cursor `sessionStart` / `beforeSubmitPrompt` | T70.7 |
+| Shrink results of tools other than Bash on a host with no proxy | PostToolUse cannot modify results (§3) | pi `tool_result` (all tools) | T70.1 (shipped 2026-09-18) |
+| `archive` live zone without a proxy | proxy-only (§9.3) | pi `context` rewrites the message array per call — the same job the proxy live zone does | T70.2 (shipped 2026-09-18) |
+| pi reaches only `measure`, `cmd` (`src/agents/pi/README.md`) | "pi philosophy is no MCP" | `pi.registerTool` is not MCP: `read` / `search` / `graph` / `memory` can be pi tools | T70.3 (shipped 2026-09-18) |
+| Foreign MCP results the **host** launched | T59.4 wraps only servers rtok itself spawns (`rtok mcp -- <argv>`); lean-ctx measured at ≈ 27 % of tool-result bytes over 30 d (§2) | Cursor's post-MCP output replacement | T70.4 (shipped 2026-09-18) |
+| `guard` unreachable on pi and OpenCode | no hook events on either host | pi `tool_call` block, OpenCode `tool.execute.before` | T70.5 (shipped 2026-09-18) |
+| Compaction outside Claude Code (T58.2 (a)) | T58.2 registers host **hook** events; pi and OpenCode have none | pi `session_before_compact`, OpenCode `experimental.session.compacting` — both stronger than a note: they own the summary | T70.6 (shipped 2026-09-18) |
+| `inject` claimed reachable on Cursor | `reaches()` counts declared surfaces, and Cursor supports hooks — but the installer registers only the two shell events, which never carry a session start or a prompt | Cursor `sessionStart` / `beforeSubmitPrompt` | T70.7 (shipped 2026-09-18) |
 | Skill bodies on pi | §10.8 lists Claude Code (T62.1) and OpenCode (T62.3) only | pi `context` (T70.2) drops an old body from the array like any other block; no separate task | — |
 | Sub-agent handoff (I-46), strict-mode Read deny (I-82), `RunBudget` (I-55) | parked on a **measured share**, not on a missing surface | — | stay parked |
 
-Reading: two of the three constraints are host-plugin-shaped, and pi is the host where the
-gap is widest — it reaches two plugins today and its extension API is the most capable of
-the three. The proxy stays the only path on Codex, Claude Desktop, Windsurf, Zed, ZCode
+Reading (2026-09-18; T70.1–T70.7 all shipped that day, so pi, OpenCode and Cursor now reach
+more than the lines below say): two of the three constraints are host-plugin-shaped, and pi
+is the host where the gap was widest — it reached two plugins and its extension API is the
+most capable of the three. The proxy stays the only path on Codex, Claude Desktop, Windsurf, Zed, ZCode
 and Copilot, which have neither a plugin directory nor the events. Kimi has a plugin
 store (`plugins/managed/`, T86) whose hooks and MCP server rtok's installer treats as
 the singleton instead of its own tables.
@@ -1432,7 +1444,7 @@ Routing (D9), WASM plugins (P32), embeddings (P29), semantic cache (P31), and ti
 
 ### 16.2 Already tracked but not the default product yet
 
-Status as of 2026-09-21.
+Status as of 2026-09-21, re-checked against `done.md` on 2026-10-08 (rows that moved are marked).
 
 These are **not** greenfield — they live in `ideas.md` / `plan.md`. Listed so this scan does not reinvent them. Priority here is “still open for savings,” not “new invention.”
 
@@ -1441,31 +1453,33 @@ These are **not** greenfield — they live in `ideas.md` / `plan.md`. Listed so 
 | P0 | **T59.5** tools[] description rewrite (I-45) | *measured* ~6.2 % of session **input** when Tool Search is off | M | shipped (off by default) | High repeat tax every turn; off-by-default rewrite is the right shape |
 | P0 | **T61.2** live-zone skill bodies (I-51) | High when a large skill stays in every later request (§10.3) | M | shipped (off by default) | Same archive path as tool results; gated on skill stats (T61.1) |
 | P1 | **T58.1** delta re-read (I-41) | Medium on Read-heavy sessions (Read ≈ 15 % of tool-result tokens §2) | M | shipped | MCP `read` returns unified diff when file changed since last read (§2: 7.3 % of reads) |
-| P1 | **T58.2** compaction checkpoint + archive ids (I-42) | Medium on long sessions that compact | M | open | Survives host summarization; half is host-plugin work (T70.x) |
-| P1 | **T59.1** per-stem `skip_wrap` (I-39) | Medium for curl/ffmpeg-class Bash if currently unwrapped | S–M | open | Fail-open; needs hang Check |
+| P1 | **T58.2** compaction checkpoint + archive ids (I-42) | Medium on long sessions that compact | M | shipped 2026-09-18 | Survives host summarization; half is host-plugin work (T70.x, also shipped) |
+| P1 | **T59.1** per-stem `skip_wrap` (I-39) | Medium for curl/ffmpeg-class Bash if currently unwrapped | S–M | shipped 2026-09-18 | Fail-open; needs hang Check |
 | P2 | **P28 / I-21** LLMLingua-style / extractive `compress` on | High *if* bench beats lossless; quality risk on code | L | open | Default off; costs tokens to save tokens |
 | P2 | **P31 / I-23** semantic response cache | High on repeated asks; dangerous false hits | L | open | Needs false-hit Check |
 | P2 | **P33 / I-25** OpenViking-style tiered context | High on very long threads | L | open | License + model path |
-| P2 | **T51.1** (I-09) compress nested JSON / `data:` inside live zone | Medium when blobs dominate | M | open | Complementary to tool_result archive |
+| P2 | **T51.1** (I-09) compress nested JSON / `data:` inside live zone | Medium when blobs dominate | M | shipped 2026-09-18 | Complementary to tool_result archive |
 | P3 | **I-55** session token/cost budget deny | Process control, not compression | S | open | Hosts already auto-compact |
 | P3 | **I-71** HTML→text curl formatter | *measured* &lt; 1 % Bash bytes here — parked | S | open | Re-open only above gate |
 
 ### 16.3 Further options not yet a first-class rtok idea (or only as a Decision)
 
-Prioritized for an agent product like AirTalk. Effort: S &lt; 1 week, M ~1–3 weeks, L multi-phase. Impact is expected **input** token or CTT reduction unless noted.
+Written 2026-09-21; by 2026-10-08 every row below has an idea in `ideas.md`, a task, or a measured reason not to build (the `Idea / status` lines under the table). Prioritized for an agent product like AirTalk. Effort: S &lt; 1 week, M ~1–3 weeks, L multi-phase. Impact is expected **input** token or CTT reduction unless noted.
 
 | # | Option | Impact | Effort | Notes / sources |
 | --- | --- | --- | --- | --- |
 | 1 | **Explicit prompt-cache breakpoints + sticky routing** | High $ (cache-read vs input); modest unique-token cut | M | Providers bill cache hits cheaply (rtok already prices cache in T49.1). Pin stable prefix (system + tools + modes) and keep the same backend pod/region so the KV/prompt cache hits. Anthropic prompt caching docs; OpenAI prompt caching. Not the same as I-23 semantic cache. |
 | 2 | **Deferred / dynamic tool declarations** | High when many MCP tools | M | Ship short tool stubs; load full schemas on first use (host Tool Search / deferred tools — doctor already warns when `ANTHROPIC_BASE_URL` disables search). Related to I-45 but schema-level, not only shorter text. |
 | 3 | **Model / tier routing by job** (D9) | High $; small raw-token change | M–L | Cheap model for format/classify/expand-prep; mid for edit; expensive only after confirm. Needs a router policy + measurement so “savings” are $. |
-| 4 | **Thinking / reasoning strip on replay** | Medium–High on reasoning models | S–M | Do not re-send prior chain-of-thought blocks into the next turn when the host attaches them; keep final answers + tool I/O. Host- and provider-specific. |
+| 4 | **Thinking / reasoning strip on replay** | Medium–High on reasoning models (estimate; measured 0.0297 % of session input, T125, 2026-09-21, §2) | S–M | Do not re-send prior chain-of-thought blocks into the next turn when the host attaches them; keep final answers + tool I/O. Host- and provider-specific. |
 | 5 | **Native context-editing APIs** (I-10 / T51.2) | Medium–High | M | Let the platform shrink history (Anthropic context editing / host compaction hooks) *and* keep rtok archive ids in the checkpoint (ties to T58.2). |
-| 6 | **Structured tool I/O (JSON Schema / strict)** | Medium output + easier trim | M | Force tools to return compact tables/fields instead of prose; then `toon` / formatters win more often. |
+| 6 | **Structured tool I/O (JSON Schema / strict)** | Medium output + easier trim | M | Force tools to return compact tables/fields instead of prose; then `toon` / formatters win more often. T402 (2026-10-08): measured, not built — already-structured JSON is 0.15 % of tool-result input and a `toon`-eligible table saves ~0 there; the prose a tool schema could reach (MCP only) is ≤ 0.64 % of session input (§16.6). |
 | 7 | **Sub-agent isolation + budgeted handoff** (I-46) | Medium when Task/Agent traffic grows | M | Child context starts small; parent gets a digest with archive ids — not a full transcript paste. |
 | 8 | **Identifier / path dictionary in-session** | Low–Medium | L | Replace repeated long paths with short codes in tool results; expand on demand. Easy to break models; needs A/B. |
-| 9 | **Multimodal token gate** | High $ when screenshots dominate | S–M | Prefer OCR/text or downscale; refuse or summarize images in the live zone. Separate from text CTT. T137 (2026-09-24): images are 0.91 % of session input (§2) — under the 5 % gate, not built. |
+| 9 | **Multimodal token gate** | High $ when screenshots dominate (estimate; measured 0.91 %, T137, §2) | S–M | Prefer OCR/text or downscale; refuse or summarize images in the live zone. Separate from text CTT. T137 (2026-09-24): images are 0.91 % of session input (§2) — under the 5 % gate, not built. |
 | 10 | **Speculative local draft → verify** | Mixed | L | Local small model proposes; cloud model verifies — can cut cloud **output** tokens, adds complexity and wrong-draft risk. |
+
+Idea / status of each row (2026-10-08): (1) I-84, decision-shaped; the cache hit rate here is already 98.1 % (§2), so the head-room on this workload is small. (2) I-85, overlaps host Tool Search. (3) I-101 model routers, needs a bench with a quality gate; D9 stays a decision. (4) I-86, rejected 2026-09-21 (T125): the API already strips earlier turns' thinking blocks. (5) shipped as T51.2 (2026-09-17); the archive ids in the checkpoint shipped as T58.2 (2026-09-18). (6) I-109, promoted as T402 (todo). (7) I-46, promoted as T59.6 and closed evidence-only at 0.7 % on 2026-09-18; §17 re-measured it with sub-agent transcripts (T128). (8) I-110, promoted as T403; measured 0.44 % cache-safe saving, 2.05 % repeated bytes (§16.7), not built. (9) not built, under the gate (T137, 2026-09-24). (10) I-111, promoted as T404 (todo). Batch and flex tiers are I-102 (see §31 and `docs/batch-flex.md`).
 
 ### 16.4 Sources (non-obvious)
 
@@ -1482,9 +1496,78 @@ Prioritized for an agent product like AirTalk. Effort: S &lt; 1 week, M ~1–3 w
 
 ### 16.5 Recommended next moves
 
-1. Ship or schedule **T59.5** and **T61.2** — highest *measured* or structurally recurring input taxes.
+1. **T59.5** and **T61.2** — highest *measured* or structurally recurring input taxes. Both shipped 2026-09-18 (off by default, as the §16.2 Status column says).
 2. Add a plan card for **prompt-cache-stable prefixes + sticky proxy upstream** if `$` savings matter as much as raw tokens (pairs with existing `stats --price` cache rates).
 3. Keep P28/P31/P33 in Later until a bench beats the lossless archive lane on *code* sessions.
+
+### 16.6 Prose versus structured tool output (T402, 2026-10-08)
+
+Question: how much tool output is free prose that a schema (fields or tables) could replace, and what would `toon` save on it. Ad hoc, read-only measurement on this machine's store (no shipped code); numbers are aggregates only.
+
+**Corpus A, stored hook payloads.** `calls` rows named `PostToolUse` / `postToolUse` whose `call_io.request_json` is kept (33,702 rows, 2026-10-05 00:33 to 2026-10-08 06:33 UTC; recording started on 2026-10-05, and the store keeps no payload above about 64 KB: 569 calls / 139.6 MB of payload in the same window were not stored, so large results are under-counted). The result text is what the model sees: `Bash` stdout+stderr, `Read` file content, MCP text blocks, Cursor `tool_output` envelopes unwrapped. `Edit`/`Write`/`Monitor`/`Agent`/`ToolSearch` acknowledgements and Cursor `Read`/`Grep`/`Write` (size only, no body) are left out: 23,148 result bodies, 45,810,515 B ≈ 11.45 M est. tokens (bytes / 4) = 0.34 % of session input counted once. **Resident** weights each body by the API requests that follow it in its own (or its sub-agent's) transcript: 20,475 Claude Code bodies, 1.043 G token-turns = **31.4 %** of the 3.32 G session input (uncached + cache_create + cache_read of every request in that window, sub-agents included), an upper bound because compaction drops old results. 2,673 bodies (Cursor, or no transcript found) have no resident factor and appear only in the once-counted bytes.
+
+**Classes** (per body, by heuristic): `file_content` (`Read`, `mcp__rtok__read`, `WebFetch`, `MCP:fetch`: the file's own text, no tool can reshape it); `json_tabular` (top-level array of at least 5 objects with the same 3+ scalar keys: exactly what `toon` encodes, tested with a port of `tabular_keys`); `json_wrapped_table` (the same array under an object key, which `toon` skips); `json_other`; `table_text` (60 % of lines start with `|`, or 80 % share one tab count); `records` (70 % of lines are `path:line:`); `free_text` (the rest: command output, logs, diffs, prose).
+
+| Class | Share of result bytes | Resident, % of session input |
+| --- | --- | --- |
+| `free_text` | 61.4 % | 19.48 % |
+| `file_content` | 31.2 % | 10.14 % |
+| `records` | 4.8 % | 1.01 % |
+| `table_text` | 2.2 % | 0.61 % |
+| `json_tabular` + `json_wrapped_table` + `json_other` | 0.4 % | 0.15 % |
+
+By tool: `Bash` is 17,410 bodies, 26.8 MB, 91.4 % `free_text`, 5.0 % `records`, 3.6 % `table_text`; resident 19.89 % of input (18.4 % of it `free_text`). 3,413 of 18,596 recorded `Bash` payloads already carry an `[rtok ... expand:]` marker, so these are post-`cmd` bytes. All MCP tools together: 1,925 bodies, 7.58 MB, 78 % `file_content` (`mcp__rtok__read` alone is 4.17 % of input); the non-file part is 1.36 % of input resident, of which `mcp__rtok__expand` (the archived original returned verbatim) is 0.72 %, the other `mcp__rtok__*` tools 0.21 % (`search` records 0.11 %, `worktree_list` pretty JSON 0.06 %) and third-party servers (Browser pane, Figma, host `ccd_*`) 0.43 %.
+
+**`toon` on the structured part.** In corpus A four bodies were `toon`-eligible (395 B saved in total) and six were wrapped tables (15,232 B would be saved if unwrapped, 98 % of it one Cursor `Shell` body). **Corpus B, the archive** (`archive` table, 61,369 bodies, 340.1 MB, 2026-09-04 to 2026-10-08, tool name not stored; bodies rtok archived, mostly large ones): `free_text` 60.8 %, `file_content` (the `Read` wrapper) 35.3 %, `table_text` 2.6 %, `records` 1.2 %, `json_other` 0.14 %, `json_tabular` + `json_wrapped_table` 16 bodies / 28,813 B (0.008 %). On those 16, rtok's own encoder logic (port, ignoring the 72-byte pointer on a tiny sample) cuts 8,803 B (30.6 %), which is the only measured TOON ratio and is used below as an optimistic factor.
+
+**What a schema could reach.** If every non-file byte of MCP output became a toon-style table at 30.6 %: 1.36 % x 0.306 = 0.42 % of input; without `expand` (whose payload is the original body) 0.64 % x 0.306 = 0.20 %. All non-file bytes of every tool (`Bash` included, 21.25 % of input) would give 6.5 % on the same factor, but `Bash`/`Shell` output is the stdout of external programs; no rtok schema applies there, only the `cmd` rules and formatters, which already shorten it (the `cmd` rule rows save 59 % of their input, `measurements` 2026-09-14 to 2026-10-08) and which are measured elsewhere.
+
+**Decision (T402, 2026-10-08).** Already-structured tool output is 0.15 % of input and has no `toon` headroom; the prose a tool schema can change (MCP, shortest path) is at most 0.64 % of input before any saving, below the 1 % gate. No build task is filed; row #6 stays an idea. Reopen if an MCP server with large table-shaped prose output (a `search` or `list` of 50+ rows) gets heavy use.
+
+Caveats: heuristic classes (no human labelling); `bytes / 4` token estimate; stored payloads under about 64 KB only (corpus A) and no tool names in the archive (corpus B); resident factors use the transcript's request timestamps and assume no compaction. Commands: read-only `sqlite3 "file:<home>/rtok.db?mode=ro"` plus a one-off Python script over `call_io.request_json` and the archive blobs; transcripts under `~/.claude/projects` for the denominator.
+
+### 16.7 Path and identifier dictionary (T403, 2026-10-08)
+
+`rtok stats --since 30d` on this machine (306 sessions, 633 651 transcript lines), `dictionary` row (`src/measure/dictionary.rs`). The proxy rows here hold no request bodies (0 `calls` with surface `proxy`, 0 `usage` rows in `rtok.db`), so the transcripts stand in: the tool inputs and tool results are the history every request re-sends. Per session, up to 6 evenly spaced API requests are rebuilt (everything up to that turn, restarted at a `compact_boundary`), 1 672 requests in all. A path is a `/`-containing run of at least 16 bytes; an identifier is snake_case or camelCase of at least 12 bytes (prose words and hex hashes are out). Shares divide by the provider-billed input of the same requests (uncached + cache writes + cache reads, 232 965 662 tokens, at the report's 4 bytes per token = 931.9 MB); message content alone is 176.3 MB, since the system prompt, tool schemas, prompts and thinking are not in the transcripts' tool blocks.
+
+| Measure | Paths | Identifiers | Both |
+| --- | --- | --- | --- |
+| Bytes of tokens repeated at least twice anywhere in the request (ceiling) | 12 834 182, 1.38 % | 6 261 279, 0.67 % | **2.05 %** |
+| Cache-safe saving, tool results only | 2 469 052, 0.26 % | 1 631 188, 0.18 % | **0.44 %** |
+
+Cache-safe means the bytes of an earlier message never change when a later one arrives, or the prompt cache (98 % of input here, §2) breaks: a code is defined inline at a token's second use in a result and only the third and later uses shrink; codes go to the biggest tokens first; the model's own tool inputs and text are never rewritten (signed blocks, quoted back into edits), so they count toward the ceiling but not the saving. Source: this machine's `~/.claude/projects` transcripts read by the code above; no request content or path leaves the machine, only the totals above. Caveats: the sample is almost all rtok development, a path-heavy workload; 4 bytes per token is the report's estimate, and short codes tokenize worse than their byte length suggests, so the token saving is lower.
+
+Under the 1 % gate on what a proxy could actually remove (0.44 %): the dictionary (§16.3 #8) stays unbuilt, with this number. The 2.05 % ceiling is above the gate, but it is not reachable: the first use of every token stays, and the model's own turns cannot change. Risk if built anyway: a model that copies a `~7` into a tool input breaks the call unless something expands it back first.
+
+### 16.8 How much input is old archived tool output: P28 Phase 1 (T385.8, 2026-10-08)
+
+Question (`docs/research/optimization.md` §3.3, `docs/llm-soft-compression.md` Phase 1): what share of the input an agent sends is tool output that an LLM compressor could rewrite, and what must such a rewrite keep. No compressor exists; this is a measurement and a test fixture.
+
+**"Old enough" is the shipped archive rule**, not a new one: a tool result is eligible when at least `plugins.archive.keep_turns` = 4 user messages follow it in the request (a turn is one `user` message counted from the end, the newest is turn 0; a tool-result message is a `user` message) and its body is at least `plugins.archive.min_tokens` = 1500 tokens (`src/config/mod.rs` `Archive`, `src/plugins/archive/mod.rs` `outside_live_zone`, `src/proxy/wire.rs` `turn_setup`, all at `d9dac1b5e`). The host-side rule it is compared with is Anthropic's `clear_tool_uses_20250919`: it fires at 100,000 input tokens, keeps the last 3 tool uses and has no `clear_at_least` by default (https://platform.claude.com/docs/en/build-with-claude/context-editing, fetched 2026-10-08); it is off in rtok (`proxy.context_management`, T51.2) and was not measured separately.
+
+**Method** (read-only, aggregates only). Corpus: every Claude Code transcript under `~/.claude/projects` modified in the last 60 days, sub-agent files included as separate conversations, counting only API requests stamped 2026-09-08 to 2026-10-08 (2,148 files, 144,452 requests). Denominator: the real usage of each request, `input + cache_creation + cache_read` tokens, once per `message.id` (21.16 G tokens). Numerator: for each request, every tool result still in that conversation, weighted by one request each (the "resident" weight of §16.6), at `bytes / 4` tokens, counted when it is at least `keep` user messages behind the request's newest user message and at least `min` tokens. Adjacent `user` lines are one message; a `compact_boundary` empties the conversation, so compaction is modelled (§16.6 was not). `rtok stats --since 30d --json` (rtok 0.15.1, `fe170a431`) gave the cross-check; the rtok database was opened with `sqlite3 -readonly` for the archive rows. The pass was a one-off Python script, not committed.
+
+| Measure (2026-09-08 to 2026-10-08) | Value |
+| --- | --- |
+| Real input, all requests | 21.16 G tokens (cache hit 98.4 %, `rtok stats`) |
+| Tool results resident, any age or size | 17.29 % of input (163,019 results, 257.2 MB) |
+| **Old enough and large enough (keep 4, min 1500)** | **6.54 % of input** (1.38 G est. tokens) |
+| Same, sensitivity: keep 8 / keep 16 | 6.13 % / 5.34 % |
+| Same, sensitivity: min 300 / min 3000 (keep 4) | 13.76 % / 3.23 % |
+| Same, last three days only (2026-10-05 on) | 6.79 % |
+| Results that ever become eligible | 8,625 of 163,019 (5.3 %), 99.5 MB of 257.2 MB (38.7 %) |
+| Old (keep 4) but under the floor: 300-1,499 tokens / under 300 tokens | 7.22 % / 2.44 % of input |
+| Eligible and already carrying an rtok `[rtok … expand:]` marker | 0 (all marked old results, any size: 0.20 %) |
+
+Eligible share by tool (sums to 6.54 %): `Bash` 2.12 %, `Read` of code 1.40 %, rtok `read` 1.23 %, `Read` of prose 0.86 %, other MCP 0.59 %, `Read` of other types 0.19 %, config files 0.05 %, search 0.03 %, rest 0.07 %. By content shape (a line-regex heuristic: 40 % of lines look like code, or a `Read` of a code extension): code 3.57 %, prose and logs 2.92 %, config and data 0.05 %. So about half of what a compressor would touch is source code or diffs, the content the research flags as weakest for token-dropping compressors.
+
+**Archive store** (`archive` table, rtok database, read-only, 2026-09-04 to 2026-10-08): 61,853 bodies, 342.4 MB. Bodies of at least 6,000 bytes (the 1500-token floor): 9,627 rows (15.6 %) holding 248.4 MB (72.5 % of archived bytes); bodies of 24 KB or more: 1,452 rows, 163.3 MB (47.7 %). `archive_decisions` has 0 rows and `proxy.mode = "passthrough"`, so the proxy rewrite has never run on this machine and every figure above is the unrewritten prompt. `rtok stats` replay of the shipped pointer over the same 30 days: tool-result context-token-turns 22.0 G to 15.4 G (-30 %), 2,520 results (that metric ignores compaction, so only its ratio is comparable); 901 `expand` calls followed a shown pointer, 3.4 MB.
+
+**What it means for P28.** The eligible set is 6.54 % of input tokens. A compressor at the 2x-5x range the LLMLingua-2 paper reports (arXiv 2403.12968, as cited in `optimization.md` §3.2, not re-fetched) would remove 3.3 % to 5.2 % of input tokens at most, ceiling 6.5 %. These are tokens, not dollars: 98.4 % of input is served from the prompt cache, and a rewrite of an old block busts the cache from that block on unless the replacement is stable (`docs/prompt-cache.md`). The compressor's own input is the 99.5 MB of ever-eligible bytes, about 24.9 M tokens, 0.12 % of the volume, paid once per result if cached per archive id. The lossless pointer already targets the same set (head 8 and tail 4 lines), so an LLM view competes with a pointer of roughly a dozen lines on quality per token, not on raw size. A cheaper lever sits next to it: `min_tokens` = 1500 leaves 7.22 % of input in old results of 300-1,499 tokens untouched, and min 300 doubles the eligible share to 13.76 %; that is a bench question for the lossless path (idea I-116), not for a model.
+
+**Must-keep fixture.** `tests/fixtures/p28_must_keep.toml` (hand-written, fictional `acme` project, no real data): 7 tool results (build errors, test failure, diff, grep records, JSON response, service log, design note) with 54 verbatim must-keep spans of six kinds: paths with `file:line`, identifiers, error lines, numbers, commands, ids. At least two spans per body sit outside the first 8 and last 4 lines the pointer shows. `tests/p28_must_keep.rs` validates the fixture and scores the shipped pointer: the pointer keeps 14 of the 54 (26 %), exactly those on the first 8 or last 4 lines; `expand` returns all of them.
+
+Caveats: `bytes / 4` underestimates code (about 3 chars per token), so the true token shares are somewhat higher; the tool-name classes come from the transcript's own `tool_use` records; transcripts of the last 60 days only, Claude Code only (Codex, Cursor and others are not in the denominator); mtime-selected files may hold older, uncounted requests; eligibility assumes the 4-message boundary of the proxy even though no proxy ran; micro-compaction by the host, if any, is not modelled. Commands: read-only `sqlite3 -readonly "file:<home>/rtok.db?mode=ro"` for the `archive`, `archive_decisions` and config values; `rtok stats --since 30d --json`.
 
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
@@ -1492,7 +1575,7 @@ Creator request: a freshly spawned sub-agent gets none of the parent's context, 
 
 ### 17.1 What T59.6 measured, and what it missed
 
-T59.6 closed `handoff` at 0.7 % because it measured the `Agent` tool's input and result **in the parent transcript**. The cost of a sub-agent is not there: it is in `<session>/subagents/agent-<id>.jsonl` (plus `agent-<id>.meta.json`: `agentType`, `model`, `toolUseId`, `spawnDepth`), which no rtok code attributes to a parent — `src/` has no `agent_id`, `agent_type` or sidechain handling.
+T59.6 closed `handoff` at 0.7 % because it measured the `Agent` tool's input and result **in the parent transcript**. The cost of a sub-agent is not there: it is in `<session>/subagents/agent-<id>.jsonl` (plus `agent-<id>.meta.json`: `agentType`, `model`, `toolUseId`, `spawnDepth`), which no rtok code attributed to a parent when this section was written (2026-09-21; `src/` had no `agent_id`, `agent_type` or sidechain handling). T128 (2026-09-22) attributes sub-agent transcripts to their parent session in `rtok stats`, and T129 (2026-09-22) makes the hook payload carry `agent_id`.
 
 `rtok stats --since 30d --json` → `subagents`, run 2026-09-22 on this machine's `~/.claude/projects` (the T128 row replaces the 2026-09-21 ad-hoc scan and supersedes its numbers):
 
@@ -1689,7 +1772,7 @@ The harness lands on Claude Code's own p50 (20–23 ms), so the gap between the 
 
 ### 19.4 The 5 s cancellations and UserPromptSubmit
 
-`~/.claude/settings.json` has no `hooks` key; the only enabled plugin is `rtok@rtok`, whose `hooks.json` owns every `UserPromptSubmit` hook, with `timeout: 5` from `setup.hook_timeout_s`. The ten cancelled rtok hooks (5 `PreToolUse`, 5 `UserPromptSubmit`, 2026-09-14 to 2026-09-21) all ran the older settings-file command `rtok hook <event>`. The store does hold `UserPromptSubmit` rows (905, mean 0.52 ms in-process). For four of the ten, the matching `calls` row carries a timestamp 0–1 s before Claude Code logged the cancellation, 5 s after it started the hook, and recorded 0.3–0.6 ms in-process; the other six left no row in that window. So the stall came before `record_call`, which is `Config` load or `Store::open`. `Store::open` waits `busy_timeout = 1000` ms on a locked database and retries a locked open up to ten times (~11 s at worst), so this points at the SQLite write lock. Not reproduced here.
+`~/.claude/settings.json` has no `hooks` key; the only enabled plugin is `rtok@rtok`, whose `hooks.json` owns every `UserPromptSubmit` hook, with `timeout: 5` from `setup.hook_timeout_s`. The ten cancelled rtok hooks (5 `PreToolUse`, 5 `UserPromptSubmit`, 2026-09-14 to 2026-09-21) all ran the older settings-file command `rtok hook <event>`. The store does hold `UserPromptSubmit` rows (905, mean 0.52 ms in-process). For four of the ten, the matching `calls` row carries a timestamp 0–1 s before Claude Code logged the cancellation, 5 s after it started the hook, and recorded 0.3–0.6 ms in-process; the other six left no row in that window. So the stall came before `record_call`, which is `Config` load or `Store::open`. `Store::open` waits `busy_timeout = 1000` ms on a locked database and retries a locked open up to ten times (~11 s at worst), so this points at the SQLite write lock. Not reproduced here; re-counted after the fixes in §19.8, where the lock explanation does not hold.
 
 ### 19.5 Change and result
 
@@ -1734,6 +1817,21 @@ command -v rtok-hook >/dev/null 2>&1 && exec rtok-hook PreToolUse; command -v rt
 | `hooks.json` PostToolUse (`rtok-hook`, resident up) | 12.54 ms | 29.22 ms |
 
 About −2.4 ms vs §19.5's `rtok hook` PreToolUse p50 (14.63 → 12.28 ms) on a quieter load then; the node + `/bin/sh` floor is still 5.6 ms, and the tiny client plus IPC leave ~6.7 ms above it. The T178 Check (p50 under 10 ms as Claude Code sees it) is **still not met**. Blocker: even with the resident answering and `rtok-hook` first on PATH, harness p50 stays ~12 ms on this machine under the stated load.
+
+Closed the same day (T178, 2026-09-26): the creator raised the Check to hook p50 as Claude Code sees it under **20 ms** on the §19.2 harness, which the numbers above meet (12.28 and 12.54 ms). Getting to 10 ms stays on the roadmap (Later), not in `plan.md`.
+
+### 19.8 Cancellations after the fixes (T397, 2026-10-08)
+
+§19.4 counted ten cancelled rtok hooks before T178 and §19.6 validated the lock-wait fix only against a synthetic lock. Re-counted on the creator's real transcripts and logs, read-only (streamed `jq` over `~/.claude/projects/**/*.jsonl`, `grep -c` over `~/.rtok/rtok.log`; nothing written, no `rtok` command opened the store). Aggregates only; timestamps are UTC. Window: 2026-09-27 to 2026-10-08, the days after T178 closed (#413, 2026-09-26); no rtok hook attachment survives in the transcripts for 2026-09-22 to 2026-09-26. Machine: Apple M3 Max, load average 80–200 while measuring.
+
+| | runs | cancelled | rate |
+| --- | ---: | ---: | ---: |
+| Before T178: `rtok hook <event>` from `settings.json`, 2026-09-14 to 2026-09-21 (surviving transcripts only) | 13,091 | 10 | 0.076 % |
+| After T178: plugin `hooks.json` command (`rtok-hook`, else `rtok hook`, else `hook.sh`), 2026-09-27 to 2026-10-08 | 165,669 | 114 | 0.069 % |
+
+The rate did not move; the count rose with use. Of the 114: 107 `PreToolUse`, 4 `UserPromptSubmit`, 3 `SubagentStart`. Duration at cancellation: 75 at 5.x s (the `timeout: 5`), 10 at 6 s, 15 at 7–9 s, 9 at 10–29 s, 5 at 30–70 s. They cluster: 13 sessions, one with 54 and one with 20; 107 fall on three days (2026-10-02: 29, 2026-10-07: 27, 2026-10-08: 51); at most 24 in one hour and 4 in one minute.
+
+Lock check, `~/.rtok/rtok.log` since 2026-09-26: 7 `hook … skipped: store locked` events (2026-09-30: 1, 2026-10-02: 2, 2026-10-06: 1, 2026-10-07: 3), so the T178 fix does fire on the real store and returns `{}` instead of waiting. Seven skips cannot account for 114 cancellations. Of 6,545 slow-hook warnings (over `max_ms = 10`), the slowest in-process run was 3,260 ms and none reached 5 s, so the 5 s cancellations are not hooks that ran to the end and logged; they are hooks that never got that far. These data do not say why (a starved process start under load, a host-side abort, and a stall before `record_call` all fit), and a transcript attachment carries no stack. Result: the lock-wait fix is confirmed to fire live; it is **not** shown to remove the cancellations, whose cause stays open.
 
 ## 20. WebSearch, WebFetch and browser page text: size, reach, what would cut it (2026-09-23)
 
@@ -1819,7 +1917,7 @@ Default-deny: no host is decrypted unless it is on an explicit allow-list of hos
 
 ## 22. Host junk map (T182) (2026-09-24)
 
-Nothing here is deleted by rtok until the creator reviews the map; all 17 hosts (`HOSTS` in `src/agents/mod.rs`) were re-verified against official docs or source repos via WebSearch/WebFetch on 2026-09-24, and a cell reads "not documented" rather than a guess whenever no host-specific official source names a path — a wrong row here can destroy a user's real data. Evidence: "documented" = the host's own docs site; "source" = the host's own repo (file cited); both give the full URL, never a site name.
+Nothing here is deleted by rtok until the creator reviews the map; the first 17 hosts of the table below were re-verified against official docs or source repos via WebSearch/WebFetch on 2026-09-24; `commandcode`, `cline`, `mimo`, `devin`, `antigravity`, `roo` and `qwen` were added on 2026-10-08 (T391), so the table now covers all 24 hosts of `HOSTS` in `src/agents/mod.rs`, and a cell reads "not documented" rather than a guess whenever no host-specific official source names a path — a wrong row here can destroy a user's real data. Evidence: "documented" = the host's own docs site; "source" = the host's own repo (file cited); both give the full URL, never a site name.
 Never junk, on any host: settings/config files, credentials and auth tokens (never read for expiry, never deleted), installed extensions/plugins, and a whole config/state directory named as if it were all junk (`~/.gemini/`, `~/.kimi-code/`, `~/Library/Application Support/Zed`, `~/.config/Code/` are never junk as a whole).
 Session or conversation history and snapshots (e.g. pi's `~/.pi/agent/sessions`, aider's `.aider.chat.history.md`/`.aider.input.history`, Gemini's checkpoints) are never junk by default: rtok clears a session only when the user names `--kind sessions`, only on a host whose sessions cell in §22.1 documents the whole session unit and the index the host keeps beside it, and never the host's memory, index or store files; per-project snapshot stores are never cleared (D36, §22.1).
 rtok clears only paths in this table, directories carrying a valid `CACHEDIR.TAG`, and paths the user names in `[agents.junk] extra`; platform cache roots and Electron subfolders without a row here are listed read-only with their size and never cleared (D36, §22.2).
@@ -1836,18 +1934,25 @@ rtok clears only paths in this table, directories carrying a valid `CACHEDIR.TAG
 | zcode | `~/.zcode/cli/exec` (past terminal output; ZCode recreates it) | not documented | not documented | documented: https://zcode.z.ai/en/docs/qa | 2026-09-24 |
 | kimi | not documented | `~/.kimi-code/logs/` | `~/.kimi-code/bin/` (downloaded `rg`/`fd`, redownloaded on use); `~/.kimi-code/updates/latest.json` | source: https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/configuration/data-locations.md | 2026-09-24 |
 | grok | not documented | `~/.grok/logs/` (`unified.jsonl`, MCP server logs; override `GROK_LOG_FILE`) | not documented | source: https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/05-configuration.md | 2026-09-24 |
-| vscode | not documented | not documented | not documented | documented (mechanism only, no path given): https://docs.github.com/en/copilot/troubleshooting-github-copilot/viewing-logs-for-github-copilot-in-your-environment | 2026-09-24 |
+| vscode | not documented | not documented | `<user data>/CachedData/<commit>` for every commit but the current one (macOS `~/Library/Application Support/Code`, Linux `~/.config/Code`); never the `CachedData` folder itself or the newest commit folder (§22.2) | documented (mechanism only, no path given): https://docs.github.com/en/copilot/troubleshooting-github-copilot/viewing-logs-for-github-copilot-in-your-environment; user data folder: https://code.visualstudio.com/docs/configure/settings; source: https://github.com/microsoft/vscode/blob/8002c7893fcc/src/mainImpl.ts (`path.join(userDataPath, 'CachedData', commit)`) | 2026-10-08 |
 | copilot | not documented | `~/.copilot/logs/` (recreated every session) | macOS `~/Library/Caches/copilot`, Linux `$XDG_CACHE_HOME/copilot` (or `~/.cache/copilot`), Windows `%LOCALAPPDATA%/copilot`, override `COPILOT_CACHE_HOME` | documented: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference | 2026-09-24 |
 | aider | not documented | not documented | not documented | not documented — only documented files are `.aider.conf.yml` and the chat/input history, both excluded (https://aider.chat/docs/faq.html, https://aider.chat/docs/config/options.html) | 2026-09-24 |
 | windsurf | not documented | not documented | not documented | not documented — Devin Desktop's Windsurf-migration FAQ names generic Electron `logs/`/`crashpad/`/cache categories but no Windsurf-specific path (https://docs.devin.ai/desktop/devin-desktop-faq) | 2026-09-24 |
 | zed | not documented | macOS `~/Library/Logs/Zed/Zed.log`; Linux `~/.local/share/zed/logs/Zed.log` (or `$XDG_DATA_HOME/zed/logs/Zed.log`) | macOS `~/Library/Caches/Zed`; Linux `$XDG_CACHE_HOME/zed` — caution, issue #17835 shows Zed has also written `~/.cache/zed` on macOS by bug; verify the installed version first | documented: https://zed.dev/docs/troubleshooting, https://zed.dev/docs/macos; source (bug): https://github.com/zed-industries/zed/issues/17835 | 2026-09-24 |
 | gemini | not documented — `~/.gemini/tmp/<hash>/` exists but holds checkpoints/shell history, which is session history, not junk | not documented | not documented | documented: https://geminicli.com/docs/cli/settings/, https://geminicli.com/docs/resources/troubleshooting/ | 2026-09-24 |
 | codewhale | not documented | not documented — `audit.log` is tied to session reconciliation, not a pure rotating log | `~/.codewhale/update-check.json` (single file; caches the update-check result, reused for `check_interval_hours`) | source: https://github.com/Hmbown/Codewhale/blob/main/docs/CONFIGURATION.md | 2026-09-24 |
+| commandcode | not documented | not documented | not documented | documented: https://commandcode.ai/docs/settings names only config, settings, auth, providers, keybindings, MCP, cron and per-project state files under `~/.commandcode`, and no log, cache or temp path | 2026-10-08 |
+| cline | not documented | `~/.cline/data/logs/` (CLI and hub logs; the CLI log is `cline.log`, `CLINE_LOG_PATH` moves it, `CLINE_DATA_DIR` replaces `~/.cline/data/`, `CLINE_DIR` replaces `~/.cline/`) | not documented — a cache folder appears only in a user's issue report (**unverified**) | documented: https://docs.cline.bot/getting-started/config | 2026-10-08 |
+| mimo | not documented | `~/.local/share/mimocode/log/` | `~/.cache/mimocode` (provider packages) | documented: https://mimo.xiaomi.com/mimocode/troubleshooting; config home `~/.config/mimocode` per https://mimo.xiaomi.com/mimocode/config-files | 2026-10-08 |
+| antigravity | not documented | not documented | not documented — no Google page names a path; the `~/.gemini/antigravity*` and `~/.config/Antigravity` locations in circulation come from third-party guides and a forum thread only, **unverified** (https://discuss.ai.google.dev/t/bug-antigravity-keeps-big-cache-directories-in-config-antigravity/129240) | 2026-10-08 |
+| devin | not documented | `~/.local/share/devin/cli/logs/devin_<timestamp>_<pid>.log` (macOS/Linux; Windows `%APPDATA%\devin\cli\logs`) | not documented — the page names no cache folder; user config is `~/.config/devin/config.json` (read from a search snippet of the config-file page, **unverified**) | documented: https://docs.devin.ai/cli/troubleshooting, https://docs.devin.ai/cli/reference/configuration/config-file | 2026-10-08 |
+| roo | not documented | not documented | not documented — the per-task folders under the extension's `globalStorage` hold task history (§22.1 rule) | not documented — a 2026-10-08 search of docs.roocode.com found no log or cache path; the storage root is only in source (https://github.com/RooCodeInc/Roo-Code/blob/main/src/utils/storage.ts) | 2026-10-08 |
+| qwen | not documented — `~/.qwen/tmp/<project_hash>/shell_history` is shell history, not junk | not documented — the settings page says session debug logs sit "under the runtime `debug/` directory" without a path | not documented | documented: https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/ (`QWEN_HOME`, default `~/.qwen`) | 2026-10-08 |
 | rtok (own, T330.3.1) | not documented | `rtok.log` siblings and archive payloads (T182) | `<project>/.rtok-lsp-xdg/{cache,pub-cache}` for every registered project (cargo workspaces `target/rtok-lsp-xdg/…`, Dart `.dart_tool/rtok-lsp-xdg/…`), cleared only when idle (T152); `$XDG_CACHE_HOME/rtok` (macOS `~/Library/Caches/rtok`, Windows `%LOCALAPPDATA%\rtok\cache`): rtok writes nothing there yet, the name is rtok's own namespace under the platform cache root | source: https://github.com/pyrlyn/rtok/blob/3ab01d79/src/plugins/graph/lsp.rs#L146-L173 (the confined state dirs); cache roots per https://specifications.freedesktop.org/basedir-spec/latest/ and Apple's file-system guide (§22.2) | 2026-10-06 |
 
 ### 22.1 T330 junk kinds vs "never junk": sessions, tokens, snapshots (T338) (2026-10-03)
 
-The conflict: T330 deletes `sessions` (`review`, default threshold 3 days), `stale-tokens` (explicit only) and `snapshots` (`review`); the §22 rule above says credentials, auth tokens and session or conversation history are never junk on any host. T330.1 (PR #651, open) ships only the read-only `list` over rtok's own T182 junk, so no shipped code takes a side yet. Checked 2026-10-03; primary sources only, secondary ones marked **unverified**.
+The conflict: T330 deletes `sessions` (`review`, default threshold 3 days), `stale-tokens` (explicit only) and `snapshots` (`review`); the §22 rule above says credentials, auth tokens and session or conversation history are never junk on any host. T330.1 (PR #651, merged 2026-10-03) shipped only the read-only `list` over rtok's own T182 junk, so that slice takes no side; the choice is D36 (§22.2). Checked 2026-10-03; primary sources only, secondary ones marked **unverified**.
 
 **What the hosts themselves say about these files.**
 
@@ -1901,7 +2006,7 @@ The conflict: T330 says paths come only from §22 and "not documented" cells are
 
 **Approach C: evidence decides what is cleared; heuristics only inform `list`.** `clear` deletes only paths with evidence: (1) a §22 cell (docs or source); (2) a directory carrying a valid `CACHEDIR.TAG`, the owner's own declaration (deletion rules per T342); (3) a path the user names in `[agents.junk] extra`. Platform cache roots and Electron subfolders are scanned read-only: `list` shows them under the agent with size and the note "not documented: not cleared (add to `[agents.junk] extra` to clear)", and they never count toward "Freed by `clear`". Cursor is `list`-only until a primary source names its paths. A heuristic path that later gets a cited §22 row moves to (1) with no code change beyond the map. Risk: low; nothing is deleted on a guess. Usefulness: the user sees every large cache folder, and freeing the undocumented ones takes one explicit config line. Maintenance: same as A for deletion, plus a small read-only scanner.
 
-**Recommendation: C.** `list` is read-only (T330.1 shipped it that way in PR #651), so showing heuristic finds costs no data; only deletion needs evidence. It keeps §22's rule for everything `clear` removes and makes the user, not rtok, the source for any undocumented path. Candidate §22 rows for T330.3, each to be added only with its citation: VS Code `CachedData/<commit>` other than the current commit (VS Code source above).
+**Recommendation: C.** `list` is read-only (T330.1 shipped it that way in PR #651), so showing heuristic finds costs no data; only deletion needs evidence. It keeps §22's rule for everything `clear` removes and makes the user, not rtok, the source for any undocumented path. Candidate §22 rows for T330.3, each to be added only with its citation: VS Code `CachedData/<commit>` other than the current commit (VS Code source above). Added as a §22 row on 2026-10-08 (T391). VS Code's cleaner receives the running commit from the app (`codeCacheCleaner.ts` only takes the `basename` of the current cache path), which rtok cannot read, so `clear` treats the most recently modified commit folder as current and keeps it, offers the others under T152's idle rule, and never touches the `CachedData` folder itself; the cleaner's own age limit (~3 months stable) is not applied.
 
 **Decision (creator, 2026-10-03):** C, recorded as D36.
 
@@ -1917,7 +2022,7 @@ Question: which hosts let a hook add context to a sub-agent before it runs, the 
 | Copilot CLI | yes | `subagentStart` (matcher on agent name), `additionalContext` prepended to the subagent's prompt; the built-in general-purpose agent emits no event | https://docs.github.com/en/copilot/reference/hooks-reference |
 | Kimi | event-only | `SubagentStart` fires; the result of `runner.trigger` is discarded | MoonshotAI/kimi-code `packages/agent-core-v2/src/features/externalHooks/session/sessionExternalHooksService.ts` |
 | Cursor | event-only | `subagentStart` output has only `permission` / `user_message` | https://cursor.com/docs/hooks |
-| Grok | event-only (weak) | `SubagentStart` / `SubagentStop` fire; no output schema documented | https://docs.x.ai/build/features/hooks |
+| Grok | event-only (weak) | `SubagentStart` / `SubagentStop` fire; re-checked 2026-10-08: no output schema and no returned fields documented for them (only `PreToolUse` documents an output, `decision` and `reason`; passive events' stdout is ignored); no `invoke_subagent` event | https://docs.x.ai/build/features/hooks (checked 2026-10-08) |
 | CodeWhale | event-only | `subagent_spawn` is an observer event; result discarded | `src/agents/codewhale/README.md` |
 | Gemini CLI | no | no subagent event (`BeforeAgent` / `AfterAgent` are the parent turn) | https://geminicli.com/docs/hooks/reference/ |
 | ZCode | no | no subagent event | https://zcode.z.ai/en/docs/hooks |
@@ -1925,10 +2030,10 @@ Question: which hosts let a hook add context to a sub-agent before it runs, the 
 | Pi, omp | no | no hookable spawn; subagents are an extension of their own | badlogic/pi-mono `docs/extensions.md` |
 | Windsurf | no | no subagent event among the documented hooks | https://docs.devin.ai/desktop/cascade/hooks |
 | Cline | no | `new_task` hands off in the same conversation, no child agent | https://docs.cline.bot/customization/hooks |
-| Antigravity | no (weak) | no hook on `invoke_subagent` | https://antigravity.google/docs/hooks/ |
+| Antigravity | no (weak) | re-checked 2026-10-08: five events only (`PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`), no subagent event; `invoke_subagent` is a tool name, so a `PreToolUse` matcher could hit it, but that output is only `decision` and `reason` (deny), so no context reaches the subagent | https://antigravity.google/docs/hooks/ (checked 2026-10-08) |
 | MiMo | no | no hook system | mimo docs |
 
-Follow-ups: T262.3 (Codex) and T262.4 (Copilot CLI). Grok and Antigravity rest on missing docs, so a docs change there is worth a recheck. Found on the way: Copilot CLI `subagentStop` accepts `modifiedResponse`, which replaces the subagent's answer to the parent (idea I-98).
+Follow-ups: T262.3 (Codex) and T262.4 (Copilot CLI). Grok and Antigravity rest on missing docs, so a docs change there is worth a recheck. Rechecked 2026-10-08 (T399): still no output schema for Grok's subagent events and no subagent hook on Antigravity; verdicts unchanged, no spawn-brief task filed. Found on the way: Copilot CLI `subagentStop` accepts `modifiedResponse`, which replaces the subagent's answer to the parent (idea I-98).
 
 ## 24. Cloud MCP mode for the Grok API (2026-09-26)
 
@@ -1958,7 +2063,7 @@ Creator request 2026-09-27: rtok manages worktrees for every agent the same way,
 
 
 Checked 2026-09-27 unless noted. Primary sources only; secondary sources marked **unverified**.
-Hosts = `src/agents/*` (21): aider, antigravity, claude, cline, codewhale, codex, copilot, cursor, devin, gemini, grok, kilo, kimi, mimo, omp, opencode, pi, vscode, windsurf, zcode, https://zed.
+Hosts = `src/agents/*` (21 on 2026-09-27: aider, antigravity, claude, cline, codewhale, codex, copilot, cursor, devin, gemini, grok, kilo, kimi, mimo, omp, opencode, pi, vscode, windsurf, zcode, zed; `commandcode` landed 2026-09-30, `roo` and `qwen` 2026-10-05, so 22 on 2026-10-04 and 24 on 2026-10-08).
 
 | Host | Native worktrees | Interception mechanism | Session id exposure | Start/end hooks | Source |
 |---|---|---|---|---|---|
@@ -1980,7 +2085,7 @@ Hosts = `src/agents/*` (21): aider, antigravity, claude, cline, codewhale, codex
 | Devin Desktop (Cascade) | yes, shares Windsurf's pool: `~/.windsurf/worktrees/<repo_name>`, random name, cap ~20 workspace-wide LRU eviction; deleting a conversation removes its worktree | `post_setup_worktree` fires **after** creation only (post-create, not a gate/replace); receives `$ROOT_WORKSPACE_PATH`; no pre-create or pre/post-remove hook | `trajectory_id` (conversation) + `execution_id` (single turn) — no field literally named "session id" | none — no `SessionStart`/`SessionEnd` among Cascade's 12 events | https://docs.devin.ai/desktop/cascade/worktrees, /hooks |
 | Windsurf (Cascade) | same as Devin above — Cognition owns both; `PostSetupWorktreeEvent`(https://docs.windsurf.com wording) = `post_setup_worktree` | same `post_setup_worktree`, post-create only | same `trajectory_id`/`execution_id` | none | https://docs.windsurf.com/windsurf/cascade/worktrees; https://docs.devin.ai/desktop/cascade/hooks (same underlying doc set) |
 | Antigravity (Google) | yes — per-conversation "New Worktree Mode" in Projects, isolates each agent/subagent; exact directory/naming **unverified** | none — only 5 hooks (`PreToolUse/PostToolUse/PreInvocation/PostInvocation/Stop`), none worktree-related | `conversationId` (UUID) in every payload; no field named "session id" | none — no `SessionStart`/`SessionEnd`; `Stop` only ends the execution loop, not the session | https://antigravity.google/docs/hooks/, /docs/projects/ |
-| Cline | not found/no evidence (Cline uses a shadow-git "checkpoints" repo instead of worktrees) | n/a | not confirmed — https://docs.cline.bot/customization/hooks did not render detail beyond "see SDK Plugins" (**unverified**) | not confirmed | https://docs.cline.bot/customization/hooks (thin), https://docs.cline.bot/core-workflows/checkpoints |
+| Cline | not found/no evidence (Cline uses a shadow-git "checkpoints" repo instead of worktrees) | n/a | not documented (checked 2026-10-08): https://docs.cline.bot/customization/hooks names no parent process or session id and points to SDK Plugins, and https://docs.cline.bot/sdk/plugins does not cover hook processes (**unverified**) | not confirmed | https://docs.cline.bot/customization/hooks, https://docs.cline.bot/sdk/plugins, https://docs.cline.bot/core-workflows/checkpoints |
 | aider | no — no worktree feature in official docs; only secondary blog posts describe manual pairing with worktrees | n/a | no hook/event system found in aider's docs at all | no | https://aider.chat/docs/git.html, /docs/faq.html |
 | Zed | no auto-managed worktree pool the way other hosts have one; a "thread" can be pointed at a plain git worktree the user creates themselves, chosen per-thread — exact mechanics **unverified** | none — Zed has **no shell hook events at all** (confirmed in rtok's own `src/agents/zed/mod.rs`: "external agents can reach them over ACP") | ACP gives a stable session id via `session/new`/`session/load`, but Zed itself issues no hook payload with one | none — no hook system to have start/end hooks in | https://zed.dev/docs/ai/parallel-agents, https://zed.dev/acp; src/agents/zed/mod.rs |
 
@@ -1990,7 +2095,7 @@ Hosts = `src/agents/*` (21): aider, antigravity, claude, cline, codewhale, codex
 2. **Only Claude Code documents a true create/remove interception hook** (`WorktreeCreate`/`WorktreeRemove`, replace + nonzero-exit-aborts semantics). Every other host that has both worktrees and hooks (Cursor, Codex, Grok Build, MiMo, Kilo, omp) only offers a **post-create setup hook/script** (Cursor's `setup-worktree*`, Devin/Windsurf's `post_setup_worktree`, Kilo's `.kilo/setup-script`) — none can block or redirect creation, and none has a pre-remove hook, so rtok cannot rely on those to enforce ownership/naming/cleanup rules the way it can on Claude Code.
 3. **`session_id` (or an equivalent) is a near-universal hook field** — Claude Code, Cursor, Codex, Copilot CLI, Grok Build, Gemini CLI, Kimi, ZCode, CodeWhale, omp all pass one. The two ACP-only surfaces (Zed, and Kimi's own `kimi acp` mode) instead rely on the Agent Client Protocol's `session/new`/`session/load` identity, which is a different mechanism from a hook payload field. Devin/Windsurf uses `trajectory_id`+`execution_id` instead of a literal "session id". Antigravity uses `conversationId`. Aider, Zed (non-ACP) and Pi's core have nothing.
 4. **SessionStart/SessionEnd pairs exist on:** Claude Code, Cursor, Codex, Copilot CLI, Grok Build, Gemini CLI, Kimi, ZCode (Stop, no distinct End), CodeWhale. **Missing on:** VS Code's linked plugin set (Start only), Devin/Windsurf, Antigravity, OpenCode/Kilo (event-based, no Start/End pair), Pi (resource-lifecycle naming, not literal session boundary), Zed, Cline, https://aider.
-5. Weakest coverage, flagged rather than guessed: Cline (docs page didn't render), Pi's worktree extensions (community, not core docs), Kilo's own session-hook existence, MiMo's exact session-id field name and worktree directory — all marked **unverified** above rather than asserted.
+5. Weakest coverage, flagged rather than guessed: Cline (hooks docs name no parent process or session id, checked 2026-10-08), Pi's worktree extensions (community, not core docs), Kilo's own session-hook existence, MiMo's exact session-id field name and worktree directory — all marked **unverified** above rather than asserted.
 
 Consequences for the plan (D34): only Claude Code can redirect creation and removal (T159). Cursor, Kilo and Devin/Windsurf run a script after they create a worktree, which is where `rtok worktree adopt` hooks in (T289). Every other host gets rtok's worktrees through the skill and the MCP tools only (T285, T286). The host session id is not unique across hosts and is missing on several, so rtok issues its own agent id (T282).
 
@@ -2013,7 +2118,7 @@ Consequences for the plan (D34): only Claude Code can redirect creation and remo
 
 Cross-host pattern: of the ten hosts probed, only **Grok Build** confirms a session-id env var reaching the MCP child by first-party code (`GROK_SESSION_ID`, injected directly at MCP spawn, independent of any hooks path). Every other host that has an equivalent var (Claude Code: none exists at all; Gemini's `GEMINI_SESSION_ID`; ZCode's `ZCODE_SESSION_ID`; CodeWhale's `DEEPSEEK_SESSION_ID`) scopes it to the hook subprocess's own env map and never mutates the host process's own environment, so an MCP child spawned from the same host process never inherits it. Codex and Copilot CLI filter the child's env to an explicit allowlist regardless. Kimi has no session-id var of any kind. The one **documented** default-sharing behaviour for sub-agents is Claude Code (string-referenced servers share the parent's connection) and Gemini CLI (a subagent without its own `mcpServers` inherits the parent's); every other host's sub-agent/MCP-process relationship is unknown or unverified. Absent a working env-var rule, T283's default per host should be (b) — correlate the MCP process's ppid chain with the hook processes' `session_id` via a common host-process ancestor — falling back to (c) cwd+host+start-time, explicitly marked ambiguous when a cwd hosts more than one live session; Grok Build alone can use (a) directly.
 
-**What T283.1 ships, and how sure it is (2026-10-03).** `src/agents/link.rs` implements the rule order above as **doc-derived**: it follows the vendor docs and spawn code in this table, not a live run. The T281 probe column stays `pending`, and when the creator's logs arrive they only confirm the rule per host or change it for a host where they disagree. Shipped: (a) `GROK_SESSION_ID` for `grok` (the one host with a confirmed env var) and (c) the host's live agents in the MCP process's cwd, where one match links and two or more are ambiguous and bind nothing. Not shipped yet: (b), the nearest common host ancestor pid (T283.3), because the hook wire request carries no pid and the resident hook process is not the host's child. A host with no hook support (`Agent::support(_, "hooks")` is `No`) registers its own agent row from the MCP process. A host that the `hosts` table does not know yet registers under `other`, so its cwd candidates include every such host.
+**What T283.1 ships, and how sure it is (2026-10-03).** `src/agents/link.rs` implements the rule order above as **doc-derived**: it follows the vendor docs and spawn code in this table, not a live run. The T281 probe column stays `pending`, and when the creator's logs arrive they only confirm the rule per host or change it for a host where they disagree. Shipped: (a) `GROK_SESSION_ID` for `grok` (the one host with a confirmed env var) and (c) the host's live agents in the MCP process's cwd, where one match links and two or more are ambiguous and bind nothing. (b), the nearest common host ancestor pid, shipped later as T283.3 (2026-10-03, see the next section): the hook wire request carries the client's pid and the resident walks that pid's ancestors, because the resident hook process is not the host's child. A host with no hook support (`Agent::support(_, "hooks")` is `No`) registers its own agent row from the MCP process. A host that the `hosts` table does not know yet registers under `other`, so its cwd candidates include every such host.
 
 ### Hook client ↔ host ancestry (T283.3)
 
@@ -2025,10 +2130,10 @@ Question: is the process that runs an rtok hook a descendant of the host process
 | Gemini CLI | google-gemini/gemini-cli @ `fb972b2f`, `packages/core/src/hooks/hookRunner.ts` | `spawn(shellConfig.executable, [...argsPrefix, command], {shell: false, cwd})` | **Verified**: host → shell → hook |
 | CodeWhale | Hmbown/CodeWhale @ `60ea7c22`, `crates/tui/src/hooks/executor.rs` `build_shell_command` | `Command::new("sh").arg("-c").arg(command)` with `process_group(0)` (`cmd` on Windows) | **Verified**: host → sh → hook |
 | Kimi CLI | MoonshotAI/kimi-code @ `21406fb4`, `packages/agent-core-v2/src/features/externalHooks/internal/runHook.ts` and `src/os/backends/node-local/hostProcessService.ts` | `hostProcess.spawn(command, [], {shell: true})`; the node-local backend wraps `node:child_process` `spawn` | **Verified** for the local backend only; other backends not read |
-| Cline | cline/cline @ `476b165b`, `apps/vscode/src/core/hooks/HookProcess.ts` | `child_process.spawn`; "Unix executes hook files through the shell for shebang support" (source comment) | **Verified**: extension host → shell → hook link |
+| Cline | cline/cline @ `476b165b`, `apps/vscode/src/core/hooks/HookProcess.ts` | `child_process.spawn`; "Unix executes hook files through the shell for shebang support" (source comment) | **Verified**: extension host → shell → hook link (source). Docs checked 2026-10-08: https://docs.cline.bot/customization/hooks names no parent process or session id. Link rule: Cline has hooks and no session env var, so rule 2 (ancestor pid, `src/agents/link.rs`) applies, with the cwd rule as fallback |
 | Claude Code | code.claude.com/docs/en/hooks.md, 2026-10-03 | docs: a command hook "run[s] a shell command"; with `args` the command "is spawned directly ... with no shell involved" | **Unverified** for the parent: closed source, the docs do not name the parent process; probe pending |
 | ZCode | zai-org/ZCode @ `29628c9a` | spawn site not located by code search | **Unverified**; probe pending |
-| Cursor, Copilot CLI, Devin, Command Code | closed source; docs describe command hooks only | not documented | **Unverified**; probe pending |
+| Cursor, Copilot CLI, Devin, Command Code | closed source; docs describe command hooks only. Re-checked 2026-10-08: Devin's hook docs (https://docs.devin.ai/desktop/cascade/hooks) run commands through `bash -c` or `powershell -Command` and name no parent; Command Code's docs (https://commandcode.ai/docs/hooks) say "Each hook fires with its own process" and list `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`, no `SubagentStart`, no ancestry field | not documented | **Unverified**; probe pending |
 
 Consequence for the rule: in every verified case a shell sits between the host and the hook command, so the hook is the host's grandchild unless the shell execs it. The rule therefore records the hook client's first three ancestors, not its parent, and matches any of them against the `rtok mcp` process's own first three. The cap keeps a shared terminal, `tmux` server or `launchd` out of the match.
 
@@ -2450,3 +2555,46 @@ Correction to the T441 card: Backlog.md and Taskmaster both lock id allocation a
 5. Bulk create and `sync` pace writes: GitHub's 500 content-creating requests/hour is the tightest limit; one write per second, honour `retry-after`.
 6. Collision check on a remote: list issues by the `rtok:R13` label with `state=all` (not the search API: 30/min and an undocumented index delay).
 7. Tokens: `GH_TOKEN` → `GITHUB_TOKEN` → `gh auth token`; `GITLAB_TOKEN`. User-owned GitHub projects need a classic token with `project`.
+
+## 36. Cross-session read duplication (T385.13, measured 2026-10-08)
+
+Question (optimization.md §5, "Cross-session read dedup"): how much of the input is the same file content read again in a second session on the same day. Build gate: at least 1 % of input. Ad-hoc read-only SQL and a scratch script over a copy of the owner's real store (`rtok.db`, 335k `calls`, 2026-09-14 to 2026-10-08); no code shipped, no `Measurement` row, no saving claimed.
+
+**Definitions.**
+
+- **Read** = a successful file read, from three `calls` sources. (1) Claude Code native `Read`: `kind='hook'`, `name='PostToolUse'`, `tool_name='Read'`, the text in `tool_response.file.content`. (2) rtok MCP `read`: `kind='mcp_call'`, `name='read'`, `ok=1`, the text in `response_json` (so a different `mode` or range is a different content). Errors, images and `file_unchanged` pointers are dropped. The hook copy of an MCP read (`mcp__rtok__read`) is not counted twice. (3) Cursor `Read`, only as a sensitivity row: its hook stores `content_length` and the path, never the text.
+- **Same content** = equal SHA-256 of the returned text, any path (a file read from two worktrees counts; the key is the content, not the path). Cursor: path plus length, which can miss an edit of the same size and cannot see a copy at another path.
+- **Within a day** = the same UTC calendar day (`strftime` of `calls.ts`). A whole-window row with no day bound is the upper bound for any 24 h window.
+- **Cross-session duplicate** = for each (day, content), the first read in every session except the earliest session. Repeats inside one session (and between a parent and its sub-agents, which share `session_id`) are the existing in-session dedup and are not counted. Bytes = the duplicate's result bytes, tokens = bytes / 4 (the estimator used in §2).
+- **Input** = uncached + cache_create + cache_read tokens of the same window from `RTOK_HOME=<copy> rtok stats --since 79h --json`, main transcripts plus sub-agent transcripts (`subagents.usage_*`), as in §2. The copy keeps `stats` from writing to the real store.
+- **Resident weighting**: a read stays in the context for the rest of the session, so its share of input is its tokens times the tool's context-token-turns per token (`tools.Read.ctt / est_tokens` = 735; `mcp__rtok__read` = 1,260 in the same window), divided by input. Generous: sub-agent windows are shorter than the main one.
+
+**Window A (the headline): 2026-10-05 to 2026-10-08, native Read plus MCP read.** Inline hook bodies exist only from 2026-10-05; before that `call_io` keeps hashes of the whole payload, which cannot identify a file.
+
+| Measure | Value |
+| --- | --- |
+| Sessions with a read / reads / bytes read | 38 / 3,049 (1,932 native, 1,117 MCP) / 13,613,229 B |
+| Reads whose content another session read the same UTC day | 232 reads in 25 (day, content) groups |
+| Cross-session duplicate reads | **38** (1.2 % of reads) |
+| Duplicate bytes / tokens | **56,561 B ≈ 14,140 tokens** (0.42 % of the bytes read) |
+| Input in the window (main + sub-agents) | 4,139,214,544 tokens |
+| Share of input, duplicate counted once | 0.00034 % |
+| Share of input, resident weighted | **0.25 %** (x735) to **0.43 %** (x1,260) |
+| No day bound (any gap inside the 3.3 days) | 59 reads, 78,598 B ≈ 19,649 tokens, resident 0.35 % to 0.60 % |
+| Same, keyed on path plus content instead of content | 2 reads, 2,698 B (the content matches found above sit at different paths, mostly different worktrees) |
+
+Where the duplicates sit (basenames only): `mod.rs`, `retry.rs`, `gc.rs`, `terminal.rs`, `sse.rs` (source files), then `AGENTS.md`, `Cargo.toml`, `release-plz.toml`. No file dominates; the largest basename is 21 % of the duplicate bytes.
+
+**Cross-checks.**
+
+| Source | Window | Result |
+| --- | --- | --- |
+| MCP `read` only, response hash | 2026-09-14 to 2026-10-08, 128 sessions, 5,615 reads, 26,192,465 B | 93 duplicate reads, 290,927 B ≈ 72,731 tokens (1.1 % of bytes); input 22,257,526,251 tokens (`--since 24d`, 279 sessions); share 0.00033 % once, 0.28 % resident (x864) |
+| `read_cache` (session, path, content hash) joined to `archive.bytes`, rtok-handled reads | 2026-09-04 to 2026-10-08, 146 sessions, 7,221 entries, 42,378,105 B | 56 duplicate entries, 354,322 B ≈ 88,580 tokens (0.84 % of the bytes); since 2026-10-05: 7 entries, 15,380 B (0.21 %) |
+| Cursor `Read`, path plus `content_length` | 2026-10-05 to 2026-10-07, 34 sessions, 4,477 reads | 76 duplicate reads, 488,485 B (0.20 % of the 242,932,224 B its hook reports). Cursor sessions are not in the `stats` input, so no share is given; the duplicate fraction of bytes is the same order as Claude Code's |
+
+**Result.** Under every definition tried the cross-session duplicate is **0.2 % to 1.1 % of the bytes read** and **0.25 % to 0.60 % of input** after weighting for how long a read stays resident (0.0005 % if each duplicate is counted once). That is below the 1 % gate, so no build task is filed and `optimization.md` §5 keeps "Cross-session read dedup" as not built.
+
+**Why it is small.** Sessions on this machine work in separate worktrees, so the same file sits at different paths and a path-keyed cache would catch almost nothing (2 reads); only a content-keyed cache would match, and the content-keyed pool is still 0.4 % of read bytes. Within a session the existing guard and read cache already collapse repeats, and `rtok read` returns line-range slices, so two sessions rarely ask for the same slice of the same file on the same day.
+
+**Limits.** (1) Native Read bodies exist for four days only; the 25-day figure is MCP `read`, which is a lower bound for all reads. (2) The denominator is every Claude Code transcript in the window, sub-agents included (63 % of the input), and the reads counted include sub-agent reads, so the whole-input figure is the matching one. Against main-session input alone (1,518,798,579 tokens) the resident-weighted share would read 0.68 % to 1.17 %, but that pairs sub-agent reads with a denominator that leaves their input out. (3) Reads by a different path to the same content in the same session are not cross-session and are not counted. (4) Commands: `sqlite3 -readonly` on a file copy of `rtok.db` for the schema checks; a Python 3 script (`sqlite3`, `hashlib`) grouped reads by (UTC day, SHA-256); `RTOK_HOME=<copy> rtok stats --since 79h --json` and `--since 24d --json` for input and the CTT ratios. Re-run these after a change to the read plugin or a move to shared worktrees; a result above 1 % would justify a content-keyed, cross-session pointer.

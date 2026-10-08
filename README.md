@@ -186,7 +186,7 @@ proxy 8788→8787
 mcp_tool_search likely disabled (ANTHROPIC_BASE_URL is set)
 autoCompactWindow 300000
 skills (68 listed, 12963 desc bytes ≈ 3240 tokens per request)
-  design-is plugin:claude-mem desc 374c body 18403B calls - WARN desc>200 WARN body>8K …
+  design-is plugin:claude-mem desc 374c body 18403B calls - WARN desc>120 WARN body>8K …
   caveman-setup user desc 1c body 10304B calls - WARN body>8K (references/) …
 ```
 
@@ -370,6 +370,8 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok otel flush` / `status` | export the ledgers over OTLP, or report the watermarks |
 
 Agent ids, messages between agents and how worktrees bind to them on every host: [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md).
+
+Numbered tasks shared by every checkout and agent of a project, stored on disk (`rtok task`, MCP `task_*`): [docs/tasks.md](docs/tasks.md).
 
 ## Plugins
 

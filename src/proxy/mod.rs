@@ -14,6 +14,10 @@
 //! chunk reports usage. `/v1/responses` goes there too (T11.3) and needs no shaping —
 //! it reports usage on its final `response.completed` event unasked.
 //!
+//! Which of those rewrites a request gets depends on its lane (T385.2, `lane::Lane::policy`):
+//! the agent lane keeps every global switch as it was, `batch` and `files` are never
+//! rewritten, and `[proxy.lanes.<lane>]` opens the others one switch at a time.
+//!
 //! Bookkeeping per request (all fail-open, logged, never alter the response):
 //! one `calls` row (`kind = api_request`, or `api_request:<lane>` off the agent lane —
 //! T385.1; `surface = proxy`) with provider+model
@@ -31,6 +35,7 @@
 //! already marked is forwarded the plain way with a `warn` log line, so a chain of rtok
 //! proxies shapes and records it once; at `MAX_HOPS` the proxy answers 508 instead.
 
+use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -51,7 +56,7 @@ use serde_json::Value;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use crate::config::Config;
+use crate::config::{Config, LanePolicy};
 use crate::plugin::{Ctx, Runtime};
 use crate::plugins::Registry;
 use crate::store::Store;
@@ -59,7 +64,9 @@ use rtok_plugin_sdk::Measurement;
 use wire::{API_ANTHROPIC, Wire, WireRequest, api_of, join_upstream};
 
 pub mod anthropic;
+pub mod batch_results;
 pub mod cli;
+mod flex;
 pub mod gemini;
 pub mod lane;
 pub mod live;
@@ -99,10 +106,30 @@ fn hops_of(headers: &HeaderMap) -> u32 {
     })
 }
 
+/// A *read* timeout, not `Client::timeout`: the latter is a deadline on the whole exchange,
+/// body stream included, so a turn that streams for longer than the budget (extended
+/// thinking, many tool calls) was cut mid-SSE with the client left without a `message_stop`.
+/// The budget bounds one read instead.
+fn build_client(timeout_s: u64) -> Result<Client> {
+    // Connecting is not streaming: a black-holed upstream used to hold the client for the
+    // whole read budget (10 minutes by default) before it saw a 502.
+    Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(Duration::from_secs(timeout_s.max(1)))
+        // T53.3: webpki roots instead of reqwest's platform verifier
+        // (Security.framework costs ~1.3–1.5 ms of dyld time per hook
+        // spawn); corporate CAs arrive via `SSL_CERT_FILE` (see `tls`).
+        .use_preconfigured_tls(crate::tls::preconfigured()?)
+        .build()
+        .context("reqwest client")
+}
+
 /// Shared server state: the DB, the upstream client and the effective `[proxy]` settings.
 pub struct ProxyState {
     pub store: Store,
     client: Client,
+    /// Clients for the lanes that set their own `timeout_s` (T385.2); the rest use `client`.
+    lane_clients: HashMap<lane::Lane, Client>,
     upstream: String,
     /// Where the OpenAI wires go; Anthropic paths keep using `upstream` (D11).
     openai_upstream: String,
@@ -122,28 +149,22 @@ impl ProxyState {
     pub fn new(cfg: &Config) -> Result<Self> {
         let store = Store::open(&cfg.core.db_path)?;
         store.set_store_raw(cfg.core.store_raw);
-        // A *read* timeout, not `Client::timeout`: the latter is a deadline on the whole
-        // exchange, body stream included, so a turn that streams for longer than
-        // `proxy.timeout_s` (extended thinking, many tool calls) was cut mid-SSE with the
-        // client left without a `message_stop`. `proxy.timeout_s` bounds one read instead.
-        let budget = Duration::from_secs(cfg.proxy.timeout_s.max(1));
-        // Connecting is not streaming: a black-holed upstream used to hold the client for the
-        // whole read budget (10 minutes by default) before it saw a 502.
-        let client = Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .read_timeout(budget)
-            // T53.3: webpki roots instead of reqwest's platform verifier
-            // (Security.framework costs ~1.3–1.5 ms of dyld time per hook
-            // spawn); corporate CAs arrive via `SSL_CERT_FILE` (see `tls`).
-            .use_preconfigured_tls(crate::tls::preconfigured()?)
-            .build()
-            .context("reqwest client")?;
+        let client = build_client(cfg.proxy.timeout_s)?;
+        let mut lane_clients = HashMap::new();
+        for lane in lane::Lane::ALL {
+            let policy = lane.policy(&cfg.proxy.lanes);
+            let secs = flex::lane_timeout_s(policy.flex, policy.timeout_s, cfg.proxy.timeout_s);
+            if secs > 0 && secs != cfg.proxy.timeout_s {
+                lane_clients.insert(lane, build_client(secs)?);
+            }
+        }
         // Host agent: the `[hook] host` setting (T5.1 says `core.host`, which T12 removed —
         // see plan.md §6 amendment in the T5.1 commit). Unknown slugs fall back to `other` (6).
         let host_id = store.host_id(&cfg.hook.host)?.or(Some(6));
         Ok(Self {
             store,
             client,
+            lane_clients,
             upstream: cfg.proxy.upstream.trim_end_matches('/').to_string(),
             openai_upstream: cfg.proxy.openai_upstream.trim_end_matches('/').to_string(),
             gemini_upstream: cfg.proxy.gemini_upstream.trim_end_matches('/').to_string(),
@@ -155,6 +176,11 @@ impl ProxyState {
             cfg: cfg.clone(),
             cache: Mutex::new(semantic_cache::Cache::new()),
         })
+    }
+
+    /// The client for `lane`: its own read timeout when `[proxy.lanes.<lane>] timeout_s` sets one.
+    fn client_for(&self, lane: lane::Lane) -> &Client {
+        self.lane_clients.get(&lane).unwrap_or(&self.client)
     }
 
     /// The upstream owning `wire`. Paths this build has no wire for keep the Anthropic
@@ -282,8 +308,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     // bookkeeping, compress, or request shaping. Listener stays up until process exit.
     // An earlier rtok hop already shaped and recorded this request (T442).
     let plain = state.plain() || hops > 0;
-    let (request_body, recorded, context_armed) = if plain {
-        (request_body, None, false)
+    let (request_body, recorded, context_armed, flex_retry) = if plain {
+        (request_body, None, false, None)
     } else {
         // Request bookkeeping is CPU-bound (serde parse of up to `MAX_BODY_BYTES`,
         // tokenizer estimates, sync store writes) — run it off the tokio worker so a
@@ -293,10 +319,16 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         let state_bg = state.clone();
         let path_bg = path.clone();
         let headers_bg = headers.clone();
-        let kind = req_lane.kind();
         let original_body = request_body.clone();
         match tokio::task::spawn_blocking(move || {
-            shape_request(&state_bg, wire, &path_bg, &headers_bg, kind, request_body)
+            shape_request(
+                &state_bg,
+                wire,
+                &path_bg,
+                &headers_bg,
+                req_lane,
+                request_body,
+            )
         })
         .await
         {
@@ -304,14 +336,17 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
             // The task panicked or was cancelled: fail open exactly like `record` /
             // `compress` / `prepare` already do on their own internal errors — forward
             // the original bytes unmodified rather than failing the request.
-            Err(_join_err) => (original_body, None, false),
+            Err(_join_err) => (original_body, None, false, None),
         }
     };
 
     let sc = &state.cfg.plugins.proxy.semantic_cache;
+    // A lane that does not use the cache neither reads nor fills it (T385.2).
+    let cache_lane = req_lane.policy(&state.cfg.proxy.lanes).semantic_cache;
     // Who asked (T323): part of the cache key on lookup and, below, on store.
     let caller = semantic_cache::caller_identity(&headers);
     if sc.enabled
+        && cache_lane
         && !plain
         && let (Some(wire), Ok(body)) = (wire, serde_json::from_slice::<Value>(&request_body))
         && semantic_cache::eligible(&body, sc)
@@ -333,7 +368,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
     };
 
-    let mut rb = state.client.request(method.clone(), target);
+    let mut rb = state.client_for(req_lane).request(method.clone(), target);
     // The client's `accept-encoding` is not honoured by this build: reqwest is linked
     // without its decompression features, so a compressed body would reach the client
     // intact but decode to no `usage` row, no `tokens` row and lossy text in `call_io`.
@@ -357,7 +392,22 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     {
         rb = rb.header("anthropic-beta", anthropic::CONTEXT_BETA);
     }
-    let upstream = match rb.body(request_body.clone()).send().await {
+    let flex::Sent {
+        result,
+        body: request_body,
+        retries,
+    } = flex::send(rb, request_body, flex_retry.as_ref()).await;
+    if retries > 0 {
+        let r = recorded.as_ref();
+        log(
+            &state,
+            r.map_or("?", |r| r.session.as_str()),
+            r.map(|r| r.call_id),
+            "warn",
+            &format!("flex 429 on {method} {path}: {retries} retry(ies)"),
+        );
+    }
+    let upstream = match result {
         Ok(r) => r,
         Err(e) => {
             if plain {
@@ -420,6 +470,10 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let req_len = request_body.len();
     let model_live = request_model(&request_body);
     let provider_live = wire.map(Wire::provider).map(str::to_string);
+    // Batch results are read only after they were forwarded (T385.4), and only when asked.
+    let results = (state.cfg.proxy.batch.parse_results && status.is_success())
+        .then(|| batch_results::source(req_lane, &method, &path))
+        .flatten();
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(TEE_CHANNEL_CHUNKS);
     let recorder = state.clone();
     let body_stream = upstream.bytes_stream();
@@ -485,7 +539,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
                     &buf,
                     total_bytes,
                     complete,
-                    &caller,
+                    cache_lane.then_some(caller.as_str()),
+                    results,
                 );
             })
             .await;
@@ -517,9 +572,11 @@ fn shape_request(
     wire: Option<&'static dyn Wire>,
     path: &str,
     headers: &HeaderMap,
-    kind: &str,
+    lane: lane::Lane,
     request_body: Bytes,
-) -> (Bytes, Option<Recorded>, bool) {
+) -> (Bytes, Option<Recorded>, bool, Option<flex::Retry>) {
+    // Each rewrite below runs only when its global switch and this lane's switch are both on.
+    let policy = lane.policy(&state.cfg.proxy.lanes);
     let parsed = serde_json::from_slice::<Value>(&request_body).ok();
     let recorded = record(
         state,
@@ -527,13 +584,21 @@ fn shape_request(
         path,
         parsed.as_ref(),
         headers,
-        kind,
+        lane.kind(),
         &request_body,
     );
     // From here on `request_body` is what upstream sees (and what `call_io` records).
-    let request_body = if state.mode == "compress" {
+    let compressing = state.mode == "compress" && policy.compress;
+    let request_body = if compressing {
         wire.map_or(request_body.clone(), |wire| {
-            compress(state, wire, parsed, recorded.as_ref(), request_body)
+            compress(
+                state,
+                wire,
+                parsed,
+                recorded.as_ref(),
+                &policy,
+                request_body,
+            )
         })
     } else {
         request_body
@@ -541,27 +606,40 @@ fn shape_request(
     // T432: terminal noise only matters where the proxy rewrites at all (`compress`); a
     // passthrough request keeps every byte the client sent.
     let request_body = match wire {
-        Some(wire) if state.mode == "compress" => noise::strip(wire, request_body),
+        Some(wire) if compressing => noise::strip(wire, request_body),
         _ => request_body,
     };
     // Provider request shaping runs in both modes (T11.2: OpenAI `stream_options`;
     // T51.2: Anthropic `context_management`).
     let request_body = match wire {
-        Some(wire) => prepare(state, wire, request_body),
-        None => request_body,
+        Some(wire) if !lane.passes_through() => prepare(state, wire, request_body),
+        _ => request_body,
     };
     let (request_body, context_armed) = match wire {
-        Some(wire) => context_edits(state, wire, request_body),
-        None => (request_body, false),
+        Some(wire) if policy.context_management => context_edits(state, wire, request_body),
+        _ => (request_body, false),
     };
     if context_armed && let Some(r) = recorded.as_ref() {
         record_context_path(state, r, &request_body);
     }
-    let (request_body, tools_delta) = rewrite_tools(state, request_body);
+    let (request_body, tools_delta) = if policy.tools_rewrite {
+        rewrite_tools(state, request_body)
+    } else {
+        (request_body, None)
+    };
     if let (Some(delta), Some(r)) = (tools_delta, recorded.as_ref()) {
         record_tools_rewrite(state, r, delta);
     }
-    (request_body, recorded, context_armed)
+    // Last, so the tier is the only thing that differs from what the other rewrites left.
+    let flex_cfg = &state.cfg.proxy.flex;
+    let (request_body, flex_retry) = match wire {
+        Some(wire) if policy.flex => match flex::apply(wire.provider(), &request_body, flex_cfg) {
+            Some(flexed) => (flexed, flex::Retry::new(request_body, flex_cfg)),
+            None => (request_body, None),
+        },
+        _ => (request_body, None),
+    };
+    (request_body, recorded, context_armed, flex_retry)
 }
 
 /// `compress` mode: run every enabled plugin's `proxy_filter` over the parsed body and
@@ -676,6 +754,7 @@ fn compress(
     wire: &'static dyn Wire,
     parsed: Option<Value>,
     recorded: Option<&Recorded>,
+    policy: &LanePolicy,
     original: Bytes,
 ) -> Bytes {
     let (Some(mut body), Some(r)) = (parsed, recorded) else {
@@ -698,12 +777,17 @@ fn compress(
     // The platform path (T51.2): with context edits armed on the Anthropic wire the
     // platform clears old tool uses server-side, so `archive` stands down for those
     // turns — rewriting them first would only churn the cache and double-shrink.
-    let platform_clears = api_of(wire) == API_ANTHROPIC && state.cfg.proxy.context_management;
+    let platform_clears = api_of(wire) == API_ANTHROPIC
+        && state.cfg.proxy.context_management
+        && policy.context_management;
     let changed = {
         let mut changed = false;
         let mut request = WireRequest::new(wire, &mut body);
         for p in state.registry.enabled() {
             if platform_clears && p.manifest().id == "archive" {
+                continue;
+            }
+            if !policy.toon && p.manifest().id == "toon" {
                 continue;
             }
             for m in p.proxy_filter(&mut request, &Ctx::new(&cx)) {
@@ -850,7 +934,8 @@ fn record_usage(
 /// `call_io` and usage parsing only see the retained prefix, never that they panic on it.
 ///
 /// `complete` is whether the body arrived whole (T323): a cut or capped body is recorded but
-/// never cached. `caller` is the [`semantic_cache::caller_identity`] the lookup used.
+/// never cached. `caller` is the [`semantic_cache::caller_identity`] the lookup used; `None`
+/// when the request's lane does not use the cache (T385.2).
 #[allow(clippy::too_many_arguments)]
 fn finish(
     state: &ProxyState,
@@ -863,7 +948,8 @@ fn finish(
     response_body: &[u8],
     response_total_bytes: usize,
     complete: bool,
-    caller: &str,
+    caller: Option<&str>,
+    results: Option<batch_results::Source>,
 ) {
     let Some(r) = recorded else { return };
     let session = r.session.clone();
@@ -907,6 +993,7 @@ fn finish(
     // Fill the cache before the usage rows: a visible usage row then implies a warm cache.
     let sc = &state.cfg.plugins.proxy.semantic_cache;
     if sc.enabled
+        && let Some(caller) = caller
         && let (Some(wire), Ok(body)) = (wire, serde_json::from_slice::<Value>(request_body))
         && semantic_cache::eligible(&body, sc)
         && complete
@@ -935,7 +1022,20 @@ fn finish(
                 "no usage in upstream response",
             );
         }
-        None => {}
+        None => {
+            if let Some(source) = results
+                && let Err(e) = batch_results::record(
+                    &state.store,
+                    &session,
+                    r.call_id,
+                    r.model.as_deref(),
+                    source,
+                    response_body,
+                )
+            {
+                log_err("batch results", e);
+            }
+        }
     }
 }
 

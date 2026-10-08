@@ -6,8 +6,8 @@
 //! left behind past `[log] files` and archive payloads past `core.retain_calls_days`. With
 //! `--yes` it also clears old hook bodies (`core.retain_hook_bodies_days`) and converts the
 //! store to incremental vacuum if it is not already (T352; `mcp`/`proxy` do the same in the
-//! background at session start). Dry run by default; `--yes` applies. `clear` never touches a
-//! host directory. `list` (T330.1, T330.2) also shows every installed host's folders from
+//! background at session start). Dry run by default; `--yes` applies. Bare `clear` never
+//! touches a host directory; with filters it is `junk_clear` (T330.4). `list` (T330.1, T330.2) also shows every installed host's folders from
 //! the `junk_map` of `research.md` §22, read-only, sized with a per-agent time limit.
 //!
 //! Inventory for T182 found nothing else unbounded in `~/.rtok`: log rotation (`src/log.rs`)
@@ -81,21 +81,23 @@ fn outcome(kind: &'static str, path: PathBuf, note: String) -> Outcome {
 /// Everything `clear` would touch. Read-only; an unreadable path is skipped, not fatal
 /// (fail open).
 pub fn scan(cfg: &Config) -> Vec<Outcome> {
+    scan_with(cfg, cfg.core.retain_calls_days)
+}
+
+/// [`scan`] with the archive retention window `days` (`clear --older-than` may only widen it).
+pub fn scan_with(cfg: &Config, days: u32) -> Vec<Outcome> {
     let mut out: Vec<Outcome> = stale_log_siblings(cfg)
         .into_iter()
         .map(|p| outcome("log", p, format!("past `[log] files` = {}", cfg.log.files)))
         .collect();
     if let Ok(store) = Store::open(&cfg.core.db_path)
-        && let Ok(paths) = store.archives_pending_retention(cfg.core.retain_calls_days)
+        && let Ok(paths) = store.archives_pending_retention(days)
     {
         out.extend(paths.into_iter().map(|p| {
             outcome(
                 "archive",
                 p,
-                format!(
-                    "past `core.retain_calls_days` = {}",
-                    cfg.core.retain_calls_days
-                ),
+                format!("past `core.retain_calls_days` = {days}"),
             )
         }));
     }
@@ -386,6 +388,7 @@ struct Found {
     path: PathBuf,
     role: Role,
     documented: bool,
+    per_commit: bool,
 }
 
 /// The folders of one host that exist: the §22 map, then the folders its own config files sit
@@ -402,6 +405,7 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
                 path,
                 role: s.role,
                 documented: s.documented,
+                per_commit: s.per_commit,
             });
         }
     }
@@ -423,6 +427,7 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
                 path: d,
                 role: Role::Data,
                 documented: false,
+                per_commit: false,
             });
         }
     }
@@ -469,7 +474,9 @@ fn host_rows(
         for f in host_folders(a, cfg, roots) {
             let target = symlink_target(&f.path);
             let key = target.clone().unwrap_or_else(|| f.path.clone());
-            if f.role == Role::Cache && f.documented {
+            if f.per_commit {
+                owned.extend(junk_kinds::stale_code_caches(&f.path));
+            } else if f.role == Role::Cache && f.documented {
                 owned.push(Owned {
                     path: f.path.clone(),
                     evidence: junk_cache::SECTION_22,
@@ -586,8 +593,8 @@ impl Default for Options {
 }
 
 /// Read-only: the same [`scan`] `clear` runs, summed per kind for rtok, plus every installed
-/// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` itself removes
-/// only rtok's logs and archives until T330.4.
+/// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` with filters
+/// plans from this report (`junk_clear`, T330.4).
 pub fn report(cfg: &Config) -> Report {
     let opts = Options::default();
     let worktrees = junk_kinds::agent_worktrees(cfg, &opts.cwd);
@@ -1009,6 +1016,40 @@ mod tests {
         assert!(!text.contains("\x1b]8"), "no link off a terminal: {text}");
         let linked = to_list(&report, true, true);
         assert!(linked.contains("\x1b]8;;file://"), "{linked}");
+    }
+
+    /// T391: only the commit folders of `CachedData` that are not the newest are VS Code cache,
+    /// and only after the idle window; Cursor's `CachedData` stays a read-only folder.
+    #[cfg(unix)]
+    #[test]
+    fn vscode_code_cache_offers_old_commit_folders_and_cursor_none() {
+        let (mut cfg, dir) = crate::testutil::config("junk-code-cache");
+        cfg.log.path = dir.join("none/rtok.log");
+        cfg.core.archive_dir = dir.join("none/archive");
+        let code = dir.join(".config/Code/CachedData");
+        for (name, secs) in [("new", 60), ("old", 40 * 86_400)] {
+            let f = code.join(name).join("f.cache");
+            write(&f, 100);
+            let when = SystemTime::now() - Duration::from_secs(secs);
+            for p in [&f, &code.join(name)] {
+                std::fs::File::open(p).unwrap().set_modified(when).unwrap();
+            }
+        }
+        write(&dir.join(".config/Cursor/CachedData/x/f"), 100);
+
+        let opts = Options {
+            all: true,
+            cwd: std::env::temp_dir(),
+            ..Options::default()
+        };
+        let report = report_with(&cfg, &roots(&dir, &[]), opts, AGENT_SCAN_LIMIT);
+
+        let v = agent(&report, "vscode");
+        let paths: Vec<_> = v.items.iter().map(|i| i.path.clone()).collect();
+        assert_eq!(paths, [code.join("old").display().to_string()]);
+        assert!(v.items[0].kept.is_none(), "{:?}", v.items);
+        assert!(folder(v, &code).documented);
+        assert!(agent(&report, "cursor").items.is_empty());
     }
 
     /// An override that points two hosts at one directory: it is listed under both with a

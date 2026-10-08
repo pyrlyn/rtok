@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { useSelectFromUrl } from "./selectFromUrl";
+import { useTableSearch } from "../tableSearch";
 import type { SessionTotals, Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
+import { ExportButtons } from "../ui/ExportButtons";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
@@ -28,11 +30,14 @@ const columns: Column<SessionTotals>[] = [
         id: "status",
         header: "status",
         width: "64px",
+        sortValue: (s) => Number(s.ended_at == null),
+        exportValue: (s) => (s.ended_at == null ? "live" : "ended"),
         cell: (s) => <LivePill live={s.ended_at == null} />,
     },
     {
         id: "id",
         header: "session",
+        sortValue: (s) => s.id,
         cell: (s) => (
             <span className="flex flex-col leading-tight">
                 <b>{s.id.slice(0, 8)}</b>
@@ -47,6 +52,7 @@ const columns: Column<SessionTotals>[] = [
         header: "tokens",
         width: "56px",
         align: "right",
+        sortValue: tokenTotal,
         cell: (s) => compact(tokenTotal(s)),
     },
     {
@@ -54,6 +60,8 @@ const columns: Column<SessionTotals>[] = [
         header: "last",
         width: "64px",
         align: "right",
+        sortValue: (s) => s.last_activity,
+        exportValue: (s) => iso(s.last_activity),
         cell: (s) => <span title={iso(s.last_activity)}>{ago(s.last_activity, nowSecs())}</span>,
     },
 ];
@@ -63,8 +71,15 @@ export function Sessions() {
 }
 
 function SessionsBody({ snap }: { snap: Snapshot }) {
-    const [query, setQuery] = useState("");
-    const [liveOnly, setLiveOnly] = useState(false);
+    const {
+        q: query,
+        setQ: setQuery,
+        filter,
+        setFilter,
+        sort,
+        setSort,
+    } = useTableSearch("sessions");
+    const liveOnly = filter.show === "live";
     const [selectedId, setSelectedId] = useState<string>();
     useSelectFromUrl(setSelectedId);
     const sessions = snap.sessions;
@@ -94,7 +109,11 @@ function SessionsBody({ snap }: { snap: Snapshot }) {
                     />
                 </div>
                 <div className="flex h-8 items-center gap-2 text-xs text-fg-muted">
-                    <Switch checked={liveOnly} onCheckedChange={setLiveOnly} label="live only" />
+                    <Switch
+                        checked={liveOnly}
+                        onCheckedChange={(on) => setFilter("show", on ? "live" : "all")}
+                        label="live only"
+                    />
                     live only
                 </div>
                 <Count>
@@ -103,12 +122,25 @@ function SessionsBody({ snap }: { snap: Snapshot }) {
             </Toolbar>
             <Split
                 list={
-                    <Panel title="sessions" hint="newest first">
+                    <Panel
+                        title="sessions"
+                        hint="newest first"
+                        action={
+                            <ExportButtons
+                                label="sessions"
+                                rows={rows}
+                                columns={columns}
+                                sort={sort}
+                            />
+                        }
+                    >
                         <DataTable
                             label="sessions"
                             rows={rows}
                             columns={columns}
                             getRowId={(s) => s.id}
+                            sort={sort}
+                            onSortChange={setSort}
                             selectedId={selected?.id}
                             onSelect={(s) => setSelectedId(s.id)}
                             height={480}

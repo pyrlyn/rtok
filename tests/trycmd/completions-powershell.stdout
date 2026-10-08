@@ -71,6 +71,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--call', '--call', [CompletionResultType]::ParameterName, 'Call one listed tool and print the text result (pi `registerTool` shim)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON arguments for `--call`')
             [CompletionResult]::new('--host', '--host', [CompletionResultType]::ParameterName, 'The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays `[hook] host` so the process can find its rtok agent')
+            [CompletionResult]::new('--http', '--http', [CompletionResultType]::ParameterName, 'Serve over Streamable HTTP at `IP:PORT` (default `[mcp] http`) instead of stdio; the bearer token comes from `[mcp] token` or `RTOK_MCP_TOKEN`')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -414,7 +415,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'One host: the same block `agents list` prints, just for that app')
             [CompletionResult]::new('sessions', 'sessions', [CompletionResultType]::ParameterValue, 'What is running in this project: host, provider, model, tokens, start, run time')
             [CompletionResult]::new('usage', 'usage', [CompletionResultType]::ParameterValue, 'Tokens and estimated cost per agent and month (or day), from the agents'' logs or rtok')
-            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk')
+            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk or, filtered, any agent''s')
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'This session''s own rtok agent id: `RTOK_AGENT_ID`, resolved through the store')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars')
@@ -436,7 +437,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'One host: the same block `agents list` prints, just for that app')
             [CompletionResult]::new('sessions', 'sessions', [CompletionResultType]::ParameterValue, 'What is running in this project: host, provider, model, tokens, start, run time')
             [CompletionResult]::new('usage', 'usage', [CompletionResultType]::ParameterValue, 'Tokens and estimated cost per agent and month (or day), from the agents'' logs or rtok')
-            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk')
+            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk or, filtered, any agent''s')
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'This session''s own rtok agent id: `RTOK_AGENT_ID`, resolved through the store')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars')
@@ -700,11 +701,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;junk;clear' {
+            [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'Only this agent: `rtok` or a host id (repeatable)')
+            [CompletionResult]::new('--kind', '--kind', [CompletionResultType]::ParameterName, 'Only this junk kind (repeatable)')
+            [CompletionResult]::new('--include', '--include', [CompletionResultType]::ParameterName, 'Also the review kinds')
+            [CompletionResult]::new('--older-than', '--older-than', [CompletionResultType]::ParameterName, 'Only items not modified for this long (`7d`, `12h`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--trash', '--trash', [CompletionResultType]::ParameterName, 'Move to the OS trash instead of deleting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'rtok;agents;junk;help' {
@@ -741,11 +747,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;junk;clear' {
+            [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'Only this agent: `rtok` or a host id (repeatable)')
+            [CompletionResult]::new('--kind', '--kind', [CompletionResultType]::ParameterName, 'Only this junk kind (repeatable)')
+            [CompletionResult]::new('--include', '--include', [CompletionResultType]::ParameterName, 'Also the review kinds')
+            [CompletionResult]::new('--older-than', '--older-than', [CompletionResultType]::ParameterName, 'Only items not modified for this long (`7d`, `12h`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--trash', '--trash', [CompletionResultType]::ParameterName, 'Move to the OS trash instead of deleting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'rtok;agent;junk;help' {
@@ -842,7 +853,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'One host: the same block `agents list` prints, just for that app')
             [CompletionResult]::new('sessions', 'sessions', [CompletionResultType]::ParameterValue, 'What is running in this project: host, provider, model, tokens, start, run time')
             [CompletionResult]::new('usage', 'usage', [CompletionResultType]::ParameterValue, 'Tokens and estimated cost per agent and month (or day), from the agents'' logs or rtok')
-            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk')
+            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk or, filtered, any agent''s')
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'This session''s own rtok agent id: `RTOK_AGENT_ID`, resolved through the store')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars')
@@ -917,7 +928,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'One host: the same block `agents list` prints, just for that app')
             [CompletionResult]::new('sessions', 'sessions', [CompletionResultType]::ParameterValue, 'What is running in this project: host, provider, model, tokens, start, run time')
             [CompletionResult]::new('usage', 'usage', [CompletionResultType]::ParameterValue, 'Tokens and estimated cost per agent and month (or day), from the agents'' logs or rtok')
-            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk')
+            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk or, filtered, any agent''s')
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'This session''s own rtok agent id: `RTOK_AGENT_ID`, resolved through the store')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars')
@@ -1818,7 +1829,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'One host: the same block `agents list` prints, just for that app')
             [CompletionResult]::new('sessions', 'sessions', [CompletionResultType]::ParameterValue, 'What is running in this project: host, provider, model, tokens, start, run time')
             [CompletionResult]::new('usage', 'usage', [CompletionResultType]::ParameterValue, 'Tokens and estimated cost per agent and month (or day), from the agents'' logs or rtok')
-            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk')
+            [CompletionResult]::new('junk', 'junk', [CompletionResultType]::ParameterValue, 'Junk and agent folders: `list` shows rtok''s and every installed host''s folders with sizes, `clear` removes rtok''s own junk or, filtered, any agent''s')
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'This session''s own rtok agent id: `RTOK_AGENT_ID`, resolved through the store')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars')

@@ -39,6 +39,9 @@ pub struct Spec {
     pub path: String,
     /// A row of §22 (official docs or the host's own source), not a guess.
     pub documented: bool,
+    /// The folder holds one subfolder per host build (VS Code's `CachedData/<commit>`): only
+    /// the ones of builds that are no longer current are cache, never the folder itself.
+    pub per_commit: bool,
 }
 
 fn doc(role: Role, path: &str) -> Spec {
@@ -46,6 +49,14 @@ fn doc(role: Role, path: &str) -> Spec {
         role,
         path: path.into(),
         documented: true,
+        per_commit: false,
+    }
+}
+
+fn per_commit(path: &str) -> Spec {
+    Spec {
+        per_commit: true,
+        ..doc(Role::Cache, path)
     }
 }
 
@@ -54,6 +65,7 @@ fn guess(role: Role, path: String) -> Spec {
         role,
         path,
         documented: false,
+        per_commit: false,
     }
 }
 
@@ -78,6 +90,11 @@ fn electron(app: &str) -> Vec<Spec> {
 }
 
 const ELECTRON_CACHES: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "CachedData", "DawnCache"];
+
+/// Hosts with no `specs` row on purpose: §22 reads "not documented" for every path they write
+/// (the config folder they already name through their markers is still listed). Keeping the
+/// list explicit makes a new host in `HOSTS` fail a test until it has a row or joins this list.
+pub const NO_ROWS: [&str; 3] = ["kilo", "aider", "roo"];
 
 /// The §22 rows and the desktop-app folders of `host`. A host §22 reads "not documented" for
 /// (Cursor, Kilo, Aider, ...) has only what its own config files already name.
@@ -132,8 +149,29 @@ pub fn specs(host: &str) -> Vec<Spec> {
             doc(Data, "{home}/.codewhale"),
             doc(Cache, "{home}/.codewhale/update-check.json"),
         ],
+        "commandcode" => vec![doc(Data, "{home}/.commandcode")],
+        "cline" => vec![
+            doc(Data, "{home}/.cline"),
+            doc(Logs, "{home}/.cline/data/logs"),
+        ],
+        "mimo" => vec![
+            doc(Data, "{home}/.config/mimocode"),
+            doc(Data, "{home}/.local/share/mimocode"),
+            doc(Logs, "{home}/.local/share/mimocode/log"),
+            doc(Cache, "{home}/.cache/mimocode"),
+        ],
+        "devin" => vec![
+            doc(Data, "{home}/.config/devin"),
+            doc(Logs, "{home}/.local/share/devin/cli/logs"),
+        ],
+        "qwen" => vec![doc(Data, "{home}/.qwen")],
         "vscode" => {
             let mut v = vec![doc(Data, "{xdg_config}/Code")];
+            // Before `electron`, which lists the same folders read-only: the first spec wins.
+            v.push(per_commit(
+                "{home}/Library/Application Support/Code/CachedData",
+            ));
+            v.push(per_commit("{xdg_config}/Code/CachedData"));
             v.extend(electron("Code"));
             v
         }
@@ -292,6 +330,38 @@ mod tests {
         assert!(specs("cursor").iter().all(|s| !s.documented));
         assert!(specs("claude").iter().all(|s| s.documented));
         assert!(specs("claude").iter().any(|s| s.role == Role::Logs));
+    }
+
+    #[test]
+    fn every_host_has_a_row_or_is_listed_as_having_none() {
+        for host in crate::agents::HOSTS {
+            let none = NO_ROWS.contains(host);
+            assert_eq!(
+                none,
+                specs(host).is_empty(),
+                "{host}: add a row to `specs`, or list it in NO_ROWS"
+            );
+        }
+    }
+
+    #[test]
+    fn only_vscode_code_cache_is_per_commit_and_documented() {
+        let per: Vec<_> = crate::agents::HOSTS
+            .iter()
+            .flat_map(|h| specs(h).into_iter().map(move |s| (*h, s)))
+            .filter(|(_, s)| s.per_commit)
+            .collect();
+        assert_eq!(per.len(), 2);
+        assert!(per.iter().all(|(h, s)| *h == "vscode"
+            && s.documented
+            && s.role == Role::Cache
+            && s.path.ends_with("/Code/CachedData")));
+        // Cursor shares the layout only by unverified report (§22.2): it stays list-only.
+        assert!(
+            specs("cursor")
+                .iter()
+                .all(|s| !s.documented && !s.per_commit)
+        );
     }
 
     #[test]
