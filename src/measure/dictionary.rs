@@ -44,8 +44,9 @@ pub struct DictionaryRow {
 }
 
 impl DictionaryRow {
+    /// Nothing repeated: no row, so a report without long paths keeps its bytes.
     pub(crate) fn is_empty(&self) -> bool {
-        self.requests == 0
+        self.paths.repeated + self.idents.repeated == 0
     }
 
     fn merge(&mut self, o: &Self) {
@@ -313,7 +314,7 @@ mod tests {
         );
     }
 
-    fn session(compact_after: Option<u32>) -> Parsed {
+    fn transcript(compact_after: Option<u32>) -> Parsed {
         let p = "/Users/x/apps/rtok/src/proxy/mod.rs";
         let mut lines = Vec::new();
         for i in 0..4 {
@@ -332,7 +333,7 @@ mod tests {
     #[test]
     fn fold_samples_each_request_of_a_short_session() {
         let mut row = DictionaryRow::default();
-        fold(&session(None), &mut row);
+        fold(&transcript(None), &mut row);
         let len = "/Users/x/apps/rtok/src/proxy/mod.rs".len() as u64;
         assert_eq!((row.requests, row.paths.repeated), (4, (2 + 3 + 4) * len));
         assert_eq!(row.paths.saved, 0);
@@ -342,7 +343,7 @@ mod tests {
     #[test]
     fn fold_starts_over_after_a_compaction() {
         let mut row = DictionaryRow::default();
-        fold(&session(Some(1)), &mut row);
+        fold(&transcript(Some(1)), &mut row);
         let len = "/Users/x/apps/rtok/src/proxy/mod.rs".len() as u64;
         assert_eq!(row.paths.repeated, (2 + 2) * len);
     }

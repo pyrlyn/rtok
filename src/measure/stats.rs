@@ -109,7 +109,7 @@ pub struct Report {
     #[serde(default, skip_serializing_if = "ImageRow::is_empty")]
     pub images: ImageRow,
     /// T403: repeated long paths and identifiers, and the net a legend would save. Absent
-    /// when no session had a request.
+    /// when nothing repeated.
     #[serde(
         default,
         skip_serializing_if = "super::dictionary::DictionaryRow::is_empty"
