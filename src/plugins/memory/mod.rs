@@ -8,6 +8,7 @@ pub mod export;
 mod files;
 pub mod handoff;
 pub mod import;
+pub mod pack;
 pub mod status;
 pub mod sync;
 
@@ -56,6 +57,11 @@ impl Plugin for Memory {
                 name: "mem_search",
                 description: "Search notes by FTS5; ids, titles, snippets.",
                 input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}),
+            },
+            ToolDef {
+                name: "mem_pack",
+                description: "Ranked notes inside a token budget. Returns id, tier, text. Does not replace mem_get.",
+                input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"max_tokens":{"type":"integer"}},"required":["query"]}),
             },
             ToolDef {
                 name: "mem_get",
@@ -319,6 +325,67 @@ pub fn mem_search(
     } else {
         rt.store.search_notes_embed(query, lim, embed)
     }
+}
+
+/// Ranked notes packed into `max_tokens`. Search errors propagate as the same
+/// strings the other `mem_*` tools return; a missing body degrades that hit's
+/// deeper tiers without failing the call.
+pub fn mem_pack(
+    rt: &crate::plugin::Runtime,
+    query: &str,
+    limit: u32,
+    max_tokens: u32,
+) -> anyhow::Result<String> {
+    let hits = mem_search(rt, query, limit)?;
+    let ranked: Vec<(i32, String, String)> = hits
+        .into_iter()
+        .map(|h| (h.id, h.title, h.snippet))
+        .collect();
+    // Body reads fail open: no body means that hit cannot deepen past abstract.
+    let pack = pack::pack_notes(
+        &ranked,
+        |id| rt.store.get_note_body(id).ok().flatten(),
+        max_tokens,
+        |s| rt.estimate(s, Class::Prose),
+    );
+    let text = pack::render_pack(&pack);
+    let before_bytes: u64 = pack
+        .entries
+        .iter()
+        .map(|e| {
+            rt.store
+                .get_note_body(e.id)
+                .ok()
+                .flatten()
+                .map(|b| b.len() as u64)
+                .unwrap_or(0)
+        })
+        .sum();
+    let after_bytes = text.len() as u64;
+    let est_before = pack
+        .entries
+        .iter()
+        .map(|e| {
+            rt.store
+                .get_note_body(e.id)
+                .ok()
+                .flatten()
+                .map(|b| rt.estimate(&b, Class::Prose))
+                .unwrap_or(0)
+        })
+        .fold(0u32, u32::saturating_add);
+    let est_after = rt.estimate(&text, Class::Prose);
+    let _ = rt.record(&Measurement {
+        plugin: "memory",
+        kind: "mem_pack",
+        before_bytes,
+        after_bytes,
+        est_before,
+        est_after,
+        ref_id: None,
+        call_id: rt.call_id,
+    });
+    Ok(text)
 }
 
 pub fn mem_get(rt: &crate::plugin::Runtime, id: i32) -> anyhow::Result<Option<String>> {
@@ -716,18 +783,17 @@ mod tests {
         );
     }
 
-    /// T69.1: the memory tools stay within the 60-description-token surface budget
-    /// (`rtok doctor` prices the same strings). T71.2 added `mem_handoff` as the fifth,
-    /// so `mem_save` drops the field list the input schema already carries.
+    /// T69.1 / T454: memory tool descriptions stay lean (`rtok doctor` prices the
+    /// same strings). T454 added `mem_pack` as the sixth tool.
     #[test]
-    fn mcp_surface_stays_within_sixty_description_tokens() {
+    fn mcp_surface_stays_within_eighty_description_tokens() {
         let cx = crate::plugin::Runtime::in_memory("t691-surface").unwrap();
         let total: i64 = Memory
             .mcp_tools()
             .iter()
             .map(|t| i64::from(cx.estimate(t.description, Class::Prose)))
             .sum();
-        assert!(total <= 60, "memory tool surface is {total} tokens");
+        assert!(total <= 80, "memory tool surface is {total} tokens");
     }
 
     #[test]
