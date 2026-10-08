@@ -82,7 +82,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T399 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
 | T402 | todo | P3 | 2 | 20% | |
-| T403 | in progress | P3 | 3 | 10% | Claude Code / claude-sonnet-5-5 |
+| T403 | in progress | P3 | 3 | 80% | Claude Code / claude-sonnet-5-5 |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
@@ -1582,6 +1582,8 @@ Done means: first measure, from stored requests, how many bytes repeated paths a
 Check: the dated measurement row; if built, the A/B row and a byte-stability test for the legend.
 
 Execution plan (2026-10-08): (1) the creator's db holds no proxy `call_io` rows, so measure on the transcripts, which carry the message array the proxy forwards: add a `dictionary` row to `rtok stats` in a new `src/measure/dictionary.rs` (repeated long paths and identifiers in tool results and tool inputs, checkpointed per request, reset at compaction; gross repeated bytes and net saving after a legend) with a unit test; (2) run it on the last 30 days and record one dated row in `research.md` §16 (aggregates only); (3) if net saving is above 1 % of input, build the proxy flag with a byte-stable legend and a byte-stability test, A/B left open for the creator's session; otherwise close with the number.
+
+Status (2026-10-08): measured and recorded in `research.md` §16.6: 0.44 % cache-safe saving (2.05 % repeated-bytes ceiling) of billed input, under the 1 % gate, so the dictionary is not built. The `dictionary` row of `rtok stats` stays as the reusable measurement. Closes on the creator's word; the A/B was never needed.
 
 ### T404. Evaluate a local draft model that the cloud model only verifies
 

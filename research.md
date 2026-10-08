@@ -1471,7 +1471,7 @@ Written 2026-09-21; by 2026-10-08 every row below has an idea in `ideas.md`, a t
 | 9 | **Multimodal token gate** | High $ when screenshots dominate (estimate; measured 0.91 %, T137, §2) | S–M | Prefer OCR/text or downscale; refuse or summarize images in the live zone. Separate from text CTT. T137 (2026-09-24): images are 0.91 % of session input (§2) — under the 5 % gate, not built. |
 | 10 | **Speculative local draft → verify** | Mixed | L | Local small model proposes; cloud model verifies — can cut cloud **output** tokens, adds complexity and wrong-draft risk. |
 
-Idea / status of each row (2026-10-08): (1) I-84, decision-shaped; the cache hit rate here is already 98.1 % (§2), so the head-room on this workload is small. (2) I-85, overlaps host Tool Search. (3) I-101 model routers, needs a bench with a quality gate; D9 stays a decision. (4) I-86, rejected 2026-09-21 (T125): the API already strips earlier turns' thinking blocks. (5) shipped as T51.2 (2026-09-17); the archive ids in the checkpoint shipped as T58.2 (2026-09-18). (6) I-109, promoted as T402 (todo). (7) I-46, promoted as T59.6 and closed evidence-only at 0.7 % on 2026-09-18; §17 re-measured it with sub-agent transcripts (T128). (8) I-110, promoted as T403 (todo). (9) not built, under the gate (T137, 2026-09-24). (10) I-111, promoted as T404 (todo). Batch and flex tiers are I-102 (see §31 and `docs/batch-flex.md`).
+Idea / status of each row (2026-10-08): (1) I-84, decision-shaped; the cache hit rate here is already 98.1 % (§2), so the head-room on this workload is small. (2) I-85, overlaps host Tool Search. (3) I-101 model routers, needs a bench with a quality gate; D9 stays a decision. (4) I-86, rejected 2026-09-21 (T125): the API already strips earlier turns' thinking blocks. (5) shipped as T51.2 (2026-09-17); the archive ids in the checkpoint shipped as T58.2 (2026-09-18). (6) I-109, promoted as T402 (todo). (7) I-46, promoted as T59.6 and closed evidence-only at 0.7 % on 2026-09-18; §17 re-measured it with sub-agent transcripts (T128). (8) I-110, promoted as T403; measured 0.44 % cache-safe saving, 2.05 % repeated bytes (§16.6), not built. (9) not built, under the gate (T137, 2026-09-24). (10) I-111, promoted as T404 (todo). Batch and flex tiers are I-102 (see §31 and `docs/batch-flex.md`).
 
 ### 16.4 Sources (non-obvious)
 
@@ -1491,6 +1491,19 @@ Idea / status of each row (2026-10-08): (1) I-84, decision-shaped; the cache hit
 1. **T59.5** and **T61.2** — highest *measured* or structurally recurring input taxes. Both shipped 2026-09-18 (off by default, as the §16.2 Status column says).
 2. Add a plan card for **prompt-cache-stable prefixes + sticky proxy upstream** if `$` savings matter as much as raw tokens (pairs with existing `stats --price` cache rates).
 3. Keep P28/P31/P33 in Later until a bench beats the lossless archive lane on *code* sessions.
+
+### 16.6 Path and identifier dictionary (T403, 2026-10-08)
+
+`rtok stats --since 30d` on this machine (306 sessions, 633 651 transcript lines), `dictionary` row (`src/measure/dictionary.rs`). The proxy rows here hold no request bodies (0 `calls` with surface `proxy`, 0 `usage` rows in `rtok.db`), so the transcripts stand in: the tool inputs and tool results are the history every request re-sends. Per session, up to 6 evenly spaced API requests are rebuilt (everything up to that turn, restarted at a `compact_boundary`), 1 672 requests in all. A path is a `/`-containing run of at least 16 bytes; an identifier is snake_case or camelCase of at least 12 bytes (prose words and hex hashes are out). Shares divide by the provider-billed input of the same requests (uncached + cache writes + cache reads, 232 965 662 tokens, at the report's 4 bytes per token = 931.9 MB); message content alone is 176.3 MB, since the system prompt, tool schemas, prompts and thinking are not in the transcripts' tool blocks.
+
+| Measure | Paths | Identifiers | Both |
+| --- | --- | --- | --- |
+| Bytes of tokens repeated at least twice anywhere in the request (ceiling) | 12 834 182, 1.38 % | 6 261 279, 0.67 % | **2.05 %** |
+| Cache-safe saving, tool results only | 2 469 052, 0.26 % | 1 631 188, 0.18 % | **0.44 %** |
+
+Cache-safe means the bytes of an earlier message never change when a later one arrives, or the prompt cache (98 % of input here, §2) breaks: a code is defined inline at a token's second use in a result and only the third and later uses shrink; codes go to the biggest tokens first; the model's own tool inputs and text are never rewritten (signed blocks, quoted back into edits), so they count toward the ceiling but not the saving. Source: this machine's `~/.claude/projects` transcripts read by the code above; no request content or path leaves the machine, only the totals above. Caveats: the sample is almost all rtok development, a path-heavy workload; 4 bytes per token is the report's estimate, and short codes tokenize worse than their byte length suggests, so the token saving is lower.
+
+Under the 1 % gate on what a proxy could actually remove (0.44 %): the dictionary (§16.3 #8) stays unbuilt, with this number. The 2.05 % ceiling is above the gate, but it is not reachable: the first use of every token stays, and the model's own turns cannot change. Risk if built anyway: a model that copies a `~7` into a tool input breaks the call unless something expands it back first.
 
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
