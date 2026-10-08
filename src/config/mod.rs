@@ -896,9 +896,10 @@ section! {
 }
 
 section! {
-    /// `[tasks.gitlab]` — GitLab Issues; tasks under an issue are subtasks.
+    /// `[tasks.gitlab]` — GitLab Issues with `status::` labels; a subtask's issue links to
+    /// its parent's.
     TasksGitlab {
-        /// Base URL, for self-hosted instances.
+        /// https base URL, for self-hosted instances.
         url: String = s("https://gitlab.com"),
         /// `group/name` path or numeric id. Empty: the `origin` remote.
         project: String = String::new(),

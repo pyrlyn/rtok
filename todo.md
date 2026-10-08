@@ -31,7 +31,6 @@
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 - T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
-- T330.5.4. Junk: the `backups` kind
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
 - T331.10. Doctor: rtok's own MCP entry in the duplicate check
@@ -97,4 +96,3 @@
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T441.12. `rtok task sync`
-- T441.8. GitLab adapter

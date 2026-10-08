@@ -398,8 +398,8 @@ Options:
       --kind <KIND>
           Only this junk kind (repeatable)
           
-          [possible values: log, archive, cache, temp, logs, build, deps, locks, swap, snapshots,
-          index, crash-dumps, sessions]
+          [possible values: log, archive, cache, temp, logs, build, deps, locks, backups, swap,
+          snapshots, index, crash-dumps, sessions]
 
       --include <CLASS>
           Also the review kinds

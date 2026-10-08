@@ -8449,6 +8449,14 @@ Check: the T330 "Session threshold" fixture and the sessions lines of "New kinds
 
 Result: `stale_session_days` and `crash_dump_min_age_days` in `AgentsJunk` (range-checked in `validate.rs`, `config/default.toml`, `docs/config.md` en/ru/uk); `--session-days` on `agents junk list` and `clear` as a figment flag layer on the same key. New `src/agents/junk_sessions.rs`: only Claude Code qualifies (`projects/<project>/<uuid>.jsonl`, the sibling `<uuid>/` folder and `file-history/<uuid>/`; memory never matched, symlinks skipped), strict threshold, a 10-minute in-use guard, a future or unknown timestamp is never cleared; `list` prints the threshold note and the host's own retention. The per-host verdict is in `research.md` §22.1. `crash-dumps` and the macOS DiagnosticReports listing in `junk_review.rs`; `index` in `junk_kinds.rs` and `junk.rs` (rtok's `.rtok-lsp-xdg/{data,state}` as rtok-owned review items; `.rust-analyzer/`, `-wal`, `-shm` listed read-only). The `explicit` class has its own `list` row and is counted in neither Freed total. Goldens re-blessed (completions, help, config-init, config-show, report-md). An invalid `stale_session_days` makes config loading fail naming the key instead of falling back to 30, so no `exclude` protection is ever lost to a silent fallback.
 
+### T330.5.4. Junk: the `backups` kind
+
+Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 500-line cap; depends on T330.5.1 (#827). `backups` (review) over the T330.5.1 report, plan, re-check and apply: rtok's own `_backup/<name>.bak-<ts>` generations in the folders of a host's config files that `setup.backup_files` has no room for (a cap lowered after the copies were taken; the newest copy of a file always stays), with a read-only `rtok-agent-sdk::stale_backups` twin of `prune_backups`; other `*.bak`, `*.bak-<ts>` and `*~` files under an agent's folders are listed read-only (no D36 evidence), and rtok's own `_backup` folder is never walked for them. `backups` joins the `--kind` values.
+
+Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
+
+Result: `rtok_agent_sdk::stale_backups` (per base name all but the newest `keep`, oldest first; `0` keeps all; only a `_backup` folder), `junk_review::backup_items` (class `review`, evidence `RTOK_OWN`) fed from `junk::marker_dirs` (extracted from `host_folders`), and `*.bak`, `*.bak-<ts>`, `*~` files found by `junk_kinds::found_items` (`is_backup`, class `review`, "not documented", `_backup` skipped). `"backups"` is in both `KINDS`; completions goldens (bash, zsh, clink) and `help-subcommands` updated; `junk_clear` test covers a running host not holding back rtok's own copy. No new dependency; docs list no junk kinds, so none changed.
+
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
@@ -9771,6 +9779,17 @@ Seventh subtask of T441 (task adapters): `adapter = "github"` keeps each task as
 Check: the adapter against a mock GitHub server (create, sub-issue link, list, get, status, id collision, missing label, rate limit); `just check` green.
 
 Result: `src/tasks/remote.rs` holds what the GitHub and GitLab adapters share: the `rtok` and `rtok:<id>` labels, the `R12. Title` issue title, the token lookup (`GH_TOKEN`/`GITHUB_TOKEN`, else `gh auth token`), and one blocking client that paces writes one second apart, waits out `retry-after` or the primary-limit reset up to a minute, and follows `Link: rel="next"` only on the API host, since every request carries the token. `src/tasks/github.rs` creates the issue with both labels, links a subtask as a sub-issue of its parent (a failed link only warns), maps `rtok:in-progress` and the close reason (`completed` → done, `not_planned` → closed), and refuses an issue GitHub stored without its label (no push access). An id another machine already issued comes back as the typed `Taken` error, and `Project::create` allocates the next id and tries again; the disk adapter returns the same error. reqwest gains its `blocking` feature. The Projects v2 Status field moved to T441.11 and `rtok task sync` to T441.12; `[tasks.github] project` is documented as read from T441.11 on. #814.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
+### T441.8. GitLab adapter
+
+Eighth subtask of T441 (task adapters): `adapter = "gitlab"` keeps each task as one issue in the project on gitlab.com or a self-hosted instance.
+
+Check: the adapter against a mock GitLab server (create, parent link, failed link, list, get, status label swaps with close/reopen, id collision, missing parent, dropped label, URL and project parsing); `just check` green.
+
+Result: `src/tasks/gitlab.rs` uses the REST API v4 through `src/tasks/remote.rs` (labels `rtok` and `rtok:<id>`, the `R12. Title` issue title, the paced client with rate-limit waits and same-host paging), and `remote.rs` now also holds `secs` and `max_with_prefix`, which the GitHub adapter uses too. Status rides on `status::in-progress`, `status::done` and `status::wont-do` labels set through `add_labels`/`remove_labels` (scoped on Premium; on Free the adapter removes the others itself); done and closed close the issue, open and in-progress reopen it, and the label tells done from won't-do since REST has no close reason. A subtask's issue gets a `relates_to` link to its parent's issue (a failed link only warns); the GraphQL parent-child hierarchy stays out until research §35.3 verifies its arguments. `[tasks.gitlab] url` must be plain https, since every request carries the token; `project` is `group/name` or a numeric id, else the origin's path on that host, URL-encoded into every request path. The token comes from `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN` or `GL_TOKEN`, else `glab config get token --host <host>`, sent as a Bearer header. An id another machine already issued returns `Taken`, and `Project::create` re-allocates. #819.
 
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5

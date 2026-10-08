@@ -399,8 +399,8 @@ dir = "tasks"                         # one Markdown file per task, relative to 
 repo = ""                             # owner/name; empty: the origin remote
 project = 0                           # repo owner's Projects v2 number: issues join it and its Status follows the task; 0 = issues only
 
-[tasks.gitlab]
-url = "https://gitlab.com"            # base URL; set it for a self-hosted instance
+[tasks.gitlab]                        # status::in-progress | status::done | status::wont-do labels; a subtask links to its parent (relates_to)
+url = "https://gitlab.com"            # https base URL; set it for a self-hosted instance; token: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, else glab
 project = ""                          # group/name or numeric id; empty: the origin remote
 
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
