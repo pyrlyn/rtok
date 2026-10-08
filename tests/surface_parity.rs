@@ -397,6 +397,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("web", "the web surface itself"),
     ("dashboard", "deprecated spelling of `rtok web`"),
     ("proxy", "serves the proxy; `--dry-run` echoes its settings"),
+    // writing: each calls the provider's Batch API, not the operator model
+    ("batch submit", "creates a provider Batch job"),
+    ("batch status", "asks the provider, not the store"),
+    ("batch fetch", "downloads provider results to a new file"),
     (
         "tui",
         "the terminal surface; its tabs are model::pages() (T15.1)",

@@ -1,0 +1,11 @@
+bin.name = "rtok"
+args = "batch submit no-such.jsonl --url http://127.0.0.1:9"
+status.code = 1
+
+# A missing file fails before any request, so the unreachable URL is never tried.
+[env]
+inherit = false
+
+[env.add]
+RTOK_HOME = "target/tmp/trycmd-batch-bad-file"
+ANTHROPIC_API_KEY = "test-key"

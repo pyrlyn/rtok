@@ -19,6 +19,7 @@
 //! - [`worktree`] — git worktree inventory: records, owners, states (T150)
 
 pub mod agents;
+pub mod batch;
 pub mod bench;
 pub mod cli;
 pub mod completions;

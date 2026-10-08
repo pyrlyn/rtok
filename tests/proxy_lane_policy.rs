@@ -48,6 +48,7 @@ fn request() -> Vec<u8> {
 /// Every global rewrite switch on: what the agent lane has always been subject to.
 fn all_switches_on(cfg: &mut Config, base: &str) {
     cfg.proxy.upstream = base.to_string();
+    cfg.proxy.openai_upstream = base.to_string();
     cfg.proxy.mode = "compress".to_string();
     cfg.proxy.tools_rewrite.enabled = true;
     cfg.proxy.context_management = true;

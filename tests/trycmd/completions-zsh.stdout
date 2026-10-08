@@ -447,6 +447,88 @@ esac
     ;;
 esac
 ;;
+(batch)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+":: :_rtok__subcmd__batch_commands" /
+"*::: :->batch" /
+&& ret=0
+
+    case $state in
+    (batch)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-batch-command-$line[1]:"
+        case $line[1] in
+            (submit)
+_arguments "${_arguments_options[@]}" : /
+'--provider=[Provider whose Batch API to call; default/: from the id (/`msgbatch_/` is Anthropic)]:PROVIDER:(anthropic openai)' /
+'--url=[Proxy base URL (default/: /`/[proxy/] bind/` and /`port/`)]:URL:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+':file -- One request per line (Anthropic/: `custom_id` + `params`; OpenAI/: `custom_id`, `method`, `url`, `body`):_files' /
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : /
+'--provider=[Provider whose Batch API to call; default/: from the id (/`msgbatch_/` is Anthropic)]:PROVIDER:(anthropic openai)' /
+'--url=[Proxy base URL (default/: /`/[proxy/] bind/` and /`port/`)]:URL:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI):_default' /
+&& ret=0
+;;
+(fetch)
+_arguments "${_arguments_options[@]}" : /
+'--provider=[Provider whose Batch API to call; default/: from the id (/`msgbatch_/` is Anthropic)]:PROVIDER:(anthropic openai)' /
+'--url=[Proxy base URL (default/: /`/[proxy/] bind/` and /`port/`)]:URL:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI):_default' /
+':out -- File to create; an existing file is never overwritten:_files' /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__batch__subcmd__help_commands" /
+"*::: :->help" /
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-batch-help-command-$line[1]:"
+        case $line[1] in
+            (submit)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(fetch)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (info)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -2381,6 +2463,34 @@ _arguments "${_arguments_options[@]}" : /
     ;;
 esac
 ;;
+(batch)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__help__subcmd__batch_commands" /
+"*::: :->batch" /
+&& ret=0
+
+    case $state in
+    (batch)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-help-batch-command-$line[1]:"
+        case $line[1] in
+            (submit)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(fetch)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (info)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -2847,6 +2957,7 @@ _rtok_commands() {
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
 'task:This project'/''s tasks/: numbered by rtok, stored by the /`/[tasks/]/` adapter' /
+'batch:Provider Batch jobs (Anthropic, OpenAI) sent through /`rtok proxy/`' /
 'info:Version, effective paths, disk usage, error count and proxy status' /
 'agents:Agent hosts (/`rtok agents install|uninstall|list|info …/`)' /
 'agent:Agent hosts (/`rtok agents install|uninstall|list|info …/`)' /
@@ -3173,6 +3284,61 @@ _rtok__subcmd__archive__subcmd__help__subcmd__rewrite_commands() {
 _rtok__subcmd__archive__subcmd__rewrite_commands() {
     local commands; commands=()
     _describe -t commands 'rtok archive rewrite commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch_commands] )) ||
+_rtok__subcmd__batch_commands() {
+    local commands; commands=(
+'submit:Create a batch from a JSONL file of provider-shaped requests; prints the batch object' /
+'status:Print the provider'/''s current state of a batch' /
+'fetch:Write the results of a finished batch to a new file' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok batch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__fetch_commands] )) ||
+_rtok__subcmd__batch__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch fetch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__help_commands] )) ||
+_rtok__subcmd__batch__subcmd__help_commands() {
+    local commands; commands=(
+'submit:Create a batch from a JSONL file of provider-shaped requests; prints the batch object' /
+'status:Print the provider'/''s current state of a batch' /
+'fetch:Write the results of a finished batch to a new file' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok batch help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__help__subcmd__fetch_commands] )) ||
+_rtok__subcmd__batch__subcmd__help__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch help fetch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__help__subcmd__help_commands] )) ||
+_rtok__subcmd__batch__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch help help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__help__subcmd__status_commands] )) ||
+_rtok__subcmd__batch__subcmd__help__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch help status commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__help__subcmd__submit_commands] )) ||
+_rtok__subcmd__batch__subcmd__help__subcmd__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch help submit commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__status_commands] )) ||
+_rtok__subcmd__batch__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch status commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__batch__subcmd__submit_commands] )) ||
+_rtok__subcmd__batch__subcmd__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok batch submit commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__bench_commands] )) ||
 _rtok__subcmd__bench_commands() {
@@ -3638,6 +3804,7 @@ _rtok__subcmd__help_commands() {
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
 'task:This project'/''s tasks/: numbered by rtok, stored by the /`/[tasks/]/` adapter' /
+'batch:Provider Batch jobs (Anthropic, OpenAI) sent through /`rtok proxy/`' /
 'info:Version, effective paths, disk usage, error count and proxy status' /
 'agents:Agent hosts (/`rtok agents install|uninstall|list|info …/`)' /
 'setup:Deprecated spelling of /`rtok agents install <host>/`; still runs, still prints where to go' /
@@ -3782,6 +3949,30 @@ _rtok__subcmd__help__subcmd__archive_commands() {
 _rtok__subcmd__help__subcmd__archive__subcmd__rewrite_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help archive rewrite commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__batch_commands] )) ||
+_rtok__subcmd__help__subcmd__batch_commands() {
+    local commands; commands=(
+'submit:Create a batch from a JSONL file of provider-shaped requests; prints the batch object' /
+'status:Print the provider'/''s current state of a batch' /
+'fetch:Write the results of a finished batch to a new file' /
+    )
+    _describe -t commands 'rtok help batch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__batch__subcmd__fetch_commands] )) ||
+_rtok__subcmd__help__subcmd__batch__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help batch fetch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__batch__subcmd__status_commands] )) ||
+_rtok__subcmd__help__subcmd__batch__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help batch status commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__batch__subcmd__submit_commands] )) ||
+_rtok__subcmd__help__subcmd__batch__subcmd__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help batch submit commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__bench_commands] )) ||
 _rtok__subcmd__help__subcmd__bench_commands() {

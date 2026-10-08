@@ -269,6 +269,55 @@ input = 0.25
 cache_write = 0.25
 cache_read = 0.025
 output = 2.0
+# Рівні Batch і Flex, отримано 2026-10-08: ключ — `<model>@batch` або `<model>@flex`, а `--price`
+# рахує usage смуги Batch за рядком `@batch`. Anthropic Batch — знижка 50 % на вхід і вихід,
+# множники кешу накладаються зверху (сторінка цін вище; рівня Flex немає). В OpenAI Batch і Flex
+# мають однакові ставки (https://developers.openai.com/api/docs/pricing).
+[stats.prices."claude-fable-5-1@batch"]
+input = 5.0
+cache_write = 6.25
+cache_read = 0.125
+output = 25.0
+[stats.prices."claude-opus-5-5@batch"]
+input = 2.0
+cache_write = 2.5
+cache_read = 0.1
+output = 10.0
+[stats.prices."claude-sonnet-5-5@batch"]
+input = 1.0
+cache_write = 1.25
+cache_read = 0.05
+output = 5.0
+[stats.prices."claude-sonnet-5@batch"]
+input = 1.0
+cache_write = 1.25
+cache_read = 0.1
+output = 5.0
+[stats.prices."claude-haiku-4-5@batch"]
+input = 0.5
+cache_write = 0.625
+cache_read = 0.05
+output = 2.5
+[stats.prices."gpt-5@batch"]
+input = 0.625
+cache_write = 0.625
+cache_read = 0.0625
+output = 5.0
+[stats.prices."gpt-5@flex"]
+input = 0.625
+cache_write = 0.625
+cache_read = 0.0625
+output = 5.0
+[stats.prices."gpt-5-mini@batch"]
+input = 0.125
+cache_write = 0.125
+cache_read = 0.0125
+output = 1.0
+[stats.prices."gpt-5-mini@flex"]
+input = 0.125
+cache_write = 0.125
+cache_read = 0.0125
+output = 1.0
 
 [report]                              # rtok report (D24: відображає операторську модель, нічого не обчислює)
 format = "md"                         # md; html (T22.2), pdf (T22.3), --ai (T22.4)
@@ -646,6 +695,10 @@ default_model = ""
 рядки взято зі сторінок цін провайдерів 2026-09-17 (джерела в
 `config/default.toml`); перевірте їх знову, якщо ваш рахунок не збігається. `stats.price`
 типово вмикає показ `--price` (`RTOK_STATS_PRICE=true` теж працює).
+
+Рядок із ключем `<model>@batch` (або `<model>@flex`) оцінює модель на рівні Batch (або Flex). `--price`
+виводить usage викликів смуги Batch під `<model>@batch` і рахує його за цим рядком; без нього друкує `-`,
+а не бере стандартну ставку. Рядки `@flex` поки ніхто не читає: рівень Flex не записується.
 
 ### Хост WASM-плагінів (`[plugins.wasm]`)
 

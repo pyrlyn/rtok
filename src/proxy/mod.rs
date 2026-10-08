@@ -97,6 +97,17 @@ const MAX_HOPS: u32 = 8;
 
 /// The incoming hop count. Anything but a number still says another rtok saw the
 /// request, so it counts as one hop rather than none.
+/// OpenAI's `/v1/batches` and `/v1/files` carry no wire, so the path alone would send them to
+/// the Anthropic upstream. Anthropic has a Files API on the same path, but every Anthropic
+/// request has to carry `anthropic-version`, which tells the two apart.
+fn is_openai_batch_path(path: &str, headers: &HeaderMap) -> bool {
+    let under = |root: &str| {
+        path.strip_prefix(root)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    };
+    (under("/v1/batches") || under("/v1/files")) && !headers.contains_key("anthropic-version")
+}
+
 fn hops_of(headers: &HeaderMap) -> u32 {
     headers.get(HOP_HEADER).map_or(0, |v| {
         v.to_str()
@@ -184,11 +195,18 @@ impl ProxyState {
     }
 
     /// The upstream owning `wire`. Paths this build has no wire for keep the Anthropic
-    /// default, which is what they did before P11 (`/v1/responses` until T11.3).
-    fn upstream_for(&self, wire: Option<&'static dyn Wire>) -> &str {
+    /// default, which is what they did before P11 (`/v1/responses` until T11.3), except
+    /// OpenAI's Batch and Files paths (T385.12.1).
+    fn upstream_for(
+        &self,
+        wire: Option<&'static dyn Wire>,
+        path: &str,
+        headers: &HeaderMap,
+    ) -> &str {
         match wire.map(Wire::provider) {
             Some("openai") => &self.openai_upstream,
             Some("gemini") => &self.gemini_upstream,
+            None if is_openai_batch_path(path, headers) => &self.openai_upstream,
             _ => &self.upstream,
         }
     }
@@ -363,7 +381,11 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         }
     }
 
-    let target = match join_upstream(state.upstream_for(wire), &path, query.as_deref()) {
+    let target = match join_upstream(
+        state.upstream_for(wire, &path, &headers),
+        &path,
+        query.as_deref(),
+    ) {
         Ok(u) => u,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
     };
@@ -1198,6 +1220,26 @@ fn error_response(status: StatusCode, message: &str) -> AxumResponse {
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    #[rstest]
+    #[case("/v1/batches", false, true)]
+    #[case("/v1/batches/batch_1/cancel", false, true)]
+    #[case("/v1/files/file-1/content", false, true)]
+    // Anthropic's Files API shares the path and is told apart by its mandatory header.
+    #[case("/v1/files", true, false)]
+    #[case("/v1/messages/batches", false, false)]
+    #[case("/v1/batchesx", false, false)]
+    fn openai_batch_paths_are_told_from_anthropic_ones(
+        #[case] path: &str,
+        #[case] anthropic: bool,
+        #[case] openai: bool,
+    ) {
+        let mut headers = HeaderMap::new();
+        if anthropic {
+            headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
+        }
+        assert_eq!(is_openai_batch_path(path, &headers), openai);
+    }
 
     /// The proxy's rows come out of the same funnel as the plugin's, shaped exactly as
     /// `insert_log` left them (T24.1). `logs.call_id` is a foreign key, so the session and

@@ -1293,4 +1293,66 @@ Options:
                            letter)
   -h, --help               Print help
 
+$ rtok batch --help
+Provider Batch jobs (Anthropic, OpenAI) sent through `rtok proxy`
+
+Usage: rtok batch [OPTIONS] <COMMAND>
+
+Commands:
+  submit  Create a batch from a JSONL file of provider-shaped requests; prints the batch object
+  status  Print the provider's current state of a batch
+  fetch   Write the results of a finished batch to a new file
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -h, --help           Print help
+
+$ rtok batch submit --help
+Create a batch from a JSONL file of provider-shaped requests; prints the batch object
+
+Usage: rtok batch submit [OPTIONS] <FILE>
+
+Arguments:
+  <FILE>  One request per line (Anthropic: `custom_id` + `params`; OpenAI: `custom_id`, `method`,
+          `url`, `body`)
+
+Options:
+      --config <PATH>        User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --provider <PROVIDER>  Provider whose Batch API to call; default: from the id (`msgbatch_` is
+                             Anthropic) [possible values: anthropic, openai]
+      --url <URL>            Proxy base URL (default: `[proxy] bind` and `port`)
+  -h, --help                 Print help
+
+$ rtok batch status --help
+Print the provider's current state of a batch
+
+Usage: rtok batch status [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI)
+
+Options:
+      --config <PATH>        User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --provider <PROVIDER>  Provider whose Batch API to call; default: from the id (`msgbatch_` is
+                             Anthropic) [possible values: anthropic, openai]
+      --url <URL>            Proxy base URL (default: `[proxy] bind` and `port`)
+  -h, --help                 Print help
+
+$ rtok batch fetch --help
+Write the results of a finished batch to a new file
+
+Usage: rtok batch fetch [OPTIONS] <ID> <OUT>
+
+Arguments:
+  <ID>   Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI)
+  <OUT>  File to create; an existing file is never overwritten
+
+Options:
+      --config <PATH>        User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --provider <PROVIDER>  Provider whose Batch API to call; default: from the id (`msgbatch_` is
+                             Anthropic) [possible values: anthropic, openai]
+      --url <URL>            Proxy base URL (default: `[proxy] bind` and `port`)
+  -h, --help                 Print help
+
 ```

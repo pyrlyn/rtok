@@ -960,7 +960,7 @@ pub fn attach_costs(
     prices: &BTreeMap<String, crate::config::ModelPrice>,
 ) -> Result<()> {
     let mut costs = CostReport::default();
-    for row in store.usage_by_model()? {
+    for row in store.usage_by_model_tier()? {
         let priced = prices.get(&row.model).map(|price| {
             row_cost(
                 row.input,
@@ -1943,6 +1943,45 @@ mod tests {
         let table = cost.to_table();
         assert!(table.contains("11.60"), "{table}");
         assert!(table.contains("mystery-1"), "{table}");
+    }
+
+    /// T385.12.1: Batch-lane usage is costed at the model's `@batch` row, and a model without
+    /// one stays unpriced instead of borrowing the standard rate.
+    #[test]
+    fn batch_lane_usage_is_priced_at_its_batch_row() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .upsert_session("s1", None, None, None, Some("proxy"))
+            .unwrap();
+        for (kind, model) in [
+            ("api_request", "gpt-5"),
+            ("api_request:batch", "gpt-5"),
+            ("api_request:batch", "mystery-1"),
+        ] {
+            let call = store
+                .insert_call("s1", "proxy", kind, None, None, None, None, Some("/x"))
+                .unwrap();
+            store
+                .insert_usage(
+                    "s1",
+                    Some(model),
+                    "openai_chat",
+                    1_000_000,
+                    0,
+                    0,
+                    1_000_000,
+                    call,
+                )
+                .unwrap();
+        }
+        let mut report = Report::default();
+        let prices = crate::config::Config::default().stats.prices;
+        attach_costs(&mut report, &store, &prices).unwrap();
+        let cost = report.cost.unwrap();
+        assert_eq!(cost.models["gpt-5"].cost, Some(11.25));
+        assert_eq!(cost.models["gpt-5@batch"].cost, Some(5.625));
+        assert_eq!(cost.unknown, ["mystery-1@batch"]);
+        assert_eq!(cost.total_cost, 16.875);
     }
 
     /// T364: a bad value is blamed on the place it came from, not always on `--since`.
