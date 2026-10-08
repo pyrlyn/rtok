@@ -319,6 +319,9 @@ section! {
         context_management: bool = false,
         /// `plugins.proxy.semantic_cache`, lookup and store.
         semantic_cache: bool = false,
+        /// OpenAI `service_tier = "flex"` on this lane's chat and responses calls; see
+        /// `[proxy.flex]`. Never opened on the `agent` lane.
+        flex: bool = false,
         /// Read timeout for this lane in seconds; 0 = `proxy.timeout_s`.
         timeout_s: u64 = 0,
     }
@@ -335,8 +338,19 @@ section! {
 }
 
 section! {
-    /// `[proxy.flex]` — Flex `service_tier` on bulk and internal lanes (T385.5). No keys yet.
-    FlexPolicy {}
+    /// `[proxy.flex]` — how the Flex tier is set and what happens when it has no capacity
+    /// (T385.5). Whether a lane gets Flex at all is `[proxy.lanes.<lane>] flex`.
+    FlexPolicy {
+        /// Overwrite a `service_tier` the client sent. Off: a client value is never changed.
+        force: bool = false,
+        /// On `429` from a request rtok set to Flex: `none` hands the 429 to the client,
+        /// `backoff` retries on Flex with doubling delays, `default` retries once on `auto`.
+        on_429: String = s("none"),
+        /// `backoff` only: retries before the 429 goes to the client; at most 5.
+        retries: u32 = 3,
+        /// `backoff` only: delay before the first retry, doubled each time, capped at 30 s.
+        backoff_ms: u64 = 1000,
+    }
 }
 
 section! {
