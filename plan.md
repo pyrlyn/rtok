@@ -36,8 +36,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.5 | in progress | P2 | 4 | 0% | Claude Code / claude-opus-5-5 |
-| T330.5.1 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
+| T330.5 | todo | P2 | 4 | 30% | |
 | T330.5.2 | todo | P2 | 3 | 0% | |
 | T330.5.3 | todo | P2 | 3 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -1093,14 +1092,6 @@ Part of T330. The review-class kinds with their keeps (worktrees through `git wo
 Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rejected naming the key; `just check`.
 
 Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. It closes when all three are done.
-
-### T330.5.1. Junk: `[agents.junk]` table and the `logs`, `backups`, `deps`, `snapshots` kinds
-
-Part of T330.5. Depends on T330.4 (#822). The `[agents.junk]` table with the keys these kinds read (`keep_logs_days` 30, `temp_min_age_hours` 24, `exclude`, `extra`), each range-checked by `rtok config validate` naming the key; `extra` entries name a host (or `rtok`), a kind (`cache`, `temp`, `logs`) and a path. Kinds, all over the T330.4 report, plan, re-check and apply (no second deleter): `logs` (review) = entries of the §22 log folders older than `keep_logs_days`; `backups` (review) = rtok's own `_backup/<name>.bak-<ts>` generations past `setup.backup_files` (newest always kept), other `*.bak`/`*~` files listed read-only; `deps` (review) = `node_modules`, `.venv`, `vendor`, `.gradle`, `Pods` in agent worktrees, listed read-only (no D36 evidence), with "no lockfile or manifest" when nothing could reinstall it; `snapshots` (never) = Gemini's `~/.gemini/history/<hash>` and `tmp/<hash>/checkpoints`, size only, with `/restore` named. `exclude` globs keep any item that matches or holds a match. `temp` reads `temp_min_age_hours`. Docs in `docs/config.md` (en, ru, uk). No `rtok.db` rows, no worktree removal, no sessions, no `crash-dumps` (moved to T330.5.2 to keep this task under the 500-line cap).
-
-Plan: `src/config/mod.rs` (`AgentsJunk`, `JunkExtra`), `validate.rs` (ranges, `extra`, `exclude`); `src/agents/junk_kinds.rs` (`log_items`, `backup_items`, deps in `build_items`, `snapshot_items`, `extra_items`, `exclude`); `rtok-agent-sdk::stale_backups` (read-only twin of `prune_backups`); `junk.rs` (wire kinds, class per kind row, "Freed with `--include review`"); `junk_clear.rs` (`--kind` set, `extra` evidence); `config/default.toml`, trycmd `config-init`; docs en/ru/uk. Verify: unit tests in temp homes, `just check`.
-
-Check: a log 31 days old is planned by `--include review` and one 29 days old is kept; a `_backup` past the cap is planned and the newest kept; `node_modules` with and without a lockfile is listed, never planned; a Gemini history dir is listed with its size and never planned, even with `--kind snapshots`; an `exclude` glob keeps a cache that holds a match; invalid values (`-1`, `2.5`, `abc`, an unknown `extra` kind or host, a bad glob) are rejected naming the key; `just check`.
 
 ### T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
 

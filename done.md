@@ -8167,6 +8167,18 @@ Result: new `src/agents/junk_clear.rs` (`Filter`, `plan`, `apply`, `to_text`) ov
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5
 
+### T330.5.1. Junk: `[agents.junk]` table and the `logs`, `backups`, `deps`, `snapshots` kinds
+
+Part of T330.5. Depends on T330.4 (#822). The `[agents.junk]` table with the keys these kinds read (`keep_logs_days` 30, `temp_min_age_hours` 24, `exclude`, `extra`), each range-checked by `rtok config validate` naming the key; `extra` entries name a host (or `rtok`), a kind (`cache`, `temp`, `logs`) and a path. Kinds over the T330.4 report, plan, re-check and apply (no second deleter): `logs` (review) = entries of the §22 log folders older than `keep_logs_days`; `backups` (review) = rtok's own `_backup/<name>.bak-<ts>` generations past `setup.backup_files` (newest always kept), other `*.bak`/`*~` files listed read-only; `deps` (review) = `node_modules`, `.venv`, `vendor`, `.gradle`, `Pods` in agent worktrees, listed read-only (no D36 evidence), with "no lockfile or manifest" when nothing could reinstall it; `snapshots` (never) = Gemini's `~/.gemini/history/<hash>` and `tmp/<hash>/checkpoints`, size only, with `/restore` named. `exclude` globs keep any item that matches or holds a match. `temp` reads `temp_min_age_hours`. `crash-dumps` moved to T330.5.2 to keep this task near the 500-line cap.
+
+Check: a log 31 days old is planned by `--include review` and one 29 days old is kept; a `_backup` past the cap is planned and the newest kept; `node_modules` with and without a lockfile is listed, never planned; a Gemini history dir is listed with its size and never planned, even with `--kind snapshots`; an `exclude` glob keeps a cache that holds a match; invalid values (`-1`, `2.5`, `abc`, an unknown `extra` kind or host, a bad glob) are rejected naming the key; `just check`.
+
+Result: `AgentsJunk`/`JunkExtra` in `src/config/mod.rs` with range, `extra` and glob checks in `validate.rs`; new `src/agents/junk_review.rs` (`backup_items`, `snapshot_items`, `extra_items`, `exclude`) and the `logs`/`deps` items in `junk_kinds.rs`, wired into `junk.rs` (one row per kind and class) and the `junk_clear` `--kind` set; `rtok-agent-sdk::stale_backups` is the read-only twin of `prune_backups`. Docs in `docs/config.md` (en, ru, uk). Code +563/−89 (net +474), tests +450. `just check`: 2725 passed, 8 skipped. #827.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-opus-5-5
+
 ### T248. Plugin READMEs must link the host's official documentation
 
 Creator's request 2026-09-24: every agent plugin package's `README.md` must link the host's official documentation.
