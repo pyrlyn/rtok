@@ -84,8 +84,8 @@ impl Plugin for Graph {
         vec![
             ToolDef {
                 name: "symbol",
-                description: "Definitions of a symbol with their source: path:line kind, then the body. Optional path substring and kind narrow the match.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
+                description: "Definitions and bodies. Pass name, or names for several. Optional path and kind.",
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"names":{"type":"array","items":{"type":"string"}},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "callers",
@@ -315,14 +315,14 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
         kind: arg("kind").to_string(),
         all: args["all"].as_bool().unwrap_or(false),
     };
-    match name {
-        "symbol" => scope::symbol(cx, scope, arg("name"), &filter),
-        "callers" => scope::callers(cx, scope, arg("name"), &filter),
+    let text = match name {
+        "symbol" => scope::symbols(cx, scope, &symbol_arg_names(args), &filter)?,
+        "callers" => scope::callers(cx, scope, arg("name"), &filter)?,
         "impact" => {
             let name = arg("name");
             if name.is_empty() {
                 let depth = args["depth"].as_u64().unwrap_or(3) as u32;
-                scope::affected_path(cx, scope, arg("path"), depth)
+                scope::affected_path(cx, scope, arg("path"), depth)?
             } else {
                 scope::impact(
                     cx,
@@ -331,13 +331,95 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                     args["depth"].as_u64().unwrap_or(2) as u32,
                     &filter,
                     args["to"].as_str(),
-                )
+                )?
             }
         }
-        "outline" => scope::outline(cx, scope, arg("path")),
-        "explore" => scope::explore(cx, scope, arg("query"), &filter),
+        "outline" => return scope::outline(cx, scope, arg("path")),
+        "explore" => scope::explore(cx, scope, arg("query"), &filter)?,
         _ => anyhow::bail!("unknown tool: {name}"),
+    };
+    Ok(format!("{}{text}", head_stale_prefix(cx, scope)))
+}
+
+/// `name`, or `names` when the caller asks for several. One name stays the old call.
+fn symbol_arg_names(args: &Value) -> Vec<String> {
+    if let Some(list) = args.get("names").and_then(Value::as_array) {
+        let names: Vec<String> = list
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        if !names.is_empty() {
+            return names;
+        }
     }
+    vec![
+        args.get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+    ]
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IndexedHead {
+    head: String,
+}
+
+fn head_key(root: &Path) -> String {
+    format!("head:{}", index::canon(root))
+}
+
+/// Remember `git rev-parse HEAD` for this root. Git missing or a non-repo is a no-op:
+/// indexing still succeeds.
+pub(crate) fn remember_indexed_head(cx: &Ctx, root: &Path) {
+    let Some(stdout) = git_stdout(root, &["rev-parse", "HEAD"]) else {
+        return;
+    };
+    let Ok(text) = String::from_utf8(stdout) else {
+        return;
+    };
+    let head = text.trim();
+    if head.is_empty() {
+        return;
+    }
+    let Ok(value) = serde_json::to_string(&IndexedHead {
+        head: head.to_string(),
+    }) else {
+        return;
+    };
+    let _ = cx.plugin_state_set("graph", &head_key(root), &value);
+}
+
+/// `index <stored> head <live>` when the indexed commit is not HEAD. Empty when
+/// there is no stored head, git failed, or the two shas match — the answer stays
+/// byte-identical. Full `rev-parse` hex, no timestamp.
+fn head_stale_prefix(cx: &Ctx, scope: &[scope::Member]) -> String {
+    let mut out = String::new();
+    for member in scope {
+        let Ok(Some(raw)) = cx.plugin_state_get("graph", &head_key(&member.root)) else {
+            continue;
+        };
+        let Ok(stored) = serde_json::from_str::<IndexedHead>(&raw) else {
+            continue;
+        };
+        if stored.head.is_empty() {
+            continue;
+        }
+        let Some(stdout) = git_stdout(&member.root, &["rev-parse", "HEAD"]) else {
+            continue;
+        };
+        let Ok(live) = String::from_utf8(stdout) else {
+            continue;
+        };
+        let live = live.trim();
+        if live.is_empty() || stored.head == live {
+            continue;
+        }
+        out.push_str(&format!("index {} head {live}\n", stored.head));
+    }
+    out
 }
 
 /// `symbol(name)`: `path:line kind` per definition, then that definition's source from
@@ -1586,6 +1668,58 @@ mod tests {
 
     fn crate_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A moved HEAD names both full shas when the index is not rebuilt (`auto_index`
+    /// off). A directory git does not own gets no line. `outline` stays bare.
+    #[test]
+    fn stale_head_line_names_both_shas() {
+        let (mut cx, dir) = cx("stale-head");
+        fs::write(dir.join("a.rs"), "fn alpha() {}\n").unwrap();
+        let scope = [scope::Member {
+            name: String::new(),
+            root: dir.clone(),
+        }];
+        let plain = call(&Ctx::new(&cx), "symbol", &json!({"name": "alpha"}), &scope).unwrap();
+        assert!(
+            !plain.lines().next().unwrap_or("").starts_with("index "),
+            "{plain}"
+        );
+        git(&dir, &["init"]);
+        git(&dir, &["config", "user.email", "t@example.com"]);
+        git(&dir, &["config", "user.name", "t"]);
+        git(&dir, &["add", "a.rs"]);
+        git(&dir, &["commit", "-m", "a"]);
+        index::run(&Ctx::new(&cx), &dir, false).unwrap();
+        let old = String::from_utf8(git_stdout(&dir, &["rev-parse", "HEAD"]).unwrap()).unwrap();
+        let old = old.trim().to_string();
+        git(&dir, &["commit", "--allow-empty", "-m", "b"]);
+        let new = String::from_utf8(git_stdout(&dir, &["rev-parse", "HEAD"]).unwrap()).unwrap();
+        let new = new.trim().to_string();
+        cx.config.plugins.graph.auto_index = false;
+        let out = call(&Ctx::new(&cx), "symbol", &json!({"name": "alpha"}), &scope).unwrap();
+        assert!(
+            out.starts_with(&format!("index {old} head {new}\n")),
+            "{out}"
+        );
+        assert!(out.contains("fn alpha()"), "{out}");
+        let outline = call(&Ctx::new(&cx), "outline", &json!({"path": "a.rs"}), &scope).unwrap();
+        assert!(!outline.starts_with("index "), "{outline}");
+        let _ = fs::remove_dir_all(dir);
     }
 
     /// T8.6: one call gives the definition and its source. The `cap` body is read back

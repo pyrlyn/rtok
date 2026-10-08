@@ -95,7 +95,7 @@ pub fn family(argv: &[String]) -> String {
         let peeled_argv = visible_argv(&raw_argv);
         let raw = bin(&raw_argv);
         let peeled = bin(&peeled_argv);
-        if peeled != raw && matches!(raw, "mise" | "just") {
+        if peeled != raw && wrapper_stem(raw) {
             return "script".to_string();
         }
         return named(&raw_argv);
@@ -186,11 +186,18 @@ fn resolve(settings: &rules::Settings, argv: &[String], output: &str) -> Resolve
     }
 }
 
-/// Argv after `mise exec`/`mise x` and `just -c`. A recipe stays as written.
+/// Argv after wrappers the host puts in front of the real command: `mise exec`,
+/// `just -c`, a leading `FOO=1`, and `uv`/`npx`/`python -m`/`cmd /c`. At most four
+/// peels, so `uv run python -m pytest` lands on `pytest` and a deeper nest stays put.
+/// A recipe stays as written.
 pub(crate) fn visible_argv(argv: &[String]) -> Vec<String> {
     let mut cur = argv.to_vec();
     for _ in 0..4 {
-        let Some(inner) = peel_mise_exec(&cur).or_else(|| peel_just_command(&cur)) else {
+        let Some(inner) = peel_mise_exec(&cur)
+            .or_else(|| peel_just_command(&cur))
+            .or_else(|| peel_leading_env(&cur))
+            .or_else(|| peel_tool_wrapper(&cur))
+        else {
             break;
         };
         if inner == cur {
@@ -232,7 +239,30 @@ fn silent_stage(stage: &[String]) -> bool {
 }
 
 fn is_wrapper_stage(stage: &[String]) -> bool {
-    matches!(stage.first().map(|s| cmd_stem(s)), Some("mise" | "just"))
+    peel_mise_exec(stage).is_some()
+        || peel_just_command(stage).is_some()
+        || peel_leading_env(stage).is_some()
+        || peel_tool_wrapper(stage).is_some()
+}
+
+fn wrapper_stem(stem: &str) -> bool {
+    matches!(
+        stem,
+        "mise"
+            | "just"
+            | "uv"
+            | "uvx"
+            | "npx"
+            | "pnpm"
+            | "yarn"
+            | "poetry"
+            | "pipenv"
+            | "hatch"
+            | "python"
+            | "python3"
+            | "py"
+            | "cmd"
+    ) || is_env_assign(stem)
 }
 
 fn peel_mise_exec(argv: &[String]) -> Option<Vec<String>> {
@@ -271,6 +301,59 @@ fn peel_mise_exec(argv: &[String]) -> Option<Vec<String>> {
         i += 1;
     }
     None
+}
+
+/// Leading `FOO=1 BAR=baz cmd`: the assignments are not the program.
+fn peel_leading_env(argv: &[String]) -> Option<Vec<String>> {
+    let mut i = 0;
+    while i < argv.len() && is_env_assign(&argv[i]) {
+        i += 1;
+    }
+    (i > 0 && i < argv.len()).then(|| argv[i..].to_vec())
+}
+
+fn is_env_assign(tok: &str) -> bool {
+    let Some((key, value)) = tok.split_once('=') else {
+        return false;
+    };
+    !value.is_empty()
+        && key
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// `uv run`, `uvx`, `npx`, `pnpm exec|dlx`, `yarn dlx`, `poetry|pipenv|hatch run`,
+/// `python|python3|py -m`, `cmd /c`. A flag we do not know stays on the wrapper.
+fn peel_tool_wrapper(argv: &[String]) -> Option<Vec<String>> {
+    let stem = cmd_stem(argv.first()?);
+    let rest_at = match stem {
+        "uv" if argv.get(1).map(String::as_str) == Some("run") => 2,
+        "uvx" | "npx" => 1,
+        "pnpm" if matches!(argv.get(1).map(String::as_str), Some("exec" | "dlx")) => 2,
+        "yarn" if argv.get(1).map(String::as_str) == Some("dlx") => 2,
+        "poetry" | "pipenv" | "hatch" if argv.get(1).map(String::as_str) == Some("run") => 2,
+        "python" | "python3" | "py" if argv.get(1).map(String::as_str) == Some("-m") => 2,
+        "cmd" if argv.get(1).is_some_and(|s| s.eq_ignore_ascii_case("/c")) => 2,
+        _ => return None,
+    };
+    command_after(argv, rest_at)
+}
+
+fn command_after(argv: &[String], at: usize) -> Option<Vec<String>> {
+    let mut rest = argv.get(at..)?;
+    if rest.first().map(String::as_str) == Some("--") {
+        rest = rest.get(1..)?;
+    }
+    if rest.is_empty() || rest[0].starts_with('-') {
+        return None;
+    }
+    if rest.len() == 1 && rest[0].chars().any(char::is_whitespace) {
+        let words: Vec<String> = rest[0].split_whitespace().map(str::to_string).collect();
+        return (!words.is_empty()).then_some(words);
+    }
+    Some(rest.to_vec())
 }
 
 /// `just -c` / `--command` names the program on the argv. A recipe name does not: the body is in the justfile, so only an echoed line can name it.
@@ -1601,5 +1684,22 @@ mod tests {
             family_of(&settings, &words("mise exec -- just test"), &nested),
             "cargo"
         );
+    }
+
+    #[test]
+    fn family_names_peeled_wrappers() {
+        let settings = rules::Settings::builtin();
+        let body = "ok\n";
+        let family = |cmd: &str| family_of(&settings, &words(cmd), body);
+        assert_eq!(family("uv run cargo test"), "cargo");
+        assert_eq!(family("FOO=1 cargo test"), "cargo");
+        assert_eq!(family(".venv/bin/pytest -q"), "pytest");
+        assert_eq!(family("uv run python -m pytest -q"), "pytest");
+        assert_eq!(family("mise exec -- cargo test"), "cargo");
+        assert_eq!(
+            family_of(&settings, &["git commit -m \"a|b\"".into()], body),
+            "git"
+        );
+        assert_eq!(family("mise exec --"), "mise");
     }
 }

@@ -152,6 +152,26 @@ fn four_tools_byte_exact() {
     );
     assert_eq!(call(&home, &a, "callers", name("a")), "no references to a");
     assert_eq!(call(&home, &a, "impact", name("a")), "nothing reaches a");
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "symbol",
+            serde_json::json!({"names": ["b", "c"]})
+        ),
+        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+         = c\nchain.rs:7 function\nfn c() {}\n"
+    );
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "symbol",
+            serde_json::json!({"names": ["b", "zzz"]})
+        ),
+        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+         = zzz\nno definition of zzz\n"
+    );
     let _ = std::fs::remove_dir_all(&home);
 }
 

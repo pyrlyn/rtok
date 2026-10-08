@@ -195,6 +195,7 @@ pub fn run_with(
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         cx.touch_symbol_indexed_at(&rk, ts)?;
+        super::remember_indexed_head(cx, &root);
         // One pass over names so callers can rank without scanning `symbols` again (T368).
         cx.rebuild_symbol_idf(&rk)?;
         // A failed rebuild leaves the previous graph; the map falls back, indexing still succeeds.
@@ -539,6 +540,39 @@ pub(crate) mod tests {
         }
         fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
         assert_eq!(run(&ctx, &dir, false).unwrap().indexed, 1);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Copied rows keep `file_sha`, so a worktree whose mtimes differ still skips the parse.
+    #[test]
+    fn copy_symbol_rows_skips_identical_blobs() {
+        let (cx, dir) = cx("copy-symbols");
+        let (a, b) = (dir.join("a"), dir.join("b"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        let src = "fn kept() {}\n";
+        fs::write(a.join("lib.rs"), src).unwrap();
+        fs::write(b.join("lib.rs"), src).unwrap();
+        let ctx = Ctx::new(&cx);
+        assert!(run(&ctx, &a, false).unwrap().indexed >= 1);
+        let n = cx.store.copy_symbol_rows(&canon(&a), &canon(&b)).unwrap();
+        assert!(n >= 1, "copied {n} rows");
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+        fs::File::options()
+            .write(true)
+            .open(b.join("lib.rs"))
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        let report = run(&ctx, &b, false).unwrap();
+        assert_eq!(report.indexed, 0, "{report:?}");
+        assert!(report.skipped >= 1, "{report:?}");
+        let sa = super::super::symbol(&ctx, &a, "kept").unwrap();
+        let sb = super::super::symbol(&ctx, &b, "kept").unwrap();
+        assert_eq!(sa, sb, "symbol on the copy matches the source");
+        fs::write(b.join("lib.rs"), "fn kept() { let _ = 1; }\n").unwrap();
+        let changed = run(&ctx, &b, false).unwrap();
+        assert_eq!(changed.indexed, 1, "{changed:?}");
         let _ = fs::remove_dir_all(dir);
     }
 

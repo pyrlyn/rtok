@@ -28,6 +28,10 @@
   groups files (depth, stored file rank, refs), prints 3 lines each and ends in the cut line.
   `--all` / MCP `all` and `impact_tokens = 0` keep the flat listing. The LSP backend is not budgeted.
 - The plugin never writes SQL (D13). Storage is `src/store/symbols.rs` (`symbol_*` methods).
+- `symbol` takes `name` or `names`. One name is the old text; several are headed `= name`
+  and capped together. `symbol` / `callers` / `impact` / `explore` prepend
+  `index <oldsha> head <newsha>` when the stored HEAD differs (full hex, no timestamp).
+  `outline` does not. `worktree add` copies symbol rows from the main checkout.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and

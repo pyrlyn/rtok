@@ -113,6 +113,31 @@ fn walkable(m: &Member) -> Result<()> {
     crate::plugins::read::walk_root_ok(&m.root)
 }
 
+/// Several names in one call. A single name is [`symbol`], byte for byte.
+/// Each extra name is headed `= name`; an unknown name is a line, not an error.
+/// The joined text goes through [`cap`] once more so a long batch still archives.
+pub fn symbols(cx: &Ctx, scope: &[Member], names: &[String], filter: &Filter) -> Result<String> {
+    if names.len() <= 1 {
+        let name = names.first().map(String::as_str).unwrap_or("");
+        return symbol(cx, scope, name, filter);
+    }
+    let mut out = String::new();
+    for name in names {
+        let body = symbol(cx, scope, name, filter)?;
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str("= ");
+        out.push_str(name);
+        out.push('\n');
+        out.push_str(&body);
+        if !body.ends_with('\n') {
+            out.push('\n');
+        }
+    }
+    cap(cx, out)
+}
+
 pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
     let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {

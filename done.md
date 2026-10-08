@@ -1,5 +1,19 @@
 # rtok — completed tasks
 
+### T454. Borrow host-capped savings, wrapper peel, symbol batch, stale HEAD, worktree symbol copy
+
+From the repowise comparison (2026-10-08). Five algorithms, no new plugin.
+
+1. `cmd` `Measurement` estimates use the first 30 000 chars the host keeps (`bounded::host_visible_prefix`). Byte lengths stay the real sizes.
+2. `family_of` peels a leading `FOO=1`, `uv run` / `uvx` / `npx` / `pnpm exec|dlx` / `yarn dlx` / `poetry|pipenv|hatch run`, `python|python3|py -m`, and `cmd /c`, at most four times, the same way it peels `mise` / `just`.
+3. `symbol` accepts `names`. One name is the old text; several are headed `= name` and capped together. An unknown name is a line.
+4. `symbol` / `callers` / `impact` / `explore` prepend `index <oldsha> head <newsha>` (full `rev-parse` hex, no timestamp) when the stored HEAD differs and the index is not rebuilt. `outline` does not. A non-repo adds nothing.
+5. `worktree add` copies `symbols` rows from the main checkout. The next index skips identical blobs (`indexed == 0`) even when mtimes differ. A copy error is a warning.
+
+Check: `cargo nextest run -p rtok -E 'test(host_visible) | test(emit_filtered) | test(family_names) | test(copy_symbol_rows) | test(stale_head) | binary(graph_contract) | binary(graph_scope)'` — 23 passed. Formatter, bounded, surface, and worktree tests — 94 passed. `cargo clippy -p rtok --all-targets -- -D warnings` clean. `cargo fmt --check` clean.
+
+Result: 2026-10-08. No new dependency. No saving claim beyond the corrected `Measurement` rows.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
