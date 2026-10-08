@@ -57,7 +57,6 @@
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
-- T385.7. Per-lane upstream and in-flight cap
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
 - T385.10. Routing for `internal` and `bulk` calls
 - T385.11. Deferred tool schemas and thinking replay
@@ -99,5 +98,6 @@
 - T436.2. Spinners on the remaining waits and icons on `agents install/update`
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T441.7. GitHub adapter
+- T441.11. GitHub Projects v2 Status
+- T441.12. `rtok task sync`
 - T441.8. GitLab adapter
