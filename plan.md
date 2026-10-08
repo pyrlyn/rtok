@@ -58,7 +58,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
-| T382 | todo | P2 | 2 | 30% | |
+| T382 | in progress | P2 | 2 | 30% | Claude Code / claude-sonnet-5-5 |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.5 | todo | P2 | 3 | 20% | |
@@ -1374,6 +1374,8 @@ Done means:
 - Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
 
 Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
+
+Execution plan (Claude Code / claude-sonnet-5-5): reuse `agents outdated`'s lookup (`install_probe` + `read_installed`) by lifting its per-variant body into one shared `installed_plugin` in `src/agents/outdated.rs`; `agents::block` appends the note to the `plugin` module row (strings in `src/ui/agents.rs`); `web/model.rs::agent_row` adds `plugin_version`/`plugin_source`; `parseHosts` keeps the row value, `moduleState` in `Hosts.tsx` marks the outdated case. Tests: `agents::list` over a fake Claude home (current, older, no version), `parseHosts` and `moduleState` cases, re-blessed trycmd where the row prints, docs in sync.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
