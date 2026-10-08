@@ -118,6 +118,12 @@ pub fn is_api_request(kind: &str) -> bool {
     kind == "api_request" || kind.starts_with("api_request:")
 }
 
+/// The lane name a `calls.kind` was recorded under — the inverse of [`Lane::kind`]. The bare
+/// `api_request` is the agent lane, which is how rows written before lanes existed read back.
+pub fn lane_of_kind(kind: &str) -> &str {
+    kind.strip_prefix("api_request:").unwrap_or("agent")
+}
+
 /// The lane of one request and the path to forward (the `/lane/<name>` prefix removed).
 #[derive(Debug, PartialEq, Eq)]
 pub struct Classified<'a> {
@@ -321,6 +327,13 @@ mod tests {
             );
         }
         assert_eq!(Lane::Bulk.policy(&lanes), moved);
+    }
+
+    #[test]
+    fn every_kind_reads_back_as_its_lane() {
+        for lane in Lane::ALL {
+            assert_eq!(lane_of_kind(lane.kind()), lane.name());
+        }
     }
 
     #[test]

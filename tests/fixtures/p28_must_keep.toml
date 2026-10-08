@@ -1,0 +1,420 @@
+# T385.8 (P28 Phase 1): the spans an LLM compressor must not drop from an old tool result.
+#
+# Everything here is invented: crate, path, id, host and number names belong to the fictional
+# `acme` project, nothing is copied from a real session. Each [[body]] is the full text of one
+# tool result; `keep` lists the spans (verbatim substrings) whose loss would send the agent
+# back to `expand`: file:line locations, identifiers, error lines, numbers, commands, ids.
+#
+# The spans sit mostly in the middle of each body on purpose: the shipped `archive` pointer
+# shows only the first `head_lines` (8) and last `tail_lines` (4) lines, so a compressor that
+# merely matches the pointer view fails this set. `tests/p28_must_keep.rs` checks the
+# fixture itself (spans present, middle spans exist) and records what the pointer view keeps.
+
+[[body]]
+id = "cargo-build-errors"
+family = "build log"
+text = '''
+   Compiling acme-money v0.9.3 (/work/acme/crates/money)
+   Compiling acme-ledger v0.14.1 (/work/acme/crates/ledger)
+warning: unused import: `std::collections::BTreeMap`
+  --> crates/ledger/src/index.rs:7:5
+   |
+ 7 | use std::collections::BTreeMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `carry`
+  --> crates/ledger/src/rounding.rs:61:13
+   |
+61 |         let carry = remainder / scale;
+   |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_carry`
+
+error[E0308]: mismatched types
+   --> crates/ledger/src/posting.rs:142:23
+    |
+142 |         let total: Cents = lines.iter().map(|l| l.amount).sum::<i64>();
+    |                    -----   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Cents`, found `i64`
+    |                    |
+    |                    expected due to this
+    |
+help: try wrapping the expression in `Cents`
+    |
+142 |         let total: Cents = Cents(lines.iter().map(|l| l.amount).sum::<i64>());
+    |                            ++++++                                            +
+
+error[E0599]: no method named `settle_batch` found for struct `LedgerHandle` in the current scope
+   --> crates/ledger/src/settle.rs:318:14
+    |
+318 |     handle.settle_batch(&pending, SettleMode::Strict)?;
+    |            ^^^^^^^^^^^^ method not found in `LedgerHandle`
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `BatchSettle` which provides `settle_batch` is implemented but not in scope; perhaps you want to import it
+    |
+1   + use crate::traits::BatchSettle;
+    |
+
+Some errors have detailed explanations: E0308, E0599.
+For more information about an error, try `rustc --explain E0308`.
+warning: `acme-ledger` (lib) generated 2 warnings
+error: could not compile `acme-ledger` (lib) due to 2 previous errors; 2 warnings emitted
+'''
+keep = [
+  { kind = "error", text = "error[E0308]: mismatched types" },
+  { kind = "path", text = "crates/ledger/src/posting.rs:142:23" },
+  { kind = "identifier", text = "expected `Cents`, found `i64`" },
+  { kind = "error", text = "error[E0599]: no method named `settle_batch` found for struct `LedgerHandle`" },
+  { kind = "path", text = "crates/ledger/src/settle.rs:318:14" },
+  { kind = "identifier", text = "use crate::traits::BatchSettle;" },
+  { kind = "error", text = "error: could not compile `acme-ledger` (lib) due to 2 previous errors; 2 warnings emitted" },
+]
+
+[[body]]
+id = "cargo-test-failure"
+family = "test log"
+text = '''
+running 44 tests
+test rounding::tests::half_even_ties ... ok
+test rounding::tests::negative_scale_is_rejected ... ok
+test rounding::tests::zero_scale ... ok
+test posting::tests::empty_batch_sums_to_zero ... ok
+test posting::tests::mixed_currency_is_refused ... ok
+test posting::tests::single_line_roundtrip ... ok
+test index::tests::lookup_hits_after_rebuild ... ok
+test index::tests::lookup_misses_unknown_account ... ok
+test index::tests::rebuild_is_idempotent ... ok
+test settle::tests::strict_mode_aborts_on_first_short_leg ... ok
+test settle::tests::lenient_mode_collects_short_legs ... ok
+test settle::tests::retry_budget_is_spent_once ... ok
+test fx::tests::cross_rate_via_usd ... ok
+test fx::tests::stale_quote_is_rejected ... ok
+test fx::tests::triangular_rate_matches_direct ... FAILED
+test fx::tests::quote_cache_evicts_oldest ... ok
+test report::tests::trial_balance_matches_ledger ... ok
+test report::tests::csv_header_is_stable ... ok
+test report::tests::rounding_total_matches_lines ... FAILED
+test audit::tests::chain_hash_is_deterministic ... ok
+test audit::tests::tamper_is_detected ... ok
+test audit::tests::truncated_log_is_detected ... ok
+test export::tests::ndjson_roundtrip ... ok
+test export::tests::large_batch_streams ... ignored, needs the sandbox database
+
+failures:
+
+---- fx::tests::triangular_rate_matches_direct stdout ----
+thread 'fx::tests::triangular_rate_matches_direct' panicked at crates/ledger/src/fx.rs:204:9:
+assertion `left == right` failed: EUR->JPY via GBP drifted from the direct quote
+  left: 162.4471
+ right: 162.4503
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- report::tests::rounding_total_matches_lines stdout ----
+thread 'report::tests::rounding_total_matches_lines' panicked at crates/ledger/src/report.rs:88:9:
+assertion `left == right` failed: report total 1049.37 differs from line sum 1049.38
+  left: 1049.37
+ right: 1049.38
+
+failures:
+    fx::tests::triangular_rate_matches_direct
+    report::tests::rounding_total_matches_lines
+
+test result: FAILED. 41 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.82s
+
+error: test failed, to rerun pass `-p acme-ledger --lib`
+'''
+keep = [
+  { kind = "identifier", text = "fx::tests::triangular_rate_matches_direct" },
+  { kind = "identifier", text = "report::tests::rounding_total_matches_lines" },
+  { kind = "path", text = "crates/ledger/src/fx.rs:204:9" },
+  { kind = "path", text = "crates/ledger/src/report.rs:88:9" },
+  { kind = "number", text = "left: 162.4471" },
+  { kind = "number", text = "right: 162.4503" },
+  { kind = "number", text = "report total 1049.37 differs from line sum 1049.38" },
+  { kind = "number", text = "41 passed; 2 failed; 1 ignored" },
+  { kind = "command", text = "-p acme-ledger --lib" },
+]
+
+[[body]]
+id = "git-diff-hunks"
+family = "diff"
+text = '''
+diff --git a/crates/ledger/src/retry.rs b/crates/ledger/src/retry.rs
+index 3b9c1f2..a47d0e8 100644
+--- a/crates/ledger/src/retry.rs
++++ b/crates/ledger/src/retry.rs
+@@ -12,9 +12,11 @@ use std::time::Duration;
+
+ /// Upper bound for one backoff step. Longer waits hide a dead peer.
+-const MAX_BACKOFF_MS: u64 = 10_000;
++const MAX_BACKOFF_MS: u64 = 30_000;
++const JITTER_PERMILLE: u64 = 125;
+
+ pub struct RetryBudget {
+     spent: u32,
+     limit: u32,
++    window: Duration,
+ }
+
+@@ -48,14 +50,22 @@ impl RetryBudget {
+     pub fn new(limit: u32) -> Self {
+-        Self { spent: 0, limit }
++        Self { spent: 0, limit, window: Duration::from_secs(60) }
+     }
+
+-    pub fn spend(&mut self) -> bool {
+-        if self.spent >= self.limit {
+-            return false;
+-        }
+-        self.spent += 1;
+-        true
++    /// Returns the delay before the next attempt, or `None` when the budget is gone.
++    pub fn spend(&mut self, attempt: u32) -> Option<Duration> {
++        if self.spent >= self.limit {
++            return None;
++        }
++        self.spent += 1;
++        let base = 200u64.saturating_mul(1 << attempt.min(10));
++        let capped = base.min(MAX_BACKOFF_MS);
++        let jitter = capped * JITTER_PERMILLE / 1000;
++        Some(Duration::from_millis(capped + jitter))
+     }
+
+@@ -91,6 +101,7 @@ impl RetryBudget {
+     pub fn reset(&mut self) {
+         self.spent = 0;
++        self.window = Duration::from_secs(60);
+     }
+ }
+diff --git a/crates/ledger/src/settle.rs b/crates/ledger/src/settle.rs
+index 91ac0d4..5be2c77 100644
+--- a/crates/ledger/src/settle.rs
++++ b/crates/ledger/src/settle.rs
+@@ -301,7 +301,8 @@ impl LedgerHandle {
+         for leg in pending {
+-            if !self.budget.spend() {
++            let Some(wait) = self.budget.spend(leg.attempt) else {
+                 return Err(SettleError::BudgetExhausted { leg: leg.id });
+-            }
++            };
++            std::thread::sleep(wait);
+         }
+'''
+keep = [
+  { kind = "path", text = "diff --git a/crates/ledger/src/retry.rs b/crates/ledger/src/retry.rs" },
+  { kind = "number", text = "@@ -48,14 +50,22 @@ impl RetryBudget {" },
+  { kind = "identifier", text = "const MAX_BACKOFF_MS: u64 = 30_000;" },
+  { kind = "identifier", text = "const JITTER_PERMILLE: u64 = 125;" },
+  { kind = "identifier", text = "pub fn spend(&mut self, attempt: u32) -> Option<Duration> {" },
+  { kind = "identifier", text = "SettleError::BudgetExhausted { leg: leg.id }" },
+  { kind = "path", text = "+++ b/crates/ledger/src/settle.rs" },
+]
+
+[[body]]
+id = "grep-records"
+family = "search"
+text = '''
+crates/ledger/src/audit.rs:31:pub struct AuditChain {
+crates/ledger/src/audit.rs:58:    pub fn append(&mut self, entry: &Entry) -> ChainHash {
+crates/ledger/src/audit.rs:77:        let prev = self.tail.unwrap_or(ChainHash::GENESIS);
+crates/ledger/src/audit.rs:104:    fn verify_link(prev: ChainHash, entry: &Entry) -> bool {
+crates/ledger/src/export.rs:19:use crate::audit::AuditChain;
+crates/ledger/src/export.rs:66:    let chain = AuditChain::open(&cfg.audit_path)?;
+crates/ledger/src/export.rs:92:        chain.append(&entry);
+crates/ledger/src/index.rs:12:use crate::audit::AuditChain;
+crates/ledger/src/index.rs:140:    fn rebuild(&mut self, chain: &AuditChain) -> Result<(), IndexError> {
+crates/ledger/src/index.rs:171:        for entry in chain.iter() {
+crates/ledger/src/lib.rs:9:pub mod audit;
+crates/ledger/src/posting.rs:22:use crate::audit::AuditChain;
+crates/ledger/src/posting.rs:211:    chain.append(&Entry::posting(&batch));
+crates/ledger/src/report.rs:14:use crate::audit::AuditChain;
+crates/ledger/src/report.rs:121:    let chain = AuditChain::open_readonly(&path)?;
+crates/ledger/src/settle.rs:27:use crate::audit::AuditChain;
+crates/ledger/src/settle.rs:333:    self.chain.append(&Entry::settlement(&legs));
+crates/ledger/src/settle.rs:402:    debug_assert!(self.chain.verify_all());
+crates/ledger-cli/src/main.rs:44:    let chain = AuditChain::open(&args.audit)?;
+crates/ledger-cli/src/main.rs:97:    println!("chain head {}", chain.head());
+crates/ledger-cli/src/verify.rs:15:use acme_ledger::audit::AuditChain;
+crates/ledger-cli/src/verify.rs:52:    if !chain.verify_all() {
+crates/ledger-cli/src/verify.rs:53:        eprintln!("audit chain broken at entry {}", chain.first_bad());
+crates/ledger-cli/tests/verify.rs:18:    let mut chain = AuditChain::open_tmp();
+crates/ledger-cli/tests/verify.rs:40:    chain.append(&Entry::fixture(7));
+crates/ledger-cli/tests/verify.rs:61:    assert!(!chain.verify_all());
+docs/audit.md:12:`AuditChain` is append-only; `verify_all` walks it from `ChainHash::GENESIS`.
+docs/audit.md:44:Never edit a chain file by hand: `acme verify --audit ledger.chain` reports the first bad entry.
+'''
+keep = [
+  { kind = "path", text = "crates/ledger/src/audit.rs:104" },
+  { kind = "identifier", text = "fn verify_link(prev: ChainHash, entry: &Entry) -> bool {" },
+  { kind = "path", text = "crates/ledger/src/index.rs:140" },
+  { kind = "path", text = "crates/ledger/src/settle.rs:402" },
+  { kind = "identifier", text = "AuditChain::open_readonly(&path)?" },
+  { kind = "path", text = "crates/ledger-cli/src/verify.rs:53" },
+  { kind = "command", text = "acme verify --audit ledger.chain" },
+]
+
+[[body]]
+id = "json-api-response"
+family = "structured data"
+text = '''
+{
+  "request_id": "req_7f3a9c21d4",
+  "status": "partially_settled",
+  "batch": {
+    "id": "bat_01HZX4M8Q2",
+    "currency": "EUR",
+    "created_by": "svc-settler",
+    "legs": [
+      {
+        "id": "leg_0001",
+        "account": "DE89370400440532013000",
+        "amount_minor": 125000,
+        "state": "settled",
+        "settled_at": "2026-02-03T10:14:07Z"
+      },
+      {
+        "id": "leg_0002",
+        "account": "FR1420041010050500013M02606",
+        "amount_minor": 98750,
+        "state": "settled",
+        "settled_at": "2026-02-03T10:14:08Z"
+      },
+      {
+        "id": "leg_0003",
+        "account": "ES9121000418450200051332",
+        "amount_minor": 4200000,
+        "state": "failed",
+        "failure": {
+          "code": "INSUFFICIENT_FUNDS",
+          "http_status": 422,
+          "detail": "available 3999900 is below requested 4200000"
+        }
+      },
+      {
+        "id": "leg_0004",
+        "account": "NL91ABNA0417164300",
+        "amount_minor": 15500,
+        "state": "pending",
+        "retry_after_ms": 1500
+      }
+    ],
+    "totals": {
+      "requested_minor": 4439250,
+      "settled_minor": 223750,
+      "failed_minor": 4200000,
+      "pending_minor": 15500
+    }
+  },
+  "audit": {
+    "chain_head": "9c1e5ab07f2d44e8b6a3d0c9f81e27b45a60d93c7e1b8f24a5c6d7e8f9012345",
+    "entries_appended": 4
+  },
+  "links": {
+    "self": "https://api.acme.example/v2/batches/bat_01HZX4M8Q2",
+    "retry": "https://api.acme.example/v2/batches/bat_01HZX4M8Q2/retry"
+  }
+}
+'''
+keep = [
+  { kind = "id", text = "bat_01HZX4M8Q2" },
+  { kind = "id", text = "req_7f3a9c21d4" },
+  { kind = "id", text = "leg_0003" },
+  { kind = "error", text = "\"code\": \"INSUFFICIENT_FUNDS\"" },
+  { kind = "number", text = "available 3999900 is below requested 4200000" },
+  { kind = "number", text = "\"settled_minor\": 223750" },
+  { kind = "id", text = "9c1e5ab07f2d44e8b6a3d0c9f81e27b45a60d93c7e1b8f24a5c6d7e8f9012345" },
+  { kind = "number", text = "\"retry_after_ms\": 1500" },
+]
+
+[[body]]
+id = "service-log-trace"
+family = "log"
+text = '''
+2026-02-03T10:14:01.112Z INFO  settler: starting batch bat_01HZX4M8Q2 legs=4 mode=Strict
+2026-02-03T10:14:01.140Z INFO  settler: leg_0001 sent attempt=0
+2026-02-03T10:14:01.388Z INFO  settler: leg_0001 acked in 248ms
+2026-02-03T10:14:01.391Z INFO  settler: leg_0002 sent attempt=0
+2026-02-03T10:14:01.602Z INFO  settler: leg_0002 acked in 211ms
+2026-02-03T10:14:01.604Z INFO  settler: leg_0003 sent attempt=0
+2026-02-03T10:14:01.845Z WARN  settler: leg_0003 rejected 422 INSUFFICIENT_FUNDS
+2026-02-03T10:14:01.846Z INFO  settler: leg_0004 sent attempt=0
+2026-02-03T10:14:02.101Z WARN  pool: connection reset by peer, host=10.20.30.41:5432
+2026-02-03T10:14:02.102Z ERROR pool: connect failed: Connection refused (os error 61) addr=10.20.30.41:5432
+2026-02-03T10:14:02.350Z WARN  pool: retry 1/5 in 400ms
+2026-02-03T10:14:02.760Z ERROR pool: connect failed: Connection refused (os error 61) addr=10.20.30.41:5432
+2026-02-03T10:14:03.300Z WARN  pool: retry 2/5 in 800ms
+2026-02-03T10:14:04.110Z ERROR pool: connect failed: Connection refused (os error 61) addr=10.20.30.41:5432
+2026-02-03T10:14:05.020Z WARN  pool: retry 3/5 in 1600ms
+2026-02-03T10:14:06.640Z ERROR pool: connect failed: Connection refused (os error 61) addr=10.20.30.41:5432
+2026-02-03T10:14:08.300Z WARN  pool: retry 4/5 in 3200ms
+2026-02-03T10:14:11.510Z ERROR pool: connect failed: Connection refused (os error 61) addr=10.20.30.41:5432
+2026-02-03T10:14:11.511Z ERROR pool: giving up after 5 attempts
+2026-02-03T10:14:11.513Z ERROR settler: leg_0004 failed: BudgetExhausted
+2026-02-03T10:14:11.520Z INFO  settler: audit chain head 9c1e5ab07f2d44e8
+2026-02-03T10:14:11.522Z INFO  metrics: settled=2 failed=1 pending=1 p99_ms=248
+2026-02-03T10:14:11.530Z WARN  health: readiness probe /readyz returned 503 (db unreachable)
+2026-02-03T10:14:12.000Z INFO  health: restart requested by supervisor, reason=readiness
+2026-02-03T10:14:12.044Z ERROR supervisor: worker 2 exited with status 137 (killed)
+2026-02-03T10:14:12.045Z INFO  supervisor: respawning worker 2, generation 18
+'''
+keep = [
+  { kind = "error", text = "connect failed: Connection refused (os error 61) addr=10.20.30.41:5432" },
+  { kind = "error", text = "pool: giving up after 5 attempts" },
+  { kind = "error", text = "settler: leg_0004 failed: BudgetExhausted" },
+  { kind = "error", text = "rejected 422 INSUFFICIENT_FUNDS" },
+  { kind = "path", text = "/readyz returned 503" },
+  { kind = "number", text = "exited with status 137" },
+  { kind = "number", text = "settled=2 failed=1 pending=1 p99_ms=248" },
+  { kind = "id", text = "9c1e5ab07f2d44e8" },
+]
+
+[[body]]
+id = "design-note-prose"
+family = "prose"
+text = '''
+# Settlement retries: decision record
+
+Status: accepted. Owners: the ledger team.
+
+## Context
+
+Strict mode used to give up on the first failed leg, which left batches half settled whenever
+the database restarted. Operations asked for bounded retries with jitter instead of an
+unbounded loop, because the January incident showed a retry storm taking down the pool.
+
+## Decision
+
+1. Each batch gets one `RetryBudget` of 5 attempts per leg, shared by every worker.
+2. The delay doubles from 200 ms and is capped at `MAX_BACKOFF_MS` = 30000, plus 12.5 percent jitter.
+3. When the budget is spent the leg is reported as `BudgetExhausted`; the batch is never retried
+   automatically a second time, an operator runs `acme settle --retry bat_01HZX4M8Q2`.
+4. Readiness stays red until the pool reconnects, so the supervisor restarts the worker rather
+   than letting it serve while degraded.
+
+## Consequences
+
+- p99 settlement latency rises from 248 ms to about 3.4 s only when the database is down.
+- The audit chain gets one entry per leg, so `AuditChain::verify_all` cost grows linearly with legs.
+- Supported on `acme-ledger` v0.14.1 and newer; v0.13.x keeps the old behaviour behind the
+  `legacy-strict` feature, which will be removed in v0.16.0.
+
+## Rejected alternatives
+
+- A circuit breaker per account: too much state for the gain, see the benchmark in `bench/retry.md`.
+- Queue every failed leg for a nightly job: breaks the 15 minute settlement promise to customers.
+
+## How to verify
+
+Run `cargo nextest run -p acme-ledger settle::` and then `acme verify --audit ledger.chain`;
+both must exit 0. If the second command prints "audit chain broken at entry", stop and escalate.
+'''
+keep = [
+  { kind = "identifier", text = "`RetryBudget` of 5 attempts per leg" },
+  { kind = "number", text = "`MAX_BACKOFF_MS` = 30000" },
+  { kind = "command", text = "acme settle --retry bat_01HZX4M8Q2" },
+  { kind = "number", text = "from 248 ms to about 3.4 s" },
+  { kind = "identifier", text = "`legacy-strict` feature, which will be removed in v0.16.0" },
+  { kind = "path", text = "bench/retry.md" },
+  { kind = "command", text = "cargo nextest run -p acme-ledger settle::" },
+  { kind = "error", text = "audit chain broken at entry" },
+]

@@ -144,6 +144,16 @@ describe("hosts", () => {
     expect(v.blocks[4]?.skip).toContain("rtok agents install zed");
   });
 
+  test("a plugin row keeps its installed version, source and mismatch note (T382)", () => {
+    expect(v.blocks[1]?.modules.at(-1)).toEqual([
+      "plugin",
+      "installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update codex",
+    ]);
+    expect(v.blocks[2]?.modules.at(-1)).toEqual(["plugin", "installed 0.15.1 (local)"]);
+    const legacy = parseHosts("CLI: Gemini CLI\n  ✓ plugin  installed (legacy, no version)\n");
+    expect(legacy.blocks[0]?.modules).toEqual([["plugin", "installed (legacy, no version)"]]);
+  });
+
   test("the first probe says it is still running", () => {
     expect(parseHosts("probing hosts…\n")).toEqual({ probing: true, blocks: [], other: [] });
   });

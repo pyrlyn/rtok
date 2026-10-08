@@ -167,3 +167,19 @@ export function useTableSearch<P extends TablePage>(page: P) {
     setSort: (sort: Sort | undefined) => write({ sort }, false),
   };
 }
+
+/**
+ * A link to a list page with some filters set and everything else at its default, built from the
+ * page's own spec so a link and the page that reads it cannot disagree on a param name or value.
+ */
+export function tableLink<P extends TablePage>(
+  page: P,
+  filter: Partial<TableState<(typeof TABLE_SPECS)[P]>["filter"]>,
+) {
+  const spec: TableSpec = TABLE_SPECS[page];
+  const base = parseTableSearch(spec, {});
+  return {
+    to: `/${page}` as const,
+    search: toSearch(spec, { ...base, filter: { ...base.filter, ...filter } }),
+  };
+}

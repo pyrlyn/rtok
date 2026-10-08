@@ -7,33 +7,14 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, describe, expect, test } from "vitest";
 import { connectSample } from "../api/sample";
 import { project } from "../api/sampleRows";
-import type { ClientMessage, ProjectRow, Snapshot } from "../api/snapshot.gen";
-import type { Connect, Frame } from "../api/ws";
+import type { ProjectRow, Snapshot } from "../api/snapshot.gen";
 import { richSnapshot } from "./fixtures";
-import { mount, serving } from "./testHelpers";
+import { mount, serving, wire } from "./testHelpers";
 
 afterEach(cleanup);
 
 const withProjects = (projects: ProjectRow[] | null): Snapshot => ({ ...richSnapshot, projects });
 const current = () => within(screen.getByLabelText("current project"));
-
-/** A socket the test drives: it records what the page sends and pushes the frames it likes. */
-function wire(first: Snapshot) {
-    const sent: ClientMessage[] = [];
-    let push: (f: Frame) => void = () => {};
-    const connect: Connect = (h) => {
-        push = h.onFrame;
-        h.onState("open");
-        h.onFrame({ type: "snapshot", snapshot: first });
-        return { send: (m) => (sent.push(m), true), close: () => {} };
-    };
-    return {
-        connect,
-        sent,
-        push: (snapshot: Snapshot) => push({ type: "snapshot", snapshot }),
-        message: (text: string) => push({ type: "message", text }),
-    };
-}
 
 describe("graph page projects", () => {
     test("the selector lists projects and the header shows the selected one", async () => {
@@ -91,6 +72,12 @@ describe("graph page projects", () => {
         fireEvent.click(await screen.findByRole("button", { name: /^b/ }));
         await waitFor(() => expect(w.sent).toHaveLength(1));
         expect(w.sent).toEqual([{ project: { action: "select", project: "2" } }]);
+        // The button waits for the answer: busy and not clickable until the snapshot arrives.
+        // Scoped to the selector: other panels can also show a button named after project b.
+        const list = within(screen.getByRole("list", { name: "projects" }));
+        const asked = list.getByRole("button", { name: /^b/ }) as HTMLButtonElement;
+        expect(asked.getAttribute("aria-busy")).toBe("true");
+        expect(asked.disabled).toBe(true);
         expect(current().getByText("a")).toBeTruthy();
         w.push(withProjects(rows.map((p) => ({ ...p, selected: p.id === 2 }))));
         expect(
@@ -106,11 +93,15 @@ describe("graph page projects", () => {
     });
 
     test("a refusal from the server shows under the selector", async () => {
-        const w = wire(withProjects([project(1, "a", { selected: true })]));
+        const w = wire(withProjects([project(1, "a", { selected: true }), project(9, "gone")]));
         mount(w.connect, "/graph");
-        await screen.findByLabelText("current project");
+        const button = await screen.findByRole("button", { name: /^gone/ });
+        fireEvent.click(button);
+        await waitFor(() => expect(w.sent).toHaveLength(1));
         w.message("project 9 is gone");
         expect(await screen.findByText("project 9 is gone")).toBeTruthy();
+        expect((button as HTMLButtonElement).disabled).toBe(false);
+        expect(button.getAttribute("aria-busy")).toBeNull();
     });
 
     test("link, link both ways and unlink send their requests", async () => {
