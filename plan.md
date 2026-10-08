@@ -108,7 +108,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
-| T414.8 | todo | P2 | 2 | 0% | |
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
@@ -1784,12 +1783,6 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light
 Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
-
-### T414.8. Sidebar groups and a collapsible sidebar
-
-The 13 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme. The bottom bar on phones stays one scrolling row.
-
-Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
 
 ### T414.10. Table filters and sort in the URL
 
