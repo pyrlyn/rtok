@@ -32,6 +32,21 @@ for (const { id } of PAGES) {
   });
 }
 
+test("pause freezes the header on a visible paused state and resume lifts it", async ({ page }) => {
+  await page.goto("/#/overview");
+  const header = page.getByRole("banner");
+  await expect(header.getByText(/^updated \d+[smhd] ago$/)).toBeVisible();
+
+  const pause = header.getByRole("button", { name: "Pause live updates" });
+  await pause.click();
+  await expect(pause).toHaveAttribute("aria-pressed", "true");
+  await expect(header.getByText("paused", { exact: true })).toBeVisible();
+
+  await pause.click();
+  await expect(pause).toHaveAttribute("aria-pressed", "false");
+  await expect(header.getByText("paused", { exact: true })).toHaveCount(0);
+});
+
 test("plugin toggle round-trips through /ws and the config file", async ({ page, rtok }) => {
   await page.goto("/#/plugins");
   const toon = page.getByRole("switch", { name: "toggle toon" });
@@ -61,6 +76,34 @@ test("expand returns the archived payload of a call", async ({ page }) => {
   const payload = page.locator("pre");
   await expect(payload).toContainText(ARCHIVED_MARKER);
   await expect(page.getByText(/\d+ lines/)).toBeVisible();
+});
+
+test("a filtered and sorted Calls link restores the view after a reload and steps with back", async ({
+  page,
+}) => {
+  await page.goto("/#/calls?surface=mcp&sort=-name");
+  const rows = page.getByRole("table", { name: "calls" }).getByRole("row");
+  await expect(rows.filter({ hasText: /mem_save/ })).toHaveCount(1);
+  await expect(rows.filter({ hasText: /SessionStart/ })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: /name/ })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^mcp \d+$/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(rows.filter({ hasText: /SessionStart/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^hook \d+$/ }).click();
+  await expect(page).toHaveURL(/surface=hook/);
+  await expect(rows.filter({ hasText: /mem_save/ })).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/surface=mcp/);
+  await expect(rows.filter({ hasText: /mem_save/ })).toHaveCount(1);
 });
 
 test("offline takes the whole screen when the server stops; Reconnect brings it back", async ({
