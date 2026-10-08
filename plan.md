@@ -35,7 +35,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.4 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
@@ -1057,12 +1056,6 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - Permission-denied and timeout folders are reported, not fatal; exit code 1 when anything planned was not removed.
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
-
-### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
-
-Part of T330. `clear` takes the same scan as `list`, filters it (`--agent` repeatable, `--kind`, `--include review`, `--older-than`), re-checks every item before deleting (still there, not open, not a symlink out, not modified in the last minute), skips a running agent's temp/locks/swap/index, clears `explicit` kinds only when named with `--kind` and paths without D36 evidence never, supports `--trash`, prints the planned and freed bytes per agent and kind, and exits 1 when something planned was not removed. `agents junk clear` with no flags and `--agent rtok` keep T182's behaviour (the existing tests stay green). Depends on T330.3 and the investigations T340/T344.
-
-Check: dry run changes no file (tree hash), `--yes` removes exactly the planned safe items, lockfiles/settings/`rtok.db` untouched, a changed item is skipped; `just check`.
 
 ### T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 

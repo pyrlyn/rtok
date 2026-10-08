@@ -8291,6 +8291,17 @@ Check: the T330 "Cache" fixtures (exact sizes, kinds under the right agent, tag 
 
 Closed 2026-10-07 with its last subtask: T330.3.1 and T330.3.2 (#793).
 
+### T330.4. Junk `clear`: `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, re-check, exit codes
+
+Part of T330. `rtok agents junk clear` filters the same report `list` builds (`--agent` rtok or a host id, `--kind`, `--include review`, `--older-than`), re-checks every item right before removal, skips a running agent's temp/locks/swap and §22 caches, supports `--trash`, prints planned and freed bytes per agent and kind, and exits 1 when something planned was not removed. Bare `clear` and `--agent rtok` keep T182's behaviour.
+
+Check: dry run changes no file (tree compared before and after), `--yes` empties exactly the planned cache and keeps its top folder and `CACHEDIR.TAG`, `rtok.db` and a lockfile untouched, a file modified in the last minute is skipped with exit 1, bad flags exit 2, `--trash` lands in the fixture home's freedesktop trash (Linux), a running agent (faked through a live store session) keeps its temp and §22 cache, a shared folder of a running agent stays; `just check`.
+
+Result: new `src/agents/junk_clear.rs` (`Filter`, `plan`, `apply`, `to_text`) over `junk::report`, with `junk::scan_with` for rtok's logs and archives (`--older-than` only lengthens `core.retain_calls_days`, 0 stays 0). The plan takes only counted items with D36 evidence and applies the T330 class gate (`safe` by default, `review` with `--include review` or when named, `explicit` only when named). A host counts as running when a live rtok session names it (T284) or its CLI or installed app process is up (`restart::host_running`; the process check is off under `RTOK_HOST_SANDBOX`). The re-check refuses: gone (not an error), symlink, changed real path, modified in the last minute, held lock, lost `CACHEDIR.TAG`, or a path that is or holds `rtok.db` (or its -wal/-shm), a host settings file or a package-manager lockfile. Cache and build folders are emptied keeping the top folder and tag; archives go through store retention as in T182. New dependency `trash` 5.2.9 (NSFileManager on macOS, no Finder prompt). Bare `clear` and `--agent rtok` run T182's clear unchanged (T344 read conservatively; T340 untouched). Not done: agent-id `--agent`, per-host "tolerates running" caches, `index` (T330.5), "changed since plan" across separate runs (T330.6). #822.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
 ### T248. Plugin READMEs must link the host's official documentation
 
 Creator's request 2026-09-24: every agent plugin package's `README.md` must link the host's official documentation.
