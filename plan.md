@@ -79,7 +79,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T396 | todo | P3 | 2 | 20% | |
 | T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T399 | in progress | P3 | 1 | 0% | Claude Code / claude-haiku-4-5 |
 | T401 | todo | P3 | 4 | 20% | |
 | T402 | todo | P3 | 2 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
@@ -1544,20 +1543,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T399. Re-check host docs for three open host questions
-
-From `research.md`:
-
-- §10.6: which hosts besides Claude Code and Cursor honour `disable-model-invocation` in a skill (OpenCode, Copilot, Gemini, Codex are "not documented"); `doctor`'s skill advice relies on it.
-- §23: Grok and Antigravity subagent-start hooks rest on missing docs; re-read for an output schema or an `invoke_subagent` hook.
-- §26: Devin, Command Code and Cline are "unverified; probe pending" for hook ancestry but are not in T281's host list; and on Windows only the cwd rule applies (`rtok-sys` returns no ancestors), which no doc records.
-
-Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
-
-Check: dated sources in §10.1, §23 and §26.
-
-Execution plan: (1) WebFetch the primary host docs for skills (OpenCode, Copilot, Gemini, Codex, Cursor, agentskills.io) and record which document `disable-model-invocation` or say it is not documented, with the URL and 2026-10-08; (2) WebFetch the Grok and Antigravity hook docs and look for an output schema or `invoke_subagent`; (3) check Cline's hook docs and source, and Devin and Command Code docs, for hook ancestry; (4) update `research.md` §10.1, §10.6, §23 and §26 with the dated sources; (5) add the Windows cwd-only limit to `docs/agents-and-worktrees.md`; (6) run `mise exec -- just docs-check`. No rtok code or doctor advice changes.
 
 ### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
 
