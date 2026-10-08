@@ -61,7 +61,7 @@ export function BudgetGrid({ cut, label }: { cut: number; label: string }) {
             {Array.from({ length: 16 }, (_, i) => (
                 <span
                     key={i}
-                    className={`rounded-full ${i >= 16 - cells ? "bg-brand-coral" : "bg-brand-cyan"}`}
+                    className={`rounded-full ${i >= 16 - cells ? "bg-delta" : "bg-accent"}`}
                 />
             ))}
         </Mark>

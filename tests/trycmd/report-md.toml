@@ -47,6 +47,10 @@ Every effective key with its origin — the `config show --sources` page.
 | --- | --- | --- |
 | agents.enabled | true | default |
 | agents.idle | 30m | default |
+| agents.junk.exclude | [] | default |
+| agents.junk.extra | [] | default |
+| agents.junk.keep_logs_days | 30 | default |
+| agents.junk.temp_min_age_hours | 24 | default |
 | agents.push_bytes | 1024 | default |
 | agents.usage.by | agent | default |
 | agents.usage.dirs.antigravity | [~/.gemini/antigravity] | default |
@@ -403,7 +407,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-357 keys.
+361 keys.
 
 ## Doctor
 

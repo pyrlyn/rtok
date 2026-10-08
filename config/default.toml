@@ -62,6 +62,12 @@
 # zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
 # antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 
+[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
+# keep_logs_days          = 30          # `logs` entries modified within this many days stay (0-3650)
+# temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay (0-87600)
+# exclude                 = []          # globs never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]
+# extra                   = []          # paths you vouch for as junk, e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = a host id or rtok
+
 [mcp]                                 # rtok mcp
 # tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed
 # max_description_tokens  = 60          # enforced by a test
@@ -380,7 +386,7 @@
 
 [tasks.github]
 # repo    = ""                          # owner/name; empty: the origin remote
-# project = 0                           # Projects v2 number for the Status field (not read yet); 0 = issues only
+# project = 0                           # repo owner's Projects v2 number: issues join it and its Status follows the task; 0 = issues only
 
 [tasks.gitlab]
 # url     = "https://gitlab.com"        # base URL; set it for a self-hosted instance

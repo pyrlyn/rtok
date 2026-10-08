@@ -130,6 +130,12 @@ grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI
 zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
 antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 
+[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
+keep_logs_days          = 30          # `logs` entries (the agents' documented log folders) modified within this many days stay; 0-3650
+temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay; 0-87600
+exclude                 = []          # globs (~ = home) never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]; a bad glob keeps everything
+extra                   = []          # paths you vouch for as junk (D36), e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = a host id or rtok
+
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
 max_description_tokens  = 60          # enforced by a test (T4.1)
@@ -438,7 +444,7 @@ dir = "tasks"                         # one Markdown file per task, relative to 
 
 [tasks.github]
 repo = ""                             # owner/name; empty: the origin remote
-project = 0                           # Projects v2 number for the Status field (not read yet); 0 = issues only
+project = 0                           # repo owner's Projects v2 number: issues join it and its Status follows the task; 0 = issues only
 
 [tasks.gitlab]
 url = "https://gitlab.com"            # base URL; set it for a self-hosted instance
@@ -797,6 +803,7 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 | `worktree whoami` | — | reads `RTOK_AGENT_ID` and `[worktree] root` (T411); no key of its own (`--json` is the reading row) |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: written into the checkout's `.rtok.toml` (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | per call (no key): what one task is and which rows one call shows; `[tasks]` picks the adapter and the prefix |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, `--bytes`, `--yes` | per call (no key): what one run lists or removes; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.exclude`, `.extra` have no flag |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, plus `.dirs.<host>` with no flag (`--unpriced` picks the view of one call, `--json` is the reading row) |
 | `agents sessions` | `--all` | (action: also lists ended sessions; live vs idle follows `agents.idle`) |
 | `agents show` | — | resolves an id prefix through the store (T284); live vs idle follows `agents.idle` (`--json` is the reading row) |

@@ -338,3 +338,54 @@ fn clear_trash_moves_the_cache_to_the_home_trash() {
     assert!(!c.cache.join("blob").exists());
     assert!(c.home.join(".local/share/Trash/files/blob").is_file());
 }
+
+/// T330.5.1: a Claude Code debug log past `keep_logs_days` is `review` junk (only with
+/// `--include review` or `--kind logs`), a fresher one stays, and the config key moves the line.
+#[test]
+fn review_logs_need_the_flag_and_follow_keep_logs_days() {
+    let c = Clear::new("clear-logs");
+    common::agents::fake_hosts(&c.home);
+    let debug = c.home.join(".claude/debug");
+    write(&debug.join("old.log"), 100);
+    write(&debug.join("new.log"), 10);
+    age(&debug.join("old.log"), 31 * 86_400);
+    age(&debug.join("new.log"), 29 * 86_400);
+    let planned = |args: &[&str]| {
+        let (code, plan) = c.json(args);
+        assert_eq!(code, 0, "{plan}");
+        let items = plan["items"].as_array().unwrap().iter();
+        let names = items.filter(|i| i["action"] == "clear" && i["kind"] == "logs");
+        let mut names: Vec<String> = names
+            .map(|i| {
+                i["path"]
+                    .as_str()
+                    .unwrap()
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap()
+                    .into()
+            })
+            .collect();
+        names.sort();
+        names
+    };
+
+    assert!(planned(&["--agent", "claude", "--json"]).is_empty());
+    assert_eq!(
+        planned(&["--agent", "claude", "--kind", "logs", "--json"]),
+        ["old.log"]
+    );
+    let review = ["--agent", "claude", "--include", "review", "--json"];
+    assert_eq!(planned(&review), ["old.log"]);
+
+    fs::write(
+        c.home.join("config.toml"),
+        "[agents.junk]\nkeep_logs_days = 7\n",
+    )
+    .unwrap();
+    assert_eq!(planned(&review), ["new.log", "old.log"]);
+    let (code, done) = c.json(&["--agent", "claude", "--kind", "logs", "--yes", "--json"]);
+    assert_eq!(code, 0, "{done}");
+    assert!(!debug.join("old.log").exists() && !debug.join("new.log").exists());
+    assert!(debug.is_dir(), "the log folder itself stays");
+}

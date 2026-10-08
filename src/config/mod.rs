@@ -175,8 +175,37 @@ section! {
         /// the agent's context; the rest become one "and N more" line.
         push_bytes: u32 = 1024,
         usage: AgentsUsage = AgentsUsage::default(),
+        junk: AgentsJunk = AgentsJunk::default(),
     }
 }
+
+section! {
+    /// `[agents.junk]` — `rtok agents junk list|clear` (T330.5.1): the age floors of the
+    /// junk kinds, paths never touched, and the paths the user vouches for as junk (the third
+    /// kind of D36 evidence beside a §22 row and a `CACHEDIR.TAG`). `~` in a path or glob is the
+    /// user's home.
+    AgentsJunk {
+        /// `logs` entries modified within this many days stay.
+        keep_logs_days: u32 = 30,
+        /// `temp` entries touched within this many hours stay.
+        temp_min_age_hours: u32 = 24,
+        /// Globs of paths never touched, nor any folder that holds one.
+        exclude: Vec<String> = Vec::new(),
+        extra: Vec<JunkExtra> = Vec::new(),
+    }
+}
+
+section! {
+    /// One `[agents.junk] extra` entry: `path` is junk of `kind` for `host` (a host id or `rtok`).
+    JunkExtra {
+        host: String = String::new(),
+        kind: String = String::new(),
+        path: String = String::new(),
+    }
+}
+
+/// The kinds an `[agents.junk] extra` entry may name: folders whose content ages out.
+pub const JUNK_EXTRA_KINDS: [&str; 3] = ["cache", "temp", "logs"];
 
 section! {
     /// `[agents.usage]` — `rtok agents usage` (T358): tokens and estimated cost per agent, day
@@ -883,7 +912,9 @@ section! {
     TasksGithub {
         /// `owner/name`. Empty: the `origin` remote.
         repo: String = String::new(),
-        /// Projects v2 number for the Status field, read from T441.11 on; 0 = issues only.
+        /// Projects v2 number under the repo owner (user or organization): each issue joins it and its
+        /// `Status` single-select follows the task (open → Todo, in-progress → In Progress, done and
+        /// closed → Done). Needs the `project` token scope; any failure only warns. 0 = issues only.
         project: u32 = 0,
     }
 }
