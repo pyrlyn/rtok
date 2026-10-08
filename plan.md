@@ -56,7 +56,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
-| T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
@@ -1334,21 +1333,6 @@ Plan: per-root trigram posting lists (`file_id` bitmaps, `roaring` only with a `
 Done when: a literal `search` on a 50k-file repo scans only candidate files and returns the same hits.
 
 Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
-
-### T382. Installed plugin version in `rtok agents list` and on the web Hosts page
-
-Ivan, 2026-10-04: `rtok agents list` and `rtok web` `#/hosts` must show which version of the rtok plugin each host has installed. Today the `plugin` row says only `✓ plugin  installed`, so a stale plugin (older than the binary) is invisible without opening the host's own records (for Claude `~/.claude/plugins/installed_plugins.json`: `version`, `installPath`, `gitCommitSha`).
-
-Depends on T279: it defines where the installed version comes from (the installed copy's `.rtok-plugin-version`, then the install receipt, then the host record). Reuse that lookup; do not add a second one.
-
-Done means:
-
-- `agents::list`: the `plugin` row of every host that has a plugin carries the installed version and its source, e.g. `✓ plugin  installed 0.15.1 (marketplace)`. When the version differs from the running binary it says so: `installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude`. An install with no version anywhere shows `installed (legacy, no version)`, matching T279's `agents info` wording. Hosts with `− plugin not supported` are unchanged.
-- `rtok agents list --json` gains `plugin_version` and `plugin_source` fields; absent rather than empty when unknown.
-- Web: the Hosts page reads `agents::list` verbatim (`hosts_page_text` in `src/web/model.rs`), so the version arrives with the text; `parseHosts` in `web/src/pages/text.ts` keeps it in the module row's state and `Hosts.tsx` shows it, with the outdated case visibly marked. The TUI Hosts page shows the same text.
-- Tests: an `agents::list` unit test over a fake Claude home with an installed plugin at the binary's version, at an older one, and with no version; a `parseHosts` test for the three row shapes; trycmd/snapshot files that print the `plugin` row re-blessed.
-
-Check: the three `agents::list` cases and the `parseHosts` test pass; `rtok agents list` on this machine prints `installed 0.15.1` for Claude Code; `#/hosts` in `rtok web` shows the same; `just check`.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 

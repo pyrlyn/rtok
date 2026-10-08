@@ -4,13 +4,15 @@
 
 //! `rtok agents outdated` / `rtok agents update --check` (T279.1).
 
+use std::cmp::Ordering;
+
 use anyhow::{Context, Result, bail};
 use semver::Version;
 use serde::Serialize;
 
-use super::plugin_install::install_probe;
-use super::plugin_version::{Receipt, is_behind, read_installed, receipt_path};
-use super::{HOSTS, Kind, Support, host, wants};
+use super::plugin_install::{InstallProbe, install_probe};
+use super::plugin_version::{Installed, Receipt, Source, is_behind, read_installed, receipt_path};
+use super::{Agent, HOSTS, Kind, Support, host, wants};
 use crate::config::Config;
 use crate::render::{Col, table};
 use crate::ui::agents as ui;
@@ -64,29 +66,11 @@ fn scan(cfg: &Config, selection: &OutdatedSelection) -> Result<OutdatedReport> {
     for id in ids {
         let Some(agent) = host(&id) else { continue };
         for v in agent.variants().iter().filter(|v| want(v.kind)) {
-            if !agent.installed(cfg, v.kind).contains(&"plugin") {
+            let Some(found) = installed_plugin(agent, v.kind, cfg, &receipt)? else {
                 continue;
-            }
-            if matches!(agent.support(v.kind, "plugin"), Support::No(_)) {
-                continue;
-            }
+            };
             installed += 1;
-            let probe = install_probe(&id, cfg, v.kind, &receipt).unwrap_or(
-                super::plugin_install::InstallProbe {
-                    version_file: std::path::PathBuf::from("\0"),
-                    host_record_version: None,
-                    fallback_source: super::plugin_version::Source::Github,
-                },
-            );
-            if let Some(row) = installed_row(
-                &id,
-                v.kind,
-                &probe.version_file,
-                &receipt,
-                probe.host_record_version.as_deref(),
-                probe.fallback_source,
-                &target,
-            )? {
+            if let Some(row) = outdated_row(&id, v.kind, &found, &target) {
                 out.push(row);
             }
         }
@@ -98,38 +82,112 @@ fn scan(cfg: &Config, selection: &OutdatedSelection) -> Result<OutdatedReport> {
     })
 }
 
-fn installed_row(
-    agent: &str,
-    kind: Kind,
-    version_file: &std::path::Path,
-    receipt: &Receipt,
-    host_record: Option<&str>,
-    fallback: super::plugin_version::Source,
-    target: &Version,
-) -> Result<Option<Outdated>> {
-    let got = read_installed(version_file, receipt, agent, host_record, fallback)?;
-    if !is_behind(&got.version, target) {
-        return Ok(None);
+fn outdated_row(agent: &str, kind: Kind, found: &Found, target: &Version) -> Option<Outdated> {
+    if !is_behind(&found.got.version, target) {
+        return None;
     }
-    // `got.legacy` only says the installed copy has no version file. The card lists as `legacy`
-    // an install with no recorded version at all; one the receipt or the host record dates
-    // (Claude's `installed_plugins.json` says `0.0.1`) shows that version.
-    let recorded =
-        receipt.get(agent).is_some() || host_record.is_some_and(|v| Version::parse(v).is_ok());
-    let legacy = got.legacy && !recorded;
+    let legacy = found.unversioned;
     let installed = if legacy {
         "legacy".to_string()
     } else {
-        got.version.to_string()
+        found.got.version.to_string()
     };
-    Ok(Some(Outdated {
+    Some(Outdated {
         agent: agent.to_string(),
         variant: kind.as_str().to_string(),
         installed,
         available: target.to_string(),
-        source: got.source.to_string(),
+        source: found.got.source.to_string(),
         legacy,
+    })
+}
+
+/// A host variant's installed plugin as the version lookup reads it (T279 step 2).
+pub(super) struct Found {
+    pub got: Installed,
+    /// No version file and no version recorded anywhere (receipt or host record): the install
+    /// predates T279. `got.legacy` alone only says the installed copy has no version file; one
+    /// the receipt or the host record dates (Claude's `installed_plugins.json` says `0.0.1`)
+    /// shows that version.
+    pub unversioned: bool,
+}
+
+/// True when the variant has rtok's plugin installed and the host supports one.
+fn has_plugin(agent: &dyn Agent, kind: Kind, cfg: &Config) -> bool {
+    agent.installed(cfg, kind).contains(&"plugin")
+        && !matches!(agent.support(kind, "plugin"), Support::No(_))
+}
+
+/// The installed-plugin lookup shared by `agents outdated` and the `plugin` row of `agents
+/// list` (T382): the host's probe, then [`read_installed`]. `None` when there is no plugin.
+pub(super) fn installed_plugin(
+    agent: &dyn Agent,
+    kind: Kind,
+    cfg: &Config,
+    receipt: &Receipt,
+) -> Result<Option<Found>> {
+    if !has_plugin(agent, kind, cfg) {
+        return Ok(None);
+    }
+    let id = agent.id();
+    let probe = install_probe(id, cfg, kind, receipt).unwrap_or(InstallProbe {
+        version_file: std::path::PathBuf::from("\0"),
+        host_record_version: None,
+        fallback_source: Source::Github,
+    });
+    let host_record = probe.host_record_version.as_deref();
+    let got = read_installed(
+        &probe.version_file,
+        receipt,
+        id,
+        host_record,
+        probe.fallback_source,
+    )?;
+    let recorded =
+        receipt.get(id).is_some() || host_record.is_some_and(|v| Version::parse(v).is_ok());
+    Ok(Some(Found {
+        unversioned: got.legacy && !recorded,
+        got,
     }))
+}
+
+/// What the `plugin` row of `agents list` and the JSON `plugin_*` fields say about one
+/// installed plugin (T382).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginStatus {
+    /// Absent when no version is recorded anywhere (the install predates T279).
+    pub version: Option<String>,
+    pub source: Option<String>,
+    /// The text after `installed` on the row.
+    pub note: String,
+}
+
+/// The installed plugin's version and source for one host variant, read with the same lookup
+/// as `agents outdated`. `None` when there is no plugin, and also when the lookup fails: a
+/// listing never turns a broken version file into an error.
+pub fn plugin_status(agent: &dyn Agent, kind: Kind, cfg: &Config) -> Option<PluginStatus> {
+    let receipt = Receipt::read(&receipt_path(cfg)).unwrap_or_default();
+    let found = installed_plugin(agent, kind, cfg, &receipt).ok()??;
+    let rtok = target_version().ok()?;
+    if found.unversioned {
+        return Some(PluginStatus {
+            version: None,
+            source: None,
+            note: ui::LEGACY_NOTE.to_string(),
+        });
+    }
+    let (version, source) = (found.got.version.to_string(), found.got.source.to_string());
+    let hint = (found.got.version.cmp_precedence(&rtok) == Ordering::Less).then_some(agent.id());
+    let note = if found.got.version.cmp_precedence(&rtok) == Ordering::Equal {
+        ui::plugin_current(&version, &source)
+    } else {
+        ui::plugin_differs(&version, &source, &rtok.to_string(), hint)
+    };
+    Some(PluginStatus {
+        version: Some(version),
+        source: Some(source),
+        note,
+    })
 }
 
 fn host_ids(selection: &OutdatedSelection) -> Result<Vec<String>> {
