@@ -230,10 +230,22 @@ pub fn shorten_result(
         if lines <= rule.max_lines {
             continue;
         }
+        let text = text.to_owned();
+        #[cfg(feature = "json_tree")]
+        if cx.config.plugins.json_tree.enabled
+            && tool != "read"
+            && tool != "search"
+            && let Some(printed) =
+                crate::plugins::json_tree::mcp_replacement(cx, &text, rule.max_lines)
+        {
+            block["text"] = Value::String(printed);
+            changed = true;
+            continue;
+        }
         let Ok(id) = cx.put_archive(text.as_bytes()) else {
             continue;
         };
-        let cut = rules::apply(settings, text, 0, &rule, &id);
+        let cut = rules::apply(settings, &text, 0, &rule, &id);
         if cut.len() >= text.len() {
             continue;
         }
@@ -243,7 +255,7 @@ pub fn shorten_result(
             kind,
             before_bytes: text.len() as u64,
             after_bytes: printed.len() as u64,
-            est_before: cx.estimate(text, Class::Code),
+            est_before: cx.estimate(&text, Class::Code),
             est_after: cx.estimate(&printed, Class::Code),
             ref_id: Some(format!("{server}/{tool}:{id}")),
             call_id: None,
@@ -388,5 +400,56 @@ mod tests {
         assert!(!shorten_result(
             &cx, &settings, "linear", "list", &mut small, "archive", "mcp"
         ));
+    }
+
+    #[cfg(feature = "json_tree")]
+    #[test]
+    fn shorten_result_folds_nested_json_when_json_tree_is_on() {
+        let mut cx = crate::plugin::Runtime::in_memory("wrap-json-tree").unwrap();
+        cx.config.plugins.json_tree.enabled = true;
+        let settings = Settings::from_config(&cx.config);
+        let fill = serde_json::json!({"hex": "#ffffff", "opacity": 1, "blend": "normal"});
+        let children: Vec<_> = (0..28)
+            .map(|i| serde_json::json!({"id": i, "type": "RECT", "fill": fill}))
+            .collect();
+        let value = serde_json::json!({"name": "x".repeat(40), "children": children});
+        let text = serde_json::to_string_pretty(&value).unwrap();
+        assert!(text.lines().count() > 40, "{}", text.lines().count());
+        let mut result = serde_json::json!({"content":[{"type":"text","text": text}]});
+        assert!(shorten_result(
+            &cx,
+            &settings,
+            "figma",
+            "get",
+            &mut result,
+            "archive",
+            "mcp"
+        ));
+        let printed = result["content"][0]["text"].as_str().unwrap();
+        assert!(printed.starts_with("[json-tree "), "{printed}");
+        assert!(printed.lines().count() <= 40, "{}", printed.lines().count());
+        let id = printed
+            .lines()
+            .next()
+            .unwrap()
+            .trim_start_matches("[json-tree ")
+            .trim_end_matches(']');
+        assert_eq!(
+            crate::expand::fetch(&cx, id).unwrap().unwrap(),
+            text.as_bytes()
+        );
+        let rows = cx.store.list_measurements("json_tree").unwrap();
+        assert!(rows.iter().any(|r| r.kind == "fold"), "{rows:?}");
+        assert!(rows.iter().any(|r| r.kind == "expand"), "{rows:?}");
+
+        let mut read = serde_json::json!({"content":[{"type":"text","text": text}]});
+        assert!(shorten_result(
+            &cx, &settings, "figma", "read", &mut read, "archive", "mcp"
+        ));
+        let read_text = read["content"][0]["text"].as_str().unwrap();
+        assert!(
+            !read_text.starts_with("[json-tree "),
+            "read stays on the line cut: {read_text}"
+        );
     }
 }

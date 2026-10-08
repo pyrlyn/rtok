@@ -78,6 +78,27 @@
     }
   },
   {
+    "id": "json_tree",
+    "enabled": false,
+    "surfaces": [
+      "proxy",
+      "mcp"
+    ],
+    "title": "JSON tree",
+    "summary": "Fold repeated objects in nested JSON; expand returns the original.",
+    "saves_tokens": true,
+    "fields": [],
+    "stats": {
+      "input": 0,
+      "output": 0,
+      "cache_create": 0,
+      "cache_read": 0,
+      "est_before": 0,
+      "est_after": 0,
+      "rows": 0
+    }
+  },
+  {
     "id": "archive",
     "enabled": true,
     "surfaces": [

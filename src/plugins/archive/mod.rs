@@ -186,8 +186,10 @@ fn rewrite_block(
     let a = cx.plugin_config::<crate::config::Archive>("archive");
     let (archive_id, live, kind) = match cx.archive_decision(tool_use_id) {
         Ok(Some(d)) if d.expanded => return None,
-        // `archive_decisions` is shared with `toon` (same `tool_use_id` key); replaying its
-        // block here measured the saving twice, once under each plugin.
+        // `archive_decisions` is shared with `json_tree` and `toon` (same `tool_use_id`
+        // key); replaying their blocks here measured the saving twice, once under each plugin.
+        #[cfg(feature = "json_tree")]
+        Ok(Some(d)) if d.pointer.starts_with(crate::plugins::json_tree::PREFIX) => return None,
         Ok(Some(d)) if d.pointer.starts_with(crate::plugins::toon::PREFIX) => return None,
         Ok(Some(d)) => {
             let kind = if a.tiers {
@@ -262,6 +264,8 @@ fn rewrite_blob(content: &mut Value, cx: &Ctx) -> Option<Measurement> {
     let key = format!("blob:{}", crate::store::hex_sha256(text.as_bytes()));
     let (archive_id, live) = match cx.archive_decision(&key) {
         Ok(Some(d)) if d.expanded => return None,
+        #[cfg(feature = "json_tree")]
+        Ok(Some(d)) if d.pointer.starts_with(crate::plugins::json_tree::PREFIX) => return None,
         Ok(Some(d)) if d.pointer.starts_with(crate::plugins::toon::PREFIX) => return None,
         Ok(Some(d)) => (d.archive_id, d.pointer),
         Ok(None) => {

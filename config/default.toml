@@ -432,6 +432,9 @@
 # delta            = true               # changed re-read → unified diff vs last archive
 # delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
 
+[plugins.json_tree]
+# enabled = false                     # fold repeated objects in nested JSON; expand returns the original
+
 [plugins.archive]
 # enabled    = true
 # keep_turns = 4                        # never touch the last N turns

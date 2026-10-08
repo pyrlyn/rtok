@@ -68,6 +68,9 @@ fn rewrite_block(
 
     match cx.archive_decision(tool_use_id) {
         Ok(Some(d)) if d.expanded => return None,
+        // `json_tree` shares this table and runs first; its pointer is not a toon saving.
+        #[cfg(feature = "json_tree")]
+        Ok(Some(d)) if d.pointer.starts_with(crate::plugins::json_tree::PREFIX) => return None,
         // An `archive` pointer under the same `tool_use_id` is that plugin's block, and its
         // saving was measured there; replaying it here added a second `toon` row.
         Ok(Some(d)) if !d.pointer.starts_with(PREFIX) => return None,

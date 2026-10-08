@@ -93,7 +93,7 @@ fn expand_unknown_id_with_lines_flag_still_fails_as_unknown() {
 /// `plugins` prints the header plus exactly the 11 catalogue rows, each with
 /// an on/off state and a surface list.
 #[test]
-fn plugins_lists_eleven_catalogue_rows_with_header_and_surfaces() {
+fn plugins_lists_catalogue_rows_with_header_and_surfaces() {
     let home = tmp("plugins-table");
     let out = cmd(&["plugins"], &home)
         .assert()
@@ -104,13 +104,23 @@ fn plugins_lists_eleven_catalogue_rows_with_header_and_surfaces() {
     let mut lines = text.lines();
     assert_eq!(
         lines.next().unwrap_or(""),
-        "id       enabled  surfaces",
+        "id        enabled   surfaces",
         "{text}"
     );
     let rows: Vec<&str> = lines.collect();
-    assert_eq!(rows.len(), 11, "{text}");
+    assert_eq!(rows.len(), 12, "{text}");
     for id in [
-        "measure", "cmd", "read", "archive", "proxy", "inject", "guard", "memory", "graph", "toon",
+        "measure",
+        "cmd",
+        "read",
+        "json_tree",
+        "archive",
+        "proxy",
+        "inject",
+        "guard",
+        "memory",
+        "graph",
+        "toon",
         "compress",
     ] {
         assert!(

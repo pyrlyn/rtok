@@ -296,6 +296,24 @@ Legend: **blocked by** = tasks that must land first; **gate** = keep-or-revert r
 
 ---
 
+## `json_tree`
+
+**Goal.** Nested JSON tool results with repeated objects fold to a positional tree, ahead of `archive`. Uniform scalar tables stay with `toon`.
+
+**Replaces.** Nothing in the retired stack. Clean-room count-gated hoist (figma-developer-mcp 0.13.2, MIT, ideas only).
+
+**Surfaces.** `proxy_filter` when `plugins.json_tree.enabled`, inside `proxy.mode = "compress"`. MCP wrapper when the fold fits the `[mcp]` line cap and is not `read` or `search`. Default **off**.
+
+**Gate.** fold only when the estimate shrinks
+
+| Order | Task | Plan |
+|-------|------|------|
+| 1 | T437 | Fold nested JSON ahead of `archive` when `plugins.json_tree.enabled`. Lossless `expand`. Default off. · done 2026-10-08 |
+
+**Status.** T437 done 2026-10-08 (see `done.md`). Default stays off.
+
+---
+
 ## Dependency sketch
 
 ```

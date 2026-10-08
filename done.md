@@ -1,5 +1,15 @@
 # rtok — completed tasks
 
+### T437. Fold nested JSON tool results before archive
+
+Nested JSON with repeated objects was archived as a head/tail pointer, so the model lost the tree. `toon` only encodes uniform scalar tables.
+
+Do: `json_tree` plugin, default off, dispatched before `archive`. Hoist a non-empty object or array used as a field value at least twice (never `children`). Template an object body, minus `id` / `name` / `children`, when that body occurs twice and has more than one key. Print `VARS` / `ELEMENTS` / `NODES`. Content ids are sha256 (already a direct dependency), 8 hex, lengthened by 4 on collision. Archive the original first. Rewrite only when the pointer plus the fold estimates fewer tokens. Uniform scalar tables stay with `toon`. `archive` and `toon` skip the `[json-tree ` pointer. The MCP wrapper uses the same fold when it fits the `[mcp]` line cap and the tool is not `read` or `search`. `expand <id>` returns the original bytes and records the measurement on `json_tree`.
+
+Check: unit tests for the hoist, key order, the scalar-table refusal, the live zone, `archive` not replaying the pointer, and the MCP fold; `expand` bytes match; `tests/lossless_roundtrip.rs`, `tests/plugin_plans.rs`, and `tests/cli_trycmd.rs` green.
+
+Check result: those tests passed (`cargo test --lib json_tree`, `lossless_roundtrip`, `plugin_plans`, `cli_trycmd`, `clippy -p rtok --lib --tests -D warnings`).
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

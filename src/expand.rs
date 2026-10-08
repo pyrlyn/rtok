@@ -25,6 +25,7 @@ pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
     // permanently under-counting `report_expand.cost`.
     let n = bytes.len() as u64;
     let plugin = match cx.store.live_zone_pointer(id)? {
+        Some(p) if p.starts_with("[json-tree ") => "json_tree",
         Some(p) if p.starts_with("[toon ") => "toon",
         Some(_) => "archive",
         None => "archive",

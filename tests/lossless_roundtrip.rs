@@ -15,7 +15,16 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const COVERED: &[&str] = &["archive", "cmd", "graph", "guard", "memory", "read", "toon"];
+const COVERED: &[&str] = &[
+    "archive",
+    "cmd",
+    "graph",
+    "guard",
+    "json_tree",
+    "memory",
+    "read",
+    "toon",
+];
 const NEVER: &[&str] = &["compress", "inject", "measure", "proxy"];
 
 /// The fixture body per case: 50 lines so a capping plugin has something to drop, carrying
@@ -182,6 +191,45 @@ fn toon(kind: &str, body: &[u8]) -> usize {
     n
 }
 
+/// `json_tree`: a nested tree with a repeated fill is replaced by a pointer plus the
+/// fold; the archived original is the pretty JSON it replaced. Non-UTF-8 cannot be JSON.
+fn json_tree(kind: &str, body: &[u8]) -> usize {
+    let Ok(text) = std::str::from_utf8(body) else {
+        return 0;
+    };
+    if text.len() < 32 {
+        return 0;
+    }
+    let fill = json!({"hex": "#ffffff", "opacity": 1, "blend": "normal", "note": text});
+    let child = |id| json!({"id": id, "type": "RECT", "fill": fill});
+    let value = json!({
+        "name": "x".repeat(32),
+        "children": [child(1), child(2), child(3), child(4)],
+    });
+    let original = serde_json::to_string_pretty(&value).unwrap();
+    let (mut cx, dir) = runtime(&format!("json-tree-{kind}"));
+    cx.config.plugins.json_tree.enabled = true;
+    let mut wire = json!({"messages": [{
+        "role": "user",
+        "content": [{
+            "type": "tool_result",
+            "tool_use_id": format!("t-{kind}"),
+            "content": original,
+        }],
+    }]});
+    let ms = rtok::plugins::json_tree::JsonTree.proxy_filter(
+        &mut WireRequest::new(&rtok::proxy::anthropic::ANTHROPIC, &mut wire),
+        &Ctx::new(&cx),
+    );
+    let id = ms
+        .first()
+        .and_then(|m| m.ref_id.clone())
+        .unwrap_or_else(|| panic!("json_tree left the {kind} tree whole"));
+    let n = round_trip(&cx, "json_tree", &id, original.as_bytes());
+    let _ = fs::remove_dir_all(&dir);
+    n
+}
+
 /// `archive`: an old tool result is replaced by head/tail plus its archive id; the
 /// archived original is the result text (JSON strings are UTF-8, as for `toon`).
 fn archive(kind: &str, body: &[u8]) -> usize {
@@ -293,6 +341,7 @@ const WALK: &[(&str, Driver)] = &[
     ("cmd", cmd),
     ("graph", graph),
     ("guard", guard),
+    ("json_tree", json_tree),
     ("memory", memory),
     ("read", read),
     ("toon", toon),
