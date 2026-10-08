@@ -1465,7 +1465,7 @@ Written 2026-09-21; by 2026-10-08 every row below has an idea in `ideas.md`, a t
 | 3 | **Model / tier routing by job** (D9) | High $; small raw-token change | M–L | Cheap model for format/classify/expand-prep; mid for edit; expensive only after confirm. Needs a router policy + measurement so “savings” are $. |
 | 4 | **Thinking / reasoning strip on replay** | Medium–High on reasoning models (estimate; measured 0.0297 % of session input, T125, 2026-09-21, §2) | S–M | Do not re-send prior chain-of-thought blocks into the next turn when the host attaches them; keep final answers + tool I/O. Host- and provider-specific. |
 | 5 | **Native context-editing APIs** (I-10 / T51.2) | Medium–High | M | Let the platform shrink history (Anthropic context editing / host compaction hooks) *and* keep rtok archive ids in the checkpoint (ties to T58.2). |
-| 6 | **Structured tool I/O (JSON Schema / strict)** | Medium output + easier trim | M | Force tools to return compact tables/fields instead of prose; then `toon` / formatters win more often. |
+| 6 | **Structured tool I/O (JSON Schema / strict)** | Medium output + easier trim | M | Force tools to return compact tables/fields instead of prose; then `toon` / formatters win more often. T402 (2026-10-08): measured, not built — already-structured JSON is 0.15 % of tool-result input and a `toon`-eligible table saves ~0 there; the prose a tool schema could reach (MCP only) is ≤ 0.64 % of session input (§16.6). |
 | 7 | **Sub-agent isolation + budgeted handoff** (I-46) | Medium when Task/Agent traffic grows | M | Child context starts small; parent gets a digest with archive ids — not a full transcript paste. |
 | 8 | **Identifier / path dictionary in-session** | Low–Medium | L | Replace repeated long paths with short codes in tool results; expand on demand. Easy to break models; needs A/B. |
 | 9 | **Multimodal token gate** | High $ when screenshots dominate (estimate; measured 0.91 %, T137, §2) | S–M | Prefer OCR/text or downscale; refuse or summarize images in the live zone. Separate from text CTT. T137 (2026-09-24): images are 0.91 % of session input (§2) — under the 5 % gate, not built. |
@@ -1491,6 +1491,32 @@ Idea / status of each row (2026-10-08): (1) I-84, decision-shaped; the cache hit
 1. **T59.5** and **T61.2** — highest *measured* or structurally recurring input taxes. Both shipped 2026-09-18 (off by default, as the §16.2 Status column says).
 2. Add a plan card for **prompt-cache-stable prefixes + sticky proxy upstream** if `$` savings matter as much as raw tokens (pairs with existing `stats --price` cache rates).
 3. Keep P28/P31/P33 in Later until a bench beats the lossless archive lane on *code* sessions.
+
+### 16.6 Prose versus structured tool output (T402, 2026-10-08)
+
+Question: how much tool output is free prose that a schema (fields or tables) could replace, and what would `toon` save on it. Ad hoc, read-only measurement on this machine's store (no shipped code); numbers are aggregates only.
+
+**Corpus A, stored hook payloads.** `calls` rows named `PostToolUse` / `postToolUse` whose `call_io.request_json` is kept (33,702 rows, 2026-10-05 00:33 to 2026-10-08 06:33 UTC; recording started on 2026-10-05, and the store keeps no payload above about 64 KB: 569 calls / 139.6 MB of payload in the same window were not stored, so large results are under-counted). The result text is what the model sees: `Bash` stdout+stderr, `Read` file content, MCP text blocks, Cursor `tool_output` envelopes unwrapped. `Edit`/`Write`/`Monitor`/`Agent`/`ToolSearch` acknowledgements and Cursor `Read`/`Grep`/`Write` (size only, no body) are left out: 23,148 result bodies, 45,810,515 B ≈ 11.45 M est. tokens (bytes / 4) = 0.34 % of session input counted once. **Resident** weights each body by the API requests that follow it in its own (or its sub-agent's) transcript: 20,475 Claude Code bodies, 1.043 G token-turns = **31.4 %** of the 3.32 G session input (uncached + cache_create + cache_read of every request in that window, sub-agents included), an upper bound because compaction drops old results. 2,673 bodies (Cursor, or no transcript found) have no resident factor and appear only in the once-counted bytes.
+
+**Classes** (per body, by heuristic): `file_content` (`Read`, `mcp__rtok__read`, `WebFetch`, `MCP:fetch`: the file's own text, no tool can reshape it); `json_tabular` (top-level array of at least 5 objects with the same 3+ scalar keys: exactly what `toon` encodes, tested with a port of `tabular_keys`); `json_wrapped_table` (the same array under an object key, which `toon` skips); `json_other`; `table_text` (60 % of lines start with `|`, or 80 % share one tab count); `records` (70 % of lines are `path:line:`); `free_text` (the rest: command output, logs, diffs, prose).
+
+| Class | Share of result bytes | Resident, % of session input |
+| --- | --- | --- |
+| `free_text` | 61.4 % | 19.48 % |
+| `file_content` | 31.2 % | 10.14 % |
+| `records` | 4.8 % | 1.01 % |
+| `table_text` | 2.2 % | 0.61 % |
+| `json_tabular` + `json_wrapped_table` + `json_other` | 0.4 % | 0.15 % |
+
+By tool: `Bash` is 17,410 bodies, 26.8 MB, 91.4 % `free_text`, 5.0 % `records`, 3.6 % `table_text`; resident 19.89 % of input (18.4 % of it `free_text`). 3,413 of 18,596 recorded `Bash` payloads already carry an `[rtok ... expand:]` marker, so these are post-`cmd` bytes. All MCP tools together: 1,925 bodies, 7.58 MB, 78 % `file_content` (`mcp__rtok__read` alone is 4.17 % of input); the non-file part is 1.36 % of input resident, of which `mcp__rtok__expand` (the archived original returned verbatim) is 0.72 %, the other `mcp__rtok__*` tools 0.21 % (`search` records 0.11 %, `worktree_list` pretty JSON 0.06 %) and third-party servers (Browser pane, Figma, host `ccd_*`) 0.43 %.
+
+**`toon` on the structured part.** In corpus A four bodies were `toon`-eligible (395 B saved in total) and six were wrapped tables (15,232 B would be saved if unwrapped, 98 % of it one Cursor `Shell` body). **Corpus B, the archive** (`archive` table, 61,369 bodies, 340.1 MB, 2026-09-04 to 2026-10-08, tool name not stored; bodies rtok archived, mostly large ones): `free_text` 60.8 %, `file_content` (the `Read` wrapper) 35.3 %, `table_text` 2.6 %, `records` 1.2 %, `json_other` 0.14 %, `json_tabular` + `json_wrapped_table` 16 bodies / 28,813 B (0.008 %). On those 16, rtok's own encoder logic (port, ignoring the 72-byte pointer on a tiny sample) cuts 8,803 B (30.6 %), which is the only measured TOON ratio and is used below as an optimistic factor.
+
+**What a schema could reach.** If every non-file byte of MCP output became a toon-style table at 30.6 %: 1.36 % x 0.306 = 0.42 % of input; without `expand` (whose payload is the original body) 0.64 % x 0.306 = 0.20 %. All non-file bytes of every tool (`Bash` included, 21.25 % of input) would give 6.5 % on the same factor, but `Bash`/`Shell` output is the stdout of external programs; no rtok schema applies there, only the `cmd` rules and formatters, which already shorten it (the `cmd` rule rows save 59 % of their input, `measurements` 2026-09-14 to 2026-10-08) and which are measured elsewhere.
+
+**Decision (T402, 2026-10-08).** Already-structured tool output is 0.15 % of input and has no `toon` headroom; the prose a tool schema can change (MCP, shortest path) is at most 0.64 % of input before any saving, below the 1 % gate. No build task is filed; row #6 stays an idea. Reopen if an MCP server with large table-shaped prose output (a `search` or `list` of 50+ rows) gets heavy use.
+
+Caveats: heuristic classes (no human labelling); `bytes / 4` token estimate; stored payloads under about 64 KB only (corpus A) and no tool names in the archive (corpus B); resident factors use the transcript's request timestamps and assume no compaction. Commands: read-only `sqlite3 "file:<home>/rtok.db?mode=ro"` plus a one-off Python script over `call_io.request_json` and the archive blobs; transcripts under `~/.claude/projects` for the denominator.
 
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
