@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,452 @@
+@@ -0,0 +1,464 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -114,6 +114,9 @@ target/tmp/t60-2-config-init.toml
 +# semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
 +# flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
 +# timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s, but 900 or more with flex = true (OpenAI's Flex guide uses 15 min)
++# upstream            = ""              # base URL for every request on this lane, any wire; "" = proxy.upstream / openai_upstream / gemini_upstream
++# max_in_flight       = 0               # requests upstream at once; 0 = no cap (the agent lane is never capped)
++# max_queued          = 8               # with max_in_flight: requests that wait for a slot; one more gets 429 + Retry-After
 +
 +[proxy.lanes.embeddings]              # same keys as bulk
 +# compress            = false
@@ -123,6 +126,9 @@ target/tmp/t60-2-config-init.toml
 +# semantic_cache      = false
 +# flex                = false
 +# timeout_s           = 0
++# upstream            = ""
++# max_in_flight       = 0
++# max_queued          = 8
 +
 +[proxy.lanes.meta]                    # same keys as bulk (models, token counting)
 +# compress            = false
@@ -132,6 +138,9 @@ target/tmp/t60-2-config-init.toml
 +# semantic_cache      = false
 +# flex                = false
 +# timeout_s           = 0
++# upstream            = ""
++# max_in_flight       = 0
++# max_queued          = 8
 +
 +[proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
 +# compress            = false
@@ -141,6 +150,9 @@ target/tmp/t60-2-config-init.toml
 +# semantic_cache      = false
 +# flex                = false
 +# timeout_s           = 0
++# upstream            = ""
++# max_in_flight       = 0
++# max_queued          = 8
 +
 +[proxy.batch]                         # provider Batch result files
 +# parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
@@ -332,7 +344,7 @@ target/tmp/t60-2-config-init.toml
 +
 +[tasks.github]
 +# repo    = ""                          # owner/name; empty: the origin remote
-+# project = 0                           # Projects v2 number whose Status field tracks tasks; 0 = issues only
++# project = 0                           # Projects v2 number for the Status field (not read yet); 0 = issues only
 +
 +[tasks.gitlab]
 +# url     = "https://gitlab.com"        # base URL; set it for a self-hosted instance

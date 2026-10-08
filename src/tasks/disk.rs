@@ -13,7 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use super::adapter::{Filter, TaskAdapter};
+use super::adapter::{Filter, Taken, TaskAdapter};
 use super::{NewTask, Status, Task, TaskId};
 
 /// Longest slug in a file name; the title itself lives in the front matter.
@@ -99,7 +99,8 @@ impl TaskAdapter for DiskAdapter {
             bail!("disk tasks: a task needs a title");
         }
         if self.find(id)?.is_some() {
-            bail!("disk tasks: {id} already exists in {}", self.dir.display());
+            return Err(anyhow::Error::new(Taken(id.clone()))
+                .context(format!("disk tasks: {}", self.dir.display())));
         }
         let now = now();
         let task = Task {
@@ -121,9 +122,7 @@ impl TaskAdapter for DiskAdapter {
         if filter.wants_finished() {
             tasks.extend(self.scan(&self.done_dir())?.into_iter().map(|(_, t)| t));
         }
-        tasks.retain(|t| filter.matches(t));
-        tasks.sort_by(|a, b| a.id.cmp(&b.id));
-        Ok(tasks)
+        Ok(filter.select(tasks))
     }
 
     fn get(&self, id: &TaskId) -> Result<Option<Task>> {

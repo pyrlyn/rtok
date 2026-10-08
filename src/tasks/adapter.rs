@@ -30,11 +30,31 @@ impl Filter {
         status && (self.parent.is_none() || task.parent == self.parent)
     }
 
+    /// What `list` returns from everything an adapter read: the matches, sorted by id.
+    pub fn select(&self, tasks: impl IntoIterator<Item = Task>) -> Vec<Task> {
+        let mut out: Vec<Task> = tasks.into_iter().filter(|t| self.matches(t)).collect();
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out
+    }
+
     /// Whether finished tasks can match, so an adapter knows to read its archive.
     pub fn wants_finished(&self) -> bool {
         self.all || self.statuses.iter().any(|s| !s.is_active())
     }
 }
+
+/// `create`'s error when `id` is already stored: a pull, another checkout or another machine
+/// numbered past this machine's counter. [`super::run::Project::create`] re-allocates on it.
+#[derive(Debug)]
+pub struct Taken(pub TaskId);
+
+impl std::fmt::Display for Taken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "task {} already exists", self.0)
+    }
+}
+
+impl std::error::Error for Taken {}
 
 /// A task storage backend: plain files on disk, GitHub Issues or GitLab Issues. Ids come from
 /// the store's allocator; an adapter only stores them.

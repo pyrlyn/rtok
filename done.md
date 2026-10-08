@@ -7935,6 +7935,20 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.7. Per-lane upstream and in-flight cap
+
+optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
+
+Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
+
+Plan: `[proxy.lanes.<lane>]` gains `upstream` (empty = the wire's own upstream), `max_in_flight` (0 = no cap) and `max_queued`; `agent`, `batch` and `files` have no table, so Batch keeps the provider upstream and the agent lane is never capped. `src/proxy/gate.rs`: one semaphore per capped lane plus a bounded waiting count; a slot is taken before shaping and held until the response stream ends; a full queue answers 429 with `Retry-After` and is never recorded as a call; plain mode skips the cap. `ProxyState` picks the lane upstream in `upstream_for`. Config template, `docs/config.md` (en, ru, uk), validation of the URL, trycmd goldens. Test `tests/proxy_lane_gate.rs`: a gated mock upstream holds a bulk burst while an agent call completes; queue-full 429; lane upstream reaches its own mock.
+
+Result: `[proxy.lanes.bulk|embeddings|meta|internal]` gain `upstream` (default `""`), `max_in_flight` (default `0`, no cap) and `max_queued` (default `8`). A lane `upstream` replaces the base URL for every request on that lane whatever its wire (a gateway or local server); `""` keeps `proxy.upstream` / `openai_upstream` / `gemini_upstream`. `agent`, `batch` and `files` still have no table, so the agent lane is never capped and keeps its upstream, and a Batch job's create, poll and results always reach the provider that owns it (a `bulk` marker on a Batch path changes nothing). `src/proxy/gate.rs` gives each capped lane its own `tokio` semaphore and a bounded waiting count; the slot is taken before the request body is read (a queued request holds no body) and released when the response stream ends or the client hangs up. Design choices: a full queue answers `429` with `Retry-After: 1` and an Anthropic-shaped `rate_limit_error` (the provider SDKs back off and retry on it; `503` would read as a provider outage), writes no `calls` row since it never went upstream, and logs at `warn`; with the proxy switched off (`proxy.enabled`, `core.enabled` or `plugins.proxy.enabled` false) nothing is capped, so a kill switch never turns a request away. `rtok config validate` rejects a lane `upstream` that is not an http(s) URL. Tests: `tests/proxy_lane_gate.rs` (an upstream that holds every bulk request until released: two in flight, one queued, the next gets 429 and never reaches upstream, an agent turn and a bulk-marked Batch call answer from the default upstream while every bulk slot is held, then the burst completes; proxy off caps nothing), unit tests in `gate.rs`, `lane.rs` and `config/validate.rs`; trycmd snapshots and `docs/config.md` (en, ru, uk) updated. `cargo nextest run --lib --test 'proxy*' --test 'config*'`: 1982 run, 1981 passed; the one failure (`proxy_lane_policy the_semantic_cache_serves_the_agent_lane_only_by_default`) is the cache-fill race T385.6 fixes in that test, not this change.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-opus-5-5
+
 ### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
 
 optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
@@ -9714,6 +9728,17 @@ Check: CLI ↔ MCP parity (same inputs, same JSON); `just check` green.
 Result: `src/mcp/tasks.rs` lists the five tools beside the worktree and agent tools and calls the same `tasks::run` functions as `rtok task …`; `Project::get`, `Project::status` and `run::filter` moved there from the CLI so neither front-end keeps its own copy, and `show` now fails with `no task <id>` itself. Each call re-reads the config for the current cwd, because `roots/list` can move the server into the project after launch and `[tasks] prefix` lives in that project's `.rtok.toml`. `tests/task_cli.rs` drives the tools through `rtok mcp --call` and compares their answers with `--json`. The server entry `rtok agents install` already writes covers every host, so the tools need no install of their own; the AGENTS.md/CLAUDE.md instruction line was split into T441.10.
 
 Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T441.7. GitHub adapter
+
+Seventh subtask of T441 (task adapters): `adapter = "github"` keeps each task as one issue in the project's repository.
+
+Check: the adapter against a mock GitHub server (create, sub-issue link, list, get, status, id collision, missing label, rate limit); `just check` green.
+
+Result: `src/tasks/remote.rs` holds what the GitHub and GitLab adapters share: the `rtok` and `rtok:<id>` labels, the `R12. Title` issue title, the token lookup (`GH_TOKEN`/`GITHUB_TOKEN`, else `gh auth token`), and one blocking client that paces writes one second apart, waits out `retry-after` or the primary-limit reset up to a minute, and follows `Link: rel="next"` only on the API host, since every request carries the token. `src/tasks/github.rs` creates the issue with both labels, links a subtask as a sub-issue of its parent (a failed link only warns), maps `rtok:in-progress` and the close reason (`completed` → done, `not_planned` → closed), and refuses an issue GitHub stored without its label (no push access). An id another machine already issued comes back as the typed `Taken` error, and `Project::create` allocates the next id and tries again; the disk adapter returns the same error. reqwest gains its `blocking` feature. The Projects v2 Status field moved to T441.11 and `rtok task sync` to T441.12; `[tasks.github] project` is documented as read from T441.11 on. #814.
+
+Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5
 
 ### T441.9. Task adapter docs
