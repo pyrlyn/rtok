@@ -11,8 +11,9 @@
 - Normalise before comparing (trim, collapse whitespace, strip the `rtok run` wrap) so
   trivially different commands still match, but never match different file paths. A Bash
   key carries the hook's cwd and every leading `cd … &&` hop verbatim (hops are relative
-  to the persistent shell, so they never fold, T445); a Bash with a `cd` hop clears all
-  other `bash` keys because it moves the shell.
+  to the persistent shell, so they never fold, T445); a Bash behind a relative hop
+  is never keyed (Post already sees the moved cwd), and any `cd` hop clears all other
+  `bash` keys because it moves the shell.
 - Runs on the hook path: one indexed DB lookup plus a file-existence stat, never a
   body read (`archive_size`, T55.16).
 - Each denial writes `Measurement { kind: "guard" }` with the avoided result size.
