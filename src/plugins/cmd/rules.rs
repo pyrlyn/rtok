@@ -924,28 +924,15 @@ fn group_diag(lines: Vec<String>) -> Vec<String> {
     })
 }
 
-/// True when `s` trims to a JSON object or array. Primitives (`true`, `"x"`) stay
-/// on the line-cut path so a one-word command is not rewritten.
-pub(crate) fn is_json_body(s: &str) -> bool {
-    parse_json_body(s).is_some()
-}
-
-fn parse_json_body(s: &str) -> Option<serde_json::Value> {
+/// A JSON object or array body, parsed. Primitives (`true`, `"x"`) stay on the
+/// line-cut path so a one-word command is not rewritten.
+pub(crate) fn parse_json_body(s: &str) -> Option<serde_json::Value> {
     let t = s.trim();
     let b = t.as_bytes().first()?;
     if *b != b'{' && *b != b'[' {
         return None;
     }
     serde_json::from_str(t).ok()
-}
-
-/// Rewrite a JSON object/array before the line cut (T65.2). `None` = unparseable,
-/// leave the body untouched.
-fn compact_json(output: &str, items: u32, string_max: u32) -> Option<String> {
-    let v = parse_json_body(output)?;
-    let items = items.max(1) as usize;
-    let string_max = string_max.max(1) as usize;
-    Some(fmt_top(&v, items, string_max))
 }
 
 fn fmt_top(v: &serde_json::Value, items: usize, string_max: usize) -> String {
@@ -1026,40 +1013,62 @@ pub fn apply(
     rule: &Rule,
     archive_id: &str,
 ) -> String {
-    let mut lines: Vec<String> = output.lines().map(str::to_string).collect();
+    // The parse is skipped on a failed run: that path never reads the body as JSON.
+    let json = if exit == 0 {
+        parse_json_body(output)
+    } else {
+        None
+    };
+    apply_parsed(settings, output, json, exit, rule, archive_id)
+}
+
+/// [`apply`] for a caller that already parsed `output` with [`parse_json_body`], so a
+/// large JSON body is not parsed twice.
+pub(crate) fn apply_parsed(
+    settings: &Settings,
+    output: &str,
+    json: Option<serde_json::Value>,
+    exit: i32,
+    rule: &Rule,
+    archive_id: &str,
+) -> String {
     if exit != 0 {
+        let lines: Vec<&str> = output.lines().collect();
         let n = lines.len().saturating_sub(settings.fail_tail_lines);
         return lines[n..].join("\n");
     }
-    lines.retain(|l| {
-        let low = l.to_ascii_lowercase();
-        is_keep(&low, rule) || !is_drop(&low, rule)
-    });
-    // T65.4 first: when a trace block is in the output the columnar pass stands
-    // down — traceback/YAML/diff indentation and frame padding are not columnar.
-    let trace_kept = trace_blocks(&lines);
-    if rule.collapse_columns && !trace_kept.iter().any(|t| *t) {
-        for l in &mut lines {
-            *l = collapse_columns(l);
+    let mut lines: Vec<String> = if let Some(v) = json {
+        // T65.2: rewrite a JSON body before the cut. It replaces every line of the
+        // original payload, so drop/keep/dedupe on those lines could not change it.
+        fmt_top(
+            &v,
+            rule.json_items.max(1) as usize,
+            rule.json_string.max(1) as usize,
+        )
+        .lines()
+        .map(str::to_string)
+        .collect()
+    } else {
+        let mut lines: Vec<String> = output.lines().map(str::to_string).collect();
+        lines.retain(|l| {
+            let low = l.to_ascii_lowercase();
+            is_keep(&low, rule) || !is_drop(&low, rule)
+        });
+        // T65.4 first: when a trace block is in the output the columnar pass stands
+        // down — traceback/YAML/diff indentation and frame padding are not columnar.
+        if rule.collapse_columns && !trace_blocks(&lines).iter().any(|t| *t) {
+            for l in &mut lines {
+                *l = collapse_columns(l);
+            }
         }
-    }
-    lines = match rule.dedupe {
-        Dedupe::Off => lines,
-        Dedupe::Adjacent => dedupe(lines),
-        Dedupe::Normalized => normalized_dedupe(lines),
+        match rule.dedupe {
+            Dedupe::Off => lines,
+            Dedupe::Adjacent => dedupe(lines),
+            Dedupe::Normalized => normalized_dedupe(lines),
+        }
     };
-    match rule.group {
-        Group::Dir => lines = group_dir(lines),
-        Group::Diag => lines = group_diag(lines),
-        Group::Off => {}
-    }
-    // T65.2: rewrite a JSON body after grouping and before the cut. Parse the
-    // original payload so drop/keep/dedupe cannot poison a pretty-printed object.
-    // The rewrite replaces `lines`, so `trace_kept` (indexed by line below) is
-    // recomputed after every transform that can change the line count.
-    if let Some(compacted) = compact_json(output, rule.json_items, rule.json_string) {
-        lines = compacted.lines().map(str::to_string).collect();
-    }
+    // One pass, after the JSON rewrite. A grouped line is a summary, not a path or a
+    // diagnostic, so the second pass this replaced found nothing left to fold.
     match rule.group {
         Group::Dir => lines = group_dir(lines),
         Group::Diag => lines = group_diag(lines),
@@ -2072,6 +2081,36 @@ mod tests {
             on.contains("no-var ×20: Unexpected var (0:1, 1:1, 2:1, …)"),
             "{on}"
         );
+    }
+
+    /// `apply` groups once. The pass it dropped re-grouped already grouped lines, so
+    /// these must be fixed points for the output to stay what it was.
+    #[test]
+    fn grouping_is_a_fixed_point_on_its_own_output() {
+        let paths: Vec<String> = (0..30)
+            .flat_map(|i| {
+                [
+                    format!("./src/a{i}.rs"),
+                    format!("tests/t{i}.rs"),
+                    "x.md".into(),
+                ]
+            })
+            .collect();
+        let once = group_dir(paths);
+        assert_eq!(group_dir(once.clone()), once);
+        let mut diags = Vec::new();
+        for i in 0..8 {
+            diags.push(format!(
+                "src/f{i}.ts({i},1): error TS2322: Type 'a' is not 'b'."
+            ));
+            diags.push("error[E0308]: mismatched types".into());
+            diags.push(format!("  {i}:1  error  Unexpected var  no-var"));
+            diags.push(format!("FAILED t{i}.py::t - ValueError: bad {i}"));
+            diags.push("E   KeyError: 'k'".into());
+            diags.push(format!("plain line {i}"));
+        }
+        let once = group_diag(diags);
+        assert_eq!(group_diag(once.clone()), once);
     }
 
     #[test]
