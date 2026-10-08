@@ -71,6 +71,8 @@ impl Lane {
                 tools_rewrite: true,
                 context_management: true,
                 semantic_cache: true,
+                // Never silently: an agent turn is Flex only when the client asks for it.
+                flex: false,
                 timeout_s: 0,
             },
             Lane::Batch | Lane::Files => LanePolicy::default(),

@@ -523,6 +523,7 @@ fn check_table(
 const CHOICES: &[(&str, &[&str])] = &[
     ("log.tspin", &["auto", "always", "off"]),
     ("plugins.graph.map_rank", &["refs", "pagerank"]),
+    ("proxy.flex.on_429", &["none", "backoff", "default"]),
     // Any other value turns the semantic tier on with the placeholder hash embedding
     // (`proxy::semantic_cache`); `"hash"` is the only backend until P29 ships real ones.
     ("plugins.proxy.semantic_cache.embed_backend", &["hash"]),
@@ -623,6 +624,10 @@ fn check_leaf(
             }
             "plugins.archive.keep_turns" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
+            }
+            // Each retry holds the client's connection open; past a handful it is a hang.
+            "proxy.flex.retries" if n > 5 => {
+                errors.push(format!("{at}: {dotted} must be ≤ 5"));
             }
             "tui.tick_secs" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
@@ -1148,6 +1153,29 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn flex_policy_values_are_checked() {
+        let dir = tmp("flex");
+        let path = dir.join("c.toml");
+        for (key, bad) in [("on_429", "\"retry\""), ("retries", "6")] {
+            std::fs::write(&path, format!("[proxy.flex]\n{key} = {bad}\n")).unwrap();
+            let errs = issues(&path).unwrap();
+            assert!(
+                errs.iter().any(|e| e.contains(key)),
+                "{key} = {bad}: {errs:?}"
+            );
+        }
+        for (key, ok) in [
+            ("on_429", "\"backoff\""),
+            ("on_429", "\"default\""),
+            ("retries", "5"),
+        ] {
+            std::fs::write(&path, format!("[proxy.flex]\n{key} = {ok}\n")).unwrap();
+            assert!(issues(&path).unwrap().is_empty(), "{key} = {ok}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
