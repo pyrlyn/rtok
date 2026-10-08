@@ -82,7 +82,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
-| T401 | in progress | P3 | 4 | 20% | Claude Code / claude-opus-5-5 |
 | T402 | todo | P3 | 2 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
@@ -1573,21 +1572,6 @@ From `research.md`:
 Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
 
 Check: dated sources in §10.1, §23 and §26.
-
-### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
-
-Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
-
-Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
-
-Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
-
-Execution plan (`crates/rtok-mcp` is the install/status core; the server it means is `Server` in `src/mcp.rs`, which stays the one dispatch path):
-1. Transport: rmcp's own `transport-streamable-http-server` (rmcp is already a dependency; feature only, no version change), stateless with JSON responses, mounted on the axum already in the tree. A thin `ServerHandler` in `src/mcp/http.rs` hands `tools/list` and `tools/call` to `Server::tools` / `Server::call_tool`, so `record` writes the same rows as stdio.
-2. Security: bearer token from `[mcp] token` / `RTOK_MCP_TOKEN` only (no CLI flag), compared in constant time, required on every request and refused at startup when unset; loopback `[mcp] http_addr` by default; rmcp's Host check (loopback hosts plus the host of `[mcp] public_url`) and Origin check (only the origin of `public_url`); `mcp.token` redacted in config output.
-3. Allow-list: `[mcp] http_tools` (default: the read-only `read`, `search`, `tree`) replaces `[mcp] tools` for the HTTP server through the same filter in `Server::new`.
-4. CLI `rtok mcp --http [ADDR]`; config template, `docs/config.md` + `docs/ru|uk/config.md`, trycmd fences; `docs/research/grok-cloud-mcp.md` status and a client-side functions section.
-5. `tests/mcp_http.rs`: spawn `rtok mcp --http 127.0.0.1:0` in a temp home, then initialize, tools/list, one `read` call, 401 without and with a wrong token, 403 on a foreign Origin; the `read` call's rows match a stdio `read` call. Verify with `just check`.
 
 ### T402. Measure how much tool output a structured schema would shrink
 
