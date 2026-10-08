@@ -86,7 +86,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.4 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
@@ -1586,19 +1585,6 @@ Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pac
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
-
-Apply the approved shell and components; chart series colours come from the brand roles.
-
-Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
-
-Plan (T414.2 shell and T414.3 components are in; the pages are audited against them in dark and light at 1440 and 390 px):
-1. `ShareBar` in `web/src/ui/Marks.tsx`: one share bar with the chart tooltip, on the `accent` role for cost and tokens and the `delta` role for savings; it replaces the three hand-rolled bars in Overview (savings by plugin), Stats (cost per model) and Usage (periods).
-2. Usage: the per-agent table keeps its agent column (it collapses at 1440 px when two half-width panels hold six columns), and the incomplete-cost panel takes the `warn` border the Overview alerts use.
-3. Stats and Usage KPI grids take the Overview's `gap-3`.
-4. Calls and Sessions: an idle detail column shows a hint instead of a hole (new `pages/DetailHint.tsx`; `Split` and `parts.tsx` stay untouched for T414.5 and T414.6).
-5. Tests and stories for `ShareBar` and the hint; `just spa-test`, `spa-stories`, `spa-e2e`, `just check`; dark and light screenshots of the five pages.
 
 ### T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 
