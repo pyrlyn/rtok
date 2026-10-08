@@ -158,6 +158,38 @@ deny = []                             # drop these names from tools[]; later cal
 [proxy.lanes]                         # T385.1; tag each request's lane in the ledger (calls.kind); bytes stay identical
 enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
 
+[proxy.lanes.bulk]                    # sync scripts; the agent lane follows the global switches, batch and files are never rewritten
+compress            = false           # proxy.mode = "compress" rewrites (archive, compress, noise strip)
+toon                = false           # the toon filter inside that pass; needs compress
+tools_rewrite       = false           # proxy.tools_rewrite
+context_management  = false           # proxy.context_management
+semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
+timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
+
+[proxy.lanes.embeddings]              # same keys as bulk
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.meta]                    # same keys as bulk (models, token counting)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
 [proxy.batch]                         # no keys yet (T385.4)
 
 [proxy.flex]                          # no keys yet (T385.5)
@@ -496,6 +528,26 @@ no heuristics: an unmarked request is `agent`, the lane every request had before
 The agent lane keeps `calls.kind = api_request`; the others record `api_request:<lane>`
 (`api_request:bulk`, `api_request:batch`, ...). Request bytes are not changed by the lane.
 
+The `agent` lane has no table: every global switch decides for it exactly as it did before
+lanes existed (prompt-cache stability). `batch` and `files` have none either: their bodies
+(Batch JSONL, uploads) are always forwarded verbatim, and `stream_options` shaping is
+skipped on them too. `bulk`, `embeddings`, `meta` and `internal` each read a
+`[proxy.lanes.<lane>]` table, and every switch in it is off by default, so those lanes are
+forwarded byte for byte until you opt one in. A lane switch only narrows its global
+counterpart: a rewrite runs on a lane when the global switch *and* the lane switch are on.
+
+| Key | Global switch it narrows | Default | Meaning |
+|-----|--------------------------|---------|---------|
+| `compress` | `proxy.mode = "compress"` | `false` | archive, compress and terminal-noise strip |
+| `toon` | `plugins.toon.enabled` | `false` | the `toon` filter inside that pass; needs `compress` |
+| `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | `tools[]` description rewrite |
+| `context_management` | `proxy.context_management` | `false` | Anthropic server-side context editing |
+| `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | cache lookup and store |
+| `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s` |
+
+Flex, routing and a per-lane upstream are not here yet: each joins this table with its own
+step (`[proxy.flex]`, `[proxy.routing]` below).
+
 ### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — planned (see `docs/batch-flex.md`)
 
 These three tables exist and are empty: an empty `[proxy.batch]` loads, but none has a key
@@ -581,7 +633,7 @@ Rust (rust-analyzer) and Dart (Dart SDK): `docs/lsp.md`.
 
 rtok's own lines for a person at a terminal — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, the `graph index` summary, `--help` — carry an emoji and a colour by default:
-✅ success (green), 💡 status (cyan), ⚠️ warning (yellow), ❌ error (red).
+✅ success (green), 💡 status (cyan), ❗ warning (yellow), ❌ error (red). A line that names an operation takes that operation's icon instead (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), padded so the text after it starts in one column.
 
 ```toml
 [ui]

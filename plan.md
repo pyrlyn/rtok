@@ -24,7 +24,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.5 | todo | P2 | 3 | 0% | |
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.11 | todo | P2 | 3 | 0% | |
@@ -62,7 +61,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T378 | todo | P3 | 3 | 0% | |
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.2 | todo | P2 | 3 | 20% | |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.4 | todo | P2 | 3 | 20% | |
 | T385.5 | todo | P2 | 3 | 20% | |
@@ -111,19 +109,18 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
-| T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436 | todo | P2 | 3 | 0% | |
 | T436.1 | todo | P2 | 3 | 0% | |
+| T436.2 | todo | P2 | 2 | 0% | |
+| T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
-| T441.9 | todo | P3 | 1 | 0% | |
 | T441.10 | todo | P3 | 2 | 0% | |
 
 
@@ -839,13 +836,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback the backend component reads 0.6; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
-
-T329 §6 (second half): `dead` over the scope (a symbol in B used only from A is not dead while A links B, still reported per project), `affected` reading `git diff` in every git project of the scope, caps and token budgets applied to the whole answer, `watch` updating every project in the scope. Depends on T329.4.
-
-Check: `dead` over A's scope spares B's function only A calls, selecting B alone reports it; `affected` maps per project; an MCP reply stays under the cap with three linked projects; an edit in C updates its index under `watch`; `just check`.
-
-
 ### T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
 
 T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's strict behaviour. Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 (default backend decision) must be answered first. Depends on T329.4.
@@ -1428,12 +1418,6 @@ Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id ord
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
 
-### T385.2. Per-lane policy table
-
-optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
-
-Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
-
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
@@ -1793,12 +1777,6 @@ Charts on the same time axis (the calls chart, the calls and live-sessions KPI m
 
 Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
-### T433. Save hook session fields once instead of in every hook body
-
-Every saved hook stdin repeats the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Done when they are stored once per distinct value set in their own table referenced from the call, the saved body keeps only the event's own fields, and the full stdin can be rebuilt for readers (OTel, web). `[core] store_raw = true` keeps the full body. Design (table, migration, readers) is written into this card before code.
-
-Check: a store test saves two hook calls of one session and reads back both full bodies from one session row.
-
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -1852,24 +1830,6 @@ Execution plan:
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
-### T436. Operation icons and a spinner on every wait, the way ketch draws them
-
-Creator request 2026-10-07: a loader spinner on every operation where the user waits, and icons like ketch's.
-
-Today `src/ui/style.rs` marks a line only by what it means (`Kind`: ✅ success, 💡 info, ⚠️ warning, ❌ error). ketch (`apps/ketch/src/ui.rs`, `OPERATION_ICONS` and `icon()`) first looks up the verb of the line: install 📦, uninstall/remove/prune 🧹, upgrade/update ⏫, download/fetch ⏬, link 🔗, roll back ⏪, search 🔍, doctor 🩺; only then falls back to the tone icon. Work in progress has no icon; each icon is measured with `unicode-width` and padded to one column count so verbs line up even where a terminal ignores U+FE0F.
-
-Done means:
-
-1. Operation icons: `style.rs` gets a verb → icon table on ketch's model (substring match in order, `uninstall` before `install`), extended with rtok's own verbs (index, worktree add/remove, compress/expand, bench, proxy start). A line takes its operation's icon when the verb names one, else its `Kind` icon. Every rtok status line that names an operation goes through it; no command picks its own emoji.
-2. Alignment: icons are padded to a fixed measured width, as in ketch, so the text after the icon starts in the same column for every icon.
-3. Spinner on every wait: T276 owns external commands (`ProgressRunner`); this task covers the waits it does not — rtok's own slow work (network fetches, store migrations, index rebuilds, large reads) — with the same runner or helper, no second spinner implementation. When the wait ends the spinner is replaced by the finished line with its operation icon.
-4. Same rules as today: icons need `[ui] emoji` and a terminal on that stream; spinners draw nothing when stderr is not a TTY; hook output, MCP JSON, `--json` and piped output stay byte-for-byte unchanged.
-5. Reuse first: if the icon table and width padding are the same code in ketch and rtok, extract them into a shared crate in `packages/` and use it from both (workspace rule); otherwise say in the PR why not.
-
-Depends on T276 for the spinner runner.
-
-Check: snapshot tests for the icon of each verb and the fallback to `Kind`; a width test that every icon pads to the same column; a non-TTY test that no icon and no spinner bytes reach a pipe; manual run of `rtok agents install`, `rtok worktree add`, `rtok graph index` in a terminal shows the spinner during the wait and the icon on the result; `just check`.
-
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA.
@@ -1885,6 +1845,18 @@ Done means:
 5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
 
 Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
+
+### T436.2. Spinners on the remaining waits and icons on `agents install/update`
+
+Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
+
+Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
+
+### T436.3. Shared operation-icon crate for rtok and ketch
+
+Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
+
+Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
 
 ## Reference
 
