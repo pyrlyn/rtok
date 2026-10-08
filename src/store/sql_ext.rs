@@ -517,6 +517,36 @@ impl Query for SearchNotes {
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}
 
+/// FTS5 `MATCH` and `bm25()` over `symbols_fts` — no form in Diesel 2.3's typed DSL (T454).
+#[derive(QueryId)]
+pub(crate) struct SearchSymbols {
+    pub root: String,
+    pub query: String,
+    pub limit: i32,
+}
+
+impl QueryFragment<Sqlite> for SearchSymbols {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql(
+            "SELECT s.path, s.name, s.kind, s.line, s.signature, s.doc, bm25(symbols_fts) \
+             FROM symbols_fts JOIN symbols s ON s.id = symbols_fts.rowid \
+             WHERE symbols_fts MATCH ",
+        );
+        out.push_bind_param::<Text, _>(&self.query)?;
+        out.push_sql(" AND s.root = ");
+        out.push_bind_param::<Text, _>(&self.root)?;
+        out.push_sql(" AND s.is_def = 1 LIMIT ");
+        out.push_bind_param::<Integer, _>(&self.limit)?;
+        Ok(())
+    }
+}
+
+impl Query for SearchSymbols {
+    type SqlType = (Text, Text, Text, Integer, Text, Text, Double);
+}
+
+impl RunQueryDsl<SqliteConnection> for SearchSymbols {}
+
 /// `COUNT() OVER` and `ROW_NUMBER() OVER` — no window functions in Diesel 2.3's typed DSL.
 #[derive(QueryId)]
 pub(crate) struct UsageCtt;

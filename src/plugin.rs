@@ -574,7 +574,7 @@ impl Symbols for Runtime {
         path: &str,
         file_sha: &str,
         stat: (i64, i64),
-        rows: &[(String, String, i32, bool, i32, String)],
+        rows: &[rtok_plugin_sdk::SymbolRow],
     ) -> Result<usize> {
         self.store.replace_symbols(root, path, file_sha, stat, rows)
     }
@@ -698,6 +698,26 @@ impl Symbols for Runtime {
 
     fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
         self.store.file_rank_put(root, graph)
+    }
+
+    fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<rtok_plugin_sdk::SymbolSpan>> {
+        self.store.symbol_span(root, path, name, kind, line)
+    }
+
+    fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, String, String, i32)>> {
+        self.store.symbol_fts(root, query, limit)
     }
 }
 

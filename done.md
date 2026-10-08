@@ -1,5 +1,14 @@
 # rtok — completed tasks
 
+### T454. Symbol byte spans, a recoverable cut body, and id lookup
+
+Ideas only from jCodeMunch (no code, schema, or comments copied; no MCP tool, embeddings, or second copy of source files). `symbols` keeps `start_byte`, `end_byte`, and `content_hash` (sha256 of that slice). A definition longer than `body_lines` archives the uncut span and ends with `expand <id>`. Every definition head prints `{path}::{name}#{kind}@{line}`. `symbol` takes optional `id` and, when set, returns that one row. `symbols_fts` indexes definition name, signature (`line_text`), and the contiguous `///`/`//!` doc above the line (512 bytes). `explore` falls through to that index when a name does not resolve, ranking a name-token hit above a signature hit above a doc hit.
+
+Check: a body over 40 lines round-trips through `expand`; a shorter body is unchanged aside from the id prefix; an unchanged mtime and size is still skipped; `symbol` with an id returns that row; `explore` of `truncated source lines` includes `body_lines`; `cargo test --test graph_contract --test graph_model` and the `outline` / `index` / `graph` unit tests pass; `just check`.
+
+Result: `symbol` prints the id on every definition head and reads a cut body back from the file span when the file sha matches. `rtok expand <id>` returns the uncut span. `explore` of `truncated source lines` on the graph plugin includes `body_lines`. `just check`: 2978 passed, 6 skipped.
+Status: done 2026-10-08
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

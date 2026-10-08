@@ -1,5 +1,5 @@
 //! Diesel `table!` macros for the six 0001 tables (plan T13.1).
-//! `notes_fts` is a VIRTUAL TABLE — FTS5 `MATCH` / `bm25` have no Diesel DSL form (T163.3).
+//! `notes_fts` and `symbols_fts` are VIRTUAL TABLEs — FTS5 `MATCH` / `bm25` have no Diesel DSL form (T163.3).
 
 #![allow(unused)]
 
@@ -269,6 +269,11 @@ diesel::table! {
         size -> BigInt,
         end_line -> Integer,
         scope -> Text,
+        start_byte -> BigInt,
+        end_byte -> BigInt,
+        content_hash -> Text,
+        signature -> Text,
+        doc -> Text,
     }
 }
 
