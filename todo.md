@@ -71,7 +71,6 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
-- T403. A/B a path and identifier dictionary in proxy requests
 - T404. Evaluate a local draft model that the cloud model only verifies
 - T405. Task-board extras for the agent task tools
 - T413. More agent hosts: popular agents rtok does not install into yet

@@ -75,7 +75,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
-| T403 | in progress | P3 | 3 | 80% | Claude Code / claude-sonnet-5-5 |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
@@ -1499,18 +1498,6 @@ Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/resear
 Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
 
 Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
-
-### T403. A/B a path and identifier dictionary in proxy requests
-
-Promoted from I-110 (Ivan, 2026-10-04). From `research.md` §16.3 #8: repeated long paths and identifiers could be replaced with short codes plus one legend per request. It may cost answer quality and must not break the prompt cache.
-
-Done means: first measure, from stored requests, how many bytes repeated paths and identifiers take (§16 row). If above 1 % of input, build it behind a proxy flag (off by default) with a byte-stable legend (cache-safe) and run an A/B on the bench set with a pass-rate gate; the flag turns on only if pass rate holds and tokens fall.
-
-Check: the dated measurement row; if built, the A/B row and a byte-stability test for the legend.
-
-Execution plan (2026-10-08): (1) the creator's db holds no proxy `call_io` rows, so measure on the transcripts, which carry the message array the proxy forwards: add a `dictionary` row to `rtok stats` in a new `src/measure/dictionary.rs` (repeated long paths and identifiers in tool results and tool inputs, checkpointed per request, reset at compaction; gross repeated bytes and net saving after a legend) with a unit test; (2) run it on the last 30 days and record one dated row in `research.md` §16 (aggregates only); (3) if net saving is above 1 % of input, build the proxy flag with a byte-stable legend and a byte-stability test, A/B left open for the creator's session; otherwise close with the number.
-
-Status (2026-10-08): measured and recorded in `research.md` §16.7: 0.44 % cache-safe saving (2.05 % repeated-bytes ceiling) of billed input, under the 1 % gate, so the dictionary is not built. The `dictionary` row of `rtok stats` stays as the reusable measurement. Closes on the creator's word; the A/B was never needed.
 
 ### T404. Evaluate a local draft model that the cloud model only verifies
 
