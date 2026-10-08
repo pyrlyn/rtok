@@ -115,3 +115,4 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T441.7. GitHub adapter
 - T441.8. GitLab adapter
+- T452. Recall notes linked to a file the prompt names, without a text match
