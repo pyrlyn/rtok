@@ -517,6 +517,33 @@ impl Query for SearchNotes {
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}
 
+/// FTS5 `MATCH` / `bm25` over `observations` (T454) — same gap as [`SearchNotes`].
+#[derive(QueryId)]
+pub(crate) struct SearchObservations {
+    pub query: String,
+    pub limit: i32,
+}
+
+impl QueryFragment<Sqlite> for SearchObservations {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql(
+            "SELECT o.id, o.title, substr(o.narrative, 1, 120) \
+             FROM observations_fts f JOIN observations o ON o.id = f.rowid \
+             WHERE observations_fts MATCH ",
+        );
+        out.push_bind_param::<Text, _>(&self.query)?;
+        out.push_sql(" AND o.retired IS NULL ORDER BY bm25(observations_fts) LIMIT ");
+        out.push_bind_param::<Integer, _>(&self.limit)?;
+        Ok(())
+    }
+}
+
+impl Query for SearchObservations {
+    type SqlType = (Integer, Text, Text);
+}
+
+impl RunQueryDsl<SqliteConnection> for SearchObservations {}
+
 /// `COUNT() OVER` and `ROW_NUMBER() OVER` — no window functions in Diesel 2.3's typed DSL.
 #[derive(QueryId)]
 pub(crate) struct UsageCtt;

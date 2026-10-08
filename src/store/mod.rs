@@ -24,6 +24,7 @@ mod sql_ext;
 mod symbols;
 // T329.1: the graph project registry.
 mod note_files;
+mod observations;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
@@ -4820,11 +4821,16 @@ mod tests {
     // `table!` models neither) defaults/indexes/triggers via a golden `sqlite_master` dump.
     /// A migrated table with no `table!` macro, and why.
     const RAW_SQL_TABLES: &[&str] = &[
-        "notes_fts",                  // 0001: FTS5 virtual table, MATCH/bm25 in sql_ext (T163.3)
-        "notes_fts_data",             // FTS5 shadow table for notes_fts
-        "notes_fts_idx",              // FTS5 shadow table for notes_fts
-        "notes_fts_docsize",          // FTS5 shadow table for notes_fts
-        "notes_fts_config",           // FTS5 shadow table for notes_fts
+        "notes_fts",         // 0001: FTS5 virtual table, MATCH/bm25 in sql_ext (T163.3)
+        "notes_fts_data",    // FTS5 shadow table for notes_fts
+        "notes_fts_idx",     // FTS5 shadow table for notes_fts
+        "notes_fts_docsize", // FTS5 shadow table for notes_fts
+        "notes_fts_config",  // FTS5 shadow table for notes_fts
+        "observations_fts",  // 0034 (T454): FTS5 over observation title+narrative
+        "observations_fts_data",
+        "observations_fts_idx",
+        "observations_fts_docsize",
+        "observations_fts_config",
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 

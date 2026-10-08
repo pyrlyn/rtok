@@ -350,6 +350,28 @@ pub trait Notes {
     ) -> Result<Vec<NoteHit>> {
         Ok(Vec::new())
     }
+
+    /// Insert a scrubbed synthetic PostToolUse observation (T454). Default `Ok(0)` fails open
+    /// for a host that does not keep observations.
+    #[allow(clippy::too_many_arguments)]
+    fn insert_observation(
+        &self,
+        _project: Option<&str>,
+        _kind: &str,
+        _title: &str,
+        _narrative: &str,
+        _files: &[String],
+        _archive_id: Option<&str>,
+        _importance: i32,
+        _confidence: f64,
+    ) -> Result<i32> {
+        Ok(0)
+    }
+
+    /// FTS5 search over synthetic observations (T454). Default `Ok(Vec::new())`.
+    fn search_observations(&self, _query: &str, _limit: u32) -> Result<Vec<NoteHit>> {
+        Ok(Vec::new())
+    }
 }
 
 /// Per-session memory of what has already been read, so the same file is not sent twice.

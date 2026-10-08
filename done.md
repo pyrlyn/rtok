@@ -1,5 +1,19 @@
 # rtok — completed tasks
 
+### T454. Synthetic PostToolUse observations (scrub + archive pointer)
+
+Port agentmemory v0.9.30's zero-LLM observation path into `memory`: on `PostToolUse`, build a scrubbed synthetic narrative (≤400 chars), archive the full tool output for `rtok expand <id>`, and store an `observations` row. No new MCP tools; no LLM on the hook path; fail open ≤10 ms. Titles-only recall of observations is a later card.
+
+Plan: `scrub.rs` (`strip_private` from agentmemory `privacy.ts`), `observe.rs` (`inferType` / `extractFiles` / narrative from `compress-synthetic.ts`), migration `0034_observations` + FTS5, `Store::insert_observation` / `search_observations`, wire `Memory::post_tool`.
+
+Check: scrub unit tests (private tag, PEM, URL userinfo, key-shaped tokens); a PostToolUse fixture inserts one observation whose narrative is scrubbed and whose `archive_id` expands to the raw output; FTS search hits the title; `just check`.
+
+Result (2026-10-08, Cursor / composer): `observations` table + FTS5 (migration 0034); `scrub::strip_private` and `observe::build_synthetic` / `record` on `Memory::post_tool`; store insert/search; SDK `Notes::insert_observation` / `search_observations` defaults fail open. MCP tool list unchanged. `just check` green (2980 passed).
+
+Status: done 2026-10-08
+
+Model: Cursor / composer
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

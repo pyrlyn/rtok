@@ -9,6 +9,8 @@ if split out per T2.5.
 
 **Invariants**
 - No LLM calls. Notes are written by the agent through `mem_save` or extracted mechanically.
+- Observations (T454) are synthetic: a scrubbed ≤400-char narrative from PostToolUse, never a
+  raw tool dump. Full output stays in `archive` and is fetched with `rtok expand <id>`.
 - `mem_save` is an upsert on `(project, kind, title)` — the title is the topic key (T66.1).
   The `notes_topic` UNIQUE index enforces one row per key at the database level (T209):
   checkpoints (`checkpoint.rs`) and the SDK's `insert_note` both upsert now too (newest

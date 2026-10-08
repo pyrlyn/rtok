@@ -8,13 +8,15 @@ pub mod export;
 mod files;
 pub mod handoff;
 pub mod import;
+mod observe;
+mod scrub;
 pub mod status;
 pub mod sync;
 
 pub use crate::project::project_name;
 
 use rtok_plugin_sdk::{
-    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PromptSubmit,
+    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PostToolUse, PromptSubmit,
     SessionStart, SubagentStart, Surface, ToolDef,
 };
 use serde_json::json;
@@ -73,6 +75,13 @@ impl Plugin for Memory {
 
     fn session_start(&self, _ev: &SessionStart, cx: &Ctx) -> Option<Injection> {
         recall(cx)
+    }
+
+    fn post_tool(&self, ev: &PostToolUse, cx: &Ctx) -> Option<String> {
+        // T454: scrubbed synthetic observation + archive pointer. Adds no context (D2);
+        // fail open — observe::record swallows store errors.
+        observe::record(ev, cx);
+        None
     }
 
     fn prompt_submit(&self, ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
@@ -428,6 +437,47 @@ mod tests {
             text.contains("1 x"),
             "the entry is shortened, not lost: {text}"
         );
+    }
+
+    /// T454: PostToolUse stores a scrubbed synthetic observation; full output is archived.
+    #[test]
+    fn post_tool_stores_a_scrubbed_observation_with_archive() {
+        use serde_json::json;
+        let cx = crate::plugin::Runtime::in_memory("t454-observe").unwrap();
+        let secret = "sk-ant-abcdefghijklmnopqrstuvwxyz012345";
+        let body = format!("ok {secret}");
+        let input = json!({"file_path": "src/a.rs"});
+        let response = json!(&body);
+        let ev = PostToolUse {
+            tool_name: "Read",
+            tool_input: &input,
+            tool_response: &response,
+        };
+        assert!(Memory.post_tool(&ev, &Ctx::new(&cx)).is_none());
+        let hits = cx.store.search_observations("Read", 5).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].title, "Read");
+        assert!(
+            !hits[0].snippet.contains("sk-ant-"),
+            "narrative scrubbed: {}",
+            hits[0].snippet
+        );
+        assert!(
+            hits[0].snippet.contains("[REDACTED_SECRET]"),
+            "{}",
+            hits[0].snippet
+        );
+        let archive_id = cx
+            .store
+            .observation_archive_id(hits[0].id)
+            .unwrap()
+            .expect("archive kept");
+        let raw = cx
+            .store
+            .get_archive(&archive_id, Some(&cx.config.core.archive_dir))
+            .unwrap()
+            .unwrap();
+        assert_eq!(String::from_utf8(raw).unwrap(), body);
     }
 
     #[test]

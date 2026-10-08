@@ -508,6 +508,34 @@ impl Notes for Runtime {
     ) -> Result<Vec<NoteHit>> {
         self.store.notes_for_files(project, paths, limit)
     }
+
+    fn insert_observation(
+        &self,
+        project: Option<&str>,
+        kind: &str,
+        title: &str,
+        narrative: &str,
+        files: &[String],
+        archive_id: Option<&str>,
+        importance: i32,
+        confidence: f64,
+    ) -> Result<i32> {
+        self.store.insert_observation(
+            &self.session,
+            project,
+            kind,
+            title,
+            narrative,
+            files,
+            archive_id,
+            importance,
+            confidence,
+        )
+    }
+
+    fn search_observations(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        self.store.search_observations(query, limit)
+    }
 }
 
 impl ReadCache for Runtime {

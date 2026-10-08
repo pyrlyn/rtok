@@ -90,6 +90,27 @@ diesel::table! {
     }
 }
 
+// 0034 (T454): synthetic PostToolUse observations; narrative scrubbed, body in archive.
+diesel::table! {
+    observations (id) {
+        id -> Integer,
+        ts -> BigInt,
+        session -> Text,
+        project -> Nullable<Text>,
+        kind -> Text,
+        title -> Text,
+        narrative -> Text,
+        files -> Text,
+        archive_id -> Nullable<Text>,
+        importance -> Integer,
+        confidence -> Double,
+        uses -> Integer,
+        last_used -> Nullable<BigInt>,
+        retired -> Nullable<BigInt>,
+        pinned -> Integer,
+    }
+}
+
 diesel::table! {
     notes (id) {
         id -> Integer,
@@ -403,6 +424,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     notes,
     note_embeddings,
     note_files,
+    observations,
     usage,
     hosts,
     providers,
