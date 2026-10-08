@@ -364,6 +364,18 @@ impl Store {
         Ok(())
     }
 
+    /// When `id` was last seen, or `None` when the store has no such agent. A missing row is
+    /// what makes a claim stale (T442): the agent is not live on this machine.
+    pub fn agent_last_seen(&self, id: &str) -> Result<Option<i64>> {
+        let mut conn = self.lock()?;
+        agents::table
+            .filter(agents::id.eq(id))
+            .select(agents::last_seen)
+            .first::<i64>(&mut *conn)
+            .optional()
+            .map_err(Into::into)
+    }
+
     /// Test-only: place `last_seen` at an exact time, so a fixture can say "seen before the
     /// MCP process started" without sleeping.
     #[cfg(test)]

@@ -17,7 +17,15 @@ Tools (MCP, same shapes on the CLI with `--json`):
 - `task_get` (`rtok task show <id>`): one task with its description and subtasks.
 - `task_status` (`rtok task status <id> in-progress|done|closed`): without a status it only
   reads. Set `in-progress` when you start and `done` when it is finished and checked.
-- `task_next` (`rtok task next`): the lowest open task with no active subtask.
+- `task_next` (`rtok task next`): the first ready task. With no blockers, that is still the
+  lowest open task with no active subtask.
+- `task_ready` (`rtok task ready`): every task that can be claimed, highest priority first.
+- `task_claim` (`rtok task claim [id] --agent <id>`): claim a task, or the first ready one
+  when the id is omitted. Set it when you start. A second claim by you changes nothing.
+- `task_release` (`rtok task release <id>`): give it back. Only the holder, unless `--force`.
+- `task_dep` (`rtok task dep <id> <blocker>`): `id` waits until `blocker` is done. A cycle
+  is refused and nothing is written.
+- `task_priority` (`rtok task priority <id> <0-4>`): 0 is highest, 2 is the default.
 
 Run `rtok task init` once per project to choose the adapter (disk, GitHub or GitLab) and the id
 prefix; without it the defaults apply.
