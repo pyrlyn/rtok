@@ -103,7 +103,6 @@
 - T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-- T414.10. Table filters and sort in the URL
 - T414.11. Clickable KPIs and panels open the filtered page
 - T414.12. Live status: snapshot age and pause
 - T414.13. Δtok savings trend on Overview and Stats
