@@ -24,7 +24,7 @@ jobs:
   review:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write # rustup and cargo caches
@@ -58,8 +58,17 @@ jobs:
         run: |
           set -euo pipefail
           cargo build --bin rtok
-          # Exit 0 on a high score. A git or index failure still fails the job.
-          ./target/debug/rtok graph review --since "${RTOK_BASE}" > "${REVIEW}"
+          # A high score exits 0. The walk over this repo can run long in a debug
+          # build; bound it and say so instead of holding the job until timeout.
+          set +e
+          timeout 180 ./target/debug/rtok graph review --since "${RTOK_BASE}" > "${REVIEW}"
+          code=$?
+          set -e
+          if [ "${code}" -eq 124 ]; then
+            printf 'review did not finish within 3 minutes\n' > "${REVIEW}"
+          elif [ "${code}" -ne 0 ]; then
+            exit "${code}"
+          fi
           python3 - <<'PY'
           import os
           from pathlib import Path

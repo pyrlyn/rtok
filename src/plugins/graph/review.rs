@@ -568,7 +568,12 @@ diff --git a/gone.rs b/gone.rs
             fs::write(dir.join("tests/parse.rs"), test).unwrap();
         }
         git(&dir, &["init", "-q", "-b", "main"]);
-        git(&dir, &["add", "."]);
+        // The runtime's database lives in this directory. Adding it makes a later
+        // wal write look like a change (Windows keeps `rtok.db-wal` dirty).
+        git(&dir, &["add", "--", "lib.rs"]);
+        if test.is_some() {
+            git(&dir, &["add", "--", "tests/parse.rs"]);
+        }
         git(&dir, &["commit", "-q", "-m", "init"]);
         (cx, dir)
     }
