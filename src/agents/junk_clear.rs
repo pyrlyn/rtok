@@ -24,9 +24,9 @@ use crate::info::human_bytes;
 use crate::store::Store;
 use crate::worktree::list::{is_cache_dir, usage_until};
 
-/// What `--kind` takes today: rtok's own T182 junk, then the T330.3 and T330.5.1 kinds.
-/// `snapshots` is accepted and never clears anything: its class is `never`.
-pub const KINDS: [&str; 10] = [
+/// What `--kind` takes today: rtok's own T182 junk, then the T330.3, T330.5.1, T330.5.2 and
+/// T330.5.4 kinds. `snapshots` is accepted and never clears anything: its class is `never`.
+pub const KINDS: [&str; 14] = [
     "log",
     "archive",
     "cache",
@@ -35,8 +35,12 @@ pub const KINDS: [&str; 10] = [
     "build",
     "deps",
     "locks",
+    "backups",
     "swap",
     "snapshots",
+    "index",
+    "crash-dumps",
+    "sessions",
 ];
 
 /// Kinds a running agent may be writing right now. A §22 cache joins them; a tagged cache is
@@ -136,7 +140,7 @@ impl Cleared {
 /// The newest file mtime under `path` (T152's measure: a folder's own mtime is not use), inner
 /// `None` for a folder without files; `None` when the walk did not finish, so an unknown age
 /// never reads as old.
-fn newest(path: &Path) -> Option<Option<SystemTime>> {
+pub(super) fn newest(path: &Path) -> Option<Option<SystemTime>> {
     let meta = std::fs::symlink_metadata(path).ok()?;
     if !meta.is_dir() {
         return Some(meta.modified().ok());
@@ -302,7 +306,7 @@ fn discard(path: &Path, trash: bool) -> std::io::Result<()> {
 /// A cache keeps its top folder (an app may expect it) and its `CACHEDIR.TAG` (T330).
 fn remove(p: &Planned, trash: bool) -> std::io::Result<()> {
     let path = Path::new(&p.path);
-    if !matches!(p.kind, "cache" | "build") {
+    if !matches!(p.kind, "cache" | "build" | "index") {
         return discard(path, trash);
     }
     for e in std::fs::read_dir(path)? {
@@ -474,6 +478,7 @@ mod tests {
             total_bytes: 0,
             kinds: Vec::new(),
             items,
+            notes: Vec::new(),
             freed_default_bytes: 0,
             freed_review_bytes: 0,
         }
@@ -531,6 +536,7 @@ mod tests {
                 classed("logs", "review", &p("old.log"), SECTION_22),
                 classed("temp", "safe", &p("old.tmp"), EXTRA),
                 classed("logs", "review", &p("app.log"), EXTRA),
+                classed("backups", "review", &p("s.json.bak-1"), RTOK_OWN),
                 snap,
             ],
         )]);
@@ -548,13 +554,13 @@ mod tests {
             include_review: true,
             ..filter(&["claude"], &[])
         };
-        let all = ["old.log", "old.tmp", "app.log"];
+        let all = ["old.log", "old.tmp", "app.log", "s.json.bak-1"];
         assert_eq!(names(&review, &idle), all);
         let logs = names(&filter(&[], &["logs"]), &idle);
         assert_eq!(logs, ["old.log", "app.log"]);
         assert!(names(&filter(&[], &["snapshots"]), &idle).is_empty());
-        // Running: the §22 log and the `extra` paths stay.
-        assert!(names(&review, &|_| true).is_empty());
+        // Running: the §22 log and the `extra` paths stay, rtok's own backup does not.
+        assert_eq!(names(&review, &|_| true), ["s.json.bak-1"]);
     }
 
     #[test]

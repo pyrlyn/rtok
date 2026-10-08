@@ -29,7 +29,7 @@ pub const NOT_DOCUMENTED: &str =
     "not documented: not cleared (add to [agents.junk] extra to clear)";
 
 /// The evidence column of a find nothing documents.
-const NO_EVIDENCE: &str = "none";
+pub(super) const NO_EVIDENCE: &str = "none";
 
 /// How deep a walk for lock, swap and build leftovers goes: an agent folder is shallow, and a
 /// deep tree is a checkout, not state.
@@ -141,11 +141,28 @@ fn is_lock(name: &str, kind: &FileType) -> bool {
             || name.ends_with(".lock") && !PACKAGE_LOCKS.contains(&name))
 }
 
+/// A language server's folder and the journal files of a SQLite database. A journal beside a
+/// database that is still open is live data, and nothing here can tell which one is closed.
+fn is_index(name: &str, kind: &FileType) -> bool {
+    let journal = kind.is_file() && (name.ends_with("-wal") || name.ends_with("-shm"));
+    journal || (kind.is_dir() && name == ".rust-analyzer")
+}
+
+/// An editor's or a tool's copy of a file (`*.bak`, `*.bak-<ts>`, `*~`); rtok's own `_backup`
+/// generations are `junk_review::backup_items`, never walked here.
+fn is_backup(name: &str, kind: &FileType) -> bool {
+    kind.is_file() && (name.ends_with(".bak") || name.contains(".bak-") || name.ends_with('~'))
+}
+
 fn lock_or_swap(name: &str, kind: &FileType) -> Option<&'static str> {
     if is_swap(name, kind) {
         Some("swap")
     } else if is_lock(name, kind) {
         Some("locks")
+    } else if is_index(name, kind) {
+        Some("index")
+    } else if is_backup(name, kind) {
+        Some("backups")
     } else {
         None
     }
@@ -196,25 +213,38 @@ fn swap_reason(path: &Path) -> Option<String> {
     }
 }
 
-/// Lock and swap files under an agent's folders. None has D36 evidence, so each is kept: a
-/// live owner or a held lock says so, the rest read "not documented". Package-manager lockfiles
-/// are not junk and are not listed.
+/// Lock, swap and backup files and the file-based `index` leftovers under an agent's folders.
+/// None has D36 evidence, so each is kept: a live owner or a held lock says so, the rest read
+/// "not documented". Package-manager lockfiles are not junk and are not listed.
 pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
     let deadline = Instant::now() + limit;
+    let ours = |p: &Path| {
+        p.file_name()
+            .is_some_and(|n| n == rtok_agent_sdk::BACKUP_DIR)
+    };
     let finds = roots
         .iter()
-        .flat_map(|r| find(r, deadline, &|_| false, &lock_or_swap));
+        .flat_map(|r| find(r, deadline, &ours, &lock_or_swap));
     finds
         .map(|(path, kind)| {
             let reason = if kind == "swap" {
                 swap_reason(&path)
-            } else if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+            } else if kind == "locks" && std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file())
+            {
                 held_reason(&path)
             } else {
                 None
             };
             let kept = reason.unwrap_or_else(|| NOT_DOCUMENTED.into());
-            make_item(kind, &path, NO_EVIDENCE, Some(kept), limit)
+            let class = if kind == "index" || kind == "backups" {
+                "review"
+            } else {
+                "safe"
+            };
+            Item {
+                class,
+                ..make_item(kind, &path, NO_EVIDENCE, Some(kept), limit)
+            }
         })
         .collect()
 }
@@ -535,6 +565,24 @@ mod tests {
             Some(NOT_DOCUMENTED)
         );
         assert!(items.iter().all(|i| i.kind == "locks" && !i.counted()));
+    }
+
+    #[test]
+    fn backup_copies_are_listed_read_only_and_rtoks_own_backup_folder_is_not_walked() {
+        let root = tmp_dir("kinds-backups");
+        put(&root.join("notes.txt~"), b"x");
+        put(&root.join("a/settings.json.bak"), b"x");
+        put(&root.join("_backup/settings.json.bak-1"), b"x");
+
+        let items = found_items(std::slice::from_ref(&root), LIMIT);
+
+        assert_eq!(items.len(), 2, "{items:?}");
+        for i in &items {
+            assert_eq!(
+                (i.kind, i.class, i.kept.as_deref()),
+                ("backups", "review", Some(NOT_DOCUMENTED))
+            );
+        }
     }
 
     #[test]

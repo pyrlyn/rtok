@@ -134,6 +134,8 @@ antigravity = ["~/.gemini/antigravity"] # позначається як unsuppor
 [agents.junk]                         # rtok agents junk list|clear: межі віку, захищені шляхи, ваші власні шляхи для сміття
 keep_logs_days          = 30          # записи `logs` (задокументовані теки логів агентів), змінені за стільки днів, лишаються; 0-3650
 temp_min_age_hours      = 24          # записи `temp`, торкнуті за стільки годин, лишаються; 0-87600
+stale_session_days      = 30          # лише з `--kind sessions`: сесії, яких не торкалися довше за стільки днів, є сміттям, єдиний критерій тут час; 0-3650; `--session-days N` на один запуск
+crash_dump_min_age_days = 7           # дамп збою в теці `extra` з kind crash-dumps, старший за стільки днів, безпечно чистити, молодший іде як review; 0-3650
 exclude                 = []          # glob-и (~ = домашня тека), яких ніколи не чіпають, як і теки зі збігом, напр. ["~/.claude/debug/keep-*"]; хибний glob зберігає все
 extra                   = []          # шляхи, які ви визнаєте сміттям (D36), напр. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = id хоста або rtok
 
@@ -250,7 +252,7 @@ calibrate_samples = 30                # на клас          (--calibrate)
 baseline        = ""                  # типова назва для --compare; "" = немає
 price           = false               # показувати вартість у USD для кожної моделі (--price)
 # рядки USD за MTok для --price (T49.1). Джерела, отримано 2026-09-17 (Anthropic claude-fable-5-1,
-# claude-opus-5-5 і claude-sonnet-5-5: 2026-10-06):
+# claude-opus-5-5 і claude-sonnet-5-5: 2026-10-08):
 # Anthropic claude-* рядки: https://platform.claude.com/docs/en/about-claude/pricing
 # (вхід / запис у кеш на 5m / читання з кешу / вихід). OpenAI gpt-5 / gpt-5-mini:
 # https://platform.openai.com/docs/pricing (вхід із коротким контекстом / кешований вхід /
@@ -269,7 +271,7 @@ output = 20.0
 [stats.prices."claude-sonnet-5-5"]
 input = 2.0
 cache_write = 2.5
-cache_read = 0.2
+cache_read = 0.1
 output = 10.0
 [stats.prices."claude-sonnet-5"]
 input = 2.0
@@ -398,8 +400,8 @@ dir = "tasks"                         # один Markdown-файл на зада
 repo = ""                             # owner/name; порожньо: remote origin
 project = 0                           # номер Projects v2 власника репо: issues потрапляють у нього, поле Status слідує за задачею; 0 = лише issues
 
-[tasks.gitlab]
-url = "https://gitlab.com"            # базова URL; задайте для власного інстансу
+[tasks.gitlab]                        # мітки status::in-progress | status::done | status::wont-do; підзадача пов’язана з батьківською (relates_to)
+url = "https://gitlab.com"            # https базова URL; задайте для власного інстансу; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, інакше glab
 project = ""                          # group/name або числовий id; порожньо: remote origin
 
 [otel]                                # експорт OpenTelemetry (D19); вимкнено, доки не визначено endpoint
@@ -753,7 +755,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читає `RTOK_AGENT_ID` і `[worktree] root` (T411); власного ключа немає (`--json` — див. рядок «читання») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записуються в `.rtok.toml` цієї копії репозиторію (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного виклику (без ключа): яке завдання і які рядки показати; адаптер і префікс вибирає `[tasks]` |
-| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, `--bytes`, `--yes` | на один виклик (без ключа): що один запуск показує або видаляє; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.exclude`, `.extra` без прапорця |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | на один виклик (без ключа): що один запуск показує або видаляє; `--session-days` це `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.exclude`, `.extra` без прапорця |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а також `.dirs.<host>` без прапорця (`--unpriced` обирає вигляд одного виклику, `--json` — див. рядок «читання») |
 | `agents sessions` | `--all` | (дія: також перелічує завершені сесії; live чи idle визначає `agents.idle`) |
 | `agents show` | — | знаходить префікс id через сховище (T284); live чи idle визначає `agents.idle` (`--json` — див. рядок «читання») |

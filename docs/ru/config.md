@@ -133,8 +133,10 @@ antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Go
 [agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
 keep_logs_days          = 30          # `logs` entries (the agents' documented log folders) modified within this many days stay; 0-3650
 temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay; 0-87600
+stale_session_days      = 30          # `--kind sessions` only: sessions not touched for more than this many days are junk, time is the only criterion; 0-3650; `--session-days N` for one run
+crash_dump_min_age_days = 7           # a crash dump in an `extra` crash-dumps folder older than this many days is safe to clear, a younger one is review; 0-3650
 exclude                 = []          # globs (~ = home) never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]; a bad glob keeps everything
-extra                   = []          # paths you vouch for as junk (D36), e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = a host id or rtok
+extra                   = []          # paths you vouch for as junk (D36), e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs | crash-dumps; host = a host id or rtok
 
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
@@ -249,7 +251,7 @@ calibrate_samples = 30                # per class        (--calibrate)
 baseline        = ""                  # default name for --compare; "" = none
 price           = false               # show per-model USD costs (--price)
 # USD per MTok rows for --price (T49.1). Sources, fetched 2026-09-17 (Anthropic claude-fable-5-1,
-# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-06):
+# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-08):
 # Anthropic claude-* rows: https://platform.claude.com/docs/en/about-claude/pricing
 # (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 # https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -268,7 +270,7 @@ output = 20.0
 [stats.prices."claude-sonnet-5-5"]
 input = 2.0
 cache_write = 2.5
-cache_read = 0.2
+cache_read = 0.1
 output = 10.0
 [stats.prices."claude-sonnet-5"]
 input = 2.0
@@ -397,8 +399,8 @@ dir = "tasks"                         # один Markdown-файл на зада
 repo = ""                             # owner/name; пусто: remote origin
 project = 0                           # номер Projects v2 владельца репо: issues попадают в него, поле Status следует за задачей; 0 = только issues
 
-[tasks.gitlab]
-url = "https://gitlab.com"            # базовый URL; задайте для своего инстанса
+[tasks.gitlab]                        # метки status::in-progress | status::done | status::wont-do; подзадача связана с родителем (relates_to)
+url = "https://gitlab.com"            # https базовый URL; задайте для своего инстанса; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, иначе glab
 project = ""                          # group/name или числовой id; пусто: remote origin
 
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
@@ -751,7 +753,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
-| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, `--bytes`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.exclude`, `.extra` без флага |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `--session-days` это `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.exclude`, `.extra` без флага |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |
 | `agents sessions` | `--all` | (действие: также перечисляет завершённые сессии; live или idle — по `agents.idle`) |
 | `agents show` | — | разрешает префикс id через хранилище (T284); live или idle — по `agents.idle` (`--json` — строка «чтение») |

@@ -8,6 +8,7 @@ import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
+import { ShareBar } from "../ui/Marks";
 import { Pill } from "../ui/Pill";
 import { compact, fmt } from "./format";
 import { responsive, useMinWidth, WithSnapshot } from "./parts";
@@ -205,15 +206,14 @@ function Report({ r }: { r: UsageReport }) {
                 header: "share",
                 width: "96px",
                 cell: (p) => (
-                    <div
-                        aria-hidden="true"
-                        className="h-1.5 overflow-hidden rounded-full bg-surface-3"
-                    >
-                        <div
-                            className="h-full rounded-full bg-accent-fg"
-                            style={{ width: `${((p.tokens / maxPeriod) * 100).toFixed(1)}%` }}
-                        />
-                    </div>
+                    <ShareBar
+                        title={p.period}
+                        share={p.tokens / maxPeriod}
+                        rows={[
+                            ["tokens", fmt(p.tokens)],
+                            ["of the busiest period", pct(p.tokens / maxPeriod)],
+                        ]}
+                    />
                 ),
             },
         ],
@@ -226,7 +226,7 @@ function Report({ r }: { r: UsageReport }) {
             <p className="text-2xs text-fg-subtle">
                 {sources[r.source as keyof typeof sources] ?? r.source} · up to {r.through} ({r.tz})
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                 <Kpi
                     label="tokens"
                     value={compact(t.tokens)}
@@ -248,7 +248,7 @@ function Report({ r }: { r: UsageReport }) {
                     <Kpi
                         label="rtok saved"
                         value={compact(t.saved_tokens)}
-                        tone="ok"
+                        tone="saved"
                         sub={
                             t.saved_usd == null
                                 ? "no price for an estimate"
@@ -258,7 +258,11 @@ function Report({ r }: { r: UsageReport }) {
                 )}
             </div>
             {incomplete && (
-                <Panel title="cost is incomplete" hint="rtok agents usage --unpriced">
+                <Panel
+                    title="cost is incomplete"
+                    hint="rtok agents usage --unpriced"
+                    className="border-warn/50"
+                >
                     <p role="alert" className="text-xs text-warn-fg">
                         {r.unpriced_models === 1
                             ? "1 model has"
@@ -286,7 +290,10 @@ function Report({ r }: { r: UsageReport }) {
                     </ul>
                 </Panel>
             )}
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            {/* Six fixed-width columns leave a half-width panel no room for the label before 2xl. */}
+            <div
+                className={`grid grid-cols-1 gap-3 ${lineFull.length > 4 ? "2xl:grid-cols-2" : "xl:grid-cols-2"}`}
+            >
                 <Panel title={byModel ? "per model" : "per agent"} hint="agents usage">
                     <DataTable
                         label={byModel ? "usage per model" : "usage per agent"}

@@ -48,6 +48,11 @@ pub fn issue_title(id: &TaskId, title: &str) -> String {
     format!("{id}. {}", title.trim())
 }
 
+/// The id an issue title still starts with (`R12. Ship it`), for an issue whose label is gone.
+pub fn title_id(title: &str) -> Option<TaskId> {
+    title.split_once(". ")?.0.trim().parse().ok()
+}
+
 /// The task title back from an issue title; one edited by hand keeps whatever it says.
 pub fn task_title(id: &TaskId, title: &str) -> String {
     let lead = format!("{id}. ");
@@ -55,6 +60,17 @@ pub fn task_title(id: &TaskId, title: &str) -> String {
         Some(head) if head.eq_ignore_ascii_case(&lead) => title[lead.len()..].trim().to_string(),
         _ => title.trim().to_string(),
     }
+}
+
+/// Unix seconds of an API timestamp (RFC 3339 on both providers); 0 when it does not parse.
+pub fn secs(ts: &str) -> i64 {
+    ts.parse::<jiff::Timestamp>().map_or(0, |t| t.as_second())
+}
+
+/// The highest of `ids` with `prefix`, any case: `max_id` over the issues a provider listed.
+pub fn max_with_prefix(ids: impl IntoIterator<Item = TaskId>, prefix: &str) -> Option<TaskId> {
+    let prefix = prefix.to_ascii_uppercase();
+    ids.into_iter().filter(|id| id.prefix() == prefix).max()
 }
 
 /// The first non-empty variable of `vars`, else the trimmed output of the `cli` command

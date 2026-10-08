@@ -589,6 +589,12 @@ enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Raise the id counters to the adapter's highest ids and report drift; never writes the adapter
+    Sync {
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
     /// Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
     Init {
         /// disk, github or gitlab (default: disk, or what the file already says)
@@ -648,7 +654,8 @@ enum WorktreeCmd {
         json: bool,
     },
     /// Remove your own finished worktree: unlock, `git worktree remove`, delete the branch
-    /// when merged, release the claim; refuses dirty, foreign-locked or current worktrees
+    /// when merged, release the claim; refuses dirty or current worktrees, and a foreign lock
+    /// unless the task is finished (merged, clean, with commits of its own)
     Remove {
         /// The worktree's path, or its task id (the lock's task or the branch `<task>[-<slug>]`)
         target: String,
@@ -1013,6 +1020,9 @@ enum JunkCmd {
         /// Also the hosts that are not installed
         #[arg(long)]
         all: bool,
+        /// Sessions untouched for more than this many days are old, for this run only
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=3650))]
+        session_days: Option<u32>,
     },
     /// List what `agents junk clear` would remove; `--yes` applies it
     ///
@@ -1037,6 +1047,9 @@ enum JunkCmd {
         /// Only items not modified for this long (`7d`, `12h`)
         #[arg(long, value_name = "AGE", value_parser = humantime::parse_duration)]
         older_than: Option<std::time::Duration>,
+        /// Sessions untouched for more than this many days are old, for this run only
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=3650))]
+        session_days: Option<u32>,
         /// Move to the OS trash instead of deleting
         #[arg(long)]
         trash: bool,
@@ -1672,7 +1685,7 @@ pub fn run() -> Result<()> {
         } => {
             use crate::worktree::gc;
             use anyhow::Context as _;
-            // T285: a live agent's worktree is never removed; no store, no live agents.
+            // T285: a live agent's worktree is never removed unless its task is finished (T453); no store, no live agents.
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let live = crate::store::Store::open(&cfg.core.db_path)
                 .and_then(|s| s.live_agents(&cfg.agents.idle))
@@ -1889,9 +1902,16 @@ pub fn run() -> Result<()> {
                 }
             }
             AgentCmd::Junk {
-                action: JunkCmd::List { json, bytes, all },
+                action:
+                    JunkCmd::List {
+                        json,
+                        bytes,
+                        all,
+                        session_days,
+                    },
             } => {
-                let cfg = Config::load_with(config_file.as_deref(), None)?;
+                let cfg =
+                    Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
                 let report = crate::agents::junk::report_with(
                     &cfg,
                     &crate::agents::junk_map::Roots::from_env(),
@@ -1917,10 +1937,12 @@ pub fn run() -> Result<()> {
                         kinds,
                         include,
                         older_than,
+                        session_days,
                         trash,
                     },
             } => {
-                let cfg = Config::load_with(config_file.as_deref(), None)?;
+                let cfg =
+                    Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
                 let filter = crate::agents::junk_clear::Filter {
                     agents,
                     kinds,
@@ -2615,6 +2637,14 @@ fn usage_flags<const N: usize>(given: [(&str, Option<String>); N]) -> Option<fig
     Some(flags)
 }
 
+/// `--session-days N` as the flag layer of `agents.junk.stale_session_days`.
+fn session_days_flag(days: Option<u32>) -> Option<figment::value::Dict> {
+    use figment::value::{Dict, Value};
+    let junk = Dict::from([("stale_session_days".to_string(), Value::from(days?))]);
+    let agents = Dict::from([("junk".to_string(), Value::from(junk))]);
+    Some(Dict::from([("agents".to_string(), Value::from(agents))]))
+}
+
 fn bench_flags(
     tasks: Option<std::path::PathBuf>,
     runs: Option<u32>,
@@ -3145,6 +3175,15 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
                 print_json(&task)?;
             } else {
                 println!("{}: {}", task.id, task.status);
+            }
+        }
+        TaskCmd::Sync { json } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let report = crate::tasks::sync::sync(&open()?, &store)?;
+            if json {
+                print_json(&report)?;
+            } else {
+                print!("{}", crate::tasks::sync::text(&report));
             }
         }
         TaskCmd::Next { json } => {

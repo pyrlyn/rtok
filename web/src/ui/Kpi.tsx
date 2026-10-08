@@ -6,7 +6,14 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { HoverSub, Scoped, type Readout } from "../charts/Readout";
 
-const tones = { default: "", ok: "text-success-fg", warn: "text-warn-fg", fail: "text-delta-fg" };
+const tones = {
+    default: "",
+    ok: "text-success-fg",
+    warn: "text-warn-fg",
+    fail: "text-delta-fg",
+    // Δ is the brand's measured cut; the same coral as the hero, the trend chart and the share bars.
+    saved: "text-delta-fg",
+};
 
 export function Kpi({
     label,

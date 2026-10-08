@@ -389,3 +389,104 @@ fn review_logs_need_the_flag_and_follow_keep_logs_days() {
     assert!(!debug.join("old.log").exists() && !debug.join("new.log").exists());
     assert!(debug.is_dir(), "the log folder itself stays");
 }
+
+/// T330.5.2: a Claude Code session past `stale_session_days` is junk only for `--kind sessions`
+/// (never by default nor with `--include review`), goes with its restore points, leaves the
+/// project's memory alone, and `--session-days` or the config key moves the line.
+#[test]
+fn sessions_need_kind_sessions_and_follow_the_threshold() {
+    let c = Clear::new("clear-sessions");
+    common::agents::fake_hosts(&c.home);
+    let id = "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0";
+    let transcript = c.home.join(format!(".claude/projects/p/{id}.jsonl"));
+    let history = c.home.join(format!(".claude/file-history/{id}/f@v1"));
+    let memory = c.home.join(".claude/projects/p/memory/MEMORY.md");
+    for p in [&transcript, &history, &memory] {
+        write(p, 10);
+        age(p, 31 * 86_400);
+    }
+    let planned = |args: &[&str]| -> usize {
+        let (code, plan) = c.json(args);
+        assert_eq!(code, 0, "{plan}");
+        let items = plan["items"].as_array().unwrap().iter();
+        let sessions = items.filter(|i| i["action"] == "clear" && i["kind"] == "sessions");
+        sessions.count()
+    };
+
+    assert_eq!(planned(&["--agent", "claude", "--json"]), 0);
+    assert_eq!(
+        planned(&["--agent", "claude", "--include", "review", "--json"]),
+        0
+    );
+    let by_kind = ["--agent", "claude", "--kind", "sessions"];
+    assert_eq!(planned(&[&by_kind[..], &["--json"]].concat()), 2);
+    assert_eq!(
+        planned(&[&by_kind[..], &["--session-days", "60", "--json"]].concat()),
+        0
+    );
+
+    let list = rtok(&["agents", "junk", "list"], &c.home);
+    assert!(
+        list.contains("old sessions: not touched for more than 30 days"),
+        "{list}"
+    );
+    assert!(list.contains("cleanupPeriodDays = 30 (default)"), "{list}");
+
+    fs::write(
+        c.home.join("config.toml"),
+        "[agents.junk]\nstale_session_days = 60\n",
+    )
+    .unwrap();
+    assert_eq!(planned(&[&by_kind[..], &["--json"]].concat()), 0);
+    fs::write(
+        c.home.join("config.toml"),
+        "[agents.junk]\nstale_session_days = 30\n",
+    )
+    .unwrap();
+
+    let (code, done) = c.json(&[&by_kind[..], &["--yes", "--json"]].concat());
+    assert_eq!(code, 0, "{done}");
+    assert!(!transcript.exists() && !history.exists());
+    assert!(memory.is_file(), "the host's memory is never a session");
+}
+
+/// T330.5.2: an `extra` crash folder clears only dumps past `crash_dump_min_age_days` by default;
+/// a younger one needs `--kind crash-dumps`.
+#[test]
+fn an_extra_crash_folder_clears_only_old_dumps_unless_named() {
+    let c = Clear::new("clear-crash");
+    common::agents::fake_hosts(&c.home);
+    let dumps = c.home.join("dumps");
+    write(&dumps.join("old.dmp"), 10);
+    write(&dumps.join("young.dmp"), 10);
+    age(&dumps.join("old.dmp"), 10 * 86_400);
+    age(&dumps.join("young.dmp"), 2 * 86_400);
+    let extra = format!(
+        "[[agents.junk.extra]]\nhost = \"cursor\"\nkind = \"crash-dumps\"\npath = '{}'\n",
+        dumps.display()
+    );
+    fs::write(c.home.join("config.toml"), extra).unwrap();
+    let planned = |args: &[&str]| -> Vec<String> {
+        let (code, plan) = c.json(args);
+        assert_eq!(code, 0, "{plan}");
+        let items = plan["items"].as_array().unwrap().iter();
+        let found = items.filter(|i| i["kind"] == "crash-dumps" && i["action"] == "clear");
+        let mut names: Vec<String> = found
+            .map(|i| {
+                i["path"]
+                    .as_str()
+                    .unwrap()
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap()
+                    .into()
+            })
+            .collect();
+        names.sort();
+        names
+    };
+
+    assert_eq!(planned(&["--agent", "cursor", "--json"]), ["old.dmp"]);
+    let named = ["--agent", "cursor", "--kind", "crash-dumps", "--json"];
+    assert_eq!(planned(&named), ["old.dmp", "young.dmp"]);
+}

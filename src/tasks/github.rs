@@ -16,9 +16,11 @@ use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::adapter::{Filter, Taken, TaskAdapter};
+use super::adapter::{Filter, Stray, Taken, TaskAdapter};
 use super::github_project::ProjectSync;
-use super::remote::{Http, LABEL, id_label, issue_title, label_id, task_title};
+use super::remote::{
+    Http, LABEL, id_label, issue_title, label_id, max_with_prefix, secs, task_title, title_id,
+};
 use super::{ExternalRef, NewTask, Status, Task, TaskId};
 
 /// The public GitHub REST API.
@@ -91,10 +93,6 @@ impl Issue {
             id,
         })
     }
-}
-
-fn secs(ts: &str) -> i64 {
-    ts.parse::<jiff::Timestamp>().map_or(0, |t| t.as_second())
 }
 
 /// `[tasks.github] repo`, else the `owner/name` of a `github.com` origin (`key` is
@@ -282,13 +280,24 @@ impl TaskAdapter for GithubAdapter {
     }
 
     fn max_id(&self, prefix: &str) -> Result<Option<TaskId>> {
-        let prefix = prefix.to_ascii_uppercase();
+        let issues = self.issues(LABEL, "all")?;
+        Ok(max_with_prefix(
+            issues.iter().filter_map(Issue::task_id),
+            prefix,
+        ))
+    }
+
+    fn unlabelled(&self) -> Result<Vec<Stray>> {
         Ok(self
             .issues(LABEL, "all")?
-            .iter()
-            .filter_map(Issue::task_id)
-            .filter(|id| id.prefix() == prefix)
-            .max())
+            .into_iter()
+            .filter(|i| i.task_id().is_none())
+            .map(|i| Stray {
+                id: title_id(&i.title),
+                title: i.title,
+                url: i.html_url,
+            })
+            .collect())
     }
 }
 

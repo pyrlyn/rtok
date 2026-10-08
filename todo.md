@@ -30,9 +30,7 @@
 - T329.21. Project badges in the graph page lists
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
-- T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
 - T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
-- T330.5.4. Junk: the `backups` kind
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
 - T331.10. Doctor: rtok's own MCP entry in the duplicate check
@@ -84,8 +82,6 @@
 - T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
-- T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
 - T416.1. rtok renders previews through `change-preview`
@@ -96,5 +92,3 @@
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T441.12. `rtok task sync`
-- T441.8. GitLab adapter

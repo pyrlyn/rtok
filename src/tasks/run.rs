@@ -14,6 +14,7 @@ use serde::Serialize;
 use super::adapter::{Filter, Taken, TaskAdapter, set_status};
 use super::disk::DiskAdapter;
 use super::github::{self, GithubAdapter};
+use super::gitlab::{self, GitlabAdapter};
 use super::remote;
 use super::{NewTask, Status, Task, TaskId, check_prefix, resolve_prefix};
 use crate::config::layers::git_root;
@@ -66,9 +67,22 @@ impl Project {
                         .with_project(cfg.github.project.into()),
                 )
             }
-            "gitlab" => bail!(
-                "rtok task: the gitlab adapter is not built yet (T441.8); set [tasks] adapter = \"disk\" or \"github\""
-            ),
+            "gitlab" => {
+                let instance = gitlab::instance(&cfg.gitlab.url)?;
+                let project = gitlab::project(&cfg.gitlab.project, &instance, &key)?;
+                let host = instance.host_str().unwrap_or_default();
+                let token = remote::token(
+                    "gitlab",
+                    &["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "GL_TOKEN"],
+                    &["glab", "config", "get", "token", "--host", host],
+                )?;
+                Box::new(GitlabAdapter::new(
+                    &gitlab::api_base(&instance),
+                    &project,
+                    &token,
+                    remote::WRITE_GAP,
+                )?)
+            }
             other => bail!("rtok task: unknown [tasks] adapter {other:?}"),
         };
         Ok(Self::with_adapter(key, root, prefix, adapter))
@@ -344,14 +358,21 @@ mod tests {
     }
 
     #[test]
-    fn remote_adapters_say_they_are_not_built_yet() {
+    fn gitlab_needs_an_origin_on_its_host_and_an_https_url() {
         let dir = checkout("remote");
-        let cfg = crate::config::Tasks {
+        let mut cfg = crate::config::Tasks {
             adapter: "gitlab".into(),
             ..crate::config::Tasks::default()
         };
+        // Both fail before any token lookup or request.
         let err = Project::open(&cfg, &dir).err().unwrap();
-        assert!(err.to_string().contains("not built yet"), "{err}");
+        assert!(
+            err.to_string().contains("set [tasks.gitlab] project"),
+            "{err}"
+        );
+        cfg.gitlab.url = "http://gitlab.example.com".into();
+        let err = Project::open(&cfg, &dir).err().unwrap();
+        assert!(err.to_string().contains("https://"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

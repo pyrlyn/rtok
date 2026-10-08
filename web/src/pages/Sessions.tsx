@@ -10,6 +10,7 @@ import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
 import { Switch } from "../ui/Switch";
 import { orUnknown } from "../ui/Unknown";
+import { DetailHint } from "./DetailHint";
 import { ago, compact, hms, iso, nowSecs } from "./format";
 import { why } from "./missing";
 import { matchesSession } from "./model";
@@ -153,7 +154,13 @@ function SessionsBody({ snap }: { snap: Snapshot }) {
                         />
                     </Panel>
                 }
-                detail={selected && <Detail session={selected} snap={snap} />}
+                detail={
+                    selected ? (
+                        <Detail session={selected} snap={snap} />
+                    ) : (
+                        <DetailHint what="session" />
+                    )
+                }
             />
         </div>
     );
