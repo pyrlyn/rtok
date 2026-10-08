@@ -10,7 +10,7 @@ mod common;
 
 use clap::CommandFactory;
 use common::agents::{rtok, tmp, write_cfg};
-use rtok::agents::skill::SKILLS;
+use rtok::agents::skill::{SKILL_DESC_MAX, SKILLS};
 use rtok::cli::Cli;
 use std::fs;
 use std::path::PathBuf;
@@ -41,7 +41,7 @@ fn every_skill_description_is_at_most_120_chars() {
         let (front, _) = split_frontmatter(&content);
         let desc = description(front);
         assert!(
-            desc.chars().count() <= 120,
+            desc.chars().count() <= SKILL_DESC_MAX,
             "{name}: description is {} chars: {desc}",
             desc.chars().count()
         );

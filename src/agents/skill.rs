@@ -18,6 +18,10 @@ use super::{apply, home_dir, skill_src};
 /// Every name but the hub `rtok` starts with `rtok-` so it cannot collide with a user's skill (T380).
 pub const SKILLS: &[&str] = &["rtok", "rtok-worktrees"];
 
+/// Longest `description:` a skill listing should carry (`research.md` §10.4): the listing rides
+/// every request, so rtok's own skills stay under it and `doctor` flags the rest against it.
+pub const SKILL_DESC_MAX: usize = 120;
+
 /// Unprefixed install from before T380. Retired on install only when the marker or a byte copy
 /// already proves it ours; a foreign directory or symlink keeps its name and is reported once.
 const LEGACY_SKILL: &str = "worktrees";

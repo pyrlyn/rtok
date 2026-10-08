@@ -537,7 +537,8 @@ agents
     proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
     plugin  not installed (--yes)
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
-  dry-refactoring project desc 154c body 2772B calls - WARN never invoked
+  descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
+  dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked
 config
   note tests/trycmd/input/json-readers.toml:2: stats.transcripts_dir = "tests/trycmd/input/stats-price-tx" (default ~/.claude/projects)
 ```
