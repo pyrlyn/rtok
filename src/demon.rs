@@ -196,7 +196,7 @@ pub fn start(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> Res
             .spawn()
             .with_context(|| format!("spawn supervisor for {service}"))?;
         let started = format!("{service} started (supervisor {})", child.id());
-        println!("{}", style::success(&started));
+        println!("{}", style::success_op("start", &started));
     }
     Ok(())
 }
@@ -229,7 +229,10 @@ pub fn stop(cfg: &Config, named: &[Service], force: bool) -> Result<()> {
             rtok_sys::process_kill(st.child);
         }
         let _ = fs::remove_file(file(cfg, service, "json"));
-        println!("{}", style::success(&format!("{service} stopped")));
+        println!(
+            "{}",
+            style::success_op("stop", &format!("{service} stopped"))
+        );
     }
     Ok(())
 }

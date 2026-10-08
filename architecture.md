@@ -157,6 +157,7 @@ migration is forbidden; add the next directory.
 |-------|-----------|---------|
 | `hosts`, `providers`, `models`, `sessions` | `Store` upsert | every `calls` row |
 | `calls` + `call_io` | dispatcher, mcp, proxy | `rtok stats`, doctor |
+| `hook_sessions` | dispatcher: a hook stdin's session fields, once per distinct set (not with `store_raw`) | `call_io` readers, which splice them back into the body |
 | `tokens` | same surfaces (`before`/`after`/`mcp`) | `rtok stats --plugin <id>` |
 | `logs` | core + plugins via `Ctx::log` | doctor, debug |
 | `events` | (superseded; 0001 leftover) | — |
@@ -164,6 +165,7 @@ migration is forbidden; add the next directory.
 | `archive` | `cmd`, `read`, `archive`, `call_io` spill | `rtok expand`, `guard` |
 | `read_cache` | `read` | `read` (dedup) |
 | `notes` + `notes_fts` | `memory` | `memory` |
+| `note_files` | `memory` (`mem_save`, `remember:`: files the body names, the checkpoint's paths; T374) | `memory` prompt recall (RRF boost for files the session read or the prompt names) |
 | `usage` | `proxy` (optional `call_id`) | `measure` |
 
 Raw payloads live on disk under `archive_dir/<id>`; the DB holds size, sha256 and path.

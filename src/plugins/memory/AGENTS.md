@@ -21,6 +21,10 @@ if split out per T2.5.
 - MCP `mem_update` and `rtok memory retire|pin|unpin|revise` call the same functions here —
   one call path per capability (D21); `revise` is `mem_save` + `retire_note`, nothing else.
 - Recall injects titles and ids only; bodies are fetched on demand with `mem_get`.
+- Notes are linked to files (T374, `note_files`, `files.rs`): at `mem_save` and `remember:`,
+  to the existing files the body names and the session checkpoint's paths, root-relative and
+  never outside the root. `prompt_recall` fuses the text hits with the notes linked to files the
+  session read (`read_cache`) or the prompt names (RRF); any error there leaves the text hits.
 - Checkpoint prompts are only what the human typed (T417, `checkpoint::user_prompt`):
   host-injected records and `<system-reminder>` blocks never take one of the 20 slots.
   A new host envelope goes into `HOST_OPENERS` and `HOST_FIXTURE`, not a second filter.

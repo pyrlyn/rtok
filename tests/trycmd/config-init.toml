@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,434 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -96,7 +96,40 @@ target/tmp/t60-2-config-init.toml
 +[proxy.lanes]                         # tag each request's lane in the ledger (calls.kind); bytes stay identical
 +# enabled = true                        # false = every request an untagged api_request; x-rtok-lane and /lane/<name>/ forwarded as sent
 +
-+[proxy.batch]                         # no keys yet
++[proxy.lanes.bulk]                    # sync scripts; the agent lane follows the global switches, batch and files are never rewritten
++# compress            = false           # proxy.mode = "compress" rewrites (archive, compress, noise strip)
++# toon                = false           # the toon filter inside that pass; needs compress
++# tools_rewrite       = false           # proxy.tools_rewrite
++# context_management  = false           # proxy.context_management
++# semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
++# timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
++
++[proxy.lanes.embeddings]              # same keys as bulk
++# compress            = false
++# toon                = false
++# tools_rewrite       = false
++# context_management  = false
++# semantic_cache      = false
++# timeout_s           = 0
++
++[proxy.lanes.meta]                    # same keys as bulk (models, token counting)
++# compress            = false
++# toon                = false
++# tools_rewrite       = false
++# context_management  = false
++# semantic_cache      = false
++# timeout_s           = 0
++
++[proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
++# compress            = false
++# toon                = false
++# tools_rewrite       = false
++# context_management  = false
++# semantic_cache      = false
++# timeout_s           = 0
++
++[proxy.batch]                         # provider Batch result files
++# parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 +
 +[proxy.flex]                          # no keys yet
 +

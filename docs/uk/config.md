@@ -159,7 +159,40 @@ deny = []                             # прибрати ці назви з tool
 [proxy.lanes]                         # T385.1; позначати смугу кожного запиту в журналі обліку (calls.kind); байти лишаються ідентичними
 enabled = true                        # false = кожен запит — непозначений api_request; x-rtok-lane і /lane/<name>/ пересилаються як надіслано
 
-[proxy.batch]                         # ключів ще немає (T385.4)
+[proxy.lanes.bulk]                    # синхронні скрипти; смуга agent слідує глобальним перемикачам, batch і files не переписуються ніколи
+compress            = false           # переписування proxy.mode = "compress" (archive, compress, зачистка шуму)
+toon                = false           # фільтр toon всередині цього проходу; потрібен compress
+tools_rewrite       = false           # proxy.tools_rewrite
+context_management  = false           # proxy.context_management
+semantic_cache      = false           # plugins.proxy.semantic_cache, читання і запис
+timeout_s           = 0               # таймаут читання для цієї смуги; 0 = proxy.timeout_s
+
+[proxy.lanes.embeddings]              # ті самі ключі, що в bulk
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.meta]                    # ті самі ключі, що в bulk (models, підрахунок токенів)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.lanes.internal]                # ті самі ключі, що в bulk (власні виклики моделі rtok)
+compress            = false
+toon                = false
+tools_rewrite       = false
+context_management  = false
+semantic_cache      = false
+timeout_s           = 0
+
+[proxy.batch]                         # файли результатів провайдерського Batch
+parse_results       = false           # розібрати отриманий файл результатів у рядок usage на запит; тіло пересилається як є
 
 [proxy.flex]                          # ключів ще немає (T385.5)
 
@@ -182,7 +215,7 @@ since           = "30d"
 format          = "table"             # table | json      (--json)
 plugin          = ""                  # "" = усі         (--plugin <id>)
 transcripts_dir = "~/.claude/projects"
-codex_dir       = "~/.codex/sessions" # логи Codex CLI → ще один рядок `api` (T49.2); сховища OpenCode, Cursor і Copilot CLI не містять кількості токенів (перевірено 2026-09-17), тож їх не читають
+codex_dir       = "~/.codex/sessions" # логи Codex CLI → ще один рядок `api` (T49.2); OpenCode і Copilot CLI читає `rtok agents usage` ([agents.usage.dirs], T358.3); сховища Cursor не містять кількості токенів (перевірено 2026-09-17), тож їх не читають
 calibrate_samples = 30                # на клас          (--calibrate)
 baseline        = ""                  # типова назва для --compare; "" = немає
 price           = false               # показувати вартість у USD для кожної моделі (--price)
@@ -497,30 +530,48 @@ Gemini `:batchGenerateContent`), `files`, `embeddings` і `meta` (`/v1/models`,
 Смуга agent лишає `calls.kind = api_request`; інші записують `api_request:<lane>`
 (`api_request:bulk`, `api_request:batch`, ...). Байти запиту смуга не змінює.
 
-### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
+Смуга `agent` таблиці не має: для неї кожен глобальний перемикач вирішує так само, як до
+появи смуг (стабільність prompt-кешу). `batch` і `files` її теж не мають: їхні тіла
+(Batch JSONL, завантаження) завжди пересилаються без змін, а правка `stream_options` для них
+теж пропускається. `bulk`, `embeddings`, `meta` і `internal` читають кожна свою таблицю
+`[proxy.lanes.<lane>]`, і всі перемикачі в ній типово вимкнені, тому ці смуги пересилаються
+байт у байт, доки ви не ввімкнете одну з них. Перемикач смуги лише звужує глобальний:
+переписування виконується на смузі, коли ввімкнені глобальний перемикач *і* перемикач смуги.
 
-Ці три таблиці існують і порожні: порожній `[proxy.batch]` завантажується, але жодна
+| Ключ | Який глобальний перемикач звужує | Типово | Значення |
+|-----|--------------------------|---------|---------|
+| `compress` | `proxy.mode = "compress"` | `false` | archive, compress і зачистка шуму термінала |
+| `toon` | `plugins.toon.enabled` | `false` | фільтр `toon` усередині цього проходу; потрібен `compress` |
+| `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | переписування описів у `tools[]` |
+| `context_management` | `proxy.context_management` | `false` | серверне редагування контексту Anthropic |
+| `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | читання і запис кешу |
+| `timeout_s` | `proxy.timeout_s` | `0` | таймаут читання цієї смуги в секундах; `0` = `proxy.timeout_s` |
+
+Flex, маршрутизації та upstream для окремої смуги тут поки немає: кожен з'явиться в цій
+таблиці власним кроком (`[proxy.flex]`, `[proxy.routing]` нижче).
+
+### `[proxy.batch]`
+
+Спостереження за провайдерським Batch. Самі виклики Batch (створення, опитування, список, скасування, результати)
+вже позначені `api_request:batch` через `[proxy.lanes]`, а їхні тіла ніколи не переписуються.
+
+| Ключ | Тип | Типово | Значення |
+|-----|------|--------|---------|
+| `parse_results` | bool | `false` | Після пересилання файлу результатів записує по одному рядку `usage` на успішний запит: Anthropic `GET /v1/messages/batches/{id}/results` та OpenAI `GET /v1/files/{id}/content`, якщо його рядки — результати Batch (такий виклик отримує мітку `api_request:batch`). Рядки з помилкою, прострочені та пошкоджені пропускаються. Потрібен `[proxy.lanes] enabled`; байти відповіді не змінюються. |
+
+```toml
+[proxy.batch]
+parse_results = false
+```
+
+### `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
+
+Ці дві таблиці існують і порожні: жодна
 ще не має ключа. Ключі нижче — **задумані**; додавання будь-якого з них до робочого файлу конфігурації
 і далі не проходить `rtok config validate`, доки не з'явиться відповідний крок. Fallback
 проксі вже пересилає невідомі шляхи (зокрема `/v1/batches` і
 `/v1/messages/batches`) без `Wire`; вставлення Flex і переписування для маршрутизації — це майбутня робота над
 `prepare` / політиками. Повна семантика: [`docs/batch-flex.md`](batch-flex.md).
-
-#### `[proxy.batch]`
-
-| Ключ | Тип | Типово (задумано) | Значення |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `true` | Головний перемикач; сьогодні fallback axum завжди пересилає шляхи Batch |
-| `observe` | bool | `true` | Записувати створення/опитування/результати Batch як окремі рядки журналу обліку (**заплановано**) |
-| `parse_results` | bool | `false` | Якщо true, розбирати файли/потоки результатів у рядки `usage` (**заплановано**) |
-
-```toml
-# Заплановано — сьогодні не завантажується
-[proxy.batch]
-enabled = true
-observe = true
-parse_results = false
-```
 
 #### `[proxy.flex]`
 
@@ -583,7 +634,7 @@ Rust (rust-analyzer) і Dart (Dart SDK): `docs/lsp.md`.
 
 Власні рядки rtok для людини за терміналом — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, підсумок `graph index`, `--help` — типово мають емодзі й колір:
-✅ успіх (зелений), 💡 статус (блакитний), ⚠️ попередження (жовтий), ❌ помилка (червоний).
+✅ успіх (зелений), 💡 статус (блакитний), ❗ попередження (жовтий), ❌ помилка (червоний). Рядок з назвою операції отримує її значок (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), вирівняний так, що текст після нього починається в одній колонці.
 
 ```toml
 [ui]

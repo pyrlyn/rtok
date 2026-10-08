@@ -82,6 +82,14 @@ diesel::table! {
     }
 }
 
+// 0033 (T374): the files a note is about, root-relative.
+diesel::table! {
+    note_files (note_id, path) {
+        note_id -> Integer,
+        path -> Text,
+    }
+}
+
 diesel::table! {
     notes (id) {
         id -> Integer,
@@ -193,6 +201,16 @@ diesel::table! {
         // T211: exact bytes, written only when the inline body is not valid UTF-8.
         request_raw -> Nullable<Binary>,
         response_raw -> Nullable<Binary>,
+        // 0032 (T433): the session fields split out of a hook stdin; NULL = full body.
+        hook_session_id -> Nullable<Integer>,
+    }
+}
+
+// 0032 (T433): one row per distinct set of hook session fields, as compact JSON.
+diesel::table! {
+    hook_sessions (id) {
+        id -> Integer,
+        fields -> Text,
     }
 }
 
@@ -368,11 +386,13 @@ diesel::joinable!(calls -> providers (provider_id));
 diesel::joinable!(calls -> models (model_id));
 diesel::joinable!(calls -> sessions (session_id));
 diesel::joinable!(call_io -> calls (call_id));
+diesel::joinable!(call_io -> hook_sessions (hook_session_id));
 diesel::joinable!(tokens -> calls (call_id));
 diesel::joinable!(logs -> calls (call_id));
 diesel::joinable!(measurements -> calls (call_id));
 diesel::joinable!(usage -> calls (call_id));
 diesel::joinable!(note_embeddings -> notes (note_id));
+diesel::joinable!(note_files -> notes (note_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     events,
@@ -382,6 +402,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     read_cache,
     notes,
     note_embeddings,
+    note_files,
     usage,
     hosts,
     providers,
@@ -389,6 +410,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     sessions,
     calls,
     call_io,
+    hook_sessions,
     tokens,
     logs,
     symbols,

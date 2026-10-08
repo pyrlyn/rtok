@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useMemo, useState } from "react";
+import { RESULTS, SURFACES, useTableSearch } from "../tableSearch";
 import { useExpandMutation } from "../api/query";
 import type { CallRow, Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
@@ -17,8 +18,6 @@ import { why } from "./missing";
 import { tokensOf } from "./model";
 import { Count, Kv, Split, SurfacePill, Toolbar, WithSnapshot } from "./parts";
 
-const SURFACES = ["all", "hook", "mcp", "proxy"] as const;
-const RESULTS = ["any", "ok", "failed"] as const;
 type Surface = (typeof SURFACES)[number];
 type Result = (typeof RESULTS)[number];
 
@@ -36,20 +35,28 @@ const columns: Column<CallRow>[] = [
         id: "time",
         header: "time",
         width: "72px",
+        sortValue: (c) => c.ts,
         cell: (c) => <span title={iso(c.ts)}>{hms(c.ts)}</span>,
     },
     {
         id: "surface",
         header: "surface",
         width: "72px",
+        sortValue: (c) => c.surface,
         cell: (c) => <SurfacePill surface={c.surface} />,
     },
-    { id: "name", header: "name", cell: (c) => orUnknown(c.name ?? c.plugin, why.callName) },
+    {
+        id: "name",
+        header: "name",
+        sortValue: (c) => c.name ?? c.plugin,
+        cell: (c) => orUnknown(c.name ?? c.plugin, why.callName),
+    },
     {
         id: "ms",
         header: "ms",
         width: "52px",
         align: "right",
+        sortValue: (c) => c.ms,
         cell: (c) => orUnknown(c.ms?.toFixed(1), why.callMs),
     },
     {
@@ -58,12 +65,14 @@ const columns: Column<CallRow>[] = [
         // Room for "Unknown ?" on calls that carry no usage row.
         width: "96px",
         align: "right",
+        sortValue: tokensOf,
         cell: (c) => orUnknown(compact(tokensOf(c)), why.callUsage),
     },
     {
         id: "ok",
         header: "ok",
         width: "52px",
+        sortValue: (c) => Number(Boolean(c.ok)),
         cell: (c) =>
             c.ok ? (
                 <span className="text-success-fg" role="img" aria-label="ok">
@@ -80,9 +89,8 @@ export function Calls() {
 }
 
 function CallsBody({ snap }: { snap: Snapshot }) {
-    const [query, setQuery] = useState("");
-    const [surface, setSurface] = useState<Surface>("all");
-    const [result, setResult] = useState<Result>("any");
+    const { q: query, setQ: setQuery, filter, setFilter, sort, setSort } = useTableSearch("calls");
+    const { surface, result } = filter;
     const [selectedId, setSelectedId] = useState<number>();
     const calls = snap.calls;
     const rows = useMemo(
@@ -116,14 +124,22 @@ function CallsBody({ snap }: { snap: Snapshot }) {
                 </div>
                 <div role="group" aria-label="Surface" className="flex flex-wrap gap-1.5">
                     {SURFACES.map((s) => (
-                        <Chip key={s} pressed={surface === s} onPressedChange={() => setSurface(s)}>
+                        <Chip
+                            key={s}
+                            pressed={surface === s}
+                            onPressedChange={() => setFilter("surface", s)}
+                        >
                             {s} {count(s)}
                         </Chip>
                     ))}
                 </div>
                 <div role="group" aria-label="Result" className="flex flex-wrap gap-1.5">
                     {RESULTS.map((r) => (
-                        <Chip key={r} pressed={result === r} onPressedChange={() => setResult(r)}>
+                        <Chip
+                            key={r}
+                            pressed={result === r}
+                            onPressedChange={() => setFilter("result", r)}
+                        >
                             {r}
                         </Chip>
                     ))}
@@ -140,6 +156,8 @@ function CallsBody({ snap }: { snap: Snapshot }) {
                             rows={rows}
                             columns={columns}
                             getRowId={(c) => String(c.id)}
+                            sort={sort}
+                            onSortChange={setSort}
                             selectedId={selected && String(selected.id)}
                             onSelect={(c) => setSelectedId(c.id)}
                             height={480}

@@ -240,3 +240,28 @@ fn the_cli_flag_resolves_a_project_for_the_single_project_subcommands() {
     let bad = cli(&home, &elsewhere, &["impact", "x", "--project", "9999"]);
     assert!(bad.unwrap_err().contains("no project"));
 }
+
+/// T329.5: `shared` in `c` is called from `a` and `b`, so it is live in their scope and dead in its own.
+#[test]
+fn dead_over_a_scope_spares_what_a_linked_project_calls() {
+    let home = world("dead");
+    let a = home.join("a");
+    assert_eq!(
+        cli(&home, &a, &["dead"]).unwrap(),
+        "[a] lib.rs:1 function a_caller\n[b] lib.rs:1 function b_caller\n"
+    );
+    assert_eq!(
+        cli(&home, &a, &["dead", "--project", "3"]).unwrap(),
+        "lib.rs:1 function shared\n"
+    );
+    let json = cli(&home, &a, &["dead", "--json"]).unwrap();
+    assert!(json.contains("\"project\": \"b\""), "{json}");
+    // Affected tests of a path in a linked project: none are indexed here, said once.
+    let c = call(
+        &home,
+        &a,
+        "impact",
+        serde_json::json!({"path": home.join("c").join("lib.rs")}),
+    );
+    assert_eq!(c, "no indexed test reaches the change; run the suite");
+}
