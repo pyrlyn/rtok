@@ -244,29 +244,49 @@ async fn the_semantic_cache_serves_the_agent_lane_only_by_default() {
             .header("content-type", "application/json")
             .body(r#"{"type":"message","usage":{"input_tokens":1,"output_tokens":2}}"#);
     });
-    let (addr, _s, task) = proxy_server("lane-policy-cache", |cfg| {
+    let (addr, state, task) = proxy_server("lane-policy-cache", |cfg| {
         cfg.proxy.upstream = server.base_url();
         cfg.plugins.proxy.semantic_cache.enabled = true;
     })
     .await;
+    // The proxy fills the cache after the reply has streamed, just before the usage row, so a
+    // usage row is the sign that a fill (if any) is done; without the wait the next call races it.
+    let recorded = |n: i64| {
+        let store = &state.store;
+        async move {
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+            while store.count_usage().expect("usage rows") < n {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "{n} usage rows never appeared"
+                );
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        }
+    };
     let body = br#"{"model":"claude-test","messages":[{"role":"user","content":"hi"}]}"#.to_vec();
     // Bulk neither reads nor fills the cache, so both calls reach upstream.
-    for _ in 0..2 {
+    for n in 1..=2 {
         assert!(
             post(&addr, "/v1/messages", Some("bulk"), body.clone())
                 .await
                 .is_success()
         );
+        recorded(n).await;
     }
     mock.assert_calls(2);
     // The agent lane starts cold even though bulk sent the same prompt, then hits.
-    for _ in 0..2 {
-        assert!(
-            post(&addr, "/v1/messages", None, body.clone())
-                .await
-                .is_success()
-        );
-    }
+    assert!(
+        post(&addr, "/v1/messages", None, body.clone())
+            .await
+            .is_success()
+    );
+    recorded(3).await;
+    assert!(
+        post(&addr, "/v1/messages", None, body.clone())
+            .await
+            .is_success()
+    );
     mock.assert_calls(3);
     task.abort();
 }
