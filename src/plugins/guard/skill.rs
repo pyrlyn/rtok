@@ -88,9 +88,11 @@ fn resolve(name: &str, cwd: Option<&Path>, home: &Path) -> Option<PathBuf> {
 }
 
 /// `plugins."<plugin>@<marketplace>"[i].installPath` — Claude Code `installed_plugins.json`
-/// version 2 (entries carry `scope`, and `projectPath` for project/local installs), checked
-/// on this machine 2026-10-08. A skill name has no marketplace and the file keeps one
-/// install per scope and project, so anything not provably the right install falls open:
+/// version 2: `scope` and `installPath` were checked on this machine 2026-10-08. `projectPath`
+/// for project/local installs is assumed, not verified (the local file has only a user-scope
+/// entry); its absence just falls through to the user scope. A skill name has no
+/// marketplace and the file keeps one install per scope and project, so anything not
+/// provably the right install falls open:
 /// a plugin under several marketplaces, or several installs that neither `cwd` nor the
 /// user scope narrows to one.
 fn plugin_root(manifest: &Path, plugin: &str, cwd: Option<&Path>) -> Option<PathBuf> {
