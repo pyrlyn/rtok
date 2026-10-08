@@ -130,6 +130,12 @@ grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI
 zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
 antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 
+[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
+keep_logs_days          = 30          # `logs` entries (the agents' documented log folders) modified within this many days stay; 0-3650
+temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay; 0-87600
+exclude                 = []          # globs (~ = home) never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]; a bad glob keeps everything
+extra                   = []          # paths you vouch for as junk (D36), e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = a host id or rtok
+
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
 max_description_tokens  = 60          # enforced by a test (T4.1)
@@ -389,7 +395,7 @@ dir = "tasks"                         # один Markdown-файл на зада
 
 [tasks.github]
 repo = ""                             # owner/name; пусто: remote origin
-project = 0                           # номер Projects v2 для поля Status (читается с T441.11); 0 = только issues
+project = 0                           # номер Projects v2 владельца репо: issues попадают в него, поле Status следует за задачей; 0 = только issues
 
 [tasks.gitlab]                        # метки status::in-progress | status::done | status::wont-do; подзадача связана с родителем (relates_to)
 url = "https://gitlab.com"            # https базовый URL; задайте для своего инстанса; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, иначе glab
@@ -745,6 +751,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, `--bytes`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.exclude`, `.extra` без флага |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |
 | `agents sessions` | `--all` | (действие: также перечисляет завершённые сессии; live или idle — по `agents.idle`) |
 | `agents show` | — | разрешает префикс id через хранилище (T284); live или idle — по `agents.idle` (`--json` — строка «чтение») |

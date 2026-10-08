@@ -25,6 +25,7 @@ use serde::Serialize;
 use super::junk_cache::{self, Ctx, Item, Owned};
 use super::junk_kinds;
 use super::junk_map::{Role, Roots, specs};
+use super::junk_review;
 use super::{Agent, HOSTS, host, present};
 use crate::config::Config;
 use crate::info::human_bytes;
@@ -213,6 +214,8 @@ pub struct AgentJunk {
     /// leave alone, the reason. Only an item without a reason is in `kinds` and the totals.
     pub items: Vec<Item>,
     pub freed_default_bytes: u64,
+    /// What `--include review` would free on top of the `safe` kinds (T330.5.1).
+    pub freed_review_bytes: u64,
 }
 
 /// `rtok agents junk list` (T330.1): per-agent folders, junk kinds and space `clear` frees.
@@ -222,6 +225,7 @@ pub struct Report {
     /// Every folder once, however many agents share it.
     pub total_bytes: u64,
     pub freed_default_bytes: u64,
+    pub freed_review_bytes: u64,
 }
 
 /// What one walk found. A folder it could not read or finish is a lower bound, never an error.
@@ -359,28 +363,44 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     paths
 }
 
-/// The junk kinds in the order the T330 table lists them.
-const KINDS: [&str; 5] = ["cache", "temp", "build", "locks", "swap"];
+/// The junk kinds in the order the T330 tables list them.
+const KINDS: [&str; 8] = [
+    "cache",
+    "temp",
+    "logs",
+    "build",
+    "deps",
+    "locks",
+    "swap",
+    "snapshots",
+];
 
-/// One row per kind of `items`: only an item `clear` would take now counts.
+/// One row per kind and class of `items`: only an item `clear` would take now counts. A kind
+/// row says its class, so `review` rows are counted apart from what a plain `clear` frees.
 fn kind_rows(items: &[Item]) -> Vec<KindRow> {
-    KINDS
-        .iter()
-        .filter_map(|&kind| {
-            let counted = items.iter().filter(|i| i.kind == kind && i.counted());
+    let mut rows = Vec::new();
+    for kind in KINDS {
+        for class in ["safe", "review"] {
+            let counted = items.iter().filter(|i| i.kind == kind && i.class == class);
+            let counted = counted.filter(|i| i.counted());
             let (n, bytes) = counted.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
-            (n > 0).then_some(KindRow {
-                kind,
-                class: "safe",
-                items: n,
-                size_bytes: bytes,
-            })
-        })
-        .collect()
+            if n > 0 {
+                rows.push(KindRow {
+                    kind,
+                    class,
+                    items: n,
+                    size_bytes: bytes,
+                });
+            }
+        }
+    }
+    rows
 }
 
-fn freed(items: &[Item]) -> u64 {
-    kind_rows(items).iter().map(|k| k.size_bytes).sum()
+/// What `clear` frees: the `safe` rows, plus the `review` ones with `review`.
+fn freed(rows: &[KindRow], review: bool) -> u64 {
+    let wanted = rows.iter().filter(|k| k.class == "safe" || review);
+    wanted.map(|k| k.size_bytes).sum()
 }
 
 /// A folder a host writes, before it is sized.
@@ -471,6 +491,7 @@ fn host_rows(
         let mut agent_keys = Vec::new();
         let mut owned = Vec::new();
         let mut temp = Vec::new();
+        let mut logs = Vec::new();
         for f in host_folders(a, cfg, roots) {
             let target = symlink_target(&f.path);
             let key = target.clone().unwrap_or_else(|| f.path.clone());
@@ -485,6 +506,9 @@ fn host_rows(
             }
             if f.role == Role::Temp && f.documented {
                 temp.push(f.path.clone());
+            }
+            if f.role == Role::Logs && f.documented {
+                logs.push(f.path.clone());
             }
             let usage = *sized
                 .entry(key.clone())
@@ -513,17 +537,29 @@ fn host_rows(
                 note: (!notes.is_empty()).then(|| notes.join("; ")),
             });
         }
-        let roots = outermost(agent_keys.clone());
-        let mut items = junk_cache::cache_items(&owned, &roots, cx, limit);
-        items.extend(junk_kinds::temp_items(&temp, cx, limit));
-        items.extend(junk_kinds::found_items(&roots, limit));
+        let junk = &cfg.agents.junk;
+        let temp_age = junk_review::hours(junk.temp_min_age_hours);
+        let (extra_owned, extra) =
+            junk_review::extra_items(junk, a.id(), &cfg.home, roots.home(), cx, limit);
+        owned.extend(extra_owned);
+        let tag_roots = outermost(agent_keys.clone());
+        let mut items = junk_cache::cache_items(&owned, &tag_roots, cx, limit);
+        items.extend(extra);
+        items.extend(junk_kinds::temp_items(&temp, temp_age, cx, limit));
+        items.extend(junk_review::log_items(&logs, junk, cx, limit));
+        items.extend(junk_kinds::found_items(&tag_roots, limit));
+        if a.id() == "gemini" {
+            items.extend(junk_review::snapshot_items(roots, limit));
+        }
         let own: Vec<PathBuf> = worktrees
             .iter()
             .filter(|(h, _)| *h == a.id())
             .map(|(_, p)| p.clone())
             .collect();
         items.extend(junk_kinds::build_items(&own, cx, limit));
+        junk_review::exclude(&mut items, &junk.exclude, &cfg.home, roots.home(), limit);
         let items = junk_cache::drop_nested(items);
+        let kinds = kind_rows(&items);
         keys.push(agent_keys);
         rows.push(AgentJunk {
             name: a.id(),
@@ -531,8 +567,9 @@ fn host_rows(
             installed,
             folders,
             total_bytes: 0,
-            kinds: kind_rows(&items),
-            freed_default_bytes: freed(&items),
+            freed_default_bytes: freed(&kinds, false),
+            freed_review_bytes: freed(&kinds, true),
+            kinds,
             items,
         });
     }
@@ -628,12 +665,14 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         .iter()
         .map(|f| PathBuf::from(&f.path))
         .collect();
-    let cache = junk_cache::cache_items(
-        &rtok_owned(cfg, roots, &rtok_cache),
-        &outermost(tag_roots),
-        &cx,
-        limit,
-    );
+    let junk = &cfg.agents.junk;
+    let (extra_owned, extra) =
+        junk_review::extra_items(junk, "rtok", &cfg.home, roots.home(), &cx, limit);
+    let mut owned = rtok_owned(cfg, roots, &rtok_cache);
+    owned.extend(extra_owned);
+    let mut cache = junk_cache::cache_items(&owned, &outermost(tag_roots), &cx, limit);
+    cache.extend(extra);
+    junk_review::exclude(&mut cache, &junk.exclude, &cfg.home, roots.home(), limit);
     let cache = junk_cache::drop_nested(cache);
     kinds.extend(kind_rows(&cache));
     let rtok_total = rtok_folders.iter().map(|f| f.size_bytes).sum::<u64>();
@@ -643,7 +682,8 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         installed: true,
         folders: rtok_folders,
         total_bytes: rtok_total,
-        freed_default_bytes: kinds.iter().map(|k| k.size_bytes).sum(),
+        freed_default_bytes: freed(&kinds, false),
+        freed_review_bytes: freed(&kinds, true),
         kinds,
         items: cache,
     }];
@@ -660,10 +700,17 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         .filter(|k| !KINDS.contains(&k.kind))
         .map(|k| k.size_bytes)
         .sum();
-    let cache = agents.iter().flat_map(|a| &a.items).filter(|i| i.counted());
-    let cache: BTreeMap<&Path, u64> = cache.map(|i| (Path::new(&i.path), i.bytes)).collect();
+    // Each path once however many agents list it, and a nested one inside its parent.
+    let freed = |review: bool| {
+        let wanted = |c: &str| c == "safe" || (review && c == "review");
+        let items = agents.iter().flat_map(|a| &a.items);
+        let items = items.filter(|i| i.counted() && wanted(i.class));
+        let by_path: BTreeMap<&Path, u64> = items.map(|i| (Path::new(&i.path), i.bytes)).collect();
+        log_archive + top_level_bytes(by_path.iter().map(|(p, b)| (*p, *b)))
+    };
     Report {
-        freed_default_bytes: log_archive + top_level_bytes(cache.iter().map(|(p, b)| (*p, *b))),
+        freed_default_bytes: freed(false),
+        freed_review_bytes: freed(true),
         agents,
         total_bytes,
     }
@@ -736,25 +783,39 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
                 ));
             }
         }
+        // One line per reason when several items share it: a log folder keeps hundreds of
+        // fresh files, and each would otherwise be its own line.
+        let mut groups: Vec<(&str, &str, Vec<&Item>)> = Vec::new();
         for i in kept {
             let why = i.kept.as_deref().unwrap_or_default();
-            out.push_str(&format!(
-                "    kept {}  {}  ({why})\n",
-                i.path,
-                size(i.bytes)
-            ));
+            match groups.iter_mut().find(|g| (g.0, g.1) == (i.kind, why)) {
+                Some(g) => g.2.push(i),
+                None => groups.push((i.kind, why, vec![i])),
+            }
+        }
+        for (kind, why, items) in groups {
+            let bytes = size(items.iter().map(|i| i.bytes).sum());
+            match items.as_slice() {
+                [one] => out.push_str(&format!("    kept {}  {bytes}  ({why})\n", one.path)),
+                many => out.push_str(&format!(
+                    "    kept {kind}: {} items, {bytes}  ({why})\n",
+                    many.len()
+                )),
+            }
         }
         if !a.host || !a.kinds.is_empty() {
             out.push_str(&format!(
-                "  Freed by `clear`: {}\n",
-                size(a.freed_default_bytes)
+                "  Freed by `clear`: {}\n  Freed with `--include review`: {}\n",
+                size(a.freed_default_bytes),
+                size(a.freed_review_bytes)
             ));
         }
     }
     out.push_str(&format!(
-        "total\n  Folders: {}\n  Freed by `clear`: {}\n",
+        "total\n  Folders: {}\n  Freed by `clear`: {}\n  Freed with `--include review`: {}\n",
         size(report.total_bytes),
-        size(report.freed_default_bytes)
+        size(report.freed_default_bytes),
+        size(report.freed_review_bytes)
     ));
     out
 }

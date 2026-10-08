@@ -21,6 +21,9 @@ export const Disabled: Story = { args: { disabled: true } };
 export const Pending: Story = { args: { pending: true } };
 export const PendingOn: Story = { args: { pending: true, checked: true } };
 export const DisabledOn: Story = { args: { disabled: true, checked: true } };
+// The on track is solid `accent`; the knob and the spinner on it use `on-accent`.
+export const OnLight: Story = { ...On, globals: { theme: "light" } };
+export const PendingOnLight: Story = { ...PendingOn, globals: { theme: "light" } };
 
 export const Toggles: Story = {
     render: (args) => {

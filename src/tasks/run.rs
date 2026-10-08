@@ -57,22 +57,15 @@ impl Project {
             "disk" => Box::new(DiskAdapter::new(root.join(&cfg.disk.dir))),
             "github" => {
                 let repo = github::repo(&cfg.github.repo, &key)?;
-                if cfg.github.project != 0 {
-                    log::warn!(
-                        "rtok task: [tasks.github] project is not used yet; status lives in labels and open/closed"
-                    );
-                }
                 let token = remote::token(
                     "github",
                     &["GH_TOKEN", "GITHUB_TOKEN"],
                     &["gh", "auth", "token"],
                 )?;
-                Box::new(GithubAdapter::new(
-                    github::API,
-                    &repo,
-                    &token,
-                    remote::WRITE_GAP,
-                )?)
+                Box::new(
+                    GithubAdapter::new(github::API, &repo, &token, remote::WRITE_GAP)?
+                        .with_project(cfg.github.project.into()),
+                )
             }
             "gitlab" => {
                 let instance = gitlab::instance(&cfg.gitlab.url)?;

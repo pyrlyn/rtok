@@ -5,10 +5,10 @@
 import type { ReactNode } from "react";
 
 const tones = {
-    ok: "border-success/40 bg-success/15 text-success-fg",
-    warn: "border-warn/40 bg-warn/15 text-warn-fg",
-    fail: "border-delta/40 bg-delta/15 text-delta-fg",
-    info: "border-accent/40 bg-accent/15 text-accent-fg",
+    ok: "border-success/40 bg-success/10 text-success-fg",
+    warn: "border-warn/40 bg-warn/10 text-warn-fg",
+    fail: "border-danger/40 bg-danger/10 text-danger-fg",
+    info: "border-accent/40 bg-accent/10 text-accent-fg",
     muted: "border-border bg-surface-2 text-fg-muted",
 };
 

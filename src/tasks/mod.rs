@@ -18,6 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub mod adapter;
 pub mod disk;
 pub mod github;
+mod github_project;
 pub mod gitlab;
 pub mod remote;
 pub mod run;

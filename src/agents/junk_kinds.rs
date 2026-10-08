@@ -21,7 +21,7 @@ use super::junk_cache::{
 use super::plugin_install::PLUGIN_CACHE;
 use crate::config::Config;
 use crate::store::Store;
-use crate::worktree::clean::kept_because;
+use crate::worktree::clean::{Policy, kept_because};
 use crate::worktree::list::{self, Cache, usage_until};
 
 /// Why a find with no D36 evidence is not cleared.
@@ -40,6 +40,40 @@ const SKIP_DIRS: [&str; 2] = [".git", "node_modules"];
 
 /// Build output without a `CACHEDIR.TAG`: listed in an agent worktree, never cleared (D36).
 const BUILD_DIRS: [&str; 3] = ["dist", ".next", "__pycache__"];
+
+/// Reinstallable dependency folders and the files beside one that can reinstall it.
+const DEPS: [(&str, &[&str]); 5] = [
+    ("node_modules", &["package.json"]),
+    (
+        ".venv",
+        &["pyproject.toml", "requirements.txt", "uv.lock", "Pipfile"],
+    ),
+    ("vendor", &["composer.json", "Gemfile", "go.mod"]),
+    (
+        ".gradle",
+        &["build.gradle", "build.gradle.kts", "settings.gradle"],
+    ),
+    ("Pods", &["Podfile"]),
+];
+
+/// `deps` has no D36 evidence (no §22 row, no tag), so it is listed only; one nothing beside it
+/// could reinstall says that first.
+fn deps_reason(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    let manifests = DEPS
+        .iter()
+        .find(|(d, _)| *d == name)
+        .map_or(&[][..], |d| d.1);
+    let beside = path.parent().unwrap_or(path);
+    if manifests.iter().any(|m| beside.join(m).is_file()) {
+        NOT_DOCUMENTED.into()
+    } else {
+        "no lockfile or manifest beside it: cannot be reinstalled".into()
+    }
+}
 
 /// Lock files that are package-manager state and never junk.
 pub(super) const PACKAGE_LOCKS: [&str; 14] = [
@@ -185,23 +219,47 @@ pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
         .collect()
 }
 
-/// The entries of the §22 temp dirs `dirs`: one item per file or directory, kept while it was
-/// touched within the idle window (24 h) or, for a file, while another process holds a lock on
-/// it. A symlink is never an item. A running agent's temp is left by `junk_clear` (T330.4).
-pub fn temp_items(dirs: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item> {
+/// The entries of the §22 temp dirs `dirs`, kept while touched within `min_age`
+/// (`[agents.junk] temp_min_age_hours`). A running agent's temp is left by `junk_clear` (T330.4).
+pub fn temp_items(dirs: &[PathBuf], min_age: Duration, cx: &Ctx, limit: Duration) -> Vec<Item> {
+    aged_items("temp", dirs, SECTION_22, min_age, cx, limit)
+}
+
+/// One item per entry of each folder in `dirs`, or the path itself when it is a file (Zed's
+/// single `Zed.log`): kept while touched within `min_age` or, for a file, while another process
+/// holds a lock on it. A symlink is never an item.
+pub fn aged_items(
+    kind: &'static str,
+    dirs: &[PathBuf],
+    evidence: &'static str,
+    min_age: Duration,
+    cx: &Ctx,
+    limit: Duration,
+) -> Vec<Item> {
+    let policy = Policy {
+        idle: min_age,
+        now: cx.policy.now,
+    };
     let mut items = Vec::new();
-    for dir in dirs.iter().filter(|d| !is_symlink(d) && d.is_dir()) {
-        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-            let Ok(kind) = e.file_type() else { continue };
-            if kind.is_symlink() {
+    for dir in dirs.iter().filter(|d| !is_symlink(d)) {
+        let entries: Vec<PathBuf> = if dir.is_dir() {
+            let found = std::fs::read_dir(dir).into_iter().flatten().flatten();
+            found.map(|e| e.path()).collect()
+        } else {
+            vec![dir.clone()]
+        };
+        for path in entries {
+            let Ok(meta) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if meta.file_type().is_symlink() {
                 continue;
             }
-            let path = e.path();
-            let (modified, cut) = if kind.is_dir() {
+            let (modified, cut) = if meta.is_dir() {
                 let (u, cut) = usage_until(&path, Instant::now() + limit);
                 (u.modified, cut)
             } else {
-                (e.metadata().ok().and_then(|m| m.modified().ok()), false)
+                (meta.modified().ok(), false)
             };
             let entry = Cache {
                 path: path.clone(),
@@ -211,10 +269,10 @@ pub fn temp_items(dirs: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item> {
             let kept = if cut {
                 Some(SCAN_STOPPED.into())
             } else {
-                kept_because(&entry, false, false, &cx.policy)
+                kept_because(&entry, false, false, &policy)
             };
-            let kept = kept.or_else(|| kind.is_file().then(|| held_reason(&path)).flatten());
-            items.push(make_item("temp", &path, SECTION_22, kept, limit));
+            let kept = kept.or_else(|| meta.is_file().then(|| held_reason(&path)).flatten());
+            items.push(make_item(kind, &path, evidence, kept, limit));
         }
     }
     items
@@ -237,17 +295,22 @@ pub fn build_items(worktrees: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item
             items.push(make_item("build", &cache.path, TAG, kept, limit));
         }
         let tagged = |p: &Path| usage.caches.iter().any(|c| c.path == p);
-        let named = |name: &str, kind: &FileType| {
-            (kind.is_dir() && BUILD_DIRS.contains(&name)).then_some("build")
+        let named = |name: &str, kind: &FileType| match kind.is_dir() {
+            true if BUILD_DIRS.contains(&name) => Some("build"),
+            true if DEPS.iter().any(|(d, _)| *d == name) => Some("deps"),
+            _ => None,
         };
-        for (path, kind) in find(wt, Instant::now() + limit, &tagged, &named) {
-            items.push(make_item(
-                kind,
-                &path,
-                NO_EVIDENCE,
-                Some(NOT_DOCUMENTED.into()),
-                limit,
-            ));
+        let finds = find(wt, Instant::now() + limit, &tagged, &named);
+        // A tagged `.venv` (uv writes the tag) is already `build` above.
+        for (path, kind) in finds.into_iter().filter(|(p, _)| !tagged(p)) {
+            let (class, kept) = match kind {
+                "deps" => ("review", deps_reason(&path)),
+                _ => ("safe", NOT_DOCUMENTED.into()),
+            };
+            items.push(Item {
+                class,
+                ..make_item(kind, &path, NO_EVIDENCE, Some(kept), limit)
+            });
         }
     }
     items
@@ -519,6 +582,7 @@ mod tests {
 
         let items = temp_items(
             std::slice::from_ref(&dir),
+            DEFAULT_IDLE,
             &cx(&tmp_dir("kinds-temp-cwd")),
             LIMIT,
         );
@@ -548,6 +612,8 @@ mod tests {
         put(&wt.join("web/dist/app.js"), b"x");
         put(&wt.join("py/__pycache__/m.pyc"), b"x");
         put(&wt.join("node_modules/pkg/dist/i.js"), b"x");
+        put(&wt.join("app/package.json"), b"{}");
+        put(&wt.join("app/node_modules/m/i.js"), b"x");
         age_files(&wt, 3 * 86_400);
 
         let items = build_items(
@@ -556,7 +622,14 @@ mod tests {
             LIMIT,
         );
 
-        assert_eq!(items.len(), 3, "{items:?}");
+        assert_eq!(items.len(), 5, "{items:?}");
+        let deps = |n: &str| {
+            let i = row(&items, n);
+            assert_eq!((i.kind, i.class, i.counted()), ("deps", "review", false));
+            i.kept.clone().unwrap()
+        };
+        assert_eq!(deps("app/node_modules"), NOT_DOCUMENTED);
+        assert!(deps("node_modules").starts_with("no lockfile or manifest"));
         let target = row(&items, "target");
         assert!(target.counted() && target.evidence == TAG && target.kind == "build");
         for listed in ["web/dist", "py/__pycache__"] {

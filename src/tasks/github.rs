@@ -5,7 +5,8 @@
 //! The `github` adapter (T441 §7): one issue per task through the REST API. The issue carries
 //! the `rtok` label and `rtok:R12`, its title starts with the id, a subtask is a sub-issue of
 //! its parent's issue, `rtok:in-progress` marks work under way, and done or closed close the
-//! issue as `completed` or `not_planned` (§8).
+//! issue as `completed` or `not_planned` (§8). With `[tasks.github] project` set, the issue
+//! also joins that Projects v2 board and its Status follows the task (`github_project.rs`).
 
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::adapter::{Filter, Taken, TaskAdapter};
+use super::github_project::ProjectSync;
 use super::remote::{
     Http, LABEL, id_label, issue_title, label_id, max_with_prefix, secs, task_title,
 };
@@ -30,6 +32,8 @@ pub const IN_PROGRESS: &str = "rtok:in-progress";
 pub struct GithubAdapter {
     http: Http,
     repo: String,
+    /// `[tasks.github] project`: the Projects v2 board whose Status follows the task.
+    project: Option<ProjectSync>,
 }
 
 #[derive(Deserialize)]
@@ -133,7 +137,21 @@ impl GithubAdapter {
         Ok(Self {
             http: Http::new("github", base, headers, gap)?,
             repo: repo.to_string(),
+            project: None,
         })
+    }
+
+    /// Mirror each task's status into the Status field of Projects v2 project `number`
+    /// (owned by the repo's owner); 0 keeps the adapter on issues only.
+    pub fn with_project(mut self, number: u64) -> Self {
+        self.project = (number != 0).then(|| ProjectSync::new(&self.repo, number));
+        self
+    }
+
+    fn sync_project(&self, id: &TaskId, issue: &Issue, status: Status) {
+        if let Some(p) = &self.project {
+            p.sync(&self.http, id, issue.node_id.as_deref(), status);
+        }
     }
 
     /// rtok's issues with `label`, pull requests left out; `state` is `open` or `all`.
@@ -207,6 +225,7 @@ impl TaskAdapter for GithubAdapter {
                 );
             }
         }
+        self.sync_project(id, &issue, Status::Open);
         issue
             .into_task()
             .context("github tasks: the new issue has no task id")
@@ -254,6 +273,7 @@ impl TaskAdapter for GithubAdapter {
         }
         let path = format!("/repos/{}/issues/{}", self.repo, issue.number);
         let updated: Issue = self.http.send(Method::PATCH, &path, &body)?;
+        self.sync_project(id, &updated, status);
         updated
             .into_task()
             .with_context(|| format!("github tasks: {id} lost its label"))
