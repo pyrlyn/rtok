@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 import { connectSample } from "../api/sample";
 import { Calls } from "./Calls";
 import { richSnapshot } from "./fixtures";
@@ -21,6 +22,25 @@ export default overview;
 type Story = StoryObj<typeof overview>;
 
 export const OverviewDefault: Story = { decorators: [withData(rich)] };
+// Every card and panel that has a page links to it with the filter the figure on it describes.
+export const OverviewLinks: Story = {
+    decorators: [withData(rich)],
+    play: async ({ canvasElement }) => {
+        const view = within(canvasElement);
+        const targets: [string | RegExp, string][] = [
+            ["calls", "/calls"],
+            [/^1 failed$/, "/calls?result=failed"],
+            ["live sessions", "/sessions?show=live"],
+            ["plugins on", "/plugins?show=on"],
+            [/^hook \d+$/, "/calls?surface=hook"],
+            [/^failed 1$/, "/calls?result=failed"],
+            [/ live →$/, "/sessions?show=live"],
+        ];
+        for (const [name, href] of targets) {
+            await expect(await view.findByRole("link", { name })).toHaveAttribute("href", href);
+        }
+    },
+};
 export const OverviewLoading: Story = { decorators: [withData(loading)] };
 export const OverviewNothingMeasured: Story = { decorators: [withData(noPlugins)] };
 export const OverviewDoctorUnavailable: Story = { decorators: [withData(noDoctor)] };
