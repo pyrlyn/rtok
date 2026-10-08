@@ -77,7 +77,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
-| T397 | todo | P3 | 2 | 30% | |
+| T397 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
@@ -1537,6 +1537,8 @@ From `research.md` §2 and §19, three numbers predate the fix they describe:
 Done means: each is re-run on current `main` (`cargo test --release --test graph_bench -- --ignored`, `replay_bench`, the §19.1 jq query over a post-T178 window) and the dated result replaces the stale text; T59.3's batch size is kept or reverted on its number.
 
 Check: three dated rows in `research.md`.
+
+Execution plan: (1) run `cargo test --release --test graph_bench -- --ignored --nocapture` three times on current `main` and put the median 3,000-file cold index next to the 172 ms in §2 (keep T59.3's 200-file batch unless slower, and report a slower number instead of reverting); (2) re-run `cargo test --test replay_bench -- --nocapture` and rewrite the T241 row for the `cmd` trailer (T247) and the `search` row (T300); (3) count `hook_cancelled` rtok attachments in a post-T178 window from a read-only copy of the session transcripts, aggregates only, and update §19.4 and §19.6 (or record that the data cannot answer it, with the date). Files: `research.md`. Verify: the numbers come from the commands above, `just check` for docs.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
