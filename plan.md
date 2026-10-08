@@ -93,7 +93,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
-| T414.11 | todo | P2 | 2 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -1637,12 +1636,6 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
-
-### T414.11. Clickable KPIs and panels open the filtered page
-
-Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
-
-Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
 
 ### T416. Shared `change-preview` crate for dry-run output
 

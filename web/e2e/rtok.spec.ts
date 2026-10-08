@@ -185,6 +185,16 @@ test("a filtered and sorted Calls link restores the view after a reload and step
   await expect(rows.filter({ hasText: /mem_save/ })).toHaveCount(1);
 });
 
+test("a KPI card on the Overview opens its page already filtered", async ({ page }) => {
+  await page.goto("/#/overview");
+  await page.getByRole("main").getByRole("link", { name: "plugins on" }).click();
+  await expect(page).toHaveURL(/#\/plugins\?show=on/);
+  await expect(page.getByRole("button", { name: /^enabled/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
 test("offline takes the whole screen when the server stops; Reconnect brings it back", async ({
   page,
   rtok,

@@ -130,6 +130,33 @@ describe("overview", () => {
         expect(screen.getByRole("img", { name: "3 of 4 plugins enabled" })).toBeTruthy();
     });
 
+    test("each KPI card and panel links to its page with the matching filter", async () => {
+        mount(serving(richSnapshot), "/overview");
+        await screen.findByRole("alert");
+        // The sidebar links to the same pages, so only links outside the nav count.
+        const href = (name: RegExp | string) => {
+            const found = screen.getAllByRole("link", { name }).filter((a) => !a.closest("nav"));
+            expect(found).toHaveLength(1);
+            return found[0]?.getAttribute("href");
+        };
+        expect(href("calls")).toBe("/calls");
+        expect(href(/^1 failed$/)).toBe("/calls?result=failed");
+        expect(href("live sessions")).toBe("/sessions?show=live");
+        expect(href("plugins on")).toBe("/plugins?show=on");
+        expect(href(/^mcp \d+$/)).toBe("/calls?surface=mcp");
+        expect(href(/^failed 1$/)).toBe("/calls?result=failed");
+        expect(href(/ live →$/)).toBe("/sessions?show=live");
+        // The chart sits above the card's overlay, so it is not inside any link.
+        expect(screen.getByRole("img", { name: /^Calls over time/ }).closest("a")).toBeNull();
+    });
+
+    test("clicking a KPI opens the page already filtered", async () => {
+        mount(serving(richSnapshot), "/overview");
+        fireEvent.click(await screen.findByRole("link", { name: "live sessions" }));
+        const liveOnly = await screen.findByRole("switch", { name: "live only" });
+        expect(liveOnly.getAttribute("aria-checked")).toBe("true");
+    });
+
     test("renders a failed doctor probe and an empty ledger instead of zeros", async () => {
         mount(serving({ ...richSnapshot, doctor: null, calls: [], sessions: [] }), "/overview");
         const doctor = await screen.findByRole("region", { name: "doctor" });
