@@ -7601,6 +7601,16 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T454. Hook recall uses the stored hybrid leg when embeddings are on
+
+`prompt_recall` ranked with FTS only while `mem_search` used `search_notes_hybrid` when `embed.enabled && embed.hybrid`. The hook now uses that same RRF over FTS and vectors already stored (`Store::search_notes_hybrid_stored`, on `Notes` / `Ctx` with an FTS default). It does not call `embed_stale`: a missing or stale row is not rewritten. An empty embedding table returns the FTS list, so the title index matches the flag-off path. `files::recall_hits` still wraps that list. Titles and ids only. One `Measurement` row, kind `prompt_recall`. Embeddings stay off by default. No change to `src/plugins/graph/`, `src/hooks/`, `src/proxy/`, or the `Plugin` trait. Amends D35: a stored-vector read is allowed on the hook only when embeddings are already on.
+
+Check: `mise exec rust -- cargo test --lib -- plugins::memory store::embed` (66 passed). `mise exec rust -- cargo clippy --all-targets -- -D warnings` clean. `mise exec rust -- cargo test --test latency --release` missed 10 ms on this host for every event, including PreToolUse (p95 13.8 ms, min 6.7 ms, `--test-threads=1`), which this change does not touch — the same spawn-floor miss T428 records on a loaded host.
+
+Result: lib tests 66 passed; clippy clean. #894.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
+
 ### T452. Recall notes linked to a file the prompt names, without a text match
 
 Creator decision on T374 (2026-10-08). A file named in the prompt (a path `files::mentioned` finds, relative, inside the root) recalls up to 2 notes linked to it even with no text match. They take slots from the existing `prompt_recall` budget (`n` titles, `recall_tokens`) and never enlarge it; output is byte-stable. Files the session merely read only re-rank notes that already matched the prompt text, so T374's recall of read-file notes with no text match is gone. The wider variant, recall by every read file without a text match, is parked as I-115 until a `Measurement` shows a saving. `files::recall_hits` replaces `linked_notes`; no config keys, no SDK change.

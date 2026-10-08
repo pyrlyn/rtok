@@ -93,7 +93,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T454 | in progress | P1 | 2 | 0% | Cursor / grok 4.7 |
 
 
 
@@ -1621,14 +1620,6 @@ Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an i
 Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
-
-### T454. Hook recall uses the stored hybrid leg when embeddings are on
-
-`prompt_recall` ranks with FTS only (`Ctx::search_notes`). `mem_search` uses `search_notes_hybrid` when `embed.enabled && embed.hybrid`. Defaults stay `enabled = false`, `hybrid = true`. The hook must use that same hybrid ranker over vectors already on disk, and must not call `embed_stale` (that rewrite misses the 10 ms hook).
-
-Do: `Store::search_notes_hybrid_stored` next to `search_notes_hybrid` — RRF of `search_notes` and a KNN that does not call `embed_stale`. An empty embedding table returns the FTS list. Expose it on `Ctx` the same way `search_notes` is (`Notes`, default body is FTS). `prompt_recall` calls it through `recall_query_hits`. `files::recall_hits` stays wrapped around that list. Titles and ids only. One `Measurement` row, kind `prompt_recall`. Embeddings stay off by default. No change to `src/plugins/graph/`, `src/hooks/`, `src/proxy/`, or the `Plugin` trait. Amends D35's "no vector read" for this stored read only.
-
-Check: with `embed.enabled = false`, `prompt_recall` output matches the existing tests (`prompt_recall_is_on_by_default_and_skips_bodies`). With `enabled` and `hybrid`, a note FTS misses and a stored hash vector hits is eligible for the title index, and a note with no stored vector causes no write. `cargo test --lib plugins::memory store::embed`; `cargo clippy --all-targets -- -D warnings`; `cargo test --test latency --release`.
 
 ### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 
