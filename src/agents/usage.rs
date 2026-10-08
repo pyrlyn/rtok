@@ -373,7 +373,7 @@ fn name(host: &str) -> String {
 }
 
 /// `tz` as an IANA zone; empty is the system zone (jiff reads `TZ` and the OS setting).
-fn zone(tz: &str) -> Result<TimeZone> {
+pub(crate) fn zone(tz: &str) -> Result<TimeZone> {
     if tz.is_empty() {
         return Ok(TimeZone::system());
     }
@@ -383,7 +383,7 @@ fn zone(tz: &str) -> Result<TimeZone> {
 }
 
 /// Midnight starting `day` in `tz`, in unix seconds.
-fn start_of(day: Date, tz: &TimeZone) -> Result<i64> {
+pub(crate) fn start_of(day: Date, tz: &TimeZone) -> Result<i64> {
     Ok(day.to_zoned(tz.clone())?.timestamp().as_second())
 }
 
