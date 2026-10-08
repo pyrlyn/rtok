@@ -537,9 +537,10 @@ pub fn leaf_keys() -> Vec<String> {
     keys
 }
 
-/// Keys whose value is a credential (an OTLP ingestion key rides in `otel.headers`): `config
-/// show/get/set` and `report` say that one is set and where from, never what it is.
-const SECRET_KEYS: &[&str] = &["otel.headers"];
+/// Keys whose value is a credential (an OTLP ingestion key rides in `otel.headers`, the
+/// `rtok mcp --http` bearer token in `mcp.token`): `config show/get/set` and `report` say that
+/// one is set and where from, never what it is.
+const SECRET_KEYS: &[&str] = &["otel.headers", "mcp.token"];
 
 fn legacy_source_for(fig: &Figment, key: &str) -> Option<String> {
     if key.starts_with("web.") {
@@ -683,6 +684,18 @@ mod tests {
         };
         assert_eq!(headers(&[("OTEL_HEADERS", "x-key=secret")]), "<redacted>");
         assert_eq!(headers(&[]), "", "unset stays visibly unset");
+        let token = |env: &[(&str, &str)]| {
+            entries(&fig(&home, env, None))
+                .into_iter()
+                .find(|(k, ..)| k == "mcp.token")
+                .unwrap()
+                .1
+        };
+        assert_eq!(
+            token(&[("MCP_TOKEN", "s3cret-s3cret-s3cret")]),
+            "<redacted>"
+        );
+        assert_eq!(token(&[]), "");
         let _ = std::fs::remove_dir_all(&home);
     }
 
