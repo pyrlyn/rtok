@@ -125,10 +125,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436 | todo | P2 | 3 | 0% | |
 | T436.1 | todo | P2 | 3 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.6 | todo | P2 | 3 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
 | T441.9 | todo | P3 | 1 | 0% | |
+| T441.10 | todo | P3 | 2 | 0% | |
 
 
 
@@ -2246,10 +2246,11 @@ project = "group/name"
 3. **T441.3 Allocator** — locked file (or Diesel table), project key, prefix rule, subtask counters, seeding hook; the parallel-process test.
 4. **T441.4 Adapter trait + disk adapter** — trait, disk layout, archive on done.
 5. **T441.5 CLI** — `rtok task create/list/show/status/next/init`, `--json`.
-6. **T441.6 MCP tools** — `task_*` on `rtok mcp`, parity test; instruction line installed into AGENTS.md/CLAUDE.md through `rtok agents install`; snippets for Claude Code, Claude Desktop, Codex CLI/app checked on each host.
+6. **T441.6 MCP tools** — `task_*` on `rtok mcp`, parity test. The server entry is already what `rtok agents install` writes for every host, so the tools need no install of their own.
 7. **T441.7 GitHub adapter** — issues, sub-issues, Projects v2 Status, label mapping, collision check, `sync`.
 8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
+10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 
 #### 12. Open questions
 
