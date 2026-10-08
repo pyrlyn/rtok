@@ -329,7 +329,8 @@ mod tests {
     fn escaped_quote_does_not_hide_a_cd() {
         assert!(decide(r"echo it\'s && cd sub").is_none());
         assert!(decide(r#"echo "a\" b" && cd sub"#).is_none());
-        assert!(decide(r"echo it\'s fine").is_some());
+        // Windows leaves every apostrophe command whole (T55.12).
+        assert_eq!(decide(r"echo it\'s fine").is_some(), !cfg!(windows));
     }
 
     #[test]
