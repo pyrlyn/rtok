@@ -249,7 +249,7 @@ calibrate_samples = 30                # per class        (--calibrate)
 baseline        = ""                  # default name for --compare; "" = none
 price           = false               # show per-model USD costs (--price)
 # USD per MTok rows for --price (T49.1). Sources, fetched 2026-09-17 (Anthropic claude-fable-5-1,
-# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-06):
+# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-08):
 # Anthropic claude-* rows: https://platform.claude.com/docs/en/about-claude/pricing
 # (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 # https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -268,7 +268,7 @@ output = 20.0
 [stats.prices."claude-sonnet-5-5"]
 input = 2.0
 cache_write = 2.5
-cache_read = 0.2
+cache_read = 0.1
 output = 10.0
 [stats.prices."claude-sonnet-5"]
 input = 2.0
