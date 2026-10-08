@@ -116,7 +116,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.1 | in progress | P2 | 3 | 95% | Claude Code / claude-sonnet-5-5 |
 | T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
@@ -1836,29 +1835,6 @@ Execution plan:
 4. Verify: A/B of the traced binaries, the latency test in release, five manual runs, `just check`.
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
-
-### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
-
-Creator request 2026-10-07: the same as T436, in the `rtok web` SPA.
-
-Today only page loads show a spinner (`Loading` in `web/src/states.tsx`, T407). Actions that call the API show nothing while they wait: the plugin switch (`pages/Plugins.tsx`, `useSetMutation`), project select and link (`pages/Projects.tsx`, `pages/graph3d/ProjectsOverview.tsx`, `useProjectMutation`), and doctor plan/apply (`pages/DoctorFix.tsx`) and expand (`pages/Calls.tsx`), which only disable their buttons.
-
-Done means:
-
-1. One `Spinner` in `web/src/ui`, with a story; `Loading` draws its ring through it, so there is one spinner in the SPA.
-2. Every control that sends a request shows the spinner on itself from the click until the answer, is disabled meanwhile and sets `aria-busy`. A switch stays in its old position until the server answers; on error it stays there and the error is shown.
-3. Operation icons: a verb → icon map in `web/src/ui` with the same operations as ketch's `OPERATION_ICONS` (install, remove/prune, update, fetch, link, roll back, search, doctor) plus rtok's own from T436, falling back to the success/warning/error/info icon. The web draws them as brand SVG icons through `Icon`, not emoji; missing ones are added under `brand/icons/ui/` (source rule of T414: no copies in `web/`). Action buttons and the result of an action carry their operation's icon.
-4. One list of operations: the web map and the CLI table of T436 name the same operations, checked by a test.
-5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
-
-Execution plan (2026-10-08): reuse `Icon`/`hasIcon` (`web/src/ui/Icon.tsx`), `Loading` (`states.tsx`) and the `useMutation` hooks in `api/query.tsx`.
-1. `ui/Spinner.tsx` (+ story); `Loading` draws through it.
-2. `set`/`project` in `createApi` resolve only on the server's answer (next snapshot, or a message frame that rejects), with a timeout, so `isPending` spans the real wait. A new `ui/Button.tsx` carries `pending` (spinner in place of the icon, disabled, `aria-busy`); `Switch` gains `pending`. Wired into Plugins, Projects (select, link, unlink), ProjectsOverview (select), DoctorFix (plan, apply), Calls (expand).
-3. `ui/operations.ts`: verb to icon map (ketch rows plus rtok's), `Kind` fallback, new SVGs under `brand/icons/ui/`; `Button` and result lines take an `op`.
-4. `web/src/ui/operations.test.ts` reads `OPERATION_ICONS` from `src/ui/style.rs` and compares the operation names.
-5. Verify: `npm run typecheck`, unit tests, `just spa-stories`, `just spa-e2e` (delayed `/ws` via `routeWebSocket`), `just check`.
-
-Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
 
 ### T436.2. Spinners on the remaining waits and icons on `agents install/update`
 
