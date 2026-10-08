@@ -15,6 +15,7 @@ use crate::config::Config;
 use crate::config::layers;
 use crate::config::validate;
 use crate::demon::Service;
+use crate::render::with_loader;
 use crate::ui::style;
 use crate::web::model;
 use anyhow::{Result, bail};
@@ -1430,7 +1431,10 @@ pub fn run() -> Result<()> {
                 config_file.as_deref(),
                 bench_flags(tasks, runs, dry_run, timeout, suite),
             )?;
-            print!("{}", crate::bench::run(&cfg)?);
+            print!(
+                "{}",
+                with_loader("running bench", || crate::bench::run(&cfg))?
+            );
         }
         Cmd::Doctor {
             instructions,
@@ -1501,15 +1505,17 @@ pub fn run() -> Result<()> {
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
             let cwd = std::env::current_dir()?;
             let root = &cfg.worktree.root;
-            let plan = claim::add(
-                store.as_ref(),
-                &cwd,
-                root,
-                id,
-                agent.as_ref(),
-                owner,
-                cfg.plugins.graph.auto_add_projects,
-            )?;
+            let plan = with_loader("adding worktree", || {
+                claim::add(
+                    store.as_ref(),
+                    &cwd,
+                    root,
+                    id,
+                    agent.as_ref(),
+                    owner,
+                    cfg.plugins.graph.auto_add_projects,
+                )
+            })?;
             println!("{}", plan.path.display());
         }
         Cmd::Worktree {
@@ -1582,13 +1588,15 @@ pub fn run() -> Result<()> {
             let store = crate::store::Store::open(&cfg.core.db_path).ok();
             let agent = claim::caller(store.as_ref(), agent.as_deref())?;
             let cwd = std::env::current_dir()?;
-            let done = remove::for_agent(
-                store.as_ref(),
-                &cwd,
-                &target,
-                (agent.as_ref(), owner),
-                keep_branch,
-            )?;
+            let done = with_loader("removing worktree", || {
+                remove::for_agent(
+                    store.as_ref(),
+                    &cwd,
+                    &target,
+                    (agent.as_ref(), owner),
+                    keep_branch,
+                )
+            })?;
             if json {
                 print_json(&done)?;
             } else {
@@ -2195,7 +2203,7 @@ pub fn run() -> Result<()> {
                         r.include_added,
                         r.extension_mapped,
                     );
-                    println!("{}", style::success(&summary));
+                    println!("{}", style::success_op("index", &summary));
                     if !dry_run {
                         crate::plugins::graph::follow::report(&cx, &root);
                     }
@@ -2573,13 +2581,6 @@ fn bench_flags(
     let mut flags = Dict::new();
     flags.insert("bench".into(), Value::from(bench));
     Some(flags)
-}
-
-fn with_loader<T>(msg: &str, f: impl FnOnce() -> T) -> T {
-    let pb = crate::render::loader(msg);
-    let out = f();
-    pb.finish_and_clear();
-    out
 }
 
 fn parse_hosts(host: &str) -> Result<Vec<String>> {

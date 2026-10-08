@@ -581,7 +581,7 @@ Rust (rust-analyzer) and Dart (Dart SDK): `docs/lsp.md`.
 
 rtok's own lines for a person at a terminal — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, the `graph index` summary, `--help` — carry an emoji and a colour by default:
-✅ success (green), 💡 status (cyan), ⚠️ warning (yellow), ❌ error (red).
+✅ success (green), 💡 status (cyan), ❗ warning (yellow), ❌ error (red). A line that names an operation takes that operation's icon instead (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), padded so the text after it starts in one column.
 
 ```toml
 [ui]
