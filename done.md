@@ -8,7 +8,7 @@ Do: `json_tree` plugin, default off, dispatched before `archive`. Hoist a non-em
 
 Check: unit tests for the hoist, key order, the scalar-table refusal, the live zone, `archive` not replaying the pointer, and the MCP fold; `expand` bytes match; `tests/lossless_roundtrip.rs`, `tests/plugin_plans.rs`, and `tests/cli_trycmd.rs` green.
 
-Check result: those tests passed (`cargo test --lib json_tree`, `lossless_roundtrip`, `plugin_plans`, `cli_trycmd`, `clippy -p rtok --lib --tests -D warnings`).
+Check result: `cargo +1.98.1 fmt --check` clean. `cargo +1.98.1 test --lib` with `RTOK_HOST_SANDBOX=1`: 2076 passed, 0 failed, 2 ignored. `agents_doc`, `lossless_roundtrip`, `plugin_plans`, and `cli_trycmd` passed. Workspace `--no-fail-fast` (same env; `just`/`mise` are not installed) is green except `filter` and `pi_plugin`, which panic because `vitest` is not on `PATH`, and `tests/proxy.rs`, which hangs at `proxy_openai_responses_compress_is_byte_exact_and_ignores_archive_decisions` when the whole file runs in one process. That hang reproduces on `main` (`a1af6639`); the test passes alone.
 
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
