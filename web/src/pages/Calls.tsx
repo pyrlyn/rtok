@@ -9,6 +9,7 @@ import type { CallRow, Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
 import { Chip } from "../ui/Chip";
 import { DataTable, type Column } from "../ui/DataTable";
+import { ExportButtons } from "../ui/ExportButtons";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
@@ -36,6 +37,7 @@ const columns: Column<CallRow>[] = [
         header: "time",
         width: "72px",
         sortValue: (c) => c.ts,
+        exportValue: (c) => iso(c.ts),
         cell: (c) => <span title={iso(c.ts)}>{hms(c.ts)}</span>,
     },
     {
@@ -73,6 +75,7 @@ const columns: Column<CallRow>[] = [
         header: "ok",
         width: "52px",
         sortValue: (c) => Number(Boolean(c.ok)),
+        exportValue: (c) => Boolean(c.ok),
         cell: (c) =>
             c.ok ? (
                 <span className="text-success-fg" role="img" aria-label="ok">
@@ -150,7 +153,18 @@ function CallsBody({ snap }: { snap: Snapshot }) {
             </Toolbar>
             <Split
                 list={
-                    <Panel title="calls (newest first)" hint={`last ${calls.length} ledger rows`}>
+                    <Panel
+                        title="calls (newest first)"
+                        hint={`last ${calls.length} ledger rows`}
+                        action={
+                            <ExportButtons
+                                label="calls"
+                                rows={rows}
+                                columns={columns}
+                                sort={sort}
+                            />
+                        }
+                    >
                         <DataTable
                             label="calls"
                             rows={rows}

@@ -14,7 +14,7 @@ Source of intent: `ideas.md` (I-100/I-101 token-saving notes), `docs/prompt-cach
 | Lever | What it is | Sync agent turn? | Rewrites the body? |
 |-------|------------|------------------|--------------------|
 | **Batch** | Provider async APIs (`/v1/batches`, `/v1/messages/batches`, …) | No — submit, poll, fetch results | **Pass-through** (no sync→Batch conversion) |
-| **Flex** | Same sync endpoints, cheaper/slower tier via `service_tier` | Yes | **Rewrite** in `prepare` (**planned**) |
+| **Flex** | Same sync endpoints, cheaper/slower tier via `service_tier` | Yes | **Rewrite** in `prepare` (`[proxy.lanes.<lane>] flex`) |
 | **Model routing** | Pick a cheaper model for easy turns (D9) | Yes | **Rewrite** `model` (**planned**) |
 
 rtok does **not** transparently convert a live agent `POST /v1/messages` (or
@@ -48,7 +48,7 @@ compress / prepare / usage parsing and behave as a plain reverse hop with a
 |------------|-------|----------|
 | Sync chat wires | record + optional compress/prepare + usage | unchanged |
 | Batch endpoints | fallback forward; no `Wire`; no usage row | **planned**: observe batch lifecycle + result usage |
-| Flex (`service_tier`) | client may set it; rtok does not inject | **planned**: `prepare` may set/override per `[proxy.flex]` |
+| Flex (`service_tier`) | client may set it | `prepare` sets it on opted-in lanes only and never overwrites a client value unless `[proxy.flex] force` |
 | Model routing | single upstream URL; model left as client sent | **planned**: policy rewrite under `[proxy.routing]` |
 
 ## Batch API endpoints
@@ -119,14 +119,17 @@ it.
 unchanged (passthrough / compress do not strip unknown fields on the wire
 parse path that re-serialises only after a filter mutates the body).
 
-**Planned:** `[proxy.flex]` drives `prepare` on OpenAI wires:
+**Flex on lanes:** `[proxy.lanes.<lane>] flex = true` (lanes `bulk`, `internal`, `embeddings`, `meta`;
+never `agent`) lets `prepare` set `service_tier = "flex"` on the two OpenAI wires, and `[proxy.flex]` tunes it:
 
-- `enabled = true` → set `service_tier = "flex"` when the client omitted it
-- `force = true` → overwrite a client value
-- respect an explicit client `"default"` / `"auto"` when `force = false`
-- on `429` resource-unavailable from Flex, fail open to the client (no silent
-  retry onto default tier unless `[proxy.flex] fallback = "default"` — **TODO**:
-  confirm retry policy before implementing)
+- the field is added when the client omitted it (or sent `null`); every other byte is forwarded as sent
+- a client `"default"` / `"auto"` / `"priority"` / `"flex"` is respected; `force = true` overwrites it
+- on `429 Resource Unavailable` (billed nothing, per the OpenAI guide checked 2026-10-08) `on_429`
+  decides: `none` fails open to the client, `backoff` retries on Flex with doubling delays,
+  `default` retries once with the client's own tier if `force` replaced one, else `auto`. A
+  `Retry-After` in seconds lengthens the wait (cap 30 s); a `408` is not retried. Only a tier rtok set is retried.
+
+Keys and defaults: [config.md](config.md#proxyflex).
 
 Anthropic has no `service_tier` twin; Flex here means OpenAI (and any future
 provider that exposes an equivalent field on a `Wire`).
@@ -190,10 +193,11 @@ enabled = true          # forward Batch paths (always true via fallback today)
 observe = true          # record create/poll/results into the ledger
 parse_results = false   # when true, expand result files into usage rows
 
-[proxy.flex]
-enabled = false         # prepare may set service_tier = "flex"
-force = false           # overwrite client service_tier
-fallback = "none"       # none | default — behaviour on Flex 429 (**TODO**)
+[proxy.flex]            # live, unlike the rest of this sketch
+force = false           # overwrite a client service_tier
+on_429 = "none"        # none | backoff | default
+retries = 3             # backoff only
+backoff_ms = 1000       # backoff only
 
 [proxy.routing]
 enabled = false         # model / tier routing (D9); off until a policy + Check exists

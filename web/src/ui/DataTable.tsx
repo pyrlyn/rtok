@@ -17,7 +17,11 @@ export interface Column<T extends RowData> {
     cell: (row: T) => ReactNode;
     /** Makes the header a sort button; `null` and `undefined` always sort last. */
     sortValue?: (row: T) => number | string | null | undefined;
+    /** Plain value for CSV and JSON export; defaults to `sortValue`, and a column with neither is left out. */
+    exportValue?: (row: T) => Cell;
 }
+
+export type Cell = number | string | boolean | null | undefined;
 
 export interface Sort {
     id: string;
