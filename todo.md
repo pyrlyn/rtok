@@ -120,4 +120,3 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T441.7. GitHub adapter
 - T441.8. GitLab adapter
-- T451. Graph cold index: ship the 200-file batch T59.3 claimed
