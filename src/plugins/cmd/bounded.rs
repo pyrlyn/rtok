@@ -4,8 +4,8 @@
 
 //! T176: a command the agent already bounded — `sed -n 1,80p`, `head`/`tail -n`,
 //! `grep -A/-B/-C/-m`, `cat -n` of named files — printed what was asked for. Cutting it
-//! again only buys an `expand` round trip. The lexer reads quotes and the `|`, `|&`,
-//! `&&`, `||`, `;` separators and nothing else of the shell grammar (`cmd/AGENTS.md`).
+//! again only buys an `expand` round trip. The lexer reads quotes, backslash escapes and the
+//! `|`, `|&`, `&&`, `||`, `;` separators and nothing else of the shell grammar (`cmd/AGENTS.md`).
 
 /// Past this the host truncates a Bash result on its own (Claude Code: 30 000 chars),
 /// and a cut that names the archive beats one that does not.
@@ -78,6 +78,20 @@ fn lex(s: &str) -> Vec<Vec<Vec<String>>> {
         if let Some(q) = quote {
             if c == q {
                 quote = None;
+            } else if q == '"' && c == '\\' {
+                // Inside double quotes only these four are escapable (and `\`-newline is
+                // a continuation); any other `\` stays literal. Single quotes have no
+                // escapes, so they never get here.
+                match chars.peek().copied() {
+                    Some(n @ ('"' | '\\' | '$' | '`')) => {
+                        chars.next();
+                        word.get_or_insert_default().push(n);
+                    }
+                    Some('\n') => {
+                        chars.next();
+                    }
+                    _ => word.get_or_insert_default().push(c),
+                }
             } else {
                 word.get_or_insert_default().push(c);
             }
@@ -89,6 +103,13 @@ fn lex(s: &str) -> Vec<Vec<Vec<String>>> {
             '\\' if chars.peek() == Some(&'\n') => {
                 chars.next();
                 None
+            }
+            // Any other escaped char is a plain word char: `it\'s` must not open a quote
+            // that swallows a later `&& cd sub`.
+            '\\' => {
+                word.get_or_insert_default()
+                    .push(chars.next().unwrap_or('\\'));
+                continue;
             }
             '\'' | '"' => {
                 quote = Some(c);
@@ -331,5 +352,19 @@ mod tests {
     #[test]
     fn backslash_newline_continuation_does_not_split_a_pipeline() {
         assert_eq!(super::lex("cargo test \\\n  --all").len(), 1);
+    }
+
+    /// T444: `\` outside quotes makes the next char literal; inside double quotes it
+    /// escapes only `"`, `\`, `$`, `` ` ``; single quotes have no escapes.
+    #[rstest]
+    #[case(r"echo it\'s && cd sub", r#"[["echo", "it's"], ["cd", "sub"]]"#)]
+    #[case(r#"echo "a\" b" && x"#, r#"[["echo", "a\" b"], ["x"]]"#)]
+    #[case(r#"echo "a\\" && x"#, r#"[["echo", "a\\"], ["x"]]"#)]
+    #[case(r#"echo "a\n" && x"#, r#"[["echo", "a\\n"], ["x"]]"#)]
+    #[case(r"echo 'a\' && x", r#"[["echo", "a\\"], ["x"]]"#)]
+    #[case(r"echo a\;b c", r#"[["echo", "a;b", "c"]]"#)]
+    #[case("cargo test \\\n --all", r#"[["cargo", "test", "--all"]]"#)]
+    fn lexer_backslash_escapes(#[case] cmd: &str, #[case] want: &str) {
+        assert_eq!(format!("{:?}", super::stages(cmd)), want, "{cmd}");
     }
 }
