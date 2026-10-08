@@ -100,7 +100,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
-| T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
@@ -1700,12 +1699,6 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
 
 Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
-
-### T414.13. Δtok savings trend on Overview and Stats
-
-A time series of `Measurement` savings (est before − after per bucket), total and per plugin, added to the snapshot by the Rust model next to `Stats` and drawn on Overview and Stats. Buckets come from the existing aggregation helper; no second aggregation path. No `Measurement` rows → an empty state, never a zero line that reads as a claim.
-
-Check: Rust test for the bucketed series against fixture rows; regenerated `web/src/api/snapshot.gen.ts` committed; story with sample data and with no rows.
 
 ### T414.14. CSV and JSON export of tables
 

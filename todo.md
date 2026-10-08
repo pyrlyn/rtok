@@ -98,7 +98,6 @@
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T414.11. Clickable KPIs and panels open the filtered page
-- T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
 - T416. Shared `change-preview` crate for dry-run output
 - T416.1. rtok renders previews through `change-preview`
