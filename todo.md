@@ -67,7 +67,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T403. A/B a path and identifier dictionary in proxy requests
 - T404. Evaluate a local draft model that the cloud model only verifies
 - T405. Task-board extras for the agent task tools
 - T413. More agent hosts: popular agents rtok does not install into yet
