@@ -110,7 +110,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.8 | todo | P2 | 2 | 0% | |
-| T414.11 | todo | P2 | 2 | 0% | |
+| T414.11 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.12 | todo | P2 | 2 | 0% | |
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
@@ -1933,6 +1933,8 @@ Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reac
 Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
 
 Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
+
+Execution plan: (1) `tableLink(page, filter)` in `web/src/tableSearch.ts` builds a typed `{to, search}` from the page's `TABLE_SPECS` so no link hand-builds a query string. (2) `Kpi` gets an optional `to`: the label becomes a stretched link (an `::after` overlay covers the card, the focus ring is drawn on it) and the chart stays above the overlay, because a link around a focusable chart would nest interactive elements. (3) Overview: calls to Calls (its failed count to `result=failed`), live sessions to `show=live`, plugins on to `show=on`; the calls legend entries and a "live" link in the sessions panel header use the same helper, the panels keep their header links. (4) Tests: a unit test for `tableLink`, a Pages story with a play function asserting every link target and an axe pass, an e2e that clicks a KPI and lands on the filtered page. Verify with `just check`, typecheck, unit tests, `just spa-stories`, `just spa-e2e`.
 
 ### T414.12. Live status: snapshot age and pause
 
