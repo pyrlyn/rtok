@@ -85,7 +85,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.3 | todo | P2 | 3 | 0% | |
 | T414.4 | todo | P2 | 3 | 0% | |
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
@@ -96,10 +95,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
+| T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.11 | todo | P3 | 3 | 0% | |
 | T441.12 | todo | P3 | 3 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
 
@@ -1582,12 +1580,6 @@ Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos a
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
 
-### T414.3. Restyle the `web/src/ui` components to the approved mockup
-
-Chip, DataTable, Kpi, Marks, Panel, Pill, Search, Sparkline, Switch: brand roles only (no hex literals), stories updated.
-
-Check: `just spa-stories` (axe) green; a grep over `web/src` finds no hex colour literal outside tests and fixtures.
-
 ### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
 
 Apply the approved shell and components; chart series colours come from the brand roles.
@@ -1666,17 +1658,17 @@ Execution plan:
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
-### T436.2. Spinners on the remaining waits and icons on `agents install/update`
-
-Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
-
-Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
-
 ### T436.3. Shared operation-icon crate for rtok and ketch
 
 Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
+
+### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
+
+Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
+
+Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
 ## Reference
 
@@ -2009,7 +2001,7 @@ project = "group/name"
 8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
-11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
+11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
 12. **T441.12 `rtok task sync`** (split from T441.7) — reconcile a remote adapter with the store counter and report drift: issues labelled by hand, ids above the counter, tasks whose `rtok:<id>` label was removed.
 
 #### 12. Open questions

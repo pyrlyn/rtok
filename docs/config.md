@@ -397,7 +397,7 @@ dir = "tasks"                         # one Markdown file per task, relative to 
 
 [tasks.github]
 repo = ""                             # owner/name; empty: the origin remote
-project = 0                           # Projects v2 number for the Status field (not read yet); 0 = issues only
+project = 0                           # repo owner's Projects v2 number: issues join it and its Status follows the task; 0 = issues only
 
 [tasks.gitlab]
 url = "https://gitlab.com"            # base URL; set it for a self-hosted instance

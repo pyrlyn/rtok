@@ -1729,7 +1729,9 @@ pub fn run() -> Result<()> {
         }
         Cmd::Info { json } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
-            let info = crate::info::collect(&cfg, config_file.as_deref());
+            let info = with_loader("reading status", || {
+                crate::info::collect(&cfg, config_file.as_deref())
+            });
             if json {
                 print_json(&info)?;
             } else {
@@ -2237,7 +2239,9 @@ pub fn run() -> Result<()> {
                     dry_run,
                     remove,
                     force,
-                } => crate::plugins::memory::sync::run(&cfg, file, budget, dry_run, remove, force)?,
+                } => with_loader("syncing memory", || {
+                    crate::plugins::memory::sync::run(&cfg, file, budget, dry_run, remove, force)
+                })?,
                 MemoryCmd::Status {
                     project,
                     since,
@@ -2434,10 +2438,13 @@ pub fn run() -> Result<()> {
             match action {
                 OtelCmd::Flush { coalesce } => {
                     let cx = crate::plugin::Runtime::open(cfg, "otel")?;
+                    // The coalesced run is the hook's detached child, with no terminal to draw on.
                     let rep = if coalesce {
                         crate::otel::export::flush_coalesced_blocking(&cx)
                     } else {
-                        crate::otel::export::flush_blocking(&cx)
+                        with_loader("flushing telemetry", || {
+                            crate::otel::export::flush_blocking(&cx)
+                        })
                     };
                     println!("{rep}");
                 }
@@ -2516,7 +2523,9 @@ pub fn run() -> Result<()> {
             // D24: the command picks the renderer and the sink; every number was already
             // computed by the model (`src/report/` touches nothing else).
             let home = Config::home_dir();
-            let doc = crate::report::document(&cfg, &home, config_file.as_deref())?;
+            let doc = with_loader("building the report", || {
+                crate::report::document(&cfg, &home, config_file.as_deref())
+            })?;
             if cfg.report.ai {
                 emit(
                     &cfg.report.out,

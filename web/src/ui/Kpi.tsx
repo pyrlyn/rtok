@@ -29,7 +29,9 @@ export function Kpi({
 }) {
     return (
         <Scoped>
-            <div className="glass relative flex min-w-0 flex-col gap-1.5 p-3">
+            <div
+                className={`glass relative flex min-w-0 flex-col gap-1.5 p-3 transition-colors duration-fast ease-standard ${to ? "hover:border-border-strong" : ""}`}
+            >
                 <span className="truncate text-2xs font-semibold tracking-kicker text-fg-subtle uppercase">
                     {to ? (
                         <Link
