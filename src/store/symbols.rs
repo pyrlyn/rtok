@@ -16,7 +16,8 @@ use diesel::sqlite::SqliteConnection;
 use super::Store;
 use super::schema::{extractor, file_rank, symbol_stale, symbols};
 
-const INSERT_CHUNK: usize = 999 / 11;
+/// Span rows bind 16 columns; stay under SQLite's default 999 variables (T471).
+const SPAN_INSERT_CHUNK: usize = 999 / 16;
 
 /// SQLite's default `SQLITE_MAX_VARIABLE_NUMBER` is 999; a BFS level's frontier is chunked
 /// below that so a wide fan-out never blows the bind limit in one `eq_any`.
@@ -145,6 +146,36 @@ fn replace_one(
     stat: (i64, i64),
     rows: &[(String, String, i32, bool, i32, String)],
 ) -> QueryResult<usize> {
+    let spans: Vec<rtok_plugin_sdk::SymbolSpanRow> = rows
+        .iter()
+        .map(
+            |(name, kind, line, is_def, end_line, scope)| rtok_plugin_sdk::SymbolSpanRow {
+                name: name.clone(),
+                kind: kind.clone(),
+                line: *line,
+                is_def: *is_def,
+                end_line: *end_line,
+                scope: scope.clone(),
+                start_byte: 0,
+                end_byte: 0,
+                content_hash: String::new(),
+                signature: String::new(),
+                doc: String::new(),
+            },
+        )
+        .collect();
+    replace_spans(conn, root, path, file_sha, stat, &spans)
+}
+
+/// [`replace_one`] plus the byte span, signature and doc (T471).
+fn replace_spans(
+    conn: &mut SqliteConnection,
+    root: &str,
+    path: &str,
+    file_sha: &str,
+    stat: (i64, i64),
+    rows: &[rtok_plugin_sdk::SymbolSpanRow],
+) -> QueryResult<usize> {
     diesel::delete(symbols::table.filter(symbols::root.eq(root).and(symbols::path.eq(path))))
         .execute(conn)?;
     if rows.is_empty() {
@@ -163,22 +194,27 @@ fn replace_one(
             .execute(conn)?;
         return Ok(0);
     }
-    for chunk in rows.chunks(INSERT_CHUNK) {
+    for chunk in rows.chunks(SPAN_INSERT_CHUNK) {
         let values: Vec<_> = chunk
             .iter()
-            .map(|(name, kind, line, is_def, end_line, scope)| {
+            .map(|r| {
                 (
                     symbols::root.eq(root),
                     symbols::path.eq(path),
-                    symbols::name.eq(name),
-                    symbols::kind.eq(kind),
-                    symbols::line.eq(line),
-                    symbols::is_def.eq(i32::from(*is_def)),
+                    symbols::name.eq(&r.name),
+                    symbols::kind.eq(&r.kind),
+                    symbols::line.eq(r.line),
+                    symbols::is_def.eq(i32::from(r.is_def)),
                     symbols::file_sha.eq(file_sha),
                     symbols::mtime.eq(stat.0),
                     symbols::size.eq(stat.1),
-                    symbols::end_line.eq(end_line),
-                    symbols::scope.eq(scope),
+                    symbols::end_line.eq(r.end_line),
+                    symbols::scope.eq(&r.scope),
+                    symbols::start_byte.eq(r.start_byte),
+                    symbols::end_byte.eq(r.end_byte),
+                    symbols::content_hash.eq(&r.content_hash),
+                    symbols::signature.eq(&r.signature),
+                    symbols::doc.eq(&r.doc),
                 )
             })
             .collect();
@@ -316,6 +352,135 @@ impl Store {
                 Ok(inserted)
             })?,
         )
+    }
+
+    /// Span-aware replace of many files (T471). Same transaction shape as
+    /// [`Store::replace_symbol_files`].
+    pub fn replace_symbol_span_files(
+        &self,
+        root: &str,
+        files: &rtok_plugin_sdk::SymbolSpanBatch,
+    ) -> Result<usize> {
+        if files.is_empty() {
+            return Ok(0);
+        }
+        let mut conn = self.lock()?;
+        Ok(
+            conn.immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                let mut inserted = 0usize;
+                for (path, file_sha, stat, rows) in files {
+                    inserted += replace_spans(conn, root, path, file_sha, *stat, rows)?;
+                }
+                Ok(inserted)
+            })?,
+        )
+    }
+
+    /// Span-aware replace of one file (T471).
+    pub fn replace_symbol_spans(
+        &self,
+        root: &str,
+        path: &str,
+        file_sha: &str,
+        stat: (i64, i64),
+        rows: &[rtok_plugin_sdk::SymbolSpanRow],
+    ) -> Result<usize> {
+        let mut conn = self.lock()?;
+        Ok(
+            conn.immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                replace_spans(conn, root, path, file_sha, stat, rows)
+            })?,
+        )
+    }
+
+    /// One definition's stored span (T471).
+    pub fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<rtok_plugin_sdk::SymbolSpan>> {
+        let mut conn = self.lock()?;
+        let row = symbols::table
+            .filter(
+                symbols::root
+                    .eq(root)
+                    .and(symbols::path.eq(path))
+                    .and(symbols::name.eq(name))
+                    .and(symbols::kind.eq(kind))
+                    .and(symbols::line.eq(line))
+                    .and(symbols::is_def.eq(1)),
+            )
+            .select((
+                symbols::path,
+                symbols::name,
+                symbols::kind,
+                symbols::line,
+                symbols::end_line,
+                symbols::start_byte,
+                symbols::end_byte,
+                symbols::content_hash,
+                symbols::mtime,
+                symbols::size,
+            ))
+            .first::<(String, String, String, i32, i32, i32, i32, String, i64, i64)>(&mut *conn)
+            .optional()?;
+        Ok(row.map(
+            |(
+                path,
+                name,
+                kind,
+                line,
+                end_line,
+                start_byte,
+                end_byte,
+                content_hash,
+                mtime,
+                size,
+            )| {
+                rtok_plugin_sdk::SymbolSpan {
+                    path,
+                    name,
+                    kind,
+                    line,
+                    end_line,
+                    start_byte,
+                    end_byte,
+                    content_hash,
+                    mtime,
+                    size,
+                }
+            },
+        ))
+    }
+
+    /// FTS hits on definition name, signature and doc, BM25 order, before Rust ranking (T471).
+    pub fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<rtok_plugin_sdk::SymbolFtsHit>> {
+        let Some(q) = super::fts_or_query(query) else {
+            return Ok(Vec::new());
+        };
+        let mut conn = self.lock()?;
+        let hits = super::sql_ext::SearchSymbolFts {
+            query: q,
+            root: root.to_string(),
+            limit: i32::try_from(limit).unwrap_or(64).clamp(1, 64),
+        }
+        .load::<(String, String, String)>(&mut *conn)?
+        .into_iter()
+        .map(|(name, signature, doc)| rtok_plugin_sdk::SymbolFtsHit {
+            name,
+            signature,
+            doc,
+        })
+        .collect();
+        Ok(hits)
     }
 
     pub fn replace_symbols(

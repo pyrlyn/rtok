@@ -26,6 +26,10 @@ pub struct TagHit {
     pub line_text: String,
     /// Full import specifier when `kind == "import"` (T368). `name` stays the last segment.
     pub import_path: String,
+    /// Byte offset of the tagged node (T471).
+    pub start_byte: usize,
+    /// Exclusive end offset of the tagged node (T471).
+    pub end_byte: usize,
 }
 
 /// True when `path` has a tags-supported extension (cheap; does not parse).
@@ -123,6 +127,8 @@ pub fn tags_with_extensions(
                 is_def,
                 line_text: line_text.clone(),
                 import_path,
+                start_byte: tag.range.start,
+                end_byte: tag.range.end,
             });
         }
     }

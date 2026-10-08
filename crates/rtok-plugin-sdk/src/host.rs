@@ -414,6 +414,74 @@ pub type SymbolFileRows = Vec<(String, String, i32, bool, i32, String)>;
 /// Batched cold-index writes: `(path, sha, stat, rows)` per file.
 pub type SymbolFileBatch = Vec<(String, String, (i64, i64), SymbolFileRows)>;
 
+/// One indexed symbol plus the byte span of its source (T471).
+///
+/// `end_byte <= start_byte` means the row has no span; readers fall back to line slicing.
+#[derive(Debug, Clone)]
+pub struct SymbolSpanRow {
+    /// Definition or reference name.
+    pub name: String,
+    /// Tags kind (`function`, `method`, …).
+    pub kind: String,
+    /// 1-based start line.
+    pub line: i32,
+    /// True for a definition.
+    pub is_def: bool,
+    /// 1-based end line, inclusive.
+    pub end_line: i32,
+    /// Enclosing definition, or the full import path.
+    pub scope: String,
+    /// Byte offset of the tagged node.
+    pub start_byte: i32,
+    /// Exclusive end offset. Usable when `end_byte > start_byte`.
+    pub end_byte: i32,
+    /// SHA-256 of the span bytes. Empty skips the check on read.
+    pub content_hash: String,
+    /// First line of a definition, trimmed. Empty for a reference.
+    pub signature: String,
+    /// Doc comment immediately above a definition, at most 512 bytes.
+    pub doc: String,
+}
+
+/// Batched span writes: `(path, sha, stat, rows)` per file (T471).
+pub type SymbolSpanBatch = Vec<(String, String, (i64, i64), Vec<SymbolSpanRow>)>;
+
+/// A stored definition span and the file freshness it was indexed with (T471).
+#[derive(Debug, Clone)]
+pub struct SymbolSpan {
+    /// Repo-relative path.
+    pub path: String,
+    /// Definition name.
+    pub name: String,
+    /// Tags kind.
+    pub kind: String,
+    /// 1-based start line.
+    pub line: i32,
+    /// 1-based end line, inclusive.
+    pub end_line: i32,
+    /// Byte offset of the tagged node.
+    pub start_byte: i32,
+    /// Exclusive end offset.
+    pub end_byte: i32,
+    /// SHA-256 of the span bytes. Empty skips the check.
+    pub content_hash: String,
+    /// Indexed mtime in nanoseconds.
+    pub mtime: i64,
+    /// Indexed file size in bytes.
+    pub size: i64,
+}
+
+/// One FTS hit on a definition's name, signature and doc (T471).
+#[derive(Debug, Clone)]
+pub struct SymbolFtsHit {
+    /// Definition name.
+    pub name: String,
+    /// Stored signature line.
+    pub signature: String,
+    /// Stored doc comment.
+    pub doc: String,
+}
+
 /// The symbol index behind `symbol` / `callers` / `impact`: definitions and references
 /// extracted from source, keyed by repository root and relative path.
 ///
@@ -606,6 +674,63 @@ pub trait Symbols {
     fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
         let _ = (root, graph);
         Ok(())
+    }
+
+    /// Replace one file's rows, keeping each symbol's byte span (T471).
+    ///
+    /// Default drops the span columns and calls [`Symbols::replace_symbols`], so a host
+    /// that has not opted in still accepts the write.
+    fn replace_symbol_spans(
+        &self,
+        root: &str,
+        path: &str,
+        file_sha: &str,
+        stat: (i64, i64),
+        rows: &[SymbolSpanRow],
+    ) -> Result<usize> {
+        let plain: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                (
+                    r.name.clone(),
+                    r.kind.clone(),
+                    r.line,
+                    r.is_def,
+                    r.end_line,
+                    r.scope.clone(),
+                )
+            })
+            .collect();
+        self.replace_symbols(root, path, file_sha, stat, &plain)
+    }
+
+    /// Replace many files' span rows in one transaction (T471).
+    fn replace_symbol_span_files(&self, root: &str, files: &SymbolSpanBatch) -> Result<usize> {
+        let mut n = 0;
+        for (path, sha, stat, rows) in files {
+            n += self.replace_symbol_spans(root, path, sha, *stat, rows)?;
+        }
+        Ok(n)
+    }
+
+    /// One definition's span. `None` when the host has no span columns or no such row (T471).
+    fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<SymbolSpan>> {
+        let _ = (root, path, name, kind, line);
+        Ok(None)
+    }
+
+    /// Definitions whose name, signature or doc matches `query` (T471). Empty on error
+    /// is the caller's choice; the default is an empty list.
+    fn symbol_fts(&self, root: &str, query: &str, limit: i64) -> Result<Vec<SymbolFtsHit>> {
+        let _ = (root, query, limit);
+        Ok(Vec::new())
     }
 }
 

@@ -586,14 +586,15 @@ fn finish(cx: &Ctx, tool: &'static str, t0: Instant, text: String) -> Result<Str
     cap(cx, text)
 }
 
-fn body(root: &Path, path: &str, line: i32, end_line: i32, budget: usize) -> String {
+fn body(cx: &Ctx, root: &Path, path: &str, line: i32, end_line: i32, budget: usize) -> String {
     let src = std::fs::read_to_string(root.join(path)).unwrap_or_default();
-    super::body_lines(&src, line, end_line, budget)
+    super::body_lines(Some(cx), &src, line, end_line, budget)
 }
 
 /// The text of `lsp symbol`: one `path:line kind` + body per matching definition,
 /// or the empty-answer sentence. Shared by the tool and `explore` (T68.1).
 fn symbol_text(
+    cx: &Ctx,
     s: &mut Session,
     name: &str,
     filter: &super::Filter,
@@ -612,8 +613,10 @@ fn symbol_text(
             if !filter.path_ok(&d.path) || !filter.kind_ok(kind_name(d.kind)) {
                 continue;
             }
-            out.push_str(&format!("{}:{} {}\n", d.path, d.line, kind_name(d.kind)));
-            out.push_str(&body(&s.root, &d.path, d.line, d.end_line, budget));
+            let kind = kind_name(d.kind);
+            let id = format!("{}::{name}#{kind}@{}", d.path, d.line);
+            out.push_str(&format!("{}:{} {} {id}\n", d.path, d.line, kind));
+            out.push_str(&body(cx, &s.root, &d.path, d.line, d.end_line, budget));
         }
     }
     if out.is_empty() {
@@ -634,7 +637,7 @@ pub(crate) fn symbol(cx: &Ctx, root: &Path, name: &str, filter: &super::Filter) 
                 format!("no definition of {name}{}", filter.scope_note()),
             );
         }
-        let out = symbol_text(s, name, filter, budget)?;
+        let out = symbol_text(cx, s, name, filter, budget)?;
         finish(cx, "symbol", t0, out)
     })
 }
@@ -871,6 +874,7 @@ struct LspExplore<'a> {
     s: &'a mut Session,
     filter: &'a super::Filter,
     budget: usize,
+    cx: &'a Ctx<'a>,
 }
 
 impl super::ExploreParts for LspExplore<'_> {
@@ -894,7 +898,7 @@ impl super::ExploreParts for LspExplore<'_> {
     }
 
     fn defs(&mut self, name: &str) -> Result<String> {
-        symbol_text(self.s, name, self.filter, self.budget)
+        symbol_text(self.cx, self.s, name, self.filter, self.budget)
     }
 
     fn paths(&mut self, a: &str, b: &str) -> Result<Vec<String>> {
@@ -924,7 +928,12 @@ pub(crate) fn explore(
     let t0 = Instant::now();
     let budget = cx.plugin_config::<crate::config::Graph>("graph").body_lines as usize;
     with_session(root, |s| {
-        let mut parts = LspExplore { s, filter, budget };
+        let mut parts = LspExplore {
+            s,
+            filter,
+            budget,
+            cx,
+        };
         let (text, before) = super::assemble_explore(query, filter, &mut parts)?;
         let est = cx.estimate(&text, Class::Code);
         cx.record(&Measurement {

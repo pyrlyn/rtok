@@ -8,7 +8,7 @@
 //! the index is stored. A storage backend is acceptable when this file passes unchanged:
 //! the same five tools, byte for byte, plus the three index behaviours a caller can observe
 //! — a second repo does not disturb the first, an edited file is re-read, a deleted file
-//! loses its rows. The expected strings are the v0.2 (SQLite) output, copied verbatim.
+//! loses its rows. Definition heads carry `path::name#kind@line` (T471).
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -78,8 +78,8 @@ fn explore_two_symbol_question_byte_exact() {
             "explore",
             serde_json::json!({"query": "how do b and c interact"})
         ),
-        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
-         = c\nchain.rs:7 function\nfn c() {}\n\
+        "= b\nchain.rs:4 function chain.rs::b#function@4\nfn b() {\n    c();\n}\ncalls: c\n\
+         = c\nchain.rs:7 function chain.rs::c#function@7\nfn c() {}\n\
          paths:\nc → b\n\
          impact:\nb ← 1\nc ← 2\n"
     );
@@ -113,7 +113,7 @@ fn four_tools_byte_exact() {
     let name = |n: &str| serde_json::json!({"name": n});
     assert_eq!(
         call(&home, &a, "symbol", name("b")),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs:4 function chain.rs::b#function@4\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(&home, &a, "callers", name("c")),
@@ -218,7 +218,7 @@ fn second_repo_leaves_the_first_intact() {
     let first = call(&home, &a, "symbol", name.clone());
     assert_eq!(
         first,
-        "chain.rs:1 function\nfn a() {\n    b();\n}\ncalls: b\n"
+        "chain.rs:1 function chain.rs::a#function@1\nfn a() {\n    b();\n}\ncalls: b\n"
     );
     assert_eq!(
         call(&home, &b, "symbol", name.clone()),
@@ -273,7 +273,7 @@ fn filters_narrow_to_one_subtree() {
             "symbol",
             serde_json::json!({"name": "b", "path": "chain"})
         ),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs:4 function chain.rs::b#function@4\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(
@@ -282,7 +282,7 @@ fn filters_narrow_to_one_subtree() {
             "symbol",
             serde_json::json!({"name": "b", "kind": "function"})
         ),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs:4 function chain.rs::b#function@4\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(

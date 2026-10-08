@@ -12,7 +12,7 @@ use anyhow::Result;
 
 use crate::plugins::read::outline;
 use crate::store;
-use rtok_plugin_sdk::Ctx;
+use rtok_plugin_sdk::{Ctx, SymbolSpanRow};
 
 #[derive(Debug, Default)]
 pub struct Report {
@@ -26,8 +26,8 @@ pub struct Report {
     pub extension_mapped: u32,
 }
 
-/// One symbol row: name, kind, line, is-definition, end line, enclosing definition.
-type Row = (String, String, i32, bool, i32, String);
+/// One symbol row, including the byte span `symbol` slices (T471).
+type Row = SymbolSpanRow;
 
 /// `file_sha` for a file that cannot be decoded or parsed (T36.16). The stat gate can skip it
 /// on the next run without opening the file again.
@@ -56,7 +56,7 @@ fn changed_abs(root: &Path, event_path: &Path) -> PathBuf {
     })
 }
 
-fn stat_key(md: &std::fs::Metadata) -> (i64, i64) {
+pub(crate) fn stat_key(md: &std::fs::Metadata) -> (i64, i64) {
     let mtime = md
         .modified()
         .ok()
@@ -169,7 +169,7 @@ pub fn run_with(
         pb.inc(1);
         stage_parsed(job, parsed, &mut report, &mut pending, &mut touches);
         if !dry_run && pending.len() >= SYMBOL_BATCH_FILES {
-            report.inserted += cx.replace_symbol_files(&rk, &pending)?;
+            report.inserted += cx.replace_symbol_span_files(&rk, &pending)?;
             pending.clear();
         }
         Ok(())
@@ -179,7 +179,7 @@ pub fn run_with(
         report.inserted = pending.iter().map(|(_, _, _, rows)| rows.len()).sum();
     } else {
         if !pending.is_empty() {
-            report.inserted += cx.replace_symbol_files(&rk, &pending)?;
+            report.inserted += cx.replace_symbol_span_files(&rk, &pending)?;
         }
         for (path, stat) in touches {
             cx.touch_symbols(&rk, &path, stat.0, stat.1)?;
@@ -273,7 +273,7 @@ fn run_changed_with(
                 report.inserted += if dry_run {
                     rows.len()
                 } else {
-                    cx.replace_symbols(&rk, &job.rel, &sha, job.stat, &rows)?
+                    cx.replace_symbol_spans(&rk, &job.rel, &sha, job.stat, &rows)?
                 };
             }
         }
@@ -348,7 +348,7 @@ fn parse(job: &Job) -> Parsed {
         return Parsed::Same;
     }
     match outline::tags_with_extensions(&job.path, &src, &job.extensions) {
-        Ok(hits) => Parsed::Rows(sha, scoped(&hits)),
+        Ok(hits) => Parsed::Rows(sha, scoped(&src, &hits)),
         Err(_) => Parsed::Unparsed,
     }
 }
@@ -391,8 +391,9 @@ fn each_parsed(jobs: &[Job], mut write: impl FnMut(&Job, Parsed) -> Result<()>) 
     })
 }
 
-/// Bump when [`scoped`] changes (T35.5). T368's full import path in `scope` rewrites version-3 roots once.
-const INDEX_VERSION: u32 = 4;
+/// Bump when [`scoped`] changes (T35.5). T471 stores the byte span, signature and doc, so
+/// version-4 roots are rewritten once.
+const INDEX_VERSION: u32 = 5;
 
 /// Hex sha256 of `INDEX_VERSION` and every query string [`outline::tags`] compiles —
 /// tags **and** locals, because a language whose locals query changed produces different
@@ -468,12 +469,13 @@ fn extractor_fingerprint() -> String {
 /// definition (or the upstream reference) always stands and no site counts twice.
 /// Verified on the `truth-constructs` fixture: `OnlyTyped:1` yields the def row
 /// only, `impl Recv` the implementation row only.
-fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
+fn scoped(src: &str, hits: &[outline::TagHit]) -> Vec<Row> {
     let defs: Vec<(usize, usize, &str)> = hits
         .iter()
         .filter(|h| h.is_def)
         .map(|h| (h.line, h.end_line.max(h.line), h.name.as_str()))
         .collect();
+    let bytes = src.as_bytes();
     hits.iter()
         .map(|h| {
             // Import rows keep the full specifier in `scope` (no new column). The
@@ -489,16 +491,103 @@ fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
                     .map(|(_, _, n)| n.to_string())
                     .unwrap_or_default()
             };
-            (
-                h.name.clone(),
-                h.kind.clone(),
-                h.line as i32,
-                h.is_def,
-                h.end_line as i32,
+            let (start_byte, end_byte, content_hash) = span_of(bytes, h.start_byte, h.end_byte);
+            let (signature, doc) = if h.is_def {
+                (signature_of(&h.line_text), doc_above(src, h.line as i32))
+            } else {
+                (String::new(), String::new())
+            };
+            SymbolSpanRow {
+                name: h.name.clone(),
+                kind: h.kind.clone(),
+                line: h.line as i32,
+                is_def: h.is_def,
+                end_line: h.end_line as i32,
                 scope,
-            )
+                start_byte,
+                end_byte,
+                content_hash,
+                signature,
+                doc,
+            }
         })
         .collect()
+}
+
+/// Byte span of one tag. Offsets that do not fit `i32`, or a range outside `src`, store
+/// `(0, 0, "")` so a reader falls back to line slicing.
+fn span_of(src: &[u8], start: usize, end: usize) -> (i32, i32, String) {
+    let Ok(start_i) = i32::try_from(start) else {
+        return (0, 0, String::new());
+    };
+    let Ok(end_i) = i32::try_from(end) else {
+        return (0, 0, String::new());
+    };
+    if end_i <= start_i {
+        return (0, 0, String::new());
+    }
+    let Some(slice) = src.get(start..end) else {
+        return (0, 0, String::new());
+    };
+    (start_i, end_i, store::hex_sha256(slice))
+}
+
+fn signature_of(line_text: &str) -> String {
+    cap_bytes(line_text.lines().next().unwrap_or("").trim(), 240)
+}
+
+/// Contiguous `///` / `//!` / `/**` lines immediately above a definition, skipping blank
+/// lines between the comment and the def. Capped at 512 bytes (T471).
+fn doc_above(src: &str, def_line: i32) -> String {
+    let Some(line) = usize::try_from(def_line).ok().filter(|n| *n > 1) else {
+        return String::new();
+    };
+    let lines: Vec<&str> = src.lines().collect();
+    let mut i = line - 2;
+    let mut acc: Vec<&str> = Vec::new();
+    while let Some(raw) = lines.get(i) {
+        let t = raw.trim();
+        if t.is_empty() {
+            if !acc.is_empty() {
+                break;
+            }
+        } else if doc_line(t) {
+            acc.push(t);
+        } else {
+            break;
+        }
+        if i == 0 {
+            break;
+        }
+        i -= 1;
+    }
+    let documented = acc.iter().any(|l| {
+        l.starts_with("///") || l.starts_with("//!") || l.starts_with("/**") || l.starts_with("*/")
+    });
+    if !documented {
+        return String::new();
+    }
+    acc.reverse();
+    cap_bytes(&acc.join("\n"), 512)
+}
+
+fn doc_line(t: &str) -> bool {
+    t.starts_with("///")
+        || t.starts_with("//!")
+        || t.starts_with("/**")
+        || t.starts_with("*/")
+        || t.starts_with('*')
+}
+
+fn cap_bytes(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        return s.to_string();
+    }
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s[..end].to_string()
 }
 
 /// Index `root` only when it has no rows yet (first tool call in that repo).

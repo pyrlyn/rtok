@@ -162,9 +162,61 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
             prefix: &label(m),
             suffix: if many { " ?" } else { "" },
         };
-        body.push_str(&defs_text(cx, &m.root, rows, callees, &tag));
+        body.push_str(&defs_text(cx, &m.root, name, rows, callees, &tag));
     }
     capped(cx, &head, body)
+}
+
+/// `symbol` by `path::name#kind@line`. `name` is ignored by the caller when `id` is set (T471).
+pub fn symbol_by_id(cx: &Ctx, scope: &[Member], id: &str) -> Result<String> {
+    let Some((path, name, kind, line)) = super::parse_symbol_id(id) else {
+        return Ok(format!("no definition of {id}"));
+    };
+    if let [one] = scope {
+        walkable(one)?;
+        let text = symbol_id_in(cx, one, "", &path, &name, &kind, line)?
+            .unwrap_or_else(|| format!("no definition of {id}"));
+        return with_stale(cx, &one.root, cap(cx, text)?);
+    }
+    let (done, notes) = fan_out(scope, |m| {
+        walkable(m)?;
+        symbol_id_in(cx, m, &label(m), &path, &name, &kind, line)
+    })?;
+    let head = banners(cx, &done, notes)?;
+    let mut body = String::new();
+    for (_, text) in &done {
+        if let Some(text) = text {
+            body.push_str(text);
+        }
+    }
+    if body.is_empty() {
+        return Ok(format!("{head}no definition of {id}"));
+    }
+    capped(cx, &head, body)
+}
+
+fn symbol_id_in(
+    cx: &Ctx,
+    m: &Member,
+    prefix: &str,
+    path: &str,
+    name: &str,
+    kind: &str,
+    line: i32,
+) -> Result<Option<String>> {
+    index_for(cx, &m.root)?;
+    let key = index::canon(&m.root);
+    let rows: Vec<_> = cx
+        .symbol_defs(&key, name)?
+        .into_iter()
+        .filter(|(p, k, l, _)| p == path && k == kind && *l == line)
+        .collect();
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let callees = cx.symbol_callees(&key, name)?;
+    let tag = Tag { prefix, suffix: "" };
+    Ok(Some(defs_text(cx, &m.root, name, &rows, &callees, &tag)))
 }
 
 pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
@@ -319,6 +371,8 @@ pub fn explore(cx: &Ctx, scope: &[Member], query: &str, filter: &Filter) -> Resu
                 filter,
                 key: index::canon(&m.root),
                 label,
+                fts_seed: None,
+                seed_taken: false,
             })
             .collect(),
         labels: &labels,
@@ -708,7 +762,7 @@ mod tests {
         assert_eq!(
             out,
             "1 names ambiguous (?): narrow with path or kind, or backend = \"lsp\"\n\
-             [a] lib.rs:1 function ?\nfn dup() {}\n[c] lib.rs:1 function ?\nfn dup() {}\n"
+             [a] lib.rs:1 function lib.rs::dup#function@1 ?\nfn dup() {}\n[c] lib.rs:1 function lib.rs::dup#function@1 ?\nfn dup() {}\n"
         );
         let out = callers(&ctx, &scope, "dup", &Filter::none()).unwrap();
         assert!(out.starts_with("1 names ambiguous (?)"), "{out}");
@@ -717,7 +771,7 @@ mod tests {
         let scope = scope_at(&cx, &dir, "b", None);
         assert_eq!(
             symbol(&ctx, &scope, "dup", &Filter::none()).unwrap(),
-            "[c] lib.rs:1 function\nfn dup() {}\n"
+            "[c] lib.rs:1 function lib.rs::dup#function@1\nfn dup() {}\n"
         );
         let _ = fs::remove_dir_all(dir);
     }
@@ -823,8 +877,14 @@ mod tests {
         let ctx = Ctx::new(&cx);
         let scope = scope_at(&cx, &dir, "a", None);
         let out = explore(&ctx, &scope, "shared b_mid", &Filter::none()).unwrap();
-        assert!(out.contains("= shared\n[c] lib.rs:1 function\n"), "{out}");
-        assert!(out.contains("= b_mid\n[b] lib.rs:1 function\n"), "{out}");
+        assert!(
+            out.contains("= shared\n[c] lib.rs:1 function lib.rs::shared#function@1\n"),
+            "{out}"
+        );
+        assert!(
+            out.contains("= b_mid\n[b] lib.rs:1 function lib.rs::b_mid#function@1\n"),
+            "{out}"
+        );
         assert!(out.contains("shared \u{2190} 1\n"), "{out}");
         assert!(out.contains("b_mid \u{2190} 1\n"), "{out}");
         // One project asks the plain explore.

@@ -101,7 +101,8 @@ pub mod wire;
 
 pub use host::{
     Archive, ArchiveDecision, ArchiveHit, Capabilities, Class, Ctx, Host, Ledger, NoteHit, Notes,
-    ReadCache, SymbolFileBatch, SymbolFileRows, Symbols,
+    ReadCache, SymbolFileBatch, SymbolFileRows, SymbolFtsHit, SymbolSpan, SymbolSpanBatch,
+    SymbolSpanRow, Symbols,
 };
 pub use wire::{BlobRef, SkillRef, ToolResultRef, ToolResults, WireRequest};
 

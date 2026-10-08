@@ -587,6 +587,46 @@ impl Symbols for Runtime {
         self.store.replace_symbol_files(root, files)
     }
 
+    fn replace_symbol_spans(
+        &self,
+        root: &str,
+        path: &str,
+        file_sha: &str,
+        stat: (i64, i64),
+        rows: &[rtok_plugin_sdk::SymbolSpanRow],
+    ) -> Result<usize> {
+        self.store
+            .replace_symbol_spans(root, path, file_sha, stat, rows)
+    }
+
+    fn replace_symbol_span_files(
+        &self,
+        root: &str,
+        files: &rtok_plugin_sdk::SymbolSpanBatch,
+    ) -> Result<usize> {
+        self.store.replace_symbol_span_files(root, files)
+    }
+
+    fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<rtok_plugin_sdk::SymbolSpan>> {
+        self.store.symbol_span(root, path, name, kind, line)
+    }
+
+    fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<rtok_plugin_sdk::SymbolFtsHit>> {
+        self.store.symbol_fts(root, query, limit)
+    }
+
     fn delete_symbols_missing(&self, root: &str, keep: &HashSet<String>) -> Result<usize> {
         self.store.delete_symbols_missing(root, keep)
     }

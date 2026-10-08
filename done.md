@@ -1,5 +1,13 @@
 # rtok — completed tasks
 
+### T471. Symbol byte spans, recoverable bodies, and id lookup
+
+A definition head is `path:line kind path::name#kind@line`. The index keeps the tree-sitter byte span (`start_byte`, `end_byte`, `content_hash`) plus the signature line and the doc comment above the definition. `symbol` with `id` returns that one definition. A body longer than `plugins.graph.body_lines` archives the uncut span and ends with `… N more lines, expand <id>`. When the file's mtime and size no longer match, the answer says `stale <path>` and does not slice. `explore` falls through to FTS5 on name, signature and doc when exact-then-prefix resolution finds nothing. No new tool, no content-cache copy, no token meter.
+
+Check: `cargo test --lib` graph span tests, `graph_contract`, `graph_scope`; `cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings`.
+
+Result: span, id, archive, stale and doc-FTS tests passed; contract and scope tests passed with the new head; clippy `-D warnings` passed.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

@@ -269,6 +269,11 @@ diesel::table! {
         size -> BigInt,
         end_line -> Integer,
         scope -> Text,
+        start_byte -> Integer,
+        end_byte -> Integer,
+        content_hash -> Text,
+        signature -> Text,
+        doc -> Text,
     }
 }
 

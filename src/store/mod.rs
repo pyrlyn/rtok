@@ -123,6 +123,19 @@ pub(crate) fn fts_phrase_query(query: &str) -> Option<String> {
     (!quoted.is_empty()).then(|| quoted.join(" "))
 }
 
+/// FTS5 `MATCH` over identifier tokens joined with `OR` (T471). Space-separated
+/// phrases are AND, which would miss a doc that contains only some of the words.
+/// `None` when the query has no identifier token.
+pub(crate) fn fts_or_query(query: &str) -> Option<String> {
+    let quoted: Vec<String> = query
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|t| !t.is_empty())
+        .take(8)
+        .map(|token| format!("\"{}\"", token.replace('"', "\"\"")))
+        .collect();
+    (!quoted.is_empty()).then(|| quoted.join(" OR "))
+}
+
 /// The four required `notes` columns as one `.values(...)` tuple — shared by
 /// [`Store::insert_note`] and [`Store::insert_note_if_absent`] (T209), which differ only
 /// in the `INSERT` variant and what an ignored conflict means for the caller.
@@ -4825,6 +4838,11 @@ mod tests {
         "notes_fts_idx",              // FTS5 shadow table for notes_fts
         "notes_fts_docsize",          // FTS5 shadow table for notes_fts
         "notes_fts_config",           // FTS5 shadow table for notes_fts
+        "symbols_fts",                // 0034: FTS5 virtual table, MATCH in sql_ext (T471)
+        "symbols_fts_data",           // FTS5 shadow table for symbols_fts
+        "symbols_fts_idx",            // FTS5 shadow table for symbols_fts
+        "symbols_fts_docsize",        // FTS5 shadow table for symbols_fts
+        "symbols_fts_config",         // FTS5 shadow table for symbols_fts
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 
