@@ -57,7 +57,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
 | T382 | todo | P2 | 2 | 30% | |
@@ -100,7 +99,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
-| T414.14 | todo | P3 | 2 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -1352,16 +1350,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
-### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
-
-From the Empryo study (idea-only, clean-room; Empryo `compaction/working-state.ts`, `extractor.ts`: a deterministic working state built from tool calls, not from an LLM). `Checkpoint` (`src/plugins/checkpoint.rs:11`) records paths without what happened to them, so after compact the agent re-reads files it only looked at and may miss the ones it changed.
-
-Plan: extend the checkpoint's path list to `(path, action, last_line_range)` from PostToolUse events (Read → read, Edit/MultiEdit → edited, Write on a new path → created, `rm`/`git rm` in Bash → deleted); render edited/created first. Backward-compatible decode of old rows (missing action = read).
-
-Done when: after a session that reads A and edits B, the checkpoint lists `B (edited)` before `A (read)`.
-
-Check: unit tests for the event → action mapping and old-row decode; the checkpoint rendering snapshot (`insta`) updated; `just check`.
-
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
 From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
@@ -1702,12 +1690,6 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
 
 Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
-
-### T414.14. CSV and JSON export of tables
-
-An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
-
-Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
 
 ### T416. Shared `change-preview` crate for dry-run output
 
