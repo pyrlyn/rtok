@@ -139,3 +139,63 @@ fn flag_off_search_matches_fts5_only() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T374: a note linked to a file the session has read comes back in the recall, and first,
+/// although five unlinked notes match the prompt's words equally well and were saved earlier.
+#[test]
+fn file_context_cases_recall_the_linked_note() {
+    use rtok_plugin_sdk::{Ctx, Plugin, PromptSubmit};
+
+    let raw = include_str!("fixtures/p29_memory.toml");
+    let doc: toml_edit::DocumentMut = raw.parse().expect("fixture parses");
+    let cases = doc["file_case"]
+        .as_array_of_tables()
+        .expect("[[file_case]]");
+    let min = doc["file_case_expect"]["min_recall_at_5"]
+        .as_float()
+        .unwrap();
+    let (mut recalled, mut first) = (0, 0);
+    for (i, case) in cases.iter().enumerate() {
+        let file = case["file"].as_str().unwrap();
+        let words = case["words"].as_str().unwrap();
+        let project =
+            std::env::temp_dir().join(format!("rtok-t374-p29-{i}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&project);
+        let path = project.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "x").unwrap();
+        let (mut rt, dir) = open(&format!("p29-file-{i}"), false, true);
+        rt.cwd = Some(project.to_string_lossy().into_owned());
+        // Same tokens, no such file: the last stem character becomes `x`, so lengths match.
+        let (stem, ext) = file.rsplit_once('.').unwrap();
+        let ghost = format!("{}x.{ext}", &stem[..stem.len() - 1]);
+        for n in 0..5 {
+            let body = format!("{words} see {ghost}");
+            mem_save(&rt, "note", &format!("decoy-{n}"), &body, None).unwrap();
+        }
+        mem_save(&rt, "note", "target", &format!("{words} see {file}"), None).unwrap();
+        rt.store
+            .put_read_cache(
+                &format!("p29-file-{i}"),
+                &format!("{file}\tfull\t"),
+                "h",
+                None,
+            )
+            .unwrap();
+        let prompt = PromptSubmit { prompt: words };
+        let inj = rtok::plugins::memory::Memory
+            .prompt_submit(&prompt, &Ctx::new(&rt))
+            .expect("recall injects");
+        let lines: Vec<&str> = inj.text.lines().skip(1).collect();
+        recalled += usize::from(lines.iter().any(|l| l.contains(" target (")));
+        first += usize::from(lines.first().is_some_and(|l| l.contains(" target (")));
+        let _ = std::fs::remove_dir_all(&project);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    let total = cases.len() as f64;
+    assert!(
+        recalled as f64 / total >= min,
+        "recall@5 {recalled}/{total}"
+    );
+    assert_eq!(first, cases.len(), "the linked note comes back first");
+}

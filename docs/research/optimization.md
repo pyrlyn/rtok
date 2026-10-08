@@ -172,7 +172,7 @@ default.
 | Image gate | Parked | Images were 0.91 % of input on 2026-09-24 (T137), under the 5 % gate |
 | Sub-agent handoff (I-46) | Parked | Agent+Task results 0.7 % of tool-result tokens (T59.6) |
 | Foreign MCP results (I-44) | Parked | 15 K of 2.83 M tool-result tokens (`research.md` §9.3) |
-| Cross-session read dedup | Not built | `read`/`guard` dedup is per session; parallel agents in worktrees re-read the same files. Measure from `calls` across sessions before designing |
+| Cross-session read dedup | Not built | `read`/`guard` dedup is per session. *Measured* 0.25 % to 0.60 % of input (resident weighted; 0.42 % of the bytes read) on 2026-10-08, under the 1 % gate (`research.md` §36); re-measure if worktrees become shared |
 | Output tokens | Modes (terse/yagni) only | Output is the code the model writes (`research.md` §9.3); the remaining lever is fewer writes, i.e. better first reads |
 
 ## 6. Consolidated plan
