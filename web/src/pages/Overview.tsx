@@ -19,7 +19,6 @@ import { PanelLink, TokenMix, tokenTotal, WithSnapshot } from "./parts";
 import { tableLink } from "../tableSearch";
 import { SavingsTrend } from "./SavingsTrend";
 
-
 type Saving = ReturnType<typeof overview>["measured"][number];
 
 function savingColumns(max: number): Column<Saving>[] {
