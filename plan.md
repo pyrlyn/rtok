@@ -61,7 +61,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
-| T385.12 | todo | P3 | 3 | 20% | |
+| T385.12.2 | todo | P3 | 3 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -1375,11 +1375,11 @@ optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas an
 
 Check: per-wire tests and a dated bench row; `just check`.
 
-### T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
 
-optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
+Split from T385.12; T385.6 and T385.12.1 are done (the price rows and `usage_by_model_tier` are in place). Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
 
-Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+Check: a report fixture with Batch and Flex rows; `just check`.
 
 ### T394. Run the paid live benches and record them
 

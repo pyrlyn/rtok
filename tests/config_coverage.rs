@@ -156,6 +156,15 @@ const ALLOW_KEYS: &[&str] = &[
     "task.list.all",
     "task.list.parent",
     "task.status.force",
+    // `batch submit|status|fetch --provider/--url` (T385.12.1): which provider's Batch API and
+    // which proxy one call talks to; the URL defaults to `[proxy] bind`/`port`, and the
+    // provider is read from the batch id, so there is nothing to store.
+    "batch.submit.provider",
+    "batch.submit.url",
+    "batch.status.provider",
+    "batch.status.url",
+    "batch.fetch.provider",
+    "batch.fetch.url",
 ];
 
 #[test]

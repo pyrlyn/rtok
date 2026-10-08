@@ -1,0 +1,10 @@
+bin.name = "rtok"
+args = "batch status msgbatch_1"
+status.code = 1
+
+# The key is read from the environment only; a cleared env has none, so nothing is sent.
+[env]
+inherit = false
+
+[env.add]
+RTOK_HOME = "target/tmp/trycmd-batch-no-key"

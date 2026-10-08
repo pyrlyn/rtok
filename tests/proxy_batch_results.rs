@@ -170,6 +170,7 @@ async fn an_ordinary_file_download_stays_a_files_call_without_rows() {
     serve(&up, "/v1/files/file-doc/content", 200, "just some text\n");
     let (addr, state, task) = proxy_server("batch-results-plain-file", |cfg| {
         cfg.proxy.upstream = up.base_url();
+        cfg.proxy.openai_upstream = up.base_url();
         cfg.proxy.batch.parse_results = true;
     })
     .await;

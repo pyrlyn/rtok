@@ -355,6 +355,8 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` / `show <id>` / `next` | active tasks with subtasks indented; one task with its subtasks; the lowest open task with no active subtask |
 | `rtok task status <id> [<status>] [--force] [--json]` | read or set `open`, `in-progress`, `done` or `closed`; finishing a parent with active subtasks is refused unless `--force`; on disk, finished tasks move to `tasks/done/` |
 | `rtok task sync [--json]` | raise the store's id counters to the highest ids the adapter holds (never lower them) and report drift: ids above the counter, duplicate ids, issues that kept the `rtok` label but lost `rtok:<id>`; reads the adapter only |
+| `rtok batch submit <file.jsonl> [--provider anthropic\|openai] [--url <proxy>]` | create a provider Batch job from a file of provider-shaped requests through `rtok proxy` (the JSONL is sent as written; nothing is converted from a live request); prints the batch object; the key comes only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
+| `rtok batch status <id>` / `fetch <id> <out>` | the provider's state of a batch; its results written to a new file (an existing file is never overwritten); the provider is read from the id (`msgbatch_` is Anthropic) unless `--provider` says so; the proxy tags every call to the `batch` lane, and `stats --price` costs that usage at the `<model>@batch` price row |
 | `rtok run -- <cmd>` | run, archive, and format a command result |
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode) |
 | `rtok expand <id>` | retrieve an archived original (`--lines`, `--grep`) |

@@ -36,6 +36,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
             [CompletionResult]::new('task', 'task', [CompletionResultType]::ParameterValue, 'This project''s tasks: numbered by rtok, stored by the `[tasks]` adapter')
+            [CompletionResult]::new('batch', 'batch', [CompletionResultType]::ParameterValue, 'Provider Batch jobs (Anthropic, OpenAI) sent through `rtok proxy`')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Version, effective paths, disk usage, error count and proxy status')
             [CompletionResult]::new('agents', 'agents', [CompletionResultType]::ParameterValue, 'Agent hosts (`rtok agents install|uninstall|list|info …`)')
             [CompletionResult]::new('agent', 'agent', [CompletionResultType]::ParameterValue, 'Agent hosts (`rtok agents install|uninstall|list|info …`)')
@@ -393,6 +394,59 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;task;help;help' {
+            break
+        }
+        'rtok;batch' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('submit', 'submit', [CompletionResultType]::ParameterValue, 'Create a batch from a JSONL file of provider-shaped requests; prints the batch object')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print the provider''s current state of a batch')
+            [CompletionResult]::new('fetch', 'fetch', [CompletionResultType]::ParameterValue, 'Write the results of a finished batch to a new file')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rtok;batch;submit' {
+            [CompletionResult]::new('--provider', '--provider', [CompletionResultType]::ParameterName, 'Provider whose Batch API to call; default: from the id (`msgbatch_` is Anthropic)')
+            [CompletionResult]::new('--url', '--url', [CompletionResultType]::ParameterName, 'Proxy base URL (default: `[proxy] bind` and `port`)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;batch;status' {
+            [CompletionResult]::new('--provider', '--provider', [CompletionResultType]::ParameterName, 'Provider whose Batch API to call; default: from the id (`msgbatch_` is Anthropic)')
+            [CompletionResult]::new('--url', '--url', [CompletionResultType]::ParameterName, 'Proxy base URL (default: `[proxy] bind` and `port`)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;batch;fetch' {
+            [CompletionResult]::new('--provider', '--provider', [CompletionResultType]::ParameterName, 'Provider whose Batch API to call; default: from the id (`msgbatch_` is Anthropic)')
+            [CompletionResult]::new('--url', '--url', [CompletionResultType]::ParameterName, 'Proxy base URL (default: `[proxy] bind` and `port`)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;batch;help' {
+            [CompletionResult]::new('submit', 'submit', [CompletionResultType]::ParameterValue, 'Create a batch from a JSONL file of provider-shaped requests; prints the batch object')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print the provider''s current state of a batch')
+            [CompletionResult]::new('fetch', 'fetch', [CompletionResultType]::ParameterValue, 'Write the results of a finished batch to a new file')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rtok;batch;help;submit' {
+            break
+        }
+        'rtok;batch;help;status' {
+            break
+        }
+        'rtok;batch;help;fetch' {
+            break
+        }
+        'rtok;batch;help;help' {
             break
         }
         'rtok;info' {
@@ -1706,6 +1760,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
             [CompletionResult]::new('task', 'task', [CompletionResultType]::ParameterValue, 'This project''s tasks: numbered by rtok, stored by the `[tasks]` adapter')
+            [CompletionResult]::new('batch', 'batch', [CompletionResultType]::ParameterValue, 'Provider Batch jobs (Anthropic, OpenAI) sent through `rtok proxy`')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Version, effective paths, disk usage, error count and proxy status')
             [CompletionResult]::new('agents', 'agents', [CompletionResultType]::ParameterValue, 'Agent hosts (`rtok agents install|uninstall|list|info …`)')
             [CompletionResult]::new('setup', 'setup', [CompletionResultType]::ParameterValue, 'Deprecated spelling of `rtok agents install <host>`; still runs, still prints where to go')
@@ -1820,6 +1875,21 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;task;init' {
+            break
+        }
+        'rtok;help;batch' {
+            [CompletionResult]::new('submit', 'submit', [CompletionResultType]::ParameterValue, 'Create a batch from a JSONL file of provider-shaped requests; prints the batch object')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print the provider''s current state of a batch')
+            [CompletionResult]::new('fetch', 'fetch', [CompletionResultType]::ParameterValue, 'Write the results of a finished batch to a new file')
+            break
+        }
+        'rtok;help;batch;submit' {
+            break
+        }
+        'rtok;help;batch;status' {
+            break
+        }
+        'rtok;help;batch;fetch' {
             break
         }
         'rtok;help;info' {

@@ -57,6 +57,9 @@ use schema::{
 
 pub(crate) use sql_ext::{coalesce, length, substr, sum_bigint, unixepoch};
 
+// `usage_by_model_tier` groups by a column of each table.
+diesel::allow_columns_to_appear_in_same_group_by_clause!(usage::model, calls::kind);
+
 /// Pause between `open` attempts while another connection holds the lock.
 const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
 
@@ -2252,18 +2255,32 @@ impl Store {
     /// inside `ORDER BY`/`SELECT` — a Diesel 2.3.13 `GROUP BY`-over-computed-expression gap,
     /// not a raw-SQL fallback).
     pub fn usage_by_model(&self) -> Result<Vec<ModelUsage>> {
+        self.model_usage(false)
+    }
+
+    /// [`Self::usage_by_model`] with the usage of Batch-lane calls (T385.12.1) listed under
+    /// `<model>@batch`, the key of the matching `[stats.prices]` row.
+    pub fn usage_by_model_tier(&self) -> Result<Vec<ModelUsage>> {
+        self.model_usage(true)
+    }
+
+    fn model_usage(&self, by_tier: bool) -> Result<Vec<ModelUsage>> {
         type Row = (
+            Option<String>,
             Option<String>,
             Option<i64>,
             Option<i64>,
             Option<i64>,
             Option<i64>,
         );
+        let batch = crate::proxy::lane::Lane::Batch.kind();
         let mut conn = self.lock()?;
         let rows: Vec<Row> = usage::table
-            .group_by(usage::model)
+            .left_join(calls::table)
+            .group_by((usage::model, calls::kind))
             .select((
                 usage::model,
+                calls::kind.nullable(),
                 sum_bigint(usage::input),
                 sum_bigint(usage::cache_create),
                 sum_bigint(usage::cache_read),
@@ -2271,8 +2288,11 @@ impl Store {
             ))
             .load(&mut *conn)?;
         let mut by_model: BTreeMap<String, ModelUsage> = BTreeMap::new();
-        for (model, input, cache_create, cache_read, output) in rows {
-            let model = model.unwrap_or_else(|| "unknown".to_string());
+        for (model, kind, input, cache_create, cache_read, output) in rows {
+            let mut model = model.unwrap_or_else(|| "unknown".to_string());
+            if by_tier && kind.as_deref() == Some(batch) {
+                model.push_str("@batch");
+            }
             let entry = by_model.entry(model.clone()).or_insert(ModelUsage {
                 model,
                 input: 0,

@@ -13,6 +13,7 @@ Commands:
   doctor       Inspect hooks, MCP servers and the proxy chain
   worktree     Git worktrees of this repository: owner, state and disk cost
   task         This project's tasks: numbered by rtok, stored by the `[tasks]` adapter
+  batch        Provider Batch jobs (Anthropic, OpenAI) sent through `rtok proxy`
   info         Version, effective paths, disk usage, error count and proxy status
   agents       Agent hosts (`rtok agents install|uninstall|list|info …`) [alias: agent]
   run          Execute a command, archive its raw output, print the filtered version

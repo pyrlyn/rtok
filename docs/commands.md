@@ -12,6 +12,7 @@ build never blocks the host.
 | `rtok hook <event>` | Claude Code hook entry point (stdin JSON → stdout JSON) |
 | `rtok mcp` | MCP server over stdio: `read`, `search`, `tree`, `expand`, `mem_*`, graph tools |
 | `rtok proxy` | `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` hop: usage capture, optional compress mode |
+| `rtok batch` | provider Batch jobs (`submit`, `status`, `fetch`) sent through `rtok proxy`; see [batch-flex.md](batch-flex.md) |
 | `rtok dashboard` | local React UI over a WebSocket API, reading the same store |
 | `rtok run -- <cmd>` | run a command, archive the raw output, print the filtered version |
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode `tool.execute.after`) |

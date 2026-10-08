@@ -57,7 +57,7 @@
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
 - T385.10. Routing for `internal` and `bulk` calls
 - T385.11. Deferred tool schemas and thinking replay
-- T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+- T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
 - T394. Run the paid live benches and record them
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files

@@ -28,6 +28,8 @@ config; reading cases set `inherit = false` and `RTOK_HOME` under `target/tmp/`.
 - `config-validate.toml` — `config validate` on the bench fixture
 - `config-set.toml` — `config set --dry-run` diff for `proxy.port`
 - `completions-zsh.toml` — zsh completions
+- `batch-no-key.toml` — `batch status` without `ANTHROPIC_API_KEY`: error, nothing sent
+- `batch-bad-file.toml` — `batch submit` of a missing file fails before any request
 - `completions-list.toml` — `completions --list` on an empty home: every shell `no`, per-user paths (T408)
 - `completions-no-shell.toml` — `completions` without a shell or a terminal: error, no picker (T408)
 - `completions-fish.toml` — fish completions
