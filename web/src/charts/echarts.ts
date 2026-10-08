@@ -125,7 +125,7 @@ export function toOption(spec: ChartSpec, p: Palette) {
           itemStyle: { color, opacity, borderRadius: axes ? 0 : 1 },
           // Minis fade low bars so the shape reads at 28px, as the SVG minis did.
           data: s.values.map((v) =>
-            axes ? v : { value: v, itemStyle: { opacity: 0.45 + 0.55 * (v / peak) } },
+            axes || v == null ? v : { value: v, itemStyle: { opacity: 0.45 + 0.55 * (v / peak) } },
           ),
         };
       }),
@@ -139,7 +139,7 @@ export function toOption(spec: ChartSpec, p: Palette) {
               symbolOffset: [0, -6],
               itemStyle: toneStyle(p, spec.dots.tone),
               emphasis: { disabled: true },
-              data: spec.dots.values.map((v, i) => (v > 0 ? topAt(spec, i) : null)),
+              data: spec.dots.values.map((v, i) => ((v ?? 0) > 0 ? topAt(spec, i) : null)),
             },
           ]
         : []),

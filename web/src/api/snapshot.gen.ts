@@ -891,11 +891,45 @@ export interface Overview {
   output: number;
   rows: number;
   /**
+   * The Δtok trend Overview and Stats draw: [`SAVINGS_DAYS`] days ending today, oldest
+   * first, from [`savings_trend`]. Empty while the first read runs or when the store will
+   * not read.
+   */
+  savings: SavingsDay[];
+  /**
    * Per-turn `ctx`, sessions oldest-first and request order within a session, kept
    * to the last [`OVERVIEW_TURNS`]. A `usage` row carries no timestamp, so across
    * sessions this is session order, not wall-clock order.
    */
   turns: number[];
+}
+/**
+ * One day of the Δtok savings trend (T414.13).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "SavingsDay".
+ */
+export interface SavingsDay {
+  /**
+   * `YYYY-MM-DD` in `[agents.usage] tz`, so the trend and the Usage page cut the same days.
+   */
+  day: string;
+  /**
+   * The same per plugin, only the plugins with rows that day. An `expand` row nets negative,
+   * as on the Plugins page.
+   */
+  plugins: {
+    [k: string]: number;
+  };
+  /**
+   * `Measurement` rows stamped that day.
+   */
+  rows: number;
+  /**
+   * Σ est_before − est_after; `None` when the day has no rows. No row, no saving claim: an
+   * empty day is a gap on the chart, never a zero.
+   */
+  saved: number | null;
 }
 /**
  * The Overview page (T15.3): the usage totals plus what the tab draws from them —
@@ -927,6 +961,12 @@ export interface Overview1 {
   input: number;
   output: number;
   rows: number;
+  /**
+   * The Δtok trend Overview and Stats draw: [`SAVINGS_DAYS`] days ending today, oldest
+   * first, from [`savings_trend`]. Empty while the first read runs or when the store will
+   * not read.
+   */
+  savings: SavingsDay[];
   /**
    * Per-turn `ctx`, sessions oldest-first and request order within a session, kept
    * to the last [`OVERVIEW_TURNS`]. A `usage` row carries no timestamp, so across

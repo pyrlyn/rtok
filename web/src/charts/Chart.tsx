@@ -145,14 +145,21 @@ export function Chart({
     );
 }
 
+const NO_DATA = "no data";
+const show = (v: number | null | undefined, format: (v: number) => string) =>
+    v == null ? NO_DATA : format(v);
+
 function Rows({ spec, i, format }: { spec: ChartSpec; i: number; format: (v: number) => string }) {
     const rows = spec.dots ? [...spec.series, spec.dots] : spec.series;
+    const empty = spec.series.every((s) => s.values[i] == null);
     return (
         <>
             <p className="mb-1 flex gap-3 font-semibold text-fg">
                 {(spec.titles ?? spec.x)[i]}
                 {spec.kind === "stacked-bars" && (
-                    <span className="ml-auto tabular-nums">{format(stackAt(spec, i))}</span>
+                    <span className="ml-auto tabular-nums">
+                        {empty ? NO_DATA : format(stackAt(spec, i))}
+                    </span>
                 )}
             </p>
             <ul className="flex flex-col gap-0.5">
@@ -164,7 +171,7 @@ function Rows({ spec, i, format }: { spec: ChartSpec; i: number; format: (v: num
                         />
                         {s.label}
                         <span className="ml-auto pl-3 text-fg tabular-nums">
-                            {format(s.values[i] ?? 0)}
+                            {show(s.values[i], format)}
                         </span>
                     </li>
                 ))}
