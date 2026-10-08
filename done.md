@@ -1,5 +1,16 @@
 # rtok — completed tasks
 
+### T454. MCP `mem_pack`: ranked notes inside a token budget
+
+MCP-only packing for memory hits: place every candidate at a cheap tier, then spend leftover budget deepening the best hits. Original Rust (OpenViking AGPL not vendored). No new dependency, no LLM, no vector index, no hook-path change. SessionStart `recall` stays byte-stable.
+
+Do: `src/plugins/memory/pack.rs` (`pack_notes`, tiers Uri/Abstract/Overview/Full); wire `mem_pack` after `mem_search` in `Memory::mcp_tools` and the MCP invoke path; record a `Measurement` kind `mem_pack`.
+
+Check: `cargo test --lib pack_notes`; `cargo test --test p29_memory`; MCP harness call returns a tiered block and a `mem_pack` measurement row.
+
+Result (2026-10-08, Cursor / composer): `pack_notes` breadth-then-depth (Abstract/Uri floor, then Overview/Full upgrades, spare Full ignoring per-entry cap); in-memory dedup of identical chosen text (id stripped); body/ledger-style reads fail open. `mem_pack` MCP tool after `mem_search`; Measurement `kind=mem_pack`. `cargo test --lib pack_notes` 5 passed; `cargo test --test p29_memory` 3 passed; `cargo test --lib plugins::memory` 59 passed. Manual: import `{"kind":"decision","title":"hooks","body":"fail open in 10 ms"}`, `tools/call mem_pack` returned `1\tfull\n…hooks…` and measurements row `(memory, mem_pack, …)`.
+Status: done 2026-10-08
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

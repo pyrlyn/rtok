@@ -93,7 +93,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T454 | in progress | P2 | 3 | 0% | Cursor / composer |
 
 
 
@@ -1979,12 +1978,3 @@ project = "group/name"
 - A web UI page for tasks, dependencies beyond parent/child, assignees, priorities, LLM-generated task breakdowns (Taskmaster's PRD parsing).
 - An HTTP MCP transport or a hosted service.
 - Replacing hosts' built-in TodoWrite/`update_plan` checklists.
-
-### T454. MCP `mem_pack`: ranked notes inside a token budget
-
-MCP-only packing for memory hits: place every candidate at a cheap tier, then spend leftover budget deepening the best hits. Original Rust (do not vendor OpenViking AGPL). No new dependency, no LLM, no vector index, no hook-path change. SessionStart `recall` stays byte-stable.
-
-Do: `src/plugins/memory/pack.rs` (`pack_notes`, tiers Uri/Abstract/Overview/Full); wire `mem_pack` after `mem_search` in `Memory::mcp_tools` and the MCP invoke path; record a `Measurement` kind `mem_pack`.
-
-Check: `cargo test --lib pack_notes`; `cargo test --test p29_memory`; MCP harness call returns a tiered block and a `mem_pack` measurement row.
-Complexity: 3/5
