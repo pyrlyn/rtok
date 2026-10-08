@@ -73,7 +73,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.12 | todo | P3 | 3 | 20% | |
 | T385.13 | todo | P3 | 2 | 20% | |
 | T391 | todo | P3 | 2 | 30% | |
-| T393 | todo | P3 | 1 | 40% | |
+| T393 | in progress | P3 | 1 | 0% | Claude Code / claude-sonnet-5-5 |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -1500,6 +1500,8 @@ From `research.md` §10.4: descriptions over 120 characters cost about 1.3 K tok
 Done means: the skills section adds one line, "descriptions over 120 chars: N skills, ≈ X tokens/request recoverable", using the same token estimate as the rest of the audit; the per-row flag threshold matches the 120-character guidance rtok's own skills follow. Advice only.
 
 Check: a doctor fixture with one long and one short description shows the line; `just check`.
+
+Execution plan: add `SKILL_DESC_MAX = 120` beside `SKILLS` in `src/agents/skill.rs` and use it in `tests/skill.rs` and `skill_row`; `warn_desc` becomes `desc_chars > 120` and the flag reads `WARN desc>120`. `Report::render` derives the line from the rows (count over the cap, `Σ(chars − 120) / 4` tokens, the same `/4` as the header), no new struct field. Tests in `src/doctor.rs`: a long and a short row show the line, none over the cap omits it. Update README example and goldens if they change; `just check`.
 
 ### T394. Run the paid live benches and record them
 
