@@ -172,9 +172,13 @@ fn hook_dispatches_a_5mb_post_tool_body_under_50ms() {
 /// now half the hold on every platform — a hook that returns in `HOLD / 2` cannot have waited
 /// for the release — and the test runs alone (`.config/nextest.toml`). The few-ms bound on the
 /// wait itself is a compile-time assert on `LOCK_WAIT` in `src/hooks/mod.rs`.
+///
+/// The hold is 2 s: with 500 ms the bound was 250 ms, and `windows-latest` took 341 ms under
+/// load (pyrlyn/rtok#871, 2026-10-08). A longer hold widens the bound without letting a hook
+/// that waited for the release pass.
 #[test]
 fn hook_returns_despite_exclusive_lock() {
-    const HOLD: Duration = Duration::from_millis(500);
+    const HOLD: Duration = Duration::from_millis(2000);
     use diesel::Connection;
     use diesel::connection::SimpleConnection;
 
