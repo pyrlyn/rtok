@@ -510,6 +510,24 @@ fn trace_blocks(lines: &[String]) -> Vec<bool> {
     keep
 }
 
+/// Total trace lines `apply` prints past the budget. A few full backtraces fit
+/// (a deep Rust or Java trace runs 50-100 frames), but an exit-0 body that is
+/// nothing but stacks (`kubectl logs` with thousands of exceptions, a Go
+/// goroutine dump) must still be cut, or `max_lines` bounds nothing for it.
+const MAX_TRACE_LINES: usize = 400;
+
+/// Demote trace lines past [`MAX_TRACE_LINES`] to ordinary lines, so they go through
+/// the normal head/tail budget and the omitted marker counts them.
+fn cap_trace_lines(kept: &mut [bool]) {
+    let mut n = 0;
+    for k in kept.iter_mut().filter(|k| **k) {
+        n += 1;
+        if n > MAX_TRACE_LINES {
+            *k = false;
+        }
+    }
+}
+
 fn normalize_line_key(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut i = 0usize;
@@ -1047,11 +1065,12 @@ pub fn apply(
         Group::Diag => lines = group_diag(lines),
         Group::Off => {}
     }
-    let trace_kept = trace_blocks(&lines);
     let max = rule.max_lines.max(1) as usize;
     if lines.len() <= max {
         return lines.join("\n");
     }
+    let mut trace_kept = trace_blocks(&lines);
+    cap_trace_lines(&mut trace_kept);
     let head = rule.head.min(rule.max_lines) as usize;
     let tail = rule.tail.min(rule.max_lines.saturating_sub(rule.head)) as usize;
     let keep_idx: Vec<usize> = lines
@@ -1324,6 +1343,48 @@ mod tests {
         let out = apply(&settings(80), &lines.join("\n"), 0, &rule, "arc");
         let shown = out.lines().filter(|l| lines.iter().any(|x| x == l)).count();
         assert_eq!(shown + omitted_sum(&out), lines.len(), "{out}");
+    }
+
+    /// An exit-0 body that is only stacks (`kubectl logs` of a crash-looping Java
+    /// service) is cut: trace lines past the cap are ordinary lines, and the shown
+    /// lines plus the trailers still add up to the input.
+    #[test]
+    fn trace_lines_past_the_cap_go_through_the_budget() {
+        let lines: Vec<String> = (0..2000)
+            .flat_map(|i| {
+                [
+                    format!("Exception in thread \"t{i}\" java.lang.IllegalStateException"),
+                    format!("\tat Svc.run{i}(Svc.java:1)"),
+                    format!("\tat Svc.main{i}(Svc.java:2)"),
+                ]
+            })
+            .collect();
+        let rule = Rule {
+            max_lines: 50,
+            head: 10,
+            tail: 10,
+            dedupe: Dedupe::Off,
+            ..Rule::default()
+        };
+        let out = apply(&settings(80), &lines.join("\n"), 0, &rule, "arc");
+        let shown = out.lines().filter(|l| !l.starts_with("… ")).count();
+        assert!(
+            shown <= MAX_TRACE_LINES + 2 * rule.max_lines as usize,
+            "{shown} lines kept"
+        );
+        assert!(out.contains("lines omitted (expand arc)"), "{out}");
+        assert_eq!(shown + omitted_sum(&out), lines.len());
+        // The first trace block is still whole; the last one is cut.
+        assert!(out.contains("Svc.main0(Svc.java:2)"), "{out}");
+        assert!(!out.contains("Svc.run1900("), "{out}");
+    }
+
+    #[test]
+    fn cap_trace_lines_demotes_trace_lines_past_the_cap() {
+        let mut kept = vec![true; MAX_TRACE_LINES + 10];
+        kept.insert(5, false);
+        cap_trace_lines(&mut kept);
+        assert_eq!(kept.iter().filter(|k| **k).count(), MAX_TRACE_LINES);
     }
 
     /// No archive id (store unavailable) → the marker names no `expand` target.
