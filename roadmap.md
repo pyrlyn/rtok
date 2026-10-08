@@ -439,6 +439,12 @@ Surfaced 2026-09-26 by the first full local `just check` on Windows (T272–T274
 | W1 | `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on Windows dart 3.9 (`File is not being analyzed`): give the temp project a `dart pub get` / a readiness wait, or skip-on-error on Windows — CI never runs it (no dart on runners) | open |
 | W2 | run `cargo clippy --workspace` in the `windows` CI job so `cfg(windows)` lint debt (the T273/T274 class) fails CI instead of the first local Windows gate | open |
 
+## MCP agent link in the Claude desktop app
+
+### T456. Claude desktop: keep the shared desktop MCP entry from shadowing the session's own rtok MCP
+
+Approved by the creator 2026-10-08 after the T455 investigation. In the desktop app's Code tab every `mcp__rtok__*` call is served by the one `rtok mcp` that Claude.app spawns from `claude_desktop_config.json` (cwd of an unrelated project, no `CLAUDE_*` env, shared by every session), while the session's own server (the `rtok@rtok` plugin, a child of `claude`) runs but never serves a call. No link rule can name a session from that shared process, so MCP `whoami`/`worktree_*`/`agent_*` stay unlinked there, T454's env rule included. First verify live how the Code tab deduplicates the desktop entry against the session's server (by name or by command); then write a desktop entry that does not shadow the session's server (another name or args, an amendment to T275's naming decision), and check that MCP `whoami` in a Code-tab session links by `ancestor` or `env`.
+
 # Batch / Flex API pass — implementation plan
 
 > **Canonical copy:** research + T250–T259 checklist now live in [`plan.md`](plan.md)

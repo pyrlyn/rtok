@@ -89,3 +89,7 @@ Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add`
 ### Windows
 
 On Windows rtok cannot read a process's parent pid (`rtok-sys::parent_pid` returns nothing; the Windows snapshot value is not updated after the parent exits), so no ancestor chain is read and only the cwd rule decides which agent a hook call belongs to. No host doc records this limit. Sources and dates are in `research.md` §26.
+
+### Claude desktop app
+
+In the desktop app's Code tab, rtok's MCP tools are served by the one `rtok mcp` the app starts from `claude_desktop_config.json` for every session, not by a process of the session itself. That process sits under no session and in no session's directory, so MCP `whoami`, `worktree_*` and `agent_*` cannot tell which agent called them and answer "not linked to an agent session" with that reason. Use `rtok agents` and `rtok worktree` from the agent's shell there. Keeping the shared entry from hiding the session's own server is T456.

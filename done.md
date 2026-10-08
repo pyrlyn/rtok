@@ -9159,6 +9159,17 @@ Check: store unit tests (register is idempotent, sub-agent row, resolve prefix /
 Status: done 2026-09-27 (#439; hook bench p95 9.10 ms PreToolUse, 9.51 ms PostToolUse)
 Model: Claude Code / claude-opus-5-5
 
+### T455. MCP `whoami` says when this process sits under no live session
+
+Creator request 2026-10-08: find why `link::resolve` returned `Link::None` for a Claude Code desktop session whose agent row had matching `ancestors` and cwd. Finding: `resolve` is right. In the desktop app's Code tab every `mcp__rtok__*` call is served by the one `rtok mcp` Claude.app spawns from `claude_desktop_config.json` (`calls.session_id = mcp-<pid>` of that process; parent `disclaimer` → `Claude.app`, cwd of an unrelated project, no `CLAUDE_*` env), not by the session's child of `claude` (the `rtok@rtok` plugin's server), which never served a call in a day of the creator's store. Its parent chain and cwd match no session, so nothing can link it, and T454's `CLAUDE_CODE_SESSION_ID` rule does not reach it either. Replayed against a scratch `RTOK_HOME` (fresh store, then a `sqlite3 .backup` of the live store with the live config): a process inside the session's tree links by `ancestor`. The install-side fix is T456 (`roadmap.md`).
+
+Check: `resolve` returns `Link::Outside` instead of `Link::None` when live agents of the host recorded hook chains since this process started yet none shares a pid with this process or its cwd, and MCP `whoami`/`worktree_*`/`agent_*` answer with that reason and the CLI to use; `Link::None` keeps its exact text; `just check`.
+
+Result: `Link::Outside` in `src/agents/link.rs`, after the hookless rule (a hookless host sharing the `other` host row with a hooked one still registers its own row) and only when both this process and a live candidate have a chain (an old client without one could still be this session). Like `None` it is never cached, since a new session's MCP looks the same until its first hook lands. `src/mcp.rs` `agent()` maps it to "not linked to an agent session: this rtok mcp process is under no live <host> session and in none's cwd, …". `docs/agents-and-worktrees.md` (and `ru`/`uk`) gain a "Claude desktop app" section. Tests: three `link.rs` cases with fake pids in an in-memory store (outside; no chained row or no own chain stays `None`; hookless beside chained rows registers itself) and one RPC `whoami` case. Live: a debug build and the installed 0.15.1 against the scratch replay, with the session's chain swapped for fake pids and a foreign cwd: the new text vs the old one.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
 ### T283.3. MCP link rule (b): the nearest common host ancestor pid
 
 PR 2 of T283, part 3. The hook wire request (`crates/rtok-hook`, `src/hooks/resident.rs`: `version, fingerprint, event, host, cwd, stdin`) carries no pid, and the resident hook process is not the host's child, so a hook cannot record its own ancestry today. Add the client's parent pid to the request (protocol version bump), store it on the agent row (migration), record it on registration, and let `link.rs` match it against the `rtok mcp` process's ancestor chain (nearest first; two agents behind one ancestor are ambiguous). Doc-derived like the rest of the rule order; the T281 probe confirms it per host.
