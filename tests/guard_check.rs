@@ -41,9 +41,11 @@ fn run(home: &Home, args: &[&str], stdin: &str) -> (bool, String) {
     )
 }
 
+// No `cwd`, like the pi and OpenCode plugins: `guard check` has none either, and the Bash key
+// carries the cwd, so a recording with one would never match the check.
 fn post(home: &Home, session: &str, tool: &str, input: &str, stdout: &str) {
     let body = format!(
-        r#"{{"session_id":"{session}","cwd":"/tmp","tool_name":"{tool}","tool_input":{input},"hook_event_name":"PostToolUse","tool_response":{{"stdout":"{stdout}"}}}}"#
+        r#"{{"session_id":"{session}","tool_name":"{tool}","tool_input":{input},"hook_event_name":"PostToolUse","tool_response":{{"stdout":"{stdout}"}}}}"#
     );
     let (ok, out) = run(home, &["hook", "PostToolUse"], &body);
     assert!(ok, "{out}");
