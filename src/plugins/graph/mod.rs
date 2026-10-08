@@ -169,7 +169,7 @@ pub fn index_for(cx: &Ctx, root: &Path) -> Result<index::Report> {
 pub(crate) fn pending_paths(cx: &Ctx, root: &Path) -> Result<Vec<String>> {
     let key = index::canon(root);
     let mut set: HashSet<String> = cx.symbol_pending(&key, root)?.into_iter().collect();
-    for p in cx.graph_watch_pending() {
+    for p in cx.graph_watch_pending(&key) {
         set.insert(p);
     }
     let mut out: Vec<String> = set.into_iter().collect();
@@ -183,7 +183,8 @@ fn stale_banner(cx: &Ctx, root: &Path) -> Result<String> {
     if pending.is_empty() {
         return Ok(String::new());
     }
-    let watch_pending = !cx.graph_watch_pending().is_empty() && cfg.watch != "off";
+    let watch_pending =
+        !cx.graph_watch_pending(&index::canon(root)).is_empty() && cfg.watch != "off";
     if !cfg.auto_index || watch_pending {
         let show = pending.len().min(5);
         let listed = pending[..show].join(", ");
@@ -315,22 +316,8 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
         "impact" => {
             let name = arg("name");
             if name.is_empty() {
-                // Affected tests are one project's (the scoped form is T329.5).
-                let root = &scope[0].root;
-                crate::plugins::read::walk_root_ok(root)?;
-                let path = arg("path");
-                let paths = if path.is_empty() {
-                    Vec::new()
-                } else {
-                    vec![rel_of(root, path)]
-                };
-                affected_from_paths(
-                    cx,
-                    root,
-                    &paths,
-                    args["depth"].as_u64().unwrap_or(3) as u32,
-                    false,
-                )
+                let depth = args["depth"].as_u64().unwrap_or(3) as u32;
+                scope::affected_path(cx, scope, arg("path"), depth)
             } else {
                 scope::impact(
                     cx,
@@ -936,8 +923,27 @@ pub(crate) fn affected_from_paths(
 ) -> Result<String> {
     index_for(cx, root)?;
     let key = index::canon(root);
+    let (mut hits, starts) = changed_starts(cx, root, &key, paths)?;
+    for name in &starts {
+        for (_, path, scope) in impact_bfs(cx, &key, name, depth)? {
+            if is_test_path(&path) {
+                hits.insert((path, via_of(name, scope)));
+            }
+        }
+    }
+    Ok(format_affected(&hits, json))
+}
+
+/// What a project's changed paths start from: the test files they hit directly or by naming
+/// convention, and the definitions the walk climbs up from (T329.5 shares this with the scope).
+fn changed_starts(
+    cx: &Ctx,
+    root: &Path,
+    key: &str,
+    paths: &[String],
+) -> Result<(Hits, HashSet<String>)> {
     // T372: indexed paths for name-convention test links (existing files only).
-    let indexed: HashSet<String> = cx.symbol_stats(&key)?.into_keys().collect();
+    let indexed: HashSet<String> = cx.symbol_stats(key)?.into_keys().collect();
     let mut hits = BTreeSet::new();
     let mut starts = HashSet::new();
     for raw in paths {
@@ -947,26 +953,23 @@ pub(crate) fn affected_from_paths(
                 hits.insert((candidate, "(by name)".to_string()));
             }
         }
-        for name in defs_in_path(cx, root, &key, &rel)? {
+        for name in defs_in_path(cx, root, key, &rel)? {
             if is_test_path(&rel) {
                 hits.insert((rel.clone(), name.clone()));
             }
             starts.insert(name);
         }
     }
-    for name in &starts {
-        for (_, path, scope) in impact_bfs(cx, &key, name, depth)? {
-            if is_test_path(&path) {
-                let via = if scope.is_empty() {
-                    name.clone()
-                } else {
-                    scope
-                };
-                hits.insert((path, via));
-            }
-        }
+    Ok((hits, starts))
+}
+
+/// The symbol a test is reached through: the calling scope, else the changed name itself.
+fn via_of(name: &str, scope: String) -> String {
+    if scope.is_empty() {
+        name.to_string()
+    } else {
+        scope
     }
-    Ok(format_affected(&hits, json))
 }
 
 /// T372: candidate test paths linked by naming convention to `rel` (same stem).
@@ -1075,18 +1078,24 @@ fn test_command(path: &str, name: &str) -> Option<String> {
     }
 }
 
-fn format_affected(hits: &BTreeSet<(String, String)>, json: bool) -> String {
-    if json {
-        let tests: Vec<Value> = hits
-            .iter()
-            .map(|(file, symbol)| {
-                json!({
-                    "file": file,
-                    "symbol": symbol,
-                    "command": test_command(file, symbol),
-                })
+/// Affected tests as `(file, via symbol)`.
+type Hits = BTreeSet<(String, String)>;
+
+fn tests_json(hits: &Hits) -> Vec<Value> {
+    hits.iter()
+        .map(|(file, symbol)| {
+            json!({
+                "file": file,
+                "symbol": symbol,
+                "command": test_command(file, symbol),
             })
-            .collect();
+        })
+        .collect()
+}
+
+fn format_affected(hits: &Hits, json: bool) -> String {
+    if json {
+        let tests = tests_json(hits);
         return if tests.is_empty() {
             json!({"tests": [], "message": EMPTY_AFFECTED}).to_string()
         } else {

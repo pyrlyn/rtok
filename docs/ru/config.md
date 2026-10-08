@@ -222,7 +222,7 @@ since           = "30d"
 format          = "table"             # table | json      (--json)
 plugin          = ""                  # "" = all         (--plugin <id>)
 transcripts_dir = "~/.claude/projects"
-codex_dir       = "~/.codex/sessions" # Codex CLI logs → one more `api` row (T49.2); OpenCode, Cursor and Copilot CLI stores carry no token counts (surveyed 2026-09-17), so they are not read
+codex_dir       = "~/.codex/sessions" # Codex CLI logs → one more `api` row (T49.2); OpenCode and Copilot CLI are read by `rtok agents usage` ([agents.usage.dirs], T358.3); Cursor stores carry no token counts (surveyed 2026-09-17), so they are not read
 calibrate_samples = 30                # per class        (--calibrate)
 baseline        = ""                  # default name for --compare; "" = none
 price           = false               # show per-model USD costs (--price)
@@ -663,7 +663,7 @@ Rust (rust-analyzer) и Dart (Dart SDK): `docs/lsp.md`.
 
 Собственные строки rtok для человека за терминалом — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, сводка `graph index`, `--help` — по умолчанию снабжены эмодзи и цветом:
-✅ успех (зелёный), 💡 статус (голубой), ⚠️ предупреждение (жёлтый), ❌ ошибка (красный).
+✅ успех (зелёный), 💡 статус (голубой), ❗ предупреждение (жёлтый), ❌ ошибка (красный). Строка с названием операции получает её значок (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), выровненный так, что текст после него начинается в одной колонке.
 
 ```toml
 [ui]

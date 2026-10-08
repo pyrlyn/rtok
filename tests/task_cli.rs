@@ -33,8 +33,17 @@ impl Sandbox {
 
     /// `rtok task <args>` in the checkout: (exited 0, stdout, stderr).
     fn task(&self, args: &[&str]) -> (bool, String, String) {
+        self.rtok(&[&["task"], args].concat())
+    }
+
+    /// The MCP tool `name` through `rtok mcp --call`: (exited 0, the tool's text).
+    fn mcp(&self, name: &str, args: &str) -> (bool, String) {
+        let (ok, out, _) = self.rtok(&["mcp", "--call", name, "--json", args]);
+        (ok, out)
+    }
+
+    fn rtok(&self, args: &[&str]) -> (bool, String, String) {
         let out = Command::new(env!("CARGO_BIN_EXE_rtok"))
-            .arg("task")
             .args(args)
             .current_dir(&self.repo)
             .env("HOME", &self.home)
@@ -138,4 +147,50 @@ fn refusals_name_the_problem() {
     assert!(!ok && err.contains("--adapter must be one of"), "{err}");
     assert_eq!(sb.ok(&["next"]), "no open task\n");
     assert_eq!(sb.ok(&["next", "--json"]), "null\n");
+}
+
+/// T441.6: the MCP tools answer with the JSON `--json` prints, and both see the same plan.
+#[test]
+fn mcp_tools_answer_like_the_cli() {
+    let sb = Sandbox::new("mcp");
+    sb.ok(&["init", "--prefix", "M"]);
+    let json = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+    let mcp = |name: &str, args: &str| {
+        let (ok, out) = sb.mcp(name, args);
+        assert!(ok, "{name} {args}: {out}");
+        json(&out)
+    };
+
+    let made = mcp("task_create", r#"{"title":"Parent","description":"Why."}"#);
+    assert_eq!(made["id"], "M1");
+    let sub = mcp("task_create", r#"{"title":"Child","parent":"M1"}"#);
+    assert_eq!(sub["id"], "M1.1");
+    assert_eq!(json(&sb.ok(&["create", "Other", "--json"]))["id"], "M2");
+
+    assert_eq!(mcp("task_list", "{}"), json(&sb.ok(&["list", "--json"])));
+    assert_eq!(
+        mcp("task_get", r#"{"id":"M1"}"#),
+        json(&sb.ok(&["show", "M1", "--json"]))
+    );
+    assert_eq!(mcp("task_next", "{}"), json(&sb.ok(&["next", "--json"])));
+
+    let (ok, out) = sb.mcp("task_status", r#"{"id":"M1","status":"done"}"#);
+    assert!(!ok && out.contains("M1.1"), "{out}");
+    assert_eq!(
+        mcp("task_status", r#"{"id":"M1.1","status":"done"}"#)["status"],
+        "done"
+    );
+    assert_eq!(
+        mcp("task_status", r#"{"id":"M1"}"#),
+        json(&sb.ok(&["status", "M1", "--json"]))
+    );
+    assert_eq!(
+        mcp("task_list", r#"{"status":["done"]}"#),
+        json(&sb.ok(&["list", "--status", "done", "--json"]))
+    );
+
+    let (ok, out) = sb.mcp("task_get", "{}");
+    assert!(!ok && out.contains("missing `id`"), "{out}");
+    let (ok, out) = sb.mcp("task_get", r#"{"id":"M9"}"#);
+    assert!(!ok && out.contains("no task M9"), "{out}");
 }
