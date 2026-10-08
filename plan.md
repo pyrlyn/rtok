@@ -64,7 +64,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.4 | todo | P2 | 3 | 20% | |
 | T385.5 | todo | P2 | 3 | 20% | |
-| T385.6 | todo | P2 | 3 | 20% | |
+| T385.6 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T385.7 | todo | P3 | 4 | 10% | |
 | T385.8 | todo | P2 | 2 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
@@ -1442,6 +1442,8 @@ Check: mock upstream — omit/force/respect matrix and each 429 policy; `just ch
 optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
 
 Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
+
+Execution plan: (1) `Store::usage_by_lane` groups `usage` by the `calls.kind` of its call (Diesel join, no SQL) and `lane::lane_of_kind` maps the kind back to a lane name; `stats::attach_lanes` fills `Report.lanes` (same `ApiRow` and hit formula as `api`) and the table and JSON show it only once a non-agent lane has usage, so agent-only goldens stay byte-identical. (2) `tests/proxy_lane_cache.rs` replays one growing agent conversation through the proxy against a mock upstream with `compress` on, and asserts each turn's forwarded request keeps the previous turn's prefix byte for byte; a fixture test in `tests/stats_model.rs` pins the per-lane hit rates. (3) Verify with the touched tests, then `just check`.
 
 ### T385.7. Per-lane upstream and in-flight cap
 
