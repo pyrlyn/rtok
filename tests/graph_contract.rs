@@ -271,6 +271,94 @@ fn edited_and_deleted_files_are_reflected() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// T474: after an empty commit, symbol answers open with `index <old> head <new>`.
+#[test]
+fn symbol_prefixes_stale_head_after_empty_commit() {
+    let home = tmp("stale-head");
+    let a = repo(&home, "a");
+    assert!(
+        Command::new("git")
+            .args(["init"])
+            .current_dir(&a)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["-c", "user.email=t@t", "-c", "user.name=t", "add", "."])
+            .current_dir(&a)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args([
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-m",
+                "init"
+            ])
+            .current_dir(&a)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let before = call(&home, &a, "symbol", serde_json::json!({"name": "b"}));
+    assert!(
+        before.starts_with("chain.rs:4"),
+        "first answer has no head prefix: {before}"
+    );
+    assert!(
+        Command::new("git")
+            .args([
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "empty"
+            ])
+            .current_dir(&a)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let after = call(&home, &a, "symbol", serde_json::json!({"name": "b"}));
+    let first = after.lines().next().expect("line");
+    assert!(
+        first.starts_with("index ") && first.contains(" head "),
+        "want index <sha> head <sha>, got {first}"
+    );
+    let parts: Vec<&str> = first.split_whitespace().collect();
+    assert_eq!(parts.len(), 4, "{first}");
+    assert_eq!(parts[0], "index");
+    assert_eq!(parts[2], "head");
+    assert_eq!(parts[1].len(), 40, "full hex: {first}");
+    assert_eq!(parts[3].len(), 40, "full hex: {first}");
+    assert_ne!(parts[1], parts[3]);
+    assert!(after.contains("chain.rs:4 function"), "{after}");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// T474: a plain directory (no `.git`) keeps today's symbol text and does not panic.
+#[test]
+fn symbol_without_git_has_no_head_prefix() {
+    let home = tmp("no-git");
+    let a = repo(&home, "a");
+    assert_eq!(
+        call(&home, &a, "symbol", serde_json::json!({"name": "b"})),
+        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 /// T52.1: optional `path` / `kind` args narrow `symbol`, `callers` and
 /// `impact` to one subtree in one call; no-arg calls stay byte-exact (above).
 #[test]

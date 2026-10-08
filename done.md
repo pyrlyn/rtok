@@ -1,5 +1,19 @@
 # rtok — completed tasks
 
+### T474. Stale HEAD line on graph answers (repowise borrow)
+
+Remember `rev-parse HEAD` at index time. Prefix symbol/callers/impact/explore with `index <old> head <new>` when they differ (read before auto-index refreshes). Not on outline. No `.git` → no prefix.
+
+Check: graph_contract stale-head + no-git; graph_scope; `just check`.
+Result: empty-commit test shows both full hex; plain dir unchanged.
+
+### T475. Copy symbol rows into a new worktree (repowise borrow)
+
+`Store::copy_symbol_rows` copies indexed rows main→worktree (skip paths already present). `worktree claim::add` calls it after add succeeds. Copy error warns, does not fail the add.
+
+Check: `copy_symbol_rows` lib test; graph_scope; `just check`.
+Result: copy then symbol works; warm re-index skips; byte change re-indexes.
+
 ### T473. `symbol` accepts `names` (repowise borrow)
 
 One MCP `symbol` call can take `names: [str]`. Unknown names are lines in the answer, not Err. One `name` stays byte-exact. Cap with existing graph max_tokens / archive helper. Description total ≤ 150 est tokens.

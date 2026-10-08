@@ -195,6 +195,7 @@ pub fn run_with(
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         cx.touch_symbol_indexed_at(&rk, ts)?;
+        remember_head(cx, &root);
         // One pass over names so callers can rank without scanning `symbols` again (T368).
         cx.rebuild_symbol_idf(&rk)?;
         // A failed rebuild leaves the previous graph; the map falls back, indexing still succeeds.
@@ -204,6 +205,48 @@ pub fn run_with(
     }
     pb.finish_and_clear();
     Ok(report)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct IndexedHead {
+    pub head: String,
+}
+
+/// Record `rev-parse HEAD` for the root so answers can warn when the working tree moved (T474).
+/// Git failure is silent: indexing still succeeds.
+pub fn remember_head(cx: &Ctx, root: &Path) {
+    let Some(head) = super::git_stdout(root, &["rev-parse", "HEAD"]) else {
+        return;
+    };
+    let head = String::from_utf8_lossy(&head).trim().to_string();
+    if head.is_empty() {
+        return;
+    }
+    let key = format!("head:{}", canon(root));
+    let _ = cx.plugin_state_set(
+        "graph",
+        &key,
+        &serde_json::to_string(&IndexedHead { head }).unwrap_or_default(),
+    );
+}
+
+/// `index <saved> head <live>\n` when they differ; empty when unknown, equal, or not a git repo.
+pub fn stale_prefix(cx: &Ctx, root: &Path) -> String {
+    let key = format!("head:{}", canon(root));
+    let Some(raw) = cx.plugin_state_get("graph", &key).ok().flatten() else {
+        return String::new();
+    };
+    let Ok(saved) = serde_json::from_str::<IndexedHead>(&raw) else {
+        return String::new();
+    };
+    let Some(live) = super::git_stdout(root, &["rev-parse", "HEAD"]) else {
+        return String::new();
+    };
+    let live = String::from_utf8_lossy(&live).trim().to_string();
+    if live.is_empty() || live == saved.head {
+        return String::new();
+    }
+    format!("index {} head {live}\n", saved.head)
 }
 
 fn run_changed_with(
@@ -874,5 +917,32 @@ fn touched() {}
             "file-level call has no scope"
         );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T475: copy_symbol_rows seeds another root; re-index skips; a byte change re-indexes.
+    #[test]
+    fn copy_symbol_rows_seeds_a_worktree_and_warm_index_skips() {
+        let (cx, dir_a) = cx("copy-a");
+        let dir_b = dir_a.parent().unwrap().join("copy-b");
+        let _ = fs::remove_dir_all(&dir_b);
+        fs::create_dir_all(&dir_b).unwrap();
+        fs::write(dir_a.join("lib.rs"), "pub fn alpha() {}\n").unwrap();
+        fs::write(dir_b.join("lib.rs"), "pub fn alpha() {}\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        run(&ctx, &dir_a, false).unwrap();
+        let from = canon(&dir_a);
+        let to = canon(&dir_b);
+        let n = cx.store.copy_symbol_rows(&from, &to).unwrap();
+        assert!(n > 0, "copied rows");
+        let out = super::super::symbol(&ctx, &dir_b, "alpha").unwrap();
+        assert!(out.contains("lib.rs:1"), "{out}");
+        let warm = run(&ctx, &dir_b, false).unwrap();
+        assert_eq!(warm.indexed, 0, "sha match → no re-parse");
+        assert!(warm.skipped >= 1, "file skipped: {warm:?}");
+        fs::write(dir_b.join("lib.rs"), "pub fn alpha() { /* changed */ }\n").unwrap();
+        let cold = run(&ctx, &dir_b, false).unwrap();
+        assert_eq!(cold.indexed, 1, "byte change re-indexes");
+        let _ = fs::remove_dir_all(dir_a);
+        let _ = fs::remove_dir_all(dir_b);
     }
 }

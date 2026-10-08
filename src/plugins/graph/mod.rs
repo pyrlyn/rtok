@@ -324,14 +324,19 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
         kind: arg("kind").to_string(),
         all: args["all"].as_bool().unwrap_or(false),
     };
-    match name {
-        "symbol" => scope::symbols(cx, scope, &symbol_names(args), &filter),
-        "callers" => scope::callers(cx, scope, arg("name"), &filter),
+    // T474: read the head note before the tool body auto-indexes and refreshes it.
+    let head_note = match name {
+        "symbol" | "callers" | "impact" | "explore" => index::stale_prefix(cx, &root),
+        _ => String::new(),
+    };
+    let text = match name {
+        "symbol" => scope::symbols(cx, scope, &symbol_names(args), &filter)?,
+        "callers" => scope::callers(cx, scope, arg("name"), &filter)?,
         "impact" => {
             let name = arg("name");
             if name.is_empty() {
                 let depth = args["depth"].as_u64().unwrap_or(3) as u32;
-                scope::affected_path(cx, scope, arg("path"), depth)
+                scope::affected_path(cx, scope, arg("path"), depth)?
             } else {
                 scope::impact(
                     cx,
@@ -340,13 +345,18 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                     args["depth"].as_u64().unwrap_or(2) as u32,
                     &filter,
                     args["to"].as_str(),
-                )
+                )?
             }
         }
-        "outline" => scope::outline(cx, scope, arg("path")),
-        "explore" => scope::explore(cx, scope, arg("query"), &filter),
+        "outline" => scope::outline(cx, scope, arg("path"))?,
+        "explore" => scope::explore(cx, scope, arg("query"), &filter)?,
         _ => anyhow::bail!("unknown tool: {name}"),
-    }
+    };
+    Ok(if head_note.is_empty() {
+        text
+    } else {
+        format!("{head_note}{text}")
+    })
 }
 
 /// `symbol(name)`: `path:line kind` per definition, then that definition's source from
