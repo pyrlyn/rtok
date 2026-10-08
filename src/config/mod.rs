@@ -40,10 +40,11 @@ pub(crate) fn write_file(path: &Path, body: &str) -> Result<()> {
 
 /// Plugin catalogue: `(id, default_on)`. The registry's manifests must match this list
 /// (asserted by a test in `plugins`), and [`Plugins`] has one field per id.
-pub const CATALOGUE: [(&str, bool); 11] = [
+pub const CATALOGUE: [(&str, bool); 12] = [
     ("measure", true),
     ("cmd", true),
     ("read", true),
+    ("json_tree", false),
     ("archive", true),
     ("proxy", true),
     ("inject", true),
@@ -995,6 +996,7 @@ section! {
         measure: Measure = Measure::default(),
         cmd: Cmd = Cmd::default(),
         read: Read = Read::default(),
+        json_tree: JsonTree = JsonTree::default(),
         archive: Archive = Archive::default(),
         proxy: ProxyPlugin = ProxyPlugin::default(),
         inject: Inject = Inject::default(),
@@ -1188,6 +1190,11 @@ section! {
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),
     }
+}
+
+section! {
+    /// `[plugins.json_tree]`
+    JsonTree { enabled: bool = false }
 }
 
 section! {
@@ -1548,6 +1555,7 @@ impl Config {
             "measure" => p.measure.enabled,
             "cmd" => p.cmd.enabled,
             "read" => p.read.enabled,
+            "json_tree" => p.json_tree.enabled,
             "archive" => p.archive.enabled,
             "proxy" => p.proxy.enabled,
             "inject" => p.inject.enabled,
@@ -1570,6 +1578,7 @@ impl Config {
             "measure" => p.measure.enabled = on,
             "cmd" => p.cmd.enabled = on,
             "read" => p.read.enabled = on,
+            "json_tree" => p.json_tree.enabled = on,
             "archive" => p.archive.enabled = on,
             "proxy" => p.proxy.enabled = on,
             "inject" => p.inject.enabled = on,

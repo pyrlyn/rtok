@@ -1,3 +1,6 @@
+> [!NOTE]
+> This project is under active development. We need "testing volunteers": try it and report what breaks.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-wordmark-dark.svg">
   <img src="assets/logo-wordmark.svg" alt="rtok" width="200">
@@ -249,17 +252,19 @@ rtok plugins
 ```
 
 ```text
-id       enabled  surfaces
-measure  on       cli,proxy
-cmd      on       hook,cli
-read     on       mcp,hook
-archive  on       proxy,mcp
-proxy    on       proxy
-inject   on       hook
-guard    on       hook
-memory   on       mcp,hook
-graph    on       mcp
-toon     on       proxy,mcp
+id        enabled   surfaces
+measure   on        cli,proxy
+cmd       on        hook,cli
+read      on        mcp,hook
+json_tree off       proxy,mcp
+archive   on        proxy,mcp,cli
+proxy     on        proxy
+inject    on        hook
+guard     on        hook,cli
+memory    on        mcp,hook
+graph     on        mcp,hook
+toon      on        proxy,mcp
+compress  on        proxy
 ```
 
 Turn one off with `rtok config set plugins.cmd.enabled false`, or turn `toon` off with
@@ -369,6 +374,7 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok memory retire <id> [--superseded-by <id>]` | tombstone a note: never recalled or searched, body kept |
 | `rtok memory pin / unpin <id>` | keep a note at the head of SessionStart recall, or drop it back |
 | `rtok memory revise <id> --title <t> --body <b>` | save a replacement note and retire the old one |
+| `rtok memory history <id>` | earlier title and body kept when an upsert changed the note |
 | `rtok otel flush` / `status` | export the ledgers over OTLP, or report the watermarks |
 
 Agent ids, messages between agents and how worktrees bind to them on every host: [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md).

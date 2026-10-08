@@ -296,6 +296,18 @@ Legend: **blocked by** = tasks that must land first; **gate** = keep-or-revert r
 
 ---
 
+## `json_tree`
+
+**Goal.** Fold a large nested JSON tool result (a design tree or an AST) before `archive` replaces it with a head/tail pointer.
+
+**Replaces.** Nothing by dependency. The hoist and element-template idea is Figma-Context-MCP (`finalize.ts`, MIT); the algorithm is written here (D6).
+
+**Surfaces.** `proxy_filter` and MCP `shorten_result`. Default **off** until a `Measurement` row shows a saving.
+
+**Gate.** a nested JSON tool result is folded only when the folded form estimates fewer tokens than the original, and expand returns those original bytes.
+
+---
+
 ## Dependency sketch
 
 ```
@@ -426,6 +438,12 @@ Surfaced 2026-09-26 by the first full local `just check` on Windows (T272–T274
 |------|------|--------|
 | W1 | `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on Windows dart 3.9 (`File is not being analyzed`): give the temp project a `dart pub get` / a readiness wait, or skip-on-error on Windows — CI never runs it (no dart on runners) | open |
 | W2 | run `cargo clippy --workspace` in the `windows` CI job so `cfg(windows)` lint debt (the T273/T274 class) fails CI instead of the first local Windows gate | open |
+
+## MCP agent link in the Claude desktop app
+
+### T456. Claude desktop: keep the shared desktop MCP entry from shadowing the session's own rtok MCP
+
+Approved by the creator 2026-10-08 after the T455 investigation. In the desktop app's Code tab every `mcp__rtok__*` call is served by the one `rtok mcp` that Claude.app spawns from `claude_desktop_config.json` (cwd of an unrelated project, no `CLAUDE_*` env, shared by every session), while the session's own server (the `rtok@rtok` plugin, a child of `claude`) runs but never serves a call. No link rule can name a session from that shared process, so MCP `whoami`/`worktree_*`/`agent_*` stay unlinked there, T454's env rule included. First verify live how the Code tab deduplicates the desktop entry against the session's server (by name or by command); then write a desktop entry that does not shadow the session's server (another name or args, an amendment to T275's naming decision), and check that MCP `whoami` in a Code-tab session links by `ancestor` or `env`.
 
 # Batch / Flex API pass — implementation plan
 

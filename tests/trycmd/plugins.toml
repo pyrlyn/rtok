@@ -1,18 +1,19 @@
 bin.name = "rtok"
 args = "--config tests/trycmd/input/json-readers.toml plugins"
 stdout = """
-id       enabled  surfaces
-measure  on       cli,proxy
-cmd      on       hook,cli
-read     on       mcp,hook
-archive  on       proxy,mcp,cli
-proxy    on       proxy
-inject   on       hook
-guard    on       hook,cli
-memory   on       mcp,hook
-graph    on       mcp,hook
-toon     on       proxy,mcp
-compress on       proxy
+id        enabled   surfaces
+measure   on        cli,proxy
+cmd       on        hook,cli
+read      on        mcp,hook
+json_tree off       proxy,mcp
+archive   on        proxy,mcp,cli
+proxy     on        proxy
+inject    on        hook
+guard     on        hook,cli
+memory    on        mcp,hook
+graph     on        mcp,hook
+toon      on        proxy,mcp
+compress  on        proxy
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

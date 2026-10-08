@@ -1238,6 +1238,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
+            [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
             [CompletionResult]::new('revise', 'revise', [CompletionResultType]::ParameterValue, 'Save a replacement (title, body) for a note and retire the old row')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Notes live/pinned/retired, recall and MCP call counts')
@@ -1277,6 +1278,12 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;memory;history' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;memory;revise' {
             [CompletionResult]::new('--title', '--title', [CompletionResultType]::ParameterName, 'The replacement title')
             [CompletionResult]::new('--body', '--body', [CompletionResultType]::ParameterName, 'The replacement body')
@@ -1311,6 +1318,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
+            [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
             [CompletionResult]::new('revise', 'revise', [CompletionResultType]::ParameterValue, 'Save a replacement (title, body) for a note and retire the old row')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Notes live/pinned/retired, recall and MCP call counts')
@@ -1330,6 +1338,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;memory;help;unpin' {
+            break
+        }
+        'rtok;memory;help;history' {
             break
         }
         'rtok;memory;help;revise' {
@@ -2027,6 +2038,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
+            [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
             [CompletionResult]::new('revise', 'revise', [CompletionResultType]::ParameterValue, 'Save a replacement (title, body) for a note and retire the old row')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Notes live/pinned/retired, recall and MCP call counts')
@@ -2045,6 +2057,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;memory;unpin' {
+            break
+        }
+        'rtok;help;memory;history' {
             break
         }
         'rtok;help;memory;revise' {

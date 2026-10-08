@@ -14,6 +14,16 @@ Check: `cargo nextest run -p rtok -E 'test(host_visible) | test(emit_filtered) |
 
 Result: 2026-10-08. No new dependency. No saving claim beyond the corrected `Measurement` rows.
 
+### T455. Fold nested JSON before archive replaces it with a pointer
+
+`archive` runs before any structural encoder and, past `plugins.archive.min_tokens`, replaces a large tool result with a head/tail pointer. `rtok mcp -- <server>` does the same by line count. A design or AST JSON therefore never reaches an encoder that can hoist repeated values and element bodies.
+
+Plan: plugin `json_tree` (Proxy, Mcp), `default_on` false, registered immediately before `archive`. `fold_json` returns `None` unless the value is an object or array of at least 256 bytes with a nested object, and `toon::tabular_keys(value, 1)` is `None` so tables stay with `toon`. Values used by two or more objects are hoisted into a `VARS:` block (sha1-8, lengthened on collision). An object body that repeats, ignoring identity keys `id` and `name`, becomes `EL-<sha1-8>`; a body that is only a type-like field is not templated. One line per node. The original is archived first; rewrite only when the folded form estimates fewer tokens. `archive` and `toon` leave a `[json-tree ` pointer alone. MCP `shorten_result` folds before the line cut when the fold fits `max_lines` and is smaller, and does not fold `read` or `search`.
+
+Check: `just check`; `cargo test -p rtok json_tree -- --test-threads=8`. `rtok expand <id>` returns the pre-fold bytes. A block `toon` encodes still has a `[toon ` prefix and no `[json-tree ` prefix. No saving without a `Measurement` row (`plugin: "json_tree"`, `kind: "fold"`).
+
+Result: `just check` 2981 passed, 6 skipped. `cargo test -p rtok json_tree -- --test-threads=8` 11 passed.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
@@ -9163,6 +9173,17 @@ Check: store unit tests (register is idempotent, sub-agent row, resolve prefix /
 Status: done 2026-09-27 (#439; hook bench p95 9.10 ms PreToolUse, 9.51 ms PostToolUse)
 Model: Claude Code / claude-opus-5-5
 
+### T455. MCP `whoami` says when this process sits under no live session
+
+Creator request 2026-10-08: find why `link::resolve` returned `Link::None` for a Claude Code desktop session whose agent row had matching `ancestors` and cwd. Finding: `resolve` is right. In the desktop app's Code tab every `mcp__rtok__*` call is served by the one `rtok mcp` Claude.app spawns from `claude_desktop_config.json` (`calls.session_id = mcp-<pid>` of that process; parent `disclaimer` → `Claude.app`, cwd of an unrelated project, no `CLAUDE_*` env), not by the session's child of `claude` (the `rtok@rtok` plugin's server), which never served a call in a day of the creator's store. Its parent chain and cwd match no session, so nothing can link it, and T454's `CLAUDE_CODE_SESSION_ID` rule does not reach it either. Replayed against a scratch `RTOK_HOME` (fresh store, then a `sqlite3 .backup` of the live store with the live config): a process inside the session's tree links by `ancestor`. The install-side fix is T456 (`roadmap.md`).
+
+Check: `resolve` returns `Link::Outside` instead of `Link::None` when live agents of the host recorded hook chains since this process started yet none shares a pid with this process or its cwd, and MCP `whoami`/`worktree_*`/`agent_*` answer with that reason and the CLI to use; `Link::None` keeps its exact text; `just check`.
+
+Result: `Link::Outside` in `src/agents/link.rs`, after the hookless rule (a hookless host sharing the `other` host row with a hooked one still registers its own row) and only when both this process and a live candidate have a chain (an old client without one could still be this session). Like `None` it is never cached, since a new session's MCP looks the same until its first hook lands. `src/mcp.rs` `agent()` maps it to "not linked to an agent session: this rtok mcp process is under no live <host> session and in none's cwd, …". `docs/agents-and-worktrees.md` (and `ru`/`uk`) gain a "Claude desktop app" section. Tests: three `link.rs` cases with fake pids in an in-memory store (outside; no chained row or no own chain stays `None`; hookless beside chained rows registers itself) and one RPC `whoami` case. Live: a debug build and the installed 0.15.1 against the scratch replay, with the session's chain swapped for fake pids and a foreign cwd: the new text vs the old one.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
 ### T283.3. MCP link rule (b): the nearest common host ancestor pid
 
 PR 2 of T283, part 3. The hook wire request (`crates/rtok-hook`, `src/hooks/resident.rs`: `version, fingerprint, event, host, cwd, stdin`) carries no pid, and the resident hook process is not the host's child, so a hook cannot record its own ancestry today. Add the client's parent pid to the request (protocol version bump), store it on the agent row (migration), record it on registration, and let `link.rs` match it against the `rtok mcp` process's ancestor chain (nearest first; two agents behind one ancestor are ambiguous). Doc-derived like the rest of the rule order; the T281 probe confirms it per host.
@@ -10166,3 +10187,14 @@ Check result: `src/ui/style.rs` unit tests (emoji key × tty matrix, prefix shap
 
 Status: done 2026-09-30 (#532)
 Model: Grok Bot
+
+### T472. Keep the previous note body when an upsert changes it
+
+An upsert on `(project, kind, title)` replaces the body. The previous title and body go into `note_versions` before that write, in the same immediate transaction, with `version = COALESCE(MAX(version), 0) + 1`. Migration `0035_note_versions` (`0034` is already used by open pull requests). Kinds `checkpoint:*` and `session:*` write no version rows; a same-body upsert writes none. `rtok memory history <id>` prints the rows oldest first. SessionStart recall and `mem_get` stay on the current body. No MCP tool. Private-tag redaction is a separate change and is not part of this task.
+
+Check: `cargo test --lib plugins::memory::`; `cargo test --lib store::`; `cargo test --test memory_status`; `just check`.
+
+Result: `upsert_note` records the previous title and body in `note_versions` inside one immediate transaction. `rtok memory history <id>` prints those rows oldest first. Checkpoint and session kinds, and a same-body upsert, write no version row. Recall and `mem_get` stay on the current body. `just check`: 2972 passed, 6 skipped.
+
+Status: done 2026-10-08
+Model: Cursor / grok 4.7

@@ -20,7 +20,7 @@ that line only when its value points at this proxy, so a foreign base URL stays.
 The proxy carries the `proxy` surface. Hook- and MCP-only plugins have no path in.
 There is no `anthropic-api-base` in aider's options reference — only `openai-api-base`.
 
-Reachable: measure, archive, proxy, toon, compress
+Reachable: measure, json_tree, archive, proxy, toon, compress
 Not reachable: cmd, read, inject, guard, memory, graph
 
 ## Docs
