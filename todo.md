@@ -60,7 +60,6 @@
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.4. Batch observe and `parse_results` into `usage`
 - T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
-- T385.6. Per-lane cache-hit ledger and a replay byte-stability test
 - T385.7. Per-lane upstream and in-flight cap
 - T385.8. P28 Phase 1: measure what LLM compression could save
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
