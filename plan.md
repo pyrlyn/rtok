@@ -116,7 +116,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
+| T436.1 | in progress | P2 | 3 | 95% | Claude Code / claude-sonnet-5-5 |
 | T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
