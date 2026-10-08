@@ -255,6 +255,12 @@ pub(crate) fn cache_key(
             let c = norm_cmd(&input.get("command")?.as_str()?.replace(['\n', '\r'], " ; "));
             // Only read-only commands are keyed: a repeat of `cargo test` after an Edit is
             // new information, not a duplicate.
+            // A relative hop resolves against a directory the key cannot name: PostToolUse
+            // already sees the cwd after the command's own `cd`, so the repeat would match
+            // and run one level deeper. Over-invalidating is safe, a false deny is not.
+            if relative_hop(&c) {
+                return None;
+            }
             // The starting directory is part of the key: the host keeps the shell's cwd
             // between calls, so the same text run elsewhere prints something else.
             read_only(&c).then(|| match cwd.filter(|d| !d.is_empty()) {
@@ -420,6 +426,24 @@ fn split_cd(s: &str) -> (Vec<String>, String) {
     (hops, t)
 }
 
+/// Whether any leading `cd` hop of the normalized command is relative (`cd sub`, `cd -`,
+/// `cd $HOME/x`). Absolute means a rooted path, `~…` or a Windows drive.
+fn relative_hop(cmd: &str) -> bool {
+    split_cd(cmd).0.iter().any(|t| {
+        let t = t
+            .strip_prefix('\'')
+            .and_then(|r| r.strip_suffix('\''))
+            .or_else(|| t.strip_prefix('"').and_then(|r| r.strip_suffix('"')))
+            .unwrap_or(t);
+        let b = t.as_bytes();
+        let drive = b.len() >= 3
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && matches!(b[2], b'\\' | b'/');
+        !(t.starts_with(['/', '~']) || drive)
+    })
+}
+
 /// Whether the command moves the host's persistent shell, so every cached listing was
 /// taken from a different directory.
 fn has_cd_hop(command: &str) -> bool {
@@ -525,33 +549,34 @@ mod tests {
         crate::testutil::runtime("guard").0
     }
 
-    /// T445: every `cd` hop stays in the key, verbatim and in order. Hops are relative to
-    /// the shell's current directory, so folding `cd sub && cd sub` to one hop keyed two
-    /// different directories as one. The starting directory is part of the key too.
+    /// T445: every `cd` hop stays in the key, verbatim and in order, and the starting
+    /// directory is part of the key. A relative hop is never keyed at all.
     #[test]
-    fn bash_key_keeps_every_cd_hop_and_the_cwd() {
+    fn bash_key_keeps_every_absolute_cd_hop_and_the_cwd() {
         let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
         assert_eq!(k("ls"), Some("bash\tls".to_string()));
-        assert_eq!(k("cd a && ls"), Some("bash\tcd a && ls".to_string()));
-        assert_eq!(k("cd b && ls"), Some("bash\tcd b && ls".to_string()));
+        assert_eq!(k("cd /a && ls"), Some("bash\tcd /a && ls".to_string()));
+        assert_eq!(k("cd /b && ls"), Some("bash\tcd /b && ls".to_string()));
         assert_eq!(
-            k("cd a && cd b && ls"),
-            Some("bash\tcd a && cd b && ls".to_string())
+            k("cd /a && cd /b && ls"),
+            Some("bash\tcd /a && cd /b && ls".to_string())
         );
-        assert_ne!(k("cd a && cd a && ls"), k("cd a && ls"));
-        assert_ne!(k("cd /r && cd sub && ls"), k("cd sub && ls"));
+        assert_ne!(k("cd /a && cd /a && ls"), k("cd /a && ls"));
         // A quoted path with `&&` inside is one target word, not a split point.
         assert_eq!(
-            k("cd 'a && b' && ls"),
-            Some("bash\tcd 'a && b' && ls".to_string())
+            k("cd '/a && b' && ls"),
+            Some("bash\tcd '/a && b' && ls".to_string())
         );
+        for abs in ["~", "~/x", "~u/x", "'/a b'", "\"/a b\"", "C:\\x", "d:/x"] {
+            assert!(k(&format!("cd {abs} && ls")).is_some(), "{abs}");
+        }
         // Whitespace normalization and the `rtok run` wrap behind hops do not split a key:
         // PreToolUse sees the typed command, PostToolUse the rewritten one.
-        assert_eq!(k("cd   a   &&   ls"), k("cd a && ls"));
-        assert_eq!(k("cd a && rtok run -- 'ls'"), k("cd a && ls"));
+        assert_eq!(k("cd   /a   &&   ls"), k("cd /a && ls"));
+        assert_eq!(k("cd /a && rtok run -- 'ls'"), k("cd /a && ls"));
         assert_eq!(
-            k("cd a && cd b && rtok run -- 'ls'"),
-            k("cd a && cd b && ls")
+            k("cd /a && cd /b && rtok run -- 'ls'"),
+            k("cd /a && cd /b && ls")
         );
 
         let at = |cwd, agent| cache_key("Bash", &json!({"command": "ls"}), agent, cwd);
@@ -564,6 +589,30 @@ mod tests {
             at(Some("/r"), Some("ag")),
             Some("bash\t/r\tls\tag".to_string())
         );
+    }
+
+    /// A hop that resolves against the current directory has no stable key: the same text
+    /// runs somewhere else once the shell has moved.
+    #[test]
+    fn bash_behind_a_relative_cd_hop_has_no_key() {
+        for c in [
+            "cd a && ls",
+            "cd - && ls",
+            "cd .. && ls",
+            "cd $HOME/x && ls",
+            "cd 'a b' && ls",
+            "cd /r && cd sub && ls",
+            "cd sub && cd /r && ls",
+            "cd a && rtok run -- 'ls'",
+        ] {
+            for cwd in [None, Some("/s")] {
+                assert_eq!(
+                    cache_key("Bash", &json!({"command": c}), None, cwd),
+                    None,
+                    "{c}"
+                );
+            }
+        }
     }
 
     /// A redirect glued to a word (`echo x>file`) is still a writer: the
@@ -624,42 +673,59 @@ mod tests {
         }
     }
 
-    /// The cwd-blind pin was wrong twice: the hops were folded to the last one, so
-    /// `cd sub` from `/repo` and from `/repo/sub` shared a key.
+    /// The shell is persistent, so by PostToolUse the host cwd is already past the
+    /// command's own `cd`: a relative repeat would match that key and run one level deeper.
     #[test]
-    fn bash_repeat_behind_cd_hops_is_a_new_key() {
+    fn relative_cd_repeat_is_not_denied() {
         let mut sh = Shell::new();
-        sh.at("/repo");
-        sh.ran("ls   -la");
-        assert!(sh.denied("ls -la"), "the same command in the same place");
-        sh.ran("cd /repo && cd sub && ls -la");
+        sh.at("/s/a");
+        sh.ran("cd a && ls");
+        assert!(!sh.denied("cd a && ls"), "would run in /s/a/a");
+        sh.ran("cd a && ls");
+        assert!(!sh.denied("cd a && ls"));
+        assert!(!sh.denied("ls"));
+    }
+
+    /// An absolute hop is safe: the post cwd is the hop target, and the repeat lists it again.
+    #[test]
+    fn absolute_cd_repeat_is_denied() {
+        let mut sh = Shell::new();
+        sh.at("/s");
+        sh.ran("ls");
+        sh.at("/r/sub");
+        sh.ran("cd /r && cd /r/sub && ls -la");
         assert!(
-            !sh.denied("cd sub && ls -la"),
-            "one hop fewer runs in another directory, not in the same one"
+            !sh.denied("ls"),
+            "the shell moved, the parent listing is stale"
         );
+        assert!(sh.denied("cd /r && cd /r/sub && ls -la"));
         assert!(
-            sh.denied("cd /repo && cd sub && ls -la"),
-            "the identical hops from the identical start repeat the listing"
+            !sh.denied("cd /r/sub && ls -la"),
+            "one hop fewer is another key"
         );
     }
 
-    /// `cd a && ls` is a read-only listing, yet it moves the shell: a plain `ls` after it
-    /// runs in `a`, so the listing taken before must not answer it.
+    /// `cd /r && ls` is a read-only listing, yet it moves the shell: a plain `ls` after it
+    /// runs in `/r`, and a relative `cd a && ls` (unkeyed) moves it just the same.
     #[test]
     fn cd_hop_drops_earlier_bash_answers() {
-        let mut sh = Shell::new();
-        sh.at("/repo");
-        sh.ran("ls");
-        sh.ran("git status");
-        sh.ran("cd a && ls");
-        assert!(!sh.denied("ls"), "the parent listing is stale inside `a`");
-        assert!(!sh.denied("git status"));
-        assert!(sh.denied("cd a && ls"), "its own answer is kept");
-        // No hop, no flush: ordinary read-only commands keep each other's answers.
-        sh.ran("ls");
-        sh.ran("git status");
-        assert!(sh.denied("ls"));
-        assert!(sh.denied("git status"));
+        for hop in ["cd /r && ls", "cd a && ls"] {
+            let mut sh = Shell::new();
+            sh.at("/repo");
+            sh.ran("ls");
+            sh.ran("git status");
+            sh.ran(hop);
+            assert!(
+                !sh.denied("ls"),
+                "the parent listing is stale after `{hop}`"
+            );
+            assert!(!sh.denied("git status"));
+            // No hop, no flush: ordinary read-only commands keep each other's answers.
+            sh.ran("ls");
+            sh.ran("git status");
+            assert!(sh.denied("ls"));
+            assert!(sh.denied("git status"));
+        }
     }
 
     /// The same text from another starting directory prints something else.
@@ -1159,7 +1225,7 @@ mod tests {
             "ls && cat a",
             "cat a; ls",
             "grep 'a;b' f",
-            "cd d && ls; wc f",
+            "cd /d && ls; wc f",
         ] {
             assert!(k(r).is_some(), "{r:?}");
         }
