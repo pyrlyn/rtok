@@ -1,0 +1,97 @@
+# Risk-ranked reading list for a pull request diff. Unprivileged on purpose:
+# this job never writes a comment. graph-review-comment.yml posts the artifact
+# from the default branch and does not check out pull-request code.
+# A high score does not fail the job.
+name: Graph review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: graph-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: "0"
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: write # rustup and cargo caches
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: false
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+
+      - name: Fetch the pull request base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin \
+            "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          echo "RTOK_BASE=origin/${BASE_REF}" >> "${GITHUB_ENV}"
+
+      - name: Build rtok and write the review
+        env:
+          REVIEW: ${{ runner.temp }}/review.txt
+          OUT: ${{ runner.temp }}/rtok-review.md
+        run: |
+          set -euo pipefail
+          cargo build --bin rtok
+          # Exit 0 on a high score. A git or index failure still fails the job.
+          ./target/debug/rtok graph review --since "${RTOK_BASE}" > "${REVIEW}"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          text = Path(os.environ["REVIEW"]).read_text(encoding="utf-8", errors="replace")
+          raw = text.encode("utf-8")
+          limit = 50_000
+          if len(raw) > limit:
+              text = raw[:limit].decode("utf-8", errors="ignore").rstrip() + "\n\n… truncated\n"
+          body = "## rtok review\n\n" + text
+          if not body.endswith("\n"):
+              body += "\n"
+          body += "\n*rtok graph review*\n"
+          Path(os.environ["OUT"]).write_text(body, encoding="utf-8")
+          PY
+
+      - name: Stage report artifact
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/rtok-review
+          REPORT: ${{ runner.temp }}/rtok-review.md
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          rm -rf -- "${ARTIFACT_DIR}"
+          mkdir -p -- "${ARTIFACT_DIR}"
+          cp -- "${REPORT}" "${ARTIFACT_DIR}/rtok-review.md"
+          printf '%s\n' "${PR_NUMBER}" > "${ARTIFACT_DIR}/pr-number.txt"
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: rtok-review
+          path: ${{ runner.temp }}/rtok-review/
+          if-no-files-found: error
+          retention-days: 1

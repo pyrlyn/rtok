@@ -10,6 +10,14 @@ Check: `just check`; `cargo test -p rtok json_tree -- --test-threads=8`. `rtok e
 
 Result: `just check` 2981 passed, 6 skipped. `cargo test -p rtok json_tree -- --test-threads=8` 11 passed.
 
+### T454. Risk-ranked reading list for a git diff
+
+`rtok graph review` (CLI only, same flags as `affected`) scores each changed file from the symbol index: an untested definition is 0.30, a tested one is 0.05, a whole-token security keyword adds 0.20, and callers add at most 0.10. It prints the level, the untested names, and the hunk ranges that fit an 800-line budget. No sixth MCP tool. No new crate. No `Measurement` unless `cap` shortens the answer. The repo `.coderabbit.yaml` stub is removed so the central pyrlyn config applies. A pull request uploads the report from an unprivileged job; a `workflow_run` on the default branch posts the sticky comment and does not check out pull-request code. A high score does not fail CI.
+
+Check: `cargo test --lib plugins::graph::review`; `graph_surface_is_five_tools_under_150_tokens`; `just check`.
+
+Result: 8 review tests passed; the MCP surface stays five tools. `just check` ran the full gate (trycmd snapshots are a shared input): 2978 passed, 6 skipped.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

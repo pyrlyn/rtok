@@ -831,6 +831,21 @@ enum GraphCmd {
         #[arg(long, global = true)]
         json: bool,
     },
+    /// Risk-ranked reading list for a git diff (files, untested defs, line ranges)
+    Review {
+        /// Diff against this ref
+        #[arg(long, conflicts_with = "staged")]
+        since: Option<String>,
+        /// Staged files only (`git diff --cached --name-only`)
+        #[arg(long)]
+        staged: bool,
+        /// JSON instead of the text list
+        #[arg(long)]
+        json: bool,
+        /// Project id or directory instead of the cwd (see `rtok graph projects`)
+        #[arg(long)]
+        project: Option<String>,
+    },
     /// Tests that reach files changed in git (`git diff --name-only`)
     Affected {
         /// Diff against this ref
@@ -2437,6 +2452,29 @@ pub fn run() -> Result<()> {
                                 ..crate::plugins::graph::Filter::none()
                             },
                             to.as_deref(),
+                        )?
+                    );
+                }
+                GraphCmd::Review {
+                    since,
+                    staged,
+                    json,
+                    project,
+                } => {
+                    let root = crate::plugins::graph::cli_root(None)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.as_deref(),
+                        &root,
+                    )?;
+                    print!(
+                        "{}",
+                        crate::plugins::graph::scope::review_git(
+                            &crate::plugin::Ctx::new(&cx),
+                            &scope,
+                            since.as_deref(),
+                            staged,
+                            json,
                         )?
                     );
                 }
