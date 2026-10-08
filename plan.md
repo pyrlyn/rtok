@@ -113,7 +113,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
 | T414.13 | todo | P2 | 4 | 0% | |
-| T414.14 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.16 | todo | P2 | 3 | 0% | |
 | T433 | todo | P2 | 4 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1945,14 +1944,6 @@ Check: unit test for the age formatter; a story for paused and live; pausing kee
 A time series of `Measurement` savings (est before − after per bucket), total and per plugin, added to the snapshot by the Rust model next to `Stats` and drawn on Overview and Stats. Buckets come from the existing aggregation helper; no second aggregation path. No `Measurement` rows → an empty state, never a zero line that reads as a claim.
 
 Check: Rust test for the bucketed series against fixture rows; regenerated `web/src/api/snapshot.gen.ts` committed; story with sample data and with no rows.
-
-### T414.14. CSV and JSON export of tables
-
-An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
-
-Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
-
-Execution plan: stacks on T414.10 (`DataTable`, `sortRows`, URL filters). `web/src/ui/tableExport.ts` builds the file from the same filtered rows, columns and sort the table renders (`sortRows` reused; a column gets an optional `exportValue`, falling back to `sortValue`, and a value-less column such as the share bar is left out) and holds the CSV writer (RFC 4180, formula-leading text escaped per OWASP), the JSON writer and the browser download. `web/src/ui/ExportButtons.tsx` is the CSV/JSON button group, placed in the `Panel` action slot of Calls, Sessions and the Overview savings-by-plugin table. Verify with unit tests for the writers, the buttons and the three pages, a story for the accessible names, `just check`, `just spa-stories` and `just spa-e2e`.
 
 ### T414.16. Linked hover across charts and live values elsewhere
 

@@ -1181,6 +1181,18 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T414.14. CSV and JSON export of tables
+
+An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
+
+Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
+
+Result: `web/src/ui/tableExport.ts` builds the file from the same filtered rows, columns and sort that `DataTable` renders (`sortRows` reused; optional `Column.exportValue`, falling back to `sortValue`; value-less columns such as the share bar are left out). The RFC 4180 CSV writer quotes and doubles quotes, writes CRLF lines, and writes an empty table as its header row. Text cells starting with `=`, `+`, `-`, `@`, tab, CR, LF or a full-width variant are quoted behind an apostrophe per the OWASP CSV injection page (checked 2026-10-08); numbers are never escaped. `ui/ExportButtons.tsx` is a CSV/JSON button group ("Export <table> as CSV|JSON", disabled with no rows) in the `Panel` action slot of Calls, Sessions and Overview's savings by plugin. Web unit tests 223 passed, `just spa-stories` 130 passed (axe), `just spa-e2e` 18 passed; `just dup js` green. #830.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
