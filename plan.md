@@ -57,7 +57,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T374 | todo | P3 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
-| T377 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T378 | todo | P3 | 3 | 0% | |
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
@@ -1360,18 +1359,6 @@ Plan: extend the checkpoint's path list to `(path, action, last_line_range)` fro
 Done when: after a session that reads A and edits B, the checkpoint lists `B (edited)` before `A (read)`.
 
 Check: unit tests for the event → action mapping and old-row decode; the checkpoint rendering snapshot (`insta`) updated; `just check`.
-
-### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
-
-From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
-
-Plan: group the BFS result by file, order files by (depth asc, T370 rank or ref count desc), print `path (N refs, depth d)` with the first 3 lines per file, stop at `plugins.graph.impact_tokens` (default 1500) with `+K files, M refs not shown — impact <name> --all`. `--all` keeps today's output.
-
-Done when: `impact` on a hub symbol fits the budget and ends with the cut line; a small impact is unchanged.
-
-Execution plan: new `src/plugins/graph/blast.rs` renders the BFS rows: flat (today's text) when it fits `plugins.graph.impact_tokens`, else files grouped, ordered by (min depth, stored T370 file rank, ref count) with 3 lines each, filled to the budget, ending in the cut line; a cut records a `Measurement`. `Filter.all` (CLI `--all`, MCP `all`) skips it. Wire into `impact_tags` and the scoped walk; the LSP backend keeps its flat text. Config key through `src/config/mod.rs`, `config/default.toml`, `docs/config.md` (+ ru/uk) and the trycmd goldens. Verify: unit tests on a hub fixture, `tests/graph_truth.rs` recall via `all`, `just check`.
-
-Check: snapshot test on a fixture with a hub symbol; output tokens on the ambiguous set from T368 within budget; `tests/graph_truth.rs` impact recall unchanged with `--all`; `just check`.
 
 ### T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 
