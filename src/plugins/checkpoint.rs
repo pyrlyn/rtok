@@ -582,7 +582,8 @@ fn removed_paths(command: &str, cwd: Option<&str>) -> Vec<String> {
                     files
                         .into_iter()
                         // After a `cd` the record's cwd is no longer where a relative path points.
-                        .filter(|f| !moved || Path::new(f).is_absolute())
+                        // `/abs` is a Bash absolute path on Windows too, where `Path` says no.
+                        .filter(|f| !moved || f.starts_with('/') || Path::new(f).is_absolute())
                         .map(|f| resolve(cwd, f)),
                 );
             }
