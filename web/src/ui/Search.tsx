@@ -28,7 +28,7 @@ export function Search({
                 value={value}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
-                className={`${focusRing} h-8 w-full rounded-md border border-border bg-bg px-2.5 text-xs text-fg placeholder:text-fg-subtle hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40`}
+                className={`${focusRing} h-control w-full rounded-md border border-border bg-bg/60 px-2.5 text-xs text-fg transition-colors duration-fast ease-standard placeholder:text-fg-subtle max-md:h-touch max-md:text-sm hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40`}
             />
         </div>
     );
