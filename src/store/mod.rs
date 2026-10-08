@@ -24,6 +24,7 @@ mod sql_ext;
 mod symbols;
 // T329.1: the graph project registry.
 mod note_files;
+mod observations;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
@@ -187,6 +188,36 @@ thread_local! {
 
 /// Rows per write transaction when clearing hook bodies (T352).
 const HOOK_BODY_BATCH: i64 = 5_000;
+
+fn age_days(now: i64, ts: i64) -> f64 {
+    (now.saturating_sub(ts) as f64 / 86_400.0).max(0.0)
+}
+
+fn days_since(now: i64, last_used: Option<i64>) -> Option<f64> {
+    last_used.map(|t| age_days(now, t))
+}
+
+/// Retention used only as a rank (T454). Adapted from agentmemory
+/// `src/functions/retention.ts` `computeRetention`: a pin is 1, otherwise
+/// `min(1, salience * exp(-0.01 * ageDays) + 0.3 / daysSinceUsed)`.
+/// Never deletes a row.
+pub fn retention_score(
+    pinned: bool,
+    uses: i32,
+    age_days: f64,
+    days_since_used: Option<f64>,
+) -> f64 {
+    if pinned {
+        return 1.0;
+    }
+    let salience = 0.5 + (f64::from(uses) * 0.02).min(0.2);
+    let temporal = (-0.01 * age_days).exp();
+    let boost = match days_since_used {
+        Some(d) if d > 0.0 => 0.3 / d,
+        _ => 0.0,
+    };
+    (salience * temporal + boost).min(1.0)
+}
 
 impl Store {
     /// Open (creating directories and the file as needed) and migrate.
@@ -1443,7 +1474,8 @@ impl Store {
 
     /// Remember a Read/Bash result so `guard` can deny the duplicate (T2.6).
     /// Newest note titles for SessionStart recall (T6.2). Never bodies. Retired notes
-    /// never recall; pinned ones lead (then newest-first) and both orders are id-stable.
+    /// never recall; pinned ones lead. Among the rest, [`retention_score`] leads, and
+    /// equal scores stay newest-first so the title cap still drops the oldest.
     pub fn list_note_titles(
         &self,
         project: Option<&str>,
@@ -1451,18 +1483,60 @@ impl Store {
     ) -> Result<Vec<(i32, String)>> {
         let mut conn = self.lock()?;
         let lim = i64::from(limit.max(1));
+        // A wider window so a note just below the cut can still lead once `uses` lifts it.
+        // Pinned rows sort first in SQL, so an old pin stays inside the window.
         let mut q = notes::table
             .filter(notes::retired.is_null())
             .filter(notes::kind.not_like("checkpoint:%"))
             .filter(notes::kind.not_like("session:%"))
             .order((notes::pinned.desc(), notes::id.desc()))
-            .limit(lim)
-            .select((notes::id, notes::title))
+            .limit(lim.saturating_mul(4))
+            .select((
+                notes::id,
+                notes::title,
+                notes::pinned,
+                notes::uses,
+                notes::ts,
+                notes::last_used,
+            ))
             .into_boxed();
         if let Some(p) = project {
             q = q.filter(notes::project.eq(p));
         }
-        q.load(&mut *conn).map_err(Into::into)
+        let mut rows: Vec<(i32, String, i32, i32, i64, Option<i64>)> = q.load(&mut *conn)?;
+        let now = i64::try_from(crate::log::now()).unwrap_or(0);
+        rows.sort_by(|a, b| {
+            b.2.cmp(&a.2)
+                .then_with(|| {
+                    retention_score(b.2 != 0, b.3, age_days(now, b.4), days_since(now, b.5))
+                        .partial_cmp(&retention_score(
+                            a.2 != 0,
+                            a.3,
+                            age_days(now, a.4),
+                            days_since(now, a.5),
+                        ))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                // Equal scores keep newest-first, which is what the title cap drops last.
+                .then_with(|| b.0.cmp(&a.0))
+        });
+        rows.truncate(limit.max(1) as usize);
+        Ok(rows
+            .into_iter()
+            .map(|(id, title, ..)| (id, title))
+            .collect())
+    }
+
+    /// Count one read of `id` toward retention ranking (T454). Unknown ids change nothing.
+    pub fn touch_note(&self, id: i32) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(notes::table.find(id))
+            .set((
+                notes::uses.eq(notes::uses + 1),
+                notes::last_used.eq(unixepoch()),
+            ))
+            .execute(&mut *conn)?;
+        Ok(())
     }
 
     /// One note's lifecycle row (T69.1): kind/project for a revise, the retired line and
@@ -4943,11 +5017,16 @@ mod tests {
     // `table!` models neither) defaults/indexes/triggers via a golden `sqlite_master` dump.
     /// A migrated table with no `table!` macro, and why.
     const RAW_SQL_TABLES: &[&str] = &[
-        "notes_fts",                  // 0001: FTS5 virtual table, MATCH/bm25 in sql_ext (T163.3)
-        "notes_fts_data",             // FTS5 shadow table for notes_fts
-        "notes_fts_idx",              // FTS5 shadow table for notes_fts
-        "notes_fts_docsize",          // FTS5 shadow table for notes_fts
-        "notes_fts_config",           // FTS5 shadow table for notes_fts
+        "notes_fts",         // 0001: FTS5 virtual table, MATCH/bm25 in sql_ext (T163.3)
+        "notes_fts_data",    // FTS5 shadow table for notes_fts
+        "notes_fts_idx",     // FTS5 shadow table for notes_fts
+        "notes_fts_docsize", // FTS5 shadow table for notes_fts
+        "notes_fts_config",  // FTS5 shadow table for notes_fts
+        "observations_fts",  // 0036: FTS5 virtual table
+        "observations_fts_data",
+        "observations_fts_idx",
+        "observations_fts_docsize",
+        "observations_fts_config",
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 

@@ -102,6 +102,27 @@ diesel::table! {
     }
 }
 
+// 0036 (T454): mechanical tool-call observations. `observations_fts` is virtual.
+diesel::table! {
+    observations (id) {
+        id -> Integer,
+        ts -> BigInt,
+        session_id -> Text,
+        project -> Nullable<Text>,
+        obs_type -> Text,
+        title -> Text,
+        narrative -> Text,
+        dedup -> Text,
+    }
+}
+
+diesel::table! {
+    observation_files (observation_id, path) {
+        observation_id -> Integer,
+        path -> Text,
+    }
+}
+
 diesel::table! {
     notes (id) {
         id -> Integer,
@@ -416,6 +437,7 @@ diesel::joinable!(measurements -> calls (call_id));
 diesel::joinable!(usage -> calls (call_id));
 diesel::joinable!(note_embeddings -> notes (note_id));
 diesel::joinable!(note_files -> notes (note_id));
+diesel::joinable!(observation_files -> observations (observation_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     events,
@@ -426,6 +448,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     notes,
     note_embeddings,
     note_files,
+    observations,
+    observation_files,
     usage,
     hosts,
     providers,
