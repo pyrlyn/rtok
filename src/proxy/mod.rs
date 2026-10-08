@@ -96,8 +96,6 @@ pub const HOP_HEADER: &str = "x-rtok-proxied";
 /// A chain this long is a loop, not a deployment: answer 508 instead of forwarding.
 const MAX_HOPS: u32 = 8;
 
-/// The incoming hop count. Anything but a number still says another rtok saw the
-/// request, so it counts as one hop rather than none.
 /// OpenAI's `/v1/batches` and `/v1/files` carry no wire, so the path alone would send them to
 /// the Anthropic upstream. Anthropic has a Files API on the same path, but every Anthropic
 /// request has to carry `anthropic-version`, which tells the two apart.
@@ -109,6 +107,8 @@ fn is_openai_batch_path(path: &str, headers: &HeaderMap) -> bool {
     (under("/v1/batches") || under("/v1/files")) && !headers.contains_key("anthropic-version")
 }
 
+/// The incoming hop count. Anything but a number still says another rtok saw the
+/// request, so it counts as one hop rather than none.
 fn hops_of(headers: &HeaderMap) -> u32 {
     headers.get(HOP_HEADER).map_or(0, |v| {
         v.to_str()
