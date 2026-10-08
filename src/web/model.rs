@@ -418,6 +418,7 @@ pub fn stats_report(cfg: &Config) -> Result<stats::Report> {
     )?;
     if let Ok(store) = Store::open(&cfg.core.db_path) {
         let _ = stats::attach_api(&mut report, &store);
+        let _ = stats::attach_lanes(&mut report, &store);
         let _ = stats::attach_bash_cmd(&mut report, &store);
         let _ = stats::attach_checkpoint_notes(&mut report, &store);
         if cfg.stats.price {

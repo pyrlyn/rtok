@@ -2136,6 +2136,37 @@ impl Store {
             .collect())
     }
 
+    /// Usage totals grouped by the `calls.kind` of the request that produced them, which is
+    /// the proxy lane that handled it (T385.6). Every proxy `usage` row carries its call, so
+    /// the inner join drops nothing.
+    pub fn usage_by_lane(&self) -> Result<Vec<LaneUsage>> {
+        let mut conn = self.lock()?;
+        let rows = usage::table
+            .inner_join(calls::table)
+            .group_by(calls::kind)
+            .select((
+                calls::kind,
+                sum_bigint(usage::input),
+                sum_bigint(usage::cache_create),
+                sum_bigint(usage::cache_read),
+                sum_bigint(usage::output),
+            ))
+            .order(calls::kind)
+            .load::<(String, Option<i64>, Option<i64>, Option<i64>, Option<i64>)>(&mut *conn)?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(kind, input, cache_create, cache_read, output)| LaneUsage {
+                    kind,
+                    input: input.unwrap_or(0),
+                    cache_create: cache_create.unwrap_or(0),
+                    cache_read: cache_read.unwrap_or(0),
+                    output: output.unwrap_or(0),
+                },
+            )
+            .collect())
+    }
+
     /// Usage totals grouped by model (`rtok stats --price`, T49.1). One statement,
     /// like [`Self::usage_by_api`]: `NULL` models already group into one bucket under
     /// plain `GROUP BY model` (grouping treats every `NULL` as equal), so the SQL side
@@ -2778,6 +2809,16 @@ pub struct MeasurementTotal {
 #[derive(Debug, Clone)]
 pub struct ApiUsage {
     pub api: String,
+    pub input: i64,
+    pub cache_create: i64,
+    pub cache_read: i64,
+    pub output: i64,
+}
+
+/// Aggregated usage totals grouped by `calls.kind` (T385.6).
+#[derive(Debug, Clone)]
+pub struct LaneUsage {
+    pub kind: String,
     pub input: i64,
     pub cache_create: i64,
     pub cache_read: i64,

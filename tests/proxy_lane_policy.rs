@@ -7,16 +7,14 @@
 //! for byte; the agent lane is rewritten exactly as it was before lanes; a lane switch opens
 //! one rewrite at a time.
 
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use httpmock::HttpMockRequest;
 use httpmock::prelude::*;
 use rtok::config::Config;
 use serde_json::{Value, json};
 
 mod common;
-use common::proxy::proxy_server;
+use common::proxy::{Sink, proxy_server};
 
 const SESSION: &str = "sess-lane-policy";
 /// Well over `proxy.tools_rewrite.max_description_tokens` (60), so the rewrite has work to do.
@@ -47,52 +45,14 @@ fn request() -> Vec<u8> {
 
 /// Every global rewrite switch on: what the agent lane has always been subject to.
 fn all_switches_on(cfg: &mut Config, base: &str) {
+    // Every provider upstream points at the mock, so no case can reach a real API.
     cfg.proxy.upstream = base.to_string();
+    cfg.proxy.openai_upstream = base.to_string();
+    cfg.proxy.gemini_upstream = base.to_string();
     cfg.proxy.mode = "compress".to_string();
     cfg.proxy.tools_rewrite.enabled = true;
     cfg.proxy.context_management = true;
     cfg.plugins.toon.enabled = true;
-}
-
-/// One request as upstream saw it: the body and whether it carried `anthropic-beta`.
-type Seen = (Vec<u8>, bool);
-
-/// An upstream that answers `{}` and keeps every request body and its `anthropic-beta` header.
-struct Sink {
-    server: MockServer,
-    seen: Arc<Mutex<Vec<Seen>>>,
-}
-
-impl Sink {
-    fn new() -> Self {
-        let server = MockServer::start();
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let sink = seen.clone();
-        server.mock(move |when, then| {
-            when.is_true(move |req: &HttpMockRequest| {
-                let beta = req.headers().get("anthropic-beta").is_some();
-                sink.lock().expect("sink").push((req.body_vec(), beta));
-                true
-            });
-            then.status(200)
-                .header("content-type", "application/json")
-                .body("{}");
-        });
-        Self { server, seen }
-    }
-
-    fn base(&self) -> String {
-        self.server.base_url()
-    }
-
-    fn last(&self) -> Seen {
-        self.seen
-            .lock()
-            .expect("sink")
-            .last()
-            .cloned()
-            .expect("a request reached upstream")
-    }
 }
 
 async fn post(addr: &str, path: &str, lane: Option<&str>, body: Vec<u8>) -> reqwest::StatusCode {
