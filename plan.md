@@ -55,7 +55,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T374 | todo | P3 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -1336,16 +1335,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
-
-### T374. Memory notes linked to files: recall boosted by the files in play
-
-From the Empryo study (idea-only, clean-room; Empryo memory DB file links and recall boosting). P29 recall matches on the prompt text only; a note about `src/proxy/semantic_cache.rs` is not preferred when the session is editing that file. Low priority while the store holds few notes (18 on the creator's machine, 2026-10-02).
-
-Plan: new `note_files (note_id, path)` table (migration); filled at `mem_save` (`src/plugins/memory/mod.rs:266`) from paths found in the note body that exist under the root, and from the current checkpoint's paths. In `prompt_recall` (`memory/mod.rs:163`), add a third ranked list — notes linked to files read this session (`read_cache`) or named in the prompt — to the RRF merge (`src/store/embed.rs:198`, after T373).
-
-Done when: a note linked to a file the session has read ranks above an equally text-matching unlinked note.
-
-Check: new cases in `tests/fixtures/p29_memory.toml` with file context; recall@5 on the file-context cases ≥ 0.6 and no drop on the existing cases; `just check`.
 
 ### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
 
