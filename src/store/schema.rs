@@ -388,6 +388,17 @@ diesel::table! {
     }
 }
 
+// 0034 (T442): the claim SessionStart names. The file or the issue stays the source of truth.
+diesel::table! {
+    task_claims (project, task_id) {
+        project -> Text,
+        task_id -> Text,
+        agent_id -> Text,
+        title -> Text,
+        since -> BigInt,
+    }
+}
+
 diesel::joinable!(archive_decisions -> archive (archive_id));
 diesel::joinable!(models -> providers (provider_id));
 diesel::joinable!(sessions -> hosts (host_id));
@@ -435,4 +446,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     projects,
     project_links,
     task_counters,
+    task_claims,
 );

@@ -1,5 +1,11 @@
 # rtok — completed tasks
 
+### T442. Atomic task claim and a ready queue
+
+Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.
+
+A disk claim takes `<tasks>/.claim.lock` (`create_new`, a lock older than 10s is stolen). GitHub and GitLab labels are `rtok:owner:<agent>`, `rtok:needs:<id>` and `rtok:p:<n>` (omitted at the default 2). Those writes are last-write-wins, not compare-and-set. A claim whose agent row is missing, or whose `last_seen` is older than 30 minutes, can be taken. A store error does not steal a live claim. The same agent claiming again does not rewrite the file. A cycle, a self-edge or a missing blocker writes nothing. When the plan has no `blocked_by` edges, `next` is still the lowest open leaf.
+
 ### T455. Fold nested JSON before archive replaces it with a pointer
 
 `archive` runs before any structural encoder and, past `plugins.archive.min_tokens`, replaces a large tool result with a head/tail pointer. `rtok mcp -- <server>` does the same by line count. A design or AST JSON therefore never reaches an encoder that can hoist repeated values and element bodies.

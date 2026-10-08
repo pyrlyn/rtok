@@ -6,15 +6,15 @@
 //! agent-facing side of `rtok task …`. They call the same `tasks::run` functions as the CLI and
 //! answer with the JSON its `--json` prints.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
 use crate::config::Config;
 use crate::plugin::{Runtime, ToolDef};
-use crate::tasks::run::{Project, filter};
+use crate::tasks::run::{Project, filter, require_agent};
 use crate::tasks::{NewTask, Status, TaskId};
 
-pub fn defs() -> [ToolDef; 5] {
+pub fn defs() -> [ToolDef; 10] {
     [
         ToolDef {
             name: "task_create",
@@ -38,8 +38,33 @@ pub fn defs() -> [ToolDef; 5] {
         },
         ToolDef {
             name: "task_next",
-            description: "The task to work on next: the lowest open task with no active subtask, or null.",
+            description: "The first ready task: free or stale, not blocked by an active task. A leaf when the plan has no blockers. null when nothing is ready.",
             input_schema: json!({"type":"object","properties":{}}),
+        },
+        ToolDef {
+            name: "task_ready",
+            description: "Tasks that can be claimed, highest priority first (0 before 2). stale is true when the assignee was last seen more than 30 minutes ago.",
+            input_schema: json!({"type":"object","properties":{}}),
+        },
+        ToolDef {
+            name: "task_claim",
+            description: "Claim a task for this agent (in-progress). Omit id to take the first ready task. changed is false when you already hold it. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set.",
+            input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"agent":{"type":"string","description":"rtok agent id; defaults to RTOK_AGENT_ID"}}}),
+        },
+        ToolDef {
+            name: "task_release",
+            description: "Clear the assignee and set the task open. Only the holder, unless force.",
+            input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"agent":{"type":"string"},"force":{"type":"boolean"}},"required":["id"]}),
+        },
+        ToolDef {
+            name: "task_dep",
+            description: "Record that id waits on blocker. A cycle is refused and nothing is written.",
+            input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"blocker":{"type":"string"}},"required":["id","blocker"]}),
+        },
+        ToolDef {
+            name: "task_priority",
+            description: "Set priority from 0 (highest) to 4. 2 is the default and is not stored.",
+            input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"level":{"type":"integer"}},"required":["id","level"]}),
         },
     ]
 }
@@ -94,9 +119,33 @@ pub fn call(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         "task_status" => {
             let status = arg(args, "status").map(str::parse::<Status>).transpose()?;
             let force = args["force"].as_bool().unwrap_or(false);
-            serde_json::to_value(project.status(&id(args)?, status, force)?)?
+            serde_json::to_value(project.status(&cx.store, &id(args)?, status, force)?)?
         }
-        "task_next" => serde_json::to_value(project.next()?)?,
+        "task_next" => serde_json::to_value(project.next(&cx.store)?)?,
+        "task_ready" => serde_json::to_value(project.ready(&cx.store)?)?,
+        "task_claim" => {
+            let agent = require_agent(&cx.store, arg(args, "agent"))?;
+            let id = arg(args, "id").map(str::parse::<TaskId>).transpose()?;
+            serde_json::to_value(project.claim(&cx.store, id.as_ref(), &agent)?)?
+        }
+        "task_release" => {
+            let agent = require_agent(&cx.store, arg(args, "agent"))?;
+            let force = args["force"].as_bool().unwrap_or(false);
+            serde_json::to_value(project.release(&cx.store, &id(args)?, &agent, force)?)?
+        }
+        "task_dep" => {
+            let Some(blocker) = arg(args, "blocker") else {
+                bail!("`blocker` is required");
+            };
+            serde_json::to_value(project.block(&id(args)?, &blocker.parse()?)?)?
+        }
+        "task_priority" => {
+            let Some(level) = args["level"].as_u64() else {
+                bail!("level is required, 0 to 4");
+            };
+            let level = u8::try_from(level).context("level is outside 0–4")?;
+            serde_json::to_value(project.set_priority(&id(args)?, level)?)?
+        }
         other => bail!("unknown tool {other}"),
     };
     Ok(out.to_string())

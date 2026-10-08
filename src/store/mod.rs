@@ -29,6 +29,7 @@ mod projects;
 pub use project_links::{Link, LinkKind};
 pub use projects::{Origin, Project, Resolved, canon_root};
 // T285: which agent a worktree is bound to (the git lock stays the source of truth).
+mod task_claims;
 mod task_counters;
 mod worktree_claims;
 

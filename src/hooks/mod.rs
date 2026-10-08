@@ -152,6 +152,24 @@ fn first_chars(s: &str, n: usize) -> String {
 /// path as every other offering (`inject_event`) rather than a parallel one. `None` when
 /// `agent` is `None` — `[agents] enabled = false` or the host id could not be resolved
 /// (`dispatch` already folds both into that one `Option`).
+/// T442: `task <id> <title>` for the claim this agent holds in the checkout `cx.cwd` names.
+/// The newest row wins. A title's first line only, so the offering stays one line.
+fn claim_injection(cx: &Runtime, agent: Option<&str>) -> Option<Injection> {
+    let agent = agent?;
+    let cwd = cx.cwd.as_deref()?;
+    let project = crate::project::project_key(std::path::Path::new(cwd))?;
+    let row = cx.store.latest_task_claim(&project, agent).ok()??;
+    let title = row.title.split(['\n', '\r']).next().unwrap_or("").trim();
+    let text = format!("task {} {title}", row.task_id);
+    Some(Injection {
+        plugin: "task_claim",
+        text: text.trim_end().to_string(),
+        // Under the agent id (10) and checkpoint recall (9), so those stay when the budget
+        // is tight. Stable for a given claim row.
+        priority: 8,
+    })
+}
+
 fn agent_id_injection(agent: Option<&str>) -> Option<Injection> {
     let id = agent?;
     let short = first_chars(id, 8);
@@ -874,6 +892,16 @@ fn inject_event(
         input.hook_event_name.as_str(),
         "SessionStart" | "SubagentStart"
     ) && let Some(i) = agent_id_injection(agent)
+    {
+        inj.push(i);
+    }
+    // T442: the task this agent claimed, one line, SessionStart and PostCompact only. Fail
+    // open: a store error or a cwd that is not a checkout adds nothing. No measurement of
+    // its own; it rides the same budget as every other offering.
+    if matches!(
+        input.hook_event_name.as_str(),
+        "SessionStart" | "PostCompact"
+    ) && let Some(i) = claim_injection(cx, agent)
     {
         inj.push(i);
     }
@@ -2045,6 +2073,39 @@ mod tests {
         // whole line — stays byte-identical.
         let out2 = dispatch(&stdin, &input, &cx);
         assert_eq!(out, out2, "byte-stable across two runs of the same session");
+    }
+
+    /// T442: SessionStart names the claim in one line and records no measurement of its own.
+    #[test]
+    fn session_start_names_the_claimed_task() {
+        let dir = std::env::temp_dir().join(format!("rtok-claim-hook-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::write(
+            dir.join(".git/config"),
+            "[remote \"origin\"]\n\turl = https://github.com/me/claim-hook.git\n",
+        )
+        .unwrap();
+        let (stdin, input, mut cx) = session_start_fixture("t442-claim");
+        cx.cwd = Some(dir.display().to_string());
+        let host = cx.host_id().unwrap();
+        let agent = cx
+            .store
+            .register_agent(host, &cx.session, None, cx.cwd.as_deref(), None)
+            .unwrap();
+        let key = crate::project::project_key(&dir).unwrap();
+        cx.store
+            .upsert_task_claim(&key, "R4", &agent, "Ship it\nmore")
+            .unwrap();
+        let out = dispatch(&stdin, &input, &cx);
+        assert!(
+            additional_context(&out).contains("task R4 Ship it"),
+            "{}",
+            additional_context(&out)
+        );
+        assert!(!additional_context(&out).contains("more"));
+        assert!(cx.store.list_measurements("task_claim").unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// T428: the recall and `inject` measurements reach the ledger in the order the plugins
