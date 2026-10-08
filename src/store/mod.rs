@@ -1934,6 +1934,52 @@ impl Store {
         Ok(())
     }
 
+    /// Many `usage` rows for one call in a single transaction — a Batch results file (T385.4)
+    /// carries one per request. Each row is `(model, api, [input, cache_create, cache_read,
+    /// output])`, the same four counters as [`Store::insert_usage`].
+    pub fn insert_usage_rows(
+        &self,
+        session: &str,
+        call_id: i32,
+        rows: &[(Option<&str>, &str, [i64; 4])],
+    ) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.transaction::<_, anyhow::Error, _>(|conn| {
+            // 8 binds per row, well under SQLite's 32766-variable cap per statement.
+            for chunk in rows.chunks(500) {
+                let values: Vec<_> = chunk
+                    .iter()
+                    .map(|(model, api, [input, cache_create, cache_read, output])| {
+                        (
+                            usage::session.eq(session),
+                            usage::model.eq(*model),
+                            usage::api.eq(*api),
+                            usage::input.eq(*input),
+                            usage::cache_create.eq(*cache_create),
+                            usage::cache_read.eq(*cache_read),
+                            usage::output.eq(*output),
+                            usage::call_id.eq(call_id),
+                        )
+                    })
+                    .collect();
+                diesel::insert_into(usage::table)
+                    .values(&values)
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Re-tag a call once its response showed what it was (T385.4: an OpenAI file download
+    /// that held Batch results).
+    pub fn set_call_kind(&self, id: i32, kind: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(calls::table.filter(calls::id.eq(id)))
+            .set(calls::kind.eq(kind))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
     /// Test-only: one proxy `usage` turn — the session row, a bare `api_request` call
     /// and the `usage` row. Tests that need request bodies (cache-bust causes) still
     /// write their own `call_io`.
