@@ -64,7 +64,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.5 | in progress | P2 | 3 | 20% | Claude Code / claude-sonnet-5-5 |
 | T385.6 | todo | P2 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
 | T385.8 | todo | P2 | 2 | 20% | |
@@ -1573,14 +1572,6 @@ Check: each sub-task carries its own Check; this card closes when every step is 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
 Check: one dated `research.md` row per setting.
-
-### T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
-
-optimization.md §2.2 L4 (roadmap S4). Inject `service_tier = "flex"` only on `bulk`/`internal` (never silently on `agent`), OpenAI only (Anthropic has no Flex tier). On `429 Resource Unavailable`: retry policy `none` / `backoff` / `default` (retry with `service_tier = "auto"`). Cite the OpenAI Flex docs with the date checked.
-
-Check: mock upstream — omit/force/respect matrix and each 429 policy; `just check`.
-
-Execution plan: `flex` joins `LanePolicy` (`src/config/mod.rs`, `Lane::policy` in `src/proxy/lane.rs`; `agent` stays false) and `[proxy.flex]` gets `force`, `on_429` (`none`/`backoff`/`default`), `retries`, `backoff_ms`. New `src/proxy/flex.rs` sets the tier at the end of `shape_request` on the two OpenAI wires only (omitted: spliced in, other bytes untouched; client value kept unless `force`), and `flex::send` replaces the single upstream send in `handle` with a bounded retry on `429` for requests rtok set to Flex. Docs checked against the OpenAI Flex guide (2026-10-08). Verify with unit tests, a mock-upstream test file `tests/proxy_flex.rs`, config docs/snapshots and `just check`.
 
 ### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
 
