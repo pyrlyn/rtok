@@ -3,6 +3,9 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { readFileSync } from "node:fs";
+import type { Page } from "@playwright/test";
+import { mockMachine } from "../src/api/sampleDoctor";
+import type { Selection } from "../src/api/snapshot.gen";
 import { PAGES } from "../src/pages";
 import { expect, test } from "./fixtures";
 import { ARCHIVED_MARKER } from "./rtok";
@@ -49,6 +52,82 @@ test("plugin toggle round-trips through /ws and the config file", async ({ page,
   await expect
     .poll(() => readFileSync(rtok.configPath, "utf8"))
     .toMatch(/\[plugins\.toon\][^[]*enabled\s*=\s*true/);
+});
+
+type Rule = { reply?: string; hold?: boolean };
+
+/**
+ * Sits between the page and `/ws`. For each request the page sends, `rule` may answer it itself
+ * (`reply`) instead of the server and may hold it back (`hold`) until the returned `release()`,
+ * so the wait the user sees can be observed.
+ */
+async function interceptSocket(page: Page, rule: (request: unknown) => Rule | undefined) {
+  let release = () => {};
+  const gate = new Promise<void>((open) => (release = open));
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      const { reply, hold } = rule(JSON.parse(String(message))) ?? {};
+      const deliver = () => (reply === undefined ? server.send(message) : ws.send(reply));
+      if (hold) void gate.then(deliver);
+      else deliver();
+    });
+  });
+  return release;
+}
+
+test("the plugin switch spins in its old position until the server answers", async ({
+  page,
+  rtok,
+}) => {
+  const release = await interceptSocket(page, () => ({ hold: true }));
+  await page.goto("/#/plugins");
+  const toon = page.getByRole("switch", { name: "toggle toon" });
+  await expect(toon).toHaveAttribute("aria-checked", "true");
+
+  await toon.click();
+  await expect(toon).toHaveAttribute("aria-busy", "true");
+  await expect(toon).toBeDisabled();
+  await expect(toon).toHaveAttribute("aria-checked", "true");
+  // Held, so the spinner is still there and nothing was written yet.
+  await page.waitForTimeout(500);
+  await expect(toon).toHaveAttribute("aria-busy", "true");
+  expect(readFileSync(rtok.configPath, "utf8")).not.toMatch(
+    /\[plugins\.toon\][^[]*enabled\s*=\s*false/,
+  );
+
+  release();
+  await expect(toon).toHaveAttribute("aria-checked", "false");
+  await expect(toon).not.toHaveAttribute("aria-busy");
+  await expect(toon).toBeEnabled();
+});
+
+test("doctor apply keeps its spinner until the answer and drops it after", async ({ page }) => {
+  const machine = mockMachine();
+  const frame = (type: string, key: string, body: unknown) => JSON.stringify({ type, [key]: body });
+  // The e2e store has nothing to fix, so the mocked machine supplies the plan; only the apply
+  // is held.
+  const release = await interceptSocket(page, (request) => {
+    const doctor = (request as { doctor?: { action: string; selection: Selection } }).doctor;
+    if (doctor?.action === "plan")
+      return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection)) };
+    if (doctor?.action === "apply")
+      return { reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection)), hold: true };
+    return undefined;
+  });
+  await page.goto("/#/doctor");
+  const fix = page.getByRole("region", { name: "fix" });
+  await fix.getByRole("button", { name: /^Fix selected/ }).click();
+  const confirm = fix.getByRole("button", { name: "Confirm" });
+  await confirm.click();
+  await expect(confirm).toHaveAttribute("aria-busy", "true");
+  await expect(confirm).toBeDisabled();
+  await page.waitForTimeout(500);
+  await expect(confirm).toHaveAttribute("aria-busy", "true");
+
+  release();
+  await expect(fix.getByRole("status")).toContainText("entries");
+  await expect(fix.locator("[aria-busy]")).toHaveCount(0);
 });
 
 test("expand returns the archived payload of a call", async ({ page }) => {

@@ -11,7 +11,7 @@ import { richSnapshot } from "./fixtures";
 import { callBuckets, doctorChecks, overview, tokensOf } from "./model";
 import { matchesPlugin } from "./Plugins";
 import { matchesCall } from "./Calls";
-import { mount, serving } from "./testHelpers";
+import { mount, serving, wire } from "./testHelpers";
 
 afterEach(cleanup);
 
@@ -168,6 +168,37 @@ describe("plugins", () => {
                 screen.getByRole("switch", { name: "toggle shell" }).getAttribute("aria-checked"),
             ).toBe("false"),
         );
+    });
+
+    test("the switch spins in its old position until the server answers", async () => {
+        const w = wire(richSnapshot);
+        mount(w.connect, "/plugins");
+        const toggle = await screen.findByRole("switch", { name: "toggle shell" });
+        fireEvent.click(toggle);
+        await waitFor(() => expect(w.sent).toHaveLength(1));
+        const busy = screen.getByRole("switch", { name: "toggle shell" }) as HTMLButtonElement;
+        expect(busy.getAttribute("aria-busy")).toBe("true");
+        expect(busy.disabled).toBe(true);
+        expect(busy.getAttribute("aria-checked")).toBe("true");
+
+        w.push(richSnapshot);
+        await waitFor(() =>
+            expect(
+                screen.getByRole("switch", { name: "toggle shell" }).getAttribute("aria-busy"),
+            ).toBeNull(),
+        );
+    });
+
+    test("a refused switch stays where it was and shows the refusal", async () => {
+        const w = wire(richSnapshot);
+        mount(w.connect, "/plugins");
+        fireEvent.click(await screen.findByRole("switch", { name: "toggle shell" }));
+        await waitFor(() => expect(w.sent).toHaveLength(1));
+        w.message("config set plugins.shell.enabled: read-only");
+        expect((await screen.findByRole("alert")).textContent).toContain("read-only");
+        const toggle = screen.getByRole("switch", { name: "toggle shell" }) as HTMLButtonElement;
+        expect(toggle.getAttribute("aria-checked")).toBe("true");
+        expect(toggle.disabled).toBe(false);
     });
 
     test("a switch inside a row does not need the row's keys", async () => {

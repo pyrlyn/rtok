@@ -4,7 +4,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { connectionKey, createApi, messageKey, snapshotKey, type Api } from "./query";
+import { connectionKey, createApi, snapshotKey, WRITE_TIMEOUT_MS, type Api } from "./query";
 import { connectSample, isSampleRequested, sampleSnapshot } from "./sample";
 import type { Snapshot } from "./snapshot.gen";
 import type { Connect, Connection, Handlers } from "./ws";
@@ -77,7 +77,9 @@ describe("set mutation", () => {
       "not connected",
     );
     api.open();
-    await api.set({ key: "plugins.a.enabled", value: true });
+    const sent = api.set({ key: "plugins.a.enabled", value: true });
+    s.server().onFrame({ type: "snapshot", snapshot: sampleSnapshot });
+    await sent;
     expect(s.sent).toEqual([{ set: { key: "plugins.a.enabled", value: true } }]);
     s.setOpen(false);
     await expect(api.set({ key: "plugins.a.enabled", value: false })).rejects.toThrow(
@@ -85,11 +87,33 @@ describe("set mutation", () => {
     );
   });
 
-  test("a refusal is stored as the server message", () => {
+  test("a write waits for the server's answer: the next snapshot settles it, a message fails it", async () => {
     const s = scripted();
-    createApi(queryClient, s.connect).open();
-    s.server().onFrame({ type: "message", text: "refused key x" });
-    expect(queryClient.getQueryData(messageKey)).toBe("refused key x");
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    let settled = false;
+    const written = api.project({ action: "select", project: "1" }).then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    s.server().onFrame({ type: "snapshot", snapshot: sampleSnapshot });
+    await written;
+    expect(settled).toBe(true);
+
+    const refused = api.set({ key: "proxy.enabled", value: true });
+    s.server().onFrame({ type: "message", text: "refused key proxy.enabled" });
+    await expect(refused).rejects.toThrow("refused key proxy.enabled");
+  });
+
+  test("a write the server never answers fails instead of spinning for ever", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const silent = expect(api.set({ key: "plugins.a.enabled", value: true })).rejects.toThrow(
+      "did not answer",
+    );
+    await vi.advanceTimersByTimeAsync(WRITE_TIMEOUT_MS);
+    await silent;
   });
 });
 
@@ -174,9 +198,11 @@ describe("?sample source", () => {
   test("refuses a key outside the plugin allowlist", async () => {
     const api = createApi(queryClient, connectSample);
     api.open();
-    await api.set({ key: "proxy.enabled", value: true });
+    // The fixture's first snapshot lands on a microtask and would settle the write too early.
     await Promise.resolve();
-    expect(queryClient.getQueryData(messageKey)).toBe("refused key proxy.enabled");
+    await expect(api.set({ key: "proxy.enabled", value: true })).rejects.toThrow(
+      "refused key proxy.enabled",
+    );
   });
 });
 

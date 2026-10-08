@@ -7,10 +7,12 @@ import { RESULTS, SURFACES, useTableSearch } from "../tableSearch";
 import { useExpandMutation } from "../api/query";
 import type { CallRow, Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
+import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
 import { DataTable, type Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { Result } from "../ui/Result";
 import { Search } from "../ui/Search";
 import { Unknown, orUnknown } from "../ui/Unknown";
 import { compact, fmt, hms, iso } from "./format";
@@ -255,22 +257,24 @@ function Expand({ refId }: { refId: string }) {
     return (
         <div className="flex flex-col gap-2 border-t border-border/60 pt-2">
             <div className="flex items-center gap-2">
-                <button
-                    type="button"
-                    disabled={isPending}
+                <Button
+                    verb="expand"
+                    variant="solid"
+                    pending={isPending}
                     onClick={() => mutate(refId)}
-                    className="h-8 cursor-pointer rounded-md bg-accent px-3 text-xs font-semibold text-accent-on outline-none focus-visible:shadow-ring disabled:cursor-wait disabled:opacity-60"
                 >
                     expand {refId}
-                </button>
+                </Button>
                 {data != null && (
-                    <span className="text-2xs text-fg-subtle">{lines.length} lines</span>
+                    <Result verb="expand" kind="success">
+                        {lines.length} lines
+                    </Result>
                 )}
             </div>
             {error && (
-                <p role="alert" className="text-xs text-delta-fg">
+                <Result verb="expand" kind="error">
                     {error.message}
-                </p>
+                </Result>
             )}
             {data != null && (
                 <>
