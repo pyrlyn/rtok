@@ -4,6 +4,7 @@
 
 //! Pure line filter for `rtok run` output (plan T3.2). No I/O.
 
+use std::collections::HashMap;
 use std::ffi::OsStr;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -756,6 +757,9 @@ fn fold(
     fmt: impl Fn(&str, &str, &[String], usize) -> String,
 ) -> Vec<String> {
     let mut groups: Vec<(String, String, Vec<String>, usize)> = Vec::new();
+    // A linear scan per line is O(lines x groups); `find .` over a big tree has both in
+    // the hundreds of thousands.
+    let mut index: HashMap<String, usize> = HashMap::new();
     let mut placed = Vec::new();
     let mut out: Vec<Result<usize, String>> = Vec::new();
     for line in lines {
@@ -763,12 +767,14 @@ fn fold(
             out.push(Err(line));
             continue;
         };
-        let i = match groups.iter().position(|(k, _, _, _)| k == &key) {
-            Some(i) => i,
+        let i = match index.get(&key) {
+            Some(&i) => i,
             None => {
+                let i = groups.len();
+                index.insert(key.clone(), i);
                 groups.push((key, msg, Vec::new(), 0));
                 placed.push(false);
-                groups.len() - 1
+                i
             }
         };
         groups[i].3 += 1;
@@ -1957,6 +1963,29 @@ mod tests {
             "{on}"
         );
         assert!(!on.contains("lines omitted"), "{on}");
+    }
+
+    /// `find .` over a big tree: grouping used to rescan every group per line, which
+    /// stalls `rtok run` for seconds at this size.
+    #[test]
+    fn group_dir_scales_to_a_find_over_a_large_tree() {
+        let dirs = 20_000;
+        let body: String = (0..200_000)
+            .map(|i| format!("./d{}/sub/f{i}.rs", i % dirs))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let s = settings(80);
+        let t = std::time::Instant::now();
+        let out = apply(&s, &body, 0, &uncut(Group::Dir), "id");
+        let ms = t.elapsed().as_millis();
+        // Generous: the linear version needs well under a second even in debug, the
+        // quadratic one several seconds.
+        let budget = if cfg!(debug_assertions) { 5000 } else { 1000 };
+        assert!(ms < budget, "{ms} ms");
+        assert!(
+            out.contains("d0/sub/ (10 files): f0.rs, f20000.rs, f40000.rs …"),
+            "{out}"
+        );
     }
 
     #[test]
