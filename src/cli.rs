@@ -67,6 +67,11 @@ enum Cmd {
         /// the process can find its rtok agent
         #[arg(long, value_name = "HOST")]
         host: Option<String>,
+        // T401
+        /// Serve over Streamable HTTP at `IP:PORT` (default `[mcp] http`) instead of stdio; the
+        /// bearer token comes from `[mcp] token` or `RTOK_MCP_TOKEN`
+        #[arg(long, value_name = "ADDR", num_args = 0..=1, conflicts_with_all = ["call", "json"])]
+        http: Option<Option<String>>,
         /// Foreign stdio MCP server to wrap losslessly (`rtok mcp -- npx some-server`)
         #[arg(last = true)]
         wrap: Vec<String>,
@@ -1978,9 +1983,19 @@ pub fn run() -> Result<()> {
             call,
             json,
             host,
+            http,
             wrap,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), hook_host_flag(host))?;
+            if let Some(addr) = http {
+                if action.is_some() || !wrap.is_empty() {
+                    bail!(
+                        "rtok mcp --http serves rtok's own tools; it takes no subcommand or `--`"
+                    );
+                }
+                let addr = addr.unwrap_or_else(|| cfg.mcp.http.clone());
+                return crate::mcp::http::serve_blocking(&cfg, &addr);
+            }
             if let Some(McpCmd::Ping {
                 agent,
                 cli,

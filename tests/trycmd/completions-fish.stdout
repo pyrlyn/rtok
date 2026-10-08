@@ -65,6 +65,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand hook" -s h -l help -d 'Print h
 complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -l call -d 'Call one listed tool and print the text result (pi `registerTool` shim)' -r
 complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -l json -d 'JSON arguments for `--call`' -r
 complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -l host -d 'The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays `[hook] host` so the process can find its rtok agent' -r
+complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -l http -d 'Serve over Streamable HTTP at `IP:PORT` (default `[mcp] http`) instead of stdio; the bearer token comes from `[mcp] token` or `RTOK_MCP_TOKEN`' -r
 complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -s h -l help -d 'Print help'
 complete -c rtok -n "__fish_rtok_using_subcommand mcp; and not __fish_seen_subcommand_from ping help" -a "ping" -d 'Prove the agent/'s rtok MCP server is alive and answering'
