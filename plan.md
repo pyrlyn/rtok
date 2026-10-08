@@ -55,7 +55,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T374 | todo | P3 | 2 | 0% | |
+| T374 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -1353,6 +1353,8 @@ Plan: new `note_files (note_id, path)` table (migration); filled at `mem_save` (
 Done when: a note linked to a file the session has read ranks above an equally text-matching unlinked note.
 
 Check: new cases in `tests/fixtures/p29_memory.toml` with file context; recall@5 on the file-context cases ≥ 0.6 and no drop on the existing cases; `just check`.
+
+Execution plan: (1) Migration `0033_note_files` (`note_files (note_id REFERENCES notes ON DELETE CASCADE, path, PRIMARY KEY (note_id, path))` plus an index on `path`; 0032 is taken by open PR #823), `schema.rs`, `schema_snapshot.txt`. (2) Store (`src/store/note_files.rs`, Diesel): `set_note_files` replaces a note's links, `notes_for_files` returns live notes linked to any of the paths (most matching paths first), `read_cache_paths` lists the session's read keys. Host trait methods with default bodies (`Notes::set_note_files`, `Notes::notes_for_files`, `ReadCache::read_cache_paths`) so a host without them fails open; Runtime impls. (3) `src/plugins/memory/files.rs`: root-relative paths found in text that exist under the root (no `..`, nothing outside the root, 32 candidates at most) plus the checkpoint's paths through `checkpoint::last_paths`; used by `mem_save` and the hook's `remember:` save, and by `prompt_recall` (read-cache files plus files named in the prompt). (4) `rrf_merge_lists` in `src/store/embed.rs` (`rrf_merge` becomes a two-list wrapper); `prompt_recall` merges the FTS list with the linked list, and any error in the linked list is skipped. (5) Tests: store round trip and cascade, extractor guards, a linked note outranks an equally matching unlinked one, recall@5 on file-context cases added to `tests/fixtures/p29_memory.toml` and `tests/p29_memory.rs`, existing cases unchanged. Verify with the touched tests, then `just check`.
 
 ### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
 
