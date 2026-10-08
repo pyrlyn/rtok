@@ -589,7 +589,24 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
                     }
                 }
             }
-            HookOutput::default()
+            // T454: titles and up to two observations, so the host's compaction sees them.
+            // No notes and no observations in this session stays `{}`.
+            #[cfg(feature = "memory")]
+            let extra = crate::plugins::memory::compact_context(&Ctx::new(cx));
+            #[cfg(not(feature = "memory"))]
+            let extra: Option<Injection> = None;
+            if let Some(inj) = extra {
+                HookOutput {
+                    hook_specific_output: Some(HookSpecificOutput {
+                        hook_event_name: "PreCompact".into(),
+                        additional_context: Some(inj.text),
+                        ..HookSpecificOutput::default()
+                    }),
+                    ..HookOutput::default()
+                }
+            } else {
+                HookOutput::default()
+            }
         }
         "SessionEnd" => {
             #[cfg(feature = "inject")]

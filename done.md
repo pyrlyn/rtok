@@ -1,5 +1,17 @@
 # rtok — completed tasks
 
+### T454. Mechanical observations, retention rank, and PreCompact recall
+
+A tool call now stores one scrubbed observation (title, type, narrative ≤ 400 characters, existing root-relative files). The raw output stays in the archive. The same session, tool and narrative within 5 seconds does not insert again. `mem_*` tools are not observed. `mem_get` with `obs` returns the narrative.
+
+`notes.uses` and `last_used` move on a live `mem_get` and on a prompt-recall injection. Recall order is pinned, then retention score, then newest id. A low score is never a delete.
+
+`prompt_recall` fuses observation FTS with file-linked observations (RRF, k = 60), keeps at most 3 hits from one session, and appends at most two `obs <id> <title> (<session>)` lines inside `recall_tokens`. `PreCompact` adds the title index and this session's observations when either exists, and stays `{}` when both are empty.
+
+Check: `cargo test --lib plugins::memory`; `cargo test --lib schema_matches_the_migrated_tables_and_snapshot`.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
+
 ### T442. Atomic task claim and a ready queue
 
 Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.
