@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
-import logo from "@brand/logo/rtok-mark.svg";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
 import { LiveStatus } from "./LiveStatus";
 import { Orb } from "./Orb";
 import { Kbd, paletteKeys } from "./palette/Kbd";
 import type { Target } from "./palette/Palette";
 import { useShortcuts } from "./palette/shortcuts";
-import { PAGES, type Page } from "./pages";
+import { PAGES } from "./pages";
+import { Sidebar, useSidebarCollapsed } from "./Sidebar";
 import { Empty, ErrorState, Offline } from "./states";
 import { useTheme } from "./theme";
 import { focusRing } from "./ui/cx";
@@ -26,13 +26,11 @@ const ShortcutHelp = lazyPart("the shortcut sheet", () =>
     import("./palette/Palette").then((m) => m.ShortcutHelp),
 );
 
-// Narrow screens get a bottom tab bar (icon over label, centred); from md up it is the sidebar.
-const navLink = `${focusRing} flex min-w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-md px-2 py-1.5 text-2xs md:h-9 md:min-w-0 md:flex-row md:justify-start md:gap-3 md:px-2.5 md:py-0 md:text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent-fg`;
-
 export function Shell() {
     const connection = useConnection();
     const { data } = useSnapshot();
     const { dark, toggle } = useTheme();
+    const sidebar = useSidebarCollapsed();
     const pathname = useRouterState({ select: (s) => s.location.pathname });
     const title = PAGES.find((p) => `/${p.id}` === pathname)?.id ?? "not found";
     const heading = useRef<HTMLHeadingElement>(null);
@@ -95,27 +93,14 @@ export function Shell() {
                     </>
                 )}
             </Suspense>
-            <div className="min-h-screen md:grid md:grid-cols-[200px_minmax(0,1fr)] lg:grid-cols-[232px_minmax(0,1fr)]">
-                <nav
-                    aria-label="Admin screens"
-                    className="glass fixed inset-x-2 bottom-2 z-40 flex gap-0.5 overflow-x-auto p-1 md:sticky md:inset-auto md:top-0 md:m-3 md:h-[calc(100vh-1.5rem)] md:flex-col md:overflow-y-auto"
-                >
-                    <div className="mb-2 hidden items-center gap-2.5 border-b border-border px-2.5 pt-2 pb-3 md:flex">
-                        <img src={logo} alt="" width={28} height={28} className="rounded-md" />
-                        <span className="flex flex-col leading-none">
-                            <span className="text-sm font-bold tracking-wordmark">RTOK</span>
-                            <span className="mt-1 text-2xs text-fg-subtle">
-                                <span className="text-delta-fg">Δ</span>tok
-                            </span>
-                        </span>
-                    </div>
-                    {PAGES.map((p: Page) => (
-                        <Link key={p.id} to={`/${p.id}`} className={navLink}>
-                            <Icon name={p.id} />
-                            {p.id}
-                        </Link>
-                    ))}
-                </nav>
+            <div
+                className={`min-h-screen md:grid ${
+                    sidebar.collapsed
+                        ? "md:grid-cols-[4.5rem_minmax(0,1fr)]"
+                        : "md:grid-cols-[200px_minmax(0,1fr)] lg:grid-cols-[232px_minmax(0,1fr)]"
+                }`}
+            >
+                <Sidebar collapsed={sidebar.collapsed} onToggle={sidebar.toggle} />
                 <div className="flex min-w-0 flex-col">
                     <header className="flex items-end gap-3 px-3 pt-4 pb-3">
                         <div className="min-w-0 flex-1">

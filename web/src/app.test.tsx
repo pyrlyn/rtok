@@ -4,14 +4,15 @@
 
 // @vitest-environment happy-dom
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, test } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { DataProvider } from "./api/query";
 import { sampleSnapshot } from "./api/sample";
 import type { Snapshot } from "./api/snapshot.gen";
 import type { Connect, ConnectionState } from "./api/ws";
 import { PAGES } from "./pages";
 import { createAppRouter } from "./router";
+import { NAV_GROUPS } from "./Sidebar";
 
 // Plays the server once: pushes `state` and, when given, one snapshot.
 const server =
@@ -47,7 +48,7 @@ describe("routes", () => {
         mount(server("open", sampleSnapshot));
         const nav = await screen.findByRole("navigation", { name: "Admin screens" });
         const links = Array.from(nav.querySelectorAll("a"));
-        expect(links.map((a) => a.textContent)).toEqual(PAGES.map((p) => p.id));
+        expect(links.map((a) => a.textContent)).toEqual(NAV_GROUPS.flatMap((g) => g.pages));
         for (const link of links) {
             expect(link.getAttribute("href")).toMatch(/^\//);
             expect(link.tabIndex).toBeGreaterThanOrEqual(0);
@@ -59,6 +60,10 @@ describe("routes", () => {
                 expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1 }));
             }
         }
+    });
+
+    test("every page sits in exactly one nav group", () => {
+        expect(NAV_GROUPS.flatMap((g) => g.pages).sort()).toEqual(PAGES.map((p) => p.id).sort());
     });
 
     test("the root path redirects to the first page and unknown paths say so", async () => {
@@ -168,5 +173,45 @@ describe("orb", () => {
         mount(server("open", sampleSnapshot));
         const fallback = await screen.findByTestId("orb-fallback");
         expect(fallback.hidden).toBe(false);
+    });
+});
+
+describe("sidebar", () => {
+    test("the groups are labelled and the toggle collapses to icons and persists", async () => {
+        mount(server("open", sampleSnapshot));
+        const nav = await screen.findByRole("navigation", { name: "Admin screens" });
+        for (const g of NAV_GROUPS) {
+            expect(within(nav).getByRole("group", { name: g.label })).toBeTruthy();
+        }
+        const toggle = within(nav).getByRole("button", { name: "Sidebar" });
+        expect(toggle.getAttribute("aria-expanded")).toBe("true");
+        fireEvent.click(toggle);
+        expect(toggle.getAttribute("aria-expanded")).toBe("false");
+        expect(localStorage.getItem("rtok-sidebar")).toBe("collapsed");
+        // Collapsed links keep their name for assistive tech and a pointer tooltip.
+        expect(within(nav).getByRole("link", { name: "calls" }).getAttribute("title")).toBe(
+            "calls",
+        );
+
+        cleanup();
+        mount(server("open", sampleSnapshot));
+        const again = await screen.findByRole("button", { name: "Sidebar" });
+        expect(again.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    test("blocked storage leaves the sidebar usable for the session", async () => {
+        const blocked = () => {
+            throw new DOMException("blocked", "SecurityError");
+        };
+        vi.spyOn(Storage.prototype, "getItem").mockImplementation(blocked);
+        vi.spyOn(Storage.prototype, "setItem").mockImplementation(blocked);
+        try {
+            mount(server("open", sampleSnapshot));
+            const toggle = await screen.findByRole("button", { name: "Sidebar" });
+            fireEvent.click(toggle);
+            expect(toggle.getAttribute("aria-expanded")).toBe("false");
+        } finally {
+            vi.restoreAllMocks();
+        }
     });
 });

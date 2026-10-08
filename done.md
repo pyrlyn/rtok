@@ -1169,6 +1169,17 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just js` green; `gr
 
 Result: `web/src/ui/Unknown.tsx` renders the label at once and the "?" with its React Aria `Tooltip` from a lazy chunk (`UnknownWhy`, 5.8 kB gzip; entry +1 kB), so a chunk that fails leaves the word. `orUnknown(value, why, label?)` turns null, "" and the CLI's "-" into it; zero passes through. Every reason lives in `web/src/pages/missing.ts`, each restating where Rust leaves the field null (`src/store` call and session rows, `src/web/model.rs` plugin stats, hosts and services, `src/worktree/list.rs`). Where absence is a fact the label says so with the same tooltip: "top-level" parent, "none" ref_id, host config, worktree branch, owner, agent and pid, "never" seen, "not found" host app, "n/a" saved for plugins that save no tokens, "not set" OTel endpoint. Plugins now show a measured zero or negative saving instead of "-". Covered: Calls, Sessions, Overview's recent sessions, Plugins, Hosts, Worktrees, Services and Stats. Tooltip opens on hover, keyboard focus and touch tap (checked in the dev server at phone width with touch pointer events). `ui/lazyPart.ts` is the shared fail-open lazy loader, now also used by the command palette in `Shell.tsx`. The calls tokens column widened to fit "Unknown ?". The card's grep still finds `web/src/pages/text.ts`, the parser that fills absent CLI columns with "-"; pages render those through `orUnknown`.
 
+### T414.8. Sidebar groups and a collapsible sidebar
+
+The 14 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme, through one shared storage helper (`web/src/storage.ts`) that the theme now uses too. The bottom bar on phones stays one scrolling row.
+
+Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
+
+Result: `web/src/Sidebar.tsx` holds the groups (`NAV_GROUPS`), a labelled `role="group"` per group, and a toggle with `aria-expanded` and a visible focus ring; collapsed links keep their name (screen-reader-only text plus `title`). A unit test pins that every page sits in exactly one group, and blocked storage still works. `Sidebar.stories.tsx` covers expanded, collapsed, phone and toggle. New rtok-only icon `brand/icons/ui/sidebar.svg`, since `@pyrlyn/brand` has no panel icon. `just check` green, `just spa-stories` 131 passed (axe), `just spa-e2e` 17 passed. #821.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T414.12. Live status: snapshot age and pause
 
 The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
@@ -9327,6 +9338,35 @@ Fifth subtask of T441 (task adapters): `rtok task create/list/show/status/next/i
 Check: the commands work end to end on the disk adapter in a temp checkout; `just check` green.
 
 Result: `src/tasks/run.rs` holds what the commands do, so T441.6's MCP tools call the same functions: `Project::open` (git root, `project_key`, the prefix from `[tasks] prefix` or the project name, the adapter; `github`/`gitlab` say they are not built yet), `create` (checks the parent exists, raises the store counter past every id the adapter holds at that depth, then allocates), `show` (task plus subtask ids), `next` (lowest open task with no active subtask), and `init`, which writes `[tasks] adapter`/`prefix` into `<git root>/.rtok.toml` with `toml_edit`, keeping the rest of the file. `src/cli.rs` adds `rtok task …`; `--body-file -` reads stdin. `[tasks] adapter` is validated against the same `ADAPTERS` list. The card's `create --status` is left out (a new task is open; `status` sets the rest), and `sync` stays with T441.7. `tests/task_cli.rs` runs the binary from init to done, including the parent refusal and a hand-deleted file whose id is not reused. README command rows and the `docs/config.md` flag table (en/ru/uk) list the commands.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T400. Fix stale and broken statements in `research.md` and related docs
+
+The research sweep (2026-10-04) found statements that shipped work made false. Fix each in place with a date or a "shipped as Txx" pointer, following the §16.2 Status column:
+
+- §2 T241 row caveats (see T397 for the numbers); §2 graph recall (fixed in T387, see `done.md`).
+- §3–§9: §9.2–§9.4 describe T58.1, T58.2 and I-44–I-48 as open (all shipped as T58.x, T59.4–T59.8); the Cursor `afterMCPExecution` "unverified" claim is resolved; a blank line at the `rtok modes` row splits the P14 survey table; T134's cross-references point at the wrong lines; §5/§6 tool counts for `read` and `graph` contradict §9.3; §6 item 8 "adapter first" contradicts D6.
+- §10, §13–§15 "today" cells refuted by T61.2/T62.x, T66.1, T69.1, T70.1–T70.3 and T304; the §13/§14 contradiction about checkpoint rows being "legacy unscoped" vs "under project `rtok`".
+- §16–§19: T58.2 and T59.1 marked `open`; §16.5's "ship or schedule T59.5 and T61.2"; §16.3's ratings and "not yet a first-class idea" (I-84, I-85, I-86 rejected, I-101, I-102 exist); §17.1 "src/ has no agent_id" (T128, T129); §19.7 "T178 Check still not met" (raised to 20 ms, closed). `ideas.md` I-90 cites 17 % where §17 measures 14 %. I-99 and T156 gain the lead that `dunnage` 0.1.0 has its own `seed` and `worktree` subcommands (unmeasured).
+- §22–§28: T283.3 shipped (line "Not shipped yet: (b)"); T330.1 no longer "PR #651, open"; host counts (22, not 17 or 21; plain host names, not autolinked URLs).
+- `docs/config.md` `codex_dir` comment: only Cursor stores carry no token counts now (OpenCode and Copilot CLI are read by `rtok agents usage`).
+
+Check: each listed statement is fixed or dated; the P14 table renders as one table; `just check` (docs tests).
+
+Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) and `docs/config.md` (with the ru/uk copies) was checked against `done.md`, the code and `git log`, then dated or given a "shipped as Txx" pointer; the P14 table is one table; stale "12 hosts" cells in §9.3, §11 and §14 were dated too. Not done here: the §2 T241 `replay_bench` caveats, which T397 already owns (its re-run replaces them). Left for later: `README.md`, `docs/comparison.md` (en/ru/uk) and `roadmap.md` still quote the old 0.351 reference recall, and `src/plugins/read/README.md` says five MCP tools where it lists three. #818.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
+### T441.6. MCP task tools
+
+Sixth subtask of T441 (task adapters): `task_create`, `task_list`, `task_get`, `task_status` and `task_next` on `rtok mcp`, with the same JSON as the CLI.
+
+Check: CLI ↔ MCP parity (same inputs, same JSON); `just check` green.
+
+Result: `src/mcp/tasks.rs` lists the five tools beside the worktree and agent tools and calls the same `tasks::run` functions as `rtok task …`; `Project::get`, `Project::status` and `run::filter` moved there from the CLI so neither front-end keeps its own copy, and `show` now fails with `no task <id>` itself. Each call re-reads the config for the current cwd, because `roots/list` can move the server into the project after launch and `[tasks] prefix` lives in that project's `.rtok.toml`. `tests/task_cli.rs` drives the tools through `rtok mcp --call` and compares their answers with `--json`. The server entry `rtok agents install` already writes covers every host, so the tools need no install of their own; the AGENTS.md/CLAUDE.md instruction line was split into T441.10.
 
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
