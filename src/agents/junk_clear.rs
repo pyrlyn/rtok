@@ -207,6 +207,9 @@ pub fn plan(
         .map(|p| p.path.clone())
         .collect();
     out.retain(|p| !p.planned || !busy.contains(&p.path));
+    // An emptied folder keeps its own block on most filesystems (4 KiB on ext4), so its size
+    // never reaches 0; with nothing left inside it is not worth planning again.
+    out.retain(|p| !std::fs::read_dir(&p.path).is_ok_and(|mut d| d.next().is_none()));
     let mut seen = std::collections::HashSet::new();
     out.retain(|p| seen.insert(p.path.clone()));
     out
