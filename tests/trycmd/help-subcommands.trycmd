@@ -1066,7 +1066,8 @@ Commands:
   adopt   Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
           pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only
   remove  Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
-          merged, release the claim; refuses dirty, foreign-locked or current worktrees
+          merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless
+          the task is finished (merged, clean, with commits of its own)
   list    Every worktree and orphan with its owner, state, source and build-cache bytes
   whoami  Your agent, where new worktrees go, the worktree you are in and the ones you hold
   gc      Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
@@ -1182,7 +1183,8 @@ Options:
 
 $ rtok worktree remove --help
 Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when merged,
-release the claim; refuses dirty, foreign-locked or current worktrees
+release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is
+finished (merged, clean, with commits of its own)
 
 Usage: rtok worktree remove [OPTIONS] <TARGET>
 
