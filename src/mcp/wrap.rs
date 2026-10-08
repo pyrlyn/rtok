@@ -233,6 +233,11 @@ pub fn shorten_result(
         let Ok(id) = cx.put_archive(text.as_bytes()) else {
             continue;
         };
+        if let Some(printed) = json_tree_fold(cx, &rule, tool, text, &id) {
+            block["text"] = Value::String(printed);
+            changed = true;
+            continue;
+        }
         let cut = rules::apply(settings, text, 0, &rule, &id);
         if cut.len() >= text.len() {
             continue;
@@ -252,6 +257,55 @@ pub fn shorten_result(
         changed = true;
     }
     changed
+}
+
+/// Fold one JSON value when `json_tree` is on, the tool is not `read` or `search`,
+/// and the fold fits the mcp rule's line cap and is shorter than the original.
+/// `None` keeps today's line cut. The original is already archived under `archive_id`.
+fn json_tree_fold(
+    cx: &Runtime,
+    rule: &rules::Rule,
+    tool: &str,
+    text: &str,
+    archive_id: &str,
+) -> Option<String> {
+    #[cfg(not(feature = "json_tree"))]
+    {
+        let _ = (cx, rule, tool, text, archive_id);
+        return None;
+    }
+    #[cfg(feature = "json_tree")]
+    {
+        if !cx.config.plugins.json_tree.enabled {
+            return None;
+        }
+        if tool.eq_ignore_ascii_case("read") || tool.eq_ignore_ascii_case("search") {
+            return None;
+        }
+        let value: Value = serde_json::from_str(text).ok()?;
+        let folded = crate::plugins::json_tree::fold_json(&value)?;
+        if folded.text.lines().count() as u32 > rule.max_lines {
+            return None;
+        }
+        if folded.text.len() >= text.len() {
+            return None;
+        }
+        let printed = format!("{}\n[json-tree {archive_id}]", folded.text.trim_end());
+        if printed.len() >= text.len() {
+            return None;
+        }
+        let _ = cx.record(&Measurement {
+            plugin: "json_tree",
+            kind: "fold",
+            before_bytes: text.len() as u64,
+            after_bytes: printed.len() as u64,
+            est_before: cx.estimate(text, Class::Code),
+            est_after: cx.estimate(&printed, Class::Code),
+            ref_id: Some(archive_id.to_string()),
+            call_id: None,
+        });
+        Some(printed)
+    }
 }
 
 fn shorten(
