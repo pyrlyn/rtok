@@ -410,6 +410,23 @@ pub fn mem_revise(
     Ok((new, Some(id)))
 }
 
+/// T472: earlier title and body for `id`, oldest first. The current body stays on
+/// `mem_get`. Unknown ids error the same way as retire and pin.
+pub fn mem_history(rt: &crate::plugin::Runtime, id: i32) -> anyhow::Result<String> {
+    if rt.store.note_row(id)?.is_none() {
+        anyhow::bail!("unknown note id: {id}");
+    }
+    let rows = rt.store.note_versions(id)?;
+    if rows.is_empty() {
+        return Ok(format!("no earlier versions of note {id}"));
+    }
+    Ok(rows
+        .into_iter()
+        .map(|(version, title, body)| format!("v{version} {title}\n{body}"))
+        .collect::<Vec<_>>()
+        .join("\n\n"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -744,6 +761,23 @@ mod tests {
         let hits = mem_search(&cx, "jwt", 5).unwrap();
         assert_eq!(hits[0].id, a);
         assert!(mem_search(&cx, "sessions", 5).unwrap().is_empty());
+    }
+
+    /// T472: history returns the old body; recall and mem_get stay on the current one.
+    #[test]
+    fn history_returns_the_old_body_and_recall_stays_on_the_current() {
+        let cx = crate::plugin::Runtime::in_memory("t472-history").unwrap();
+        let (id, _) = mem_save(&cx, "decision", "topic", "alpha body", None).unwrap();
+        mem_save(&cx, "decision", "topic", "beta body", None).unwrap();
+        assert_eq!(mem_get(&cx, id).unwrap().unwrap(), "beta body");
+        let history = mem_history(&cx, id).unwrap();
+        assert!(history.contains("alpha body"), "{history}");
+        assert!(!history.contains("beta body"), "{history}");
+        let recall = recall(&Ctx::new(&cx)).unwrap();
+        assert!(recall.text.contains("topic"), "{}", recall.text);
+        assert!(!recall.text.contains("alpha body"), "{}", recall.text);
+        assert!(!recall.text.contains("beta body"), "{}", recall.text);
+        assert!(mem_history(&cx, 999).is_err());
     }
 
     #[test]

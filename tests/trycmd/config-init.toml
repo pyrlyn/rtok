@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,516 @@
+@@ -0,0 +1,519 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -438,6 +438,9 @@ target/tmp/t60-2-config-init.toml
 +# tree_depth       = 2
 +# delta            = true               # changed re-read → unified diff vs last archive
 +# delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
++
++[plugins.json_tree]
++# enabled = false                     # fold repeated nested JSON in old tool results; off until a measurement shows a saving
 +
 +[plugins.archive]
 +# enabled    = true

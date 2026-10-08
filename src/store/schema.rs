@@ -90,6 +90,18 @@ diesel::table! {
     }
 }
 
+// 0035 (T472): previous title and body when an upsert changes the body.
+diesel::table! {
+    note_versions (id) {
+        id -> Integer,
+        note_id -> Integer,
+        title -> Text,
+        body -> Text,
+        version -> Integer,
+        ts -> BigInt,
+    }
+}
+
 diesel::table! {
     notes (id) {
         id -> Integer,

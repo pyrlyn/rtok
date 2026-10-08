@@ -30,6 +30,7 @@ index|sqlite_autoindex_hosts_1|hosts|
 index|sqlite_autoindex_kv_1|kv|
 index|sqlite_autoindex_models_1|models|
 index|sqlite_autoindex_note_files_1|note_files|
+index|sqlite_autoindex_note_versions_1|note_versions|
 index|sqlite_autoindex_otel_export_1|otel_export|
 index|sqlite_autoindex_project_links_1|project_links|
 index|sqlite_autoindex_projects_1|projects|
@@ -63,6 +64,7 @@ table|messages|messages|CREATE TABLE messages ( id INTEGER PRIMARY KEY, from_age
 table|models|models|CREATE TABLE models ( id INTEGER PRIMARY KEY, provider_id INTEGER NOT NULL REFERENCES providers(id), slug TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()), UNIQUE (provider_id, slug) )
 table|note_embeddings|note_embeddings|CREATE TABLE note_embeddings ( note_id INTEGER PRIMARY KEY NOT NULL REFERENCES notes(id) ON DELETE CASCADE, model TEXT NOT NULL, dims INTEGER NOT NULL, text_hash TEXT NOT NULL, embedded_at INTEGER NOT NULL DEFAULT (unixepoch()), vector BLOB NOT NULL )
 table|note_files|note_files|CREATE TABLE note_files ( note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE, path TEXT NOT NULL, PRIMARY KEY (note_id, path) )
+table|note_versions|note_versions|CREATE TABLE note_versions ( id INTEGER PRIMARY KEY, note_id INTEGER NOT NULL REFERENCES notes(id), title TEXT NOT NULL, body TEXT NOT NULL, version INTEGER NOT NULL, ts INTEGER NOT NULL DEFAULT (unixepoch()), UNIQUE (note_id, version) )
 table|notes|notes|CREATE TABLE notes ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), project TEXT, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL , retired INTEGER NULL, superseded_by INTEGER NULL, pinned INTEGER NOT NULL DEFAULT 0, uses INTEGER NOT NULL DEFAULT 0, last_used INTEGER NULL)
 table|notes_fts|notes_fts|CREATE VIRTUAL TABLE notes_fts USING fts5 (title, body, content = 'notes', content_rowid = 'id')
 table|notes_fts_config|notes_fts_config|CREATE TABLE 'notes_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID

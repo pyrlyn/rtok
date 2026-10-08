@@ -138,10 +138,10 @@ pub fn state(word: &str, ok: bool) -> String {
 /// callers (T15.11): the CLI renders the operator model's Plugins page with it, and
 /// `Registry::table` renders manifests with it — so the two cannot drift.
 pub fn plugins_table(rows: &[(&str, bool, Vec<&str>)]) -> String {
-    let mut out = format!("{:<9}{:<9}surfaces\n", "id", "enabled");
+    let mut out = format!("{:<10}{:<10}surfaces\n", "id", "enabled");
     for (id, on, surfaces) in rows {
         out.push_str(&format!(
-            "{:<9}{:<9}{}\n",
+            "{:<10}{:<10}{}\n",
             id,
             if *on { "on" } else { "off" },
             surfaces.join(",")
