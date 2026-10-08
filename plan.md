@@ -1569,7 +1569,6 @@ Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id ord
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
 
-
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
