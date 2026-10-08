@@ -17,3 +17,12 @@ export const ErrorBanner: Story = { render: () => <ErrorState message="store wil
 export const OfflineScreen: Story = {
     render: () => <Offline connecting={false} onReconnect={() => {}} />,
 };
+
+// The wash and border roles of `ErrorState` and the dashed rule of `Empty` differ per theme.
+export const LoadingStateLight: Story = { ...LoadingState, globals: { theme: "light" } };
+export const EmptyStateLight: Story = { ...EmptyState, globals: { theme: "light" } };
+export const ErrorBannerLight: Story = { ...ErrorBanner, globals: { theme: "light" } };
+export const OfflineScreenLight: Story = { ...OfflineScreen, globals: { theme: "light" } };
+export const OfflineReconnecting: Story = {
+    render: () => <Offline connecting onReconnect={() => {}} />,
+};

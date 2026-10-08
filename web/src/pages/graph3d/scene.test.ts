@@ -11,6 +11,7 @@ import {
   buildScene,
   CLUSTER_ABOVE,
   colorOf,
+  resolveRole,
   EDGE_WIDTH,
   radiusOf,
   scopeOf,
@@ -101,9 +102,20 @@ describe("scene mapping", () => {
     expect(s.counts.problems).toBe(2);
   });
 
+  test("a role colour resolves from the token and falls back without the brand stylesheet", () => {
+    const style = { getPropertyValue: (n: string) => (n === "--pyr-accent-fg" ? " #5CE1FF " : "") };
+    const css = style as unknown as CSSStyleDeclaration;
+    expect(resolveRole("var(--pyr-accent-fg)", css, "gray")).toBe("#5CE1FF");
+    expect(resolveRole("var(--pyr-delta-fg)", css, "gray")).toBe("gray");
+    expect(resolveRole("#123456", css, "gray")).toBe("#123456");
+  });
+
   test("colour is stable per root and radius grows with symbols but is capped", () => {
     expect(colorOf("/work/a")).toBe(colorOf("/work/a"));
-    expect(colorOf("/work/a")).not.toBe(colorOf("/work/b"));
+    // Four roles are all the brand has, so only the spread is asserted, not that two roots differ.
+    const roots = Array.from({ length: 24 }, (_, i) => `/work/p${i}`);
+    expect(new Set(roots.map(colorOf)).size).toBeGreaterThan(2);
+    expect(roots.every((r) => /^var\(--pyr-[\w-]+\)$/.test(colorOf(r)))).toBe(true);
     expect(radiusOf(undefined)).toBe(3);
     expect(radiusOf(10)).toBeLessThan(radiusOf(10_000));
     expect(radiusOf(1e30)).toBe(10);

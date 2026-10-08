@@ -14,6 +14,7 @@ import { focusRing } from "../ui/cx";
 import type { Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { Result } from "../ui/Result";
 import { compact, fmt, pct } from "./format";
 import type { CheckState } from "./model";
 
@@ -161,10 +162,10 @@ export function TokenMix({ tokens }: { tokens: Tokens }) {
 export function Missing({ page, command }: { page: string; command: string }) {
     return (
         <Panel title={page}>
-            <p role="alert" className="text-xs text-delta-fg">
+            <Result kind="error">
                 {page} did not answer this tick (Snapshot.{page} = null).{" "}
                 <code className="text-fg-muted">{command}</code> has the details.
-            </p>
+            </Result>
         </Panel>
     );
 }

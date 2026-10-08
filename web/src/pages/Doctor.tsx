@@ -226,7 +226,7 @@ function Agents({ agents }: { agents: AgentModules[] }) {
                             return (
                                 <div
                                     key={m}
-                                    className="rounded-md border border-border px-2 py-1"
+                                    className="rounded-md border border-border bg-bg/60 px-2 py-1"
                                     title={r?.note}
                                 >
                                     <div className="flex items-center justify-between gap-1">

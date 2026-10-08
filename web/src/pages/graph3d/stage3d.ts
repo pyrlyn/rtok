@@ -29,7 +29,7 @@ import {
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { disposeObject } from "./dispose";
-import type { Scene, SceneEdge, SceneNode } from "./scene";
+import { resolveRole, type Scene, type SceneEdge, type SceneNode } from "./scene";
 import type { Positions } from "./useLayout";
 import type { ViewApi, ViewEvents } from "./webgl";
 
@@ -129,8 +129,9 @@ export class Stage implements ViewApi {
     // Named fallback only for hosts without the brand stylesheet (unit tests).
     const fg = style.color || "gray";
     const subtle = style.getPropertyValue("--pyr-fg-subtle").trim() || fg;
+    const accent = style.getPropertyValue("--pyr-accent-fg").trim() || fg;
     for (const node of scene.nodes) {
-      const color = new Color(node.color);
+      const color = new Color(resolveRole(node.color, style, fg));
       const material = new MeshStandardMaterial({
         color,
         emissive: node.inScope ? color : new Color(0),
@@ -145,7 +146,7 @@ export class Stage implements ViewApi {
       const label = labelSprite(node.label, fg, node.dim);
       let ring: Mesh | undefined;
       if (node.selected) {
-        ring = new Mesh(this.sphere, new MeshBasicMaterial({ color: fg, wireframe: true }));
+        ring = new Mesh(this.sphere, new MeshBasicMaterial({ color: accent, wireframe: true }));
         ring.scale.setScalar(node.radius * 1.5);
       }
       this.group.add(mesh, label, ...(ring ? [ring] : []));
@@ -154,7 +155,7 @@ export class Stage implements ViewApi {
     this.edges = scene.edges.filter((e) => this.nodes.has(e.from) && this.nodes.has(e.to));
     this.owner = this.edges.flatMap((e, i) => Array<number>(e.dashed ? DASHES : 1).fill(i));
     const tint = (e: SceneEdge) =>
-      new Color(e.inScope ? fg : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
+      new Color(e.inScope ? accent : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
     const lineMat = new MeshBasicMaterial({ color: 0xffffff });
     this.lines = new InstancedMesh(this.cylinder, lineMat, Math.max(1, this.owner.length));
     this.heads = new InstancedMesh(

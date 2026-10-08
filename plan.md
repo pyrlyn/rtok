@@ -84,7 +84,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
@@ -1566,12 +1565,6 @@ Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pac
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
-
-As T414.4; the Graph 3D view keeps its renderer and takes its colours from the roles.
-
-Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page and state.
 
 ### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 
