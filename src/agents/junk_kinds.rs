@@ -42,7 +42,7 @@ const SKIP_DIRS: [&str; 2] = [".git", "node_modules"];
 const BUILD_DIRS: [&str; 3] = ["dist", ".next", "__pycache__"];
 
 /// Lock files that are package-manager state and never junk.
-const PACKAGE_LOCKS: [&str; 14] = [
+pub(super) const PACKAGE_LOCKS: [&str; 14] = [
     "Cargo.lock",
     "yarn.lock",
     "bun.lock",
@@ -129,7 +129,7 @@ fn lock_held(path: &Path) -> std::io::Result<bool> {
 }
 
 /// Why a file stays because a process may use it, or `None` when nothing holds it.
-fn held_reason(path: &Path) -> Option<String> {
+pub(super) fn held_reason(path: &Path) -> Option<String> {
     match lock_held(path) {
         Ok(false) => None,
         Ok(true) => Some("held by a running process".into()),
@@ -187,7 +187,7 @@ pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
 
 /// The entries of the §22 temp dirs `dirs`: one item per file or directory, kept while it was
 /// touched within the idle window (24 h) or, for a file, while another process holds a lock on
-/// it. A symlink is never an item. A running agent's temp is T330.4's re-check.
+/// it. A symlink is never an item. A running agent's temp is left by `junk_clear` (T330.4).
 pub fn temp_items(dirs: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item> {
     let mut items = Vec::new();
     for dir in dirs.iter().filter(|d| !is_symlink(d) && d.is_dir()) {

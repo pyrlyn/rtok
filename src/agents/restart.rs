@@ -231,6 +231,16 @@ fn running_cli_bin(agent: &dyn Agent, procs: &dyn Procs) -> Option<&'static str>
         .find_map(|v| v.bins.iter().copied().find(|b| procs.bin_running(b)))
 }
 
+/// Whether a CLI binary or an installed desktop app of `agent` runs now. Only installed apps
+/// are asked: on macOS `osascript` may open a "Choose Application" dialog for an unknown name.
+pub fn host_running(agent: &dyn Agent, procs: &dyn Procs) -> bool {
+    let apps = agent.variants().iter().filter(|v| v.kind == Kind::Desktop);
+    running_cli_bin(agent, procs).is_some()
+        || apps
+            .filter(|v| super::present(v))
+            .any(|v| running_desktop_app(v, procs).is_some())
+}
+
 /// How long a quit app gets to exit. Electron apps often need well over 5 s, and reopening one
 /// that is still shutting down only activates the dying instance (T434).
 const QUIT_TIMEOUT: Duration = if cfg!(test) {

@@ -5,7 +5,10 @@
 import { useMemo, type ReactNode } from "react";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
+import { ExportButtons } from "../ui/ExportButtons";
+
 import { Mark, MarkRows } from "../charts/Mark";
+
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
@@ -22,12 +25,18 @@ type Saving = ReturnType<typeof overview>["measured"][number];
 
 function savingColumns(max: number): Column<Saving>[] {
     return [
-        { id: "plugin", header: "plugin", cell: (r) => <b>{r.plugin.id}</b> },
+        {
+            id: "plugin",
+            header: "plugin",
+            exportValue: (r) => r.plugin.id,
+            cell: (r) => <b>{r.plugin.id}</b>,
+        },
         {
             id: "rows",
             header: "rows",
             width: "64px",
             align: "right",
+            exportValue: (r) => r.plugin.stats?.rows,
             cell: (r) => fmt(r.plugin.stats?.rows),
         },
         {
@@ -35,6 +44,7 @@ function savingColumns(max: number): Column<Saving>[] {
             header: "saved",
             width: "72px",
             align: "right",
+            exportValue: (r) => r.saved,
             cell: (r) => compact(r.saved),
         },
         {
@@ -246,7 +256,16 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 <Panel
                     title="savings by plugin"
                     hint="Σ est before − after, measured plugins only"
-                    action={<PanelLink to="/plugins">plugins →</PanelLink>}
+                    action={
+                        <span className="flex items-center gap-3">
+                            <ExportButtons
+                                label="savings by plugin"
+                                rows={o.measured}
+                                columns={columns}
+                            />
+                            <PanelLink to="/plugins">plugins →</PanelLink>
+                        </span>
+                    }
                     className="xl:col-span-7"
                 >
                     <DataTable
