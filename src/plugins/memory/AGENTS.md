@@ -25,6 +25,9 @@ if split out per T2.5.
   to the existing files the body names and the session checkpoint's paths, root-relative and
   never outside the root. `prompt_recall` fuses the text hits with the notes linked to files the
   session read (`read_cache`) or the prompt names (RRF); any error there leaves the text hits.
+  A file the prompt names (T452) also recalls up to 2 of its notes the text missed, taking slots
+  from the same `prompt_recall` budget; a read file only re-ranks text hits (I-115 is the wider
+  variant, off until a `Measurement` shows a saving).
 - Checkpoint prompts are only what the human typed (T417, `checkpoint::user_prompt`):
   host-injected records and `<system-reminder>` blocks never take one of the 20 slots.
   A new host envelope goes into `HOST_OPENERS` and `HOST_FIXTURE`, not a second filter.
