@@ -81,7 +81,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T398 | todo | P3 | 1 | 30% | |
 | T399 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
-| T402 | todo | P3 | 2 | 20% | |
+| T402 | in progress | P3 | 2 | 20% | Claude Code / claude-sonnet-5-5 |
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
@@ -1573,6 +1573,8 @@ Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that
 Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
 
 Check: the dated §16 row; the build task filed or the card closed with its number.
+
+Execution plan: copy the stored `calls` database read-only into scratch and classify each result body per tool (JSON or table vs free prose) with a stated heuristic. Estimate the `toon` saving on a sample with rtok's own encoder, and record the dated row in `research.md` §16 with the window, rows and per-tool shares. Close with the number, or propose the build task if the share clears 1 % of input.
 
 ### T403. A/B a path and identifier dictionary in proxy requests
 
