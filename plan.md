@@ -111,7 +111,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.8 | todo | P2 | 2 | 0% | |
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
-| T414.12 | todo | P2 | 2 | 0% | |
+| T414.12 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
@@ -1808,6 +1808,8 @@ Check: a story asserts each card's link target; e2e clicks one KPI and lands on 
 The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
 
 Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
+
+Execution plan: the freeze lives in the query layer (`web/src/api/query.tsx`): `createApi` gets `pause()`/`resume()`; while paused, snapshot frames are folded into a held copy and the cache keeps the rendered one, so `dataUpdatedAt` doubles as the age of what is on screen; resume applies the held snapshot. The pause flag is a cache-only query (`pausedKey`) read through `usePaused`. `Shell.tsx` adds an "updated Ns ago" label (the existing `ago` helper, ticking once a second) and a pause/resume button with `aria-pressed`, a visible "paused" pill and an `aria-live` status; `brand/icons/ui/pause.svg` and `play.svg` are new icons. Verify: unit tests for the age label and for rows staying stable while frames arrive (`query.test.ts`, `app.test.tsx`), a Shell story for live and paused (axe via `just spa-stories`), `just check`, `just spa-e2e`.
 
 ### T414.13. Δtok savings trend on Overview and Stats
 
