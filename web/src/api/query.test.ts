@@ -5,12 +5,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-    connectionKey,
-    createApi,
-    pausedKey,
-    snapshotKey,
-    WRITE_TIMEOUT_MS,
-    type Api,
+  connectionKey,
+  createApi,
+  pausedKey,
+  snapshotKey,
+  WRITE_TIMEOUT_MS,
+  type Api,
 } from "./query";
 import { connectSample, isSampleRequested, sampleSnapshot } from "./sample";
 import type { Snapshot } from "./snapshot.gen";

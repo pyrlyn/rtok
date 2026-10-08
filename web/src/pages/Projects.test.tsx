@@ -73,7 +73,9 @@ describe("graph page projects", () => {
         await waitFor(() => expect(w.sent).toHaveLength(1));
         expect(w.sent).toEqual([{ project: { action: "select", project: "2" } }]);
         // The button waits for the answer: busy and not clickable until the snapshot arrives.
-        const asked = screen.getByRole("button", { name: /^b/ }) as HTMLButtonElement;
+        // Scoped to the selector: other panels can also show a button named after project b.
+        const list = within(screen.getByRole("list", { name: "projects" }));
+        const asked = list.getByRole("button", { name: /^b/ }) as HTMLButtonElement;
         expect(asked.getAttribute("aria-busy")).toBe("true");
         expect(asked.disabled).toBe(true);
         expect(current().getByText("a")).toBeTruthy();
