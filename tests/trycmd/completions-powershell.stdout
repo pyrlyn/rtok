@@ -297,7 +297,12 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
-            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The first ready task: free or stale, not blocked; a leaf when nothing is blocked')
+            [CompletionResult]::new('ready', 'ready', [CompletionResultType]::ParameterValue, 'Tasks that can be claimed, highest priority first')
+            [CompletionResult]::new('claim', 'claim', [CompletionResultType]::ParameterValue, 'Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set')
+            [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
+            [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
+            [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -346,6 +351,44 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;task;ready' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;claim' {
+            [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'The rtok agent id; defaults to `RTOK_AGENT_ID`')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON, with `changed`')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;release' {
+            [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'The rtok agent id; defaults to `RTOK_AGENT_ID`')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Release a task held by someone else')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;dep' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;priority' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;task;sync' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
@@ -366,7 +409,12 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
-            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The first ready task: free or stale, not blocked; a leaf when nothing is blocked')
+            [CompletionResult]::new('ready', 'ready', [CompletionResultType]::ParameterValue, 'Tasks that can be claimed, highest priority first')
+            [CompletionResult]::new('claim', 'claim', [CompletionResultType]::ParameterValue, 'Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set')
+            [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
+            [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
+            [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -385,6 +433,21 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;task;help;next' {
+            break
+        }
+        'rtok;task;help;ready' {
+            break
+        }
+        'rtok;task;help;claim' {
+            break
+        }
+        'rtok;task;help;release' {
+            break
+        }
+        'rtok;task;help;dep' {
+            break
+        }
+        'rtok;task;help;priority' {
             break
         }
         'rtok;task;help;sync' {
@@ -1862,7 +1925,12 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
-            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The first ready task: free or stale, not blocked; a leaf when nothing is blocked')
+            [CompletionResult]::new('ready', 'ready', [CompletionResultType]::ParameterValue, 'Tasks that can be claimed, highest priority first')
+            [CompletionResult]::new('claim', 'claim', [CompletionResultType]::ParameterValue, 'Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set')
+            [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
+            [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
+            [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             break
@@ -1880,6 +1948,21 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;task;next' {
+            break
+        }
+        'rtok;help;task;ready' {
+            break
+        }
+        'rtok;help;task;claim' {
+            break
+        }
+        'rtok;help;task;release' {
+            break
+        }
+        'rtok;help;task;dep' {
+            break
+        }
+        'rtok;help;task;priority' {
             break
         }
         'rtok;help;task;sync' {
