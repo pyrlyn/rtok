@@ -22,7 +22,7 @@ build never blocks the host.
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | take rtok back out of a host, with backups; `--dry-run` |
 | `rtok agents list` | every known app: kind and name, path and version, config files, rtok modules |
 | `rtok graph index [path]` | build the tree-sitter symbol index for a tree |
-| `rtok graph impact <name> [--project <id\|dir>]` | what breaks if a symbol changes, over the project and the projects it links to; `dead` and `affected` run over that scope too (a symbol only a linked project calls is not dead; `git diff` is read in every project, tests are listed per project); `index` and `status` take `--project` too. One answer, one cap; with `watch` on, `rtok mcp` watches every project of the scope |
+| `rtok graph impact <name> [--all] [--project <id\|dir>]` | what breaks if a symbol changes (files grouped and cut at `plugins.graph.impact_tokens`; `--all` prints every row), over the project and the projects it links to; `dead` and `affected` run over that scope too (a symbol only a linked project calls is not dead; `git diff` is read in every project, tests are listed per project); `index` and `status` take `--project` too. One answer, one cap; with `watch` on, `rtok mcp` watches every project of the scope |
 | `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
 | `rtok memory import <file>` | import notes as JSONL, deduped by body hash |
 | `rtok otel flush\|status` | export the ledgers over OTLP/HTTP, or report the watermarks |
