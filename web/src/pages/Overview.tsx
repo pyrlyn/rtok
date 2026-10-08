@@ -17,6 +17,8 @@ import { overview } from "./model";
 import { CallsPanel, DoctorPanel, SessionsPanel } from "./OverviewPanels";
 import { PanelLink, TokenMix, tokenTotal, WithSnapshot } from "./parts";
 import { tableLink } from "../tableSearch";
+import { SavingsTrend } from "./SavingsTrend";
+
 
 type Saving = ReturnType<typeof overview>["measured"][number];
 
@@ -260,6 +262,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 >
                     <TokenMix tokens={u} />
                 </Panel>
+                <SavingsTrend days={u.savings} className="xl:col-span-12" />
                 <Panel
                     title="savings by plugin"
                     hint="Σ est before − after, measured plugins only"
