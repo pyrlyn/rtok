@@ -2979,8 +2979,7 @@ fn print_json(value: &(impl serde::Serialize + ?Sized)) -> Result<()> {
 
 /// `rtok task …` (T441.5): every subcommand but `init` opens the project's adapter.
 fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()> {
-    use crate::tasks::adapter::{Filter, set_status};
-    use crate::tasks::run::{Project, details, init, table};
+    use crate::tasks::run::{Project, details, filter, init, table};
     use crate::tasks::{NewTask, Status, TaskId};
     use anyhow::Context as _;
 
@@ -3035,15 +3034,9 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
             parent,
             json,
         } => {
-            let filter = Filter {
-                statuses: status
-                    .iter()
-                    .map(|s| s.parse::<Status>())
-                    .collect::<Result<_>>()?,
-                all,
-                parent: parent.as_deref().map(id_of).transpose()?,
-            };
-            let tasks = open()?.adapter().list(&filter)?;
+            let tasks = open()?
+                .adapter()
+                .list(&filter(&status, all, parent.as_deref())?)?;
             if json {
                 print_json(&tasks)?;
             } else {
@@ -3052,9 +3045,7 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
         }
         TaskCmd::Show { id, json } => {
             let id = id_of(&id)?;
-            let shown = open()?
-                .show(&id)?
-                .with_context(|| format!("no task {id}"))?;
+            let shown = open()?.show(&id)?;
             if json {
                 print_json(&shown)?;
             } else {
@@ -3068,14 +3059,8 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
             json,
         } => {
             let id = id_of(&id)?;
-            let project = open()?;
-            let task = match status {
-                Some(s) => set_status(project.adapter(), &id, s.parse()?, force)?,
-                None => project
-                    .adapter()
-                    .get(&id)?
-                    .with_context(|| format!("no task {id}"))?,
-            };
+            let status = status.as_deref().map(str::parse::<Status>).transpose()?;
+            let task = open()?.status(&id, status, force)?;
             if json {
                 print_json(&task)?;
             } else {
