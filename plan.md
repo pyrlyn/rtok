@@ -105,7 +105,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
-| T414.12 | todo | P2 | 2 | 0% | |
 | T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
@@ -1751,12 +1750,6 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 Every Overview KPI and panel links to its page with the matching filter from T414.10 (failed calls → Calls filtered to failures, live sessions → Sessions filtered to live, plugins on → Plugins). Whole-card links with a visible focus ring.
 
 Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
-
-### T414.12. Live status: snapshot age and pause
-
-The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
-
-Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
 
 ### T414.13. Δtok savings trend on Overview and Stats
 
