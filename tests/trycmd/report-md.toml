@@ -337,7 +337,7 @@ Every effective key with its origin — the `config show --sources` page.
 | stats.prices.claude-opus-5-5.cache_write | 5 | default |
 | stats.prices.claude-opus-5-5.input | 4 | default |
 | stats.prices.claude-opus-5-5.output | 20 | default |
-| stats.prices.claude-sonnet-5-5.cache_read | 0.2 | default |
+| stats.prices.claude-sonnet-5-5.cache_read | 0.1 | default |
 | stats.prices.claude-sonnet-5-5.cache_write | 2.5 | default |
 | stats.prices.claude-sonnet-5-5.input | 2 | default |
 | stats.prices.claude-sonnet-5-5.output | 10 | default |
