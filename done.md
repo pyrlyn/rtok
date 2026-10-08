@@ -1,5 +1,17 @@
 # rtok — completed tasks
 
+### T455. Observation recall: rank, session diversify, PreCompact re-inject
+
+Follows T454. SessionStart (and PreCompact) inject observation *titles* so the agent recalls what it did, not only notes it wrote. Rank: pinned first, then working-memory score × retention (agentmemory formulas, rank only — never DELETE). Cap 3 per session with backfill. One `Measurement` `kind = "recall"` still covers the combined title index; titles only; full bodies via `expand <archive_id>` / later fetch.
+
+Check: unit tests for score/retention/diversify; SessionStart fixture includes an observation title; PreCompact stdout carries titles under `recall_tokens`; `just check`.
+
+Result (2026-10-08, Cursor / composer): `rank.rs` (score/retention/diversify); SessionStart recall fuses note + observation titles; `Plugin::pre_compact` returns `Option<String>` and hooks emit `additionalContext`; one `recall` Measurement. `just check` green (2985 passed).
+
+Status: done 2026-10-08
+
+Model: Cursor / composer
+
 ### T454. Synthetic PostToolUse observations (scrub + archive pointer)
 
 Port agentmemory v0.9.30's zero-LLM observation path into `memory`: on `PostToolUse`, build a scrubbed synthetic narrative (≤400 chars), archive the full tool output for `rtok expand <id>`, and store an `observations` row. No new MCP tools; no LLM on the hook path; fail open ≤10 ms. Titles-only recall of observations is a later card.

@@ -93,15 +93,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T455 | in progress | P1 | 3 | 0% | Cursor / composer |
 
 
-
-### T455. Observation recall: rank, session diversify, PreCompact re-inject
-
-Follows T454. SessionStart (and PreCompact) inject observation *titles* so the agent recalls what it did, not only notes it wrote. Rank: pinned first, then working-memory score × retention (agentmemory formulas, rank only — never DELETE). Cap 3 per session with backfill. One `Measurement` `kind = "recall"` still covers the combined title index; titles only; full bodies via `expand <archive_id>` / later fetch.
-
-Check: unit tests for score/retention/diversify; SessionStart fixture includes an observation title; PreCompact stdout carries titles under `recall_tokens`; `just check`.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
