@@ -177,12 +177,18 @@ mod tests {
 
     #[test]
     fn climbing_and_foreign_paths_are_refused() {
-        let r = Path::new("/p");
+        // Built from a real absolute directory: on Windows `/p` has no drive, so is not absolute.
+        let base = std::env::temp_dir();
+        let r = &base.join("p");
+        let abs = |p: &Path| p.to_str().unwrap().to_string();
         assert_eq!(relative(r, r, "src/../../x"), None);
-        assert_eq!(relative(r, r, "/other/a.rs"), None);
-        assert_eq!(relative(r, r, "/p/a/b.rs").as_deref(), Some("a/b.rs"));
+        assert_eq!(relative(r, r, &abs(&base.join("other").join("a.rs"))), None);
+        assert_eq!(
+            relative(r, r, &abs(&r.join("a").join("b.rs"))).as_deref(),
+            Some("a/b.rs")
+        );
         assert_eq!(relative(r, r, "./a.rs").as_deref(), Some("a.rs"));
-        assert_eq!(relative(r, r, "/p"), None);
+        assert_eq!(relative(r, r, &abs(r)), None);
     }
 
     #[test]
