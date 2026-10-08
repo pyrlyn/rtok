@@ -273,6 +273,17 @@ section! {
         max_description_tokens: u32 = 60,
         /// Above this, MCP tool results use head/tail + archive id.
         max_result_chars: u32 = 20000,
+        /// `rtok mcp --http` without an address binds here. Loopback, so only a tunnel the
+        /// user starts puts the server on the internet.
+        http: String = s("127.0.0.1:8791"),
+        /// The HTTP server's allow-list, used instead of `tools`: what an internet caller may
+        /// run is chosen apart from what a local host may, and starts read-only.
+        http_tools: Vec<String> = strs(&["read", "search", "tree"]),
+        /// Bearer token every HTTP request must carry. Empty: the HTTP server refuses to start.
+        token: String = String::new(),
+        /// The public HTTPS URL a tunnel serves the HTTP server at. Its host passes the Host
+        /// check and its origin the Origin check; anything else is refused.
+        public_url: String = String::new(),
     }
 }
 

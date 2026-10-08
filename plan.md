@@ -63,12 +63,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
-| T391 | todo | P3 | 2 | 30% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T401 | todo | P3 | 4 | 20% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
@@ -1394,14 +1392,6 @@ optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through 
 
 Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
 
-### T391. Junk map: the five missing hosts and VS Code `CachedData`
-
-From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
-
-Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
-
-Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
-
 ### T394. Run the paid live benches and record them
 
 From `research.md` §3 (coaching nudges A/B) and §2 (A/B bench T9.2, `graph` T68.9): every live arm is unrun ("No live token, cache, or USD rows … the gate is do not enable"; T68.9 "Live API clause remains open"). Gate P9 and P8b clause 4 stay open until they run. Needs the creator's session and API spend: an agent sandbox cannot run them (OAuth expired).
@@ -1433,14 +1423,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
-
-Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
-
-Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
-
-Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
 
 ### T404. Evaluate a local draft model that the cloud model only verifies
 

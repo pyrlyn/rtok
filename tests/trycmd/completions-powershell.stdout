@@ -71,6 +71,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--call', '--call', [CompletionResultType]::ParameterName, 'Call one listed tool and print the text result (pi `registerTool` shim)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON arguments for `--call`')
             [CompletionResult]::new('--host', '--host', [CompletionResultType]::ParameterName, 'The host this MCP entry belongs to (`claude`, `cursor`, `grok`, …): overlays `[hook] host` so the process can find its rtok agent')
+            [CompletionResult]::new('--http', '--http', [CompletionResultType]::ParameterName, 'Serve over Streamable HTTP at `IP:PORT` (default `[mcp] http`) instead of stdio; the bearer token comes from `[mcp] token` or `RTOK_MCP_TOKEN`')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')

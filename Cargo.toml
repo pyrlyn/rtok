@@ -116,7 +116,8 @@ toml_edit = "0.25" # `config set` (T12.3) edits in place, preserving comments
 dotenvy = "0.15" # `.env` files as a config layer, parse only (T12.5)
 dunce = "1" # canonicalize without Windows UNC prefixes (graph index keys + file:// URIs)
 pathdiff = "0.2" # relative path of a file under a repo root (graph LSP + index)
-rmcp = { version = "3.2" } # stdio MCP types + JSON-RPC (T4.1)
+rmcp = { version = "3.2", features = ["transport-streamable-http-server"] } # stdio MCP types + JSON-RPC (T4.1); the SDK's Streamable HTTP server for `rtok mcp --http` (T401)
+subtle = "2.6" # constant-time bearer-token compare for `rtok mcp --http` (T401); already in the tree via rustls
 url = "2.5" # file:// MCP roots → path (T263)
 ignore = "0.4" # gitignore-aware walk for search/tree (T4.5)
 globset = "0.4" # workspace member globs of project references (T329.7); already in the tree through `ignore`

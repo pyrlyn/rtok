@@ -124,7 +124,7 @@ Project programs and direct packages from the manifests.
 | ratatui | local | https://crates.io/crates/ratatui | TUI |
 | regex | local | https://crates.io/crates/regex | Rust dependency |
 | reqwest | local | https://crates.io/crates/reqwest | HTTP: proxy and otel (async), task adapters (`blocking`) |
-| rmcp | local | https://crates.io/crates/rmcp | Rust dependency |
+| rmcp | local | https://crates.io/crates/rmcp | MCP types; feature `transport-streamable-http-server` serves `rtok mcp --http` (T401) |
 | rstest | local | https://crates.io/crates/rstest | Rust dependency |
 | rust-embed | local | https://crates.io/crates/rust-embed | Embeds the built SPA (`web/dist`) in the binary in every profile; memory-serve reads disk in debug builds and has no run-time override, include_dir has no media types or digests |
 | rustix | local | https://crates.io/crates/rustix | Rust dependency |
@@ -138,6 +138,7 @@ Project programs and direct packages from the manifests.
 | serde-saphyr | local | https://crates.io/crates/serde-saphyr | T329.7: `pnpm-workspace.yaml` of project references; maintained (serde_yaml is deprecated) |
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
 | similar | local | https://crates.io/crates/similar | Rust dependency |
+| subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |
 | toml_edit | local | https://crates.io/crates/toml_edit | Rust dependency |
 | trash | local | https://crates.io/crates/trash | T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin |
