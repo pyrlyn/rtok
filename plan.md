@@ -71,7 +71,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
-| T385.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T391 | todo | P3 | 2 | 30% | |
 | T393 | todo | P3 | 1 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
@@ -1479,14 +1478,6 @@ Check: per-wire tests and a dated bench row; `just check`.
 optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
 
 Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
-
-### T385.13. Measure cross-session read duplication
-
-optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
-
-Execution plan: open a read-only copy of the real store; join `calls` to `sessions` for read-class tool calls, define "same content" and "within a day" from the columns that exist (content hash if stored, else path and size), count duplicated reads and their result bytes, and divide by the input tokens of the same window; ad-hoc read-only SQL, no code shipped. Add a dated `research.md` section with the commands and the numbers; if the share is under 1 % the card closes with the number, otherwise propose a build task in the PR.
-
-Check: the dated `research.md` row.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
