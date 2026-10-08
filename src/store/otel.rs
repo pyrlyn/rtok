@@ -15,8 +15,8 @@ use super::sum_bigint;
 use super::Store;
 use super::models::{Call, CallIo, LogRow, Session, TokenRow};
 use super::schema::{
-    call_io, calls, hosts, logs, measurements, models, otel_export, providers, sessions, tokens,
-    usage,
+    call_io, calls, hook_sessions, hosts, logs, measurements, models, otel_export, providers,
+    sessions, tokens, usage,
 };
 
 /// Everything a span needs beside its `calls` row.
@@ -287,11 +287,19 @@ impl Store {
     /// The one read a span needs: io, usage, plugin token rows, measurements and the three slugs.
     pub fn call_detail(&self, call: &Call) -> Result<CallDetail> {
         let mut conn = self.lock()?;
+        // T433: a hook body saved without its session fields gets them back before mapping.
         let io = call_io::table
-            .find(call.id)
-            .select(CallIo::as_select())
-            .first(&mut *conn)
-            .optional()?;
+            .left_join(hook_sessions::table)
+            .filter(call_io::call_id.eq(call.id))
+            .select((CallIo::as_select(), hook_sessions::fields.nullable()))
+            .first::<(CallIo, Option<String>)>(&mut *conn)
+            .optional()?
+            .map(|(mut io, fields)| {
+                io.request_json = io
+                    .request_json
+                    .map(|j| super::hook_fields::rebuild(j, fields.as_deref()));
+                io
+            });
         let usage = usage::table
             .filter(usage::call_id.eq(call.id))
             .order(usage::id.desc())

@@ -185,7 +185,7 @@ pub fn report(rt: &Runtime, root: &Path) {
         f.linked,
         f.dropped
     );
-    println!("{}", style::success(&line));
+    println!("{}", style::success_op("link", &line));
     for stop in &f.stops {
         println!("{}", style::warn(&stop.to_string()));
     }
