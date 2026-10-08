@@ -48,7 +48,6 @@
 - T347. Investigate: D16 "one task = one PR" vs multi-PR execution plans
 - T348. Investigate: `--agent` means an agent id, a host, or both
 - T356. Never index `$HOME` or `/` as a graph root
-- T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T372. Link tests to sources by naming convention in `affected_from_paths`
@@ -107,7 +106,6 @@
 - T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-- T414.8. Sidebar groups and a collapsible sidebar
 - T414.10. Table filters and sort in the URL
 - T414.11. Clickable KPIs and panels open the filtered page
 - T414.12. Live status: snapshot age and pause
@@ -127,3 +125,4 @@
 - T441.7. GitHub adapter
 - T441.8. GitLab adapter
 - T441.9. Task adapter docs
+- T441.10. Task instruction line through `rtok agents install`
