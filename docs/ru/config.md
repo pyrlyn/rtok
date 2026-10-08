@@ -164,7 +164,8 @@ toon                = false           # фильтр toon внутри этог�
 tools_rewrite       = false           # proxy.tools_rewrite
 context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, чтение и запись
-timeout_s           = 0               # таймаут чтения для этой lane; 0 = proxy.timeout_s
+flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
+timeout_s           = 0               # таймаут чтения для этой lane; 0 = proxy.timeout_s, но не меньше 900 при flex = true (гайд OpenAI по Flex берёт 15 мин)
 upstream            = ""              # базовый URL для каждого запроса этой lane, любой wire; "" = proxy.upstream / openai_upstream / gemini_upstream
 max_in_flight       = 0               # запросов upstream одновременно; 0 = без лимита (lane agent не ограничивается никогда)
 max_queued          = 8               # при max_in_flight: сколько запросов ждут слот; следующий получает 429 + Retry-After
@@ -175,6 +176,7 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
 upstream            = ""
 max_in_flight       = 0
@@ -186,6 +188,7 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
 upstream            = ""
 max_in_flight       = 0
@@ -197,6 +200,7 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
 upstream            = ""
 max_in_flight       = 0
@@ -205,7 +209,11 @@ max_queued          = 8
 [proxy.batch]                         # файлы результатов провайдерского Batch
 parse_results       = false           # разобрать полученный файл результатов в строку usage на запрос; тело пересылается как есть
 
-[proxy.flex]                          # no keys yet (T385.5)
+[proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
+force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
+on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
+retries             = 3               # backoff only: retries before giving up; at most 5
+backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
 [proxy.routing]                       # no keys yet (D9)
 
@@ -555,7 +563,8 @@ Lane agent сохраняет `calls.kind = api_request`; остальные з�
 | `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | переписывание описаний в `tools[]` |
 | `context_management` | `proxy.context_management` | `false` | серверное редактирование контекста Anthropic |
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | чтение и запись кэша |
-| `timeout_s` | `proxy.timeout_s` | `0` | таймаут чтения этой lane в секундах; `0` = `proxy.timeout_s` |
+| `flex` | нет | `false` | OpenAI `service_tier = "flex"` для вызовов chat и responses, см. [`[proxy.flex]`](#proxyflex) |
+| `timeout_s` | `proxy.timeout_s` | `0` | таймаут чтения этой lane в секундах; `0` = `proxy.timeout_s`, но не меньше 900 при `flex = true` (руководство OpenAI по Flex поднимает таймаут SDK до 15 минут: запросы Flex чаще упираются в таймаут) |
 | `upstream` | `proxy.upstream`, `openai_upstream`, `gemini_upstream` | `""` | базовый URL для каждого запроса этой lane, какой бы ни был wire (шлюз или локальный сервер, который их понимает); `""` = собственный upstream wire |
 | `max_in_flight` | нет | `0` | сколько запросов этой lane одновременно у upstream, считая до конца потока ответа; `0` = без лимита |
 | `max_queued` | нет | `8` | при `max_in_flight`: сколько запросов ждут слот; следующий получает `429` с `Retry-After: 1` и до upstream не доходит |
@@ -569,8 +578,9 @@ bulk заполняет только свою lane и никогда не зад
 У `batch` и `files` нет `upstream`: создание, опрос и результаты Batch-задачи всегда идут к
 провайдеру, которому она принадлежит.
 
-Flex и маршрутизации здесь пока нет: каждый появится в этой таблице своим шагом
-(`[proxy.flex]`, `[proxy.routing]` ниже).
+Маршрутизации здесь пока нет: она появится в этой таблице своим шагом (`[proxy.routing]`
+ниже). У lane `agent` нет переключателя `flex`: живой ход не меняет уровень, пока клиент сам
+его не попросит.
 
 ### `[proxy.batch]`
 
@@ -586,30 +596,51 @@ Flex и маршрутизации здесь пока нет: каждый по
 parse_results = false
 ```
 
-### `[proxy.flex]` / `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
+### `[proxy.flex]`
 
-Эти две таблицы существуют и пусты: ни в одной пока нет
-ключа. Ключи ниже — **задуманные**; добавление любого из них в рабочий файл конфигурации
-по-прежнему не проходит `rtok config validate`, пока не появится соответствующий шаг. Fallback прокси
-уже пересылает неизвестные пути (включая `/v1/batches` и
-`/v1/messages/batches`) без `Wire`; внедрение Flex и переписывания маршрутизации — будущая работа над
-`prepare` / политикой. Полная семантика: [`docs/batch-flex.md`](batch-flex.md).
+Обработка Flex в OpenAI тарифицирует вызов chat или responses по ставкам Batch в обмен на задержку
+([OpenAI: Flex processing](https://developers.openai.com/api/docs/guides/flex-processing), проверено
+2026-10-08). При `flex = true` в lane (`bulk`, `internal`, `embeddings` или `meta`; у `agent`, `batch`
+и `files` его нет) rtok задаёт `service_tier = "flex"` в вызовах этой lane к `/v1/chat/completions`
+и `/v1/responses`. У Anthropic нет уровня Flex, его протокол не затрагивается никогда.
 
-#### `[proxy.flex]`
+Переданный клиентом `service_tier` (`auto`, `default`, `priority`, `flex`) не перезаписывается, пока не
+задано `force = true`. Если поля нет, rtok добавляет его в начало объекта, а все остальные байты
+пересылает так, как их прислал клиент.
 
-| Ключ | Тип | По умолчанию (задумано) | Значение |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `false` | Если true, `prepare` может задать OpenAI `service_tier = "flex"`, если клиент его не указал |
-| `force` | bool | `false` | Перезаписывать `service_tier`, переданный клиентом |
-| `fallback` | string | `"none"` | `none` или `default` — поведение при `429` resource-unavailable от Flex (**TODO**) |
+Когда у Flex нет мощности, OpenAI отвечает `429 Resource Unavailable` и ничего не списывает. Код ошибки
+в руководстве не назван, поэтому rtok считает так любой `429` на запрос, которому сам задал Flex. Запрос,
+у которого Flex задал клиент, не повторяется: этот `429` обрабатывает клиент.
+
+| Ключ | Тип | По умолчанию | Значение |
+|-----|------|---------|---------|
+| `force` | bool | `false` | Перезаписывать переданный клиентом `service_tier` значением `flex` |
+| `on_429` | string | `"none"` | `none` отдаёт `429` клиенту; `backoff` повторяет на Flex с удваиваемыми паузами; `default` повторяет один раз с `service_tier = "auto"` (стандартная обработка, дороже) |
+| `retries` | int | `3` | только `backoff`: повторов до того, как последний `429` уйдёт клиенту; не более `5` |
+| `backoff_ms` | int | `1000` | только `backoff`: пауза до первого повтора, удваивается, максимум 30 с |
+
+Пока rtok повторяет запрос, клиент ждёт и видит только итоговый ответ. Повтор `default` возвращает
+`service_tier`, который прислал клиент, если `force` его заменил, и ставит `auto` только когда клиент
+его не прислал. `Retry-After` на `429` (только секунды; дата и прочее игнорируются) удлиняет паузу до
+большего из него и задержки backoff, но не больше 30 с. Если он просит больше, ждать не станут: `backoff`
+отдаёт `429` клиенту, `default` сразу повторяет на запасном уровне. `408` не повторяется и доходит до
+клиента без изменений. Повторы пишутся в лог на уровне `warn`.
 
 ```toml
-# Запланировано — сегодня не загружается
+[proxy.lanes.bulk]
+flex = true
+
 [proxy.flex]
-enabled = false
 force = false
-fallback = "none"
+on_429 = "backoff"
 ```
+
+### `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
+
+Таблица существует и пуста: ключей пока нет. Ключи ниже — **задуманные**; добавление любого из них
+в рабочий файл конфигурации по-прежнему не проходит `rtok config validate`, пока не появится
+соответствующий шаг. Переписывание для маршрутизации — будущая работа над `prepare` / политикой.
+Полная семантика: [`docs/batch-flex.md`](batch-flex.md).
 
 #### `[proxy.routing]`
 

@@ -211,10 +211,15 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.context_management | false | default |
 | proxy.dry_run | false | default |
 | proxy.enabled | true | default |
+| proxy.flex.backoff_ms | 1000 | default |
+| proxy.flex.force | false | default |
+| proxy.flex.on_429 | none | default |
+| proxy.flex.retries | 3 | default |
 | proxy.gemini_upstream | https://generativelanguage.googleapis.com | default |
 | proxy.include_usage | true | default |
 | proxy.lanes.bulk.compress | false | default |
 | proxy.lanes.bulk.context_management | false | default |
+| proxy.lanes.bulk.flex | false | default |
 | proxy.lanes.bulk.max_in_flight | 0 | default |
 | proxy.lanes.bulk.max_queued | 8 | default |
 | proxy.lanes.bulk.semantic_cache | false | default |
@@ -224,6 +229,7 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.lanes.bulk.upstream |  | default |
 | proxy.lanes.embeddings.compress | false | default |
 | proxy.lanes.embeddings.context_management | false | default |
+| proxy.lanes.embeddings.flex | false | default |
 | proxy.lanes.embeddings.max_in_flight | 0 | default |
 | proxy.lanes.embeddings.max_queued | 8 | default |
 | proxy.lanes.embeddings.semantic_cache | false | default |
@@ -234,6 +240,7 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.lanes.enabled | true | default |
 | proxy.lanes.internal.compress | false | default |
 | proxy.lanes.internal.context_management | false | default |
+| proxy.lanes.internal.flex | false | default |
 | proxy.lanes.internal.max_in_flight | 0 | default |
 | proxy.lanes.internal.max_queued | 8 | default |
 | proxy.lanes.internal.semantic_cache | false | default |
@@ -243,6 +250,7 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.lanes.internal.upstream |  | default |
 | proxy.lanes.meta.compress | false | default |
 | proxy.lanes.meta.context_management | false | default |
+| proxy.lanes.meta.flex | false | default |
 | proxy.lanes.meta.max_in_flight | 0 | default |
 | proxy.lanes.meta.max_queued | 8 | default |
 | proxy.lanes.meta.semantic_cache | false | default |
@@ -355,7 +363,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-309 keys.
+317 keys.
 
 ## Doctor
 

@@ -73,6 +73,8 @@ impl Lane {
                 tools_rewrite: true,
                 context_management: true,
                 semantic_cache: true,
+                // Never silently: an agent turn is Flex only when the client asks for it.
+                flex: false,
                 timeout_s: 0,
                 // The interactive lane is never capped or queued, and keeps the wire's
                 // upstream: isolation exists so other lanes cannot slow it down (T385.7).

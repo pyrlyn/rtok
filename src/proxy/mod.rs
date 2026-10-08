@@ -66,6 +66,7 @@ use wire::{API_ANTHROPIC, Wire, WireRequest, api_of, join_upstream};
 pub mod anthropic;
 pub mod batch_results;
 pub mod cli;
+mod flex;
 mod gate;
 pub mod gemini;
 pub mod lane;
@@ -156,7 +157,8 @@ impl ProxyState {
         let client = build_client(cfg.proxy.timeout_s)?;
         let mut lane_clients = HashMap::new();
         for lane in lane::Lane::ALL {
-            let secs = lane.policy(&cfg.proxy.lanes).timeout_s;
+            let policy = lane.policy(&cfg.proxy.lanes);
+            let secs = flex::lane_timeout_s(policy.flex, policy.timeout_s, cfg.proxy.timeout_s);
             if secs > 0 && secs != cfg.proxy.timeout_s {
                 lane_clients.insert(lane, build_client(secs)?);
             }
@@ -352,8 +354,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     // bookkeeping, compress, or request shaping. Listener stays up until process exit.
     // An earlier rtok hop already shaped and recorded this request (T442).
     let plain = state.plain() || hops > 0;
-    let (request_body, recorded, context_armed) = if plain {
-        (request_body, None, false)
+    let (request_body, recorded, context_armed, flex_retry) = if plain {
+        (request_body, None, false, None)
     } else {
         // Request bookkeeping is CPU-bound (serde parse of up to `MAX_BODY_BYTES`,
         // tokenizer estimates, sync store writes) — run it off the tokio worker so a
@@ -380,7 +382,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
             // The task panicked or was cancelled: fail open exactly like `record` /
             // `compress` / `prepare` already do on their own internal errors — forward
             // the original bytes unmodified rather than failing the request.
-            Err(_join_err) => (original_body, None, false),
+            Err(_join_err) => (original_body, None, false, None),
         }
     };
 
@@ -436,7 +438,22 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     {
         rb = rb.header("anthropic-beta", anthropic::CONTEXT_BETA);
     }
-    let upstream = match rb.body(request_body.clone()).send().await {
+    let flex::Sent {
+        result,
+        body: request_body,
+        retries,
+    } = flex::send(rb, request_body, flex_retry.as_ref()).await;
+    if retries > 0 {
+        let r = recorded.as_ref();
+        log(
+            &state,
+            r.map_or("?", |r| r.session.as_str()),
+            r.map(|r| r.call_id),
+            "warn",
+            &format!("flex 429 on {method} {path}: {retries} retry(ies)"),
+        );
+    }
+    let upstream = match result {
         Ok(r) => r,
         Err(e) => {
             if plain {
@@ -605,7 +622,7 @@ fn shape_request(
     headers: &HeaderMap,
     lane: lane::Lane,
     request_body: Bytes,
-) -> (Bytes, Option<Recorded>, bool) {
+) -> (Bytes, Option<Recorded>, bool, Option<flex::Retry>) {
     // Each rewrite below runs only when its global switch and this lane's switch are both on.
     let policy = lane.policy(&state.cfg.proxy.lanes);
     let parsed = serde_json::from_slice::<Value>(&request_body).ok();
@@ -661,7 +678,16 @@ fn shape_request(
     if let (Some(delta), Some(r)) = (tools_delta, recorded.as_ref()) {
         record_tools_rewrite(state, r, delta);
     }
-    (request_body, recorded, context_armed)
+    // Last, so the tier is the only thing that differs from what the other rewrites left.
+    let flex_cfg = &state.cfg.proxy.flex;
+    let (request_body, flex_retry) = match wire {
+        Some(wire) if policy.flex => match flex::apply(wire.provider(), &request_body, flex_cfg) {
+            Some(flexed) => (flexed, flex::Retry::new(request_body, flex_cfg)),
+            None => (request_body, None),
+        },
+        _ => (request_body, None),
+    };
+    (request_body, recorded, context_armed, flex_retry)
 }
 
 /// `compress` mode: run every enabled plugin's `proxy_filter` over the parsed body and
