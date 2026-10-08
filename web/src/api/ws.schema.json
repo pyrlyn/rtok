@@ -603,6 +603,13 @@
           "format": "uint64",
           "minimum": 0
         },
+        "savings": {
+          "description": "The Δtok trend Overview and Stats draw: [`SAVINGS_DAYS`] days ending today, oldest\nfirst, from [`savings_trend`]. Empty while the first read runs or when the store will\nnot read.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SavingsDay"
+          }
+        },
         "turns": {
           "description": "Per-turn `ctx`, sessions oldest-first and request order within a session, kept\nto the last [`OVERVIEW_TURNS`]. A `usage` row carries no timestamp, so across\nsessions this is session order, not wall-clock order.",
           "type": "array",
@@ -621,7 +628,8 @@
         "est_after",
         "rows",
         "ctt",
-        "turns"
+        "turns",
+        "savings"
       ]
     },
     "Period": {
@@ -1267,6 +1275,44 @@
         "skipped"
       ]
     },
+    "SavingsDay": {
+      "description": "One day of the Δtok savings trend (T414.13).",
+      "type": "object",
+      "properties": {
+        "day": {
+          "description": "`YYYY-MM-DD` in `[agents.usage] tz`, so the trend and the Usage page cut the same days.",
+          "type": "string"
+        },
+        "plugins": {
+          "description": "The same per plugin, only the plugins with rows that day. An `expand` row nets negative,\nas on the Plugins page.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "rows": {
+          "description": "`Measurement` rows stamped that day.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "saved": {
+          "description": "Σ est_before − est_after; `None` when the day has no rows. No row, no saving claim: an\nempty day is a gap on the chart, never a zero.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        }
+      },
+      "required": [
+        "day",
+        "rows",
+        "saved",
+        "plugins"
+      ]
+    },
     "Selection": {
       "description": "What the user changed since the defaults.",
       "type": "object",
@@ -1646,7 +1692,7 @@
           "type": "boolean"
         },
         "warn_desc": {
-          "description": "`description:` over the measured 200-char median.",
+          "description": "`description:` over [`SKILL_DESC_MAX`], the cap rtok's own skills follow.",
           "type": "boolean"
         },
         "warn_never": {
