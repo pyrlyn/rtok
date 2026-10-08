@@ -9450,6 +9450,16 @@ Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) an
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T399. Re-check host docs for three open host questions
+
+Re-checked the three open host questions in `research.md` against primary sources (2026-10-08). Skills (§10.1, §10.6): Cursor documents `disable-model-invocation`; OpenCode, Copilot, Gemini and the Agent Skills spec do not; Codex uses `agents/openai.yaml` `allow_implicit_invocation: false`. Subagent-start hooks (§23): Grok and Antigravity still document no output schema and no subagent-start context hook, so the verdicts stay. Hook ancestry (§26): Devin and Command Code document no parent process, still unverified. Windows: the no-ancestor limit is written in `docs/agents-and-worktrees.md`. No code changed; `doctor` cites no `disable-model-invocation` advice today, so the card's doctor premise was stale.
+
+Check: `mise exec -- just docs-check`.
+Result: exit 0, 11 suites ok. #842.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-haiku-4-5
+
 ### T441.6. MCP task tools
 
 Sixth subtask of T441 (task adapters): `task_create`, `task_list`, `task_get`, `task_status` and `task_next` on `rtok mcp`, with the same JSON as the CLI.
