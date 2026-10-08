@@ -16,7 +16,7 @@ use super::{apply, home_dir, skill_src};
 
 /// Skills this repo ships under `skills/`, installed and removed together.
 /// Every name but the hub `rtok` starts with `rtok-` so it cannot collide with a user's skill (T380).
-pub const SKILLS: &[&str] = &["rtok", "rtok-worktrees"];
+pub const SKILLS: &[&str] = &["rtok", "rtok-worktrees", "rtok-tasks"];
 
 /// Unprefixed install from before T380. Retired on install only when the marker or a byte copy
 /// already proves it ours; a foreign directory or symlink keeps its name and is reported once.
