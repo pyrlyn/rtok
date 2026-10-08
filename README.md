@@ -370,6 +370,8 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 
 Agent ids, messages between agents and how worktrees bind to them on every host: [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md).
 
+Numbered tasks shared by every checkout and agent of a project, stored on disk (`rtok task`, MCP `task_*`): [docs/tasks.md](docs/tasks.md).
+
 ## Plugins
 
 | Plugin | Surface | What it does |

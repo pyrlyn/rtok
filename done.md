@@ -9370,6 +9370,17 @@ Result: `src/mcp/tasks.rs` lists the five tools beside the worktree and agent to
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T441.9. Task adapter docs
+
+Ninth subtask of T441 (task adapters): the user-facing page for tasks, in English with `docs/ru` and `docs/uk` twins.
+
+Check: `cargo test --test agents_doc --test host_docs --test docs_structure` green; CI `gate` green.
+
+Result: `docs/tasks.md`, `docs/ru/tasks.md` and `docs/uk/tasks.md` cover ids and the per-project counter, statuses and their aliases, the disk adapter's file layout (task files belong to the checkout they are written in; only the numbering is shared through the store), the `rtok task` commands, the MCP `task_*` tools and the `[tasks]` keys; README links the page. The GitHub and GitLab adapters are marked as not built yet: T441.7 and T441.8 add their own sections to the page.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-haiku-4-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.
