@@ -70,7 +70,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
 | T391 | todo | P3 | 2 | 30% | |
-| T393 | todo | P3 | 1 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -1462,14 +1461,6 @@ From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/age
 Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
 
 Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
-
-### T393. `doctor` shows the saving a 120-character skill description cap would give
-
-From `research.md` §10.4: descriptions over 120 characters cost about 1.3 K tokens per request for 66 skills. `doctor` flags only `desc > 200` and `body > 8192` (`skill_row` in `src/doctor.rs`) and prints no saving.
-
-Done means: the skills section adds one line, "descriptions over 120 chars: N skills, ≈ X tokens/request recoverable", using the same token estimate as the rest of the audit; the per-row flag threshold matches the 120-character guidance rtok's own skills follow. Advice only.
-
-Check: a doctor fixture with one long and one short description shows the line; `just check`.
 
 ### T394. Run the paid live benches and record them
 

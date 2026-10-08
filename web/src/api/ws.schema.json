@@ -1646,7 +1646,7 @@
           "type": "boolean"
         },
         "warn_desc": {
-          "description": "`description:` over the measured 200-char median.",
+          "description": "`description:` over [`SKILL_DESC_MAX`], the cap rtok's own skills follow.",
           "type": "boolean"
         },
         "warn_never": {

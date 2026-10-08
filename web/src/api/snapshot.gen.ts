@@ -731,7 +731,7 @@ export interface SkillRow {
    */
   warn_body: boolean;
   /**
-   * `description:` over the measured 200-char median.
+   * `description:` over [`SKILL_DESC_MAX`], the cap rtok's own skills follow.
    */
   warn_desc: boolean;
   /**
