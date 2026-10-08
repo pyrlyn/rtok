@@ -16,6 +16,7 @@ import { Pill } from "../ui/Pill";
 import { Result } from "../ui/Result";
 import { Search } from "../ui/Search";
 import { Unknown, orUnknown } from "../ui/Unknown";
+import { DetailHint } from "./DetailHint";
 import { compact, fmt, hms, iso } from "./format";
 import { why } from "./missing";
 import { tokensOf } from "./model";
@@ -187,7 +188,11 @@ function CallsBody({ snap }: { snap: Snapshot }) {
                     </Panel>
                 }
                 detail={
-                    selected && <Detail call={selected} refId={snap.ref_ids[String(selected.id)]} />
+                    selected ? (
+                        <Detail call={selected} refId={snap.ref_ids[String(selected.id)]} />
+                    ) : (
+                        <DetailHint what="call" />
+                    )
                 }
             />
         </div>

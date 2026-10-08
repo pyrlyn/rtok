@@ -83,7 +83,6 @@
 - T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
