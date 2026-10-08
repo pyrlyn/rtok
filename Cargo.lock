@@ -3922,6 +3922,7 @@ dependencies = [
  "tree-sitter-tags",
  "tree-sitter-typescript",
  "trycmd",
+ "unicode-width",
  "url",
  "uuid",
  "wasmi",

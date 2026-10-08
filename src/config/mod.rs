@@ -302,9 +302,36 @@ section! {
     /// `[proxy.lanes]` — request lanes (T385.1): each request is tagged agent, bulk, batch,
     /// files, embeddings, meta or internal in the ledger (`calls.kind`). Off: every request is
     /// an untagged `api_request` and the `x-rtok-lane` header and `/lane/<name>/` prefix are
-    /// forwarded as the client sent them.
+    /// forwarded as the client sent them. The `agent` lane has no table: the global switches
+    /// decide for it exactly as before lanes; `batch` and `files` have none either, they are
+    /// always passed through.
     Lanes {
         enabled: bool = true,
+        bulk: LanePolicy = LanePolicy::default(),
+        embeddings: LanePolicy = LanePolicy::default(),
+        meta: LanePolicy = LanePolicy::default(),
+        internal: LanePolicy = LanePolicy::default(),
+    }
+}
+
+section! {
+    /// `[proxy.lanes.<lane>]` — what the proxy may change on one non-agent lane (T385.2).
+    /// Every switch narrows its global counterpart: a rewrite runs only when both the global
+    /// switch and the lane switch are on. All off by default, so a lane's bytes are forwarded
+    /// as the client sent them until the operator opts that lane in.
+    LanePolicy {
+        /// `proxy.mode = "compress"` rewrites (archive, compress, terminal-noise strip).
+        compress: bool = false,
+        /// The `toon` filter inside that pass; needs `compress`.
+        toon: bool = false,
+        /// `proxy.tools_rewrite`.
+        tools_rewrite: bool = false,
+        /// `proxy.context_management`.
+        context_management: bool = false,
+        /// `plugins.proxy.semantic_cache`, lookup and store.
+        semantic_cache: bool = false,
+        /// Read timeout for this lane in seconds; 0 = `proxy.timeout_s`.
+        timeout_s: u64 = 0,
     }
 }
 

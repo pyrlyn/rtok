@@ -216,7 +216,31 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.enabled | true | default |
 | proxy.gemini_upstream | https://generativelanguage.googleapis.com | default |
 | proxy.include_usage | true | default |
+| proxy.lanes.bulk.compress | false | default |
+| proxy.lanes.bulk.context_management | false | default |
+| proxy.lanes.bulk.semantic_cache | false | default |
+| proxy.lanes.bulk.timeout_s | 0 | default |
+| proxy.lanes.bulk.tools_rewrite | false | default |
+| proxy.lanes.bulk.toon | false | default |
+| proxy.lanes.embeddings.compress | false | default |
+| proxy.lanes.embeddings.context_management | false | default |
+| proxy.lanes.embeddings.semantic_cache | false | default |
+| proxy.lanes.embeddings.timeout_s | 0 | default |
+| proxy.lanes.embeddings.tools_rewrite | false | default |
+| proxy.lanes.embeddings.toon | false | default |
 | proxy.lanes.enabled | true | default |
+| proxy.lanes.internal.compress | false | default |
+| proxy.lanes.internal.context_management | false | default |
+| proxy.lanes.internal.semantic_cache | false | default |
+| proxy.lanes.internal.timeout_s | 0 | default |
+| proxy.lanes.internal.tools_rewrite | false | default |
+| proxy.lanes.internal.toon | false | default |
+| proxy.lanes.meta.compress | false | default |
+| proxy.lanes.meta.context_management | false | default |
+| proxy.lanes.meta.semantic_cache | false | default |
+| proxy.lanes.meta.timeout_s | 0 | default |
+| proxy.lanes.meta.tools_rewrite | false | default |
+| proxy.lanes.meta.toon | false | default |
 | proxy.mode | passthrough | default |
 | proxy.openai_upstream | https://api.openai.com | default |
 | proxy.port | 8790 | default |
@@ -322,7 +346,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-276 keys.
+300 keys.
 
 ## Doctor
 

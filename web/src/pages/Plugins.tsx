@@ -4,6 +4,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useSelectFromUrl } from "./selectFromUrl";
+import { SHOW, useTableSearch } from "../tableSearch";
 import { useServerMessage, useSetMutation } from "../api/query";
 import type { PluginPage } from "../api/snapshot.gen";
 import { Empty } from "../states";
@@ -19,7 +20,6 @@ import { why } from "./missing";
 import { savedOf } from "./model";
 import { Count, Kv, Split, Toolbar, WithSnapshot } from "./parts";
 
-const SHOW = ["all", "on", "off", "saves"] as const;
 type Show = (typeof SHOW)[number];
 const SHOW_LABEL: Record<Show, string> = {
     all: "all",
@@ -41,8 +41,15 @@ export function Plugins() {
 }
 
 function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
-    const [query, setQuery] = useState("");
-    const [show, setShow] = useState<Show>("all");
+    const {
+        q: query,
+        setQ: setQuery,
+        filter,
+        setFilter,
+        sort,
+        setSort,
+    } = useTableSearch("plugins");
+    const { show } = filter;
     const [selectedId, setSelectedId] = useState<string>();
     useSelectFromUrl(setSelectedId);
     const { mutate } = useSetMutation();
@@ -66,6 +73,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
             {
                 id: "on",
                 header: "on",
+                sortValue: (p) => Number(p.enabled),
                 width: "56px",
                 cell: (p) => (
                     <Switch
@@ -78,6 +86,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
             {
                 id: "plugin",
                 header: "plugin",
+                sortValue: (p) => p.title,
                 cell: (p) => (
                     <span className={p.enabled ? "" : "text-fg-muted"}>
                         <b>{p.title}</b>{" "}
@@ -90,11 +99,13 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 header: "rows",
                 width: "56px",
                 align: "right",
+                sortValue: (p) => p.stats?.rows,
                 cell: (p) => fmt(p.stats?.rows),
             },
             {
                 id: "saved",
                 header: "saved",
+                sortValue: savedOf,
                 width: "64px",
                 align: "right",
                 cell: (p) => {
@@ -127,7 +138,11 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 </div>
                 <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
                     {SHOW.map((s) => (
-                        <Chip key={s} pressed={show === s} onPressedChange={() => setShow(s)}>
+                        <Chip
+                            key={s}
+                            pressed={show === s}
+                            onPressedChange={() => setFilter("show", s)}
+                        >
                             {SHOW_LABEL[s]}
                         </Chip>
                     ))}
@@ -147,6 +162,8 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                             rows={rows}
                             columns={columns}
                             getRowId={(p) => p.id}
+                            sort={sort}
+                            onSortChange={setSort}
                             selectedId={selected?.id}
                             onSelect={(p) => setSelectedId(p.id)}
                             empty={

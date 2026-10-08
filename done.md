@@ -1180,6 +1180,18 @@ Result: `web/src/Sidebar.tsx` holds the groups (`NAV_GROUPS`), a labelled `role=
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T414.10. Table filters and sort in the URL
+
+Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
+
+Check: unit tests for search-param parsing (bad values fall back to defaults), page tests for URL-driven rows and back/forward, a DataTable story (axe), and an e2e that opens a filtered and sorted Calls link, reloads and steps back.
+
+Result: one shared module (`web/src/tableSearch.ts`) holds a spec per page, the parse (untrusted values fall back to defaults, text capped at 200 chars) and the `useTableSearch` hook. Params: `q`, `sort` (`col` / `-col`), `surface` and `result` on Calls, `show` on Sessions and Plugins, `level` on Logs; defaults never appear in the URL, and the palette's `?id=` survives every change. `DataTable` gained opt-in sortable headers (`sortValue`, `aria-sort`, exported `sortRows`); Logs got an "oldest first" chip (`sort=-line`). `just check` 2706 passed, 8 skipped; unit 197 passed; `just spa-stories` 128 passed (axe); `just spa-e2e` 18 passed. #826.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
@@ -2942,6 +2954,17 @@ Check: a unit test reads a Claude settings file back as hooks ✓ / mcp ✗ / pr
 Complexity: 2/5
 Status: done 2026-09-15 · Model: Claude Code / Opus 5
 Evidence: `claude_modules_read_back_hooks_and_a_proxy_on_any_port` green; fmt + workspace clippy `-D warnings` clean; `cargo test --workspace` 428 passed; build-min ok; jscpd within threshold; `agent setup claude --dry-run` and `doctor` in a throwaway `HOME` print the marks for every host.
+
+### T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
+
+T329 §6 (second half), on the scope T329.4 built. Depends on T329.4.
+
+Check: `dead` over A's scope spares B's function only A calls, selecting B alone reports it; `affected` maps per project; an MCP reply stays under the cap with three linked projects; an edit in C updates its index under `watch`; `just check`.
+
+Result: `graph::scope::dead` and `dead_json` run each project's dead rows, then drop a name that any other project in the scope references (new `Store::symbol_referenced_names`), so a symbol only a linked project calls stays live and is still reported per project; `graph dead` and `graph affected` resolve the scope like `impact` (`--project`, else path or cwd) and a scope of one prints the old output byte for byte. `scope::affected` reads `git diff` in every project of the scope (a non-git project adds nothing), starts the impact walk over the whole scope from each project's changed definitions, and lists tests per project with their commands; MCP `impact` without a name uses it for the project that holds `path`. Banners and skip notes now count against the one `max_tokens` cap of `symbol`, `callers`, `impact`, `explore`, `dead` and `affected`. `watch::run_scope` starts one watcher per project of the scope, each behind the T263 root guard, and re-reads the scope every 2 s, so a link made after start-up is watched; the pending-edits set is kept per root (`Ctx::graph_watch_pending(root)`). `docs/commands.md` (en, ru, uk) updated. #815.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
 
 ### T331.1. Doctor: broken hooks report (read-only) and the injected `Fs`/`Env`/`Which` seam
 
@@ -7777,6 +7800,18 @@ Result: `src/proxy/lane.rs` classifies by path first (Batch, files, embeddings, 
 Status: done 2026-10-04
 Model: Claude Code / sonnet-5-5 (code), opus-5-5 (review)
 
+### T385.2. Per-lane policy table
+
+optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
+
+Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
+
+Result: `[proxy.lanes.bulk|embeddings|meta|internal]` carry `compress`, `toon`, `tools_rewrite`, `context_management`, `semantic_cache` (all off) and `timeout_s` (0 = `proxy.timeout_s`). `Lane::policy` and `Lane::passes_through` (`src/proxy/lane.rs`) feed `shape_request`, `compress`, `context_edits`, `rewrite_tools`, the semantic-cache lookup and store, and a per-lane read-timeout client. A lane switch only narrows its global switch (global AND lane). `agent` has no table: the global switches decide as before, and a test shows its upstream bytes equal the lanes-off path. `batch` and `files` have no keys and are never rewritten, `stream_options` shaping included. Flex, routing and per-lane upstream join the table with T385.5, T385.10 and T385.7. Tests: `tests/proxy_lane_policy.rs` and unit tests in `lane.rs`; trycmd snapshots and `docs/config.md` (en, ru, uk) updated. `cargo nextest run --workspace` ended with 2713 of 2714 passed; the one failure (`hook_fail_open a_locked_session_end_is_deferred_not_lost`, a timing assertion under load) passes alone. #825.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T240. Golden files for rule families without one
 
 `rules/default.toml` has families with no pair in `tests/cmd_golden`: `curl`, `node`, `pnpm`, `sed` (re-list at claim time — any rule `match_cmd` or Rust formatter with no `.in`/`.out`). Their output shape is untested.
@@ -8515,6 +8550,17 @@ Plan: `src/sanitize.rs` (pure, the ANSI walk moved from `plugins/cmd/run.rs` so 
 Check: `cargo nextest run --lib sanitize store`, `--test config_coverage`, `just check`.
 
 Result: `src/sanitize.rs` cleans each request body in `Store::insert_call_io` before the spill, so the saved size, sha and archive file describe the cleaned bytes; `[core] store_raw = true` (set from `Runtime` and `ProxyState`) keeps the verbatim body. The ANSI walk is shared with `plugins/cmd/run.rs`.
+
+### T433. Save hook session fields once instead of in every hook body
+
+Every saved hook stdin repeated the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Store them once per distinct value set, keep only the event's own fields in the saved body, and rebuild the full stdin for readers; `[core] store_raw = true` keeps the full body.
+
+Check: `two_hook_calls_share_one_session_row_and_read_back_whole`, `store_raw_and_old_rows_keep_the_full_body`, `retention_drops_unreferenced_session_rows`; `just check` green; hyperfine on the debug binary shows no measurable hook latency change (18.6 ± 1.3 ms vs 18.2 ± 2.8 ms with `store_raw`).
+
+Result: migration `0032_hook_sessions` adds `hook_sessions (id, fields UNIQUE)` and `call_io.hook_session_id`; the hook dispatcher saves through `Store::insert_hook_call_io` (`src/store/hook_fields.rs`), which, unless `store_raw` is on, splits a JSON-object stdin within `call_io_inline_bytes` into the event body and the session fields inside the existing `call_io` transaction, from the one parse cleaning already did. `call_io_request`, `recent_hook_inputs(_for_event)` and the OTel `call_detail` splice the two objects back as text. Old rows keep NULL and their full body. Retention clears the reference with the body and drops unreferenced session rows. A split body's `request_bytes` and `request_sha256` describe the saved bytes (T431's rule), and the rebuilt stdin is equal as JSON, not byte for byte (key order); `store_raw` keeps exact bytes. One session row per distinct field set instead of a copy in every body (131 B vs 227 B per saved request on a small PostToolUse). #823.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
 
 ### T432. Strip terminal noise from proxy requests before they go upstream
 
@@ -9286,6 +9332,17 @@ Result: `research.md` §35. Corrections to the card: Backlog.md (v1.53.0) and Ta
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T436. Operation icons and a spinner on every wait, the way ketch draws them
+
+Creator request 2026-10-07: a spinner on every wait and ketch-style operation icons in the rtok CLI. Split on closing: the remaining waits and `agents install/update` icons are T436.2, the crate shared with ketch is T436.3.
+
+Check: `src/ui/style.rs` unit tests (the icon of each verb, the `Kind` fallback, one width and one text column for every icon, bare text off a terminal); `tests/ui_style.rs` asserts no tone or operation icon reaches a pipe; `src/render.rs` loader test; CI `gate` green.
+
+Result: `style.rs` has a verb → icon table on ketch's model (ketch's rows plus index, worktree, compress, expand, bench, start, stop), substring-matched in order so `uninstall` wins over `install`; a line that names an operation takes its icon, any other its `Kind` icon. Warn is now the single wide code point ❗ (as in ketch) instead of ⚠️, whose width depends on U+FE0F. Icons pad to a measured 2-column gutter. The daemon start/stop lines, the `graph index` summary and the references line go through it. The CLI's loader became the public `render::with_loader` and also wraps `bench` and `worktree add/remove`; it draws nothing off a terminal, so hook, MCP, `--json` and piped output and the trycmd snapshots are unchanged. `unicode-width` (already in the tree through indicatif) became a direct dependency.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T441.2. Task core types and config
 
 Second subtask of T441 (task adapters): the domain types every adapter, the CLI and the MCP tools share, plus the `[tasks]` config section, with unit tests.
@@ -9368,6 +9425,17 @@ Result: `src/mcp/tasks.rs` lists the five tools beside the worktree and agent to
 
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
+
+### T441.9. Task adapter docs
+
+Ninth subtask of T441 (task adapters): the user-facing page for tasks, in English with `docs/ru` and `docs/uk` twins.
+
+Check: `cargo test --test agents_doc --test host_docs --test docs_structure` green; CI `gate` green.
+
+Result: `docs/tasks.md`, `docs/ru/tasks.md` and `docs/uk/tasks.md` cover ids and the per-project counter, statuses and their aliases, the disk adapter's file layout (task files belong to the checkout they are written in; only the numbering is shared through the store), the `rtok task` commands, the MCP `task_*` tools and the `[tasks]` keys; README links the page. The GitHub and GitLab adapters are marked as not built yet: T441.7 and T441.8 add their own sections to the page.
+
+Status: done 2026-10-07
+Model: Claude Code / claude-haiku-4-5
 
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 

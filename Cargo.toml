@@ -125,6 +125,7 @@ serde-saphyr = "1.3.0" # `pnpm-workspace.yaml` of project references (T329.7); m
 notify = "9.0.0-rc.5" # recursive file watching for the graph background indexer (T8.16); 9 drops windows-sys 0.60 (T223)
 indicatif = "0.18" # progress for `graph index` (T21.2); `ProgressBar::hidden()` keeps it off the MCP path
 owo-colors = { version = "4", features = ["supports-colors"] } # ANSI + the tty/NO_COLOR/CLICOLOR/TERM=dumb question in one call (T20.2)
+unicode-width = "0.2" # measure each operation icon so its column pads to one width, as ketch does (T436); already in the tree through indicatif
 printpdf = "0.12.8" # paged-PDF renderer for `rtok report --format pdf` (T22.0 survey choice, T22.3)
 regex = "1" # search pattern (T4.5)
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "time", "fs"] }
