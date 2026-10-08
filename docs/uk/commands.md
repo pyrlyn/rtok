@@ -26,7 +26,7 @@ lang: uk
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | прибирає rtok із хоста з резервними копіями; `--dry-run` |
 | `rtok agents list` | кожен відомий застосунок: тип і назва, шлях і версія, файли конфігурації, модулі rtok |
 | `rtok graph index [path]` | будує індекс символів tree-sitter для дерева |
-| `rtok graph impact <name> [--project <id\|dir>]` | що зламається при зміні символу, по проєкту й пов'язаних із ним проєктах; `--project` є й у `index`, `dead`, `status`, `affected` |
+| `rtok graph impact <name> [--project <id\|dir>]` | що зламається при зміні символу, по проєкту й пов'язаних із ним проєктах; `dead` і `affected` теж ідуть по цьому набору (символ, який викликає лише пов'язаний проєкт, не мертвий; `git diff` читається в кожному проєкті, тести перелічено по проєктах); `--project` є й у `index`, `status`. Одна відповідь, один ліміт; за ввімкненого `watch` `rtok mcp` стежить за кожним проєктом набору |
 | `rtok memory import <file>` | імпортує нотатки як JSONL з дедуплікацією за гешем тексту |
 | `rtok otel flush\|status` | експортує журнали обліку через OTLP/HTTP або повідомляє позначки (watermarks) |
 | `rtok bench` | A/B-порівняння двох конфігурацій хоста на фіксованих задачах |
