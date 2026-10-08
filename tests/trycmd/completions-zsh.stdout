@@ -391,6 +391,14 @@ _arguments "${_arguments_options[@]}" : /
 '--help[Print help]' /
 && ret=0
 ;;
+(sync)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the text]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (init)
 _arguments "${_arguments_options[@]}" : /
 '--adapter=[disk, github or gitlab (default/: disk, or what the file already says)]:ADAPTER:_default' /
@@ -429,6 +437,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (next)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(sync)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -727,6 +739,7 @@ _arguments "${_arguments_options[@]}" : /
         case $line[1] in
             (list)
 _arguments "${_arguments_options[@]}" : /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '--bytes[Exact byte counts instead of KB/MB/GB]' /
@@ -738,9 +751,10 @@ _arguments "${_arguments_options[@]}" : /
 (clear)
 _arguments "${_arguments_options[@]}" : /
 '*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
-'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks backups swap snapshots)' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks backups swap snapshots index crash-dumps sessions)' /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
@@ -1131,6 +1145,7 @@ _arguments "${_arguments_options[@]}" : /
         case $line[1] in
             (list)
 _arguments "${_arguments_options[@]}" : /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '--bytes[Exact byte counts instead of KB/MB/GB]' /
@@ -1142,9 +1157,10 @@ _arguments "${_arguments_options[@]}" : /
 (clear)
 _arguments "${_arguments_options[@]}" : /
 '*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
-'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks backups swap snapshots)' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks backups swap snapshots index crash-dumps sessions)' /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
@@ -2453,6 +2469,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (next)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(sync)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -4340,6 +4360,7 @@ _rtok__subcmd__help__subcmd__task_commands() {
 'show:One task/: title, status, parent, subtasks, link and description' /
 'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
 'next:The task to work on next/: the lowest open one with no open subtask' /
+'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
     )
     _describe -t commands 'rtok help task commands' commands "$@"
@@ -4374,6 +4395,11 @@ _rtok__subcmd__help__subcmd__task__subcmd__status_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help task status commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__sync_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task sync commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__help__subcmd__tui_commands] )) ||
 _rtok__subcmd__help__subcmd__tui_commands() {
     local commands; commands=()
@@ -4390,7 +4416,7 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
 'add:Create the worktree for a task/: one location, one name, one locked owner; prints its path' /
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only' /
-'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty, foreign-locked or current worktrees' /
+'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -4723,6 +4749,7 @@ _rtok__subcmd__task_commands() {
 'show:One task/: title, status, parent, subtasks, link and description' /
 'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
 'next:The task to work on next/: the lowest open one with no open subtask' /
+'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -4741,6 +4768,7 @@ _rtok__subcmd__task__subcmd__help_commands() {
 'show:One task/: title, status, parent, subtasks, link and description' /
 'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
 'next:The task to work on next/: the lowest open one with no open subtask' /
+'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -4781,6 +4809,11 @@ _rtok__subcmd__task__subcmd__help__subcmd__status_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task help status commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__sync_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help sync commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__task__subcmd__init_commands] )) ||
 _rtok__subcmd__task__subcmd__init_commands() {
     local commands; commands=()
@@ -4806,6 +4839,11 @@ _rtok__subcmd__task__subcmd__status_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task status commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__task__subcmd__sync_commands] )) ||
+_rtok__subcmd__task__subcmd__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task sync commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__tui_commands] )) ||
 _rtok__subcmd__tui_commands() {
     local commands; commands=()
@@ -4822,7 +4860,7 @@ _rtok__subcmd__worktree_commands() {
 'add:Create the worktree for a task/: one location, one name, one locked owner; prints its path' /
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only' /
-'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty, foreign-locked or current worktrees' /
+'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -4862,7 +4900,7 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
 'add:Create the worktree for a task/: one location, one name, one locked owner; prints its path' /
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only' /
-'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty, foreign-locked or current worktrees' /
+'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /

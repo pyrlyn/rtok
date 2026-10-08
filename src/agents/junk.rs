@@ -26,6 +26,7 @@ use super::junk_cache::{self, Ctx, Item, Owned};
 use super::junk_kinds;
 use super::junk_map::{Role, Roots, specs};
 use super::junk_review;
+use super::junk_sessions;
 use super::{Agent, HOSTS, host, present};
 use crate::config::Config;
 use crate::info::human_bytes;
@@ -213,6 +214,10 @@ pub struct AgentJunk {
     /// Every directory `clear` may empty (T330.3), with the evidence and, for one it would
     /// leave alone, the reason. Only an item without a reason is in `kinds` and the totals.
     pub items: Vec<Item>,
+    /// Lines `list` prints under the kinds: the session threshold in use and the host's own
+    /// session retention (T330.5.2).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
     pub freed_default_bytes: u64,
     /// What `--include review` would free on top of the `safe` kinds (T330.5.1).
     pub freed_review_bytes: u64,
@@ -325,22 +330,23 @@ fn rtok_owned(cfg: &Config, roots: &Roots, cache: &Path) -> Vec<Owned> {
         evidence: junk_cache::RTOK_OWN,
         idle_rule: false,
     }];
-    owned.extend(project_lsp_caches(cfg));
+    owned.extend(project_lsp_dirs(cfg, &["cache", "pub-cache"]));
     owned.extend(junk_kinds::staging_caches(&roots.resolve("{claude}")));
     owned
 }
 
-/// Language-server caches rtok confines to each registered project. Absent from the
-/// `measure`-only build: that binary has no graph plugin, so it never writes these dirs.
+/// The `subdirs` (`cache`, `pub-cache`, `data`, `state`) of the language-server state rtok
+/// confines to each registered project. Absent from the `measure`-only build: that binary has
+/// no graph plugin, so it never writes these dirs.
 #[cfg(feature = "graph")]
-fn project_lsp_caches(cfg: &Config) -> Vec<Owned> {
+fn project_lsp_dirs(cfg: &Config, subdirs: &[&str]) -> Vec<Owned> {
     let projects = Store::open(&cfg.core.db_path).and_then(|s| s.projects());
     projects
         .unwrap_or_default()
         .into_iter()
         .flat_map(|p| {
             let state = crate::plugins::graph::lsp::lsp_state_root(Path::new(&p.root));
-            ["cache", "pub-cache"].map(|d| Owned {
+            subdirs.iter().map(move |d| Owned {
                 path: state.join(d),
                 evidence: junk_cache::RTOK_OWN,
                 idle_rule: true,
@@ -350,7 +356,7 @@ fn project_lsp_caches(cfg: &Config) -> Vec<Owned> {
 }
 
 #[cfg(not(feature = "graph"))]
-fn project_lsp_caches(_cfg: &Config) -> Vec<Owned> {
+fn project_lsp_dirs(_cfg: &Config, _subdirs: &[&str]) -> Vec<Owned> {
     Vec::new()
 }
 
@@ -364,7 +370,7 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// The junk kinds in the order the T330 tables list them.
-const KINDS: [&str; 9] = [
+const KINDS: [&str; 12] = [
     "cache",
     "temp",
     "logs",
@@ -374,14 +380,27 @@ const KINDS: [&str; 9] = [
     "backups",
     "swap",
     "snapshots",
+    "index",
+    "crash-dumps",
+    "sessions",
 ];
 
+/// What `list` says about the session threshold in use (T330 "Old sessions: time only").
+fn session_note(days: u32) -> String {
+    let note = format!("old sessions: not touched for more than {days} days");
+    match days {
+        0 => format!("{note} (threshold 0: every closed session is junk)"),
+        _ => note,
+    }
+}
+
 /// One row per kind and class of `items`: only an item `clear` would take now counts. A kind
-/// row says its class, so `review` rows are counted apart from what a plain `clear` frees.
+/// row says its class, so `review` rows are counted apart from what a plain `clear` frees, and
+/// an `explicit` row (sessions) is shown but belongs to neither "Freed" total.
 fn kind_rows(items: &[Item]) -> Vec<KindRow> {
     let mut rows = Vec::new();
     for kind in KINDS {
-        for class in ["safe", "review"] {
+        for class in ["safe", "review", "explicit"] {
             let counted = items.iter().filter(|i| i.kind == kind && i.class == class);
             let counted = counted.filter(|i| i.counted());
             let (n, bytes) = counted.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
@@ -400,7 +419,9 @@ fn kind_rows(items: &[Item]) -> Vec<KindRow> {
 
 /// What `clear` frees: the `safe` rows, plus the `review` ones with `review`.
 fn freed(rows: &[KindRow], review: bool) -> u64 {
-    let wanted = rows.iter().filter(|k| k.class == "safe" || review);
+    let wanted = rows
+        .iter()
+        .filter(|k| k.class == "safe" || (review && k.class == "review"));
     wanted.map(|k| k.size_bytes).sum()
 }
 
@@ -566,6 +587,22 @@ fn host_rows(
         if a.id() == "gemini" {
             items.extend(junk_review::snapshot_items(roots, limit));
         }
+        items.extend(junk_review::diagnostic_reports(
+            &junk_review::process_names(a),
+            roots,
+            limit,
+        ));
+        let mut notes = Vec::new();
+        if a.id() == "claude" {
+            let old = junk_sessions::session_items(roots, junk.stale_session_days, cx, limit);
+            if !old.is_empty() {
+                notes.push(session_note(junk.stale_session_days));
+            }
+            items.extend(old);
+        }
+        if !folders.is_empty() {
+            notes.extend(junk_sessions::retention(roots, a.id()));
+        }
         let own: Vec<PathBuf> = worktrees
             .iter()
             .filter(|(h, _)| *h == a.id())
@@ -586,6 +623,7 @@ fn host_rows(
             freed_review_bytes: freed(&kinds, true),
             kinds,
             items,
+            notes,
         });
     }
     for (row, agent_keys) in rows.iter_mut().zip(&keys) {
@@ -687,6 +725,15 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
     owned.extend(extra_owned);
     let mut cache = junk_cache::cache_items(&owned, &outermost(tag_roots), &cx, limit);
     cache.extend(extra);
+    // The language servers' data and state hold their index: review, and the project folder
+    // stays like a cache's (T152's idle rule applies as for the caches).
+    let index =
+        junk_cache::cache_items(&project_lsp_dirs(cfg, &["data", "state"]), &[], &cx, limit);
+    cache.extend(index.into_iter().map(|i| Item {
+        kind: "index",
+        class: "review",
+        ..i
+    }));
     junk_review::exclude(&mut cache, &junk.exclude, &cfg.home, roots.home(), limit);
     let cache = junk_cache::drop_nested(cache);
     kinds.extend(kind_rows(&cache));
@@ -701,6 +748,7 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         freed_review_bytes: freed(&kinds, true),
         kinds,
         items: cache,
+        notes: Vec::new(),
     }];
     let (hosts, mut by_key) = host_rows(cfg, roots, opts.all, limit, &cx, &opts.worktrees);
     agents.extend(hosts);
@@ -780,6 +828,9 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
                 k.items,
                 size(k.size_bytes)
             ));
+        }
+        for note in &a.notes {
+            out.push_str(&format!("  {note}\n"));
         }
         // A find nothing documents is one line per kind: a worktree can hold hundreds.
         let (listed, kept): (Vec<&Item>, Vec<&Item>) = a
@@ -1512,5 +1563,65 @@ mod tests {
             "{text}"
         );
         assert_eq!(walk_names(&dir), before, "a report changes no file");
+    }
+
+    /// T330.5.2: sessions are an `explicit` row outside both "Freed" totals, rtok's language-server
+    /// data and state are `review` index items, and `.rust-analyzer/` and a `-wal` are listed only.
+    #[cfg(unix)]
+    #[test]
+    fn sessions_and_index_rows_follow_their_classes() {
+        use super::junk_cache::age_files;
+        let (mut cfg, dir) = crate::testutil::config("junk-sessions-index");
+        cfg.log.path = dir.join("none/rtok.log");
+        cfg.core.archive_dir = dir.join("none/archive");
+        let r = roots(&dir, &[]);
+        let id = "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0";
+        let claude = dir.join(".claude");
+        write(&claude.join(format!("projects/p/{id}.jsonl")), 100);
+        write(&claude.join("projects/p/state.db-wal"), 10);
+        write(&claude.join("projects/p/.rust-analyzer/db"), 10);
+        let project = dir.join("proj");
+        write(&project.join(".rtok-lsp-xdg/data/idx"), 70);
+        write(&project.join(".rtok-lsp-xdg/state/s"), 30);
+        let store = Store::open(&cfg.core.db_path).unwrap();
+        store
+            .register_project(&project, crate::store::Origin::Manual)
+            .unwrap();
+        for d in [&claude, &project] {
+            age_files(d, 40 * 86_400);
+        }
+        let opts = Options {
+            all: true,
+            cwd: std::env::temp_dir(),
+            ..Options::default()
+        };
+
+        let report = report_with(&cfg, &r, opts, AGENT_SCAN_LIMIT);
+
+        let c = agent(&report, "claude");
+        let sessions = c.kinds.iter().find(|k| k.kind == "sessions").unwrap();
+        assert_eq!((sessions.class, sessions.items), ("explicit", 1));
+        assert_eq!(c.freed_review_bytes, 0, "an explicit kind is in no total");
+        let listed = |kind: &'static str| {
+            c.items
+                .iter()
+                .filter(move |i| i.kind == kind && !i.counted())
+        };
+        assert_eq!(listed("index").count(), 2, "{:?}", c.items);
+        assert!(listed("index").all(|i| i.kept.as_deref() == Some(junk_kinds::NOT_DOCUMENTED)));
+        assert_eq!(
+            c.notes[0],
+            "old sessions: not touched for more than 30 days"
+        );
+        assert!(c.notes[1].starts_with("host retention: cleanupPeriodDays"));
+
+        let own = agent(&report, "rtok");
+        let index = own.kinds.iter().find(|k| k.kind == "index").unwrap();
+        assert_eq!((index.class, index.items), ("review", 2));
+        assert_eq!(own.freed_default_bytes, 0);
+        assert!(own.freed_review_bytes >= 100);
+        let text = to_list(&report, true, false);
+        assert!(text.contains("sessions (explicit): 1 items"), "{text}");
+        assert!(text.contains("index (review): 2 items"), "{text}");
     }
 }

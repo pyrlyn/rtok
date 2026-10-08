@@ -77,7 +77,7 @@ fn resolve(name: &str, cwd: Option<&Path>, home: &Path) -> Option<PathBuf> {
             .join(".claude")
             .join("plugins")
             .join("installed_plugins.json");
-        let root = plugin_root(&manifest, plugin)?;
+        let root = plugin_root(&manifest, plugin, cwd)?;
         return Some(root.join("skills").join(skill).join("SKILL.md"));
     }
     let project = cwd.map(|c| c.join(".claude").join("skills").join(name).join("SKILL.md"));
@@ -87,18 +87,39 @@ fn resolve(name: &str, cwd: Option<&Path>, home: &Path) -> Option<PathBuf> {
     }
 }
 
-/// `plugins."<plugin>@<marketplace>"[0].installPath` — Claude Code `installed_plugins.json`
-/// version 2, checked on this machine 2026-09-18.
-fn plugin_root(manifest: &Path, plugin: &str) -> Option<PathBuf> {
+/// `plugins."<plugin>@<marketplace>"[i].installPath` — Claude Code `installed_plugins.json`
+/// version 2: `scope` and `installPath` were checked on this machine 2026-10-08. `projectPath`
+/// for project/local installs is assumed, not verified (the local file has only a user-scope
+/// entry); its absence just falls through to the user scope. A skill name has no
+/// marketplace and the file keeps one install per scope and project, so anything not
+/// provably the right install falls open:
+/// a plugin under several marketplaces, or several installs that neither `cwd` nor the
+/// user scope narrows to one.
+fn plugin_root(manifest: &Path, plugin: &str, cwd: Option<&Path>) -> Option<PathBuf> {
     let text = std::fs::read_to_string(manifest).ok()?;
     let v: serde_json::Value = serde_json::from_str(&text).ok()?;
-    let entry = v
+    let mut keys = v
         .get("plugins")?
         .as_object()?
         .iter()
-        .find(|(k, _)| k.split('@').next() == Some(plugin))?
-        .1;
-    Some(PathBuf::from(entry.get(0)?.get("installPath")?.as_str()?))
+        .filter(|(k, _)| k.split('@').next() == Some(plugin));
+    let (_, installs) = keys.next()?;
+    if keys.next().is_some() {
+        return None;
+    }
+    let installs = installs.as_array()?;
+    let only = |pick: &dyn Fn(&serde_json::Value) -> bool| {
+        let mut hits = installs.iter().filter(|i| pick(i));
+        let first = hits.next()?;
+        hits.next().is_none().then_some(first)
+    };
+    let chosen = cwd
+        .and_then(|c| {
+            only(&|i| i.get("projectPath").and_then(|p| p.as_str()).map(Path::new) == Some(c))
+        })
+        .or_else(|| only(&|i| i.get("scope").and_then(|s| s.as_str()) == Some("user")))
+        .or_else(|| (installs.len() == 1).then(|| &installs[0]))?;
+    Some(PathBuf::from(chosen.get("installPath")?.as_str()?))
 }
 
 fn decide(cx: &Ctx, name: &str, body: &str, cap: u64) -> Option<PreToolDecision> {
@@ -280,5 +301,62 @@ mod tests {
         assert_eq!(resolve("nope:tail", None, &home), None);
         assert_eq!(resolve("../etc", None, &home), None);
         assert_eq!(resolve("a/b", None, &home), None);
+    }
+
+    fn root_of(manifest: &str, plugin: &str, cwd: Option<&Path>) -> Option<PathBuf> {
+        let home = crate::testutil::tmp_dir("skill-plugin-root");
+        let file = home.join("installed_plugins.json");
+        std::fs::write(&file, manifest).unwrap();
+        plugin_root(&file, plugin, cwd)
+    }
+
+    #[test]
+    fn a_plugin_under_two_marketplaces_falls_open() {
+        let m = r#"{"version":2,"plugins":{
+            "pony@a":[{"scope":"user","installPath":"/cache/a"}],
+            "pony@b":[{"scope":"user","installPath":"/cache/b"}]}}"#;
+        assert_eq!(root_of(m, "pony", None), None);
+    }
+
+    #[test]
+    fn the_install_for_the_session_project_beats_the_user_one() {
+        let m = r#"{"version":2,"plugins":{"pony@a":[
+            {"scope":"user","installPath":"/cache/user"},
+            {"scope":"project","projectPath":"/work/other","installPath":"/cache/other"},
+            {"scope":"project","projectPath":"/work/here","installPath":"/cache/here"}]}}"#;
+        assert_eq!(
+            root_of(m, "pony", Some(Path::new("/work/here"))),
+            Some(PathBuf::from("/cache/here"))
+        );
+    }
+
+    #[test]
+    fn the_user_install_is_used_when_no_project_matches_and_ambiguity_falls_open() {
+        let m = r#"{"version":2,"plugins":{"pony@a":[
+            {"scope":"project","projectPath":"/work/other","installPath":"/cache/other"},
+            {"scope":"user","installPath":"/cache/user"}]}}"#;
+        assert_eq!(
+            root_of(m, "pony", Some(Path::new("/work/here"))),
+            Some(PathBuf::from("/cache/user"))
+        );
+        let two_projects = r#"{"version":2,"plugins":{"pony@a":[
+            {"scope":"project","projectPath":"/work/x","installPath":"/cache/x"},
+            {"scope":"local","projectPath":"/work/y","installPath":"/cache/y"}]}}"#;
+        assert_eq!(
+            root_of(two_projects, "pony", Some(Path::new("/work/here"))),
+            None
+        );
+        let two_users = r#"{"version":2,"plugins":{"pony@a":[
+            {"scope":"user","installPath":"/cache/1"},{"scope":"user","installPath":"/cache/2"}]}}"#;
+        assert_eq!(root_of(two_users, "pony", None), None);
+    }
+
+    #[test]
+    fn a_single_legacy_entry_without_scope_still_resolves() {
+        let m = r#"{"version":2,"plugins":{"pony@a":[{"installPath":"/cache/pony"}]}}"#;
+        assert_eq!(
+            root_of(m, "pony", Some(Path::new("/work/here"))),
+            Some(PathBuf::from("/cache/pony"))
+        );
     }
 }

@@ -16,10 +16,10 @@ use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::adapter::{Filter, Taken, TaskAdapter};
+use super::adapter::{Filter, Stray, Taken, TaskAdapter};
 use super::github_project::ProjectSync;
 use super::remote::{
-    Http, LABEL, id_label, issue_title, label_id, max_with_prefix, secs, task_title,
+    Http, LABEL, id_label, issue_title, label_id, max_with_prefix, secs, task_title, title_id,
 };
 use super::{ExternalRef, NewTask, Status, Task, TaskId};
 
@@ -285,6 +285,19 @@ impl TaskAdapter for GithubAdapter {
             issues.iter().filter_map(Issue::task_id),
             prefix,
         ))
+    }
+
+    fn unlabelled(&self) -> Result<Vec<Stray>> {
+        Ok(self
+            .issues(LABEL, "all")?
+            .into_iter()
+            .filter(|i| i.task_id().is_none())
+            .map(|i| Stray {
+                id: title_id(&i.title),
+                title: i.title,
+                url: i.html_url,
+            })
+            .collect())
     }
 }
 

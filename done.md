@@ -90,6 +90,17 @@ Result: `runs_git` and the early return in `pre_tool` (`src/plugins/cmd/hook.rs`
 Status: done 2026-10-07
 Model: Claude Code / claude-sonnet-5-5
 
+### T448. `rtok run` buffers unbounded output in memory
+
+`rtok run` read the command's stdout and stderr into memory with no limit (`proc::capture`), then copied the body several times (the merged body, a lossy `String`, the rule engine's lines, the filtered text). A multi-GB `cat big.log` or `yes | head -c 10G` ran `rtok run` out of memory, where the unwrapped host command would stream and be cut at ~30 000 characters.
+
+Fix: `proc::capture_capped` keeps at most `CAPTURE_CAP` (32 MiB) of stdout and stderr together; `capture` is the same call without a cap, so the host `--version` probe is unchanged. Past the cap the pipes are still read and counted, so the child never blocks on a full pipe and exits with its own code. A capped body ends with `[rtok: output capped at 32 MiB; N bytes not captured]`, so the archive (`expand`) says it is partial. 32 MiB is three orders of magnitude above what the host shows an agent, and keeps the peak of the copies in the low hundreds of MiB.
+
+Check: `capture_capped_keeps_the_cap_and_counts_the_rest`, `capture_capped_under_the_cap_drops_nothing` (`src/proc.rs`), `capture_body_caps_and_appends_the_notice`, `capture_body_without_overflow_has_no_notice` (`src/plugins/cmd/run.rs`).
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T380. `rtok-` prefix on every shipped skill, and the prefix as the third ownership mark
 
 Ivan, 2026-10-04: every skill rtok ships is named `rtok-<name>`; the hub skill `rtok` keeps its name (it is already rtok). A skill directory whose name starts with `rtok` is rtok's: a third ownership mark beside the `.rtok-owned` marker and the byte-for-byte copy (`SkillCopy` in `crates/rtok-agent-sdk/src/lib.rs`).
@@ -435,6 +446,15 @@ Plan: boundary-safe matching in `uuid_at` and the date probe (`get(pos..pos+len)
 Check: `uuid_at_multibyte_suffix_is_no_match` (`placeholder_token("1234567é-x")` → `None`, no panic) and `normalized_dedupe_survives_multibyte_lines` over CJK/accented fixture lines; `mise exec -- cargo nextest run plugins::cmd::rules` green; `just check`.
 
 Do (2026-09-23): renumbered from T187 (that id is taken by the Command Code host task). `uuid_at` and the date probe slice with `str::get` (a non-boundary is no match), and `normalize_line_key` pushes whole `char`s, so CJK/accented lines neither panic nor mojibake into wrong fold groups. `rules::apply` also recomputes `trace_kept` after the JSON rewrite and grouping, so a one-line JSON body with many items no longer indexes past the line vector. Check: `uuid_at_multibyte_suffix_is_no_match`, `normalized_dedupe_survives_multibyte_lines`, `single_line_json_with_many_items_does_not_panic` green.
+
+### T447. `cmd` rules: quadratic grouping, unbounded trace blocks, double passes
+
+Found by reading `src/plugins/cmd/rules.rs`: (1) `fold` located a group with a linear `position` scan per line, so `group = "dir"` (on by default for `find`, `ls`, `rg`, `awk`) over a `find .` of 500k paths in 50k dirs was O(lines x groups) and stalled `rtok run`. (2) `apply` pushed every line of a trace block regardless of the budget with no cap, so an exit-0 body full of stacks (`kubectl logs` with thousands of Java `Exception in thread` blocks, a Go goroutine dump) was not cut at all. (3) `apply` ran the `group` match twice, and `formatters::compress` parsed a JSON body that `apply` then parsed again.
+
+Do: `fold` finds groups through a `HashMap<String, usize>` index (same output order). Trace-kept lines are capped at `MAX_TRACE_LINES` (400, a few full backtraces; a deep Rust or Java trace is 50-100 frames) in total; lines past it are ordinary lines that go through the head/tail budget and the `… N lines omitted (expand <id>)` marker, so the pinned true-count tests hold. `apply` groups once, after the JSON rewrite, and skips drop/dedupe/columns work for a JSON body (the rewrite replaced those lines anyway). `compress` parses the body once and hands it to the new `rules::apply_parsed`; `apply` keeps its signature. Check: `group_dir_scales_to_a_find_over_a_large_tree` (200k paths / 20k dirs), `trace_lines_past_the_cap_go_through_the_budget`, `grouping_is_a_fixed_point_on_its_own_output`; `just check`.
+
+Status: done 2026-10-08
+Model: Claude Code / sonnet-5.5
 
 ### T188. `inject::apply` emits one oversized injection whole — the D5 budget does not bind
 
@@ -1307,6 +1327,24 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
+
+Apply the approved shell and components; chart series colours come from the brand roles.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
+
+Plan (T414.2 shell and T414.3 components are in; the pages are audited against them in dark and light at 1440 and 390 px):
+1. `ShareBar` in `web/src/ui/Marks.tsx`: one share bar with the chart tooltip, on the `accent` role for cost and tokens and the `delta` role for savings; it replaces the three hand-rolled bars in Overview (savings by plugin), Stats (cost per model) and Usage (periods).
+2. Usage: the per-agent table keeps its agent column (it collapses at 1440 px when two half-width panels hold six columns), and the incomplete-cost panel takes the `warn` border the Overview alerts use.
+3. Stats and Usage KPI grids take the Overview's `gap-3`.
+4. Calls and Sessions: an idle detail column shows a hint instead of a hole (new `pages/DetailHint.tsx`; `Split` and `parts.tsx` stay untouched for T414.5 and T414.6).
+5. Tests and stories for `ShareBar` and the hint; `just spa-test`, `spa-stories`, `spa-e2e`, `just check`; dark and light screenshots of the five pages.
+
+Result (2026-10-08, Claude Code / claude-sonnet-5-5): the shell (T414.2) and components (T414.3) already carried the five pages, so the audit (dark and light, 1440 and 390 px) found these gaps and closed them. New `ShareBar` in `ui/Marks.tsx`: one share bar with the chart tooltip, `accent` for cost and tokens, `delta` for savings; it replaces the hand-rolled bars in Overview (savings by plugin), Stats (cost per model) and Usage (periods), which had no tooltip. Usage: the per-agent table with its six fixed-width columns lost its agent column inside a half-width panel at 1440 px, so it now takes the full width until 2xl; the incomplete-cost panel takes the `warn` border of the Overview alerts. Stats and Usage KPI grids use the Overview's `gap-3`; their saved cards use a new `saved` tone on `Kpi` (the `delta` coral, as the hero, the trend chart and the bars) instead of the success green. Calls and Sessions show a dashed hint in the idle detail column (`pages/DetailHint.tsx`) instead of a hole; `Split` and `parts.tsx` are untouched. The only shared-component change is the one-line `saved` tone in `Kpi`. Chart series already drew on the brand roles (T414.15). New tests: `ShareBar` (width, clamp, hidden from assistive tech) and the Calls hint; new stories for `ShareBar` and the `saved` tone, dark and light. `just spa-typecheck`, `spa-test` (259), `spa-stories` (172) and `spa-e2e` (22) green. Screenshots stay out of `web/screenshots/` (T414.7 re-shoots them).
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
 
 ### T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 
@@ -5807,6 +5845,13 @@ Status: done 2026-09-18
 Check result: code landed unclaimed in `c2a42ef` (knobs + goldens), `1e513d3` (`guard/skill.rs`, `pre_tool` branch, `expand`/MCP/README follow-ups), `d3b3f21` (`ENTRIES`, guard and agents docs); this close-out ran the Check. `nextest -E 'test(skill)'` 6 passed: `small_bodies_and_host_keys_pass` (3-line body → allow; `allowed-tools` frontmatter → allow even over the cap), `oversized_body_is_denied_with_map_and_pointer_under_budget` (~3,000 lines / ~230 KB → deny, heading map + fenced code skipped, reason ≤ 8,192 B, `get_archive(id)` returns the exact body), `resolve_prefers_project_then_user_and_reads_the_plugin_manifest` (project → user → plugin `installPath`; `../`, `a/b`, unknown plugin → None = fail open). Release profile: `cargo nextest run --release --lib -E 'test(oversized_body_is_denied)'` passes the 10 ms budget (debug runs assert 100 ms). `nextest -E 'test(guard) and package(rtok)'` 19 passed incl. hook e2e; `--test agents_doc` 1 passed — the blessed `docs/agents.md` table matches the new entry. Deviation (noted in the plan): `read` has no markdown map mode, so the heading outliner lives in `guard/skill.rs` — the first one; T68.8 unifies it.
 Model: ZCode / GLM-5.3
 
+
+**T450 `guard` skill digest may resolve another marketplace's plugin** · T62.1 · `src/plugins/guard/skill.rs`
+Do: `plugin_root` took the first `<plugin>@*` key of `installed_plugins.json` (sorted by serde_json) and always install `[0]`, so the same plugin name in two marketplaces, or user/project/local installs for different projects, could archive and deny with the wrong `SKILL.md`; a `plugin:skill` name carries no marketplace to disambiguate. Now more than one matching key → `None` (the skill loads whole); inside the single key the install whose `projectPath` equals the session cwd wins, else the one with `"scope": "user"`, else the only entry, and anything still ambiguous → `None`. `resolve` threads its `cwd` into `plugin_root`.
+Check: four tests beside `resolve_prefers_project_then_user_and_reads_the_plugin_manifest` — two marketplaces → `None`; project install beats user; user scope when no project matches (and two project installs or two user installs → `None`); a single scope-less entry still resolves. Field names (`scope`, `installPath`, `projectPath`) confirmed against the real version-2 file shape.
+Status: done 2026-10-08
+Model: Claude Code / sonnet-5.5
+
 **T56.2 Read/search unit tests on VFS** · D29 / T56 · `src/plugins/read/**` (tests)
 Do: hottest read/search filesystem tests on `testutil::Vfs` (pure `display_rel`, size gate, regex hits, line numbering/range, WalkBuilder twins via the T56.4 adapter, `ReadFs` twins via T56.5); polish leftover unit-level disk-only read paths.
 Check: no unit-level disk-only read/search path remains that the current architecture can carry on Vfs; suites green.
@@ -8246,6 +8291,17 @@ Check: `cargo nextest run -p rtok --test plugins_e2e -E 'test(read_modes_keep_a_
 Status: done 2026-09-27
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T445. `guard` Bash dedup key ignores the shell's persistent cwd
+
+The host keeps the shell's cwd between Bash calls, but the guard key did not follow it. A read-only `cd a && ls` never cleared the other `bash` keys, so a later plain `ls` (now running in `a`) was denied as a duplicate of the parent listing. `norm_cmd` folded leading `cd` hops to the last one, which is wrong for relative hops: after `cd /repo && cd sub && ls -la` the shell sits in `/repo/sub`, so `cd sub && ls -la` then runs in `/repo/sub/sub` yet shared the key. The key had no starting directory at all.
+
+Result: `cache_key` takes the hook's cwd (`Ctx::cwd()`, set once per hook run for PreToolUse and PostToolUse alike) and keys Bash as `bash\t{cwd}\t{cmd}` (no cwd: `bash\t{cmd}`; the agent suffix still trails, so the `bash` prefix clear reaches every key). Every leading `cd … &&` hop stays verbatim and in order (`split_cd` replaces `fold_cd`); `after_cd_prefix` strips all hops for the read-only check. A command behind a *relative* hop (`cd sub`, `cd -`, `$VAR`) is never keyed: PostToolUse already sees the cwd after the command's own `cd`, so the repeat would match its own key and run one level deeper. Absolute hops (`/…`, `~…`, a drive) stay keyed. `post_tool` clears every `bash` key for any command with a `cd` hop. The two pinned tests were rewritten and new ones cover stale-after-cd, the relative-repeat false deny and per-cwd keys.
+
+Check: `cargo nextest run -p rtok --lib plugins::guard`; `just check`.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T300. `read` map, signatures, search and tree record their saving
 
 I-100 (found by T299): only `mode = "stripped"` recorded a `Measurement`, so the saving of `map`, `signatures`, `search` and `tree` never reached `rtok stats`. Creator's choice (2026-09-27): `map`/`signatures` measure against the whole file they replace; `search`/`tree` record only when `max_chars` cuts their output, against their own full output — there is no honest "before" for them beyond that.
@@ -8469,6 +8525,14 @@ Result: `AgentsJunk`/`JunkExtra` in `src/config/mod.rs` with range, `extra` and 
 Status: done 2026-10-08
 
 Model: Claude Code / claude-opus-5-5
+
+### T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
+
+Part of T330.5. Depends on T330.5.1. `crash-dumps` (moved from T330.5.1): `crash_dump_min_age_days` (default 7, `0` to `3650`, rejected naming the key) and `crash-dumps` as an `extra` kind; macOS `~/Library/Logs/DiagnosticReports` files (`.ips`, `.crash`, `.dmp`, `.diag`) named for a host binary or app are listed read-only (no §22 row, D36), and an `extra` crash folder gives `safe` dumps past `crash_dump_min_age_days` and `review` ones before it. `stale_session_days` (default 30, `0` to `3650`) and `--session-days N`; `sessions` as class `explicit` (only with `--kind sessions`, time only, the T330 "Old sessions: time only" rules), only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it, with the per-host verdict recorded in §22.1 (never the host's memory, index or store files); `list` shows the host's own retention (`cleanupPeriodDays`, `general.sessionRetention`). The file-based `index` kind (review): `.rtok-lsp-xdg/{data,state}`, LSP caches such as `.rust-analyzer/`, `-wal`/`-shm` of closed DBs. rtok's own session rows and graph/tags rows in `rtok.db` are T330.5.3.
+
+Check: the T330 "Session threshold" fixture and the sessions lines of "New kinds"; a crash dump is listed read-only and an `extra` crash folder clears only old dumps by default; `just check`.
+
+Result: `stale_session_days` and `crash_dump_min_age_days` in `AgentsJunk` (range-checked in `validate.rs`, `config/default.toml`, `docs/config.md` en/ru/uk); `--session-days` on `agents junk list` and `clear` as a figment flag layer on the same key. New `src/agents/junk_sessions.rs`: only Claude Code qualifies (`projects/<project>/<uuid>.jsonl`, the sibling `<uuid>/` folder and `file-history/<uuid>/`; memory never matched, symlinks skipped), strict threshold, a 10-minute in-use guard, a future or unknown timestamp is never cleared; `list` prints the threshold note and the host's own retention. The per-host verdict is in `research.md` §22.1. `crash-dumps` and the macOS DiagnosticReports listing in `junk_review.rs`; `index` in `junk_kinds.rs` and `junk.rs` (rtok's `.rtok-lsp-xdg/{data,state}` as rtok-owned review items; `.rust-analyzer/`, `-wal`, `-shm` listed read-only). The `explicit` class has its own `list` row and is counted in neither Freed total. Goldens re-blessed (completions, help, config-init, config-show, report-md). An invalid `stale_session_days` makes config loading fail naming the key instead of falling back to 30, so no `exclude` protection is ever lost to a silent fallback.
 
 ### T330.5.4. Junk: the `backups` kind
 
@@ -9163,6 +9227,28 @@ Plan: `src/worktree/gc.rs` — `Policy.stale_lock`, a `Verdict::Reclaim(owner)` 
 
 Check: `cargo nextest run --test worktree --test cli_trycmd --test surface_parity --test config_coverage` and `just check`.
 
+### T453. Finished worktrees stay after their PR merges: let a merged, clean worktree go
+
+Creator request 2026-10-08: find out why a worktree is not always removed after its task merges, and fix it. Findings (2026-10-08, live repository and agent transcripts):
+
+1. `rtok worktree remove` from an agent's Bash often has no caller: in the desktop app `CLAUDE_ENV_FILE` stays empty, so `RTOK_AGENT_ID` is unset, and one app process serving many sessions in one cwd leaves MCP `worktree_remove` unlinked. `remove::run` then refuses every lock (`is locked by …; not removed`, seen in 8+ transcripts); a v2 lock (with `agent <uuid>`) refuses even `--owner`. Agents give up or fall back to raw `git worktree remove`.
+2. Sub-agents bind their worktrees to the parent agent, and `gc` keeps every worktree of a live agent. One orchestrator alive for a day held 13 worktrees, 8 of them merged and clean.
+3. Nothing triggers removal after a merge; `gc` runs only by hand.
+
+Done means: a worktree that is merged into the base, clean, and whose branch carries commits of its own outside the base (a squash-merged task branch, never a fresh branch still at the base) is removed by `rtok worktree remove` / MCP `worktree_remove` whoever holds its lock, and by `gc` even while its agent is live once it is idle past `--idle`. Dirty, unmerged, fresh and fast-forward-merged worktrees keep every guard they have today.
+
+Plan:
+1. `src/worktree/git.rs`: `has_own_commits(repo, base, rev)` — `git rev-list --count base..rev` > 0.
+2. `src/worktree/mod.rs`: `Entry` gains `done: bool` (merged, clean, own commits), computed in `inventory_with` only for merged rows.
+3. `src/worktree/remove.rs` `run`: a foreign or unknown lock no longer refuses a `done` worktree; the note says whose lock was opened.
+4. `src/worktree/gc.rs` `decide`: a live agent's `done` worktree falls through to the idle check instead of `keep`.
+5. Tests: unit cases in `gc.rs` `verdicts`; an e2e in `tests/worktree.rs` with a squash-merged branch under a foreign v2 lock (removed) and a fresh branch under the same lock (refused).
+6. `just check`; dry-run `rtok worktree gc` on the live repository lists the 8 merged worktrees as `remove`.
+
+Check: `cargo nextest run -E 'test(/worktree::gc::/) | binary(worktree)'`, `TRYCMD=overwrite` for `cli_trycmd` and `completions`, and `just check`; a dry-run `rtok worktree gc --idle 1h` on the live repository.
+
+Result (2026-10-08, Claude Code / claude-opus-5-5): `Entry::done` marks a merged, clean worktree whose branch has commits outside the base. `remove` opens a foreign or unknown lock on it and says so in the note; `gc` removes it past a live agent or a foreign lock once idle past `--idle` (`Verdict::Finished`), and keeps the old reason inside the window. A fresh branch under a foreign lock is still refused. On the live repository, `gc --idle 1h` now plans to remove 7 of the orchestrator's 8 merged worktrees (the eighth was touched within the hour) and keeps every open PR's. Not fixed here: the desktop app leaves `RTOK_AGENT_ID` unset and MCP unlinked, so an agent still cannot name itself.
+
 ### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
 
 On a repository with ~115 linked worktrees `rtok worktree list` took over 120 s and `rtok worktree gc` (dry run) 98 s, mostly waiting on the disk: one `git status` per worktree in sequence (25–54 s), one `merge-tree` plus `rev-parse <base>^{tree}` per worktree, and a sequential walk of ~1.1 M files (716 k of them under `target/`). Done when both commands print the same rows, states and verdicts as before, measured before/after on the same repository.
@@ -9803,6 +9889,14 @@ Result: `src/tasks/remote.rs` holds what the GitHub and GitLab adapters share: t
 
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5
+
+### T441.12. `rtok task sync`
+
+Split from T441.7: reconcile the store's task id counters with the project's `[tasks]` adapter and report drift, so ids made by hand, by another machine or by a checkout whose store this one never saw are not numbered over, and issues that lost their `rtok:<id>` label are named.
+
+Check: `tasks::sync` unit tests (disk, counter ahead, fake adapter, GitHub mock, JSON); `tests/task_cli.rs` brings a lost counter back and a second sync is quiet; the trycmd help case, completion goldens, `surface_parity` and `config_coverage` pass; `just check` green.
+
+Result: `rtok task sync [--json]` (`src/tasks/sync.rs`) lists every task through the `TaskAdapter` trait, finished ones included, and raises the top-level and each per-parent counter to the highest number found with `seed_task_counter`; it never lowers a counter and never writes to the adapter. `Store::task_counter` is the new read-only getter (Diesel). The report names the counters raised, ids above their counter, duplicate ids, and issues that kept the `rtok` label but lost `rtok:<id>` (new defaulted `TaskAdapter::unlabelled`, implemented for GitHub, with the id still in the title shown as the label to restore). Drift is reported with exit 0. CLI only: `surface_parity` exempts it because `task_create` already seeds the counter first. README and `docs/commands.md` (en, ru, uk) list the `rtok task` commands. GitLab's `unlabelled` is not implemented yet and reports none. #820.
 
 ### T441.8. GitLab adapter
 

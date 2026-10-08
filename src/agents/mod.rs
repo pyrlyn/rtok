@@ -32,6 +32,7 @@ pub mod junk_clear;
 pub mod junk_kinds;
 pub mod junk_map;
 pub mod junk_review;
+pub mod junk_sessions;
 pub mod kilo;
 pub mod kimi;
 pub mod link;

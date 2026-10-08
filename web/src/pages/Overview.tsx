@@ -7,12 +7,10 @@ import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
 import { ExportButtons } from "../ui/ExportButtons";
 
-import { Mark, MarkRows } from "../charts/Mark";
-
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
-import { Bitset, BudgetGrid, MiniBars } from "../ui/Marks";
+import { Bitset, BudgetGrid, MiniBars, ShareBar } from "../ui/Marks";
 import { Sparkline } from "../ui/Sparkline";
 import { CALLS_SYNC } from "./CallsChart";
 import { compact, fmt, hms, pct } from "./format";
@@ -58,23 +56,15 @@ function savingColumns(max: number): Column<Saving>[] {
 
 function Share({ id, value, max }: { id: string; value: number; max: number }) {
     return (
-        <Mark
-            tip={
-                <MarkRows
-                    title={id}
-                    rows={[
-                        ["saved", compact(value)],
-                        ["of the top plugin", pct(max ? value / max : 0, 0)],
-                    ]}
-                />
-            }
-            className="h-1.5 overflow-hidden rounded-full bg-surface-3"
-        >
-            <div
-                className="h-full rounded-full bg-delta-fg/80"
-                style={{ width: `${max ? (value / max) * 100 : 0}%` }}
-            />
-        </Mark>
+        <ShareBar
+            title={id}
+            share={max ? value / max : 0}
+            tone="delta"
+            rows={[
+                ["saved", compact(value)],
+                ["of the top plugin", pct(max ? value / max : 0, 0)],
+            ]}
+        />
     );
 }
 

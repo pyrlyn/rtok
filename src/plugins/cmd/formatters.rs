@@ -45,8 +45,8 @@ pub fn compress(
     let rule = settings.pick(stem);
     // T65.2: JSON bodies skip table formatters so kubectl -o json / gh --json
     // reach the compact pass instead of a NAME/STATUS parser.
-    if rules::is_json_body(output) {
-        let s = rules::apply(settings, output, exit, &rule, archive_id);
+    if let Some(json) = rules::parse_json_body(output) {
+        let s = rules::apply_parsed(settings, output, Some(json), exit, &rule, archive_id);
         let kind = if s.len() < output.len() {
             "rule"
         } else {

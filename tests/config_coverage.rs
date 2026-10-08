@@ -119,6 +119,9 @@ const ALLOW_KEYS: &[&str] = &[
     "junk.include",
     "junk.older_than",
     "junk.trash",
+    // `agents junk --session-days` (T330.5.2): a one-run override of `agents.junk.stale_session_days`;
+    // the flag name differs from the key, so the doc scan sees it as a keyless flag.
+    "junk.session_days",
     // `rtok mcp ping --timeout` (T275.1): one call's wait, default 60s, not a stored setting.
     "mcp.ping.timeout_s",
     // `agents send --all-live` / `agents inbox --unread` (T287): who gets one message and

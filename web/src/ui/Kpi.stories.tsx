@@ -27,8 +27,10 @@ export const WithSparkline: Story = {
 export const Ok: Story = { args: { tone: "ok", label: "doctor", value: "all pass" } };
 export const Warn: Story = { args: { tone: "warn", label: "doctor", value: "2 warn" } };
 export const Fail: Story = { args: { tone: "fail", label: "doctor", value: "1 fail" } };
+export const Saved: Story = { args: { tone: "saved", label: "saved", value: "$3.55" } };
 export const NoSub: Story = { args: { sub: undefined } };
 
 export const WarnLight: Story = { ...Warn, globals: { theme: "light" } };
 export const FailLight: Story = { ...Fail, globals: { theme: "light" } };
+export const SavedLight: Story = { ...Saved, globals: { theme: "light" } };
 export const OkLight: Story = { ...Ok, globals: { theme: "light" } };

@@ -1985,6 +1985,20 @@ Every other host in `HOSTS`: not documented for these three columns (§22 table 
 
 **Decision (creator, 2026-10-03):** C, recorded as D36; `stale_session_days` default raised from 3 to 30 to match Claude Code and Gemini.
 
+**Per-host verdict for `--kind sessions` (T330.5.2, 2026-10-08).** A host takes part only when its sessions cell above names the whole session unit and no index sits beside it that rtok would have to edit. Sources: the table above (read 2026-10-03) and, for Gemini, https://geminicli.com/docs/cli/session-management/ (re-read 2026-10-08).
+
+| Host | Verdict | Why |
+| --- | --- | --- |
+| claude | yes | One session is `projects/<project>/<session-id>.jsonl`, the sibling folder `<session-id>/` (subagents, tool results) and `file-history/<session-id>/`; the docs name no index beside them. `projects/<project>/memory/` never matches (a session is a UUID-named transcript) and stays. |
+| codex | no | A rollout index records fork edges between sessions and a SQLite state DB holds resumable state: removing one rollout can leave either pointing at a missing file. |
+| gemini | no | The page names `~/.gemini/tmp/<project_hash>/chats/` but not the files of one session (it says deleting a session also removes its plans, task trackers, tool outputs and activity logs without a path for each). Gemini prunes by `general.sessionRetention` itself. |
+| copilot | no | `session-store.db` holds cross-session data beside `session-state/`. |
+| kimi | no | `session_index.jsonl` indexes every session; removing one needs the index edited. |
+| opencode | no | Session and message data sit in one `project/<slug>/storage/` per project, not per session. |
+| cline and every other host | no | Not documented (§22 and §26). |
+
+`list` shows the host's own retention next to rtok's threshold for Claude Code (`cleanupPeriodDays`, default 30) and Gemini (`general.sessionRetention.maxAge`, default 30d), read from the host's `settings.json`.
+
 ### 22.2 T330 cache detection: §22 paths only vs heuristics (T339) (2026-10-03)
 
 The conflict: T330 says paths come only from §22 and "not documented" cells are not scanned, yet detects agent caches from platform cache roots, Electron/Chromium subfolders, `CACHEDIR.TAG` and all of `~/Library/Caches`, and its Check clears Cursor caches although every Cursor cell in §22 is "not documented". Checked 2026-10-03.
