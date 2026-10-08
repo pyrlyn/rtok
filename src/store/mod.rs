@@ -21,6 +21,7 @@ mod sql_ext;
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
 // T329.1: the graph project registry.
+mod note_files;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
