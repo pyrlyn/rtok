@@ -83,7 +83,7 @@ function ConfigBody({ entries }: { entries: ConfigEntry[] }) {
                             <h3 className="mb-1 text-2xs font-semibold tracking-kicker text-fg-subtle uppercase">
                                 [{group}]
                             </h3>
-                            <dl className="divide-y divide-border/40">
+                            <dl className="divide-y divide-border/60">
                                 {items.map((r) => (
                                     <div
                                         key={r.key}

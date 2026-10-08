@@ -19,7 +19,7 @@ export interface SceneNode {
   id: number;
   label: string;
   root: string;
-  /** CSS colour, stable per root so a project keeps its colour across sessions. */
+  /** CSS colour (a brand role), stable per root so a project keeps its colour across sessions. */
   color: string;
   radius: number;
   state: string;
@@ -69,11 +69,24 @@ export interface SceneOptions {
   scopeOnly: boolean;
 }
 
-/** A hue from the root, so the colour needs no stored value and is the same on every page. */
+/** Brand roles a project can take; the brand has no categorical scale, so these four are the distinct hues it ships. */
+const PROJECT_ROLES = ["--pyr-accent-fg", "--pyr-delta-fg", "--pyr-success-fg", "--pyr-fg-muted"];
+
+/**
+ * A role from the root, so the colour needs no stored value and is the same on every page.
+ * It stays a `var()` so a theme switch recolours the DOM views; the 3D stage resolves it
+ * through `resolveRole`.
+ */
 export function colorOf(root: string): string {
   let h = 2166136261;
   for (let i = 0; i < root.length; i++) h = Math.imul(h ^ root.charCodeAt(i), 16777619);
-  return `hsl(${(h >>> 0) % 360}, 62%, 56%)`;
+  return `var(${PROJECT_ROLES[(h >>> 0) % PROJECT_ROLES.length]})`;
+}
+
+/** WebGL cannot read a `var()`: this returns the role's current value, or `fallback` without the brand stylesheet (unit tests). */
+export function resolveRole(color: string, style: CSSStyleDeclaration, fallback: string): string {
+  const name = /^var\((--[\w-]+)\)$/.exec(color)?.[1];
+  return (name ? style.getPropertyValue(name).trim() : color) || fallback;
 }
 
 /** Symbols are the size: a log scale keeps one huge project from hiding the rest. */

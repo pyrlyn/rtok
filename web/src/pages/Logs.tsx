@@ -8,7 +8,7 @@ import { Search } from "../ui/Search";
 import { LEVELS, matchesLog, parseLog, type Level } from "./model";
 import { Count, LevelPill, Toolbar, WithSnapshot } from "./parts";
 
-const msgTone = { error: "text-delta-fg", warn: "text-warn-fg" } as const;
+const msgTone = { error: "text-danger-fg", warn: "text-warn-fg" } as const;
 
 export function Logs() {
     return <WithSnapshot>{(snap) => <LogsBody snap={snap} />}</WithSnapshot>;
@@ -31,7 +31,12 @@ function LogsBody({ snap }: { snap: Snapshot }) {
         <div className="flex flex-col gap-3">
             <Toolbar>
                 <div className="w-56 max-w-full">
-                    <Search label="Filter log lines" value={query} onChange={setQuery} />
+                    <Search
+                        label="Filter log lines"
+                        placeholder="time, source, message"
+                        value={query}
+                        onChange={setQuery}
+                    />
                 </div>
                 <div role="group" aria-label="Level" className="flex flex-wrap gap-1.5">
                     {LEVELS.map((lv) => (
@@ -68,7 +73,7 @@ function LogsBody({ snap }: { snap: Snapshot }) {
                         {rows.map((l) => (
                             <li
                                 key={l.i}
-                                className={`grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 border-b border-border/40 px-4 py-1.5 lg:grid-cols-[2rem_9.5rem_3.5rem_11rem_minmax(0,1fr)] ${l.level === "error" ? "bg-delta/[0.06]" : ""}`}
+                                className={`grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 border-b border-border/60 px-4 py-1.5 lg:grid-cols-[2rem_9.5rem_3.5rem_11rem_minmax(0,1fr)] ${l.level === "error" ? "bg-danger/10" : ""}`}
                             >
                                 <span className="text-right text-2xs text-fg-muted">{l.i + 1}</span>
                                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:contents">

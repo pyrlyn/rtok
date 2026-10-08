@@ -196,8 +196,8 @@ export default function Scene2D({ scene, positions, api, select, menu, hover }: 
                     >
                         <circle
                             r={n.radius}
-                            fill={n.hollow ? "none" : n.color}
-                            stroke={n.color}
+                            // `style`, not attributes: only CSS resolves the role's `var()`.
+                            style={{ fill: n.hollow ? "none" : n.color, stroke: n.color }}
                             strokeWidth={n.hollow ? 1.5 : 0}
                             strokeDasharray={n.hollow ? "3 2" : undefined}
                         />
