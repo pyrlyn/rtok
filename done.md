@@ -9484,6 +9484,16 @@ Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) an
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T397. Re-measure numbers that shipped fixes made stale
+
+Three numbers in `research.md` §2 and §19 predated the fixes they describe. Re-measured on `main` at `1d6961541` (Apple M3 Max, 2026-10-08, load average 80–200). Graph cold index, 3,000 files: median 911 ms over five `graph_bench` runs and 479 ms over fifteen in-process runs, against 172 ms (T35.2); slower, but the old run's load is unknown and the cold run now also rebuilds the symbol IDF (T368) and refreshes ranks. T59.3's 200-file batch never shipped (`index.rs` flushes at 64), so there was nothing to keep or revert and 64 vs 200 is unmeasured. T241 `replay_bench` row: `cmd` 82.7 % (trailer counted since T247, was 84.2 %), `read` 52.3 %, total 79.7 %, unchanged since 2026-09-25; `search` records a row only when `max_chars` cuts (T300). Hook cancellations after T178 (new §19.8): 114 of 165,669 runs (0.069 %) vs 10 of 13,091 (0.076 %) before; the lock-wait fix fires on the real store (7 `skipped: store locked` events) but does not explain the cancellations, whose cause stays open.
+
+Check: three dated rows in `research.md` (§2 cold index, §2 replay_bench, §19.8).
+Result: `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers` ×5; `cargo test --test replay_bench -- --nocapture` ×3; read-only `jq` count of `hook_cancelled`/`hook_success` attachments and `grep` of `rtok.log`; `docs_structure` green. #846.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T402. Measure how much tool output a structured schema would shrink
 
 Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. Measured ad hoc, read-only, on the stored `calls` payloads (2026-10-05 to 2026-10-08, 23,148 tool-result bodies, 45.8 MB, 31.4 % of the 3.32 G session input when weighted by later API requests) and on the 61,369-body archive (340 MB). Free text is 61.4 % of result bytes (19.5 % of input resident, 91 % of it from `Bash`), file content 31.2 %, `path:line` records 4.8 %, tables 2.2 %, all JSON 0.4 % (0.15 % of input). Four bodies were `toon`-eligible in the window (395 B saved); on the 16 archived structured bodies the encoder logic cuts 30.6 %. The prose a tool schema can reach (MCP) is at most 0.64 % of input before any saving (0.20 % at the 30.6 % ratio), below the 1 % gate; the rest is external program output that only the `cmd` rules can shorten. No build task filed.

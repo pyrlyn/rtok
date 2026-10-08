@@ -73,7 +73,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
-| T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
@@ -1484,18 +1483,6 @@ From `research.md` §30 (T358.3, T358.4): the Kilo and Gemini CLI readers are "n
 Done means: each reader runs once on a real file from a machine with that host; the Copilot resume semantics are confirmed or the reader stops summing duplicate shutdowns; each `unverified` tag in §30 is resolved or kept with a date.
 
 Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
-
-### T397. Re-measure numbers that shipped fixes made stale
-
-From `research.md` §2 and §19, three numbers predate the fix they describe:
-
-- Graph cold index: T59.3 (200 files per transaction) required a re-run next to the old 172 ms for 3,000 files and a revert if slower; §2 still carries the placeholder.
-- The T241 `replay_bench` row: it says the `cmd` trailer "is not counted" (fixed by T247) and that `search` "records no row" (changed by T300).
-- Hook cancellations: §19.4 and §19.6 found ten cancelled rtok hooks before T178 and validated the lock-wait fix only synthetically.
-
-Done means: each is re-run on current `main` (`cargo test --release --test graph_bench -- --ignored`, `replay_bench`, the §19.1 jq query over a post-T178 window) and the dated result replaces the stale text; T59.3's batch size is kept or reverted on its number.
-
-Check: three dated rows in `research.md`.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
