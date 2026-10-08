@@ -364,8 +364,9 @@ fn html_holds_every_markdown_number_and_fetches_nothing() {
             .unwrap_or(bare.len());
         bare.replace_range(a..end, "");
     }
+    // A URL scheme, not the bare word: `mcp.http` is a key name, not a reference.
     assert!(
-        !bare.contains("http"),
+        !bare.contains("http://") && !bare.contains("https://"),
         "external reference outside code: {}",
         &bare[..bare.len().min(200)]
     );

@@ -5,6 +5,7 @@
 import type { ReactNode } from "react";
 import offlineArt from "@brand/illustrations/offline.svg?raw";
 import { focusRing } from "./ui/cx";
+import { Spinner } from "./ui/Spinner";
 
 // The four states every page shares; pages pick one instead of drawing their own.
 function Panel({ children, ...aria }: { children: ReactNode; role: string }) {
@@ -24,10 +25,9 @@ export function Loading() {
             aria-busy
             className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-xs text-fg-muted"
         >
-            <span
-                aria-hidden="true"
-                className="size-6 animate-spin rounded-full border-2 border-surface-3 border-t-accent"
-            />
+            <span className="text-accent">
+                <Spinner />
+            </span>
             Loading…
         </div>
     );

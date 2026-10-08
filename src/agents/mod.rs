@@ -28,6 +28,7 @@ pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
 pub mod junk_cache;
+pub mod junk_clear;
 pub mod junk_kinds;
 pub mod junk_map;
 pub mod kilo;
@@ -243,6 +244,11 @@ const HOST_SANDBOX_ENV: &str = "RTOK_HOST_SANDBOX";
 /// The home dir when [`HOST_SANDBOX_ENV`] is set.
 fn host_sandbox() -> Option<PathBuf> {
     std::env::var_os(HOST_SANDBOX_ENV).map(|_| home_dir())
+}
+
+/// True under the test harness: a probe of the machine's real processes is off too.
+pub(crate) fn host_sandboxed() -> bool {
+    host_sandbox().is_some()
 }
 
 /// [`expand_spec`], re-rooted under the home dir when [`HOST_SANDBOX_ENV`] is set.
@@ -843,7 +849,13 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
     }
     // T278: the `mcp` row becomes one line per surface wherever the host has an entry.
     let surfaces = mcp::rows(agent, cfg, v.kind);
-    for row in module_rows(agent, v.kind, cfg) {
+    for mut row in module_rows(agent, v.kind, cfg) {
+        if row.name == "plugin"
+            && row.state == ModuleState::Installed
+            && let Some(status) = plugin_status(agent, v.kind, cfg)
+        {
+            row.note = format!(" {}", status.note);
+        }
         if row.name == "mcp" && !surfaces.is_empty() {
             out.push_str(&mcp::lines(&surfaces, "  "));
         } else {
@@ -1015,7 +1027,8 @@ fn carry_flags(cfg: &Config, have: &[&str]) -> Config {
 }
 
 pub use outdated::{
-    EXIT_OUTDATED, Outdated, OutdatedReport, OutdatedSelection, outdated, print_human, report,
+    EXIT_OUTDATED, Outdated, OutdatedReport, OutdatedSelection, PluginStatus, outdated,
+    plugin_status, print_human, report,
 };
 
 /// `rtok agents update` with no host named: every host with an rtok module in at least one

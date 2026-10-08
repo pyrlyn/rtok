@@ -12,7 +12,7 @@
 use std::fs::FileType;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use super::HOSTS;
 use super::junk_cache::{
@@ -42,7 +42,7 @@ const SKIP_DIRS: [&str; 2] = [".git", "node_modules"];
 const BUILD_DIRS: [&str; 3] = ["dist", ".next", "__pycache__"];
 
 /// Lock files that are package-manager state and never junk.
-const PACKAGE_LOCKS: [&str; 14] = [
+pub(super) const PACKAGE_LOCKS: [&str; 14] = [
     "Cargo.lock",
     "yarn.lock",
     "bun.lock",
@@ -129,7 +129,7 @@ fn lock_held(path: &Path) -> std::io::Result<bool> {
 }
 
 /// Why a file stays because a process may use it, or `None` when nothing holds it.
-fn held_reason(path: &Path) -> Option<String> {
+pub(super) fn held_reason(path: &Path) -> Option<String> {
     match lock_held(path) {
         Ok(false) => None,
         Ok(true) => Some("held by a running process".into()),
@@ -187,7 +187,7 @@ pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
 
 /// The entries of the §22 temp dirs `dirs`: one item per file or directory, kept while it was
 /// touched within the idle window (24 h) or, for a file, while another process holds a lock on
-/// it. A symlink is never an item. A running agent's temp is T330.4's re-check.
+/// it. A symlink is never an item. A running agent's temp is left by `junk_clear` (T330.4).
 pub fn temp_items(dirs: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item> {
     let mut items = Vec::new();
     for dir in dirs.iter().filter(|d| !is_symlink(d) && d.is_dir()) {
@@ -306,6 +306,29 @@ pub fn staging_caches(claude: &Path) -> Vec<Owned> {
         .collect()
 }
 
+/// The `<commit>` folders of a per-commit cache (VS Code's `CachedData`, §22.2) that are not
+/// the newest. VS Code's own cleaner is told the running commit; rtok is not, so the folder
+/// touched last stands for it and stays. A folder whose time cannot be read stays too, and a
+/// link is never followed. T152's idle rule still applies to each one.
+pub fn stale_code_caches(dir: &Path) -> Vec<Owned> {
+    let dirs: Vec<(PathBuf, Option<SystemTime>)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| (e.path(), e.metadata().and_then(|m| m.modified()).ok()))
+        .collect();
+    let newest = dirs.iter().filter_map(|(_, m)| *m).max();
+    dirs.into_iter()
+        .filter(|(_, m)| m.is_some_and(|m| Some(m) < newest))
+        .map(|(path, _)| Owned {
+            path,
+            evidence: SECTION_22,
+            idle_rule: true,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,6 +347,80 @@ mod tests {
         let f = std::fs::File::options().write(true).open(path).unwrap();
         f.set_modified(SystemTime::now() - Duration::from_secs(secs))
             .unwrap();
+    }
+
+    #[cfg(unix)]
+    fn old_dir(root: &Path, name: &str, secs: u64) -> PathBuf {
+        let d = root.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        let file = d.join("x.js.cache");
+        std::fs::write(&file, b"v8").unwrap();
+        age(&file, secs);
+        // A directory cannot be opened for writing, but a read handle can set its times.
+        let when = SystemTime::now() - Duration::from_secs(secs);
+        std::fs::File::open(&d).unwrap().set_modified(when).unwrap();
+        d
+    }
+
+    /// The newest commit folder is the current one and stays; older ones are owned by §22 and
+    /// still pass T152's idle rule through `cache_items`; a file or a link is never a commit.
+    #[cfg(unix)]
+    #[test]
+    fn code_cache_keeps_the_newest_commit_and_offers_the_older_ones() {
+        let root = tmp_dir("junk-code-cache");
+        let cur = old_dir(&root, "cccc", 3_600);
+        let old = old_dir(&root, "aaaa", 40 * 86_400);
+        let older = old_dir(&root, "bbbb", 80 * 86_400);
+        std::fs::write(root.join("stray-file"), b"x").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&cur, root.join("link")).unwrap();
+        let mut paths: Vec<PathBuf> = stale_code_caches(&root)
+            .into_iter()
+            .map(|o| o.path)
+            .collect();
+        paths.sort();
+        assert_eq!(paths, [old, older]);
+        assert!(
+            stale_code_caches(&root)
+                .iter()
+                .all(|o| o.idle_rule && o.evidence == SECTION_22)
+        );
+        // One commit, or none, is current: nothing to offer.
+        assert!(stale_code_caches(&cur).is_empty());
+        assert!(stale_code_caches(&root.join("missing")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_commit_folder_edited_inside_the_idle_window_is_kept_by_cache_items() {
+        let root = tmp_dir("junk-code-cache-idle");
+        old_dir(&root, "cccc", 60);
+        let busy = old_dir(&root, "aaaa", 40 * 86_400);
+        std::fs::write(busy.join("fresh"), b"x").unwrap();
+        // The write bumped the folder's own time; the newest folder is the current one.
+        let when = SystemTime::now() - Duration::from_secs(40 * 86_400);
+        std::fs::File::open(&busy)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+        let gone = old_dir(&root, "bbbb", 80 * 86_400);
+        let items = crate::agents::junk_cache::cache_items(
+            &stale_code_caches(&root),
+            &[],
+            &cx(&root),
+            LIMIT,
+        );
+        let kept = |p: &Path| {
+            items
+                .iter()
+                .find(|i| Path::new(&i.path) == p)
+                .unwrap()
+                .kept
+                .is_some()
+        };
+        assert!(kept(&busy));
+        assert!(!kept(&gone));
+        assert_eq!(items.len(), 2);
     }
 
     fn cx(cwd: &Path) -> Ctx {

@@ -3,13 +3,17 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useMemo, useState } from "react";
+import { RESULTS, SURFACES, useTableSearch } from "../tableSearch";
 import { useExpandMutation } from "../api/query";
 import type { CallRow, Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
+import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
 import { DataTable, type Column } from "../ui/DataTable";
+import { ExportButtons } from "../ui/ExportButtons";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { Result } from "../ui/Result";
 import { Search } from "../ui/Search";
 import { Unknown, orUnknown } from "../ui/Unknown";
 import { compact, fmt, hms, iso } from "./format";
@@ -17,8 +21,6 @@ import { why } from "./missing";
 import { tokensOf } from "./model";
 import { Count, Kv, Split, SurfacePill, Toolbar, WithSnapshot } from "./parts";
 
-const SURFACES = ["all", "hook", "mcp", "proxy"] as const;
-const RESULTS = ["any", "ok", "failed"] as const;
 type Surface = (typeof SURFACES)[number];
 type Result = (typeof RESULTS)[number];
 
@@ -36,20 +38,29 @@ const columns: Column<CallRow>[] = [
         id: "time",
         header: "time",
         width: "72px",
+        sortValue: (c) => c.ts,
+        exportValue: (c) => iso(c.ts),
         cell: (c) => <span title={iso(c.ts)}>{hms(c.ts)}</span>,
     },
     {
         id: "surface",
         header: "surface",
         width: "72px",
+        sortValue: (c) => c.surface,
         cell: (c) => <SurfacePill surface={c.surface} />,
     },
-    { id: "name", header: "name", cell: (c) => orUnknown(c.name ?? c.plugin, why.callName) },
+    {
+        id: "name",
+        header: "name",
+        sortValue: (c) => c.name ?? c.plugin,
+        cell: (c) => orUnknown(c.name ?? c.plugin, why.callName),
+    },
     {
         id: "ms",
         header: "ms",
         width: "52px",
         align: "right",
+        sortValue: (c) => c.ms,
         cell: (c) => orUnknown(c.ms?.toFixed(1), why.callMs),
     },
     {
@@ -58,12 +69,15 @@ const columns: Column<CallRow>[] = [
         // Room for "Unknown ?" on calls that carry no usage row.
         width: "96px",
         align: "right",
+        sortValue: tokensOf,
         cell: (c) => orUnknown(compact(tokensOf(c)), why.callUsage),
     },
     {
         id: "ok",
         header: "ok",
         width: "52px",
+        sortValue: (c) => Number(Boolean(c.ok)),
+        exportValue: (c) => Boolean(c.ok),
         cell: (c) =>
             c.ok ? (
                 <span className="text-success-fg" role="img" aria-label="ok">
@@ -80,9 +94,8 @@ export function Calls() {
 }
 
 function CallsBody({ snap }: { snap: Snapshot }) {
-    const [query, setQuery] = useState("");
-    const [surface, setSurface] = useState<Surface>("all");
-    const [result, setResult] = useState<Result>("any");
+    const { q: query, setQ: setQuery, filter, setFilter, sort, setSort } = useTableSearch("calls");
+    const { surface, result } = filter;
     const [selectedId, setSelectedId] = useState<number>();
     const calls = snap.calls;
     const rows = useMemo(
@@ -116,14 +129,22 @@ function CallsBody({ snap }: { snap: Snapshot }) {
                 </div>
                 <div role="group" aria-label="Surface" className="flex flex-wrap gap-1.5">
                     {SURFACES.map((s) => (
-                        <Chip key={s} pressed={surface === s} onPressedChange={() => setSurface(s)}>
+                        <Chip
+                            key={s}
+                            pressed={surface === s}
+                            onPressedChange={() => setFilter("surface", s)}
+                        >
                             {s} {count(s)}
                         </Chip>
                     ))}
                 </div>
                 <div role="group" aria-label="Result" className="flex flex-wrap gap-1.5">
                     {RESULTS.map((r) => (
-                        <Chip key={r} pressed={result === r} onPressedChange={() => setResult(r)}>
+                        <Chip
+                            key={r}
+                            pressed={result === r}
+                            onPressedChange={() => setFilter("result", r)}
+                        >
                             {r}
                         </Chip>
                     ))}
@@ -134,12 +155,25 @@ function CallsBody({ snap }: { snap: Snapshot }) {
             </Toolbar>
             <Split
                 list={
-                    <Panel title="calls (newest first)" hint={`last ${calls.length} ledger rows`}>
+                    <Panel
+                        title="calls (newest first)"
+                        hint={`last ${calls.length} ledger rows`}
+                        action={
+                            <ExportButtons
+                                label="calls"
+                                rows={rows}
+                                columns={columns}
+                                sort={sort}
+                            />
+                        }
+                    >
                         <DataTable
                             label="calls"
                             rows={rows}
                             columns={columns}
                             getRowId={(c) => String(c.id)}
+                            sort={sort}
+                            onSortChange={setSort}
                             selectedId={selected && String(selected.id)}
                             onSelect={(c) => setSelectedId(c.id)}
                             height={480}
@@ -237,22 +271,24 @@ function Expand({ refId }: { refId: string }) {
     return (
         <div className="flex flex-col gap-2 border-t border-border/60 pt-2">
             <div className="flex items-center gap-2">
-                <button
-                    type="button"
-                    disabled={isPending}
+                <Button
+                    verb="expand"
+                    variant="solid"
+                    pending={isPending}
                     onClick={() => mutate(refId)}
-                    className="h-8 cursor-pointer rounded-md bg-accent px-3 text-xs font-semibold text-accent-on outline-none focus-visible:shadow-ring disabled:cursor-wait disabled:opacity-60"
                 >
                     expand {refId}
-                </button>
+                </Button>
                 {data != null && (
-                    <span className="text-2xs text-fg-subtle">{lines.length} lines</span>
+                    <Result verb="expand" kind="success">
+                        {lines.length} lines
+                    </Result>
                 )}
             </div>
             {error && (
-                <p role="alert" className="text-xs text-delta-fg">
+                <Result verb="expand" kind="error">
                     {error.message}
-                </p>
+                </Result>
             )}
             {data != null && (
                 <>

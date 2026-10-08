@@ -9,7 +9,9 @@ import { Empty } from "../../states";
 import { focusRing } from "../../ui/cx";
 import { Kpi } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
+import { Result } from "../../ui/Result";
 import { Search } from "../../ui/Search";
+import { Spinner } from "../../ui/Spinner";
 import { Switch } from "../../ui/Switch";
 import { ProjectList } from "./ProjectList";
 import Scene2D from "./Scene2D";
@@ -75,7 +77,10 @@ export function ProjectsOverview({
     const positions = useLayout(scene);
     const own = useRef<ViewApi | null>(null);
     const api = probe ?? own;
-    const { mutate } = useProjectMutation();
+    const { mutate, error, inFlight } = useProjectMutation();
+    const waiting = new Set(
+        inFlight.flatMap((r) => (r.action === "select" ? [Number(r.project)] : [])),
+    );
 
     const view: View = choice === "3d" && (!canGl || lost !== null) ? "2d" : choice;
     const why = lost ?? (canGl ? null : "WebGL is not available in this browser");
@@ -148,6 +153,24 @@ export function ProjectsOverview({
                     </div>
                 )}
             </div>
+            {waiting.size > 0 && (
+                // The canvas and the menu have no control that can hold the spinner.
+                <p
+                    role="status"
+                    aria-busy
+                    className="flex items-center gap-1.5 text-xs text-fg-muted"
+                >
+                    <span className="text-accent">
+                        <Spinner size="sm" />
+                    </span>
+                    Selecting {rows.find((r) => waiting.has(r.id))?.name ?? "project"}…
+                </p>
+            )}
+            {error && (
+                <Result verb="select" kind="error">
+                    {error.message}
+                </Result>
+            )}
             {choice === "3d" && why && (
                 <p
                     role="status"
@@ -163,7 +186,7 @@ export function ProjectsOverview({
                 </p>
             )}
             {view === "list" ? (
-                <ProjectList scene={scene} select={select} />
+                <ProjectList scene={scene} select={select} waiting={waiting} />
             ) : scene.nodes.length === 0 ? (
                 <Empty title="No project matches" />
             ) : (

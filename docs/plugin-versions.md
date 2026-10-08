@@ -301,6 +301,26 @@ catalog entry that matches this build carries the same `.rtok-plugin-version`
 local checkout can differ from the binary, and `update` reads that; `outdated` does not.
 The command never changes anything: to act on the list, run the `run:` line it prints.
 
+## Installed version in `agents list`
+
+The `plugin` row of `rtok agents list` and `rtok agents info <host>` names the installed
+version and its source, read with the same lookup as `agents outdated`. A version that
+differs from the running rtok says so, and an older one names the command that fixes it; an
+install no file dates shows `legacy`. `rtok web` shows the same text on the Hosts page, with an
+older plugin marked `outdated`.
+
+```console
+$ rtok agents list
+CLI: Claude Code
+  ✓ plugin  installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude
+$ rtok agents list
+CLI: Claude Code
+  ✓ plugin  installed (legacy, no version)
+```
+
+With `--json`, each host variant carries `plugin_version` and `plugin_source`; both are
+absent when no plugin is installed or no version is recorded.
+
 ## Releasing
 
 `tools/plugin-versions.sh` is the one place that writes and checks every version file and

@@ -4,7 +4,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useSelectFromUrl } from "./selectFromUrl";
-import { useServerMessage, useSetMutation } from "../api/query";
+import { SHOW, useTableSearch } from "../tableSearch";
+import { useSetMutation } from "../api/query";
 import type { PluginPage } from "../api/snapshot.gen";
 import { Empty } from "../states";
 import { Chip } from "../ui/Chip";
@@ -12,6 +13,7 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Search } from "../ui/Search";
+import { Result } from "../ui/Result";
 import { Switch } from "../ui/Switch";
 import { Unknown } from "../ui/Unknown";
 import { compact, fmt, pct } from "./format";
@@ -19,7 +21,6 @@ import { why } from "./missing";
 import { savedOf } from "./model";
 import { Count, Kv, Split, Toolbar, WithSnapshot } from "./parts";
 
-const SHOW = ["all", "on", "off", "saves"] as const;
 type Show = (typeof SHOW)[number];
 const SHOW_LABEL: Record<Show, string> = {
     all: "all",
@@ -41,12 +42,19 @@ export function Plugins() {
 }
 
 function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
-    const [query, setQuery] = useState("");
-    const [show, setShow] = useState<Show>("all");
+    const {
+        q: query,
+        setQ: setQuery,
+        filter,
+        setFilter,
+        sort,
+        setSort,
+    } = useTableSearch("plugins");
+    const { show } = filter;
     const [selectedId, setSelectedId] = useState<string>();
     useSelectFromUrl(setSelectedId);
-    const { mutate } = useSetMutation();
-    const message = useServerMessage();
+    const { mutate, error, inFlight } = useSetMutation();
+    const pending = useMemo(() => new Set(inFlight.map((r) => r.key)), [inFlight]);
 
     const rows = useMemo(
         () => plugins.filter((p) => matchesPlugin(p, show, query)),
@@ -54,7 +62,8 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
     );
     const selected = plugins.find((p) => p.id === selectedId) ?? plugins[0];
 
-    // The server owns the state: the switch only asks, and the next snapshot moves it.
+    // The server owns the state: the switch only asks, and the next snapshot moves it. Until
+    // then it stays where it was, spinning; a refusal leaves it there and shows the error.
     const toggle = useCallback(
         (p: PluginPage) => (next: boolean) =>
             mutate({ key: `plugins.${p.id}.enabled`, value: next }),
@@ -66,11 +75,13 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
             {
                 id: "on",
                 header: "on",
+                sortValue: (p) => Number(p.enabled),
                 width: "56px",
                 cell: (p) => (
                     <Switch
                         checked={p.enabled}
                         label={`toggle ${p.id}`}
+                        pending={pending.has(`plugins.${p.id}.enabled`)}
                         onCheckedChange={toggle(p)}
                     />
                 ),
@@ -78,6 +89,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
             {
                 id: "plugin",
                 header: "plugin",
+                sortValue: (p) => p.title,
                 cell: (p) => (
                     <span className={p.enabled ? "" : "text-fg-muted"}>
                         <b>{p.title}</b>{" "}
@@ -90,11 +102,13 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 header: "rows",
                 width: "56px",
                 align: "right",
+                sortValue: (p) => p.stats?.rows,
                 cell: (p) => fmt(p.stats?.rows),
             },
             {
                 id: "saved",
                 header: "saved",
+                sortValue: savedOf,
                 width: "64px",
                 align: "right",
                 cell: (p) => {
@@ -104,7 +118,7 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 },
             },
         ],
-        [toggle],
+        [toggle, pending],
     );
 
     if (plugins.length === 0)
@@ -127,17 +141,21 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                 </div>
                 <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
                     {SHOW.map((s) => (
-                        <Chip key={s} pressed={show === s} onPressedChange={() => setShow(s)}>
+                        <Chip
+                            key={s}
+                            pressed={show === s}
+                            onPressedChange={() => setFilter("show", s)}
+                        >
                             {SHOW_LABEL[s]}
                         </Chip>
                     ))}
                 </div>
                 <Count>{rows.length} shown</Count>
             </Toolbar>
-            {message && (
-                <p role="status" className="text-xs text-warn-fg">
-                    {message}
-                </p>
+            {error && (
+                <Result verb="toggle" kind="error">
+                    {error.message}
+                </Result>
             )}
             <Split
                 list={
@@ -147,6 +165,8 @@ function PluginsBody({ plugins }: { plugins: PluginPage[] }) {
                             rows={rows}
                             columns={columns}
                             getRowId={(p) => p.id}
+                            sort={sort}
+                            onSortChange={setSort}
                             selectedId={selected?.id}
                             onSelect={(p) => setSelectedId(p.id)}
                             empty={
