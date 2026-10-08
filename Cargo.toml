@@ -198,8 +198,7 @@ debug = false
 [profile.release]
 strip = "symbols"
 
-# The profile that 'dist' will build with
+# The profile that 'dist' will build with: `dev`, so every release is a dev build
+# (unoptimized, line tables, no LTO).
 [profile.dist]
-inherits = "release"
-lto = "thin"
-codegen-units = 1 # the shipped binary is built once; trade build time for size
+inherits = "dev"
