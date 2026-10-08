@@ -388,6 +388,7 @@ struct Found {
     path: PathBuf,
     role: Role,
     documented: bool,
+    per_commit: bool,
 }
 
 /// The folders of one host that exist: the §22 map, then the folders its own config files sit
@@ -404,6 +405,7 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
                 path,
                 role: s.role,
                 documented: s.documented,
+                per_commit: s.per_commit,
             });
         }
     }
@@ -425,6 +427,7 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
                 path: d,
                 role: Role::Data,
                 documented: false,
+                per_commit: false,
             });
         }
     }
@@ -471,7 +474,9 @@ fn host_rows(
         for f in host_folders(a, cfg, roots) {
             let target = symlink_target(&f.path);
             let key = target.clone().unwrap_or_else(|| f.path.clone());
-            if f.role == Role::Cache && f.documented {
+            if f.per_commit {
+                owned.extend(junk_kinds::stale_code_caches(&f.path));
+            } else if f.role == Role::Cache && f.documented {
                 owned.push(Owned {
                     path: f.path.clone(),
                     evidence: junk_cache::SECTION_22,
@@ -1011,6 +1016,40 @@ mod tests {
         assert!(!text.contains("\x1b]8"), "no link off a terminal: {text}");
         let linked = to_list(&report, true, true);
         assert!(linked.contains("\x1b]8;;file://"), "{linked}");
+    }
+
+    /// T391: only the commit folders of `CachedData` that are not the newest are VS Code cache,
+    /// and only after the idle window; Cursor's `CachedData` stays a read-only folder.
+    #[cfg(unix)]
+    #[test]
+    fn vscode_code_cache_offers_old_commit_folders_and_cursor_none() {
+        let (mut cfg, dir) = crate::testutil::config("junk-code-cache");
+        cfg.log.path = dir.join("none/rtok.log");
+        cfg.core.archive_dir = dir.join("none/archive");
+        let code = dir.join(".config/Code/CachedData");
+        for (name, secs) in [("new", 60), ("old", 40 * 86_400)] {
+            let f = code.join(name).join("f.cache");
+            write(&f, 100);
+            let when = SystemTime::now() - Duration::from_secs(secs);
+            for p in [&f, &code.join(name)] {
+                std::fs::File::open(p).unwrap().set_modified(when).unwrap();
+            }
+        }
+        write(&dir.join(".config/Cursor/CachedData/x/f"), 100);
+
+        let opts = Options {
+            all: true,
+            cwd: std::env::temp_dir(),
+            ..Options::default()
+        };
+        let report = report_with(&cfg, &roots(&dir, &[]), opts, AGENT_SCAN_LIMIT);
+
+        let v = agent(&report, "vscode");
+        let paths: Vec<_> = v.items.iter().map(|i| i.path.clone()).collect();
+        assert_eq!(paths, [code.join("old").display().to_string()]);
+        assert!(v.items[0].kept.is_none(), "{:?}", v.items);
+        assert!(folder(v, &code).documented);
+        assert!(agent(&report, "cursor").items.is_empty());
     }
 
     /// An override that points two hosts at one directory: it is listed under both with a
