@@ -29,6 +29,7 @@ use rtok_plugin_sdk::{
     Surface, ToolDef,
 };
 
+pub mod blast;
 pub mod cochange;
 pub mod follow;
 pub mod index;
@@ -93,8 +94,8 @@ impl Plugin for Graph {
             },
             ToolDef {
                 name: "impact",
-                description: "What breaks if a symbol changes: callers up to depth. Optional to: chains reaching it. Empty name + path lists affected tests.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"to":{"type":"string"},"depth":{"type":"integer"},"path":{"type":"string"},"project":{"type":"string"}}}),
+                description: "What breaks if a symbol changes: callers up to depth, grouped by file and cut at a token budget (all=true: every row). Optional to: chains reaching it. Empty name + path lists affected tests.",
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"to":{"type":"string"},"depth":{"type":"integer"},"all":{"type":"boolean"},"path":{"type":"string"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "outline",
@@ -120,6 +121,8 @@ impl Plugin for Graph {
 pub struct Filter {
     pub path: String,
     pub kind: String,
+    /// T377: `impact` prints every reached row instead of the budgeted, file-grouped answer.
+    pub all: bool,
 }
 
 impl Filter {
@@ -127,6 +130,7 @@ impl Filter {
         Self {
             path: String::new(),
             kind: String::new(),
+            all: false,
         }
     }
 
@@ -309,6 +313,7 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
     let filter = Filter {
         path: arg("path").to_string(),
         kind: arg("kind").to_string(),
+        all: args["all"].as_bool().unwrap_or(false),
     };
     match name {
         "symbol" => scope::symbol(cx, scope, arg("name"), &filter),
@@ -650,7 +655,22 @@ fn impact_tags(
         // Cap keeps the head, so this line has to lead or a long walk hides it.
         text.push_str(&other_defs_line(name, ranked.others));
     }
-    text.push_str(&impact_lines_text(&rows));
+    // The budget covers the finished answer, so what is added around the rows is taken off it.
+    let mark = cx.symbol_defs(&key, name)?.len() > 1;
+    let mut around = if mark {
+        ambiguous_banner(1) + &mark_ambiguous_lines(&text)
+    } else {
+        text.clone()
+    };
+    around.extend(cochange::changes_with(cx, root, &file));
+    let budget = blast::Budget {
+        overhead: cx.estimate(&around, Class::Code),
+        mark,
+        ..blast::Budget::new(cx, filter.all)
+    };
+    text.push_str(&blast::render(cx, &rows, name, &budget, || {
+        rank::ranks(cx, &key)
+    })?);
     let text = cap(cx, annotate_ambiguous(cx, root, name, text)?)?;
     with_stale(cx, root, with_cochange(cx, root, &file, text))
 }
@@ -1645,6 +1665,7 @@ mod tests {
         let src = Filter {
             path: "src/".into(),
             kind: String::new(),
+            ..Filter::none()
         };
         let out = symbol_filtered(&Ctx::new(&cx), &crate_root(), "main", &src).unwrap();
         for bin in ["src/main.rs:", "src/bin/rtok-hook.rs:"] {
@@ -1859,6 +1880,7 @@ mod tests {
             &Filter {
                 path: "b.rs".into(),
                 kind: String::new(),
+                ..Filter::none()
             },
         )
         .unwrap();
@@ -1871,6 +1893,7 @@ mod tests {
                 &Filter {
                     path: "zzz".into(),
                     kind: String::new(),
+                    ..Filter::none()
                 },
             )
             .unwrap(),
@@ -1893,6 +1916,7 @@ mod tests {
             &Filter {
                 path: String::new(),
                 kind: "struct".into(),
+                ..Filter::none()
             },
         )
         .unwrap();
@@ -1919,6 +1943,7 @@ mod tests {
             &Filter {
                 path: "other".into(),
                 kind: String::new(),
+                ..Filter::none()
             },
         )
         .unwrap();
@@ -1948,6 +1973,7 @@ mod tests {
             &Filter {
                 path: "other".into(),
                 kind: String::new(),
+                ..Filter::none()
             },
             None,
         )
@@ -1962,6 +1988,7 @@ mod tests {
                 &Filter {
                     path: "zzz".into(),
                     kind: String::new(),
+                    ..Filter::none()
                 },
                 None,
             )
@@ -2352,6 +2379,7 @@ mod tests {
             &Filter {
                 path: "b.rs".into(),
                 kind: String::new(),
+                ..Filter::none()
             },
         )
         .unwrap();

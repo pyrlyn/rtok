@@ -1056,6 +1056,9 @@ section! {
     Graph {
         enabled: bool = true,
         max_tokens: u32 = 2000,
+        /// T377: `impact` token budget; a longer answer is grouped by file and cut with a count of
+        /// what was left. 0 = no budget.
+        impact_tokens: u32 = 1500,
         map_tokens: u32 = 0,
         /// T370: how the SessionStart map orders files: `refs` counts references per name,
         /// `pagerank` ranks files by personalized PageRank over the stored file graph.

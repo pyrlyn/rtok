@@ -24,6 +24,9 @@
   are one `kv` document per root, recounted only when HEAD moves. `impact` prints the top 5
   partners of the defining file; `rank::build` adds them as edges at `COCHANGE_WEIGHT`. The map
   sees them from the next index run that changes the root. Not a repo: no pairs, no change.
+- `impact` prints the flat `depth  path  scope` listing while it fits `impact_tokens`; past it `blast.rs`
+  groups files (depth, stored file rank, refs), prints 3 lines each and ends in the cut line.
+  `--all` / MCP `all` and `impact_tokens = 0` keep the flat listing. The LSP backend is not budgeted.
 - The plugin never writes SQL (D13). Storage is `src/store/symbols.rs` (`symbol_*` methods).
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
