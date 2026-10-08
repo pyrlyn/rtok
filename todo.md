@@ -96,5 +96,6 @@
 - T436.2. Spinners on the remaining waits and icons on `agents install/update`
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T441.7. GitHub adapter
+- T441.11. GitHub Projects v2 Status
+- T441.12. `rtok task sync`
 - T441.8. GitLab adapter
