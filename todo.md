@@ -73,7 +73,6 @@
 - T394. Run the paid live benches and record them
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
-- T397. Re-measure numbers that shipped fixes made stale
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T399. Re-check host docs for three open host questions
 - T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API

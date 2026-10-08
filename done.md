@@ -9393,6 +9393,16 @@ Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) an
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T397. Re-measure numbers that shipped fixes made stale
+
+Three numbers in `research.md` §2 and §19 predated the fixes they describe. Re-measured on `main` at `1d6961541` (Apple M3 Max, 2026-10-08, load average 80–200). Graph cold index, 3,000 files: median 911 ms over five `graph_bench` runs and 479 ms over fifteen in-process runs, against 172 ms (T35.2); slower, but the old run's load is unknown and the cold run now also rebuilds the symbol IDF (T368) and refreshes ranks. T59.3's 200-file batch never shipped (`index.rs` flushes at 64), so there was nothing to keep or revert and 64 vs 200 is unmeasured. T241 `replay_bench` row: `cmd` 82.7 % (trailer counted since T247, was 84.2 %), `read` 52.3 %, total 79.7 %, unchanged since 2026-09-25; `search` records a row only when `max_chars` cuts (T300). Hook cancellations after T178 (new §19.8): 114 of 165,669 runs (0.069 %) vs 10 of 13,091 (0.076 %) before; the lock-wait fix fires on the real store (7 `skipped: store locked` events) but does not explain the cancellations, whose cause stays open.
+
+Check: three dated rows in `research.md` (§2 cold index, §2 replay_bench, §19.8).
+Result: `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers` ×5; `cargo test --test replay_bench -- --nocapture` ×3; read-only `jq` count of `hook_cancelled`/`hook_success` attachments and `grep` of `rtok.log`; `docs_structure` green. #846.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T441.6. MCP task tools
 
 Sixth subtask of T441 (task adapters): `task_create`, `task_list`, `task_get`, `task_status` and `task_next` on `rtok mcp`, with the same JSON as the CLI.
