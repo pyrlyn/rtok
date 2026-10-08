@@ -6,6 +6,7 @@ import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-route
 import { Suspense, useEffect, useRef, useState } from "react";
 import logo from "@brand/logo/rtok-mark.svg";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
+import { LiveStatus } from "./LiveStatus";
 import { Orb } from "./Orb";
 import { Kbd, paletteKeys } from "./palette/Kbd";
 import type { Target } from "./palette/Palette";
@@ -13,17 +14,9 @@ import { useShortcuts } from "./palette/shortcuts";
 import { PAGES, type Page } from "./pages";
 import { Empty, ErrorState, Offline } from "./states";
 import { useTheme } from "./theme";
+import { focusRing } from "./ui/cx";
 import { Icon } from "./ui/Icon";
 import { lazyPart } from "./ui/lazyPart";
-import { Pill, type PillTone } from "./ui/Pill";
-import type { ConnectionState } from "./api/ws";
-
-// The label says the state; the tone only repeats it.
-const linkTone: Record<ConnectionState, PillTone> = {
-    open: "ok",
-    connecting: "info",
-    closed: "fail",
-};
 
 // React Aria comes with the palette, so neither weighs on the first paint.
 const Palette = lazyPart("the command palette", () =>
@@ -33,7 +26,6 @@ const ShortcutHelp = lazyPart("the shortcut sheet", () =>
     import("./palette/Palette").then((m) => m.ShortcutHelp),
 );
 
-const focusRing = "outline-none focus-visible:shadow-ring";
 // Narrow screens get a bottom tab bar (icon over label, centred); from md up it is the sidebar.
 const navLink = `${focusRing} flex min-w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-md px-2 py-1.5 text-2xs md:h-9 md:min-w-0 md:flex-row md:justify-start md:gap-3 md:px-2.5 md:py-0 md:text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent-fg`;
 
@@ -135,9 +127,7 @@ export function Shell() {
                                 {title}
                             </h1>
                         </div>
-                        <Pill tone={linkTone[connection]} dot>
-                            {connection === "open" ? "live" : connection}
-                        </Pill>
+                        <LiveStatus />
                         <button
                             type="button"
                             onClick={() => setPalette(true)}
