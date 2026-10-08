@@ -35,3 +35,19 @@ export interface ChartSpec {
 /** Sum of every series at `i`: the top of a stacked column. */
 export const stackAt = (spec: ChartSpec, i: number) =>
   spec.series.reduce((s, x) => s + (x.values[i] ?? 0), 0);
+
+/**
+ * The series whose segment of the stacked column at `i` holds `value` (a y reading of the pointer),
+ * or null above the column, on a zero segment or on any other chart kind. The calls legend lights
+ * the series the pointer is on with it (T414.16).
+ */
+export function seriesAt(spec: ChartSpec, i: number, value: number): string | null {
+  if (spec.kind !== "stacked-bars") return null;
+  let lo = 0;
+  for (const s of spec.series) {
+    const hi = lo + (s.values[i] ?? 0);
+    if (hi > lo && value > lo && value <= hi) return s.id;
+    lo = hi;
+  }
+  return null;
+}

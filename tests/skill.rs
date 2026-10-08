@@ -103,6 +103,62 @@ fn worktrees_skill_names_only_commands_rtok_worktree_has() {
     }
 }
 
+/// T441.10: the rule line is a skill, so every `rtok task` command and flag it shows must
+/// exist, and it must teach every subcommand an agent needs to plan and track work.
+#[test]
+fn tasks_skill_names_only_commands_rtok_task_has() {
+    let cli = Cli::command();
+    let task = cli.find_subcommand("task").expect("rtok task");
+    let content = hub_skill("rtok-tasks");
+    let (_, body) = split_frontmatter(&content);
+    let mut seen = Vec::new();
+    for span in body.split('`').skip(1).step_by(2) {
+        let Some(rest) = span.strip_prefix("rtok task ") else {
+            continue;
+        };
+        let mut words = rest.split_whitespace();
+        let sub = words.next().expect("subcommand after `rtok task`");
+        let cmd = task
+            .find_subcommand(sub)
+            .unwrap_or_else(|| panic!("`rtok task {sub}` is not a subcommand"));
+        for flag in words.filter_map(|w| w.strip_prefix("--")) {
+            assert!(
+                cmd.get_arguments().any(|a| a.get_long() == Some(flag)),
+                "`rtok task {sub}` has no `--{flag}`"
+            );
+        }
+        seen.push(sub);
+    }
+    for sub in ["create", "list", "show", "status", "next", "init"] {
+        assert!(seen.contains(&sub), "the skill must show `rtok task {sub}`");
+    }
+}
+
+/// T441.10: installing the task skill changes nothing but its own directory; a user's own
+/// skill beside it stays byte for byte, and a second install reports no change.
+#[test]
+fn install_adds_the_tasks_skill_and_leaves_a_users_own_skill_alone() {
+    let home = tmp("skills-tasks");
+    let cfg = write_cfg(&home);
+    let root = home.join(".codex/skills");
+    let mine = root.join("my-tasks");
+    fs::create_dir_all(&mine).unwrap();
+    fs::write(mine.join("SKILL.md"), "mine\n").unwrap();
+
+    let out = rtok(&["agents", "install", "codex"], &cfg, &home);
+    assert_eq!(
+        fs::read_to_string(root.join("rtok-tasks/SKILL.md")).unwrap(),
+        hub_skill("rtok-tasks"),
+        "{out}"
+    );
+    let again = rtok(&["agents", "install", "codex"], &cfg, &home);
+    assert!(!again.contains("rtok-tasks"), "{again}");
+    rtok(&["agents", "remove", "codex"], &cfg, &home);
+    assert_eq!(fs::read_to_string(mine.join("SKILL.md")).unwrap(), "mine\n");
+    assert!(!root.join("rtok-tasks").exists());
+    let _ = fs::remove_dir_all(&home);
+}
+
 /// T380: the hub skill keeps the name `rtok`; every other shipped skill is `rtok-<name>`.
 #[test]
 fn shipped_skills_except_the_hub_start_with_rtok_prefix() {
