@@ -28,7 +28,7 @@ build never blocks the host.
 | `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
 | `rtok memory import <file>` | import notes as JSONL, deduped by body hash |
 | `rtok otel flush\|status` | export the ledgers over OTLP/HTTP, or report the watermarks |
-| `rtok task create\|list\|show\|status\|next\|sync\|init` | the project's plan in its `[tasks]` adapter; `sync` raises the id counters to the highest ids the adapter holds and reports drift, never writing the adapter |
+| `rtok task create\|list\|show\|status\|next\|ready\|claim\|release\|dep\|priority\|sync\|init` | the project's plan in its `[tasks]` adapter; `claim` takes a ready task, `dep` records a blocker, `sync` raises the id counters and reports drift |
 | `rtok bench` | A/B two host configurations on fixed tasks |
 
 ## Every flag is a config key

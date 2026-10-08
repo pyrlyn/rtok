@@ -17,6 +17,9 @@ index|messages_to_agent|messages|CREATE INDEX messages_to_agent ON messages (to_
 index|note_embeddings_model|note_embeddings|CREATE INDEX note_embeddings_model ON note_embeddings (model)
 index|note_files_path|note_files|CREATE INDEX note_files_path ON note_files (path)
 index|notes_topic|notes|CREATE UNIQUE INDEX notes_topic ON notes (COALESCE(project, ''), kind, title)
+index|observation_files_path|observation_files|CREATE INDEX observation_files_path ON observation_files (path)
+index|observations_dedup|observations|CREATE INDEX observations_dedup ON observations (session_id, dedup, ts)
+index|observations_project_ts|observations|CREATE INDEX observations_project_ts ON observations (project, ts)
 index|project_links_to|project_links|CREATE INDEX project_links_to ON project_links(to_id)
 index|projects_one_selected|projects|CREATE UNIQUE INDEX projects_one_selected ON projects(selected) WHERE selected = 1
 index|sqlite_autoindex___diesel_schema_migrations_1|__diesel_schema_migrations|
@@ -30,6 +33,8 @@ index|sqlite_autoindex_hosts_1|hosts|
 index|sqlite_autoindex_kv_1|kv|
 index|sqlite_autoindex_models_1|models|
 index|sqlite_autoindex_note_files_1|note_files|
+index|sqlite_autoindex_note_versions_1|note_versions|
+index|sqlite_autoindex_observation_files_1|observation_files|
 index|sqlite_autoindex_otel_export_1|otel_export|
 index|sqlite_autoindex_project_links_1|project_links|
 index|sqlite_autoindex_projects_1|projects|
@@ -37,6 +42,7 @@ index|sqlite_autoindex_providers_1|providers|
 index|sqlite_autoindex_read_cache_1|read_cache|
 index|sqlite_autoindex_sessions_1|sessions|
 index|sqlite_autoindex_symbol_stale_1|symbol_stale|
+index|sqlite_autoindex_task_claims_1|task_claims|
 index|sqlite_autoindex_task_counters_1|task_counters|
 index|sqlite_autoindex_worktree_claims_1|worktree_claims|
 index|symbols_root_name|symbols|CREATE INDEX symbols_root_name ON symbols(root, name)
@@ -63,12 +69,20 @@ table|messages|messages|CREATE TABLE messages ( id INTEGER PRIMARY KEY, from_age
 table|models|models|CREATE TABLE models ( id INTEGER PRIMARY KEY, provider_id INTEGER NOT NULL REFERENCES providers(id), slug TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()), UNIQUE (provider_id, slug) )
 table|note_embeddings|note_embeddings|CREATE TABLE note_embeddings ( note_id INTEGER PRIMARY KEY NOT NULL REFERENCES notes(id) ON DELETE CASCADE, model TEXT NOT NULL, dims INTEGER NOT NULL, text_hash TEXT NOT NULL, embedded_at INTEGER NOT NULL DEFAULT (unixepoch()), vector BLOB NOT NULL )
 table|note_files|note_files|CREATE TABLE note_files ( note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE, path TEXT NOT NULL, PRIMARY KEY (note_id, path) )
+table|note_versions|note_versions|CREATE TABLE note_versions ( id INTEGER PRIMARY KEY, note_id INTEGER NOT NULL REFERENCES notes(id), title TEXT NOT NULL, body TEXT NOT NULL, version INTEGER NOT NULL, ts INTEGER NOT NULL DEFAULT (unixepoch()), UNIQUE (note_id, version) )
 table|notes|notes|CREATE TABLE notes ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), project TEXT, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL , retired INTEGER NULL, superseded_by INTEGER NULL, pinned INTEGER NOT NULL DEFAULT 0, uses INTEGER NOT NULL DEFAULT 0, last_used INTEGER NULL)
 table|notes_fts|notes_fts|CREATE VIRTUAL TABLE notes_fts USING fts5 (title, body, content = 'notes', content_rowid = 'id')
 table|notes_fts_config|notes_fts_config|CREATE TABLE 'notes_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID
 table|notes_fts_data|notes_fts_data|CREATE TABLE 'notes_fts_data'(id INTEGER PRIMARY KEY, block BLOB)
 table|notes_fts_docsize|notes_fts_docsize|CREATE TABLE 'notes_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
 table|notes_fts_idx|notes_fts_idx|CREATE TABLE 'notes_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
+table|observation_files|observation_files|CREATE TABLE observation_files ( observation_id INTEGER NOT NULL REFERENCES observations(id) ON DELETE CASCADE, path TEXT NOT NULL, PRIMARY KEY (observation_id, path) )
+table|observations|observations|CREATE TABLE observations ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session_id TEXT NOT NULL, project TEXT, obs_type TEXT NOT NULL, title TEXT NOT NULL, narrative TEXT NOT NULL, dedup TEXT NOT NULL )
+table|observations_fts|observations_fts|CREATE VIRTUAL TABLE observations_fts USING fts5 ( title, narrative, content = 'observations', content_rowid = 'id' )
+table|observations_fts_config|observations_fts_config|CREATE TABLE 'observations_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID
+table|observations_fts_data|observations_fts_data|CREATE TABLE 'observations_fts_data'(id INTEGER PRIMARY KEY, block BLOB)
+table|observations_fts_docsize|observations_fts_docsize|CREATE TABLE 'observations_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
+table|observations_fts_idx|observations_fts_idx|CREATE TABLE 'observations_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
 table|otel_export|otel_export|CREATE TABLE otel_export ( stream TEXT PRIMARY KEY, mark BIGINT NOT NULL DEFAULT 0 )
 table|project_links|project_links|CREATE TABLE project_links ( from_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, to_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('manual', 'auto')), reason TEXT, unlinked INTEGER NOT NULL DEFAULT 0 CHECK (unlinked IN (0, 1)), created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (from_id, to_id), CHECK (from_id != to_id) )
 table|projects|projects|CREATE TABLE projects ( id INTEGER PRIMARY KEY, root TEXT NOT NULL UNIQUE, name TEXT, origin TEXT NOT NULL CHECK (origin IN ('manual', 'session', 'worktree', 'mcp', 'reference')), created_at INTEGER NOT NULL DEFAULT (unixepoch()), last_used_at INTEGER NOT NULL DEFAULT (unixepoch()), selected INTEGER NOT NULL DEFAULT 0 CHECK (selected IN (0, 1)) )
@@ -82,6 +96,7 @@ table|symbols_fts_config|symbols_fts_config|CREATE TABLE 'symbols_fts_config'(k 
 table|symbols_fts_data|symbols_fts_data|CREATE TABLE 'symbols_fts_data'(id INTEGER PRIMARY KEY, block BLOB)
 table|symbols_fts_docsize|symbols_fts_docsize|CREATE TABLE 'symbols_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
 table|symbols_fts_idx|symbols_fts_idx|CREATE TABLE 'symbols_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
+table|task_claims|task_claims|CREATE TABLE task_claims ( project TEXT NOT NULL, task_id TEXT NOT NULL, agent_id TEXT NOT NULL, title TEXT NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (project, task_id) )
 table|task_counters|task_counters|CREATE TABLE task_counters ( project TEXT NOT NULL, parent TEXT NOT NULL DEFAULT '', last INTEGER NOT NULL, PRIMARY KEY (project, parent) )
 table|tokens|tokens|CREATE TABLE tokens ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), call_id INTEGER NOT NULL REFERENCES calls(id), plugin TEXT, phase TEXT NOT NULL, source TEXT NOT NULL, tokens INTEGER NOT NULL, bytes INTEGER, input INTEGER, output INTEGER, cache_create INTEGER, cache_read INTEGER )
 table|usage|usage|CREATE TABLE usage ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, model TEXT, input INTEGER NOT NULL DEFAULT 0, cache_create INTEGER NOT NULL DEFAULT 0, cache_read INTEGER NOT NULL DEFAULT 0, output INTEGER NOT NULL DEFAULT 0 , call_id INTEGER REFERENCES calls(id), api TEXT NOT NULL DEFAULT 'anthropic')
@@ -89,6 +104,9 @@ table|worktree_claims|worktree_claims|CREATE TABLE worktree_claims ( path TEXT P
 trigger|notes_ad|notes|CREATE TRIGGER notes_ad AFTER DELETE ON notes BEGIN INSERT INTO notes_fts (notes_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body); END
 trigger|notes_ai|notes|CREATE TRIGGER notes_ai AFTER INSERT ON notes BEGIN INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body); END
 trigger|notes_au|notes|CREATE TRIGGER notes_au AFTER UPDATE ON notes BEGIN INSERT INTO notes_fts (notes_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body); INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body); END
+trigger|observations_ad|observations|CREATE TRIGGER observations_ad AFTER DELETE ON observations BEGIN INSERT INTO observations_fts (observations_fts, rowid, title, narrative) VALUES ('delete', old.id, old.title, old.narrative); END
+trigger|observations_ai|observations|CREATE TRIGGER observations_ai AFTER INSERT ON observations BEGIN INSERT INTO observations_fts (rowid, title, narrative) VALUES (new.id, new.title, new.narrative); END
+trigger|observations_au|observations|CREATE TRIGGER observations_au AFTER UPDATE ON observations BEGIN INSERT INTO observations_fts (observations_fts, rowid, title, narrative) VALUES ('delete', old.id, old.title, old.narrative); INSERT INTO observations_fts (rowid, title, narrative) VALUES (new.id, new.title, new.narrative); END
 trigger|symbols_ad|symbols|CREATE TRIGGER symbols_ad AFTER DELETE ON symbols WHEN old.is_def = 1 AND old.name != '' BEGIN INSERT INTO symbols_fts (symbols_fts, rowid, name, signature, doc) VALUES ('delete', old.id, old.name, old.signature, old.doc); END
 trigger|symbols_ai|symbols|CREATE TRIGGER symbols_ai AFTER INSERT ON symbols WHEN new.is_def = 1 AND new.name != '' BEGIN INSERT INTO symbols_fts (rowid, name, signature, doc) VALUES (new.id, new.name, new.signature, new.doc); END
 trigger|symbols_au|symbols|CREATE TRIGGER symbols_au AFTER UPDATE ON symbols BEGIN INSERT INTO symbols_fts (symbols_fts, rowid, name, signature, doc) SELECT 'delete', old.id, old.name, old.signature, old.doc WHERE old.is_def = 1 AND old.name != ''; INSERT INTO symbols_fts (rowid, name, signature, doc) SELECT new.id, new.name, new.signature, new.doc WHERE new.is_def = 1 AND new.name != ''; END

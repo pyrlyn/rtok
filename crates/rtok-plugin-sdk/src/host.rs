@@ -46,6 +46,38 @@ pub struct NoteHit {
     pub snippet: String,
 }
 
+/// One mechanical observation to store (T454). One value so the host method
+/// stays under the argument cap.
+pub struct NewObservation<'a> {
+    /// Host session that produced it.
+    pub session_id: &'a str,
+    /// Project key, when the session has one.
+    pub project: Option<&'a str>,
+    /// `file_read`, `command_run`, `error`, …
+    pub obs_type: &'a str,
+    /// Tool name, capped.
+    pub title: &'a str,
+    /// Scrubbed narrative, capped.
+    pub narrative: &'a str,
+    /// sha256 of session, tool and narrative.
+    pub dedup: &'a str,
+    /// Existing root-relative files the call named.
+    pub files: &'a [String],
+}
+
+/// One mechanical observation (T454): a scrubbed tool-call summary, not the raw output.
+#[derive(Clone, Debug)]
+pub struct ObsHit {
+    /// Observation id; pass it to [`Notes::observation_narrative`].
+    pub id: i32,
+    /// Tool name, capped.
+    pub title: String,
+    /// Host session that produced it.
+    pub session_id: String,
+    /// A short excerpt of the narrative.
+    pub snippet: String,
+}
+
 /// The frozen decision for one archived tool result, from [`Archive::archive_decision`].
 ///
 /// A tool result is shortened once. Every later turn replays the same pointer text, because
@@ -349,6 +381,47 @@ pub trait Notes {
         _limit: u32,
     ) -> Result<Vec<NoteHit>> {
         Ok(Vec::new())
+    }
+
+    /// Count one read of note `id` (`uses`, `last_used`). Default no-op.
+    fn touch_note(&self, _id: i32) -> Result<()> {
+        Ok(())
+    }
+
+    /// Insert a mechanical observation. `Ok(None)` means a recent duplicate was skipped.
+    /// Default `Ok(None)` for a host that does not store observations.
+    fn insert_observation(&self, _obs: &NewObservation<'_>) -> Result<Option<i32>> {
+        Ok(None)
+    }
+
+    /// FTS over observation narratives. An empty query returns no hits.
+    fn search_observations(
+        &self,
+        _project: Option<&str>,
+        _query: &str,
+        _limit: u32,
+    ) -> Result<Vec<ObsHit>> {
+        Ok(Vec::new())
+    }
+
+    /// Observations linked to any of `paths`, newest first.
+    fn observations_for_files(
+        &self,
+        _project: Option<&str>,
+        _paths: &[String],
+        _limit: u32,
+    ) -> Result<Vec<ObsHit>> {
+        Ok(Vec::new())
+    }
+
+    /// Newest observations in one session.
+    fn recent_observations(&self, _session_id: &str, _limit: u32) -> Result<Vec<ObsHit>> {
+        Ok(Vec::new())
+    }
+
+    /// The scrubbed narrative of observation `id`.
+    fn observation_narrative(&self, _id: i32) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 

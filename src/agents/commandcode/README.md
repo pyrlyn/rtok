@@ -27,7 +27,7 @@ match on; the reply passes through unchanged.
 
 Hooks carry `hook` and `cli`, MCP carries `mcp`. Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon
+Reachable: measure, cmd, read, json_tree, archive, inject, guard, memory, graph, toon
 Not reachable: proxy, compress
 
 ## Docs

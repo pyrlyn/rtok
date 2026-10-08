@@ -445,6 +445,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("memory unpin", "drops the recall lead flag (T69.1)"),
     ("memory revise", "replaces and retires note rows (T69.1)"),
     (
+        "memory history",
+        "prints earlier bodies of one note; recall and mem_get stay on the current body (T472)",
+    ),
+    (
         "memory sync",
         "writes a managed CLAUDE.md / AGENTS.md block (T69.6)",
     ),
@@ -492,6 +496,20 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "task sync",
         "raises the store's id counters to the adapter's highest ids; agents get that for free, since task_create seeds first (T441.12)",
+    ),
+    (
+        "task ready",
+        "reads the project's adapter, not the store snapshot (T442)",
+    ),
+    (
+        "task claim",
+        "claims a task through the adapter; the store only records it for the hook (T442)",
+    ),
+    ("task release", "clears a claim through the adapter (T442)"),
+    ("task dep", "writes a blocker through the adapter (T442)"),
+    (
+        "task priority",
+        "writes a priority through the adapter (T442)",
     ),
     (
         "worktree add",
@@ -683,6 +701,11 @@ const JSON_READERS: &[&str] = &[
     "task list",
     "task show",
     "task next",
+    "task ready",
+    "task claim",
+    "task release",
+    "task dep",
+    "task priority",
 ];
 
 fn command_at<'a>(root: &'a Command, path: &str) -> &'a Command {
