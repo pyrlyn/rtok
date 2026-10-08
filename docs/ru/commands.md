@@ -24,7 +24,7 @@ lang: ru
 | `rtok doctor` | проверить хуки, MCP-серверы, цепочку прокси — включая то, сколько каждый стоит за ход |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | установить в хост с резервными копиями; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | убрать rtok из хоста с резервными копиями; `--dry-run` |
-| `rtok agents list` | каждое известное приложение: тип и имя, путь и версия, файлы конфигурации, модули rtok |
+| `rtok agents list` | каждое известное приложение: тип и имя, путь и версия, файлы конфигурации, модули rtok, версия установленного плагина |
 | `rtok graph index [path]` | построить индекс символов tree-sitter для дерева |
 | `rtok graph impact <name> [--project <id\|dir>]` | что сломается при изменении символа, по проекту и связанным с ним проектам; `dead` и `affected` тоже идут по этому набору (символ, который зовёт только связанный проект, не мёртвый; `git diff` читается в каждом проекте, тесты перечислены по проектам); `--project` есть и у `index`, `status`. Один ответ, один лимит; при включённом `watch` `rtok mcp` следит за каждым проектом набора |
 | `rtok memory import <file>` | импортировать заметки в формате JSONL с дедупликацией по хешу тела |
