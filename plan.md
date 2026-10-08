@@ -63,7 +63,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.5 | todo | P2 | 3 | 20% | |
 | T385.6 | todo | P2 | 3 | 20% | |
-| T385.7 | in progress | P3 | 4 | 10% | Claude Code / claude-opus-5-5 |
 | T385.8 | todo | P2 | 2 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
@@ -1415,14 +1414,6 @@ Check: mock upstream — omit/force/respect matrix and each 429 policy; `just ch
 optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
 
 Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
-
-### T385.7. Per-lane upstream and in-flight cap
-
-optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
-
-Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
-
-Plan: `[proxy.lanes.<lane>]` gains `upstream` (empty = the wire's own upstream), `max_in_flight` (0 = no cap) and `max_queued`; `agent`, `batch` and `files` have no table, so Batch keeps the provider upstream and the agent lane is never capped. `src/proxy/gate.rs`: one semaphore per capped lane plus a bounded waiting count; a slot is taken before shaping and held until the response stream ends; a full queue answers 429 with `Retry-After` and is never recorded as a call; plain mode skips the cap. `ProxyState` picks the lane upstream in `upstream_for`. Config template, `docs/config.md` (en, ru, uk), validation of the URL, trycmd goldens. Test `tests/proxy_lane_gate.rs`: a gated mock upstream holds a bulk burst while an agent call completes; queue-full 429; lane upstream reaches its own mock.
 
 ### T385.8. P28 Phase 1: measure what LLM compression could save
 
