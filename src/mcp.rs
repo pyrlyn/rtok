@@ -714,6 +714,8 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         #[cfg(feature = "memory")]
         "mem_search" => mem_search(cx, args),
         #[cfg(feature = "memory")]
+        "mem_pack" => mem_pack(cx, args),
+        #[cfg(feature = "memory")]
         "mem_get" => mem_get(cx, args),
         #[cfg(feature = "memory")]
         "mem_update" => mem_update(cx, args),
@@ -786,6 +788,16 @@ fn mem_save(cx: &Runtime, args: &Value) -> Result<String> {
     let project = args["project"].as_str();
     let (id, updated) = crate::plugins::memory::mem_save(cx, kind, title, body, project)?;
     Ok(json!({"id": id, "updated": updated}).to_string())
+}
+
+#[cfg(feature = "memory")]
+fn mem_pack(cx: &Runtime, args: &Value) -> Result<String> {
+    let query = args["query"].as_str().unwrap_or("");
+    let limit = args["limit"].as_u64().map_or(8, |n| n.clamp(1, 20)) as u32;
+    let max_tokens = args["max_tokens"]
+        .as_u64()
+        .map_or(400, |n| n.clamp(1, 2000)) as u32;
+    crate::plugins::memory::mem_pack(cx, query, limit, max_tokens)
 }
 
 #[cfg(feature = "memory")]

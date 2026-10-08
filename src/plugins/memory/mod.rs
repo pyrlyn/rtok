@@ -8,6 +8,7 @@ pub mod export;
 mod files;
 pub mod handoff;
 pub mod import;
+pub mod pack;
 pub mod status;
 pub mod sync;
 
@@ -56,6 +57,11 @@ impl Plugin for Memory {
                 name: "mem_search",
                 description: "Search notes by FTS5; ids, titles, snippets.",
                 input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}),
+            },
+            ToolDef {
+                name: "mem_pack",
+                description: "Ranked notes inside a token budget. Returns id, tier, text. Does not replace mem_get.",
+                input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"max_tokens":{"type":"integer"}},"required":["query"]}),
             },
             ToolDef {
                 name: "mem_get",
@@ -302,6 +308,47 @@ pub fn mem_save(
     rt.store
         .upsert_note_embedding(id, title, body, &rt.config.plugins.memory.embed)?;
     Ok((id, updated))
+}
+
+pub fn mem_pack(
+    rt: &crate::plugin::Runtime,
+    query: &str,
+    limit: u32,
+    max_tokens: u32,
+) -> anyhow::Result<String> {
+    let limit = limit.clamp(1, 20);
+    let max_tokens = max_tokens.clamp(1, 2000);
+    let hits = mem_search(rt, query, limit)?;
+    let rows: Vec<(i32, String, String)> = hits
+        .into_iter()
+        .map(|h| (h.id, h.title, h.snippet))
+        .collect();
+    let pack = pack::pack_notes(
+        &rows,
+        |id| rt.store.get_note_body(id).ok().flatten(),
+        max_tokens,
+        |text| rt.estimate(text, Class::Prose),
+    );
+    let text = pack::render(&pack);
+    let mut before_bytes = 0u64;
+    let mut est_before = 0u32;
+    for entry in &pack.entries {
+        if let Some(body) = rt.store.get_note_body(entry.id).ok().flatten() {
+            before_bytes += body.len() as u64;
+            est_before = est_before.saturating_add(rt.estimate(&body, Class::Prose));
+        }
+    }
+    let _ = rt.record(&Measurement {
+        plugin: "memory",
+        kind: "mem_pack",
+        before_bytes,
+        after_bytes: text.len() as u64,
+        est_before,
+        est_after: rt.estimate(&text, Class::Prose),
+        ref_id: None,
+        call_id: rt.call_id,
+    });
+    Ok(text)
 }
 
 pub fn mem_search(
