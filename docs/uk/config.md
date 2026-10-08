@@ -191,7 +191,8 @@ context_management  = false
 semantic_cache      = false
 timeout_s           = 0
 
-[proxy.batch]                         # ключів ще немає (T385.4)
+[proxy.batch]                         # файли результатів провайдерського Batch
+parse_results       = false           # розібрати отриманий файл результатів у рядок usage на запит; тіло пересилається як є
 
 [proxy.flex]                          # ключів ще немає (T385.5)
 
@@ -549,30 +550,28 @@ Gemini `:batchGenerateContent`), `files`, `embeddings` і `meta` (`/v1/models`,
 Flex, маршрутизації та upstream для окремої смуги тут поки немає: кожен з'явиться в цій
 таблиці власним кроком (`[proxy.flex]`, `[proxy.routing]` нижче).
 
-### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
+### `[proxy.batch]`
 
-Ці три таблиці існують і порожні: порожній `[proxy.batch]` завантажується, але жодна
+Спостереження за провайдерським Batch. Самі виклики Batch (створення, опитування, список, скасування, результати)
+вже позначені `api_request:batch` через `[proxy.lanes]`, а їхні тіла ніколи не переписуються.
+
+| Ключ | Тип | Типово | Значення |
+|-----|------|--------|---------|
+| `parse_results` | bool | `false` | Після пересилання файлу результатів записує по одному рядку `usage` на успішний запит: Anthropic `GET /v1/messages/batches/{id}/results` та OpenAI `GET /v1/files/{id}/content`, якщо його рядки — результати Batch (такий виклик отримує мітку `api_request:batch`). Рядки з помилкою, прострочені та пошкоджені пропускаються. Потрібен `[proxy.lanes] enabled`; байти відповіді не змінюються. |
+
+```toml
+[proxy.batch]
+parse_results = false
+```
+
+### `[proxy.flex]` / `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
+
+Ці дві таблиці існують і порожні: жодна
 ще не має ключа. Ключі нижче — **задумані**; додавання будь-якого з них до робочого файлу конфігурації
 і далі не проходить `rtok config validate`, доки не з'явиться відповідний крок. Fallback
 проксі вже пересилає невідомі шляхи (зокрема `/v1/batches` і
 `/v1/messages/batches`) без `Wire`; вставлення Flex і переписування для маршрутизації — це майбутня робота над
 `prepare` / політиками. Повна семантика: [`docs/batch-flex.md`](batch-flex.md).
-
-#### `[proxy.batch]`
-
-| Ключ | Тип | Типово (задумано) | Значення |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `true` | Головний перемикач; сьогодні fallback axum завжди пересилає шляхи Batch |
-| `observe` | bool | `true` | Записувати створення/опитування/результати Batch як окремі рядки журналу обліку (**заплановано**) |
-| `parse_results` | bool | `false` | Якщо true, розбирати файли/потоки результатів у рядки `usage` (**заплановано**) |
-
-```toml
-# Заплановано — сьогодні не завантажується
-[proxy.batch]
-enabled = true
-observe = true
-parse_results = false
-```
 
 #### `[proxy.flex]`
 

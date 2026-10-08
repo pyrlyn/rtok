@@ -64,6 +64,7 @@ use rtok_plugin_sdk::Measurement;
 use wire::{API_ANTHROPIC, Wire, WireRequest, api_of, join_upstream};
 
 pub mod anthropic;
+pub mod batch_results;
 pub mod cli;
 pub mod gemini;
 pub mod lane;
@@ -452,6 +453,10 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let req_len = request_body.len();
     let model_live = request_model(&request_body);
     let provider_live = wire.map(Wire::provider).map(str::to_string);
+    // Batch results are read only after they were forwarded (T385.4), and only when asked.
+    let results = (state.cfg.proxy.batch.parse_results && status.is_success())
+        .then(|| batch_results::source(req_lane, &method, &path))
+        .flatten();
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(TEE_CHANNEL_CHUNKS);
     let recorder = state.clone();
     let body_stream = upstream.bytes_stream();
@@ -518,6 +523,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
                     total_bytes,
                     complete,
                     cache_lane.then_some(caller.as_str()),
+                    results,
                 );
             })
             .await;
@@ -917,6 +923,7 @@ fn finish(
     response_total_bytes: usize,
     complete: bool,
     caller: Option<&str>,
+    results: Option<batch_results::Source>,
 ) {
     let Some(r) = recorded else { return };
     let session = r.session.clone();
@@ -989,7 +996,20 @@ fn finish(
                 "no usage in upstream response",
             );
         }
-        None => {}
+        None => {
+            if let Some(source) = results
+                && let Err(e) = batch_results::record(
+                    &state.store,
+                    &session,
+                    r.call_id,
+                    r.model.as_deref(),
+                    source,
+                    response_body,
+                )
+            {
+                log_err("batch results", e);
+            }
+        }
     }
 }
 
