@@ -8,7 +8,7 @@ use rtok_plugin_sdk::{Class, Ctx, Injection, Measurement};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::BufRead;
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 /// Parsed compact snapshot.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -596,23 +596,31 @@ fn removed_paths(command: &str, cwd: Option<&str>) -> Vec<String> {
 }
 
 /// `path` made absolute against `cwd` lexically, so the `rm` of a file the session read by
-/// its absolute path lands on the same entry.
+/// its absolute path lands on the same entry. Bash paths are POSIX even on Windows (Git
+/// Bash), where `Path` would not see `/abs` as absolute and would join with `\`, so the
+/// split is by hand and the result keeps `cwd`'s own separator.
 fn resolve(cwd: Option<&str>, path: &str) -> String {
-    let p = Path::new(path);
-    let Some(cwd) = cwd.filter(|_| !p.is_absolute()) else {
+    let absolute = path.starts_with('/') || Path::new(path).is_absolute();
+    let Some(cwd) = cwd.filter(|_| !absolute) else {
         return path.to_string();
     };
-    let mut out = PathBuf::from(cwd);
-    for c in p.components() {
+    let sep = if cwd.contains('/') { "/" } else { "\\" };
+    let mut out: Vec<&str> = cwd
+        .trim_end_matches(['/', '\\'])
+        .split(['/', '\\'])
+        .collect();
+    for c in path.split('/') {
         match c {
-            Component::ParentDir => {
-                out.pop();
+            "" | "." => {}
+            ".." => {
+                if out.len() > 1 {
+                    out.pop();
+                }
             }
-            Component::Normal(n) => out.push(n),
-            _ => {}
+            n => out.push(n),
         }
     }
-    out.to_string_lossy().into_owned()
+    out.join(sep)
 }
 
 fn walk(v: &Value, paths: &mut BTreeMap<String, Slot>, text: &mut impl FnMut(&str)) {
