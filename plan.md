@@ -87,7 +87,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.4 | todo | P2 | 3 | 0% | |
-| T414.5 | todo | P2 | 3 | 0% | |
+| T414.5 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1596,6 +1596,12 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light
 ### T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 
 As T414.4 for these pages.
+
+Plan:
+1. Audit the six pages (`web/src/pages/{Hosts,Plugins,Skills,Services,Worktrees,Projects}.tsx`) against the approved T414.2 shell and the restyled T414.3 `web/src/ui` components and the Pyrlyn base component specs: find hand-rolled controls, off-role colours, radii, spacing and motion that differ from the components.
+2. Move each page onto the shared components and `--pyr-*` roles (touching a shared component only when a page cannot be built from it, minimal and noted); keep T414.4 and T414.6 pages untouched.
+3. Add or update stories for the restyled states (dark and light), keep `pages` tests green.
+4. Verify: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just check`; dark and light screenshots of each page.
 
 Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
 
