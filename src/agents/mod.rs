@@ -28,6 +28,7 @@ pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
 pub mod junk_cache;
+pub mod junk_clear;
 pub mod junk_kinds;
 pub mod junk_map;
 pub mod kilo;
@@ -243,6 +244,11 @@ const HOST_SANDBOX_ENV: &str = "RTOK_HOST_SANDBOX";
 /// The home dir when [`HOST_SANDBOX_ENV`] is set.
 fn host_sandbox() -> Option<PathBuf> {
     std::env::var_os(HOST_SANDBOX_ENV).map(|_| home_dir())
+}
+
+/// True under the test harness: a probe of the machine's real processes is off too.
+pub(crate) fn host_sandboxed() -> bool {
+    host_sandbox().is_some()
 }
 
 /// [`expand_spec`], re-rooted under the home dir when [`HOST_SANDBOX_ENV`] is set.
