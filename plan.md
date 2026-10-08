@@ -96,6 +96,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
+| T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
@@ -1654,6 +1655,12 @@ Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an i
 Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
+
+### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
+
+Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
+
+Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
 ## Reference
 
