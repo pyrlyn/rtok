@@ -403,6 +403,15 @@ Check: `uuid_at_multibyte_suffix_is_no_match` (`placeholder_token("1234567é-x")
 
 Do (2026-09-23): renumbered from T187 (that id is taken by the Command Code host task). `uuid_at` and the date probe slice with `str::get` (a non-boundary is no match), and `normalize_line_key` pushes whole `char`s, so CJK/accented lines neither panic nor mojibake into wrong fold groups. `rules::apply` also recomputes `trace_kept` after the JSON rewrite and grouping, so a one-line JSON body with many items no longer indexes past the line vector. Check: `uuid_at_multibyte_suffix_is_no_match`, `normalized_dedupe_survives_multibyte_lines`, `single_line_json_with_many_items_does_not_panic` green.
 
+### T447. `cmd` rules: quadratic grouping, unbounded trace blocks, double passes
+
+Found by reading `src/plugins/cmd/rules.rs`: (1) `fold` located a group with a linear `position` scan per line, so `group = "dir"` (on by default for `find`, `ls`, `rg`, `awk`) over a `find .` of 500k paths in 50k dirs was O(lines x groups) and stalled `rtok run`. (2) `apply` pushed every line of a trace block regardless of the budget with no cap, so an exit-0 body full of stacks (`kubectl logs` with thousands of Java `Exception in thread` blocks, a Go goroutine dump) was not cut at all. (3) `apply` ran the `group` match twice, and `formatters::compress` parsed a JSON body that `apply` then parsed again.
+
+Do: `fold` finds groups through a `HashMap<String, usize>` index (same output order). Trace-kept lines are capped at `MAX_TRACE_LINES` (400, a few full backtraces; a deep Rust or Java trace is 50-100 frames) in total; lines past it are ordinary lines that go through the head/tail budget and the `… N lines omitted (expand <id>)` marker, so the pinned true-count tests hold. `apply` groups once, after the JSON rewrite, and skips drop/dedupe/columns work for a JSON body (the rewrite replaced those lines anyway). `compress` parses the body once and hands it to the new `rules::apply_parsed`; `apply` keeps its signature. Check: `group_dir_scales_to_a_find_over_a_large_tree` (200k paths / 20k dirs), `trace_lines_past_the_cap_go_through_the_budget`, `grouping_is_a_fixed_point_on_its_own_output`; `just check`.
+
+Status: done 2026-10-08
+Model: Claude Code / sonnet-5.5
+
 ### T188. `inject::apply` emits one oversized injection whole — the D5 budget does not bind
 
 Found 2026-09-22 in the core pass: `apply` (`src/plugins/inject/mod.rs:112-152`) only drops whole candidates once `used >= budget`; a single candidate larger than `budget_tokens` is emitted whole. `modes_text` (:81-108) reads `modes_dir/<name>.md` with an uncapped `read_to_string`, so a large mode file becomes an equally large `additionalContext` and blows the ≤ 10 ms budget too. Every other offering source self-caps (`checkpoint_tokens`, `recall_tokens`, `map_tokens`, `spawn_brief_tokens`); the contract boundary does not. Breaks D5 ("per-turn token cap (default 800)").
