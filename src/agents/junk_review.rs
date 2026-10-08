@@ -4,17 +4,16 @@
 
 //! The T330.5.1 kinds on the `cache` item model: `logs` (the §22 log folders, review),
 //! `backups` (rtok's own `_backup` generations past `setup.backup_files`, review),
-//! `crash-dumps` (listed from the platform crash folder, cleared only from an `extra` folder),
 //! `snapshots` (Gemini CLI's restore points, never), the `[agents.junk] extra` paths and the
 //! `exclude` globs. Nothing here deletes: `junk_clear` plans, re-checks and removes (T330.4).
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
 use super::junk_cache::{Ctx, Item, Owned, RTOK_OWN, SECTION_22, is_symlink, make_item};
-use super::junk_kinds::{NO_EVIDENCE, NOT_DOCUMENTED, aged_items};
+use super::junk_kinds::aged_items;
 use super::junk_map::Roots;
 use crate::config::AgentsJunk;
 
@@ -24,8 +23,6 @@ pub const EXTRA: &str = "[agents.junk] extra";
 pub const EXCLUDED: &str = "excluded by [agents.junk] exclude";
 
 const SNAPSHOT: &str = "snapshot: never cleared; Gemini CLI restores it with /restore";
-
-const DUMP_EXTS: [&str; 4] = [".ips", ".crash", ".dmp", ".diag"];
 
 fn days(n: u32) -> Duration {
     Duration::from_secs(u64::from(n) * 86_400)
@@ -64,60 +61,6 @@ pub fn backup_items(dirs: &[PathBuf], keep: u32, limit: Duration) -> Vec<Item> {
     classed(items.collect(), "review")
 }
 
-fn is_dump(name: &str) -> bool {
-    DUMP_EXTS.iter().any(|e| name.ends_with(e))
-}
-
-/// Crash reports macOS keeps for `names` (a host's binaries and apps) in
-/// `~/Library/Logs/DiagnosticReports`. §22 has no row for that folder, so each is listed only
-/// (D36); an `extra` entry with kind `crash-dumps` is the way to clear them.
-pub fn crash_items(roots: &Roots, names: &[String], limit: Duration) -> Vec<Item> {
-    let dir = roots.resolve("{home}/Library/Logs/DiagnosticReports");
-    let ours = |f: &str| {
-        names.iter().any(|n| {
-            f.strip_prefix(n.as_str())
-                .is_some_and(|rest| rest.starts_with(['-', '_', ' ', '.']))
-        })
-    };
-    let entries = std::fs::read_dir(dir).into_iter().flatten().flatten();
-    entries
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-        .filter(|e| {
-            e.file_name()
-                .to_str()
-                .is_some_and(|f| is_dump(f) && ours(f))
-        })
-        .map(|e| {
-            let item = make_item(
-                "crash-dumps",
-                &e.path(),
-                NO_EVIDENCE,
-                Some(NOT_DOCUMENTED.into()),
-                limit,
-            );
-            Item {
-                class: "review",
-                ..item
-            }
-        })
-        .collect()
-}
-
-/// The entries of a crash folder the user named: `safe` past `crash_dump_min_age_days`,
-/// `review` before it (cleared only when `--kind crash-dumps` names them).
-fn dump_items(dirs: &[PathBuf], junk: &AgentsJunk, cx: &Ctx, limit: Duration) -> Vec<Item> {
-    let floor = days(junk.crash_dump_min_age_days);
-    let mut items = aged_items("crash-dumps", dirs, EXTRA, Duration::ZERO, cx, limit);
-    for i in &mut items {
-        let modified = std::fs::symlink_metadata(&i.path).and_then(|m| m.modified());
-        let age = |t: SystemTime| cx.policy.now.duration_since(t).unwrap_or_default();
-        if !modified.is_ok_and(|t| age(t) >= floor) {
-            i.class = "review";
-        }
-    }
-    items
-}
-
 /// Gemini CLI's restore points (`research.md` §22.1): the shadow git repo of each project
 /// under `history/` and each project's `tmp/<hash>/checkpoints`. Class `never`: listed for
 /// their size with the host's own way back, never cleared.
@@ -143,7 +86,7 @@ pub fn snapshot_items(roots: &Roots, limit: Duration) -> Vec<Item> {
 }
 
 /// The `[agents.junk] extra` entries of `agent` (a host id or `rtok`): a `cache` folder joins
-/// the owned caches (emptied, its top folder kept); a `temp`, `logs` or `crash-dumps` folder
+/// the owned caches (emptied, its top folder kept); a `temp` or `logs` folder
 /// gives its entries by that kind's age rule. A relative path or an unknown kind, which
 /// `config validate` refuses, is ignored here rather than guessed at.
 pub fn extra_items(
@@ -175,7 +118,6 @@ pub fn extra_items(
                 let aged = aged_items("logs", one, EXTRA, days(junk.keep_logs_days), cx, limit);
                 items.extend(classed(aged, "review"));
             }
-            "crash-dumps" => items.extend(dump_items(one, junk, cx, limit)),
             _ => {}
         }
     }
@@ -246,6 +188,7 @@ mod tests {
     use crate::agents::junk_cache::DEFAULT_IDLE;
     use crate::config::JunkExtra;
     use crate::testutil::tmp_dir;
+    use std::time::SystemTime;
 
     const LIMIT: Duration = Duration::from_secs(10);
     const DAY: u64 = 86_400;
@@ -337,32 +280,6 @@ mod tests {
     }
 
     #[test]
-    fn crash_reports_named_for_the_host_are_listed_read_only() {
-        let home = tmp_dir("review-crash");
-        let reports = home.join("Library/Logs/DiagnosticReports");
-        for f in [
-            "claude-2026-09-01-101010.ips",
-            "Cursor Helper (Renderer)-2026-09-01.ips",
-            "claudette-2026-09-01.ips",
-            "claude-notes.txt",
-            "other-2026.crash",
-        ] {
-            put(&reports.join(f), b"x");
-        }
-        let names = ["claude".to_string(), "Cursor".to_string()];
-
-        let items = crash_items(&roots(&home), &names, LIMIT);
-
-        assert_eq!(items.len(), 2, "{items:?}");
-        for i in &items {
-            assert_eq!(
-                (i.kind, i.kept.as_deref()),
-                ("crash-dumps", Some(NOT_DOCUMENTED))
-            );
-        }
-    }
-
-    #[test]
     fn gemini_restore_points_are_sized_and_never_counted() {
         let home = tmp_dir("review-snapshots");
         put(&home.join(".gemini/history/abc/HEAD"), &[b'x'; 64]);
@@ -381,11 +298,11 @@ mod tests {
     #[test]
     fn extra_paths_become_items_of_their_kind_for_their_host_only() {
         let home = tmp_dir("review-extra");
-        let dumps = home.join("dumps");
-        put(&dumps.join("old.dmp"), b"x");
-        put(&dumps.join("new.dmp"), b"x");
-        aged(&dumps.join("old.dmp"), 10 * DAY);
-        aged(&dumps.join("new.dmp"), 2 * DAY);
+        let scratch = home.join("scratch");
+        put(&scratch.join("old.tmp"), b"x");
+        put(&scratch.join("new.tmp"), b"x");
+        aged(&scratch.join("old.tmp"), 2 * DAY);
+        aged(&scratch.join("new.tmp"), 60);
         put(&home.join("applogs/a.log"), b"x");
         aged(&home.join("applogs/a.log"), 40 * DAY);
         let entry = |host: &str, kind: &str, path: &str| JunkExtra {
@@ -396,8 +313,9 @@ mod tests {
         let junk = AgentsJunk {
             extra: vec![
                 entry("cursor", "cache", "~/Library/Caches/Cursor"),
-                entry("cursor", "crash-dumps", "~/dumps"),
+                entry("cursor", "temp", "~/scratch"),
                 entry("cursor", "logs", "~/applogs"),
+                entry("cursor", "crash-dumps", "~/dumps"),
                 entry("codex", "cache", "~/elsewhere"),
                 entry("cursor", "sessions", "~/sessions"),
                 entry("cursor", "cache", "relative/dir"),
@@ -418,9 +336,15 @@ mod tests {
         assert_eq!(owned[0].path, home.join("Library/Caches/Cursor"));
         assert_eq!(owned[0].evidence, EXTRA);
         assert_eq!(items.len(), 3, "{items:?}");
-        assert!(items.iter().all(|i| i.evidence == EXTRA && i.counted()));
-        assert_eq!(named(&items, "old.dmp").class, "safe");
-        assert_eq!(named(&items, "new.dmp").class, "review");
+        assert!(items.iter().all(|i| i.evidence == EXTRA));
+        assert!(!named(&items, "new.tmp").counted(), "young temp stays");
+        assert_eq!(
+            (
+                named(&items, "old.tmp").kind,
+                named(&items, "old.tmp").class
+            ),
+            ("temp", "safe")
+        );
         assert_eq!(
             (named(&items, "a.log").kind, named(&items, "a.log").class),
             ("logs", "review")

@@ -29,7 +29,7 @@ pub const NOT_DOCUMENTED: &str =
     "not documented: not cleared (add to [agents.junk] extra to clear)";
 
 /// The evidence column of a find nothing documents.
-pub const NO_EVIDENCE: &str = "none";
+const NO_EVIDENCE: &str = "none";
 
 /// How deep a walk for lock, swap and build leftovers goes: an agent folder is shallow, and a
 /// deep tree is a checkout, not state.

@@ -26,7 +26,7 @@ use crate::worktree::list::{is_cache_dir, usage_until};
 
 /// What `--kind` takes today: rtok's own T182 junk, then the T330.3 and T330.5.1 kinds.
 /// `snapshots` is accepted and never clears anything: its class is `never`.
-pub const KINDS: [&str; 12] = [
+pub const KINDS: [&str; 11] = [
     "log",
     "archive",
     "cache",
@@ -37,7 +37,6 @@ pub const KINDS: [&str; 12] = [
     "locks",
     "backups",
     "swap",
-    "crash-dumps",
     "snapshots",
 ];
 
@@ -513,9 +512,9 @@ mod tests {
         }
     }
 
-    /// T330.5.1: a §22 log goes only with `--include review` or `--kind logs`, an `extra` crash
-    /// dump past its age by default, a snapshot never (not even named), and a running host keeps
-    /// its `extra` path like a §22 one.
+    /// T330.5.1: a §22 log goes only with `--include review` or `--kind logs`, an `extra` temp
+    /// file by default, a snapshot never (not even named), and a running host keeps its `extra`
+    /// paths like a §22 one.
     #[test]
     fn review_kinds_need_the_flag_extra_paths_plan_and_snapshots_never_do() {
         let (cfg, dir) = crate::testutil::config("junk-clear-review");
@@ -526,8 +525,8 @@ mod tests {
             "claude",
             vec![
                 classed("logs", "review", &p("old.log"), SECTION_22),
-                classed("crash-dumps", "safe", &p("old.ips"), EXTRA),
-                classed("crash-dumps", "review", &p("new.ips"), EXTRA),
+                classed("temp", "safe", &p("old.tmp"), EXTRA),
+                classed("logs", "review", &p("app.log"), EXTRA),
                 classed("backups", "review", &p("s.json.bak-1"), RTOK_OWN),
                 snap,
             ],
@@ -541,20 +540,17 @@ mod tests {
                 .map(|p| name(p).to_owned());
             names.collect::<Vec<_>>()
         };
-        assert_eq!(names(&filter(&["claude"], &[]), &idle), ["old.ips"]);
+        assert_eq!(names(&filter(&["claude"], &[]), &idle), ["old.tmp"]);
         let review = Filter {
             include_review: true,
             ..filter(&["claude"], &[])
         };
-        let all = ["old.log", "old.ips", "new.ips", "s.json.bak-1"];
+        let all = ["old.log", "old.tmp", "app.log", "s.json.bak-1"];
         assert_eq!(names(&review, &idle), all);
-        assert_eq!(names(&filter(&[], &["logs"]), &idle), ["old.log"]);
-        assert_eq!(
-            names(&filter(&[], &["crash-dumps"]), &idle),
-            ["old.ips", "new.ips"]
-        );
+        let logs = names(&filter(&[], &["logs"]), &idle);
+        assert_eq!(logs, ["old.log", "app.log"]);
         assert!(names(&filter(&[], &["snapshots"]), &idle).is_empty());
-        // Running: the §22 log and the `extra` dumps stay, rtok's own backup does not.
+        // Running: the §22 log and the `extra` paths stay, rtok's own backup does not.
         assert_eq!(names(&review, &|_| true), ["s.json.bak-1"]);
     }
 

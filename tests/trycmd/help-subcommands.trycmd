@@ -396,7 +396,7 @@ Options:
           Only this junk kind (repeatable)
           
           [possible values: log, archive, cache, temp, logs, build, deps, locks, backups, swap,
-          crash-dumps, snapshots]
+          snapshots]
 
       --include <CLASS>
           Also the review kinds

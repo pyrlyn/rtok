@@ -31,8 +31,8 @@
 - T329.21. Project badges in the graph page lists
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
-- T330.5.1. Junk: `[agents.junk]` table and the `logs`, `backups`, `deps`, `crash-dumps`, `snapshots` kinds
-- T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`
+- T330.5.1. Junk: `[agents.junk]` table and the `logs`, `backups`, `deps`, `snapshots` kinds
+- T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
 - T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix

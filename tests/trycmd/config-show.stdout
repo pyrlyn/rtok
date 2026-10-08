@@ -1,6 +1,5 @@
 agents.enabled = true
 agents.idle = 30m
-agents.junk.crash_dump_min_age_days = 7
 agents.junk.exclude = []
 agents.junk.extra = []
 agents.junk.keep_logs_days = 30

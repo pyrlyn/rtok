@@ -364,7 +364,7 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// The junk kinds in the order the T330 tables list them.
-const KINDS: [&str; 10] = [
+const KINDS: [&str; 9] = [
     "cache",
     "temp",
     "logs",
@@ -373,12 +373,11 @@ const KINDS: [&str; 10] = [
     "locks",
     "backups",
     "swap",
-    "crash-dumps",
     "snapshots",
 ];
 
 /// One row per kind and class of `items`: only an item `clear` would take now counts. A kind
-/// can hold two classes (a young crash dump is `review`, an old one `safe`).
+/// row says its class, so `review` rows are counted apart from what a plain `clear` frees.
 fn kind_rows(items: &[Item]) -> Vec<KindRow> {
     let mut rows = Vec::new();
     for kind in KINDS {
@@ -421,23 +420,6 @@ fn marker_dirs(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<PathBuf> {
     dirs.sort();
     dirs.dedup();
     dirs
-}
-
-/// The names a host's crash reports start with: its CLI binaries and its apps.
-fn crash_names(a: &dyn Agent) -> Vec<String> {
-    let mut names: Vec<String> = Vec::new();
-    for v in a.variants() {
-        names.extend(v.bins.iter().map(|b| b.to_string()));
-        let apps = v
-            .apps
-            .iter()
-            .filter_map(|s| Path::new(s).file_name()?.to_str());
-        names.extend(
-            apps.filter_map(|n| n.strip_suffix(".app"))
-                .map(String::from),
-        );
-    }
-    names
 }
 
 /// A folder a host writes, before it is sized.
@@ -576,7 +558,6 @@ fn host_rows(
             cfg.setup.backup_files,
             limit,
         ));
-        items.extend(junk_review::crash_items(roots, &crash_names(a), limit));
         if a.id() == "gemini" {
             items.extend(junk_review::snapshot_items(roots, limit));
         }

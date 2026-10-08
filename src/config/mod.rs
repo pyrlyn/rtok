@@ -187,8 +187,6 @@ section! {
     AgentsJunk {
         /// `logs` entries modified within this many days stay.
         keep_logs_days: u32 = 30,
-        /// A crash dump in an `extra` folder is `safe` past this age and `review` before it.
-        crash_dump_min_age_days: u32 = 7,
         /// `temp` entries touched within this many hours stay.
         temp_min_age_hours: u32 = 24,
         /// Globs of paths never touched, nor any folder that holds one.
@@ -207,7 +205,7 @@ section! {
 }
 
 /// The kinds an `[agents.junk] extra` entry may name: folders whose content ages out.
-pub const JUNK_EXTRA_KINDS: [&str; 4] = ["cache", "temp", "logs", "crash-dumps"];
+pub const JUNK_EXTRA_KINDS: [&str; 3] = ["cache", "temp", "logs"];
 
 section! {
     /// `[agents.usage]` — `rtok agents usage` (T358): tokens and estimated cost per agent, day
