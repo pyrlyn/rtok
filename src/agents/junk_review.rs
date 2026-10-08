@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! The T330.5.1 kinds on the `cache` item model: `logs` (the §22 log folders, review),
+//! `backups` (rtok's own `_backup` generations past `setup.backup_files`, review),
 //! `snapshots` (Gemini CLI's restore points, never), the `[agents.junk] extra` paths and the
 //! `exclude` globs. Nothing here deletes: `junk_clear` plans, re-checks and removes (T330.4).
 
@@ -11,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
-use super::junk_cache::{Ctx, Item, Owned, SECTION_22, is_symlink, make_item};
+use super::junk_cache::{Ctx, Item, Owned, RTOK_OWN, SECTION_22, is_symlink, make_item};
 use super::junk_kinds::aged_items;
 use super::junk_map::Roots;
 use crate::config::AgentsJunk;
@@ -47,6 +48,17 @@ pub fn log_items(dirs: &[PathBuf], junk: &AgentsJunk, cx: &Ctx, limit: Duration)
         limit,
     );
     classed(aged, "review")
+}
+
+/// rtok's own copies in the `_backup` folder of each of `dirs` that `setup.backup_files` has no
+/// room for: a cap lowered after the copies were taken. The newest copy of a file always stays.
+pub fn backup_items(dirs: &[PathBuf], keep: u32, limit: Duration) -> Vec<Item> {
+    let keep = usize::try_from(keep).unwrap_or(usize::MAX);
+    let stale = dirs
+        .iter()
+        .flat_map(|d| rtok_agent_sdk::stale_backups(&d.join(rtok_agent_sdk::BACKUP_DIR), keep));
+    let items = stale.map(|p| make_item("backups", &p, RTOK_OWN, None, limit));
+    classed(items.collect(), "review")
 }
 
 /// Gemini CLI's restore points (`research.md` §22.1): the shadow git repo of each project
@@ -237,6 +249,34 @@ mod tests {
             items.iter().all(Item::counted),
             "29 days is past 7: {items:?}"
         );
+    }
+
+    #[test]
+    fn only_backup_generations_past_the_cap_are_listed_and_the_newest_always_stays() {
+        let dir = tmp_dir("review-backups");
+        let bak = dir.join(rtok_agent_sdk::BACKUP_DIR);
+        for f in [
+            "s.json.bak-1",
+            "s.json.bak-2",
+            "s.json.bak-3",
+            "o.json.bak-9",
+            "notes.txt",
+        ] {
+            put(&bak.join(f), b"x");
+        }
+        let one = std::slice::from_ref(&dir);
+
+        let items = backup_items(one, 2, LIMIT);
+
+        assert_eq!(items.len(), 1, "{items:?}");
+        let i = &items[0];
+        assert!(i.path.ends_with("s.json.bak-1") && i.counted());
+        assert_eq!(
+            (i.kind, i.class, i.evidence),
+            ("backups", "review", RTOK_OWN)
+        );
+        assert_eq!(backup_items(one, 1, LIMIT).len(), 2);
+        assert!(backup_items(one, 0, LIMIT).is_empty(), "0 keeps every copy");
     }
 
     #[test]

@@ -62,6 +62,17 @@ pub fn task_title(id: &TaskId, title: &str) -> String {
     }
 }
 
+/// Unix seconds of an API timestamp (RFC 3339 on both providers); 0 when it does not parse.
+pub fn secs(ts: &str) -> i64 {
+    ts.parse::<jiff::Timestamp>().map_or(0, |t| t.as_second())
+}
+
+/// The highest of `ids` with `prefix`, any case: `max_id` over the issues a provider listed.
+pub fn max_with_prefix(ids: impl IntoIterator<Item = TaskId>, prefix: &str) -> Option<TaskId> {
+    let prefix = prefix.to_ascii_uppercase();
+    ids.into_iter().filter(|id| id.prefix() == prefix).max()
+}
+
 /// The first non-empty variable of `vars`, else the trimmed output of the `cli` command
 /// (`gh auth token`), the order the providers' own CLIs use.
 pub fn token(adapter: &str, vars: &[&str], cli: &[&str]) -> Result<String> {

@@ -398,8 +398,8 @@ dir = "tasks"                         # один Markdown-файл на зада
 repo = ""                             # owner/name; порожньо: remote origin
 project = 0                           # номер Projects v2 власника репо: issues потрапляють у нього, поле Status слідує за задачею; 0 = лише issues
 
-[tasks.gitlab]
-url = "https://gitlab.com"            # базова URL; задайте для власного інстансу
+[tasks.gitlab]                        # мітки status::in-progress | status::done | status::wont-do; підзадача пов’язана з батьківською (relates_to)
+url = "https://gitlab.com"            # https базова URL; задайте для власного інстансу; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, інакше glab
 project = ""                          # group/name або числовий id; порожньо: remote origin
 
 [otel]                                # експорт OpenTelemetry (D19); вимкнено, доки не визначено endpoint

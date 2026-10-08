@@ -8441,6 +8441,18 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-opus-5-5
 
+### T330.5.4. Junk: the `backups` kind
+
+Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 500-line cap; depends on T330.5.1 (#827). `backups` (review) over the T330.5.1 report, plan, re-check and apply: rtok's own `_backup/<name>.bak-<ts>` generations in the folders of a host's config files that `setup.backup_files` has no room for (a cap lowered after the copies were taken; the newest copy of a file always stays), with a read-only `rtok-agent-sdk::stale_backups` twin of `prune_backups`; other `*.bak`, `*.bak-<ts>` and `*~` files under an agent's folders are listed read-only (no D36 evidence), and rtok's own `_backup` folder is never walked for them. `backups` joins the `--kind` values.
+
+Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
+
+Result: `rtok_agent_sdk::stale_backups` (per base name all but the newest `keep`, oldest first; `0` keeps all; only a `_backup` folder), `junk_review::backup_items` (class `review`, evidence `RTOK_OWN`) fed from `junk::marker_dirs` (extracted from `host_folders`), and `*.bak`, `*.bak-<ts>`, `*~` files found by `junk_kinds::found_items` (`is_backup`, class `review`, "not documented", `_backup` skipped). `"backups"` is in both `KINDS`; completions goldens (bash, zsh, clink) and `help-subcommands` updated; `junk_clear` test covers a running host not holding back rtok's own copy. No new dependency; docs list no junk kinds, so none changed.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
 From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
@@ -9770,6 +9782,17 @@ Split from T441.7: reconcile the store's task id counters with the project's `[t
 Check: `tasks::sync` unit tests (disk, counter ahead, fake adapter, GitHub mock, JSON); `tests/task_cli.rs` brings a lost counter back and a second sync is quiet; the trycmd help case, completion goldens, `surface_parity` and `config_coverage` pass; `just check` green.
 
 Result: `rtok task sync [--json]` (`src/tasks/sync.rs`) lists every task through the `TaskAdapter` trait, finished ones included, and raises the top-level and each per-parent counter to the highest number found with `seed_task_counter`; it never lowers a counter and never writes to the adapter. `Store::task_counter` is the new read-only getter (Diesel). The report names the counters raised, ids above their counter, duplicate ids, and issues that kept the `rtok` label but lost `rtok:<id>` (new defaulted `TaskAdapter::unlabelled`, implemented for GitHub, with the id still in the title shown as the label to restore). Drift is reported with exit 0. CLI only: `surface_parity` exempts it because `task_create` already seeds the counter first. README and `docs/commands.md` (en, ru, uk) list the `rtok task` commands. GitLab's `unlabelled` is not implemented yet and reports none. #820.
+
+### T441.8. GitLab adapter
+
+Eighth subtask of T441 (task adapters): `adapter = "gitlab"` keeps each task as one issue in the project on gitlab.com or a self-hosted instance.
+
+Check: the adapter against a mock GitLab server (create, parent link, failed link, list, get, status label swaps with close/reopen, id collision, missing parent, dropped label, URL and project parsing); `just check` green.
+
+Result: `src/tasks/gitlab.rs` uses the REST API v4 through `src/tasks/remote.rs` (labels `rtok` and `rtok:<id>`, the `R12. Title` issue title, the paced client with rate-limit waits and same-host paging), and `remote.rs` now also holds `secs` and `max_with_prefix`, which the GitHub adapter uses too. Status rides on `status::in-progress`, `status::done` and `status::wont-do` labels set through `add_labels`/`remove_labels` (scoped on Premium; on Free the adapter removes the others itself); done and closed close the issue, open and in-progress reopen it, and the label tells done from won't-do since REST has no close reason. A subtask's issue gets a `relates_to` link to its parent's issue (a failed link only warns); the GraphQL parent-child hierarchy stays out until research §35.3 verifies its arguments. `[tasks.gitlab] url` must be plain https, since every request carries the token; `project` is `group/name` or a numeric id, else the origin's path on that host, URL-encoded into every request path. The token comes from `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN` or `GL_TOKEN`, else `glab config get token --host <host>`, sent as a Bearer header. An id another machine already issued returns `Taken`, and `Project::create` re-allocates. #819.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
 
 ### T441.11. GitHub Projects v2 Status
 
