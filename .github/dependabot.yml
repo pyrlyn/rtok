@@ -1,6 +1,6 @@
-# Dependency updates as pull requests (T18.7). Each one runs ci.yml's full suite through
-# .github/workflows/dependabot.yml, which merges a patch update once that run is green and
-# labels minor and major updates `needs-review` for a human. Commit prefixes land in
+# Dependency updates as pull requests (T18.7). Each one runs the full CI (pipeline.yml);
+# .github/workflows/dependabot.yml merges a patch update once that run is green and labels
+# minor and major updates `needs-review` for a human. Commit prefixes land in
 # cliff.toml's Tooling group.
 #
 # Patch and minor updates are grouped separately so a patch-only pull request can be merged
