@@ -8,7 +8,7 @@ Every agent session that works through rtok gets one **rtok agent id**, and ever
 - **Hooks** register the agent on the first event of a session and touch it on every later one (`SessionStart`, tool calls, `SessionEnd`). A host whose install carries hooks needs nothing else.
 - **MCP** serves a host without hooks. `rtok mcp --host <host>` links itself to the session's agent by the host's own session id where the host puts one in the environment (Grok Build: `GROK_SESSION_ID`), else by the one live agent of that host in the same directory that has been seen since the process started. Two candidates bind nothing, so a message never lands with the wrong agent. A host that can carry neither hooks nor a session id gets a row of its own, registered by the MCP process.
 - The agent always comes from the session. No tool takes an agent or owner argument, so a model cannot claim a worktree or send a message in another agent's name.
-- `rtok agents whoami` prints the id (`RTOK_AGENT_ID`, set by the Claude Code hook into the session environment and quoted in the session-start context line); MCP `whoami` returns it with how it was linked.
+- `rtok agents whoami` prints the id (`RTOK_AGENT_ID`, set by the Claude Code hook into the session environment and quoted in the session-start context line; when that is missing, as in Claude's desktop app, the agent of `CLAUDE_CODE_SESSION_ID`); MCP `whoami` returns it with how it was linked.
 
 ## See and talk to agents
 

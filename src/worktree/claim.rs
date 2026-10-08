@@ -13,11 +13,9 @@ use super::{Owner, git, origin};
 use crate::store::{AgentDetail, Origin, Store};
 
 /// The calling agent: `--agent <prefix>` (must resolve), else `RTOK_AGENT_ID` (T283; an id
-/// the store does not know is ignored), else none.
+/// the store does not know is ignored) or the host session's agent (T454), else none.
 pub fn caller(store: Option<&Store>, flag: Option<&str>) -> Result<Option<AgentDetail>> {
-    let env = std::env::var("RTOK_AGENT_ID")
-        .ok()
-        .filter(|s| !s.is_empty());
+    let env = crate::agents::link::shell_agent(store, |k| std::env::var(k).ok());
     let (raw, explicit) = match (flag, env) {
         (Some(flag), _) => (flag.to_string(), true),
         (None, Some(env)) => (env, false),
