@@ -42,6 +42,19 @@ pub const PATH: &str = "/mcp";
 /// A shorter token is guessable by anyone who can reach the tunnel URL.
 const MIN_TOKEN_CHARS: usize = 16;
 
+/// Tools that act as "the agent this process serves" (`Server::agent`). One HTTP server answers
+/// every client that holds the token and cannot tell whose session a call comes from, so these
+/// would act as whoever started the server; they are never served here, whatever `http_tools` says.
+const AGENT_BOUND: &[&str] = &[
+    "whoami",
+    "worktree_add",
+    "worktree_remove",
+    "worktree_adopt",
+    "agent_send",
+    "agent_inbox",
+    "agent_status_set",
+];
+
 /// Hosts a loopback client sends; anything else must come from `[mcp] public_url`.
 const LOOPBACK_HOSTS: &[&str] = &["localhost", "127.0.0.1", "::1"];
 
@@ -85,6 +98,14 @@ impl ServerHandler for Http {
     }
 }
 
+/// The stdio server's tool set minus [`AGENT_BOUND`]; a dropped name is refused like any tool
+/// the allow-list left out.
+fn http_server(cfg: &Config) -> Result<Server> {
+    let mut server = Server::new(cfg)?;
+    server.listed.retain(|t| !AGENT_BOUND.contains(&t.def.name));
+    Ok(server)
+}
+
 /// `rtok mcp --http <addr>`: bind, then serve until the process is killed.
 pub fn serve_blocking(cfg: &Config, addr: &str) -> Result<()> {
     let addr: SocketAddr = addr
@@ -95,7 +116,7 @@ pub fn serve_blocking(cfg: &Config, addr: &str) -> Result<()> {
     let mut cfg = cfg.clone();
     // The HTTP surface gets its own allow-list through the same filter as stdio's `tools`.
     cfg.mcp.tools = cfg.mcp.http_tools.clone();
-    let server = Arc::new(Server::new(&cfg)?);
+    let server = Arc::new(http_server(&cfg)?);
     crate::store::Store::spawn_retention(&cfg, "mcp");
     crate::otel::export::spawn_ticker(&cfg);
     let app = router(server, token, transport_config(addr, public.as_ref()));

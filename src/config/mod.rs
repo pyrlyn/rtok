@@ -336,9 +336,13 @@ section! {
 }
 
 section! {
-    /// `[proxy.batch]` — provider Batch observe (T385.4). No keys yet: the table exists so a
-    /// later step adds them without a schema break.
-    BatchPolicy {}
+    /// `[proxy.batch]` — provider Batch observe (T385.4). The Batch calls themselves are
+    /// tagged by `[proxy.lanes]`; this table only decides whether result files are read.
+    BatchPolicy {
+        /// Parse a fetched Batch results file (Anthropic `/results`, OpenAI file content) into
+        /// one `usage` row per result line. Observation only: the body is forwarded untouched.
+        parse_results: bool = false,
+    }
 }
 
 section! {

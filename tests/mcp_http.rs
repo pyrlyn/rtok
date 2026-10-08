@@ -230,6 +230,8 @@ async fn http_serves_initialize_list_and_read_and_refuses_without_the_token() {
         assert!(names.contains(&name), "{name} missing from {names:?}");
     }
     assert!(!names.contains(&"mem_save"), "{names:?}");
+    // stdio always lists `whoami`; over HTTP it would answer as whoever started the server.
+    assert!(!names.contains(&"whoami"), "{names:?}");
 
     let args: Value = serde_json::from_str(READ_ARGS).unwrap();
     let v: Value = authed(&rpc(

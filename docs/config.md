@@ -135,7 +135,7 @@ tools                   = []          # [] = all tools from enabled plugins; els
 max_description_tokens  = 60          # enforced by a test (T4.1)
 max_result_chars        = 20000       # above this, head/tail + archive id
 http                    = "127.0.0.1:8791"  # `rtok mcp --http` with no address; keep it on loopback
-http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed
+http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
 token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start (T401)
 public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
 
@@ -194,7 +194,8 @@ context_management  = false
 semantic_cache      = false
 timeout_s           = 0
 
-[proxy.batch]                         # no keys yet (T385.4)
+[proxy.batch]                         # provider Batch result files
+parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 
 [proxy.flex]                          # no keys yet (T385.5)
 
@@ -552,29 +553,27 @@ counterpart: a rewrite runs on a lane when the global switch *and* the lane swit
 Flex, routing and a per-lane upstream are not here yet: each joins this table with its own
 step (`[proxy.flex]`, `[proxy.routing]` below).
 
-### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — planned (see `docs/batch-flex.md`)
+### `[proxy.batch]`
 
-These three tables exist and are empty: an empty `[proxy.batch]` loads, but none has a key
+Provider Batch observation. The Batch calls themselves (create, poll, list, cancel, results) are
+already tagged `api_request:batch` by `[proxy.lanes]`, and their bodies are never rewritten.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `parse_results` | bool | `false` | After a results file was forwarded, write one `usage` row per succeeded request: Anthropic `GET /v1/messages/batches/{id}/results`, and OpenAI `GET /v1/files/{id}/content` when its lines are Batch results (that call is then re-tagged `api_request:batch`). Errored, expired and malformed lines are skipped. Needs `[proxy.lanes] enabled`; the response bytes are untouched. |
+
+```toml
+[proxy.batch]
+parse_results = false
+```
+
+### `[proxy.flex]` / `[proxy.routing]` — planned (see `docs/batch-flex.md`)
+
+These two tables exist and are empty: none has a key
 yet. The keys below are the **intended** ones; adding any of them to a live config file
 still fails `rtok config validate` until the matching step ships. The proxy fallback already forwards unknown paths (including `/v1/batches` and
 `/v1/messages/batches`) without a `Wire`; Flex injection and routing rewrites are future
 `prepare` / policy work. Full semantics: [`docs/batch-flex.md`](batch-flex.md).
-
-#### `[proxy.batch]`
-
-| Key | Type | Default (intended) | Meaning |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `true` | Master switch; today the axum fallback always forwards Batch paths |
-| `observe` | bool | `true` | Record Batch create/poll/results as distinguishable ledger rows (**planned**) |
-| `parse_results` | bool | `false` | When true, parse result files/streams into `usage` rows (**planned**) |
-
-```toml
-# Planned — not loaded today
-[proxy.batch]
-enabled = true
-observe = true
-parse_results = false
-```
 
 #### `[proxy.flex]`
 

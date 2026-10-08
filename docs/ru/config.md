@@ -135,7 +135,7 @@ tools                   = []          # [] = all tools from enabled plugins; els
 max_description_tokens  = 60          # enforced by a test (T4.1)
 max_result_chars        = 20000       # above this, head/tail + archive id
 http                    = "127.0.0.1:8791"  # `rtok mcp --http` with no address; keep it on loopback
-http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed
+http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
 token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start (T401)
 public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
 
@@ -194,7 +194,8 @@ context_management  = false
 semantic_cache      = false
 timeout_s           = 0
 
-[proxy.batch]                         # no keys yet (T385.4)
+[proxy.batch]                         # файлы результатов провайдерского Batch
+parse_results       = false           # разобрать полученный файл результатов в строку usage на запрос; тело пересылается как есть
 
 [proxy.flex]                          # no keys yet (T385.5)
 
@@ -551,30 +552,28 @@ Lane agent сохраняет `calls.kind = api_request`; остальные з�
 Flex, маршрутизации и upstream для отдельной lane здесь пока нет: каждый появится в этой
 таблице своим шагом (`[proxy.flex]`, `[proxy.routing]` ниже).
 
-### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
+### `[proxy.batch]`
 
-Эти три таблицы существуют и пусты: пустая `[proxy.batch]` загружается, но ни в одной пока нет
+Наблюдение за провайдерским Batch. Сами вызовы Batch (создание, опрос, список, отмена, результаты)
+уже помечены `api_request:batch` через `[proxy.lanes]`, а их тела никогда не переписываются.
+
+| Ключ | Тип | По умолчанию | Значение |
+|-----|------|--------------|---------|
+| `parse_results` | bool | `false` | После пересылки файла результатов записывает по одной строке `usage` на успешный запрос: Anthropic `GET /v1/messages/batches/{id}/results` и OpenAI `GET /v1/files/{id}/content`, если его строки — результаты Batch (такой вызов получает метку `api_request:batch`). Строки с ошибкой, истёкшие и повреждённые пропускаются. Нужен `[proxy.lanes] enabled`; байты ответа не меняются. |
+
+```toml
+[proxy.batch]
+parse_results = false
+```
+
+### `[proxy.flex]` / `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
+
+Эти две таблицы существуют и пусты: ни в одной пока нет
 ключа. Ключи ниже — **задуманные**; добавление любого из них в рабочий файл конфигурации
 по-прежнему не проходит `rtok config validate`, пока не появится соответствующий шаг. Fallback прокси
 уже пересылает неизвестные пути (включая `/v1/batches` и
 `/v1/messages/batches`) без `Wire`; внедрение Flex и переписывания маршрутизации — будущая работа над
 `prepare` / политикой. Полная семантика: [`docs/batch-flex.md`](batch-flex.md).
-
-#### `[proxy.batch]`
-
-| Ключ | Тип | По умолчанию (задумано) | Значение |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `true` | Главный переключатель; сегодня fallback axum всегда пересылает пути Batch |
-| `observe` | bool | `true` | Записывать создание/опрос/результаты Batch как отличимые строки журнала (**запланировано**) |
-| `parse_results` | bool | `false` | Если true, разбирать файлы/потоки результатов в строки `usage` (**запланировано**) |
-
-```toml
-# Запланировано — сегодня не загружается
-[proxy.batch]
-enabled = true
-observe = true
-parse_results = false
-```
 
 #### `[proxy.flex]`
 
