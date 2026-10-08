@@ -64,7 +64,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.4 | todo | P2 | 3 | 20% | |
+| T385.4 | in progress | P2 | 3 | 20% | Claude Code / claude-sonnet-5-5 |
 | T385.5 | todo | P2 | 3 | 20% | |
 | T385.6 | todo | P2 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
@@ -1580,6 +1580,8 @@ Check: one dated `research.md` row per setting.
 optimization.md §2.2 L3 (roadmap S2/S3). Tag Batch create/poll/list/cancel/results calls on the `batch` lane; with `parse_results = true`, parse result lines into `usage` rows. Fail open on malformed lines.
 
 Check: fixture result streams (Anthropic and OpenAI) produce the expected `usage` rows; a malformed line is skipped, not fatal; `just check`.
+
+Execution plan: (1) `[proxy.batch] parse_results = false` in `src/config/mod.rs`, `config/default.toml`, `docs/config.md` (en, ru, uk) and the trycmd snapshots. (2) New `src/proxy/batch_results.rs`: split a JSONL results body per line, read each line through the existing wire usage parsers (`ANTHROPIC` for `result.message`, `OPENAI_CHAT` / `OPENAI_RESPONSES` for `response.body`), skip errored and malformed lines. (3) `finish` in `src/proxy/mod.rs`: for a GET 2xx on a Batch `/results` path or an OpenAI `/v1/files/<id>/content` (the Files lane, since only the content says it is a batch output) with `parse_results` on, write one `usage` row per line in one transaction (`Store::insert_usage_rows`) and retag a Files-lane call that held results as `api_request:batch` (`Store::set_call_kind`). The response is already forwarded by then, so it stays byte-for-byte. (4) Tests: unit tests for the parser and `tests/proxy_batch_results.rs` against a mock upstream (Anthropic and OpenAI fixtures, malformed line, flag off, bytes identical). (5) `just check`.
 
 ### T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
 
