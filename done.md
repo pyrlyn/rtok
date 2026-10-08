@@ -1,5 +1,13 @@
 # rtok — completed tasks
 
+### T454. `read` map of `llms.txt` lists its links
+
+`llms.txt` is a markdown link index with a `.txt` name, so `read` mode `map` used to fall through to the unknown-language line scan and drop the `- [title](url)` rows. `outline::llms_links` parses those rows (fenced blocks skipped) and `render` appends `link <title> <url>` after the heading map for `llms.txt` and `llms-full.txt` only. URLs are not fetched. A normal `.md` file is unchanged.
+
+Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
+
+Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
