@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const ESC: char = '\u{1b}';
-const EMOJI: [&str; 4] = ["✅", "💡", "⚠️", "❌"];
+use rtok::ui::style::{Kind, OPERATION_ICONS};
 
 fn home(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rtok-ui-{name}-{}", std::process::id()));
@@ -50,7 +50,9 @@ fn stdout(out: &Output) -> String {
 }
 
 fn no_emoji(text: &str) {
-    for e in EMOJI {
+    let tones = [Kind::Success, Kind::Info, Kind::Warn, Kind::Error].map(Kind::emoji);
+    let ops = OPERATION_ICONS.iter().map(|(_, icon)| *icon);
+    for e in tones.into_iter().chain(ops) {
         assert!(!text.contains(e), "no emoji off a terminal: {text:?}");
     }
 }

@@ -24,6 +24,7 @@ pub mod ping;
 
 mod agents;
 mod messages;
+mod tasks;
 mod worktrees;
 
 use crate::agents::link;
@@ -75,22 +76,10 @@ pub fn run(cfg: &Config) -> Result<()> {
         };
     let stop = AtomicBool::new(false);
     std::thread::scope(|s| {
+        // T329.5: the project's scope is watched, not just its root.
         #[cfg(feature = "graph")]
         if let Some(root) = &watch_root {
-            // T263: never watch `/` or the home directory.
-            if let Err(e) = crate::plugins::read::walk_root_ok(root) {
-                let msg = format!("watcher skipped for {}: {e:#}", root.display());
-                eprintln!("rtok mcp: {msg}");
-                crate::log::append(cfg, "warn", "mcp", "watch", &msg);
-            } else {
-                s.spawn(|| {
-                    crate::plugins::graph::watch::run(
-                        &crate::plugin::Ctx::new(&server.cx),
-                        root,
-                        &stop,
-                    )
-                });
-            }
+            s.spawn(|| crate::plugins::graph::watch::run_scope(&server.cx, root, &stop));
         }
         // T329.8: register, link and index what the project's manifests reference, off the
         // request path so `initialize` and the first tool call are not delayed. Detached with its
@@ -405,6 +394,12 @@ impl Server {
                 def: agents::status_def(),
             },
         ];
+        // T441.6: the project's tasks, same functions as `rtok task …`.
+        listed.extend(
+            tasks::defs()
+                .into_iter()
+                .map(|def| Listed { plugin: "mcp", def }),
+        );
         let builtin: Vec<&str> = crate::plugins::all()
             .iter()
             .map(|p| p.manifest().id)
@@ -507,6 +502,7 @@ impl Server {
                 .agent()
                 .and_then(|(agent, _)| agents::set_status(&self.cx, &agent, args)),
             "worktree_list" => worktrees::list(&self.cx),
+            n if n.starts_with("task_") => tasks::call(&self.cx, n, args),
             _ => return invoke_text(&self.cx, name, args),
         };
         match own {

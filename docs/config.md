@@ -214,7 +214,7 @@ since           = "30d"
 format          = "table"             # table | json      (--json)
 plugin          = ""                  # "" = all         (--plugin <id>)
 transcripts_dir = "~/.claude/projects"
-codex_dir       = "~/.codex/sessions" # Codex CLI logs → one more `api` row (T49.2); OpenCode, Cursor and Copilot CLI stores carry no token counts (surveyed 2026-09-17), so they are not read
+codex_dir       = "~/.codex/sessions" # Codex CLI logs → one more `api` row (T49.2); OpenCode and Copilot CLI are read by `rtok agents usage` ([agents.usage.dirs], T358.3); Cursor stores carry no token counts (surveyed 2026-09-17), so they are not read
 calibrate_samples = 30                # per class        (--calibrate)
 baseline        = ""                  # default name for --compare; "" = none
 price           = false               # show per-model USD costs (--price)
@@ -632,7 +632,7 @@ Rust (rust-analyzer) and Dart (Dart SDK): `docs/lsp.md`.
 
 rtok's own lines for a person at a terminal — `ok …`, `… started` / `… stopped`, `warning: …`,
 `Error: …`, the `graph index` summary, `--help` — carry an emoji and a colour by default:
-✅ success (green), 💡 status (cyan), ⚠️ warning (yellow), ❌ error (red).
+✅ success (green), 💡 status (cyan), ❗ warning (yellow), ❌ error (red). A line that names an operation takes that operation's icon instead (📚 index, 🚀 start, 🛑 stop, 🔗 link, 🧹 remove, …), padded so the text after it starts in one column.
 
 ```toml
 [ui]

@@ -836,6 +836,8 @@ pub(crate) fn clear_hook_bodies(
             call_io::response_json.eq(None::<String>),
             call_io::request_raw.eq(None::<Vec<u8>>),
             call_io::response_raw.eq(None::<Vec<u8>>),
+            // T433: the session fields belong to the body; the row is swept once unreferenced.
+            call_io::hook_session_id.eq(None::<i32>),
         ))
         .execute(conn)
 }
