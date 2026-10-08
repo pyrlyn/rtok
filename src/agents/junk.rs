@@ -364,14 +364,13 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// The junk kinds in the order the T330 tables list them.
-const KINDS: [&str; 9] = [
+const KINDS: [&str; 8] = [
     "cache",
     "temp",
     "logs",
     "build",
     "deps",
     "locks",
-    "backups",
     "swap",
     "snapshots",
 ];
@@ -404,24 +403,6 @@ fn freed(rows: &[KindRow], review: bool) -> u64 {
     wanted.map(|k| k.size_bytes).sum()
 }
 
-/// The folders a host's own config files sit in, under the home `Roots` names only: a marker
-/// such as Claude Desktop's config has a fixed platform path no fixture can redirect, and a test
-/// must not size the real one. rtok keeps its `_backup` copies of those files there (T249).
-fn marker_dirs(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = a
-        .variants()
-        .iter()
-        .flat_map(|v| a.markers(cfg, v.kind))
-        .filter_map(|p| p.parent().map(Path::to_path_buf))
-        .filter(|d| {
-            d.parent().is_some() && d != roots.home() && d.starts_with(roots.home()) && d.is_dir()
-        })
-        .collect();
-    dirs.sort();
-    dirs.dedup();
-    dirs
-}
-
 /// A folder a host writes, before it is sized.
 struct Found {
     path: PathBuf,
@@ -446,7 +427,17 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
             });
         }
     }
-    let mut parents = marker_dirs(a, cfg, roots);
+    let mut parents: Vec<PathBuf> = a
+        .variants()
+        .iter()
+        .flat_map(|v| a.markers(cfg, v.kind))
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        // Under the home `Roots` names only: a marker such as Claude Desktop's config has a
+        // fixed platform path no fixture can redirect, and a test must not size the real one.
+        .filter(|d| {
+            d.parent().is_some() && d != roots.home() && d.starts_with(roots.home()) && d.is_dir()
+        })
+        .collect();
     parents.sort_by_key(|d| d.components().count());
     for d in parents {
         if !found.iter().any(|f| d.starts_with(&f.path)) {
@@ -552,12 +543,6 @@ fn host_rows(
         items.extend(junk_kinds::temp_items(&temp, temp_age, cx, limit));
         items.extend(junk_review::log_items(&logs, junk, cx, limit));
         items.extend(junk_kinds::found_items(&tag_roots, limit));
-        let backups = marker_dirs(a, cfg, roots);
-        items.extend(junk_review::backup_items(
-            &backups,
-            cfg.setup.backup_files,
-            limit,
-        ));
         if a.id() == "gemini" {
             items.extend(junk_review::snapshot_items(roots, limit));
         }
