@@ -3,22 +3,14 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useCallback, useEffect, useState } from "react";
+import { readStored, writeStored } from "./storage";
 
 const KEY = "rtok-theme";
 const LIGHT_QUERY = "(prefers-color-scheme: light)";
 
-function stored(): string | null {
-  try {
-    return localStorage.getItem(KEY);
-  } catch {
-    // Storage can be blocked (private mode, file://); the theme then follows the OS.
-    return null;
-  }
-}
-
 // Same rule as the pre-paint script in index.html, which cannot import this module.
 export function resolveDark(): boolean {
-  const saved = stored();
+  const saved = readStored(KEY);
   return saved ? saved === "dark" : !matchMedia(LIGHT_QUERY).matches;
 }
 
@@ -41,7 +33,7 @@ export function useTheme() {
     const query = matchMedia(LIGHT_QUERY);
     // An explicit choice wins over the OS; only an unset theme tracks it.
     const onChange = () => {
-      if (!stored()) setDark(resolveDark());
+      if (!readStored(KEY)) setDark(resolveDark());
     };
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
@@ -49,11 +41,7 @@ export function useTheme() {
 
   const toggle = useCallback(() => {
     const next = !dark;
-    try {
-      localStorage.setItem(KEY, next ? "dark" : "light");
-    } catch {
-      // Not persisted; the choice still applies for this session.
-    }
+    writeStored(KEY, next ? "dark" : "light");
     setDark(next);
   }, [dark]);
 
