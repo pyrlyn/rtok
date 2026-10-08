@@ -21,6 +21,7 @@ import {
   statsText,
   worktreesText,
 } from "../pages/textFixtures";
+import { savingsDays } from "../pages/savingsFixtures";
 import { usageBoth, usagePage } from "../pages/usageFixtures";
 
 const shellStats = {
@@ -276,6 +277,7 @@ export const sampleSnapshot: Snapshot = {
     output: 2_100,
     rows: 42,
     turns: [4_000, 6_500, 9_000, 7_200, 11_000, 14_000, 12_500, 16_000],
+    savings: savingsDays,
   },
   worktrees: worktreesText,
 };

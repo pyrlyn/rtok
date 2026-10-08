@@ -15,6 +15,7 @@ index|measurements_plugin|measurements|CREATE INDEX measurements_plugin ON measu
 index|measurements_session_ts|measurements|CREATE INDEX measurements_session_ts ON measurements (session, ts)
 index|messages_to_agent|messages|CREATE INDEX messages_to_agent ON messages (to_agent, id)
 index|note_embeddings_model|note_embeddings|CREATE INDEX note_embeddings_model ON note_embeddings (model)
+index|note_files_path|note_files|CREATE INDEX note_files_path ON note_files (path)
 index|notes_topic|notes|CREATE UNIQUE INDEX notes_topic ON notes (COALESCE(project, ''), kind, title)
 index|project_links_to|project_links|CREATE INDEX project_links_to ON project_links(to_id)
 index|projects_one_selected|projects|CREATE UNIQUE INDEX projects_one_selected ON projects(selected) WHERE selected = 1
@@ -28,6 +29,7 @@ index|sqlite_autoindex_hook_sessions_1|hook_sessions|
 index|sqlite_autoindex_hosts_1|hosts|
 index|sqlite_autoindex_kv_1|kv|
 index|sqlite_autoindex_models_1|models|
+index|sqlite_autoindex_note_files_1|note_files|
 index|sqlite_autoindex_otel_export_1|otel_export|
 index|sqlite_autoindex_project_links_1|project_links|
 index|sqlite_autoindex_projects_1|projects|
@@ -60,6 +62,7 @@ table|measurements|measurements|CREATE TABLE measurements ( id INTEGER PRIMARY K
 table|messages|messages|CREATE TABLE messages ( id INTEGER PRIMARY KEY, from_agent TEXT REFERENCES agents(id), to_agent TEXT NOT NULL REFERENCES agents(id), body TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()), delivered_at INTEGER, read_at INTEGER )
 table|models|models|CREATE TABLE models ( id INTEGER PRIMARY KEY, provider_id INTEGER NOT NULL REFERENCES providers(id), slug TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()), UNIQUE (provider_id, slug) )
 table|note_embeddings|note_embeddings|CREATE TABLE note_embeddings ( note_id INTEGER PRIMARY KEY NOT NULL REFERENCES notes(id) ON DELETE CASCADE, model TEXT NOT NULL, dims INTEGER NOT NULL, text_hash TEXT NOT NULL, embedded_at INTEGER NOT NULL DEFAULT (unixepoch()), vector BLOB NOT NULL )
+table|note_files|note_files|CREATE TABLE note_files ( note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE, path TEXT NOT NULL, PRIMARY KEY (note_id, path) )
 table|notes|notes|CREATE TABLE notes ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), project TEXT, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL , retired INTEGER NULL, superseded_by INTEGER NULL, pinned INTEGER NOT NULL DEFAULT 0, uses INTEGER NOT NULL DEFAULT 0, last_used INTEGER NULL)
 table|notes_fts|notes_fts|CREATE VIRTUAL TABLE notes_fts USING fts5 (title, body, content = 'notes', content_rowid = 'id')
 table|notes_fts_config|notes_fts_config|CREATE TABLE 'notes_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID

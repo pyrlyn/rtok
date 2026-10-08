@@ -35,6 +35,21 @@ for (const { id } of PAGES) {
   });
 }
 
+test("pause freezes the header on a visible paused state and resume lifts it", async ({ page }) => {
+  await page.goto("/#/overview");
+  const header = page.getByRole("banner");
+  await expect(header.getByText(/^updated \d+[smhd] ago$/)).toBeVisible();
+
+  const pause = header.getByRole("button", { name: "Pause live updates" });
+  await pause.click();
+  await expect(pause).toHaveAttribute("aria-pressed", "true");
+  await expect(header.getByText("paused", { exact: true })).toBeVisible();
+
+  await pause.click();
+  await expect(pause).toHaveAttribute("aria-pressed", "false");
+  await expect(header.getByText("paused", { exact: true })).toHaveCount(0);
+});
+
 test("plugin toggle round-trips through /ws and the config file", async ({ page, rtok }) => {
   await page.goto("/#/plugins");
   const toon = page.getByRole("switch", { name: "toggle toon" });
