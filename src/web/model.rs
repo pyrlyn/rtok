@@ -15,6 +15,9 @@ pub use agents::{
 };
 
 use anyhow::Result;
+use jiff::civil::Date;
+use jiff::tz::TimeZone;
+use jiff::{Span, Timestamp};
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -30,7 +33,7 @@ use crate::demon::{self, Service};
 use crate::doctor;
 use crate::measure::{cache, stats};
 use crate::plugins::Registry;
-use crate::store::{CallRow, SessionTotals, Store};
+use crate::store::{CallRow, MeasurementTotal, SessionTotals, Store};
 
 /// Everything a surface needs for one refresh. `Default` is the empty frame a surface
 /// paints while its first read is still running.
@@ -129,6 +132,25 @@ pub struct Stats {
     pub rows: u64,
 }
 
+/// One day of the Δtok savings trend (T414.13).
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+pub struct SavingsDay {
+    /// `YYYY-MM-DD` in `[agents.usage] tz`, so the trend and the Usage page cut the same days.
+    pub day: String,
+    /// `Measurement` rows stamped that day.
+    pub rows: u64,
+    /// Σ est_before − est_after; `None` when the day has no rows. No row, no saving claim: an
+    /// empty day is a gap on the chart, never a zero.
+    pub saved: Option<i64>,
+    /// The same per plugin, only the plugins with rows that day. An `expand` row nets negative,
+    /// as on the Plugins page.
+    pub plugins: BTreeMap<String, i64>,
+}
+
+/// Days the Δtok trend covers: two weeks of day bars stay readable at a panel's width and keep
+/// the 2 s frame small.
+pub const SAVINGS_DAYS: usize = 14;
+
 /// The Overview page (T15.3): the usage totals plus what the tab draws from them —
 /// context-token-turns and the per-turn series behind the sparkline. The totals stay
 /// flat under the `usage` key, so the `/ws` frame keeps the shape P19 pinned and the
@@ -151,6 +173,10 @@ pub struct Overview {
     /// mode). Empty when none; omitted from the wire when empty so the P19 shape stays.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub alerts: Vec<String>,
+    /// The Δtok trend Overview and Stats draw: [`SAVINGS_DAYS`] days ending today, oldest
+    /// first, from [`savings_trend`]. Empty while the first read runs or when the store will
+    /// not read.
+    pub savings: Vec<SavingsDay>,
 }
 
 /// Points of the Overview sparkline: wider than any terminal the TUI draws on, and
@@ -1556,6 +1582,9 @@ impl<'a> Model<'a> {
             out.ctt = ctt;
             out.turns = turns;
         }
+        // A bad zone is the Usage page's error to report; the trend falls back to the system's.
+        let tz = usage::zone(&self.cfg.agents.usage.tz).unwrap_or_else(|_| TimeZone::system());
+        out.savings = savings_trend(store, crate::log::now() as i64, &tz).unwrap_or_default();
         out
     }
 
@@ -1629,10 +1658,7 @@ impl<'a> Model<'a> {
             return by;
         };
         for t in totals {
-            let s: &mut Stats = by.entry(t.plugin).or_default();
-            s.rows += t.rows as u64;
-            s.est_before += t.est_before;
-            s.est_after += t.est_after;
+            fold_total(&mut by, t);
         }
         by
     }
@@ -1648,6 +1674,50 @@ impl<'a> Model<'a> {
     pub fn demon(&self, named: &[Service]) -> Result<Vec<demon::Row>> {
         demon::rows(self.cfg, named)
     }
+}
+
+/// One measurement group into its plugin's [`Stats`]: the Plugins page's totals and the Δtok
+/// trend's days sum through this one fold, so a day cannot count a plugin differently.
+fn fold_total(by: &mut BTreeMap<String, Stats>, t: MeasurementTotal) {
+    let s = by.entry(t.plugin).or_default();
+    s.rows += t.rows as u64;
+    s.est_before += t.est_before;
+    s.est_after += t.est_after;
+}
+
+/// The Δtok trend (T414.13): [`SAVINGS_DAYS`] days ending with `now`'s day in `tz`, oldest
+/// first, from [`Store::measurement_totals_since`] folded per day and plugin. A row stamped
+/// after today (a skewed clock) has no day here and is left out rather than moved.
+pub fn savings_trend(store: &Store, now: i64, tz: &TimeZone) -> Result<Vec<SavingsDay>> {
+    let today = Timestamp::from_second(now)?.to_zoned(tz.clone()).date();
+    let first = today.checked_sub(Span::new().days(SAVINGS_DAYS as i64 - 1))?;
+    let mut days: Vec<(Date, BTreeMap<String, Stats>)> =
+        std::iter::successors(Some(first), |d| d.tomorrow().ok())
+            .take(SAVINGS_DAYS)
+            .map(|d| (d, BTreeMap::new()))
+            .collect();
+    for (ts, t) in store.measurement_totals_since(usage::start_of(first, tz)?)? {
+        let day = Timestamp::from_second(ts)?.to_zoned(tz.clone()).date();
+        if let Some((_, by)) = days.iter_mut().find(|(d, _)| *d == day) {
+            fold_total(by, t);
+        }
+    }
+    Ok(days
+        .into_iter()
+        .map(|(day, by)| {
+            let rows = by.values().map(|s| s.rows).sum();
+            let plugins: BTreeMap<String, i64> = by
+                .into_iter()
+                .map(|(p, s)| (p, s.est_before - s.est_after))
+                .collect();
+            SavingsDay {
+                day: day.to_string(),
+                rows,
+                saved: (rows > 0).then(|| plugins.values().sum()),
+                plugins,
+            }
+        })
+        .collect())
 }
 
 fn live_calls(cfg: &Config) -> Vec<crate::proxy::LiveCall> {
@@ -1901,6 +1971,72 @@ mod tests {
             let s = totals.get(plugin).unwrap();
             assert_eq!((s.rows, s.est_before, s.est_after), want_plugin, "{plugin}");
         }
+    }
+
+    /// T414.13's Check: the Δtok trend buckets fixture rows by day in the zone, per plugin and
+    /// in total, nets an `expand` row out, and leaves a day without rows empty, never zero.
+    #[test]
+    fn savings_trend_buckets_rows_by_day_and_plugin() {
+        let cx = Runtime::in_memory("trend").unwrap();
+        let at = |utc: &str| utc.parse::<Timestamp>().unwrap().as_second();
+        for (session, plugin, kind, before, after, utc) in [
+            ("old", "cmd", "filter", 999, 0, "2026-09-24T23:59:59Z"),
+            ("edge", "cmd", "filter", 7, 0, "2026-09-25T00:00:00Z"),
+            ("mid", "cmd", "filter", 30, 10, "2026-10-06T22:30:00Z"),
+            ("today", "cmd", "filter", 100, 40, "2026-10-08T01:00:00Z"),
+            ("late", "archive", "filter", 50, 10, "2026-10-08T23:30:00Z"),
+            ("late", "archive", "expand", 0, 5, "2026-10-08T23:30:00Z"),
+            ("future", "cmd", "filter", 5, 0, "2026-10-09T00:00:00Z"),
+        ] {
+            let m = Measurement {
+                plugin,
+                kind,
+                before_bytes: 0,
+                after_bytes: 0,
+                est_before: before,
+                est_after: after,
+                ref_id: None,
+                call_id: None,
+            };
+            cx.store.insert_measurement(session, &m).unwrap();
+            cx.store.set_measurement_ts(session, at(utc)).unwrap();
+        }
+        let now = at("2026-10-08T12:00:00Z");
+        let days = savings_trend(&cx.store, now, &TimeZone::UTC).unwrap();
+        assert_eq!(days.len(), SAVINGS_DAYS);
+        assert_eq!(days[0].day, "2026-09-25");
+        assert_eq!(days[13].day, "2026-10-08");
+        let day = |rows, saved, plugins: &[(&str, i64)]| SavingsDay {
+            day: String::new(),
+            rows,
+            saved,
+            plugins: plugins.iter().map(|(p, s)| (p.to_string(), *s)).collect(),
+        };
+        let got: Vec<SavingsDay> = days
+            .iter()
+            .map(|d| SavingsDay {
+                day: String::new(),
+                ..d.clone()
+            })
+            .collect();
+        let mut want = vec![day(0, None, &[]); SAVINGS_DAYS];
+        want[0] = day(1, Some(7), &[("cmd", 7)]);
+        want[11] = day(1, Some(20), &[("cmd", 20)]);
+        want[13] = day(3, Some(95), &[("archive", 35), ("cmd", 60)]);
+        assert_eq!(got, want);
+        // An empty day goes out as `null`, which the chart draws as a gap.
+        assert_eq!(
+            serde_json::to_value(&days[1]).unwrap()["saved"],
+            Value::Null
+        );
+
+        // Kyiv is UTC+3 in October: 22:30Z is the next day there, and 23:30Z on the 8th is
+        // already the 9th, after today.
+        let kyiv = TimeZone::get("Europe/Kyiv").unwrap();
+        let days = savings_trend(&cx.store, now, &kyiv).unwrap();
+        assert_eq!(days[12].day, "2026-10-07");
+        assert_eq!(days[12].saved, Some(20));
+        assert_eq!(days[13].plugins, BTreeMap::from([("cmd".to_string(), 60)]));
     }
 
     /// T15.3's Check: the Overview page carries the store's own sums — totals, CTT and
