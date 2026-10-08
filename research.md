@@ -255,7 +255,7 @@ Numbers from `cargo test --release --test graph_bench -- --ignored --nocapture`.
 | (1) `tests/graph_contract.rs` | 3 passed | 3 passed | unchanged, both |
 | (2) `rtok hook PostToolUse` p95, n=100 | 8.07 ms | 96.6 ms | ≤ 10 ms |
 | (3) warm `symbol` / `callers` / `impact(2)` | 17.9 / 17.5 / 26.8 ms | 797 / 776 / 873 ms | < 100 ms |
-| (3) cold index, 3 000 files | 13.8 s; 341 ms after T35.1, 172 ms after T35.2 (2026-09-11); **T59.3** batches 200 files/txn (was 64) — re-run `cargo test --release --test graph_bench -- --ignored` when the tree compiles | 33.7 s | not gated |
+| (3) cold index, 3 000 files | 13.8 s; 341 ms after T35.1, 172 ms after T35.2 (2026-09-11); T59.3 claimed 200 files/txn but the code kept a hard-coded 64 until **T451** introduced `SYMBOL_BATCH_FILES`. T451 (2026-10-08, base `60cef680b`, M3 Max 16 cores/64 GB, `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers`, 16 interleaved pairs, load average 40-88 from other agents' builds): cold index median 64 files/txn **360 ms**, 200 files/txn **384 ms** (range 207-3544 ms vs 209-1703 ms; the last 10 pairs at load 40-85: 280 ms vs 324 ms; 200 was slower in 9 pairs, faster in 4, 3 within 2 %). The gap is inside the load noise, so 200 stays (fewer transactions); re-measure on an idle machine before tuning further | 33.7 s | not gated |
 | (4) `impact(4)` on fan-out fixture | CTE 28.5 s | path 371 ms (**77×**) | lbug ≥ 2× CTE |
 | (4) same fixture, Rust BFS | 2.61 s | 2.35 s | baseline |
 | (5) `just check` (liblbug already built) | 16.9 s | same command (clippy `--all-features`) | ≤ 2× default |
