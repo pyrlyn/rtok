@@ -44,6 +44,7 @@ _arguments "${_arguments_options[@]}" : /
 '--call=[Call one listed tool and print the text result (pi /`registerTool/` shim)]:TOOL:_default' /
 '--json=[JSON arguments for /`--call/`]:ARGS:_default' /
 '--host=[The host this MCP entry belongs to (/`claude/`, /`cursor/`, /`grok/`, …)/: overlays /`/[hook/] host/` so the process can find its rtok agent]:HOST:_default' /
+'(--call --json)--http=[Serve over Streamable HTTP at /`IP/:PORT/` (default /`/[mcp/] http/`) instead of stdio; the bearer token comes from /`/[mcp/] token/` or /`RTOK_MCP_TOKEN/`]::ADDR:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '-h[Print help]' /
 '--help[Print help]' /

@@ -12,6 +12,7 @@ import { ago, compact, nowSecs } from "./format";
 import { why } from "./missing";
 import { SURFACES, type overview } from "./model";
 import { CheckPill, LivePill, PanelLink } from "./parts";
+import { tableLink } from "../tableSearch";
 
 type Overview = ReturnType<typeof overview>;
 
@@ -40,12 +41,16 @@ export function CallsPanel({ o, calls }: { o: Overview; calls: number }) {
                                     aria-hidden="true"
                                     className={`size-2.5 rounded-sm ${swatch[SERIES[s]]} ${lit === s ? "ring-2 ring-fg-muted" : lit ? "opacity-40" : ""}`}
                                 />
-                                {s} {o.bySurface[s].n}
+                                <PanelLink {...tableLink("calls", { surface: s })}>
+                                    {s} {o.bySurface[s].n}
+                                </PanelLink>
                             </li>
                         ))}
                         <li className="flex items-center gap-1.5">
                             <span aria-hidden="true" className="size-2 rounded-full bg-delta-fg" />
-                            failed {o.failed}
+                            <PanelLink {...tableLink("calls", { result: "failed" })}>
+                                failed {o.failed}
+                            </PanelLink>
                         </li>
                         <li className="ml-auto">
                             p50 {o.p50 == null ? "-" : o.p50.toFixed(1)} ms · p95{" "}
@@ -110,7 +115,14 @@ export function SessionsPanel({ o }: { o: Overview }) {
         <Panel
             title="recent sessions"
             hint={`${o.live} live`}
-            action={<PanelLink to="/sessions">all →</PanelLink>}
+            action={
+                <span className="flex gap-3">
+                    <PanelLink {...tableLink("sessions", { show: "live" })}>
+                        {o.live} live →
+                    </PanelLink>
+                    <PanelLink to="/sessions">all →</PanelLink>
+                </span>
+            }
             className="xl:col-span-12"
         >
             {o.recent.length ? (

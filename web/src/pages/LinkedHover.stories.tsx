@@ -43,7 +43,11 @@ export const HoverCallsChart: Story = {
         await expect(tips()).toHaveLength(1);
         await expect(big).toHaveAttribute("aria-describedby", tips()[0]!.id);
         // The swapped subline stays readable to assistive tech.
-        await expect(c.getByText(/failed · p95/)).toBeInTheDocument();
+        // Matched on the whole text: the failed count may be its own link inside it (T414.11).
+        const kept = [...canvasElement.querySelectorAll(".sr-only")].filter((e) =>
+            /failed · p95/.test(e.textContent ?? ""),
+        );
+        await expect(kept).toHaveLength(1);
 
         await userEvent.keyboard("{Escape}");
         await waitFor(() => expect(c.queryAllByTestId("hover-readout")).toHaveLength(0));
