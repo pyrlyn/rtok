@@ -464,26 +464,9 @@ mod tests {
     }
 
     fn seed_rows(rt: &crate::plugin::Runtime, root: &str) {
-        let def = |n: &str, l| {
-            (
-                n.to_string(),
-                "function".to_string(),
-                l,
-                true,
-                l,
-                String::new(),
-            )
-        };
-        let usage = |n: &str, l| {
-            (
-                n.to_string(),
-                "function".to_string(),
-                l,
-                false,
-                l,
-                String::new(),
-            )
-        };
+        let def = |n: &str, l: i32| rtok_plugin_sdk::SymbolRow::new(n, "function", l, true, l, "");
+        let usage =
+            |n: &str, l: i32| rtok_plugin_sdk::SymbolRow::new(n, "function", l, false, l, "");
         let put = |path: &str, rows: &[_]| {
             rt.store
                 .replace_symbols(root, path, "s", (1, 1), rows)

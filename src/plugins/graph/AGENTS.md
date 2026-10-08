@@ -27,6 +27,7 @@
 - `impact` prints the flat `depth  path  scope` listing while it fits `impact_tokens`; past it `blast.rs`
   groups files (depth, stored file rank, refs), prints 3 lines each and ends in the cut line.
   `--all` / MCP `all` and `impact_tokens = 0` keep the flat listing. The LSP backend is not budgeted.
+- T454: a definition row stores `start_byte`, `end_byte`, `content_hash`, and on defs `signature` and `doc` (`symbols_fts`, external content). `symbol` heads are `{path}::{name}#{kind}@{line} {path}:{line} {kind}`; the body is a ranged read when the file sha still matches, otherwise the head and one `stale <path>` line. Past `body_lines` the uncut span is archived (`expand <id>`). Optional `id` loads that one row. `explore` with no resolved name uses `symbol_fts` (name, then signature, then doc, then bm25).
 - The plugin never writes SQL (D13). Storage is `src/store/symbols.rs` (`symbol_*` methods).
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.

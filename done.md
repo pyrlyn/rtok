@@ -1,5 +1,24 @@
 # rtok — completed tasks
 
+### T454. Recover a cut definition, and search past the name
+
+A definition longer than `body_lines` dropped lines with no archive id, and `explore` only resolved identifier tokens as names. Each tag now keeps its byte span so a cut body expands, and a full-text fallback runs when no name resolves.
+
+Plan:
+1. `migrations/0034_symbol_spans`: `start_byte`, `end_byte`, `content_hash` (sha256 of the span). `migrations/0035_symbols_fts`: `signature`, `doc`, external-content `symbols_fts` on definitions only, backfilled so deletes of pre-existing rows stay valid.
+2. `TagHit` keeps `tag.range` bytes. `SymbolRow` threads them, plus signature and doc, through `replace_symbols`. `INDEX_VERSION` 5 forces one cold rebuild; the mtime+size skip stays.
+3. `defs_text` reads the span when the file's sha256 still matches `file_sha`, else one `stale <path>` line. A body over the budget archives the uncut span and ends `… N more lines, expand <id>`.
+4. Every definition head is `{path}::{name}#{kind}@{line} {path}:{line} {kind}`. `symbol` takes optional `id` and ignores `name` when it is set. `explore` with no resolved name calls `symbol_fts`, ranked name-contains, then signature, then doc, then bm25, capped at 10.
+5. Not in this task: `check_edit_safe`, a session journal, embeddings.
+
+Check: `cargo test --test graph_contract --test graph_model`, unit tests in `outline.rs`, `index.rs` and `graph/mod.rs`, and `just check`.
+
+Result (2026-10-08, Cursor / grok 4.7): `symbols` gained `start_byte`, `end_byte`, `content_hash`, `signature` and `doc`. `symbols_fts` is external-content FTS5 on name, signature and doc for definitions only, with insert/delete/update triggers and a backfill. `SymbolRow` replaced the six-field tuple; `symbol_span` and `symbol_fts` default to empty on the SDK trait and `Runtime` overrides them. `INDEX_VERSION` is 5, so the next index rebuilds once; a file whose mtime and size still match is skipped after that. `symbol` prints `{path}::{name}#{kind}@{line} {path}:{line} {kind}` and reads the span when the file sha256 still equals `file_sha`; a mismatch prints the head and one `stale <path>` line and does not slice. A body past `body_lines` is archived and ends `… N more lines, expand <id>` (`rtok expand` returns the uncut span); an archive failure keeps the old trailer. Optional `id` loads that one row and ignores `name`. `explore` with no resolved name searches identifier tokens OR-ed, ranked name-contains, then signature, then doc, then bm25, capped at 10. No new tool, crate, embedding, or saving claim.
+
+Status: done 2026-10-08
+
+Model: Cursor / grok 4.7
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

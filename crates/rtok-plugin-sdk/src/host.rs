@@ -409,8 +409,77 @@ pub trait Ledger {
     fn last_measurement_ref(&self, plugin: &str, kind: &str) -> Result<Option<String>>;
 }
 
+/// One indexed symbol. `scope` is the enclosing definition, or the import specifier.
+/// Byte fields and `content_hash` describe the tag's span in the file that was indexed;
+/// `signature` is the definition line and `doc` the comment directly above it (T454).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolRow {
+    /// Identifier, or the last segment of an import.
+    pub name: String,
+    /// Tags kind (`function`, `import`, …).
+    pub kind: String,
+    /// 1-based line of the tag.
+    pub line: i32,
+    /// A definition, rather than a reference.
+    pub is_def: bool,
+    /// Last line of the tagged node.
+    pub end_line: i32,
+    /// Enclosing definition, or the full import specifier.
+    pub scope: String,
+    /// Byte offset of the tag in the indexed file.
+    pub start_byte: i64,
+    /// Exclusive end byte of the tag.
+    pub end_byte: i64,
+    /// sha256 of `file_bytes[start_byte..end_byte]`.
+    pub content_hash: String,
+    /// The definition's source line. Empty on a reference.
+    pub signature: String,
+    /// Contiguous `///` or `//!` lines directly above a definition, at most 512 bytes.
+    pub doc: String,
+}
+
+impl SymbolRow {
+    /// A row with no span, signature or doc. Tests and writers that do not parse a file
+    /// use this; the indexer fills the rest.
+    pub fn new(
+        name: impl Into<String>,
+        kind: impl Into<String>,
+        line: i32,
+        is_def: bool,
+        end_line: i32,
+        scope: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            kind: kind.into(),
+            line,
+            is_def,
+            end_line,
+            scope: scope.into(),
+            start_byte: 0,
+            end_byte: 0,
+            content_hash: String::new(),
+            signature: String::new(),
+            doc: String::new(),
+        }
+    }
+}
+
+/// Byte span of one definition, plus the file sha it was indexed against (T454).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolSpan {
+    /// Inclusive start byte.
+    pub start_byte: u64,
+    /// Exclusive end byte.
+    pub end_byte: u64,
+    /// sha256 of the span bytes.
+    pub content_hash: String,
+    /// sha256 of the whole file at index time.
+    pub file_sha: String,
+}
+
 /// Symbol rows for one indexed file.
-pub type SymbolFileRows = Vec<(String, String, i32, bool, i32, String)>;
+pub type SymbolFileRows = Vec<SymbolRow>;
 /// Batched cold-index writes: `(path, sha, stat, rows)` per file.
 pub type SymbolFileBatch = Vec<(String, String, (i64, i64), SymbolFileRows)>;
 
@@ -435,15 +504,14 @@ pub trait Symbols {
     /// Update a file's mtime and size without re-parsing it — the content is unchanged.
     fn touch_symbols(&self, root: &str, path: &str, mtime: i64, size: i64) -> Result<()>;
 
-    /// Replace every symbol of one file in a single transaction. `rows` are
-    /// `(name, kind, line, is_def, end_line, text)`; returns how many were written.
+    /// Replace every symbol of one file in a single transaction. Returns how many were written.
     fn replace_symbols(
         &self,
         root: &str,
         path: &str,
         file_sha: &str,
         stat: (i64, i64),
-        rows: &[(String, String, i32, bool, i32, String)],
+        rows: &[SymbolRow],
     ) -> Result<usize>;
 
     /// Replace many files in one transaction (T35.3 cold index).
@@ -493,6 +561,36 @@ pub trait Symbols {
 
     /// Definitions of `name`: `(path, kind, line, end_line)`.
     fn symbol_defs(&self, root: &str, name: &str) -> Result<Vec<(String, String, i32, i32)>>;
+
+    /// Byte span of one definition. `None` when that row is not indexed (T454).
+    ///
+    /// Default: nothing. A host with a symbol store overrides it.
+    fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<SymbolSpan>> {
+        let _ = (root, path, name, kind, line);
+        Ok(None)
+    }
+
+    /// Definitions matching `query` in the symbol full-text index, best first (T454).
+    /// `(path, name, kind, line)`. A name that contains a query token outranks a signature
+    /// hit, which outranks a doc hit; `bm25` breaks ties.
+    ///
+    /// Default: nothing. An error from the index is the host's to return.
+    fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, String, String, i32)>> {
+        let _ = (root, query, limit);
+        Ok(Vec::new())
+    }
 
     /// References to `name` grouped by location: `(path, kind, count, line)`.
     fn symbol_ref_groups(&self, root: &str, name: &str) -> Result<Vec<(String, String, i64, i32)>>;

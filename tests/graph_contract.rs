@@ -78,8 +78,8 @@ fn explore_two_symbol_question_byte_exact() {
             "explore",
             serde_json::json!({"query": "how do b and c interact"})
         ),
-        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
-         = c\nchain.rs:7 function\nfn c() {}\n\
+        "= b\nchain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+         = c\nchain.rs::c#function@7 chain.rs:7 function\nfn c() {}\n\
          paths:\nc → b\n\
          impact:\nb ← 1\nc ← 2\n"
     );
@@ -113,7 +113,7 @@ fn four_tools_byte_exact() {
     let name = |n: &str| serde_json::json!({"name": n});
     assert_eq!(
         call(&home, &a, "symbol", name("b")),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(&home, &a, "callers", name("c")),
@@ -218,7 +218,7 @@ fn second_repo_leaves_the_first_intact() {
     let first = call(&home, &a, "symbol", name.clone());
     assert_eq!(
         first,
-        "chain.rs:1 function\nfn a() {\n    b();\n}\ncalls: b\n"
+        "chain.rs::a#function@1 chain.rs:1 function\nfn a() {\n    b();\n}\ncalls: b\n"
     );
     assert_eq!(
         call(&home, &b, "symbol", name.clone()),
@@ -273,7 +273,7 @@ fn filters_narrow_to_one_subtree() {
             "symbol",
             serde_json::json!({"name": "b", "path": "chain"})
         ),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(
@@ -282,7 +282,7 @@ fn filters_narrow_to_one_subtree() {
             "symbol",
             serde_json::json!({"name": "b", "kind": "function"})
         ),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(
@@ -311,5 +311,78 @@ fn filters_narrow_to_one_subtree() {
         ),
         "1  other.rs  d\n"
     );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// T454: `id` loads that one definition and ignores `name`.
+#[test]
+fn symbol_id_loads_one_definition() {
+    let home = tmp("id");
+    let a = repo(&home, "a");
+    let id = "chain.rs::b#function@4";
+    let expect = "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n";
+    assert_eq!(
+        call(&home, &a, "symbol", serde_json::json!({"id": id})),
+        expect
+    );
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "symbol",
+            serde_json::json!({"id": id, "name": "a"})
+        ),
+        expect
+    );
+    assert!(
+        call(
+            &home,
+            &a,
+            "symbol",
+            serde_json::json!({"id": "chain.rs::nope#function@1"})
+        )
+        .contains("no definition")
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// T454: a body past `body_lines` archives the uncut span.
+#[test]
+fn long_body_expands_to_the_uncut_span() {
+    let home = tmp("long");
+    let dir = home.join("a");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut src = String::from("fn long_fn() {\n");
+    for i in 0..50 {
+        src.push_str(&format!("    let x{i} = {i};\n"));
+    }
+    src.push_str("}\n");
+    std::fs::write(dir.join("long.rs"), &src).unwrap();
+    let out = call(
+        &home,
+        &dir,
+        "symbol",
+        serde_json::json!({"name": "long_fn"}),
+    );
+    assert!(
+        out.starts_with("long.rs::long_fn#function@1 long.rs:1 function\n"),
+        "{out}"
+    );
+    let id = out
+        .split("expand ")
+        .nth(1)
+        .and_then(|s| s.split_whitespace().next())
+        .expect("expand id");
+    assert_eq!(id.len(), 64, "{out}");
+    let expanded = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .args(["expand", id])
+        .env("RTOK_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(expanded.status.success(), "{expanded:?}");
+    let text = String::from_utf8_lossy(&expanded.stdout);
+    assert!(text.contains("fn long_fn()"), "{text}");
+    assert!(text.contains("let x49 = 49;"), "{text}");
+    assert!(text.contains('}'), "{text}");
     let _ = std::fs::remove_dir_all(&home);
 }

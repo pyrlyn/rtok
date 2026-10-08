@@ -91,7 +91,7 @@ fn tags_backend_callers_bytes_match_contract() {
     let ctx = Ctx::new(&cx);
     assert_eq!(
         symbol(&ctx, &a, "b").unwrap(),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         callers(&ctx, &a, "c").unwrap(),

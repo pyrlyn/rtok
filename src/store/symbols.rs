@@ -15,8 +15,10 @@ use diesel::sqlite::SqliteConnection;
 
 use super::Store;
 use super::schema::{extractor, file_rank, symbol_stale, symbols};
+use rtok_plugin_sdk::{SymbolRow, SymbolSpan};
 
-const INSERT_CHUNK: usize = 999 / 11;
+/// Bound parameters in one [`NewSymbol`] insert. SQLite's default variable limit is 999.
+const INSERT_CHUNK: usize = 999 / 16;
 
 /// SQLite's default `SQLITE_MAX_VARIABLE_NUMBER` is 999; a BFS level's frontier is chunked
 /// below that so a wide fan-out never blows the bind limit in one `eq_any`.
@@ -134,6 +136,28 @@ fn note_stale(conn: &mut SqliteConnection, root: &str, path: &str) -> QueryResul
     Ok(())
 }
 
+/// One inserted symbol. Column list matches [`INSERT_CHUNK`].
+#[derive(Insertable)]
+#[diesel(table_name = symbols)]
+struct NewSymbol<'a> {
+    root: &'a str,
+    path: &'a str,
+    name: &'a str,
+    kind: &'a str,
+    line: i32,
+    is_def: i32,
+    file_sha: &'a str,
+    mtime: i64,
+    size: i64,
+    end_line: i32,
+    scope: &'a str,
+    start_byte: i64,
+    end_byte: i64,
+    content_hash: &'a str,
+    signature: &'a str,
+    doc: &'a str,
+}
+
 /// One file's rows, inside the caller's transaction: drop what the file had, insert the
 /// new tags in chunks, and return how many landed. A tagless file still gets a row so the
 /// `file_sha` stands and the next run skips it on the stat alone.
@@ -143,7 +167,7 @@ fn replace_one(
     path: &str,
     file_sha: &str,
     stat: (i64, i64),
-    rows: &[(String, String, i32, bool, i32, String)],
+    rows: &[SymbolRow],
 ) -> QueryResult<usize> {
     diesel::delete(symbols::table.filter(symbols::root.eq(root).and(symbols::path.eq(path))))
         .execute(conn)?;
@@ -164,22 +188,25 @@ fn replace_one(
         return Ok(0);
     }
     for chunk in rows.chunks(INSERT_CHUNK) {
-        let values: Vec<_> = chunk
+        let values: Vec<NewSymbol<'_>> = chunk
             .iter()
-            .map(|(name, kind, line, is_def, end_line, scope)| {
-                (
-                    symbols::root.eq(root),
-                    symbols::path.eq(path),
-                    symbols::name.eq(name),
-                    symbols::kind.eq(kind),
-                    symbols::line.eq(line),
-                    symbols::is_def.eq(i32::from(*is_def)),
-                    symbols::file_sha.eq(file_sha),
-                    symbols::mtime.eq(stat.0),
-                    symbols::size.eq(stat.1),
-                    symbols::end_line.eq(end_line),
-                    symbols::scope.eq(scope),
-                )
+            .map(|row| NewSymbol {
+                root,
+                path,
+                name: &row.name,
+                kind: &row.kind,
+                line: row.line,
+                is_def: i32::from(row.is_def),
+                file_sha,
+                mtime: stat.0,
+                size: stat.1,
+                end_line: row.end_line,
+                scope: &row.scope,
+                start_byte: row.start_byte,
+                end_byte: row.end_byte,
+                content_hash: &row.content_hash,
+                signature: &row.signature,
+                doc: &row.doc,
             })
             .collect();
         diesel::insert_into(symbols::table)
@@ -188,6 +215,54 @@ fn replace_one(
     }
     clear_stale(conn, root, path)?;
     Ok(rows.len())
+}
+
+/// Identifier tokens of a free-text query: alphanumeric/`_` runs, deduped, first 8.
+/// Shared with `explore` so the full-text fallback searches the same tokens (T454).
+pub(crate) fn identifier_tokens(query: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    query
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|t| !t.is_empty())
+        .filter(|t| seen.insert((*t).to_string()))
+        .take(8)
+        .map(str::to_string)
+        .collect()
+}
+
+/// 0 when `name` contains a query token, 1 for `signature`, 2 for `doc` (T454).
+pub(crate) fn fts_match_tier(name: &str, signature: &str, doc: &str, tokens: &[String]) -> u8 {
+    let hit = |hay: &str| {
+        let hay = hay.to_lowercase();
+        tokens.iter().any(|t| hay.contains(&t.to_lowercase()))
+    };
+    if hit(name) {
+        0
+    } else if hit(signature) {
+        1
+    } else if hit(doc) {
+        2
+    } else {
+        3
+    }
+}
+
+fn fts_query(tokens: &[String]) -> String {
+    tokens
+        .iter()
+        .map(|t| format!("\"{}\"", t.replace('"', "")))
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+
+struct FtsHit {
+    path: String,
+    name: String,
+    kind: String,
+    line: i32,
+    signature: String,
+    doc: String,
+    bm25: f64,
 }
 
 fn clear_stale(conn: &mut SqliteConnection, root: &str, path: &str) -> QueryResult<()> {
@@ -295,6 +370,86 @@ impl Store {
         Ok(())
     }
 
+    /// Byte span of one definition (T454).
+    pub fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<SymbolSpan>> {
+        let mut conn = self.lock()?;
+        let row: Option<(i64, i64, String, String)> = symbols::table
+            .filter(symbols::root.eq(root))
+            .filter(symbols::path.eq(path))
+            .filter(symbols::name.eq(name))
+            .filter(symbols::kind.eq(kind))
+            .filter(symbols::line.eq(line))
+            .filter(symbols::is_def.eq(1))
+            .select((
+                symbols::start_byte,
+                symbols::end_byte,
+                symbols::content_hash,
+                symbols::file_sha,
+            ))
+            .first(&mut *conn)
+            .optional()?;
+        Ok(row.map(|(start, end, content_hash, file_sha)| SymbolSpan {
+            start_byte: u64::try_from(start).unwrap_or(0),
+            end_byte: u64::try_from(end).unwrap_or(0),
+            content_hash,
+            file_sha,
+        }))
+    }
+
+    /// Full-text definitions, ranked name, then signature, then doc, then bm25 (T454).
+    pub fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, String, String, i32)>> {
+        let tokens = identifier_tokens(query);
+        if tokens.is_empty() || limit <= 0 {
+            return Ok(Vec::new());
+        }
+        let fetch = i32::try_from(limit.saturating_mul(8).clamp(limit, 80)).unwrap_or(80);
+        let mut conn = self.lock()?;
+        let rows: Vec<(String, String, String, i32, String, String, f64)> =
+            super::sql_ext::SearchSymbols {
+                query: fts_query(&tokens),
+                root: root.to_string(),
+                limit: fetch,
+            }
+            .load(&mut *conn)?;
+        let mut hits: Vec<FtsHit> = rows
+            .into_iter()
+            .map(|(path, name, kind, line, signature, doc, bm25)| FtsHit {
+                path,
+                name,
+                kind,
+                line,
+                signature,
+                doc,
+                bm25,
+            })
+            .collect();
+        hits.sort_by(|a, b| {
+            fts_match_tier(&a.name, &a.signature, &a.doc, &tokens)
+                .cmp(&fts_match_tier(&b.name, &b.signature, &b.doc, &tokens))
+                .then(a.bm25.total_cmp(&b.bm25))
+                .then(a.name.cmp(&b.name))
+                .then(a.path.cmp(&b.path))
+                .then(a.line.cmp(&b.line))
+        });
+        hits.truncate(usize::try_from(limit).unwrap_or(0));
+        Ok(hits
+            .into_iter()
+            .map(|h| (h.path, h.name, h.kind, h.line))
+            .collect())
+    }
+
     pub fn replace_symbol_files(
         &self,
         root: &str,
@@ -324,7 +479,7 @@ impl Store {
         path: &str,
         file_sha: &str,
         stat: (i64, i64),
-        rows: &[(String, String, i32, bool, i32, String)],
+        rows: &[SymbolRow],
     ) -> Result<usize> {
         let mut conn = self.lock()?;
         // One transaction per file: thousands of autocommit inserts dominated index time.
@@ -1177,39 +1332,18 @@ fn import_matches_file(spec: &str, file: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn row(name: &str, line: i32, is_def: bool) -> (String, String, i32, bool, i32, String) {
-        (
-            name.into(),
-            "function".into(),
-            line,
-            is_def,
-            line,
-            String::new(),
-        )
+    fn row(name: &str, line: i32, is_def: bool) -> SymbolRow {
+        SymbolRow::new(name, "function", line, is_def, line, "")
     }
 
-    fn import(name: &str, line: i32) -> (String, String, i32, bool, i32, String) {
-        (
-            name.into(),
-            "import".into(),
-            line,
-            false,
-            line,
-            String::new(),
-        )
+    fn import(name: &str, line: i32) -> SymbolRow {
+        SymbolRow::new(name, "import", line, false, line, "")
     }
 
     /// A reference row with an explicit enclosing `scope`, unlike `row`/`import` (always
     /// `scope: ""`) — needed to build the `symbol_impact` chains below.
-    fn reference(name: &str, line: i32, scope: &str) -> (String, String, i32, bool, i32, String) {
-        (
-            name.into(),
-            "function".into(),
-            line,
-            false,
-            line,
-            scope.into(),
-        )
+    fn reference(name: &str, line: i32, scope: &str) -> SymbolRow {
+        SymbolRow::new(name, "function", line, false, line, scope)
     }
 
     #[test]
@@ -1356,8 +1490,31 @@ mod tests {
         assert_eq!(got, vec![(1, "a.rs".into(), "".into())]);
     }
 
-    fn import_at(name: &str, line: i32, spec: &str) -> (String, String, i32, bool, i32, String) {
-        (name.into(), "import".into(), line, false, line, spec.into())
+    fn import_at(name: &str, line: i32, spec: &str) -> SymbolRow {
+        SymbolRow::new(name, "import", line, false, line, spec)
+    }
+
+    #[test]
+    fn symbol_fts_ranks_a_name_token_above_a_doc_hit() {
+        let store = Store::open_in_memory().unwrap();
+        let mut lines = SymbolRow::new("body_lines", "function", 10, true, 12, "");
+        lines.signature = "fn body_lines()".into();
+        lines.doc = "Source of one definition, line.".into();
+        let mut widget = SymbolRow::new("widget", "function", 1, true, 3, "");
+        widget.signature = "fn widget()".into();
+        widget.doc = "truncated source of a widget".into();
+        store
+            .replace_symbols("/r", "a.rs", "s", (0, 0), &[lines, widget])
+            .unwrap();
+        let hits = store
+            .symbol_fts("/r", "truncated source lines", 10)
+            .unwrap();
+        let names: Vec<&str> = hits.iter().map(|h| h.1.as_str()).collect();
+        let body = names.iter().position(|n| *n == "body_lines");
+        let decoy = names.iter().position(|n| *n == "widget");
+        assert!(body.is_some(), "{names:?}");
+        assert!(decoy.is_some(), "{names:?}");
+        assert!(body < decoy, "{names:?}");
     }
 
     #[test]

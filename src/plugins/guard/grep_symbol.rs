@@ -130,8 +130,9 @@ fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<Strin
             return None;
         }
         defs.push_str(&graph::def_text(
+            cx,
             text,
-            (path, kind, *line, *end_line),
+            (path, name, kind, *line, *end_line),
             budget,
         ));
     }

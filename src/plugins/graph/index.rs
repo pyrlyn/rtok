@@ -26,8 +26,8 @@ pub struct Report {
     pub extension_mapped: u32,
 }
 
-/// One symbol row: name, kind, line, is-definition, end line, enclosing definition.
-type Row = (String, String, i32, bool, i32, String);
+/// One symbol row written for a file (T454 adds the byte span, signature and doc).
+type Row = rtok_plugin_sdk::SymbolRow;
 
 /// `file_sha` for a file that cannot be decoded or parsed (T36.16). The stat gate can skip it
 /// on the next run without opening the file again.
@@ -348,7 +348,7 @@ fn parse(job: &Job) -> Parsed {
         return Parsed::Same;
     }
     match outline::tags_with_extensions(&job.path, &src, &job.extensions) {
-        Ok(hits) => Parsed::Rows(sha, scoped(&hits)),
+        Ok(hits) => Parsed::Rows(sha, scoped(&src, &hits)),
         Err(_) => Parsed::Unparsed,
     }
 }
@@ -391,8 +391,9 @@ fn each_parsed(jobs: &[Job], mut write: impl FnMut(&Job, Parsed) -> Result<()>) 
     })
 }
 
-/// Bump when [`scoped`] changes (T35.5). T368's full import path in `scope` rewrites version-3 roots once.
-const INDEX_VERSION: u32 = 4;
+/// Bump when [`scoped`] changes (T35.5). T454 stores byte spans, the definition line and the
+/// doc comment, so a version-4 root rebuilds once. The mtime+size skip is unchanged after that.
+const INDEX_VERSION: u32 = 5;
 
 /// Hex sha256 of `INDEX_VERSION` and every query string [`outline::tags`] compiles —
 /// tags **and** locals, because a language whose locals query changed produces different
@@ -468,7 +469,42 @@ fn extractor_fingerprint() -> String {
 /// definition (or the upstream reference) always stands and no site counts twice.
 /// Verified on the `truth-constructs` fixture: `OnlyTyped:1` yields the def row
 /// only, `impl Recv` the implementation row only.
-fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
+/// Contiguous `///` or `//!` lines directly above the 1-based definition line, at most 512
+/// bytes on a char boundary. A blank or any other line stops the walk (T454).
+fn doc_above(src: &str, line: usize) -> String {
+    if line <= 1 {
+        return String::new();
+    }
+    let lines: Vec<&str> = src.lines().collect();
+    let def = line - 1;
+    if def >= lines.len() {
+        return String::new();
+    }
+    let mut i = def;
+    let mut kept = Vec::new();
+    while i > 0 {
+        let trimmed = lines[i - 1].trim_start();
+        if trimmed.starts_with("///") || trimmed.starts_with("//!") {
+            kept.push(lines[i - 1]);
+            i -= 1;
+        } else {
+            break;
+        }
+    }
+    kept.reverse();
+    let mut s = kept.join("\n");
+    if s.len() > 512 {
+        let mut end = 512;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.truncate(end);
+    }
+    s
+}
+
+fn scoped(src: &str, hits: &[outline::TagHit]) -> Vec<Row> {
+    let bytes = src.as_bytes();
     let defs: Vec<(usize, usize, &str)> = hits
         .iter()
         .filter(|h| h.is_def)
@@ -489,14 +525,24 @@ fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
                     .map(|(_, _, n)| n.to_string())
                     .unwrap_or_default()
             };
-            (
+            let start = h.start_byte.min(bytes.len());
+            let end = h.end_byte.min(bytes.len()).max(start);
+            let mut row = Row::new(
                 h.name.clone(),
                 h.kind.clone(),
                 h.line as i32,
                 h.is_def,
                 h.end_line as i32,
                 scope,
-            )
+            );
+            row.start_byte = i64::try_from(start).unwrap_or(i64::MAX);
+            row.end_byte = i64::try_from(end).unwrap_or(i64::MAX);
+            row.content_hash = store::hex_sha256(&bytes[start..end]);
+            if h.is_def {
+                row.signature = h.line_text.clone();
+                row.doc = doc_above(src, h.line);
+            }
+            row
         })
         .collect()
 }
@@ -874,5 +920,23 @@ fn touched() {}
             "file-level call has no scope"
         );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn scoped_stores_the_span_hash_and_the_doc_above() {
+        let src = "/// hello\nfn b() {}\n";
+        let hits = outline::tags(Path::new("a.rs"), src).unwrap();
+        let rows = scoped(src, &hits);
+        let b = rows.iter().find(|r| r.is_def && r.name == "b").expect("b");
+        let start = usize::try_from(b.start_byte).unwrap();
+        let end = usize::try_from(b.end_byte).unwrap();
+        assert!(end > start);
+        assert_eq!(
+            b.content_hash,
+            store::hex_sha256(&src.as_bytes()[start..end])
+        );
+        assert!(b.signature.contains("fn b"), "{}", b.signature);
+        assert!(b.doc.contains("hello"), "{}", b.doc);
+        assert!(b.doc.len() <= 512);
     }
 }

@@ -18,8 +18,9 @@ use super::{
     DeadRow, ExploreParts, Filter, Hits, Tag, TagsExplore, ambiguous_banner, assemble_explore,
     blast, callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous,
     format_affected, git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots,
-    index, index_for, is_test_path, lsp, lsp_backend, outline_in, projects, rel_of,
-    reverse_call_chain, stale_banner, symbol_filtered, tests_json, via_of, with_stale,
+    index, index_for, is_test_path, lsp, lsp_backend, outline_in, parse_symbol_id, projects,
+    rel_of, reverse_call_chain, stale_banner, symbol_filtered, symbol_id_body, tests_json, via_of,
+    with_stale,
 };
 use crate::store::Store;
 
@@ -162,7 +163,60 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
             prefix: &label(m),
             suffix: if many { " ?" } else { "" },
         };
-        body.push_str(&defs_text(cx, &m.root, rows, callees, &tag));
+        body.push_str(&defs_text(cx, &m.root, name, rows, callees, &tag));
+    }
+    capped(cx, &head, body)
+}
+
+pub fn symbol_by_id(cx: &Ctx, scope: &[Member], id: &str, filter: &Filter) -> Result<String> {
+    let Some(parsed) = parse_symbol_id(id) else {
+        return Ok(format!("no definition of {id}"));
+    };
+    if let [one] = scope {
+        walkable(one)?;
+        let body = symbol_id_body(cx, &one.root, &parsed, filter, &Tag::default())?;
+        return match body {
+            Some(text) => with_stale(cx, &one.root, cap(cx, text)?),
+            None => with_stale(
+                cx,
+                &one.root,
+                format!("no definition of {}{}", parsed.name, filter.scope_note()),
+            ),
+        };
+    }
+    let (done, notes) = fan_out(scope, |m| {
+        walkable(m)?;
+        let lab = label(m);
+        let tag = Tag {
+            prefix: &lab,
+            suffix: "",
+        };
+        symbol_id_body(cx, &m.root, &parsed, filter, &tag)
+    })?;
+    let head = banners(cx, &done, notes)?;
+    let found: Vec<_> = done.iter().filter(|(_, body)| body.is_some()).collect();
+    if found.is_empty() {
+        return Ok(format!(
+            "{head}no definition of {}{}",
+            parsed.name,
+            filter.scope_note()
+        ));
+    }
+    let many = found.len() > 1;
+    let mut body = if many {
+        ambiguous_banner(1)
+    } else {
+        String::new()
+    };
+    for (_, text) in found {
+        let mut text = text.clone().unwrap_or_default();
+        if many {
+            // The single-project head has no ambiguity mark; add it on the first line.
+            if let Some((head_line, rest)) = text.split_once('\n') {
+                text = format!("{head_line} ?\n{rest}");
+            }
+        }
+        body.push_str(&text);
     }
     capped(cx, &head, body)
 }
@@ -708,7 +762,7 @@ mod tests {
         assert_eq!(
             out,
             "1 names ambiguous (?): narrow with path or kind, or backend = \"lsp\"\n\
-             [a] lib.rs:1 function ?\nfn dup() {}\n[c] lib.rs:1 function ?\nfn dup() {}\n"
+             [a] lib.rs::dup#function@1 lib.rs:1 function ?\nfn dup() {}\n[c] lib.rs::dup#function@1 lib.rs:1 function ?\nfn dup() {}\n"
         );
         let out = callers(&ctx, &scope, "dup", &Filter::none()).unwrap();
         assert!(out.starts_with("1 names ambiguous (?)"), "{out}");
@@ -717,7 +771,7 @@ mod tests {
         let scope = scope_at(&cx, &dir, "b", None);
         assert_eq!(
             symbol(&ctx, &scope, "dup", &Filter::none()).unwrap(),
-            "[c] lib.rs:1 function\nfn dup() {}\n"
+            "[c] lib.rs::dup#function@1 lib.rs:1 function\nfn dup() {}\n"
         );
         let _ = fs::remove_dir_all(dir);
     }
@@ -823,8 +877,14 @@ mod tests {
         let ctx = Ctx::new(&cx);
         let scope = scope_at(&cx, &dir, "a", None);
         let out = explore(&ctx, &scope, "shared b_mid", &Filter::none()).unwrap();
-        assert!(out.contains("= shared\n[c] lib.rs:1 function\n"), "{out}");
-        assert!(out.contains("= b_mid\n[b] lib.rs:1 function\n"), "{out}");
+        assert!(
+            out.contains("= shared\n[c] lib.rs::shared#function@1 lib.rs:1 function\n"),
+            "{out}"
+        );
+        assert!(
+            out.contains("= b_mid\n[b] lib.rs::b_mid#function@1 lib.rs:1 function\n"),
+            "{out}"
+        );
         assert!(out.contains("shared \u{2190} 1\n"), "{out}");
         assert!(out.contains("b_mid \u{2190} 1\n"), "{out}");
         // One project asks the plain explore.
