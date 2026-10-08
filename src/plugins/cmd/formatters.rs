@@ -316,7 +316,10 @@ fn is_env_assign(tok: &str) -> bool {
     let Some((key, value)) = tok.split_once('=') else {
         return false;
     };
+    // A quote in the value is an unclosed `FOO='x cd y`. `bash_family` leaves that
+    // token alone; peeling it would name `cd` instead.
     !value.is_empty()
+        && !value.contains(['\'', '"'])
         && key
             .chars()
             .next()
