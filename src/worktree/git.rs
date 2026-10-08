@@ -94,6 +94,13 @@ fn is_patch_equivalent(repo: &Path, base: &str, rev: &str) -> Result<bool> {
     Ok(stdout(repo, &["cherry", base, &squashed])?.starts_with('-'))
 }
 
+/// `rev` has commits `base` does not reach: a task branch that did work, never a fresh branch
+/// still at the base, which [`is_merged`] reads as merged too.
+pub fn has_own_commits(repo: &Path, base: &str, rev: &str) -> Result<bool> {
+    let count = stdout(repo, &["rev-list", "--count", &format!("{base}..{rev}")])?;
+    Ok(count.parse::<u64>().context("git rev-list --count")? > 0)
+}
+
 fn path_arg(path: &Path) -> Result<&str> {
     path.to_str().context("worktree path is not UTF-8")
 }

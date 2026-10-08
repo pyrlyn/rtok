@@ -193,6 +193,9 @@ pub struct Entry {
     /// Kept beside `state`: a worktree whose directory is gone still needs to know
     /// whether its branch may go.
     pub merged: bool,
+    /// [`State::Merged`] and its branch did work of its own (T453): a finished task that no
+    /// lock or live agent needs to keep, since every commit is already in the base.
+    pub done: bool,
 }
 
 /// `f` over `items` on up to one thread per core, results in `items` order. Per-worktree
@@ -261,10 +264,13 @@ pub fn inventory_with<X: Send>(
                 merged,
             })
         };
+        let done = state == State::Merged
+            && rev.is_some_and(|r| git::has_own_commits(repo, &base, r).unwrap_or(false));
         let entry = Entry {
             record: record.clone(),
             state,
             merged,
+            done,
         };
         let x = then(&entry);
         (entry, x)

@@ -654,7 +654,8 @@ enum WorktreeCmd {
         json: bool,
     },
     /// Remove your own finished worktree: unlock, `git worktree remove`, delete the branch
-    /// when merged, release the claim; refuses dirty, foreign-locked or current worktrees
+    /// when merged, release the claim; refuses dirty or current worktrees, and a foreign lock
+    /// unless the task is finished (merged, clean, with commits of its own)
     Remove {
         /// The worktree's path, or its task id (the lock's task or the branch `<task>[-<slug>]`)
         target: String,
@@ -1678,7 +1679,7 @@ pub fn run() -> Result<()> {
         } => {
             use crate::worktree::gc;
             use anyhow::Context as _;
-            // T285: a live agent's worktree is never removed; no store, no live agents.
+            // T285: a live agent's worktree is never removed unless its task is finished (T453); no store, no live agents.
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let live = crate::store::Store::open(&cfg.core.db_path)
                 .and_then(|s| s.live_agents(&cfg.agents.idle))
