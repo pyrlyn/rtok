@@ -112,7 +112,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
 | T414.12 | todo | P2 | 2 | 0% | |
-| T414.13 | in progress | P2 | 4 | 0% | Claude Code / claude-opus-5-5 |
 | T414.14 | todo | P3 | 2 | 0% | |
 | T414.16 | todo | P2 | 3 | 0% | |
 | T433 | todo | P2 | 4 | 0% | |
@@ -1808,14 +1807,6 @@ Check: a story asserts each card's link target; e2e clicks one KPI and lands on 
 The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
 
 Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
-
-### T414.13. Δtok savings trend on Overview and Stats
-
-A time series of `Measurement` savings (est before − after per bucket), total and per plugin, added to the snapshot by the Rust model next to `Stats` and drawn on Overview and Stats. Buckets come from the existing aggregation helper; no second aggregation path. No `Measurement` rows → an empty state, never a zero line that reads as a claim.
-
-Check: Rust test for the bucketed series against fixture rows; regenerated `web/src/api/snapshot.gen.ts` committed; story with sample data and with no rows.
-
-Plan: (1) `Store::measurement_totals_since(since)`: the `measurement_totals` aggregate grouped by the row's `ts` too (Diesel 2.3 cannot group a computed day), sharing its row mapping. (2) `web::model`: `Overview.savings`, one `SavingsDay` per day for the last 14 days in `[agents.usage] tz` (the Usage page's day edges), folded through the same per-plugin fold as `plugin_stat_totals`; a day with no rows has `saved: None` and no plugins. (3) Bless `ws.schema.json`, regenerate `snapshot.gen.ts`, sample data. (4) Chart layer: a series value may be `null` (a gap, the tooltip says "no data"). (5) `web/src/pages/SavingsTrend.tsx`: stacked bars per plugin (top three, the rest as other) or an empty state, placed on Overview and Stats with one line each. Verify: a model test against fixture rows, a unit test for the spec, a story with data and with no rows, `just check`, `just spa-stories`, `just spa-e2e`.
 
 ### T414.14. CSV and JSON export of tables
 
