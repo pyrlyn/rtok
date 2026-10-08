@@ -55,7 +55,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T374 | todo | P3 | 2 | 0% | |
 | T375 | todo | P3 | 2 | 0% | |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
@@ -69,17 +68,13 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
-| T385.13 | todo | P3 | 2 | 20% | |
 | T391 | todo | P3 | 2 | 30% | |
-| T393 | todo | P3 | 1 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
 | T397 | todo | P3 | 2 | 30% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T399 | todo | P3 | 1 | 30% | |
 | T401 | todo | P3 | 4 | 20% | |
-| T402 | todo | P3 | 2 | 20% | |
 | T403 | todo | P3 | 3 | 10% | |
 | T404 | todo | P3 | 3 | 10% | |
 | T405 | todo | P3 | 3 | 10% | |
@@ -103,12 +98,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
-| T414.10 | todo | P2 | 3 | 0% | |
 | T414.11 | todo | P2 | 2 | 0% | |
-| T414.12 | todo | P2 | 2 | 0% | |
-| T414.13 | todo | P2 | 4 | 0% | |
 | T414.14 | todo | P3 | 2 | 0% | |
-| T414.16 | todo | P2 | 3 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -121,7 +112,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
-| T441.10 | todo | P3 | 2 | 0% | |
 
 
 
@@ -1340,16 +1330,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
-### T374. Memory notes linked to files: recall boosted by the files in play
-
-From the Empryo study (idea-only, clean-room; Empryo memory DB file links and recall boosting). P29 recall matches on the prompt text only; a note about `src/proxy/semantic_cache.rs` is not preferred when the session is editing that file. Low priority while the store holds few notes (18 on the creator's machine, 2026-10-02).
-
-Plan: new `note_files (note_id, path)` table (migration); filled at `mem_save` (`src/plugins/memory/mod.rs:266`) from paths found in the note body that exist under the root, and from the current checkpoint's paths. In `prompt_recall` (`memory/mod.rs:163`), add a third ranked list — notes linked to files read this session (`read_cache`) or named in the prompt — to the RRF merge (`src/store/embed.rs:198`, after T373).
-
-Done when: a note linked to a file the session has read ranks above an equally text-matching unlinked note.
-
-Check: new cases in `tests/fixtures/p29_memory.toml` with file context; recall@5 on the file-context cases ≥ 0.6 and no drop on the existing cases; `just check`.
-
 ### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
 
 From the Empryo study (idea-only, clean-room; Empryo `compaction/working-state.ts`, `extractor.ts`: a deterministic working state built from tool calls, not from an LLM). `Checkpoint` (`src/plugins/checkpoint.rs:11`) records paths without what happened to them, so after compact the agent re-reads files it only looked at and may miss the ones it changed.
@@ -1466,12 +1446,6 @@ optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through 
 
 Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
 
-### T385.13. Measure cross-session read duplication
-
-optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Record with a date in `research.md`; file a build task only if it clears 1 % of input.
-
-Check: the dated `research.md` row.
-
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
 From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
@@ -1479,14 +1453,6 @@ From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/age
 Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
 
 Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
-
-### T393. `doctor` shows the saving a 120-character skill description cap would give
-
-From `research.md` §10.4: descriptions over 120 characters cost about 1.3 K tokens per request for 66 skills. `doctor` flags only `desc > 200` and `body > 8192` (`skill_row` in `src/doctor.rs`) and prints no saving.
-
-Done means: the skills section adds one line, "descriptions over 120 chars: N skills, ≈ X tokens/request recoverable", using the same token estimate as the rest of the audit; the per-row flag threshold matches the 120-character guidance rtok's own skills follow. Advice only.
-
-Check: a doctor fixture with one long and one short description shows the line; `just check`.
 
 ### T394. Run the paid live benches and record them
 
@@ -1532,18 +1498,6 @@ Done means: one dated row per editor in §18.2. If all pass, the `worktrees` ski
 
 Check: the §18.2 table has four dated rows.
 
-### T399. Re-check host docs for three open host questions
-
-From `research.md`:
-
-- §10.6: which hosts besides Claude Code and Cursor honour `disable-model-invocation` in a skill (OpenCode, Copilot, Gemini, Codex are "not documented"); `doctor`'s skill advice relies on it.
-- §23: Grok and Antigravity subagent-start hooks rest on missing docs; re-read for an output schema or an `invoke_subagent` hook.
-- §26: Devin, Command Code and Cline are "unverified; probe pending" for hook ancestry but are not in T281's host list; and on Windows only the cwd rule applies (`rtok-sys` returns no ancestors), which no doc records.
-
-Done means: each answer is recorded with its primary source and date (§10.1 "Knobs" column, §23 rows, §26 rows); `doctor` advice changes if a host ignores the flag; a spawn-brief task is filed only if §23's verdict flips to yes; the Windows limit is written in `docs/agents-and-worktrees.md`.
-
-Check: dated sources in §10.1, §23 and §26.
-
 ### T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
 
 Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/research/grok-cloud-mcp.md`: the Grok API has no hooks and reaches MCP only over Streamable HTTP or SSE, so rtok's tools are out of its reach today; the proposal says "nothing built yet".
@@ -1551,14 +1505,6 @@ Promoted from I-108 (Ivan, 2026-10-04). From `research.md` §24 and `docs/resear
 Done means: `rtok mcp --http <addr>` serves the same tool set as stdio over Streamable HTTP, with a bearer token, a tool allow-list from config, and a bind to loopback by default; client-side function export for API users who call tools themselves is documented. Every tool call through it records the same `Measurement` rows as stdio, so no saving is claimed without them. Check `crates/rtok-mcp` (T277) first and reuse its server, do not fork it.
 
 Check: an integration test drives the HTTP transport with a fake client (initialize, tools/list, one `read` call, auth rejected without the token); `docs/research/grok-cloud-mcp.md` status updated; `just check`.
-
-### T402. Measure how much tool output a structured schema would shrink
-
-Promoted from I-109 (Ivan, 2026-10-04). From `research.md` §16.3 #6: tools that return compact fields or tables instead of prose would let `toon` and the formatters win more often. No number says how much tool output is prose a schema could replace.
-
-Done means: a measurement over the stored `calls` (per tool: share of result bytes that is free prose vs already-structured JSON/tables, and what `toon` would save if the prose were fields), recorded in `research.md` §16 with a date. If the measured share clears 1 % of input, file the build task (which tools, which schema, `strict` where the host supports it); otherwise close with the number.
-
-Check: the dated §16 row; the build task filed or the card closed with its number.
 
 ### T403. A/B a path and identifier dictionary in proxy requests
 
@@ -1740,11 +1686,6 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
-### T414.10. Table filters and sort in the URL
-
-Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
-
-Check: unit tests for search-param parsing (bad values fall back to defaults); e2e opens a filtered URL and sees the filtered rows.
 
 ### T414.11. Clickable KPIs and panels open the filtered page
 
@@ -1752,29 +1693,11 @@ Every Overview KPI and panel links to its page with the matching filter from T41
 
 Check: a story asserts each card's link target; e2e clicks one KPI and lands on the filtered page.
 
-### T414.12. Live status: snapshot age and pause
-
-The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
-
-Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
-
-### T414.13. Δtok savings trend on Overview and Stats
-
-A time series of `Measurement` savings (est before − after per bucket), total and per plugin, added to the snapshot by the Rust model next to `Stats` and drawn on Overview and Stats. Buckets come from the existing aggregation helper; no second aggregation path. No `Measurement` rows → an empty state, never a zero line that reads as a claim.
-
-Check: Rust test for the bucketed series against fixture rows; regenerated `web/src/api/snapshot.gen.ts` committed; story with sample data and with no rows.
-
 ### T414.14. CSV and JSON export of tables
 
 An export button on the Calls, Sessions and savings-by-plugin tables downloads the rows currently shown (after filters) as CSV or JSON, built in the browser from the snapshot. CSV cells that start with `=`, `+`, `-` or `@` are escaped against formula injection.
 
 Check: unit tests for the CSV writer (quoting, escaping, empty table); a story asserts the button and its accessible name.
-
-### T414.16. Linked hover across charts and live values elsewhere
-
-Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
-
-Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
 
 ### T416. Shared `change-preview` crate for dry-run output
 

@@ -974,10 +974,10 @@ otherwise.
 | --- | --- | --- | --- | --- |
 | Claude Code | `~/.claude/skills/<n>/SKILL.md`, `.claude/skills/`, `<plugin>/skills/` (listed as `/plugin:skill`) | name + description of every listed skill in the system prompt (docs: "~100 tokens per skill") | the whole `SKILL.md` body; `references/`, `scripts/`, `assets/` only when the model reads them (script output enters context, script code does not) | `disable-model-invocation: true` (only `/name` by a human), project-scoped skills, plugin enable/disable |
 | Cursor | `.cursor/skills/`, `.agents/skills/`, user equivalents | name + description | body on demand, resources lazily | `paths:` globs scope a skill to matching files; `disable-model-invocation` |
-| OpenCode | `.opencode/skills/`, `~/.config/opencode/skills/`, Claude paths | Agent Skills standard (not documented in detail) | body on demand | `opencode.json` permission `allow` / `deny` / `ask` per skill pattern |
-| Copilot CLI / VS Code | `.github/skills/`, `.agents/skills/`, `~/.copilot/skills/` | metadata for discovery | body when relevant or on `/name` | not documented |
-| Gemini CLI | `~/.gemini/skills/`, `.gemini/skills/`, `.agents/skills/`, extensions | metadata only | `activate_skill` tool loads the body | `/skills disable <n>` per session; precedence built-in > extension > user > workspace |
-| Codex / ChatGPT | `.agents/skills/`, plugins | not documented | not documented | not documented |
+| OpenCode | `.opencode/skills/`, `~/.config/opencode/skills/`, Claude paths | Agent Skills standard (not documented in detail) | body on demand | `opencode.json` permission `allow` / `deny` / `ask` per skill pattern; `deny` hides the skill, custom agents can set `tools: skill: false`. No per-skill `disable-model-invocation` documented; unknown frontmatter fields are ignored (https://opencode.ai/docs/skills/, checked 2026-10-08) |
+| Copilot CLI / VS Code | `.github/skills/`, `.agents/skills/`, `~/.copilot/skills/` | metadata for discovery | body when relevant or on `/name` | not documented as of 2026-10-08: no frontmatter field and no hide option (https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
+| Gemini CLI | `~/.gemini/skills/`, `.gemini/skills/`, `.agents/skills/`, extensions | metadata only | `activate_skill` tool loads the body | `/skills disable <n>` per session ("Prevents a specific skill from being used"); no frontmatter field; precedence built-in > extension > user > workspace (https://geminicli.com/docs/cli/skills/, checked 2026-10-08) |
+| Codex / ChatGPT | `.agents/skills/`, plugins | not documented | not documented | `agents/openai.yaml` under `policy:` with `allow_implicit_invocation: false` (explicit `$skill` still works); no `SKILL.md` frontmatter field (https://learn.chatgpt.com/docs/build-skills, checked 2026-10-08) |
 
 Docs: https://code.claude.com/docs/en/skills, https://cursor.com/docs/skills,
 https://opencode.ai/docs/skills/, https://docs.github.com/en/copilot/concepts/agents/about-agent-skills,
@@ -1024,7 +1024,7 @@ the conversation for every later request of that session.
 | Technique | Lever | Evidence / limit |
 | --- | --- | --- |
 | Description ≤ 120 chars, one sentence: what it does and when to pick it | listing | median here is 200 chars; a 120-char cap on 66 skills is ≈ −1.3 K tokens per request, byte-stable once set |
-| `disable-model-invocation: true` for skills only a human runs (setup, onboarding, release checklists) | listing | Claude Code and Cursor document it; the skill keeps working as `/name` |
+| `disable-model-invocation: true` for skills only a human runs (setup, onboarding, release checklists) | listing | Claude Code and Cursor document it (Cursor re-checked 2026-10-08); Codex has `allow_implicit_invocation: false` in `agents/openai.yaml` instead; the skill keeps working as `/name`. Other hosts: not documented as of 2026-10-08 |
 | Project-level skills for project-only knowledge; user-level only for cross-project ones | listing | Claude Code lists project skills only inside that project; Cursor `paths:` scopes further |
 | Enable plugins per project, not globally | listing | 41 of the 66 listed skills here come from 5 plugins; a plugin unused in a repo still lists all its skills there |
 | Body ≤ 2 K tokens: hub `SKILL.md` + `references/*.md` read on demand; scripts in `scripts/` (only their output enters context) | body | the 248 KB `update-config` body is the ceiling case; agentskills.io recommends ≤ 500 lines |
@@ -1061,6 +1061,14 @@ the conversation for every later request of that session.
   constant; listing bytes per request = description bytes + `N × 92`.
 - Whether hosts other than Claude Code and Cursor honour `disable-model-invocation` in the
   listing is not documented (10.1).
+- **T399 (2026-10-08):** re-checked. OpenCode, Copilot, Gemini and the Agent Skills spec
+  (https://agentskills.io/specification: frontmatter is name, description, license,
+  compatibility, metadata, allowed-tools) have no per-skill disable field; Codex's equivalent
+  is `allow_implicit_invocation: false` in `agents/openai.yaml`, not in the frontmatter. So the
+  flag is only honoured by Claude Code and Cursor in the frontmatter form. The `doctor` skill
+  advice the card names is not in origin/main `699b1279f`: `src/doctor.rs` flags only
+  description length, body size and never-invoked, with no advice that cites the flag. No
+  code change follows from this check; the creator decides whether the flag is worth adding.
 
 ### 10.7 Working around the blind spot (2026-09-17)
 
@@ -1465,7 +1473,7 @@ Written 2026-09-21; by 2026-10-08 every row below has an idea in `ideas.md`, a t
 | 3 | **Model / tier routing by job** (D9) | High $; small raw-token change | M–L | Cheap model for format/classify/expand-prep; mid for edit; expensive only after confirm. Needs a router policy + measurement so “savings” are $. |
 | 4 | **Thinking / reasoning strip on replay** | Medium–High on reasoning models (estimate; measured 0.0297 % of session input, T125, 2026-09-21, §2) | S–M | Do not re-send prior chain-of-thought blocks into the next turn when the host attaches them; keep final answers + tool I/O. Host- and provider-specific. |
 | 5 | **Native context-editing APIs** (I-10 / T51.2) | Medium–High | M | Let the platform shrink history (Anthropic context editing / host compaction hooks) *and* keep rtok archive ids in the checkpoint (ties to T58.2). |
-| 6 | **Structured tool I/O (JSON Schema / strict)** | Medium output + easier trim | M | Force tools to return compact tables/fields instead of prose; then `toon` / formatters win more often. |
+| 6 | **Structured tool I/O (JSON Schema / strict)** | Medium output + easier trim | M | Force tools to return compact tables/fields instead of prose; then `toon` / formatters win more often. T402 (2026-10-08): measured, not built — already-structured JSON is 0.15 % of tool-result input and a `toon`-eligible table saves ~0 there; the prose a tool schema could reach (MCP only) is ≤ 0.64 % of session input (§16.6). |
 | 7 | **Sub-agent isolation + budgeted handoff** (I-46) | Medium when Task/Agent traffic grows | M | Child context starts small; parent gets a digest with archive ids — not a full transcript paste. |
 | 8 | **Identifier / path dictionary in-session** | Low–Medium | L | Replace repeated long paths with short codes in tool results; expand on demand. Easy to break models; needs A/B. |
 | 9 | **Multimodal token gate** | High $ when screenshots dominate (estimate; measured 0.91 %, T137, §2) | S–M | Prefer OCR/text or downscale; refuse or summarize images in the live zone. Separate from text CTT. T137 (2026-09-24): images are 0.91 % of session input (§2) — under the 5 % gate, not built. |
@@ -1491,6 +1499,32 @@ Idea / status of each row (2026-10-08): (1) I-84, decision-shaped; the cache hit
 1. **T59.5** and **T61.2** — highest *measured* or structurally recurring input taxes. Both shipped 2026-09-18 (off by default, as the §16.2 Status column says).
 2. Add a plan card for **prompt-cache-stable prefixes + sticky proxy upstream** if `$` savings matter as much as raw tokens (pairs with existing `stats --price` cache rates).
 3. Keep P28/P31/P33 in Later until a bench beats the lossless archive lane on *code* sessions.
+
+### 16.6 Prose versus structured tool output (T402, 2026-10-08)
+
+Question: how much tool output is free prose that a schema (fields or tables) could replace, and what would `toon` save on it. Ad hoc, read-only measurement on this machine's store (no shipped code); numbers are aggregates only.
+
+**Corpus A, stored hook payloads.** `calls` rows named `PostToolUse` / `postToolUse` whose `call_io.request_json` is kept (33,702 rows, 2026-10-05 00:33 to 2026-10-08 06:33 UTC; recording started on 2026-10-05, and the store keeps no payload above about 64 KB: 569 calls / 139.6 MB of payload in the same window were not stored, so large results are under-counted). The result text is what the model sees: `Bash` stdout+stderr, `Read` file content, MCP text blocks, Cursor `tool_output` envelopes unwrapped. `Edit`/`Write`/`Monitor`/`Agent`/`ToolSearch` acknowledgements and Cursor `Read`/`Grep`/`Write` (size only, no body) are left out: 23,148 result bodies, 45,810,515 B ≈ 11.45 M est. tokens (bytes / 4) = 0.34 % of session input counted once. **Resident** weights each body by the API requests that follow it in its own (or its sub-agent's) transcript: 20,475 Claude Code bodies, 1.043 G token-turns = **31.4 %** of the 3.32 G session input (uncached + cache_create + cache_read of every request in that window, sub-agents included), an upper bound because compaction drops old results. 2,673 bodies (Cursor, or no transcript found) have no resident factor and appear only in the once-counted bytes.
+
+**Classes** (per body, by heuristic): `file_content` (`Read`, `mcp__rtok__read`, `WebFetch`, `MCP:fetch`: the file's own text, no tool can reshape it); `json_tabular` (top-level array of at least 5 objects with the same 3+ scalar keys: exactly what `toon` encodes, tested with a port of `tabular_keys`); `json_wrapped_table` (the same array under an object key, which `toon` skips); `json_other`; `table_text` (60 % of lines start with `|`, or 80 % share one tab count); `records` (70 % of lines are `path:line:`); `free_text` (the rest: command output, logs, diffs, prose).
+
+| Class | Share of result bytes | Resident, % of session input |
+| --- | --- | --- |
+| `free_text` | 61.4 % | 19.48 % |
+| `file_content` | 31.2 % | 10.14 % |
+| `records` | 4.8 % | 1.01 % |
+| `table_text` | 2.2 % | 0.61 % |
+| `json_tabular` + `json_wrapped_table` + `json_other` | 0.4 % | 0.15 % |
+
+By tool: `Bash` is 17,410 bodies, 26.8 MB, 91.4 % `free_text`, 5.0 % `records`, 3.6 % `table_text`; resident 19.89 % of input (18.4 % of it `free_text`). 3,413 of 18,596 recorded `Bash` payloads already carry an `[rtok ... expand:]` marker, so these are post-`cmd` bytes. All MCP tools together: 1,925 bodies, 7.58 MB, 78 % `file_content` (`mcp__rtok__read` alone is 4.17 % of input); the non-file part is 1.36 % of input resident, of which `mcp__rtok__expand` (the archived original returned verbatim) is 0.72 %, the other `mcp__rtok__*` tools 0.21 % (`search` records 0.11 %, `worktree_list` pretty JSON 0.06 %) and third-party servers (Browser pane, Figma, host `ccd_*`) 0.43 %.
+
+**`toon` on the structured part.** In corpus A four bodies were `toon`-eligible (395 B saved in total) and six were wrapped tables (15,232 B would be saved if unwrapped, 98 % of it one Cursor `Shell` body). **Corpus B, the archive** (`archive` table, 61,369 bodies, 340.1 MB, 2026-09-04 to 2026-10-08, tool name not stored; bodies rtok archived, mostly large ones): `free_text` 60.8 %, `file_content` (the `Read` wrapper) 35.3 %, `table_text` 2.6 %, `records` 1.2 %, `json_other` 0.14 %, `json_tabular` + `json_wrapped_table` 16 bodies / 28,813 B (0.008 %). On those 16, rtok's own encoder logic (port, ignoring the 72-byte pointer on a tiny sample) cuts 8,803 B (30.6 %), which is the only measured TOON ratio and is used below as an optimistic factor.
+
+**What a schema could reach.** If every non-file byte of MCP output became a toon-style table at 30.6 %: 1.36 % x 0.306 = 0.42 % of input; without `expand` (whose payload is the original body) 0.64 % x 0.306 = 0.20 %. All non-file bytes of every tool (`Bash` included, 21.25 % of input) would give 6.5 % on the same factor, but `Bash`/`Shell` output is the stdout of external programs; no rtok schema applies there, only the `cmd` rules and formatters, which already shorten it (the `cmd` rule rows save 59 % of their input, `measurements` 2026-09-14 to 2026-10-08) and which are measured elsewhere.
+
+**Decision (T402, 2026-10-08).** Already-structured tool output is 0.15 % of input and has no `toon` headroom; the prose a tool schema can change (MCP, shortest path) is at most 0.64 % of input before any saving, below the 1 % gate. No build task is filed; row #6 stays an idea. Reopen if an MCP server with large table-shaped prose output (a `search` or `list` of 50+ rows) gets heavy use.
+
+Caveats: heuristic classes (no human labelling); `bytes / 4` token estimate; stored payloads under about 64 KB only (corpus A) and no tool names in the archive (corpus B); resident factors use the transcript's request timestamps and assume no compaction. Commands: read-only `sqlite3 "file:<home>/rtok.db?mode=ro"` plus a one-off Python script over `call_io.request_json` and the archive blobs; transcripts under `~/.claude/projects` for the denominator.
 
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
@@ -1925,7 +1959,7 @@ Question: which hosts let a hook add context to a sub-agent before it runs, the 
 | Copilot CLI | yes | `subagentStart` (matcher on agent name), `additionalContext` prepended to the subagent's prompt; the built-in general-purpose agent emits no event | https://docs.github.com/en/copilot/reference/hooks-reference |
 | Kimi | event-only | `SubagentStart` fires; the result of `runner.trigger` is discarded | MoonshotAI/kimi-code `packages/agent-core-v2/src/features/externalHooks/session/sessionExternalHooksService.ts` |
 | Cursor | event-only | `subagentStart` output has only `permission` / `user_message` | https://cursor.com/docs/hooks |
-| Grok | event-only (weak) | `SubagentStart` / `SubagentStop` fire; no output schema documented | https://docs.x.ai/build/features/hooks |
+| Grok | event-only (weak) | `SubagentStart` / `SubagentStop` fire; re-checked 2026-10-08: no output schema and no returned fields documented for them (only `PreToolUse` documents an output, `decision` and `reason`; passive events' stdout is ignored); no `invoke_subagent` event | https://docs.x.ai/build/features/hooks (checked 2026-10-08) |
 | CodeWhale | event-only | `subagent_spawn` is an observer event; result discarded | `src/agents/codewhale/README.md` |
 | Gemini CLI | no | no subagent event (`BeforeAgent` / `AfterAgent` are the parent turn) | https://geminicli.com/docs/hooks/reference/ |
 | ZCode | no | no subagent event | https://zcode.z.ai/en/docs/hooks |
@@ -1933,10 +1967,10 @@ Question: which hosts let a hook add context to a sub-agent before it runs, the 
 | Pi, omp | no | no hookable spawn; subagents are an extension of their own | badlogic/pi-mono `docs/extensions.md` |
 | Windsurf | no | no subagent event among the documented hooks | https://docs.devin.ai/desktop/cascade/hooks |
 | Cline | no | `new_task` hands off in the same conversation, no child agent | https://docs.cline.bot/customization/hooks |
-| Antigravity | no (weak) | no hook on `invoke_subagent` | https://antigravity.google/docs/hooks/ |
+| Antigravity | no (weak) | re-checked 2026-10-08: five events only (`PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`), no subagent event; `invoke_subagent` is a tool name, so a `PreToolUse` matcher could hit it, but that output is only `decision` and `reason` (deny), so no context reaches the subagent | https://antigravity.google/docs/hooks/ (checked 2026-10-08) |
 | MiMo | no | no hook system | mimo docs |
 
-Follow-ups: T262.3 (Codex) and T262.4 (Copilot CLI). Grok and Antigravity rest on missing docs, so a docs change there is worth a recheck. Found on the way: Copilot CLI `subagentStop` accepts `modifiedResponse`, which replaces the subagent's answer to the parent (idea I-98).
+Follow-ups: T262.3 (Codex) and T262.4 (Copilot CLI). Grok and Antigravity rest on missing docs, so a docs change there is worth a recheck. Rechecked 2026-10-08 (T399): still no output schema for Grok's subagent events and no subagent hook on Antigravity; verdicts unchanged, no spawn-brief task filed. Found on the way: Copilot CLI `subagentStop` accepts `modifiedResponse`, which replaces the subagent's answer to the parent (idea I-98).
 
 ## 24. Cloud MCP mode for the Grok API (2026-09-26)
 
@@ -2036,7 +2070,7 @@ Question: is the process that runs an rtok hook a descendant of the host process
 | Cline | cline/cline @ `476b165b`, `apps/vscode/src/core/hooks/HookProcess.ts` | `child_process.spawn`; "Unix executes hook files through the shell for shebang support" (source comment) | **Verified**: extension host → shell → hook link |
 | Claude Code | code.claude.com/docs/en/hooks.md, 2026-10-03 | docs: a command hook "run[s] a shell command"; with `args` the command "is spawned directly ... with no shell involved" | **Unverified** for the parent: closed source, the docs do not name the parent process; probe pending |
 | ZCode | zai-org/ZCode @ `29628c9a` | spawn site not located by code search | **Unverified**; probe pending |
-| Cursor, Copilot CLI, Devin, Command Code | closed source; docs describe command hooks only | not documented | **Unverified**; probe pending |
+| Cursor, Copilot CLI, Devin, Command Code | closed source; docs describe command hooks only. Re-checked 2026-10-08: Devin's hook docs (https://docs.devin.ai/desktop/cascade/hooks) run commands through `bash -c` or `powershell -Command` and name no parent; Command Code's docs (https://commandcode.ai/docs/hooks) say "Each hook fires with its own process" and list `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`, no `SubagentStart`, no ancestry field | not documented | **Unverified**; probe pending |
 
 Consequence for the rule: in every verified case a shell sits between the host and the hook command, so the hook is the host's grandchild unless the shell execs it. The rule therefore records the hook client's first three ancestors, not its parent, and matches any of them against the `rtok mcp` process's own first three. The cap keeps a shared terminal, `tmux` server or `launchd` out of the match.
 
@@ -2458,3 +2492,46 @@ Correction to the T441 card: Backlog.md and Taskmaster both lock id allocation a
 5. Bulk create and `sync` pace writes: GitHub's 500 content-creating requests/hour is the tightest limit; one write per second, honour `retry-after`.
 6. Collision check on a remote: list issues by the `rtok:R13` label with `state=all` (not the search API: 30/min and an undocumented index delay).
 7. Tokens: `GH_TOKEN` → `GITHUB_TOKEN` → `gh auth token`; `GITLAB_TOKEN`. User-owned GitHub projects need a classic token with `project`.
+
+## 36. Cross-session read duplication (T385.13, measured 2026-10-08)
+
+Question (optimization.md §5, "Cross-session read dedup"): how much of the input is the same file content read again in a second session on the same day. Build gate: at least 1 % of input. Ad-hoc read-only SQL and a scratch script over a copy of the owner's real store (`rtok.db`, 335k `calls`, 2026-09-14 to 2026-10-08); no code shipped, no `Measurement` row, no saving claimed.
+
+**Definitions.**
+
+- **Read** = a successful file read, from three `calls` sources. (1) Claude Code native `Read`: `kind='hook'`, `name='PostToolUse'`, `tool_name='Read'`, the text in `tool_response.file.content`. (2) rtok MCP `read`: `kind='mcp_call'`, `name='read'`, `ok=1`, the text in `response_json` (so a different `mode` or range is a different content). Errors, images and `file_unchanged` pointers are dropped. The hook copy of an MCP read (`mcp__rtok__read`) is not counted twice. (3) Cursor `Read`, only as a sensitivity row: its hook stores `content_length` and the path, never the text.
+- **Same content** = equal SHA-256 of the returned text, any path (a file read from two worktrees counts; the key is the content, not the path). Cursor: path plus length, which can miss an edit of the same size and cannot see a copy at another path.
+- **Within a day** = the same UTC calendar day (`strftime` of `calls.ts`). A whole-window row with no day bound is the upper bound for any 24 h window.
+- **Cross-session duplicate** = for each (day, content), the first read in every session except the earliest session. Repeats inside one session (and between a parent and its sub-agents, which share `session_id`) are the existing in-session dedup and are not counted. Bytes = the duplicate's result bytes, tokens = bytes / 4 (the estimator used in §2).
+- **Input** = uncached + cache_create + cache_read tokens of the same window from `RTOK_HOME=<copy> rtok stats --since 79h --json`, main transcripts plus sub-agent transcripts (`subagents.usage_*`), as in §2. The copy keeps `stats` from writing to the real store.
+- **Resident weighting**: a read stays in the context for the rest of the session, so its share of input is its tokens times the tool's context-token-turns per token (`tools.Read.ctt / est_tokens` = 735; `mcp__rtok__read` = 1,260 in the same window), divided by input. Generous: sub-agent windows are shorter than the main one.
+
+**Window A (the headline): 2026-10-05 to 2026-10-08, native Read plus MCP read.** Inline hook bodies exist only from 2026-10-05; before that `call_io` keeps hashes of the whole payload, which cannot identify a file.
+
+| Measure | Value |
+| --- | --- |
+| Sessions with a read / reads / bytes read | 38 / 3,049 (1,932 native, 1,117 MCP) / 13,613,229 B |
+| Reads whose content another session read the same UTC day | 232 reads in 25 (day, content) groups |
+| Cross-session duplicate reads | **38** (1.2 % of reads) |
+| Duplicate bytes / tokens | **56,561 B ≈ 14,140 tokens** (0.42 % of the bytes read) |
+| Input in the window (main + sub-agents) | 4,139,214,544 tokens |
+| Share of input, duplicate counted once | 0.00034 % |
+| Share of input, resident weighted | **0.25 %** (x735) to **0.43 %** (x1,260) |
+| No day bound (any gap inside the 3.3 days) | 59 reads, 78,598 B ≈ 19,649 tokens, resident 0.35 % to 0.60 % |
+| Same, keyed on path plus content instead of content | 2 reads, 2,698 B (the content matches found above sit at different paths, mostly different worktrees) |
+
+Where the duplicates sit (basenames only): `mod.rs`, `retry.rs`, `gc.rs`, `terminal.rs`, `sse.rs` (source files), then `AGENTS.md`, `Cargo.toml`, `release-plz.toml`. No file dominates; the largest basename is 21 % of the duplicate bytes.
+
+**Cross-checks.**
+
+| Source | Window | Result |
+| --- | --- | --- |
+| MCP `read` only, response hash | 2026-09-14 to 2026-10-08, 128 sessions, 5,615 reads, 26,192,465 B | 93 duplicate reads, 290,927 B ≈ 72,731 tokens (1.1 % of bytes); input 22,257,526,251 tokens (`--since 24d`, 279 sessions); share 0.00033 % once, 0.28 % resident (x864) |
+| `read_cache` (session, path, content hash) joined to `archive.bytes`, rtok-handled reads | 2026-09-04 to 2026-10-08, 146 sessions, 7,221 entries, 42,378,105 B | 56 duplicate entries, 354,322 B ≈ 88,580 tokens (0.84 % of the bytes); since 2026-10-05: 7 entries, 15,380 B (0.21 %) |
+| Cursor `Read`, path plus `content_length` | 2026-10-05 to 2026-10-07, 34 sessions, 4,477 reads | 76 duplicate reads, 488,485 B (0.20 % of the 242,932,224 B its hook reports). Cursor sessions are not in the `stats` input, so no share is given; the duplicate fraction of bytes is the same order as Claude Code's |
+
+**Result.** Under every definition tried the cross-session duplicate is **0.2 % to 1.1 % of the bytes read** and **0.25 % to 0.60 % of input** after weighting for how long a read stays resident (0.0005 % if each duplicate is counted once). That is below the 1 % gate, so no build task is filed and `optimization.md` §5 keeps "Cross-session read dedup" as not built.
+
+**Why it is small.** Sessions on this machine work in separate worktrees, so the same file sits at different paths and a path-keyed cache would catch almost nothing (2 reads); only a content-keyed cache would match, and the content-keyed pool is still 0.4 % of read bytes. Within a session the existing guard and read cache already collapse repeats, and `rtok read` returns line-range slices, so two sessions rarely ask for the same slice of the same file on the same day.
+
+**Limits.** (1) Native Read bodies exist for four days only; the 25-day figure is MCP `read`, which is a lower bound for all reads. (2) The denominator is every Claude Code transcript in the window, sub-agents included (63 % of the input), and the reads counted include sub-agent reads, so the whole-input figure is the matching one. Against main-session input alone (1,518,798,579 tokens) the resident-weighted share would read 0.68 % to 1.17 %, but that pairs sub-agent reads with a denominator that leaves their input out. (3) Reads by a different path to the same content in the same session are not cross-session and are not counted. (4) Commands: `sqlite3 -readonly` on a file copy of `rtok.db` for the schema checks; a Python 3 script (`sqlite3`, `hashlib`) grouped reads by (UTC day, SHA-256); `RTOK_HOME=<copy> rtok stats --since 79h --json` and `--since 24d --json` for input and the CTT ratios. Re-run these after a change to the read plugin or a move to shared worktrees; a result above 1 % would justify a content-keyed, cross-session pointer.

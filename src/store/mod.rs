@@ -23,6 +23,7 @@ mod sql_ext;
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
 // T329.1: the graph project registry.
+mod note_files;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
@@ -1689,18 +1690,36 @@ impl Store {
                 sum(measurements::est_after),
             ))
             .order((measurements::plugin, measurements::kind))
-            .load::<(String, String, i64, Option<i64>, Option<i64>)>(&mut *conn)?;
+            .load::<MeasurementTotalRow>(&mut *conn)?;
+        Ok(rows.into_iter().map(MeasurementTotal::from_row).collect())
+    }
+
+    /// [`Self::measurement_totals`] over the rows stamped at or after `since`, one group per
+    /// `(plugin, kind, ts)`: the same aggregate with the row's second as its grain, which the
+    /// caller folds into day buckets in a time zone (T414.13). Diesel 2.3 cannot `GROUP BY` a
+    /// computed `ts / N` bucket (the gap [`Self::usage_slices`] documents), and a day edge
+    /// moves with the zone's offset anyway.
+    pub fn measurement_totals_since(&self, since: i64) -> Result<Vec<(i64, MeasurementTotal)>> {
+        use diesel::dsl::{count_star, sum};
+        let mut conn = self.lock()?;
+        let rows = measurements::table
+            .filter(measurements::ts.ge(since))
+            .group_by((measurements::plugin, measurements::kind, measurements::ts))
+            .select((
+                measurements::ts,
+                (
+                    measurements::plugin,
+                    measurements::kind,
+                    count_star(),
+                    sum(measurements::est_before),
+                    sum(measurements::est_after),
+                ),
+            ))
+            .order(measurements::ts)
+            .load::<(i64, MeasurementTotalRow)>(&mut *conn)?;
         Ok(rows
             .into_iter()
-            .map(
-                |(plugin, kind, rows, est_before, est_after)| MeasurementTotal {
-                    plugin,
-                    kind,
-                    rows,
-                    est_before: est_before.unwrap_or(0),
-                    est_after: est_after.unwrap_or(0),
-                },
-            )
+            .map(|(ts, row)| (ts, MeasurementTotal::from_row(row)))
             .collect())
     }
 
@@ -2810,7 +2829,8 @@ fn host_by_session(conn: &mut SqliteConnection) -> Result<HashMap<String, Option
         .collect())
 }
 
-/// One `(plugin, kind)` group from [`Store::measurement_totals`] (T207).
+/// One `(plugin, kind)` group from [`Store::measurement_totals`] (T207), or one
+/// `(plugin, kind, ts)` group from [`Store::measurement_totals_since`].
 #[derive(Debug, Clone)]
 pub struct MeasurementTotal {
     pub plugin: String,
@@ -2818,6 +2838,21 @@ pub struct MeasurementTotal {
     pub rows: i64,
     pub est_before: i64,
     pub est_after: i64,
+}
+
+/// What both measurement aggregates select: plugin, kind, `COUNT(*)` and the two sums.
+type MeasurementTotalRow = (String, String, i64, Option<i64>, Option<i64>);
+
+impl MeasurementTotal {
+    fn from_row((plugin, kind, rows, est_before, est_after): MeasurementTotalRow) -> Self {
+        Self {
+            plugin,
+            kind,
+            rows,
+            est_before: est_before.unwrap_or(0),
+            est_after: est_after.unwrap_or(0),
+        }
+    }
 }
 
 /// Aggregated usage totals grouped by API (T11.6).
