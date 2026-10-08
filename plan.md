@@ -100,7 +100,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.11 | todo | P3 | 3 | 0% | |
 | T441.12 | todo | P3 | 3 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
 
@@ -2016,7 +2015,7 @@ project = "group/name"
 8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
-11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
+11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
 12. **T441.12 `rtok task sync`** (split from T441.7) — reconcile a remote adapter with the store counter and report drift: issues labelled by hand, ids above the counter, tasks whose `rtok:<id>` label was removed.
 
 #### 12. Open questions
