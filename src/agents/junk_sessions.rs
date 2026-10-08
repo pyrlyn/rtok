@@ -162,7 +162,7 @@ mod tests {
     }
 
     /// One session of `age` days: transcript, subagent folder, restore points.
-    fn session(home: &Path, id: &str, age: u64) {
+    fn write_session(home: &Path, id: &str, age: u64) {
         let secs = age * DAY;
         put(&home.join(format!(".claude/projects/p/{id}.jsonl")), secs);
         put(
@@ -176,8 +176,8 @@ mod tests {
     fn an_old_session_goes_whole_and_the_hosts_memory_and_a_young_one_stay() {
         let home = tmp_dir("sessions-old");
         let young = "11111111-2222-3333-4444-555555555555";
-        session(&home, ID, 31);
-        session(&home, young, 29);
+        write_session(&home, ID, 31);
+        write_session(&home, young, 29);
         put(&home.join(".claude/projects/p/memory/MEMORY.md"), 90 * DAY);
         put(&home.join(".claude/projects/p/notes.jsonl"), 90 * DAY);
 
@@ -202,7 +202,7 @@ mod tests {
         let near = "22222222-2222-3333-4444-555555555555";
         let busy = "33333333-2222-3333-4444-555555555555";
         // A minute past 30 days is old, a minute short of it is not.
-        session(&home, ID, 30);
+        write_session(&home, ID, 30);
         put(
             &home.join(format!(".claude/projects/p/{ID}.jsonl")),
             30 * DAY + 60,
