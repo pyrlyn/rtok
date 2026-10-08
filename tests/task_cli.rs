@@ -194,3 +194,25 @@ fn mcp_tools_answer_like_the_cli() {
     let (ok, out) = sb.mcp("task_get", r#"{"id":"M9"}"#);
     assert!(!ok && out.contains("no task M9"), "{out}");
 }
+
+/// T441.12: a store that lost its counters (a new machine, a wiped home) is brought back up to
+/// the files, and a second sync has nothing to say.
+#[test]
+fn sync_raises_a_lost_counter_and_reports_the_drift() {
+    let sb = Sandbox::new("sync");
+    sb.ok(&["init", "--prefix", "S"]);
+    sb.ok(&["create", "One"]);
+    sb.ok(&["create", "Two"]);
+    sb.ok(&["create", "Leaf", "--parent", "S1"]);
+    std::fs::remove_dir_all(sb.home.join(".rtok")).unwrap();
+
+    assert_eq!(
+        sb.ok(&["sync"]),
+        "disk: next id S3\nraised top level: 0 -> 2\nraised subtasks of S1: 0 -> 1\nabove the counter: S1, S2, S1.1\n"
+    );
+    let json: serde_json::Value = serde_json::from_str(&sb.ok(&["sync", "--json"])).unwrap();
+    assert_eq!(json["counter"], 2);
+    assert_eq!(json["raised"], serde_json::json!([]));
+    assert_eq!(sb.ok(&["sync"]), "disk: next id S3, counters in step\n");
+    assert_eq!(sb.ok(&["create", "Three"]), "S3\n");
+}

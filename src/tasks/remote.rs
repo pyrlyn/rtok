@@ -48,6 +48,11 @@ pub fn issue_title(id: &TaskId, title: &str) -> String {
     format!("{id}. {}", title.trim())
 }
 
+/// The id an issue title still starts with (`R12. Ship it`), for an issue whose label is gone.
+pub fn title_id(title: &str) -> Option<TaskId> {
+    title.split_once(". ")?.0.trim().parse().ok()
+}
+
 /// The task title back from an issue title; one edited by hand keeps whatever it says.
 pub fn task_title(id: &TaskId, title: &str) -> String {
     let lead = format!("{id}. ");

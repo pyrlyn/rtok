@@ -297,6 +297,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
             [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -344,6 +345,13 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;task;sync' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;task;init' {
             [CompletionResult]::new('--adapter', '--adapter', [CompletionResultType]::ParameterName, 'disk, github or gitlab (default: disk, or what the file already says)')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Task id prefix, 1–8 ASCII letters (default: the project name''s first letter)')
@@ -358,6 +366,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
             [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -375,6 +384,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;task;help;next' {
+            break
+        }
+        'rtok;task;help;sync' {
             break
         }
         'rtok;task;help;init' {
@@ -1780,6 +1792,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'One task: title, status, parent, subtasks, link and description')
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print a task''s status, or set it; done and closed move it out of the plan')
             [CompletionResult]::new('next', 'next', [CompletionResultType]::ParameterValue, 'The task to work on next: the lowest open one with no open subtask')
+            [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             break
         }
@@ -1796,6 +1809,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;task;next' {
+            break
+        }
+        'rtok;help;task;sync' {
             break
         }
         'rtok;help;task;init' {

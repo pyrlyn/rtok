@@ -95,4 +95,3 @@
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T441.12. `rtok task sync`

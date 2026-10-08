@@ -724,6 +724,9 @@ _rtok() {
             rtok__subcmd__help__subcmd__task,status)
                 cmd="rtok__subcmd__help__subcmd__task__subcmd__status"
                 ;;
+            rtok__subcmd__help__subcmd__task,sync)
+                cmd="rtok__subcmd__help__subcmd__task__subcmd__sync"
+                ;;
             rtok__subcmd__help__subcmd__worktree,add)
                 cmd="rtok__subcmd__help__subcmd__worktree__subcmd__add"
                 ;;
@@ -871,6 +874,9 @@ _rtok() {
             rtok__subcmd__task,status)
                 cmd="rtok__subcmd__task__subcmd__status"
                 ;;
+            rtok__subcmd__task,sync)
+                cmd="rtok__subcmd__task__subcmd__sync"
+                ;;
             rtok__subcmd__task__subcmd__help,create)
                 cmd="rtok__subcmd__task__subcmd__help__subcmd__create"
                 ;;
@@ -891,6 +897,9 @@ _rtok() {
                 ;;
             rtok__subcmd__task__subcmd__help,status)
                 cmd="rtok__subcmd__task__subcmd__help__subcmd__status"
+                ;;
+            rtok__subcmd__task__subcmd__help,sync)
+                cmd="rtok__subcmd__task__subcmd__help__subcmd__sync"
                 ;;
             rtok__subcmd__worktree,add)
                 cmd="rtok__subcmd__worktree__subcmd__add"
@@ -4245,7 +4254,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__help__subcmd__task)
-            opts="create list show status next init"
+            opts="create list show status next sync init"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4329,6 +4338,20 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__help__subcmd__task__subcmd__status)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__help__subcmd__task__subcmd__sync)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -5379,7 +5402,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__task)
-            opts="-h --config --help create list show status next init help"
+            opts="-h --config --help create list show status next sync init help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -5431,7 +5454,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__task__subcmd__help)
-            opts="create list show status next init help"
+            opts="create list show status next sync init help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -5542,6 +5565,20 @@ _rtok() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        rtok__subcmd__task__subcmd__help__subcmd__sync)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         rtok__subcmd__task__subcmd__init)
             opts="-h --adapter --prefix --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -5632,6 +5669,24 @@ _rtok() {
             ;;
         rtok__subcmd__task__subcmd__status)
             opts="-h --force --json --config --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__task__subcmd__sync)
+            opts="-h --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
