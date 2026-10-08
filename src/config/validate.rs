@@ -648,7 +648,11 @@ fn check_leaf(
                 errors.push(format!("{at}: {dotted} must be ≤ 20"));
             }
             // Ten years: a larger floor is a typo, and it would keep junk forever.
-            "agents.junk.keep_logs_days" if n > 3650 => {
+            "agents.junk.keep_logs_days"
+            | "agents.junk.stale_session_days"
+            | "agents.junk.crash_dump_min_age_days"
+                if n > 3650 =>
+            {
                 errors.push(format!("{at}: {dotted} must be ≤ 3650"));
             }
             "agents.junk.temp_min_age_hours" if n > 87_600 => {
@@ -831,6 +835,22 @@ mod tests {
                 "agents.junk.keep_logs_days must be ≤ 3650",
             ),
             (
+                "stale_session_days = 3651",
+                "agents.junk.stale_session_days must be ≤ 3650",
+            ),
+            (
+                "stale_session_days = -1",
+                "agents.junk.stale_session_days must be ≥ 0",
+            ),
+            (
+                "stale_session_days = 2.5",
+                "agents.junk.stale_session_days: expected number",
+            ),
+            (
+                "crash_dump_min_age_days = 3651",
+                "agents.junk.crash_dump_min_age_days must be ≤ 3650",
+            ),
+            (
                 "temp_min_age_hours = 87601",
                 "agents.junk.temp_min_age_hours must be ≤ 87600",
             ),
@@ -842,7 +862,7 @@ mod tests {
             ),
             (
                 "extra = [{ host = \"cursor\", kind = \"sessions\", path = \"/x\" }]",
-                "agents.junk.extra[0].kind must be one of cache, temp, logs",
+                "agents.junk.extra[0].kind must be one of cache, temp, logs, crash-dumps",
             ),
             (
                 "extra = [{ host = \"rtok\", kind = \"temp\" }]",

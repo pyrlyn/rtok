@@ -679,6 +679,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;junk;list' {
+            [CompletionResult]::new('--session-days', '--session-days', [CompletionResultType]::ParameterName, 'Sessions untouched for more than this many days are old, for this run only')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
             [CompletionResult]::new('--bytes', '--bytes', [CompletionResultType]::ParameterName, 'Exact byte counts instead of KB/MB/GB')
@@ -692,6 +693,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--kind', '--kind', [CompletionResultType]::ParameterName, 'Only this junk kind (repeatable)')
             [CompletionResult]::new('--include', '--include', [CompletionResultType]::ParameterName, 'Also the review kinds')
             [CompletionResult]::new('--older-than', '--older-than', [CompletionResultType]::ParameterName, 'Only items not modified for this long (`7d`, `12h`)')
+            [CompletionResult]::new('--session-days', '--session-days', [CompletionResultType]::ParameterName, 'Sessions untouched for more than this many days are old, for this run only')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
@@ -725,6 +727,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;junk;list' {
+            [CompletionResult]::new('--session-days', '--session-days', [CompletionResultType]::ParameterName, 'Sessions untouched for more than this many days are old, for this run only')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
             [CompletionResult]::new('--bytes', '--bytes', [CompletionResultType]::ParameterName, 'Exact byte counts instead of KB/MB/GB')
@@ -738,6 +741,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--kind', '--kind', [CompletionResultType]::ParameterName, 'Only this junk kind (repeatable)')
             [CompletionResult]::new('--include', '--include', [CompletionResultType]::ParameterName, 'Also the review kinds')
             [CompletionResult]::new('--older-than', '--older-than', [CompletionResultType]::ParameterName, 'Only items not modified for this long (`7d`, `12h`)')
+            [CompletionResult]::new('--session-days', '--session-days', [CompletionResultType]::ParameterName, 'Sessions untouched for more than this many days are old, for this run only')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')

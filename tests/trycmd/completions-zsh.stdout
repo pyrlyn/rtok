@@ -644,6 +644,7 @@ _arguments "${_arguments_options[@]}" : /
         case $line[1] in
             (list)
 _arguments "${_arguments_options[@]}" : /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '--bytes[Exact byte counts instead of KB/MB/GB]' /
@@ -655,9 +656,10 @@ _arguments "${_arguments_options[@]}" : /
 (clear)
 _arguments "${_arguments_options[@]}" : /
 '*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
-'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks swap snapshots)' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks swap snapshots index crash-dumps sessions)' /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
@@ -1048,6 +1050,7 @@ _arguments "${_arguments_options[@]}" : /
         case $line[1] in
             (list)
 _arguments "${_arguments_options[@]}" : /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '--bytes[Exact byte counts instead of KB/MB/GB]' /
@@ -1059,9 +1062,10 @@ _arguments "${_arguments_options[@]}" : /
 (clear)
 _arguments "${_arguments_options[@]}" : /
 '*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
-'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks swap snapshots)' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks swap snapshots index crash-dumps sessions)' /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
+'--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /

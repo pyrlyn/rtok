@@ -36,7 +36,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 30% | |
-| T330.5.2 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T330.5.3 | todo | P2 | 3 | 0% | |
 | T330.5.4 | todo | P2 | 2 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -1073,12 +1072,6 @@ Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 50
 Done means: `rtok agents junk list` shows the `backups` rows, `clear --include review` or `--kind backups` plans the generations past the cap and never the newest, a running host does not hold back rtok's own copies.
 
 Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
-
-### T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
-
-Part of T330.5. Depends on T330.5.1. `crash-dumps` (moved from T330.5.1): `crash_dump_min_age_days` (default 7, `0` to `3650`, rejected naming the key) and `crash-dumps` as an `extra` kind; macOS `~/Library/Logs/DiagnosticReports` files (`.ips`, `.crash`, `.dmp`, `.diag`) named for a host binary or app are listed read-only (no §22 row, D36), and an `extra` crash folder gives `safe` dumps past `crash_dump_min_age_days` and `review` ones before it. `stale_session_days` (default 30, `0` to `3650`, invalid values rejected naming the key and the run falls back to 30) and `--session-days N`; `sessions` as class `explicit` (only with `--kind sessions`, time only, the T330 "Old sessions: time only" rules), only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it, with the per-host verdict recorded here and in §22.1 (never the host's memory, index or store files: Claude Code `projects/<project>/memory/`, Kimi `session_index.jsonl`, Copilot `session-store.db`, Codex state DB); `list` shows the host's own retention (`cleanupPeriodDays`, `general.sessionRetention`). The file-based `index` kind (review): `.rtok-lsp-xdg/{data,state}`, LSP caches such as `.rust-analyzer/`, `-wal`/`-shm` of closed DBs. rtok's own session rows and graph/tags rows in `rtok.db` are T330.5.3.
-
-Check: the T330 "Session threshold" fixture and the sessions lines of "New kinds"; a crash dump is listed read-only and an `extra` crash folder clears only old dumps by default; `just check`.
 
 ### T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
 

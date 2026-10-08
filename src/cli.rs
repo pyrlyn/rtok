@@ -1008,6 +1008,9 @@ enum JunkCmd {
         /// Also the hosts that are not installed
         #[arg(long)]
         all: bool,
+        /// Sessions untouched for more than this many days are old, for this run only
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=3650))]
+        session_days: Option<u32>,
     },
     /// List what `agents junk clear` would remove; `--yes` applies it
     ///
@@ -1032,6 +1035,9 @@ enum JunkCmd {
         /// Only items not modified for this long (`7d`, `12h`)
         #[arg(long, value_name = "AGE", value_parser = humantime::parse_duration)]
         older_than: Option<std::time::Duration>,
+        /// Sessions untouched for more than this many days are old, for this run only
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=3650))]
+        session_days: Option<u32>,
         /// Move to the OS trash instead of deleting
         #[arg(long)]
         trash: bool,
@@ -1882,9 +1888,16 @@ pub fn run() -> Result<()> {
                 }
             }
             AgentCmd::Junk {
-                action: JunkCmd::List { json, bytes, all },
+                action:
+                    JunkCmd::List {
+                        json,
+                        bytes,
+                        all,
+                        session_days,
+                    },
             } => {
-                let cfg = Config::load_with(config_file.as_deref(), None)?;
+                let cfg =
+                    Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
                 let report = crate::agents::junk::report_with(
                     &cfg,
                     &crate::agents::junk_map::Roots::from_env(),
@@ -1910,10 +1923,12 @@ pub fn run() -> Result<()> {
                         kinds,
                         include,
                         older_than,
+                        session_days,
                         trash,
                     },
             } => {
-                let cfg = Config::load_with(config_file.as_deref(), None)?;
+                let cfg =
+                    Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
                 let filter = crate::agents::junk_clear::Filter {
                     agents,
                     kinds,
@@ -2589,6 +2604,14 @@ fn usage_flags<const N: usize>(given: [(&str, Option<String>); N]) -> Option<fig
     let mut flags = Dict::new();
     flags.insert("agents".into(), Value::from(agents));
     Some(flags)
+}
+
+/// `--session-days N` as the flag layer of `agents.junk.stale_session_days`.
+fn session_days_flag(days: Option<u32>) -> Option<figment::value::Dict> {
+    use figment::value::{Dict, Value};
+    let junk = Dict::from([("stale_session_days".to_string(), Value::from(days?))]);
+    let agents = Dict::from([("junk".to_string(), Value::from(junk))]);
+    Some(Dict::from([("agents".to_string(), Value::from(agents))]))
 }
 
 fn bench_flags(

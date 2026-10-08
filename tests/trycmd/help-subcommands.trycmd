@@ -365,11 +365,12 @@ Folders, junk kinds and sizes per agent, and the space `agents junk clear` would
 Usage: rtok agents junk list [OPTIONS]
 
 Options:
-      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --json           JSON instead of the text
-      --bytes          Exact byte counts instead of KB/MB/GB
-      --all            Also the hosts that are not installed
-  -h, --help           Print help
+      --config <PATH>     User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json              JSON instead of the text
+      --bytes             Exact byte counts instead of KB/MB/GB
+      --all               Also the hosts that are not installed
+      --session-days <N>  Sessions untouched for more than this many days are old, for this run only
+  -h, --help              Print help
 
 $ rtok agents junk clear --help
 List what `agents junk clear` would remove; `--yes` applies it
@@ -395,7 +396,8 @@ Options:
       --kind <KIND>
           Only this junk kind (repeatable)
           
-          [possible values: log, archive, cache, temp, logs, build, deps, locks, swap, snapshots]
+          [possible values: log, archive, cache, temp, logs, build, deps, locks, swap, snapshots,
+          index, crash-dumps, sessions]
 
       --include <CLASS>
           Also the review kinds
@@ -404,6 +406,9 @@ Options:
 
       --older-than <AGE>
           Only items not modified for this long (`7d`, `12h`)
+
+      --session-days <N>
+          Sessions untouched for more than this many days are old, for this run only
 
       --trash
           Move to the OS trash instead of deleting
