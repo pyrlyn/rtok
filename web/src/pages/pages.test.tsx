@@ -237,6 +237,15 @@ describe("plugins", () => {
 });
 
 describe("calls", () => {
+    test("an idle detail column says what to do, and gives way to the detail", async () => {
+        mount(serving(richSnapshot), "/calls");
+        const table = await screen.findByRole("table", { name: "calls" });
+        expect(screen.getByText("Select a call to see its detail.")).toBeTruthy();
+        fireEvent.click(within(table).getAllByRole("row")[1]!);
+        await screen.findByRole("region", { name: "detail" });
+        expect(screen.queryByText("Select a call to see its detail.")).toBeNull();
+    });
+
     test("selecting a failed call shows its error and details", async () => {
         mount(serving(richSnapshot), "/calls");
         const table = await screen.findByRole("table", { name: "calls" });
