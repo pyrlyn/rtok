@@ -11,7 +11,8 @@ export type Tone = "accent" | "accent-soft" | "muted" | "delta";
 export interface Series {
   id: string;
   label: string;
-  values: readonly number[];
+  /** `null` is no data at that index: a gap, and the tooltip says so instead of showing 0. */
+  values: readonly (number | null)[];
   tone: Tone;
 }
 

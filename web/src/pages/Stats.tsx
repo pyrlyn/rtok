@@ -12,6 +12,7 @@ import { orUnknown } from "../ui/Unknown";
 import { compact, fmt } from "./format";
 import { why } from "./missing";
 import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./parts";
+import { SavingsTrend } from "./SavingsTrend";
 import { parseStats, type Bust, type HealthRow, type PricedRow, type StatsView } from "./text";
 
 // A missing key reads as unknown (`-`), never as NaN or 0.
@@ -30,14 +31,17 @@ export function Stats() {
     return (
         <WithSnapshot>
             {(snap) => (
-                <TextPage
-                    page="stats"
-                    text={snap.stats}
-                    command="rtok stats --price"
-                    note="`rtok stats --price` plus `rtok stats --cache`, as one report"
-                >
-                    {(text) => <StatsBody view={parseStats(text)} />}
-                </TextPage>
+                <div className="flex flex-col gap-3">
+                    <TextPage
+                        page="stats"
+                        text={snap.stats}
+                        command="rtok stats --price"
+                        note="`rtok stats --price` plus `rtok stats --cache`, as one report"
+                    >
+                        {(text) => <StatsBody view={parseStats(text)} />}
+                    </TextPage>
+                    <SavingsTrend days={snap.usage.savings} />
+                </div>
             )}
         </WithSnapshot>
     );
