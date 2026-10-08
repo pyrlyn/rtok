@@ -126,7 +126,8 @@ never `agent`) lets `prepare` set `service_tier = "flex"` on the two OpenAI wire
 - a client `"default"` / `"auto"` / `"priority"` / `"flex"` is respected; `force = true` overwrites it
 - on `429 Resource Unavailable` (billed nothing, per the OpenAI guide checked 2026-10-08) `on_429`
   decides: `none` fails open to the client, `backoff` retries on Flex with doubling delays,
-  `default` retries once with `service_tier = "auto"`. Only a tier rtok set is retried.
+  `default` retries once with the client's own tier if `force` replaced one, else `auto`. A
+  `Retry-After` in seconds lengthens the wait (cap 30 s); a `408` is not retried. Only a tier rtok set is retried.
 
 Keys and defaults: [config.md](config.md#proxyflex).
 

@@ -165,7 +165,7 @@ tools_rewrite       = false           # proxy.tools_rewrite
 context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
 flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
-timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
+timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s, but 900 or more with flex = true (OpenAI's Flex guide uses 15 min)
 
 [proxy.lanes.embeddings]              # same keys as bulk
 compress            = false
@@ -199,9 +199,9 @@ parse_results       = false           # read a fetched results file into one usa
 
 [proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
 force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
-on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto"
+on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
 retries             = 3               # backoff only: retries before giving up; at most 5
-backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s
+backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
 [proxy.routing]                       # no keys yet (D9)
 
@@ -553,7 +553,7 @@ counterpart: a rewrite runs on a lane when the global switch *and* the lane swit
 | `context_management` | `proxy.context_management` | `false` | Anthropic server-side context editing |
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | cache lookup and store |
 | `flex` | none | `false` | OpenAI `service_tier = "flex"` on chat and responses calls, see [`[proxy.flex]`](#proxyflex) |
-| `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s` |
+| `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s`, raised to 900 when the lane has `flex = true` (the OpenAI Flex guide raises its SDK timeout to 15 minutes because Flex requests time out more often) |
 
 Routing and a per-lane upstream are not here yet: each joins this table with its own step
 (`[proxy.routing]` below). The `agent` lane has no `flex` switch: a live turn never changes tier unless
@@ -596,8 +596,12 @@ whose Flex tier came from the client is never retried: that `429` is the client'
 | `retries` | int | `3` | `backoff` only: retries before the last `429` goes to the client; at most `5` |
 | `backoff_ms` | int | `1000` | `backoff` only: wait before the first retry, doubled each time, capped at 30 s |
 
-The client waits while rtok retries and sees only the final response. With `force`, a `default`
-retry sends `auto` in place of the client's own tier. Retries are logged at `warn`.
+The client waits while rtok retries and sees only the final response. A `default` retry restores the
+`service_tier` the client sent when `force` replaced it, and uses `auto` only when the client sent
+none. A `Retry-After` on the `429` (delta-seconds only; a date or other value is ignored) lengthens
+the wait to the larger of it and the backoff delay, never past 30 s. One that asks for more is not
+waited for: `backoff` hands the `429` to the client, `default` retries on the fallback tier at
+once. A `408` is never retried and reaches the client unchanged. Retries are logged at `warn`.
 
 ```toml
 [proxy.lanes.bulk]

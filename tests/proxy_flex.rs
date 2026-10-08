@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use rtok::config::Config;
 use serde_json::Value;
@@ -32,23 +32,35 @@ struct Upstream {
     seen: Seen,
 }
 
-async fn answer(State((script, seen)): State<(Vec<u16>, Seen)>, body: Bytes) -> impl IntoResponse {
+type Script = (Vec<u16>, Seen, Option<&'static str>);
+
+async fn answer(
+    State((script, seen, retry_after)): State<Script>,
+    body: Bytes,
+) -> impl IntoResponse {
     let mut seen = seen.lock().expect("seen");
     let n = seen.len();
     seen.push(body.to_vec());
     let status = *script.get(n).or(script.last()).unwrap_or(&200);
-    (
-        StatusCode::from_u16(status).expect("status"),
-        [("content-type", "application/json")],
-        "{}",
-    )
+    let mut headers = HeaderMap::new();
+    headers.insert("content-type", HeaderValue::from_static("application/json"));
+    if let (429, Some(v)) = (status, retry_after) {
+        headers.insert("retry-after", HeaderValue::from_static(v));
+    }
+    (StatusCode::from_u16(status).expect("status"), headers, "{}")
 }
 
 async fn upstream(script: &[u16]) -> Upstream {
+    upstream_asking(script, None).await
+}
+
+/// Every `429` it sends carries `Retry-After: <retry_after>`.
+async fn upstream_asking(script: &[u16], retry_after: Option<&'static str>) -> Upstream {
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let app = Router::new()
-        .fallback(answer)
-        .with_state((script.to_vec(), seen.clone()));
+    let app =
+        Router::new()
+            .fallback(answer)
+            .with_state((script.to_vec(), seen.clone(), retry_after));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind");
@@ -242,7 +254,7 @@ async fn default_retries_once_on_auto_and_changes_only_the_tier() {
 }
 
 #[tokio::test]
-async fn a_forced_over_a_client_tier_falls_back_to_auto_and_a_client_flex_is_not_retried() {
+async fn a_forced_over_a_client_tier_falls_back_to_it_and_a_client_flex_is_not_retried() {
     let up = upstream(&[429, 200]).await;
     let (addr, task) = proxy("flex-force-default", &up, |cfg| {
         cfg.proxy.flex.force = true;
@@ -252,6 +264,25 @@ async fn a_forced_over_a_client_tier_falls_back_to_auto_and_a_client_flex_is_not
     let body = r#"{"model":"m","service_tier":"priority"}"#;
     assert_eq!(post(&addr, CHAT, Some("bulk"), body).await, 200);
     let tiers: Vec<_> = up
+        .bodies()
+        .iter()
+        .map(|b| json(b)["service_tier"].clone())
+        .collect();
+    assert_eq!(tiers, ["flex", "priority"]);
+    task.abort();
+
+    // `auto` is for a request that named no tier at all.
+    let none = upstream(&[429, 200]).await;
+    let (addr, task) = proxy("flex-force-none", &none, |cfg| {
+        cfg.proxy.flex.force = true;
+        cfg.proxy.flex.on_429 = "default".to_string();
+    })
+    .await;
+    assert_eq!(
+        post(&addr, CHAT, Some("bulk"), r#"{"model":"m"}"#).await,
+        200
+    );
+    let tiers: Vec<_> = none
         .bodies()
         .iter()
         .map(|b| json(b)["service_tier"].clone())
@@ -268,5 +299,38 @@ async fn a_forced_over_a_client_tier_falls_back_to_auto_and_a_client_flex_is_not
     let body = r#"{"model":"m","service_tier":"flex"}"#;
     assert_eq!(post(&addr, CHAT, Some("bulk"), body).await, 429);
     assert_eq!(own.bodies(), [body]);
+    task.abort();
+}
+
+#[tokio::test]
+async fn a_retry_after_over_the_cap_is_not_waited_for() {
+    // An hour asked for: holding the client for it is not an option, so `backoff` hands the
+    // 429 over at once and `default` goes straight to its one fallback try.
+    let up = upstream_asking(&[429], Some("3600")).await;
+    let (addr, task) = proxy("flex-ra-backoff", &up, |cfg| {
+        cfg.proxy.flex.on_429 = "backoff".to_string();
+    })
+    .await;
+    assert_eq!(post(&addr, CHAT, Some("bulk"), BODY).await, 429);
+    assert_eq!(up.bodies().len(), 1);
+    task.abort();
+
+    let up = upstream_asking(&[429, 200], Some("3600")).await;
+    let (addr, task) = proxy("flex-ra-default", &up, |cfg| {
+        cfg.proxy.flex.on_429 = "default".to_string();
+    })
+    .await;
+    assert_eq!(post(&addr, CHAT, Some("bulk"), BODY).await, 200);
+    assert_eq!(up.bodies().len(), 2);
+    task.abort();
+
+    // A date is not read: our own (1 ms) delay applies and the retry happens.
+    let up = upstream_asking(&[429, 200], Some("Wed, 21 Oct 2099 07:28:00 GMT")).await;
+    let (addr, task) = proxy("flex-ra-date", &up, |cfg| {
+        cfg.proxy.flex.on_429 = "backoff".to_string();
+    })
+    .await;
+    assert_eq!(post(&addr, CHAT, Some("bulk"), BODY).await, 200);
+    assert_eq!(up.bodies().len(), 2);
     task.abort();
 }

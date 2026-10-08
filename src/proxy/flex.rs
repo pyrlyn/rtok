@@ -13,6 +13,11 @@
 //! Flex only because the client asked for it is the client's to retry: rtok retries a call only
 //! when rtok set the tier itself.
 //!
+//! The guide also says Flex requests time out more often and shows a 15 minute timeout in every
+//! SDK sample (checked 2026-10-08), so a Flex lane reads for at least [`MIN_TIMEOUT_S`]. It names
+//! `408` as the SDKs' own retry and says nothing about `Retry-After`: a `408` is therefore never
+//! retried here, and `Retry-After` on a `429` is read as the standard HTTP header.
+//!
 //! Anthropic has no Flex tier, so only the two OpenAI wires are touched.
 
 use std::time::Duration;
@@ -33,6 +38,32 @@ const AUTO: &str = "auto";
 /// config says (`rtok config validate` rejects more).
 const MAX_RETRIES: u32 = 5;
 const MAX_DELAY: Duration = Duration::from_secs(30);
+/// The 15 minutes the guide's SDK samples raise the timeout to (the SDK default is 10).
+const MIN_TIMEOUT_S: u64 = 900;
+
+/// The read timeout of a lane: `lane_s` when it sets one, else `proxy_s`, but never under
+/// [`MIN_TIMEOUT_S`] when the lane sends Flex without choosing its own value.
+pub fn lane_timeout_s(flex: bool, lane_s: u64, proxy_s: u64) -> u64 {
+    match (flex, lane_s) {
+        (true, 0) => proxy_s.max(MIN_TIMEOUT_S),
+        (false, 0) => proxy_s,
+        _ => lane_s,
+    }
+}
+
+/// `Retry-After` as delta-seconds. The HTTP-date form and anything else is ignored: our own
+/// delay stands.
+fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let v = headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim();
+    if v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    v.parse().ok().map(Duration::from_secs)
+}
 
 /// What to do with a Flex `429`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,16 +145,41 @@ impl Retry {
     }
 
     /// The wait before retry `n` (0-based) and the body to send then (`None` = the same one),
-    /// or `None` once the policy has no retry left.
-    fn next(&self, n: u32) -> Option<(Duration, Option<Bytes>)> {
+    /// or `None` once the policy has no retry left. The wait is the longer of our delay and the
+    /// server's `Retry-After`; one that exceeds [`MAX_DELAY`] is not waited for, because the
+    /// client's connection stays open meanwhile: `backoff` gives up, `default` goes to the
+    /// fallback tier at once.
+    fn next(&self, n: u32, server: Option<Duration>) -> Option<(Duration, Option<Bytes>)> {
+        let too_long = server.is_some_and(|d| d > MAX_DELAY);
         match self.on_busy {
-            OnBusy::Backoff if n < self.retries => {
-                let wait = self.backoff.saturating_mul(1u32 << n).min(MAX_DELAY);
-                Some((wait, None))
+            OnBusy::Backoff if n < self.retries && !too_long => {
+                let ours = self.backoff.saturating_mul(1u32 << n).min(MAX_DELAY);
+                Some((ours.max(server.unwrap_or_default()), None))
             }
             // One try on standard processing; a second 429 there is a real rate limit.
-            OnBusy::Default if n == 0 => Some((Duration::ZERO, Some(set_tier(&self.base, AUTO)?))),
+            OnBusy::Default if n == 0 => {
+                let wait = if too_long {
+                    Duration::ZERO
+                } else {
+                    server.unwrap_or_default()
+                };
+                Some((wait, Some(self.fallback()?)))
+            }
             _ => None,
+        }
+    }
+
+    /// The body for the fallback tier: the client's own tier when `force` overwrote one, `auto`
+    /// only when it sent none.
+    fn fallback(&self) -> Option<Bytes> {
+        let sent = serde_json::from_slice::<Value>(&self.base)
+            .ok()?
+            .get(TIER)
+            .is_some_and(|t| !t.is_null());
+        if sent {
+            Some(self.base.clone())
+        } else {
+            set_tier(&self.base, AUTO)
         }
     }
 }
@@ -156,8 +212,13 @@ pub async fn send(rb: reqwest::RequestBuilder, body: Bytes, retry: Option<&Retry
         let result = attempt.send().await;
         let busy = result
             .as_ref()
-            .is_ok_and(|r| r.status() == StatusCode::TOO_MANY_REQUESTS);
-        let Some((wait, next)) = retry.filter(|_| busy).and_then(|r| r.next(retries)) else {
+            .ok()
+            .filter(|r| r.status() == StatusCode::TOO_MANY_REQUESTS);
+        let server = busy.and_then(|r| retry_after(r.headers()));
+        let Some((wait, next)) = retry
+            .filter(|_| busy.is_some())
+            .and_then(|r| r.next(retries, server))
+        else {
             return Sent {
                 result,
                 body,
@@ -235,6 +296,102 @@ mod tests {
         }
     }
 
+    fn waits(r: &Retry, server: Option<u64>) -> Vec<Option<(u64, bool)>> {
+        let server = server.map(Duration::from_secs);
+        (0..3)
+            .map(|n| r.next(n, server).map(|(w, b)| (w.as_secs(), b.is_some())))
+            .collect()
+    }
+
+    fn retry(on_429: &str) -> Retry {
+        let mut p = flex(false, on_429);
+        p.backoff_ms = 10_000;
+        Retry::new(Bytes::from_static(br#"{"model":"m"}"#), &p).expect("retry")
+    }
+
+    #[test]
+    fn retry_after_stretches_the_wait_but_never_shrinks_it() {
+        let b = retry("backoff");
+        // 10 s ours; 5 s asked is shorter, 25 s is longer than ours, 30 s is the cap itself.
+        assert_eq!(waits(&b, Some(5))[0], Some((10, false)));
+        assert_eq!(waits(&b, Some(25))[0], Some((25, false)));
+        assert_eq!(waits(&b, Some(30))[0], Some((30, false)));
+        assert_eq!(waits(&b, None)[1], Some((20, false)));
+        let d = retry("default");
+        assert_eq!(waits(&d, Some(7))[0], Some((7, true)));
+    }
+
+    #[test]
+    fn a_retry_after_over_the_cap_skips_the_wait() {
+        // backoff gives up and the 429 reaches the client.
+        assert_eq!(waits(&retry("backoff"), Some(31)), [None, None, None]);
+        // default retries on the fallback tier at once.
+        assert_eq!(
+            waits(&retry("default"), Some(3600)),
+            [Some((0, true)), None, None]
+        );
+    }
+
+    #[test]
+    fn only_delta_seconds_are_read_from_retry_after() {
+        use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
+        let read = |v: &str| {
+            let mut h = HeaderMap::new();
+            h.insert(RETRY_AFTER, HeaderValue::from_str(v).expect("header"));
+            retry_after(&h)
+        };
+        assert_eq!(read("12"), Some(Duration::from_secs(12)));
+        assert_eq!(read(" 3 "), Some(Duration::from_secs(3)));
+        assert_eq!(read("0"), Some(Duration::ZERO));
+        for ignored in [
+            "Wed, 21 Oct 2026 07:28:00 GMT",
+            "soon",
+            "-5",
+            "+5",
+            "1.5",
+            "",
+            "99999999999999999999999",
+        ] {
+            assert_eq!(read(ignored), None, "{ignored:?}");
+        }
+        assert_eq!(retry_after(&HeaderMap::new()), None);
+    }
+
+    #[test]
+    fn fallback_restores_the_client_tier_and_uses_auto_only_without_one() {
+        let policy = flex(true, "default");
+        let fallback = |body: &str| {
+            let body = Bytes::from(body.to_string());
+            let sent = apply("openai", &body, &policy).expect("flexed");
+            assert_eq!(
+                serde_json::from_slice::<Value>(&sent).unwrap()[TIER],
+                "flex"
+            );
+            let (_, retry_body) = Retry::new(body, &policy)
+                .expect("retry")
+                .next(0, None)
+                .expect("one retry");
+            let v: Value = serde_json::from_slice(&retry_body.expect("body")).unwrap();
+            v[TIER].clone()
+        };
+        assert_eq!(
+            fallback(r#"{"model":"m","service_tier":"priority"}"#),
+            "priority"
+        );
+        assert_eq!(fallback(r#"{"model":"m"}"#), "auto");
+        assert_eq!(fallback(r#"{"model":"m","service_tier":null}"#), "auto");
+    }
+
+    #[test]
+    fn a_flex_lane_reads_for_at_least_the_guides_fifteen_minutes() {
+        assert_eq!(lane_timeout_s(true, 0, 600), 900);
+        assert_eq!(lane_timeout_s(true, 0, 1800), 1800);
+        // A value the operator set on the lane is theirs.
+        assert_eq!(lane_timeout_s(true, 120, 600), 120);
+        assert_eq!(lane_timeout_s(false, 0, 600), 600);
+        assert_eq!(lane_timeout_s(false, 45, 600), 45);
+    }
+
     #[test]
     fn retry_schedule_follows_the_policy() {
         let base = Bytes::from_static(br#"{"model":"m"}"#);
@@ -246,7 +403,7 @@ mod tests {
         p.backoff_ms = 10_000;
         let r = Retry::new(base.clone(), &p).expect("backoff");
         let waits: Vec<_> = (0..7)
-            .map(|n| r.next(n).map(|(w, b)| (w.as_secs(), b)))
+            .map(|n| r.next(n, None).map(|(w, b)| (w.as_secs(), b)))
             .collect();
         assert_eq!(
             waits,
@@ -262,12 +419,12 @@ mod tests {
         );
 
         let d = Retry::new(base, &flex(false, "default")).expect("default");
-        let (wait, body) = d.next(0).expect("one retry");
+        let (wait, body) = d.next(0, None).expect("one retry");
         assert_eq!(wait, Duration::ZERO);
         assert_eq!(
             body.expect("auto body"),
             r#"{"service_tier":"auto","model":"m"}"#
         );
-        assert!(d.next(1).is_none());
+        assert!(d.next(1, None).is_none());
     }
 }

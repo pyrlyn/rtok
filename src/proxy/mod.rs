@@ -152,7 +152,8 @@ impl ProxyState {
         let client = build_client(cfg.proxy.timeout_s)?;
         let mut lane_clients = HashMap::new();
         for lane in lane::Lane::ALL {
-            let secs = lane.policy(&cfg.proxy.lanes).timeout_s;
+            let policy = lane.policy(&cfg.proxy.lanes);
+            let secs = flex::lane_timeout_s(policy.flex, policy.timeout_s, cfg.proxy.timeout_s);
             if secs > 0 && secs != cfg.proxy.timeout_s {
                 lane_clients.insert(lane, build_client(secs)?);
             }

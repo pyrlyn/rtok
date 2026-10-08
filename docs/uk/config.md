@@ -166,7 +166,7 @@ tools_rewrite       = false           # proxy.tools_rewrite
 context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, читання і запис
 flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
-timeout_s           = 0               # таймаут читання для цієї смуги; 0 = proxy.timeout_s
+timeout_s           = 0               # таймаут читання для цієї смуги; 0 = proxy.timeout_s, але не менше 900 при flex = true (гайд OpenAI щодо Flex бере 15 хв)
 
 [proxy.lanes.embeddings]              # ті самі ключі, що в bulk
 compress            = false
@@ -200,9 +200,9 @@ parse_results       = false           # розібрати отриманий ф
 
 [proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
 force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
-on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto"
+on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
 retries             = 3               # backoff only: retries before giving up; at most 5
-backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s
+backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
 [proxy.routing]                       # ключів ще немає (D9)
 
@@ -554,7 +554,7 @@ Gemini `:batchGenerateContent`), `files`, `embeddings` і `meta` (`/v1/models`,
 | `context_management` | `proxy.context_management` | `false` | серверне редагування контексту Anthropic |
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | читання і запис кешу |
 | `flex` | немає | `false` | OpenAI `service_tier = "flex"` для викликів chat і responses, див. [`[proxy.flex]`](#proxyflex) |
-| `timeout_s` | `proxy.timeout_s` | `0` | таймаут читання цієї смуги в секундах; `0` = `proxy.timeout_s` |
+| `timeout_s` | `proxy.timeout_s` | `0` | таймаут читання цієї смуги в секундах; `0` = `proxy.timeout_s`, але не менше 900 при `flex = true` (настанова OpenAI щодо Flex піднімає таймаут SDK до 15 хвилин: запити Flex частіше впираються в таймаут) |
 
 Маршрутизації та upstream для окремої смуги тут поки немає: кожен з'явиться в цій таблиці
 власним кроком (`[proxy.routing]` нижче). Смуга `agent` не має перемикача `flex`: живий хід не змінює
@@ -597,8 +597,12 @@ parse_results = false
 | `retries` | int | `3` | лише `backoff`: повторів, перш ніж останній `429` піде клієнту; не більше `5` |
 | `backoff_ms` | int | `1000` | лише `backoff`: пауза до першого повтору, подвоюється, максимум 30 с |
 
-Поки rtok повторює запит, клієнт чекає й бачить лише підсумкову відповідь. З `force` повтор `default`
-надсилає `auto` замість власного рівня клієнта. Повтори пишуться в журнал на рівні `warn`.
+Поки rtok повторює запит, клієнт чекає й бачить лише підсумкову відповідь. Повтор `default` повертає
+`service_tier`, який надіслав клієнт, якщо `force` його замінив, і ставить `auto` лише коли клієнт
+його не надсилав. `Retry-After` на `429` (лише секунди; дата й інше ігноруються) подовжує паузу до
+більшого з нього та затримки backoff, але не більше 30 с. Якщо він просить більше, чекати не будуть: `backoff`
+віддає `429` клієнту, `default` одразу повторює на запасному рівні. `408` не повторюється і доходить до
+клієнта без змін. Повтори пишуться в журнал на рівні `warn`.
 
 ```toml
 [proxy.lanes.bulk]
