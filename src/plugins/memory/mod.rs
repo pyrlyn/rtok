@@ -60,7 +60,7 @@ impl Plugin for Memory {
             },
             ToolDef {
                 name: "mem_pack",
-                description: "Ranked notes inside a token budget. Returns id, tier, text. Does not replace mem_get.",
+                description: "Ranked notes in a token budget.",
                 input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"max_tokens":{"type":"integer"}},"required":["query"]}),
             },
             ToolDef {
@@ -70,7 +70,7 @@ impl Plugin for Memory {
             },
             ToolDef {
                 name: "mem_update",
-                description: "Retire (tombstone, never delete) or pin a note by id.",
+                description: "Retire or pin a note by id.",
                 input_schema: json!({"type":"object","properties":{"id":{"type":"integer"},"retire":{"type":"boolean"},"superseded_by":{"type":"integer"},"pinned":{"type":"boolean"}},"required":["id"]}),
             },
             handoff::handoff_tool(),
@@ -782,7 +782,9 @@ mod tests {
 
     /// T69.1: the memory tools stay within the 60-description-token surface budget
     /// (`rtok doctor` prices the same strings). T71.2 added `mem_handoff` as the fifth,
-    /// so `mem_save` drops the field list the input schema already carries.
+    /// so `mem_save` drops the field list the input schema already carries. T460
+    /// shortened `mem_update` the same way so `mem_pack` fits; never-delete stays
+    /// in the plugin README.
     #[test]
     fn mcp_surface_stays_within_sixty_description_tokens() {
         let cx = crate::plugin::Runtime::in_memory("t691-surface").unwrap();

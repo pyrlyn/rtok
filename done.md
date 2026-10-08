@@ -6,7 +6,7 @@ MCP `mem_pack` packs FTS hits into one answer under a token budget. Each hit sta
 
 Check: `plugins::memory::pack` unit tests (abstracts fit, a huge body stays abstract, leftover budget deepens only the first hit, identical title and snippet collapse, an over-budget estimator returns nothing); `memory_pack_returns_a_tier_and_records`; `tests/trycmd/mcp.toml` lists `mem_pack` after `mem_search`.
 
-Result: pack tests 5 passed; `memory_pack_returns_a_tier_and_records` passed; `cli_trycmd` passed (`mcp.toml` lists `mem_pack`, `report-md` counts 31 tools, ~829 description tokens). `cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings` clean.
+Result: pack tests 5 passed; `memory_pack_returns_a_tier_and_records` passed; `mcp_surface_stays_within_sixty_description_tokens` passed (the six descriptions sum to 60). `cli_trycmd` lists `mem_pack`; the report counts 31 tools, ~810 description tokens. `cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings` clean.
 
 ### T455. Fold nested JSON before archive replaces it with a pointer
 
