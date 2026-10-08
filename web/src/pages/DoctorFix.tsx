@@ -8,12 +8,12 @@
 import { useEffect, useReducer } from "react";
 import { useDoctorApi } from "../api/query";
 import type { Item } from "../api/snapshot.gen";
-import { focusRing } from "../ui/cx";
+import { Button } from "../ui/Button";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { Result } from "../ui/Result";
+import { Spinner } from "../ui/Spinner";
 import { fixReducer, initialFix, selectedCount, type FixState } from "./fixState";
-
-const button = `${focusRing} rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-2 disabled:opacity-50`;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -66,31 +66,31 @@ function FixBody({
     if (phase === "done" && state.result) {
         return (
             <div className="flex flex-col gap-3">
-                <pre
-                    role="status"
-                    className="overflow-x-auto text-2xs whitespace-pre-wrap text-fg-muted"
-                >
-                    {state.result.text}
-                </pre>
+                <Result verb="doctor" kind={state.result.code === 0 ? "success" : "warn"}>
+                    <pre className="overflow-x-auto text-2xs whitespace-pre-wrap text-fg-muted">
+                        {state.result.text}
+                    </pre>
+                </Result>
                 <div>
-                    <button
-                        type="button"
-                        className={button}
-                        onClick={() => dispatch({ type: "again" })}
-                    >
+                    <Button verb="doctor" onClick={() => dispatch({ type: "again" })}>
                         Check again
-                    </button>
+                    </Button>
                 </div>
             </div>
         );
     }
     if (!plan) {
         return phase === "error" ? (
-            <p role="alert" className="text-xs text-delta-fg">
+            <Result verb="doctor" kind="error">
                 {state.error}
-            </p>
+            </Result>
         ) : (
-            <p className="text-xs text-fg-muted">Looking for entries to fix…</p>
+            <p role="status" aria-busy className="flex items-center gap-1.5 text-xs text-fg-muted">
+                <span className="text-accent">
+                    <Spinner size="sm" />
+                </span>
+                Looking for entries to fix…
+            </p>
         );
     }
     const n = selectedCount(plan);
@@ -121,9 +121,9 @@ function FixBody({
                 </pre>
             )}
             {state.error && (
-                <p role="alert" className="text-xs text-delta-fg">
+                <Result verb="doctor" kind="error">
                     {state.error}
-                </p>
+                </Result>
             )}
             <div className="flex items-center gap-2">
                 {phase === "confirming" || busy ? (
@@ -131,27 +131,24 @@ function FixBody({
                         <span className="text-xs">
                             Write {n} {n === 1 ? "entry" : "entries"}?
                         </span>
-                        <button type="button" className={button} disabled={busy} onClick={confirm}>
+                        <Button verb="doctor" pending={busy} onClick={confirm}>
                             Confirm
-                        </button>
-                        <button
-                            type="button"
-                            className={button}
-                            disabled={busy}
-                            onClick={() => dispatch({ type: "cancel" })}
-                        >
+                        </Button>
+                        <Button disabled={busy} onClick={() => dispatch({ type: "cancel" })}>
                             Cancel
-                        </button>
+                        </Button>
                     </>
                 ) : (
-                    <button
-                        type="button"
-                        className={button}
+                    // A change to the selection asks the server for a new diff; the button
+                    // waits for it because what it would confirm is not known until then.
+                    <Button
+                        verb="doctor"
+                        pending={phase === "loading"}
                         disabled={n === 0 || phase !== "ready"}
                         onClick={() => dispatch({ type: "ask" })}
                     >
                         Fix selected ({n})
-                    </button>
+                    </Button>
                 )}
             </div>
         </div>
@@ -200,14 +197,9 @@ function Row({
                 )}
             </div>
             {item.can_keep && (
-                <button
-                    type="button"
-                    className={button}
-                    disabled={busy}
-                    onClick={() => dispatch({ type: "keep", ref })}
-                >
+                <Button disabled={busy} onClick={() => dispatch({ type: "keep", ref })}>
                     Keep this copy
-                </button>
+                </Button>
             )}
         </li>
     );

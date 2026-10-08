@@ -305,6 +305,26 @@ exit=10
 локальний checkout, і його читає `update`; `outdated` — ні.
 Команда ніколи нічого не змінює: щоб діяти за списком, запустіть рядок `run:`, який вона виводить.
 
+## Встановлена версія в `agents list`
+
+Рядок `plugin` у `rtok agents list` і `rtok agents info <host>` називає встановлену версію та її
+джерело; значення читається тим самим пошуком, що й у `agents outdated`. Якщо версія відрізняється
+від запущеного rtok, рядок про це каже, а для старішої називає команду, яка це виправить;
+встановлення, вік якого не визначають жодні файли, показується як `legacy`. `rtok web` показує
+той самий текст на сторінці Hosts, старіший плагін позначений `outdated`.
+
+```console
+$ rtok agents list
+CLI: Claude Code
+  ✓ plugin  installed 0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude
+$ rtok agents list
+CLI: Claude Code
+  ✓ plugin  installed (legacy, no version)
+```
+
+З `--json` кожен варіант хоста несе `plugin_version` і `plugin_source`; обидва відсутні, якщо
+плагін не встановлено або версію ніде не записано.
+
 ## Випуск релізів
 
 `tools/plugin-versions.sh` — єдине місце, яке записує й перевіряє кожен файл версії та

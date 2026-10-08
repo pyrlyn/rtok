@@ -17,6 +17,9 @@ type Story = StoryObj<typeof meta>;
 export const Off: Story = {};
 export const On: Story = { args: { checked: true } };
 export const Disabled: Story = { args: { disabled: true } };
+// The request is on its way: the switch keeps its old position and cannot be clicked again.
+export const Pending: Story = { args: { pending: true } };
+export const PendingOn: Story = { args: { pending: true, checked: true } };
 export const DisabledOn: Story = { args: { disabled: true, checked: true } };
 
 export const Toggles: Story = {

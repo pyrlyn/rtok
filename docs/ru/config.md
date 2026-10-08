@@ -56,9 +56,9 @@ lang: ru
 | `rtok config get <key>` | напечатать одно итоговое значение, например `rtok config get proxy.port` |
 | `rtok config set <key> <value>` | отредактировать пользовательский файл на месте, сохраняя комментарии (использует `toml_edit`) |
 
-Учётные данные никогда не печатаются: `otel.headers` (он содержит ключи приёма OTLP) после установки показывается как `<redacted>`
-в `show`, `get`, `set` и `rtok report` — его источник при этом всё равно показывается. Чтобы увидеть значение, прочитайте
-сам файл.
+Учётные данные никогда не печатаются: `otel.headers` (он содержит ключи приёма OTLP) и `mcp.token` (bearer-токен
+`rtok mcp --http`) после установки показываются как `<redacted>` в `show`, `get`, `set` и `rtok report` — их
+источник при этом всё равно показывается. Чтобы увидеть значение, прочитайте сам файл.
 
 ## Эталонный файл
 
@@ -140,6 +140,10 @@ extra                   = []          # paths you vouch for as junk (D36), e.g. 
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
 max_description_tokens  = 60          # enforced by a test (T4.1)
 max_result_chars        = 20000       # above this, head/tail + archive id
+http                    = "127.0.0.1:8791"  # `rtok mcp --http` with no address; keep it on loopback
+http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
+token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start (T401)
+public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
 
 [proxy]                               # rtok proxy
 enabled         = true                # false = plain reverse proxy (bypass compress/bookkeeping); does NOT stop HTTP

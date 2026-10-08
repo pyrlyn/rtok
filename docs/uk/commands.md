@@ -24,7 +24,7 @@ lang: uk
 | `rtok doctor` | перевіряє хуки, MCP-сервери, ланцюжок проксі — зокрема скільки кожен коштує за хід |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | встановлює в хост із резервними копіями; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | прибирає rtok із хоста з резервними копіями; `--dry-run` |
-| `rtok agents list` | кожен відомий застосунок: тип і назва, шлях і версія, файли конфігурації, модулі rtok |
+| `rtok agents list` | кожен відомий застосунок: тип і назва, шлях і версія, файли конфігурації, модулі rtok, версія встановленого плагіна |
 | `rtok agents junk list\|clear` | теки кожного агента, види сміття й розміри; `clear` — пробний прогін до `--yes`, без `--agent`, `--kind`, `--include review` чи `--older-than` чистить лише власні логи й архіви rtok, перевіряє кожен елемент ще раз просто перед видаленням, `--trash` переносить до кошика ОС, код виходу 1, якщо заплановане лишилося |
 | `rtok graph index [path]` | будує індекс символів tree-sitter для дерева |
 | `rtok graph impact <name> [--project <id\|dir>]` | що зламається при зміні символу, по проєкту й пов'язаних із ним проєктах; `dead` і `affected` теж ідуть по цьому набору (символ, який викликає лише пов'язаний проєкт, не мертвий; `git diff` читається в кожному проєкті, тести перелічено по проєктах); `--project` є й у `index`, `status`. Одна відповідь, один ліміт; за ввімкненого `watch` `rtok mcp` стежить за кожним проєктом набору |

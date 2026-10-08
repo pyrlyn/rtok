@@ -10,6 +10,7 @@ import {
     QueryClientProvider,
     skipToken,
     useMutation,
+    useMutationState,
     useQuery,
 } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
@@ -26,12 +27,13 @@ import type { Connect, Connection, ConnectionState, Frame } from "./ws";
 
 export const snapshotKey = ["snapshot"] as const;
 export const connectionKey = ["connection"] as const;
-export const messageKey = ["message"] as const;
 export const pausedKey = ["paused"] as const;
 
 export const EXPAND_TIMEOUT_MS = 10_000;
 // A fix writes files and backs each one up first, so it gets longer than a read.
 export const DOCTOR_TIMEOUT_MS = 30_000;
+// A project select can index the project before the server answers.
+export const WRITE_TIMEOUT_MS = 30_000;
 
 export interface Api {
     open(): void;
@@ -44,6 +46,13 @@ export interface Api {
     project(request: ProjectRequest): Promise<void>;
     doctorPlan(selection: Selection): Promise<Plan>;
     doctorApply(selection: Selection): Promise<Fixed>;
+}
+
+// `set` and `project` get no reply of their own: the server answers a write with the next
+// snapshot, or with a message when it refuses. So a write is settled by whichever comes first.
+interface PendingWrite {
+    resolve(): void;
+    reject(error: Error): void;
 }
 
 interface PendingExpand {
@@ -68,6 +77,7 @@ export function createApi(
     let connection: Connection | null = null;
     let pending: PendingExpand[] = [];
     let pendingDoctor: PendingDoctor[] = [];
+    let pendingWrites: PendingWrite[] = [];
     // While paused the socket keeps reading, but frames fold into `held` and the cache keeps the
     // snapshot on screen, so `dataUpdatedAt` stays the age of what the reader sees.
     let paused = false;
@@ -90,6 +100,36 @@ export function createApi(
         const failedDoctor = pendingDoctor;
         pendingDoctor = [];
         for (const p of failedDoctor) p.reject(new Error(reason));
+        const failedWrites = pendingWrites;
+        pendingWrites = [];
+        for (const p of failedWrites) p.reject(new Error(reason));
+    };
+
+    const write = (message: ClientMessage) =>
+        new Promise<void>((resolve, reject) => {
+            const settle = (done: () => void) => () => {
+                clearTimeout(timer);
+                done();
+            };
+            const entry: PendingWrite = {
+                resolve: settle(resolve),
+                reject: (error) => settle(() => reject(error))(),
+            };
+            const timer = setTimeout(() => {
+                pendingWrites = pendingWrites.filter((p) => p !== entry);
+                reject(new Error("the server did not answer"));
+            }, WRITE_TIMEOUT_MS);
+            pendingWrites.push(entry);
+            if (!connection?.send(message)) {
+                pendingWrites = pendingWrites.filter((p) => p !== entry);
+                entry.reject(new Error("not connected"));
+            }
+        });
+
+    const settleWrites = () => {
+        const done = pendingWrites;
+        pendingWrites = [];
+        for (const p of done) p.resolve();
     };
 
     const settleDoctor = (kind: PendingDoctor["kind"], frame: Plan | Fixed) => {
@@ -129,11 +169,14 @@ export function createApi(
     const onFrame = (frame: Frame) => {
         switch (frame.type) {
             case "snapshot":
+                // A paused page still settles writes: the server applied them, only the view waits.
                 writeSnapshot(() => frame.snapshot);
+                settleWrites();
                 return;
             case "snapshot_error":
                 // A failed tick has no page data; keep the last good one and surface the error.
                 writeSnapshot((prev) => prev && { ...prev, error: frame.error });
+                settleWrites();
                 return;
             case "expand": {
                 const done = pending.filter((p) => p.id === frame.id);
@@ -148,9 +191,8 @@ export function createApi(
                 settleDoctor("doctorfixed", frame.fixed);
                 return;
             case "message":
-                queryClient.setQueryData<string>(messageKey, frame.text);
                 // The server's refusals do not name the request they answer, so a message fails
-                // every expand in flight instead of leaving it to the timeout.
+                // every request in flight instead of leaving it to the timeout.
                 rejectAll(frame.text);
         }
     };
@@ -208,12 +250,8 @@ export function createApi(
                 }
             });
         },
-        async set(request) {
-            if (!connection?.send({ set: request })) throw new Error("not connected");
-        },
-        async project(request) {
-            if (!connection?.send({ project: request })) throw new Error("not connected");
-        },
+        set: (request) => write({ set: request }),
+        project: (request) => write({ project: request }),
         doctorPlan: (selection) =>
             askDoctor<Plan>("doctorplan", { doctor: { action: "plan", selection } }),
         doctorApply: (selection) =>
@@ -252,8 +290,6 @@ export const useSnapshot = () => useQuery<Snapshot>(pushed(snapshotKey));
 export const useConnection = (): ConnectionState =>
     useQuery<ConnectionState>(pushed(connectionKey)).data ?? "connecting";
 
-export const useServerMessage = () => useQuery<string>(pushed(messageKey)).data;
-
 export const usePaused = (): boolean => useQuery<boolean>(pushed(pausedKey)).data ?? false;
 
 export function usePauseToggle(): (paused: boolean) => void {
@@ -266,14 +302,26 @@ export function useReconnect(): () => void {
     return () => api.reconnect();
 }
 
+// A write is pending from the click until the server answers. `inFlight` lists every request
+// still waiting, so each control can show its own spinner while another is being answered;
+// `error` is the last failure and clears when the next write starts.
+function useWrite<R>(name: string, send: (request: R) => Promise<void>) {
+    const { mutate, error } = useMutation({ mutationKey: [name], mutationFn: send });
+    const inFlight = useMutationState({
+        filters: { mutationKey: [name], status: "pending" },
+        select: (m) => m.state.variables as R,
+    });
+    return { mutate, error, inFlight };
+}
+
 export function useSetMutation() {
     const api = useApi();
-    return useMutation({ mutationFn: (request: SetRequest) => api.set(request) });
+    return useWrite<SetRequest>("set", (request) => api.set(request));
 }
 
 export function useProjectMutation() {
     const api = useApi();
-    return useMutation({ mutationFn: (request: ProjectRequest) => api.project(request) });
+    return useWrite<ProjectRequest>("project", (request) => api.project(request));
 }
 
 export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {

@@ -53,8 +53,8 @@ Rules:
 | `rtok config get <key>` | print one effective value, e.g. `rtok config get proxy.port` |
 | `rtok config set <key> <value>` | edit the user file in place, preserving comments (uses `toml_edit`) |
 
-Credentials never print: `otel.headers` (it carries OTLP ingestion keys) shows as `<redacted>`
-once set, in `show`, `get`, `set` and `rtok report` — its source still shows. Read the file itself
+Credentials never print: `otel.headers` (it carries OTLP ingestion keys) and `mcp.token` (the
+`rtok mcp --http` bearer token) show as `<redacted>` once set, in `show`, `get`, `set` and `rtok report` — its source still shows. Read the file itself
 to see the value.
 
 ## Reference file
@@ -140,6 +140,10 @@ extra                   = []          # paths you vouch for as junk (D36), e.g. 
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
 max_description_tokens  = 60          # enforced by a test (T4.1)
 max_result_chars        = 20000       # above this, head/tail + archive id
+http                    = "127.0.0.1:8791"  # `rtok mcp --http` with no address; keep it on loopback
+http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
+token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start (T401)
+public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
 
 [proxy]                               # rtok proxy
 enabled         = true                # false = plain reverse proxy (bypass compress/bookkeeping); does NOT stop HTTP

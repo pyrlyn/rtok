@@ -850,7 +850,13 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
     }
     // T278: the `mcp` row becomes one line per surface wherever the host has an entry.
     let surfaces = mcp::rows(agent, cfg, v.kind);
-    for row in module_rows(agent, v.kind, cfg) {
+    for mut row in module_rows(agent, v.kind, cfg) {
+        if row.name == "plugin"
+            && row.state == ModuleState::Installed
+            && let Some(status) = plugin_status(agent, v.kind, cfg)
+        {
+            row.note = format!(" {}", status.note);
+        }
         if row.name == "mcp" && !surfaces.is_empty() {
             out.push_str(&mcp::lines(&surfaces, "  "));
         } else {
@@ -1022,7 +1028,8 @@ fn carry_flags(cfg: &Config, have: &[&str]) -> Config {
 }
 
 pub use outdated::{
-    EXIT_OUTDATED, Outdated, OutdatedReport, OutdatedSelection, outdated, print_human, report,
+    EXIT_OUTDATED, Outdated, OutdatedReport, OutdatedSelection, PluginStatus, outdated,
+    plugin_status, print_human, report,
 };
 
 /// `rtok agents update` with no host named: every host with an rtok module in at least one
