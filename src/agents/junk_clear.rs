@@ -675,7 +675,12 @@ mod tests {
             text.contains("claude cache: freed 10 B of 20 B planned"),
             "{text}"
         );
-        assert!(text.ends_with("Freed 20 B of 70 B planned\n"), "{text}");
+        // The symlink item (10 B) is only planned where the test can make one.
+        let planned = if cfg!(unix) { 70 } else { 60 };
+        assert!(
+            text.ends_with(&format!("Freed 20 B of {planned} B planned\n")),
+            "{text}"
+        );
     }
 
     /// A live rtok session of a host is how a test fakes a running agent: no process probe.
