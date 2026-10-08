@@ -24,6 +24,10 @@ if split out per T2.5.
 - Checkpoint prompts are only what the human typed (T417, `checkpoint::user_prompt`):
   host-injected records and `<system-reminder>` blocks never take one of the 20 slots.
   A new host envelope goes into `HOST_OPENERS` and `HOST_FIXTURE`, not a second filter.
+- Checkpoint paths carry what happened to them (T375): `path <p> (edited|created|deleted|read[ a-b])`,
+  changed files first. The action is folded from the transcript's `tool_use` blocks in
+  `checkpoint::Files`; a bare `path <p>` row from before decodes as a read, and a `Write` is
+  `created` only when its result says so. New rendering must stay byte-stable.
 - `memory export` and `memory import` share one JSONL shape; `checkpoint:*` rows never leave.
 - Recall output is byte-stable across runs with unchanged notes and ≤ 200 tokens.
 - Import reads only the generic JSONL shape (no third-party DB schemas, D6) and is idempotent

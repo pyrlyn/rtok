@@ -6,15 +6,17 @@
 
 use rtok_plugin_sdk::{Class, Ctx, Injection, Measurement};
 use serde_json::Value;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::BufRead;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 /// Parsed compact snapshot.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Checkpoint {
     pub prompts: Vec<String>,
-    pub paths: Vec<String>,
+    /// Changed files first (edited, created, deleted), then read ones, each group by path:
+    /// the order is the render order and has to be byte-stable for the same transcript (T375).
+    pub paths: Vec<PathEntry>,
     pub errors: Vec<String>,
     /// Skills the host injected before compaction, `(name, body bytes)` per invocation
     /// (plan T62.2): the body is gone after compaction and the model must know what it
@@ -29,6 +31,91 @@ pub struct Checkpoint {
     pub typed: u64,
     /// User-text records dropped as host-written (T417's filter), same span as `typed`.
     pub skipped: u64,
+}
+
+/// What the session did to a file. The derived order is the render order: a file the
+/// agent changed matters more after compaction than one it only looked at (T375).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Action {
+    Edited,
+    Created,
+    Deleted,
+    Read,
+}
+
+impl Action {
+    fn word(self) -> &'static str {
+        match self {
+            Self::Edited => "edited",
+            Self::Created => "created",
+            Self::Deleted => "deleted",
+            Self::Read => "read",
+        }
+    }
+
+    fn from_word(w: &str) -> Option<Self> {
+        [Self::Edited, Self::Created, Self::Deleted, Self::Read]
+            .into_iter()
+            .find(|a| a.word() == w)
+    }
+}
+
+/// `offset`, and `offset + limit - 1` when a limit was given, of the last ranged `Read`.
+type Lines = (u64, Option<u64>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PathEntry {
+    pub path: String,
+    pub action: Action,
+    /// Only a read carries a range; any later change makes it meaningless.
+    pub lines: Option<Lines>,
+}
+
+impl PathEntry {
+    fn render(&self, out: &mut String) {
+        out.push_str("path ");
+        out.push_str(&self.path);
+        out.push_str(" (");
+        out.push_str(self.action.word());
+        if let Some((from, to)) = self.lines {
+            out.push_str(&format!(" {from}-"));
+            if let Some(to) = to {
+                out.push_str(&to.to_string());
+            }
+        }
+        out.push_str(")\n");
+    }
+
+    /// The text after `path ` in a stored note. Rows written before T375 are a bare path,
+    /// and a suffix that is not an action word belongs to the path: both decode as a read.
+    fn parse(rest: &str) -> Self {
+        let plain = || Self {
+            path: rest.to_string(),
+            action: Action::Read,
+            lines: None,
+        };
+        let Some((path, tail)) = rest
+            .strip_suffix(')')
+            .and_then(|body| body.rsplit_once(" ("))
+        else {
+            return plain();
+        };
+        let (word, range) = tail
+            .split_once(' ')
+            .map_or((tail, None), |(w, r)| (w, Some(r)));
+        let Some(action) = Action::from_word(word) else {
+            return plain();
+        };
+        let lines = range.and_then(|r| {
+            let (from, to) = r.split_once('-')?;
+            Some((from.parse().ok()?, to.parse().ok()))
+        });
+        Self {
+            path: path.to_string(),
+            action,
+            lines,
+        }
+    }
 }
 
 impl Checkpoint {
@@ -50,9 +137,7 @@ impl Checkpoint {
             s.push_str(" — re-invoke only what the next step needs\n");
         }
         for p in &self.paths {
-            s.push_str("path ");
-            s.push_str(p);
-            s.push('\n');
+            p.render(&mut s);
         }
         for e in &self.errors {
             s.push_str("err ");
@@ -108,7 +193,7 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
     filter: bool,
 ) -> Checkpoint {
     let mut prompts: VecDeque<String> = VecDeque::new();
-    let mut paths = BTreeSet::new();
+    let mut files = Files::default();
     let mut errors = VecDeque::new();
     let mut skills = Vec::new();
     let (mut typed, mut skipped) = (0, 0);
@@ -120,7 +205,7 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
-        walk(&v, &mut paths, &mut |s| {
+        walk(&v, &mut files.seen, &mut |s| {
             // The three spellings that occur in compiler, test and runtime output; no
             // lowercased copy of every transcript string.
             if ["error", "Error", "ERROR"].iter().any(|n| s.contains(n)) {
@@ -130,6 +215,7 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
                 errors.push_back(s.chars().take(200).collect());
             }
         });
+        files.track(&v);
         if let Some(s) = skill_body(&v) {
             skills.push(s);
         } else {
@@ -148,7 +234,7 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
     }
     Checkpoint {
         prompts: prompts.into(),
-        paths: paths.into_iter().collect(),
+        paths: files.into_entries(),
         errors: errors.into(),
         skills,
         typed,
@@ -177,6 +263,14 @@ fn worth_parsing(line: &str) -> bool {
         || line.contains("error")
         || line.contains("Error")
         || line.contains("ERROR")
+    {
+        return true;
+    }
+    // T375: a `rm` in a Bash call names no `file_path`, and a Write result is what tells a
+    // created file from an overwritten one.
+    if line.contains("\"type\":\"create\"")
+        || line.contains("File created successfully")
+        || (line.contains("\"name\":\"Bash\"") && line.contains("rm"))
     {
         return true;
     }
@@ -308,14 +402,227 @@ fn user_text(v: &Value) -> Option<String> {
     Some(raw)
 }
 
-fn walk(v: &Value, paths: &mut BTreeSet<String>, text: &mut impl FnMut(&str)) {
+/// What the session did to one path so far, and the range of its last ranged read.
+type Slot = (Action, Option<Lines>);
+
+/// Per-path actions folded from a transcript's `tool_use` blocks (T375). The transcript, not
+/// a PostToolUse event, is the source because the checkpoint is written at PreCompact and
+/// SessionEnd, from the file the host keeps.
+#[derive(Default)]
+struct Files {
+    /// Every `file_path` seen anywhere stays a read unless a tool call says otherwise, as
+    /// before T375.
+    seen: BTreeMap<String, Slot>,
+    /// `Write` calls still waiting for their result: only the result says whether the file
+    /// was new.
+    writes: HashMap<String, String>,
+}
+
+impl Files {
+    fn track(&mut self, v: &Value) {
+        let Some(blocks) = v.pointer("/message/content").and_then(Value::as_array) else {
+            return;
+        };
+        let cwd = v.get("cwd").and_then(Value::as_str);
+        // Claude Code puts `toolUseResult` beside one result; with several results in a
+        // record it cannot be told which one it describes.
+        let created = blocks.len() == 1
+            && v.pointer("/toolUseResult/type").and_then(Value::as_str) == Some("create");
+        for b in blocks {
+            match b.get("type").and_then(Value::as_str) {
+                Some("tool_use") => self.tool_use(b, cwd),
+                Some("tool_result") => self.tool_result(b, created),
+                _ => {}
+            }
+        }
+    }
+
+    fn tool_use(&mut self, b: &Value, cwd: Option<&str>) {
+        let input = b.get("input");
+        let path = input
+            .and_then(|i| i.get("file_path"))
+            .and_then(Value::as_str)
+            .filter(|p| !p.is_empty());
+        match (b.get("name").and_then(Value::as_str), path) {
+            (Some("Read"), Some(p)) => {
+                let n = |k: &str| input.and_then(|i| i.get(k)).and_then(Value::as_u64);
+                let from = n("offset");
+                let lines = (from.is_some() || n("limit").is_some()).then(|| {
+                    let from = from.unwrap_or(1);
+                    (
+                        from,
+                        n("limit").map(|l| from.saturating_add(l.saturating_sub(1))),
+                    )
+                });
+                let slot = self.slot(p);
+                if slot.0 == Action::Read {
+                    slot.1 = lines;
+                }
+            }
+            (Some("Edit" | "MultiEdit"), Some(p)) => self.mark(p, Action::Edited),
+            // An overwrite until the result proves the file was new.
+            (Some("Write"), Some(p)) => {
+                self.mark(p, Action::Edited);
+                if let Some(id) = b.get("id").and_then(Value::as_str) {
+                    self.writes.insert(id.to_string(), p.to_string());
+                }
+            }
+            (Some("Bash"), _) => {
+                let cmd = input.and_then(|i| i.get("command")).and_then(Value::as_str);
+                for p in cmd.map(|c| removed_paths(c, cwd)).unwrap_or_default() {
+                    self.mark(&p, Action::Deleted);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn tool_result(&mut self, b: &Value, created: bool) {
+        let Some(path) = b
+            .get("tool_use_id")
+            .and_then(Value::as_str)
+            .and_then(|id| self.writes.remove(id))
+        else {
+            return;
+        };
+        let said = match b.get("content") {
+            Some(Value::String(s)) => s.starts_with("File created successfully"),
+            Some(Value::Array(a)) => a.iter().any(|c| {
+                c.get("text")
+                    .and_then(Value::as_str)
+                    .is_some_and(|t| t.starts_with("File created successfully"))
+            }),
+            _ => false,
+        };
+        if created || said {
+            self.mark(&path, Action::Created);
+        }
+    }
+
+    fn slot(&mut self, path: &str) -> &mut Slot {
+        self.seen
+            .entry(path.to_string())
+            .or_insert((Action::Read, None))
+    }
+
+    /// A file the session created stays created through later edits; any other change
+    /// replaces what was known, and a change drops the read range.
+    fn mark(&mut self, path: &str, action: Action) {
+        let slot = self.slot(path);
+        if !(slot.0 == Action::Created && action == Action::Edited) {
+            slot.0 = action;
+        }
+        slot.1 = None;
+    }
+
+    fn into_entries(self) -> Vec<PathEntry> {
+        let mut v: Vec<PathEntry> = self
+            .seen
+            .into_iter()
+            .map(|(path, (action, lines))| PathEntry {
+                path,
+                action,
+                lines,
+            })
+            .collect();
+        // Stable, so each group keeps the path order of the map.
+        v.sort_by_key(|e| e.action);
+        v
+    }
+}
+
+/// Paths a shell command removes with `rm` or `git rm`, relative ones resolved against
+/// `cwd`. Conservative on purpose: a word with a glob, a variable or a `~` names no known
+/// file, `git rm --cached` keeps the file on disk, and a command that does not parse
+/// yields nothing.
+fn removed_paths(command: &str, cwd: Option<&str>) -> Vec<String> {
+    let Some(words) = shlex::split(command) else {
+        return Vec::new();
+    };
+    let moved = words.iter().any(|w| matches!(w.as_str(), "cd" | "pushd"));
+    let mut out = Vec::new();
+    let mut i = 0;
+    let mut start = true;
+    while i < words.len() {
+        // `;` glued to the last word ends the command just as a word of its own does.
+        let (w, ends) = match words[i].strip_suffix(';') {
+            Some(w) => (w, true),
+            None => (
+                words[i].as_str(),
+                matches!(words[i].as_str(), "&&" | "||" | "|" | "&"),
+            ),
+        };
+        let git_rm = start && w == "git" && words.get(i + 1).is_some_and(|n| n == "rm");
+        if start && (w == "rm" || git_rm) && !ends {
+            i += if git_rm { 2 } else { 1 };
+            let (mut files, mut keeps) = (Vec::new(), false);
+            let mut flags = true;
+            while let Some(a) = words.get(i) {
+                let (a, last) = match a.strip_suffix(';') {
+                    Some(a) => (a, true),
+                    None => (a.as_str(), false),
+                };
+                if matches!(a, "&&" | "||" | "|" | "&") {
+                    break;
+                }
+                if flags && a == "--" {
+                    flags = false;
+                } else if flags && a.starts_with('-') {
+                    keeps |= git_rm && matches!(a, "--cached" | "-n" | "--dry-run");
+                } else if !a.is_empty() && !a.contains(['*', '?', '[', '{', '$', '`', '~', '!']) {
+                    files.push(a);
+                }
+                i += 1;
+                if last {
+                    break;
+                }
+            }
+            if !keeps {
+                out.extend(
+                    files
+                        .into_iter()
+                        // After a `cd` the record's cwd is no longer where a relative path points.
+                        .filter(|f| !moved || Path::new(f).is_absolute())
+                        .map(|f| resolve(cwd, f)),
+                );
+            }
+            start = true;
+            continue;
+        }
+        start = ends;
+        i += 1;
+    }
+    out
+}
+
+/// `path` made absolute against `cwd` lexically, so the `rm` of a file the session read by
+/// its absolute path lands on the same entry.
+fn resolve(cwd: Option<&str>, path: &str) -> String {
+    let p = Path::new(path);
+    let Some(cwd) = cwd.filter(|_| !p.is_absolute()) else {
+        return path.to_string();
+    };
+    let mut out = PathBuf::from(cwd);
+    for c in p.components() {
+        match c {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::Normal(n) => out.push(n),
+            _ => {}
+        }
+    }
+    out.to_string_lossy().into_owned()
+}
+
+fn walk(v: &Value, paths: &mut BTreeMap<String, Slot>, text: &mut impl FnMut(&str)) {
     match v {
         Value::String(s) => text(s),
         Value::Object(m) => {
             if let Some(p) = m.get("file_path").and_then(Value::as_str)
                 && !p.is_empty()
             {
-                paths.insert(p.to_string());
+                paths.entry(p.to_string()).or_insert((Action::Read, None));
             }
             for c in m.values() {
                 walk(c, paths, text);
@@ -345,7 +652,10 @@ pub fn last_paths(cx: &Ctx, root: &str) -> Vec<String> {
     let prefix = format!("{}/", root.trim_end_matches('/'));
     body.lines()
         .filter_map(|l| l.strip_prefix("path "))
-        .map(|p| p.strip_prefix(&prefix).unwrap_or(p).to_string())
+        .map(PathEntry::parse)
+        // A deleted file has nothing left to personalize the map with.
+        .filter(|e| e.action != Action::Deleted)
+        .map(|e| e.path.strip_prefix(&prefix).unwrap_or(&e.path).to_string())
         .collect()
 }
 
@@ -486,6 +796,18 @@ fn render_offer(cx: &Ctx, text: String) -> Option<Injection> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn entry(path: &str, action: Action) -> PathEntry {
+        PathEntry {
+            path: path.into(),
+            action,
+            lines: None,
+        }
+    }
+
+    fn paths_of(cp: &Checkpoint) -> Vec<&str> {
+        cp.paths.iter().map(|e| e.path.as_str()).collect()
+    }
+
     const FIXTURE: &str = r#"{"type":"user","message":{"role":"user","content":"edit the three files"}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/a.rs"}},{"type":"tool_use","name":"Read","input":{"file_path":"src/b.rs"}},{"type":"tool_use","name":"Read","input":{"file_path":"src/c.rs"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"still failing with error: boom"}]}}
@@ -499,11 +821,9 @@ mod tests {
         let ctx = Ctx::new(&rt);
         assert!(last_paths(&ctx, "/r").is_empty());
         let cp = Checkpoint {
-            paths: vec![
-                "/r/src/a.rs".into(),
-                "docs/b.md".into(),
-                "/else/c.rs".into(),
-            ],
+            paths: ["/r/src/a.rs", "docs/b.md", "/else/c.rs"]
+                .map(|p| entry(p, Action::Read))
+                .into(),
             ..Checkpoint::default()
         };
         ctx.upsert_note(None, &kind(&ctx), "compact", &cp.render())
@@ -518,7 +838,7 @@ mod tests {
     #[test]
     fn fixture_has_three_paths_and_compact_injects_under_budget() {
         let cp = extract(FIXTURE);
-        assert_eq!(cp.paths, ["src/a.rs", "src/b.rs", "src/c.rs"]);
+        assert_eq!(paths_of(&cp), ["src/a.rs", "src/b.rs", "src/c.rs"]);
         let dir = std::env::temp_dir().join("rtok-t25-fixture-has-three-paths");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -696,6 +1016,227 @@ mod tests {
         ]));
         assert_eq!(got, (u64::MAX, 2), "a forged row saturates, never panics");
         assert_eq!(prompt_counts(&[]), (0, 0));
+    }
+
+    /// T375: one record per tool call shape the action mapping reads, in the compact JSON
+    /// Claude Code writes (checked against a live transcript, 2026-10-08).
+    const ACTIONS: &str = r#"{"type":"user","message":{"role":"user","content":"fix a, rewrite b"}}
+{"type":"assistant","cwd":"/r","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/r/src/a.rs","offset":10,"limit":50}},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/r/src/b.rs"}}]}}
+{"type":"assistant","cwd":"/r","message":{"content":[{"type":"tool_use","id":"t3","name":"Edit","input":{"file_path":"/r/src/b.rs","old_string":"x","new_string":"y"}}]}}
+{"type":"assistant","cwd":"/r","message":{"content":[{"type":"tool_use","id":"t4","name":"Write","input":{"file_path":"/r/src/new.rs","content":"z"}},{"type":"tool_use","id":"t5","name":"Write","input":{"file_path":"/r/src/old.rs","content":"z"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t4","content":"File created successfully at: /r/src/new.rs"}]},"toolUseResult":{"type":"create","filePath":"/r/src/new.rs"}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t5","content":"The file /r/src/old.rs has been updated successfully."}]},"toolUseResult":{"filePath":"/r/src/old.rs"}}
+{"type":"assistant","cwd":"/r","message":{"content":[{"type":"tool_use","id":"t6","name":"Bash","input":{"command":"rm -f src/gone.rs && git rm src/c.rs"}}]}}
+"#;
+
+    /// T375 done-when: a session that reads A and edits B lists B before A, and the rest of
+    /// the actions land in their groups with the last ranged read's lines.
+    #[test]
+    fn changed_files_are_listed_before_read_ones() {
+        let cp = extract(ACTIONS);
+        insta::assert_snapshot!(cp.render(), @"
+        checkpoint
+        - fix a, rewrite b
+        path /r/src/b.rs (edited)
+        path /r/src/old.rs (edited)
+        path /r/src/new.rs (created)
+        path /r/src/c.rs (deleted)
+        path /r/src/gone.rs (deleted)
+        path /r/src/a.rs (read 10-59)
+        ");
+        assert_eq!(cp.render(), extract(ACTIONS).render(), "byte-stable");
+    }
+
+    fn actions_of(jsonl: &str) -> Vec<(String, Action)> {
+        extract(jsonl)
+            .paths
+            .into_iter()
+            .map(|e| (e.path, e.action))
+            .collect()
+    }
+
+    fn tool(name: &str, input: serde_json::Value) -> String {
+        serde_json::json!({"type":"assistant","cwd":"/r","message":{"content":[{"type":"tool_use","id":"t","name":name,"input":input}]}}).to_string()
+    }
+
+    #[test]
+    fn tool_names_map_to_actions_and_a_change_is_never_downgraded() {
+        let p = |n: &str| serde_json::json!({ "file_path": format!("/r/{n}") });
+        let lines = [
+            tool("Read", p("read")),
+            tool("Grep", p("grep")),
+            tool("Edit", p("edit")),
+            tool("MultiEdit", p("multi")),
+            // Read after Edit keeps the edit; Edit after a create keeps the create.
+            tool("Read", p("edit")),
+            tool("Write", p("made")),
+            tool("Edit", p("made")),
+            // A later delete wins, and a later read of a deleted file does not undo it.
+            tool("Edit", p("gone")),
+            tool("Bash", serde_json::json!({"command":"rm gone"})),
+            tool("Read", p("gone")),
+        ]
+        .join("\n");
+        let got = actions_of(&lines);
+        let want = |n: &str| got.iter().find(|(p, _)| p == &format!("/r/{n}")).unwrap().1;
+        assert_eq!(want("read"), Action::Read);
+        assert_eq!(want("grep"), Action::Read, "an unknown tool stays a read");
+        assert_eq!(want("edit"), Action::Edited);
+        assert_eq!(want("multi"), Action::Edited);
+        assert_eq!(want("gone"), Action::Deleted);
+        // Without a result a Write cannot be told from an overwrite: edited, not created.
+        assert_eq!(want("made"), Action::Edited);
+    }
+
+    #[test]
+    fn a_write_is_created_only_when_its_result_says_so() {
+        let write = |id: &str, p: &str| {
+            serde_json::json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":id,"name":"Write","input":{"file_path":p}}]}}).to_string()
+        };
+        let result = |id: &str, content: serde_json::Value| {
+            serde_json::json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":content}]}}).to_string()
+        };
+        let lines = [
+            write("a", "/r/by-text"),
+            result("a", "File created successfully at: /r/by-text".into()),
+            write("b", "/r/by-blocks"),
+            result(
+                "b",
+                serde_json::json!([{"type":"text","text":"File created successfully at: x"}]),
+            ),
+            write("c", "/r/overwritten"),
+            result(
+                "c",
+                "The file /r/overwritten has been updated successfully.".into(),
+            ),
+            // A forged id names no pending Write.
+            result("zzz", "File created successfully at: /r/forged".into()),
+        ]
+        .join("\n");
+        let mut got = actions_of(&lines);
+        got.sort();
+        assert_eq!(
+            got,
+            [
+                ("/r/by-blocks".to_string(), Action::Created),
+                ("/r/by-text".to_string(), Action::Created),
+                ("/r/overwritten".to_string(), Action::Edited),
+            ]
+        );
+    }
+
+    #[test]
+    fn read_ranges_follow_the_last_ranged_read() {
+        let read = |extra: serde_json::Value| {
+            let mut i = serde_json::json!({"file_path":"/r/a"});
+            i.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            tool("Read", i)
+        };
+        let lines = |l: &[String]| extract(&l.join("\n")).paths[0].lines;
+        assert_eq!(
+            lines(&[read(serde_json::json!({"offset":5,"limit":3}))]),
+            Some((5, Some(7)))
+        );
+        assert_eq!(
+            lines(&[read(serde_json::json!({"limit":4}))]),
+            Some((1, Some(4)))
+        );
+        assert_eq!(
+            lines(&[read(serde_json::json!({"offset":9}))]),
+            Some((9, None))
+        );
+        assert_eq!(
+            lines(&[
+                read(serde_json::json!({"offset":5})),
+                read(serde_json::json!({}))
+            ]),
+            None,
+            "a whole-file read supersedes the range"
+        );
+    }
+
+    #[test]
+    fn bash_removals_are_read_conservatively() {
+        let rm = |c: &str| removed_paths(c, Some("/r/sub"));
+        assert_eq!(
+            rm("rm a.rs ../b.rs /abs/c.rs"),
+            ["/r/sub/a.rs", "/r/b.rs", "/abs/c.rs"]
+        );
+        assert_eq!(rm("rm -rf -- -odd dir/"), ["/r/sub/-odd", "/r/sub/dir"]);
+        assert_eq!(
+            rm("echo hi; rm a.rs; git rm -f b.rs && ls c.rs"),
+            ["/r/sub/a.rs", "/r/sub/b.rs"]
+        );
+        assert_eq!(
+            rm("cd x && rm a.rs /abs/b.rs"),
+            ["/abs/b.rs"],
+            "after a cd only absolute paths are known"
+        );
+        assert!(rm("rm *.rs").is_empty() && rm("rm $F ~/x").is_empty());
+        assert!(
+            rm("git rm --cached a.rs").is_empty(),
+            "the file stays on disk"
+        );
+        assert!(rm("git rm -n a.rs").is_empty() && rm("echo rm a.rs").is_empty());
+        assert!(rm("rm 'unterminated").is_empty() && rm("warm a.rs").is_empty());
+        assert_eq!(removed_paths("rm a.rs", None), ["a.rs"]);
+    }
+
+    /// T375: rows written before the action existed are a bare path; they and a name that
+    /// merely ends in parentheses decode as a read.
+    #[test]
+    fn old_rows_decode_as_reads() {
+        for (row, path, action, lines) in [
+            ("src/a.rs", "src/a.rs", Action::Read, None),
+            ("src/a (copy).rs", "src/a (copy).rs", Action::Read, None),
+            ("src/a (note)", "src/a (note)", Action::Read, None),
+            ("src/a.rs (edited)", "src/a.rs", Action::Edited, None),
+            ("a (b) (created)", "a (b)", Action::Created, None),
+            ("a.rs (deleted)", "a.rs", Action::Deleted, None),
+            ("a.rs (read)", "a.rs", Action::Read, None),
+            (
+                "a.rs (read 10-59)",
+                "a.rs",
+                Action::Read,
+                Some((10, Some(59))),
+            ),
+            ("a.rs (read 10-)", "a.rs", Action::Read, Some((10, None))),
+            ("a.rs (read x-y)", "a.rs", Action::Read, None),
+        ] {
+            let e = PathEntry::parse(row);
+            assert_eq!(
+                (e.path.as_str(), e.action, e.lines),
+                (path, action, lines),
+                "{row}"
+            );
+        }
+        let (rt, dir) = crate::testutil::runtime("t375-old-rows");
+        let ctx = Ctx::new(&rt);
+        let old = "checkpoint\n- go\npath /r/src/a.rs\npath /r/src/b.rs (edited)\npath /r/src/c.rs (deleted)\npath docs/d.md (read 3-9)\n";
+        ctx.upsert_note(None, &kind(&ctx), "compact", old).unwrap();
+        assert_eq!(
+            last_paths(&ctx, "/r"),
+            ["src/a.rs", "src/b.rs", "docs/d.md"]
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// T375: the change lines the prefilter must keep are the same ones the full parse reads.
+    #[test]
+    fn prefilter_keeps_the_action_lines() {
+        for line in ACTIONS.lines().skip(1) {
+            // An overwrite's result tells nothing the Write call did not: skipping it is the
+            // point, and the superset test shows the outcome is the same.
+            let update = line.contains("has been updated");
+            assert_eq!(worth_parsing(line), !update, "{line}");
+        }
+        let skipped = r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t","content":"ls output"}]}}"#;
+        assert!(!worth_parsing(skipped));
+        assert!(!worth_parsing(
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}"#
+        ));
     }
 
     #[test]
@@ -1102,6 +1643,7 @@ mod tests {
         for (name, content) in [
             ("FIXTURE", FIXTURE),
             ("HOST_FIXTURE", HOST_FIXTURE),
+            ("ACTIONS", ACTIONS),
             ("skill fixture", &skill_fixture),
             ("2 MB transcript", &big),
         ] {
