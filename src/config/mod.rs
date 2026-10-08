@@ -843,7 +843,7 @@ section! {
     TasksGithub {
         /// `owner/name`. Empty: the `origin` remote.
         repo: String = String::new(),
-        /// Projects v2 number whose Status field tracks the task; 0 = issues only.
+        /// Projects v2 number for the Status field, read from T441.11 on; 0 = issues only.
         project: u32 = 0,
     }
 }
