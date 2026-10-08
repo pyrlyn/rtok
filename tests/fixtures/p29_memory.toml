@@ -26,3 +26,25 @@ embed_off = "why not use an async database library for hooks"
 
 [expect]
 planted_title = "p29-gate-arctic-tern"
+
+# T374: file-context recall. For each case the session has read `file`; six notes share the
+# `words` the prompt asks about, five name a file that does not exist and are saved first, one
+# names `file`. The linked note must come back in the recall (recall@5) and first.
+[[file_case]]
+file = "src/proxy/semantic_cache.rs"
+words = "eviction ttl similarity threshold"
+
+[[file_case]]
+file = "src/store/embed.rs"
+words = "dimensions hashing cosine vectors"
+
+[[file_case]]
+file = "src/plugins/checkpoint.rs"
+words = "compaction transcript restore paths"
+
+[[file_case]]
+file = "src/plugins/read/cache.rs"
+words = "delta dedup unchanged archive"
+
+[file_case_expect]
+min_recall_at_5 = 0.6
