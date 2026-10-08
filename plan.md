@@ -60,7 +60,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
-| T385.8 | todo | P2 | 2 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
@@ -1385,12 +1384,6 @@ Check: one dated `research.md` row per setting.
 optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
 
 Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
-
-### T385.8. P28 Phase 1: measure what LLM compression could save
-
-optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
-
-Check: the dated rows and the fixture are in `research.md` and `tests/fixtures/`.
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 

@@ -56,7 +56,6 @@
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.7. Per-lane upstream and in-flight cap
-- T385.8. P28 Phase 1: measure what LLM compression could save
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
 - T385.10. Routing for `internal` and `bulk` calls
 - T385.11. Deferred tool schemas and thinking replay
