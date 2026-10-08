@@ -116,7 +116,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T455 | in progress | P2 | 3 | 0% | Cursor / composer |
 
 
 
@@ -2002,12 +2001,3 @@ project = "group/name"
 - A web UI page for tasks, dependencies beyond parent/child, assignees, priorities, LLM-generated task breakdowns (Taskmaster's PRD parsing).
 - An HTTP MCP transport or a hosted service.
 - Replacing hosts' built-in TodoWrite/`update_plan` checklists.
-
-### T455. Local dependency docs from Cargo.lock + cached docs.rs rustdoc JSON
-
-MCP-only `docs` plugin (default off): resolve exact crate versions from `Cargo.lock`, search a local FTS index of cached rustdoc JSON, fetch from docs.rs only via `rtok docs fetch`. No Context7 client, no OAuth, no embeddings, no rustdoc-types.
-
-Do: feature `docs`, `CATALOGUE` `("docs", false)`, `[plugins.docs]`, migration `0034_docs_fts`, store `src/store/docs.rs`, plugin `src/plugins/docs/`, MCP `docs_resolve` / `docs_query` / `docs_get`, CLI `rtok docs fetch`. `prepare_args` aliases `question`/`userQuery` → `query` on `docs_query` only. Workspace `llms.txt` / `llms-full.txt` index as crate `llms` version `local`.
-
-Check: plugin off → hook output unchanged; fixture lock serde 1.0.210 → `docs_resolve` prints that version; seeded `Deserialize` ranks first under `max_tokens`; empty cache prints `not cached` with no socket; three tool descriptions ≤ 60 tokens; `just check`; `cargo test -p rtok docs::`; `cargo test -p rtok --test mcp`.
-Complexity: 3/5

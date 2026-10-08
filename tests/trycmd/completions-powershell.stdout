@@ -50,6 +50,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('plugins', 'plugins', [CompletionResultType]::ParameterValue, 'List plugins: id, enabled, surfaces')
             [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'The one config file')
             [CompletionResult]::new('memory', 'memory', [CompletionResultType]::ParameterValue, 'Notes (`mem_save` / import / export)')
+            [CompletionResult]::new('docs', 'docs', [CompletionResultType]::ParameterValue, 'Cached rustdoc for Cargo.lock dependencies (`rtok docs fetch`)')
             [CompletionResult]::new('graph', 'graph', [CompletionResultType]::ParameterValue, 'Symbol index (`rtok graph index`)')
             [CompletionResult]::new('guard', 'guard', [CompletionResultType]::ParameterValue, 'Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)')
             [CompletionResult]::new('dashboard', 'dashboard', [CompletionResultType]::ParameterValue, 'Deprecated spelling of `rtok web`; still runs, still prints where to go')
@@ -1344,6 +1345,31 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;memory;help;help' {
             break
         }
+        'rtok;docs' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('fetch', 'fetch', [CompletionResultType]::ParameterValue, 'Download rustdoc JSON for a Cargo.lock dependency (the only network path)')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rtok;docs;fetch' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;docs;help' {
+            [CompletionResult]::new('fetch', 'fetch', [CompletionResultType]::ParameterValue, 'Download rustdoc JSON for a Cargo.lock dependency (the only network path)')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rtok;docs;help;fetch' {
+            break
+        }
+        'rtok;docs;help;help' {
+            break
+        }
         'rtok;graph' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -1773,6 +1799,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('plugins', 'plugins', [CompletionResultType]::ParameterValue, 'List plugins: id, enabled, surfaces')
             [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'The one config file')
             [CompletionResult]::new('memory', 'memory', [CompletionResultType]::ParameterValue, 'Notes (`mem_save` / import / export)')
+            [CompletionResult]::new('docs', 'docs', [CompletionResultType]::ParameterValue, 'Cached rustdoc for Cargo.lock dependencies (`rtok docs fetch`)')
             [CompletionResult]::new('graph', 'graph', [CompletionResultType]::ParameterValue, 'Symbol index (`rtok graph index`)')
             [CompletionResult]::new('guard', 'guard', [CompletionResultType]::ParameterValue, 'Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)')
             [CompletionResult]::new('dashboard', 'dashboard', [CompletionResultType]::ParameterValue, 'Deprecated spelling of `rtok web`; still runs, still prints where to go')
@@ -2054,6 +2081,13 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;memory;status' {
+            break
+        }
+        'rtok;help;docs' {
+            [CompletionResult]::new('fetch', 'fetch', [CompletionResultType]::ParameterValue, 'Download rustdoc JSON for a Cargo.lock dependency (the only network path)')
+            break
+        }
+        'rtok;help;docs;fetch' {
             break
         }
         'rtok;help;graph' {

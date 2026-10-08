@@ -39,10 +39,10 @@ The table row's resolver: `agents::hook_resolver` (bash), `agents::copilot::hook
 Hooks carry `hook` and `cli`, MCP carries `mcp`. Nothing carries `proxy`. The app is
 MCP-only until its hook support is documented.
 
-Reachable (cli): measure, cmd, read, archive, inject, guard, memory, graph, toon
+Reachable (cli): measure, cmd, read, archive, inject, guard, memory, graph, toon, docs
 Not reachable (cli): proxy, compress
 
-Reachable (desktop): read, archive, memory, graph, toon
+Reachable (desktop): read, archive, memory, graph, toon, docs
 Not reachable (desktop): measure, cmd, proxy, inject, guard, compress
 
 ## Docs

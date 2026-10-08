@@ -31,7 +31,7 @@ act on its result. Not verified on a live install: the `codewhale`/`codew` binar
 
 Hooks carry `hook` and `cli`, MCP carries `mcp`. Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon
+Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon, docs
 Not reachable: proxy, compress
 
 ## Docs

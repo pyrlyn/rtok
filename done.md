@@ -1,5 +1,19 @@
 # rtok — completed tasks
 
+### T455. Local dependency docs from Cargo.lock + cached docs.rs rustdoc JSON
+
+MCP-only `docs` plugin (default off): resolve exact crate versions from `Cargo.lock`, search a local FTS index of cached rustdoc JSON, fetch from docs.rs only via `rtok docs fetch`. No Context7 client, no OAuth, no embeddings, no rustdoc-types.
+
+Do: feature `docs`, `CATALOGUE` `("docs", false)`, `[plugins.docs]`, migration `0034_docs_fts`, store `src/store/docs.rs`, plugin `src/plugins/docs/`, MCP `docs_resolve` / `docs_query` / `docs_get`, CLI `rtok docs fetch`. `prepare_args` aliases `question`/`userQuery` → `query` on `docs_query` only. Workspace `llms.txt` / `llms-full.txt` index as crate `llms` version `local`.
+
+Check: plugin off → hook output unchanged; fixture lock serde 1.0.210 → `docs_resolve` prints that version; seeded `Deserialize` ranks first under `max_tokens`; empty cache prints `not cached` with no socket; three tool descriptions ≤ 60 tokens; `just check`; `cargo test -p rtok docs::`; `cargo test -p rtok --test mcp`.
+
+Result: default-off plugin; three MCP tools (descriptions ≤ 60 tokens); `docs_query` is FTS-only once cached and records `plugin: "docs"`, `kind: "query"` (`before_bytes` = cached docs considered, `after_bytes` = reply). `rtok docs fetch` is the only GET (docs.rs `json.zst`, 30s, no Authorization). No saving claim without that Measurement row. `cargo test -p rtok --lib docs::` 8 passed; `--test mcp` 8 passed; nextest 2979 passed, 6 skipped.
+
+Status: done 2026-10-08
+
+Model: Cursor / composer
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

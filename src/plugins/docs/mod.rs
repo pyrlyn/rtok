@@ -276,10 +276,10 @@ fn kind_str(v: &Value) -> String {
     if let Some(s) = v.as_str() {
         return s.to_string();
     }
-    if let Some(obj) = v.as_object() {
-        if let Some(k) = obj.keys().next() {
-            return k.clone();
-        }
+    if let Some(obj) = v.as_object()
+        && let Some(k) = obj.keys().next()
+    {
+        return k.clone();
     }
     "item".into()
 }
