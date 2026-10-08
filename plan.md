@@ -102,7 +102,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.1 | todo | P2 | 3 | 0% | |
-| T436.2 | todo | P2 | 2 | 0% | |
+| T436.2 | in progress | P2 | 2 | 10% | Claude Code / claude-sonnet-5-5 |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
@@ -1726,6 +1726,11 @@ Check: stories for idle, pending, done and error states pass axe (`just spa-stor
 Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
 
 Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
+
+Execution plan (scope note: the `agents install/update` spinner stays T276's `ProgressRunner`, which does not exist yet; the `with_loader("updating host")` already around the restart path is untouched):
+1. Spinners through `render::with_loader` on the waits that have none: the pending-migration apply in `Store::migrate` (not under the hook's few-ms lock wait, so hooks stay silent and fast), `rtok memory sync`, `rtok report` (building the document), `rtok otel flush`, and `rtok info` (daemon health probe).
+2. Operation icons: `Mode::verb()` and the header line of an applied `agents install/update/remove` block go through `style::line_op`, so a terminal gets the icon and colour and a pipe gets the bare text.
+3. Verify: a non-TTY test per wait, unit tests for the header, trycmd snapshots unchanged, `just check`.
 
 ### T436.3. Shared operation-icon crate for rtok and ketch
 
