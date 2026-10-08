@@ -1305,6 +1305,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--to', '--to', [CompletionResultType]::ParameterName, 'to')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Project id or directory (see `rtok graph projects`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'Every reached row, not the file-grouped answer cut at `plugins.graph.impact_tokens`')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
