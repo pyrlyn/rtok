@@ -242,10 +242,19 @@ impl Store {
         // one migration run plus the queue of other openers outlives it. Restored below. The
         // hook keeps its few ms here too and fails open instead (T178).
         set_busy(&mut conn, self.wait.migrate)?;
-        let applied = conn.exclusive_transaction::<_, anyhow::Error, _>(|conn| {
-            migrations::bridge_legacy(conn)?;
-            migrations::run_pending(conn)
-        });
+        let apply = |conn: &mut SqliteConnection| {
+            conn.exclusive_transaction::<_, anyhow::Error, _>(|conn| {
+                migrations::bridge_legacy(conn)?;
+                migrations::run_pending(conn)
+            })
+        };
+        // A person at a terminal waits out an upgrade's migrations. The hook's few-ms wait
+        // draws nothing: it must stay inside its budget and fails open instead of waiting.
+        let applied = if self.wait.migrate < std::time::Duration::from_secs(1) {
+            apply(&mut conn)
+        } else {
+            crate::render::with_loader("migrating the store", || apply(&mut conn))
+        };
         set_busy(&mut conn, self.wait.busy)?;
         applied
     }
