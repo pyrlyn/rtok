@@ -2714,7 +2714,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__impact)
-            opts="-h --depth --to --project --config --help"
+            opts="-h --depth --to --all --project --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

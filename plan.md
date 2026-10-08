@@ -55,7 +55,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
@@ -1318,16 +1317,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
-
-### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
-
-From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
-
-Plan: group the BFS result by file, order files by (depth asc, T370 rank or ref count desc), print `path (N refs, depth d)` with the first 3 lines per file, stop at `plugins.graph.impact_tokens` (default 1500) with `+K files, M refs not shown — impact <name> --all`. `--all` keeps today's output.
-
-Done when: `impact` on a hub symbol fits the budget and ends with the cut line; a small impact is unchanged.
-
-Check: snapshot test on a fixture with a hub symbol; output tokens on the ambiguous set from T368 within budget; `tests/graph_truth.rs` impact recall unchanged with `--all`; `just check`.
 
 ### T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 
