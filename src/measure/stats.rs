@@ -108,6 +108,13 @@ pub struct Report {
     /// T137: `image` content blocks. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "ImageRow::is_empty")]
     pub images: ImageRow,
+    /// T403: repeated long paths and identifiers, and the net a legend would save. Absent
+    /// when no session had a request.
+    #[serde(
+        default,
+        skip_serializing_if = "super::dictionary::DictionaryRow::is_empty"
+    )]
+    pub dictionary: super::dictionary::DictionaryRow,
     /// T61.1: skill bodies the transcripts inject as `isMeta` records, per skill
     /// name. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -602,6 +609,26 @@ impl Report {
                 s.push_str(&format!(
                     "  images {src}  blocks {}  bytes {}  est. tokens {}\n",
                     r.blocks, r.bytes, r.tokens
+                ));
+            }
+        }
+        if !self.dictionary.is_empty() {
+            let d = &self.dictionary;
+            // Bytes to tokens at the report's chars-per-token, so a byte saving is compared
+            // with the provider's token count (the shares are bytes saved, not tokens).
+            let input = d.request_tokens.saturating_mul(CHARS_PER_TOKEN as u64);
+            s.push_str(&format!(
+                "dictionary requests {}  content bytes {}  billed input est. bytes {}\n",
+                d.requests, d.input_bytes, input
+            ));
+            for (name, k) in [("paths", d.paths), ("idents", d.idents)] {
+                s.push_str(&format!(
+                    "  {name} repeated {} ({:.2}% of billed)  cache-safe saving {} ({:.2}% of billed, {:.2}% of content)\n",
+                    k.repeated,
+                    pct(k.repeated, input),
+                    k.saved,
+                    pct(k.saved, input),
+                    pct(k.saved, d.input_bytes)
                 ));
             }
         }
@@ -1186,6 +1213,7 @@ fn fold_session(
 
     fold_thinking(parsed, report);
     fold_images(parsed, &id_name, &mut report.images);
+    super::dictionary::fold(parsed, &mut report.dictionary);
 
     fold_skills(parsed, &id_skill, report, &mut samples.skills);
     for u in &parsed.usages {
@@ -2129,6 +2157,33 @@ mod tests {
         .unwrap();
         assert_eq!(r.thinking.blocks, 2);
         assert_eq!(r.thinking.bytes, 11);
+    }
+
+    /// T403: the dictionary row prints against the provider-billed input, and stays out of
+    /// the table and the JSON when no request was sampled.
+    #[test]
+    fn dictionary_row_prints_shares_of_billed_input() {
+        use crate::measure::dictionary::{DictKind, DictionaryRow};
+        let mut r = Report::default();
+        assert!(!r.to_table().contains("dictionary"));
+        r.dictionary = DictionaryRow {
+            requests: 2,
+            input_bytes: 4000,
+            request_tokens: 2500,
+            paths: DictKind {
+                repeated: 400,
+                saved: 100,
+            },
+            idents: DictKind::default(),
+        };
+        let table = r.to_table();
+        assert!(
+            table.contains(
+                "dictionary requests 2  content bytes 4000  billed input est. bytes 10000"
+            ),
+            "{table}"
+        );
+        assert!(table.contains("paths repeated 400 (4.00% of billed)  cache-safe saving 100 (1.00% of billed, 2.50% of content)"), "{table}");
     }
 
     /// T137: a PNG screenshot in a tool_result and a JPEG pasted into a prompt, both before
