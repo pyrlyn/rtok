@@ -594,7 +594,7 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
             #[cfg(feature = "memory")]
             let extra = crate::plugins::memory::compact_context(&Ctx::new(cx));
             #[cfg(not(feature = "memory"))]
-            let extra = None;
+            let extra: Option<Injection> = None;
             if let Some(inj) = extra {
                 HookOutput {
                     hook_specific_output: Some(HookSpecificOutput {
