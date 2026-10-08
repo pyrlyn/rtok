@@ -116,7 +116,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.1 | todo | P2 | 3 | 0% | |
+| T436.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
@@ -1850,6 +1850,13 @@ Done means:
 3. Operation icons: a verb → icon map in `web/src/ui` with the same operations as ketch's `OPERATION_ICONS` (install, remove/prune, update, fetch, link, roll back, search, doctor) plus rtok's own from T436, falling back to the success/warning/error/info icon. The web draws them as brand SVG icons through `Icon`, not emoji; missing ones are added under `brand/icons/ui/` (source rule of T414: no copies in `web/`). Action buttons and the result of an action carry their operation's icon.
 4. One list of operations: the web map and the CLI table of T436 name the same operations, checked by a test.
 5. Looks follow the T414 restyle (`--pyr-*` roles, React Aria Components).
+
+Execution plan (2026-10-08): reuse `Icon`/`hasIcon` (`web/src/ui/Icon.tsx`), `Loading` (`states.tsx`) and the `useMutation` hooks in `api/query.tsx`.
+1. `ui/Spinner.tsx` (+ story); `Loading` draws through it.
+2. `set`/`project` in `createApi` resolve only on the server's answer (next snapshot, or a message frame that rejects), with a timeout, so `isPending` spans the real wait. A new `ui/Button.tsx` carries `pending` (spinner in place of the icon, disabled, `aria-busy`); `Switch` gains `pending`. Wired into Plugins, Projects (select, link, unlink), ProjectsOverview (select), DoctorFix (plan, apply), Calls (expand).
+3. `ui/operations.ts`: verb to icon map (ketch rows plus rtok's), `Kind` fallback, new SVGs under `brand/icons/ui/`; `Button` and result lines take an `op`.
+4. `web/src/ui/operations.test.ts` reads `OPERATION_ICONS` from `src/ui/style.rs` and compares the operation names.
+5. Verify: `npm run typecheck`, unit tests, `just spa-stories`, `just spa-e2e` (delayed `/ws` via `routeWebSocket`), `just check`.
 
 Check: stories for idle, pending, done and error states pass axe (`just spa-stories`); an e2e test with a delayed API keeps the spinner visible on the plugin switch and doctor apply until the answer and removes it after (`just spa-e2e`); a unit test for the verb → icon map and its fallback; `just check`.
 
