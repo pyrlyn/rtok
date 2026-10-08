@@ -122,6 +122,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
+| T451 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -2213,3 +2214,9 @@ project = "group/name"
 - A web UI page for tasks, dependencies beyond parent/child, assignees, priorities, LLM-generated task breakdowns (Taskmaster's PRD parsing).
 - An HTTP MCP transport or a hosted service.
 - Replacing hosts' built-in TodoWrite/`update_plan` checklists.
+
+### T451. Graph cold index: ship the 200-file batch T59.3 claimed
+
+`done.md` T59.3 and `research.md` §2 row (3) say the cold graph index writes symbols and edges in one transaction per 200 files, but `src/plugins/graph/index.rs` flushes at a hard-coded `pending.len() >= 64` and a test comment names a `SYMBOL_BATCH_FILES` constant that does not exist. Done means the constant exists and is used at the flush site, 64 vs 200 is measured on the 3 000-file `graph_bench` fixture with the winner kept (200 on a tie), and `research.md` §2 records the dated result in place of the stale "re-run" placeholder. The warm path and the hook budget stay untouched.
+
+Execution plan: add `const SYMBOL_BATCH_FILES` in `src/plugins/graph/index.rs` and use it in `run`; interleave at least 5 release runs of `cargo test --release --test graph_bench -- --ignored --nocapture p8c_numbers` per size, noting load; record medians in `research.md`; run `cargo test -q --lib graph`, clippy, fmt.
