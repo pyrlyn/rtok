@@ -100,7 +100,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T441.12 | todo | P3 | 3 | 0% | |
-| T441.8 | todo | P3 | 4 | 0% | |
 
 
 
@@ -2005,7 +2004,7 @@ project = "group/name"
 5. **T441.5 CLI** — `rtok task create/list/show/status/next/init`, `--json`.
 6. **T441.6 MCP tools** — `task_*` on `rtok mcp`, parity test. The server entry is already what `rtok agents install` writes for every host, so the tools need no install of their own.
 7. **T441.7 GitHub adapter** — issues, sub-issues, label mapping, collision check. Done; Projects v2 Status split into T441.11, `sync` into T441.12.
-8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
+8. **T441.8 GitLab adapter** — done: issues, `status::` labels, close on done, self-hosted https URL, `relates_to` parent link (#819).
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
