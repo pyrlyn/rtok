@@ -518,6 +518,12 @@ target/tmp/t60-2-config-init.toml
 +[plugins.compress]
 +# enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
 +
++[plugins.docs]
++# enabled        = false                # local rustdoc from Cargo.lock + cached docs.rs JSON
++# query_limit    = 5                    # docs_query hit ceiling
++# snippet_chars  = 400                  # chars per FTS snippet
++# max_tokens     = 800                  # whole-reply estimate cap
++
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"

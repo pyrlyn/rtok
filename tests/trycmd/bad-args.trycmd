@@ -85,6 +85,10 @@ $ rtok memory import
 ? 2
 error: the following required arguments were not provided:
 ...
+$ rtok docs fetch
+? 2
+error: the following required arguments were not provided:
+...
 $ rtok graph impact
 ? 2
 error: the following required arguments were not provided:

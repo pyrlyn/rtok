@@ -418,6 +418,16 @@ must beat, and that line is the gate text below.
 
 ---
 
+## `docs`
+
+**Goal.** Exact crate versions from `Cargo.lock`, searched offline against a cached docs.rs rustdoc JSON index. Default off; `rtok docs fetch` is the only network path.
+
+**Surfaces.** MCP `docs_resolve` / `docs_query` / `docs_get`; CLI `rtok docs fetch`.
+
+**Gate T455.** three MCP tools, descriptions ≤ 60 tokens; query is offline once cached; hook output unchanged when off.
+
+---
+
 ## Windows developer experience
 
 Surfaced 2026-09-26 by the first full local `just check` on Windows (T272–T274, `docs/windows.md`).

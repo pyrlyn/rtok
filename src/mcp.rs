@@ -296,6 +296,15 @@ fn prepare_args(name: &str, args: &Value) -> Value {
     {
         obj.insert("pattern".into(), q);
     }
+    if name == "docs_query"
+        && args.get("query").is_none_or(Value::is_null)
+        && let Some(obj) = args.as_object_mut()
+    {
+        let alias = obj.remove("question").or_else(|| obj.remove("userQuery"));
+        if let Some(q) = alias {
+            obj.insert("query".into(), q);
+        }
+    }
     args
 }
 
@@ -706,6 +715,12 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         "mem_save" => mem_save(cx, args),
         #[cfg(feature = "memory")]
         "mem_search" => mem_search(cx, args),
+        #[cfg(feature = "docs")]
+        "docs_resolve" => docs_resolve(cx, args),
+        #[cfg(feature = "docs")]
+        "docs_query" => docs_query(cx, args),
+        #[cfg(feature = "docs")]
+        "docs_get" => docs_get(cx, args),
         #[cfg(feature = "memory")]
         "mem_get" => mem_get(cx, args),
         #[cfg(feature = "memory")]
@@ -779,6 +794,29 @@ fn mem_save(cx: &Runtime, args: &Value) -> Result<String> {
     let project = args["project"].as_str();
     let (id, updated) = crate::plugins::memory::mem_save(cx, kind, title, body, project)?;
     Ok(json!({"id": id, "updated": updated}).to_string())
+}
+
+#[cfg(feature = "docs")]
+fn docs_resolve(cx: &Runtime, args: &Value) -> Result<String> {
+    let name = args["name"].as_str().unwrap_or("");
+    crate::plugins::docs::docs_resolve(cx, name)
+}
+
+#[cfg(feature = "docs")]
+fn docs_query(cx: &Runtime, args: &Value) -> Result<String> {
+    let name = args["name"].as_str().unwrap_or("");
+    let version = args["version"].as_str();
+    let query = args["query"].as_str().unwrap_or("");
+    crate::plugins::docs::docs_query(cx, name, version, query)
+}
+
+#[cfg(feature = "docs")]
+fn docs_get(cx: &Runtime, args: &Value) -> Result<String> {
+    let id = args["id"]
+        .as_i64()
+        .and_then(|n| i32::try_from(n).ok())
+        .ok_or_else(|| anyhow::anyhow!("invalid doc id: {}", args["id"]))?;
+    crate::plugins::docs::docs_get(cx, id)
 }
 
 #[cfg(feature = "memory")]
@@ -1220,6 +1258,27 @@ mod tests {
             "invalid params: missing `path` (got: query)"
         );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn docs_query_prepare_args_renames_question_and_user_query() {
+        let a = prepare_args(
+            "docs_query",
+            &json!({"name": "serde", "question": "Deserialize"}),
+        );
+        assert_eq!(a["query"], "Deserialize");
+        assert!(a.get("question").is_none());
+        let a = prepare_args(
+            "docs_query",
+            &json!({"name": "serde", "userQuery": "Deserialize"}),
+        );
+        assert_eq!(a["query"], "Deserialize");
+        assert!(a.get("userQuery").is_none());
+        let a = prepare_args(
+            "docs_query",
+            &json!({"name": "serde", "query": "a", "question": "b"}),
+        );
+        assert_eq!(a["query"], "a", "explicit query wins");
     }
 
     #[test]

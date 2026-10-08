@@ -236,7 +236,7 @@ fn plugins_lists_the_catalogue() {
     let out = ok(&["plugins"], &home);
     for id in [
         "measure", "cmd", "read", "archive", "proxy", "inject", "guard", "memory", "graph", "toon",
-        "compress",
+        "compress", "docs",
     ] {
         assert!(out.contains(id), "{id} missing:\n{out}");
     }

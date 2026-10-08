@@ -16,7 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const COVERED: &[&str] = &["archive", "cmd", "graph", "guard", "memory", "read", "toon"];
-const NEVER: &[&str] = &["compress", "inject", "measure", "proxy"];
+const NEVER: &[&str] = &["compress", "docs", "inject", "measure", "proxy"];
 
 /// The fixture body per case: 50 lines so a capping plugin has something to drop, carrying
 /// the property under test. `empty` stays empty on purpose.

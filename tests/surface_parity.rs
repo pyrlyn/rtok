@@ -438,6 +438,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("bench", "runs the A/B schedule and writes Measurement rows"),
     ("memory import", "inserts note rows"),
     (
+        "docs fetch",
+        "downloads rustdoc JSON into the local cache; not a dashboard page",
+    ),
+    (
         "memory retire",
         "tombstones a note row; the Memory page renders the notes, not the verdict (T69.1)",
     ),
