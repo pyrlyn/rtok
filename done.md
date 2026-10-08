@@ -7192,6 +7192,18 @@ Model: Claude Code / claude-sonnet-5-5
 
 Result: `doctor::resolve_tool_search` reads `ENABLE_TOOL_SEARCH` from the Claude Code settings `env` (which wins) and from the shell, empty is unset. `false` is `disabled`; `true`, `auto` and `auto:N` (N 0-100) are `enabled` (the threshold modes still defer); an unrecognised value is no override. With no override a custom `ANTHROPIC_BASE_URL` gives `unknown`, the default install gives `enabled` and prints nothing. The text line is `mcp_tool_search <state> (<source>)`, e.g. `unknown (heuristic: ANTHROPIC_BASE_URL set)` or `enabled (ENABLE_TOOL_SEARCH=true in settings.json env)`. `Report.mcp_tool_search {state, source}` is new (schema blessed, `snapshot.gen.ts` regenerated, the web Doctor page and overview check show state and source); `mcp_tool_search_disabled` stays and is now true for `disabled` and `unknown`, and the `tools_rewrite` and `alwaysLoad` advice read it. `research.md` §3 cites the values from https://code.claude.com/docs/en/env-vars and https://code.claude.com/docs/en/mcp (checked 2026-10-06); the §7 ledger entry is updated. Checked: `tool_search_follows_the_override_not_the_base_url_alone` (base URL with and without the override, settings over shell, empty, bad values), `tool_search_renders_state_and_source`, `page_reports_the_override_over_a_custom_base_url`; `just check` green (2473 tests run, 2473 passed, 6 skipped); `npm run typecheck` green. `npm test` in `web/` has one failure, `src/ui/Icon.test.ts` ("every page has a sidebar icon"), which this change does not touch.
 
+### T393. `doctor` shows the saving a 120-character skill description cap would give
+
+From `research.md` §10.4: descriptions over 120 characters cost about 1.3 K tokens per request for 66 skills. `doctor` flagged only `desc > 200` and `body > 8192` and printed no saving.
+
+Done: the doctor skills section adds the line "descriptions over 120 chars: N skills, ≈ X tokens/request recoverable" (sum of characters above the cap / 4, the same estimate as the section header; omitted when nothing is over the cap). The per-row flag is now `WARN desc>120`. The cap is one constant, `SKILL_DESC_MAX` in `src/agents/skill.rs`, shared with the `tests/skill.rs` check on rtok's own skills. Advice only.
+
+Check: `doctor::tests::skills_audit_prices_the_description_cap` (one long, one short, one at the cap); the `report-md.toml` golden; full nextest 2760 passed.
+Result: PR #847.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T381. `rtok config init` must not freeze today's defaults into the user's file
 
 Ivan, 2026-10-04: a user's `config.toml` keeps whatever defaults were current on the day it was written. `Config::init_maybe` (`src/config/mod.rs`) writes `config/default.toml` verbatim, every key uncommented, so each value is an explicit setting. When a default changes later, the user never gets it. Seen on the creator's machine: T127 (#144) turned `toon` on by default, but `~/.rtok/config.toml` still said `[plugins.toon] enabled = false`, so `toon` stayed off with nothing pointing at the cause.
