@@ -66,7 +66,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T385.12 | todo | P3 | 3 | 20% | |
-| T391 | in progress | P3 | 2 | 30% | Claude Code / claude-sonnet-5-5 |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -1424,16 +1423,6 @@ Check: per-wire tests and a dated bench row; `just check`.
 optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
 
 Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
-
-### T391. Junk map: the five missing hosts and VS Code `CachedData`
-
-From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
-
-Done means: each missing host has a cited §22 row (or "not documented" where no primary source exists) and a matching `junk_map.rs` entry. VS Code gets a `CachedData` row where `clear` removes only non-current commit folders; Cursor stays list-only. The host count in §22 is corrected.
-
-Check: `junk_map` unit tests for the new rows and the current-commit exclusion; a test that every `HOSTS` entry has a junk-map row or an explicit "none"; `just check`.
-
-Plan: (1) re-check each host against its own docs (2026-10-08) and write the §22 rows, `roo`/`qwen` (T413) included, fix the host count; (2) `junk_map.rs`: rows for commandcode, cline, mimo, devin, antigravity (documented paths only, antigravity and roo stay "not documented"), an explicit `UNDOCUMENTED` list for hosts with no row, and a `per_commit` flag on the VS Code `CachedData` spec; (3) `junk_kinds.rs`: `stale_code_caches` turns a per-commit folder into `Owned` items for every commit folder but the newest (VS Code's own cleaner is told the running commit, rtok is not), under T152's idle rule, wired in `junk.rs` `host_rows`; (4) tests in `junk_map.rs` (host coverage), `junk_kinds.rs` (current-commit exclusion, symlink, idle); (5) `just check`.
 
 ### T394. Run the paid live benches and record them
 
