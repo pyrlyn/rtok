@@ -98,7 +98,6 @@
 - T416.3. `--stat` on the commands that show a diff
 - T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
-- T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 - T436.2. Spinners on the remaining waits and icons on `agents install/update`
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
