@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,458 @@
+@@ -0,0 +1,464 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -68,6 +68,12 @@ target/tmp/t60-2-config-init.toml
 +# grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI points at `grok usage`, which rtok does not run; follows $GROK_HOME
 +# zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
 +# antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
++
++[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
++# keep_logs_days          = 30          # `logs` entries modified within this many days stay (0-3650)
++# temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay (0-87600)
++# exclude                 = []          # globs never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]
++# extra                   = []          # paths you vouch for as junk, e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = a host id or rtok
 +
 +[mcp]                                 # rtok mcp
 +# tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed

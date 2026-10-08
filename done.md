@@ -8406,6 +8406,18 @@ Result: new `src/agents/junk_clear.rs` (`Filter`, `plan`, `apply`, `to_text`) ov
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5
 
+### T330.5.1. Junk: `[agents.junk]` table and the `logs`, `deps`, `snapshots` kinds
+
+Part of T330.5. Depends on T330.4 (#822). The `[agents.junk]` table with the keys these kinds read (`keep_logs_days` 30, `temp_min_age_hours` 24, `exclude`, `extra`), each range-checked by `rtok config validate` naming the key; `extra` entries name a host (or `rtok`), a kind (`cache`, `temp`, `logs`) and a path. Kinds over the T330.4 report, plan, re-check and apply (no second deleter): `logs` (review) = entries of the §22 log folders older than `keep_logs_days`; `deps` (review) = `node_modules`, `.venv`, `vendor`, `.gradle`, `Pods` in agent worktrees, listed read-only (no D36 evidence), with "no lockfile or manifest" when nothing could reinstall it; `snapshots` (never) = Gemini's `~/.gemini/history/<hash>` and `tmp/<hash>/checkpoints`, size only, with `/restore` named. `exclude` globs keep any item that matches or holds a match. `temp` reads `temp_min_age_hours`. `crash-dumps` moved to T330.5.2 and `backups` to T330.5.4 to keep this task under the 500-line cap.
+
+Check: a log 31 days old is planned by `--include review` and one 29 days old is kept; `node_modules` with and without a lockfile is listed, never planned; a Gemini history dir is listed with its size and never planned, even with `--kind snapshots`; an `exclude` glob keeps a cache that holds a match; invalid values (`-1`, `2.5`, `abc`, an unknown `extra` kind or host, a bad glob) are rejected naming the key; `just check`.
+
+Result: `AgentsJunk`/`JunkExtra` in `src/config/mod.rs` with range, `extra` and glob checks in `validate.rs`; new `src/agents/junk_review.rs` (`snapshot_items`, `extra_items`, `exclude`) and the `logs`/`deps` items in `junk_kinds.rs`, wired into `junk.rs` (one row per kind and class) and the `junk_clear` `--kind` set. Docs in `docs/config.md` (en, ru, uk). Non-test code 477 added lines against the T330.4 base merged with main (566 before the `backups` split), tests about 344. Targeted runs after the split: `agents_junk` 7, `--lib junk` 44, `cli_trycmd`, `config_coverage`, `surface_parity` 16, `rtok-agent-sdk` 41 passed; CI green. #827.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-opus-5-5
+
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
 From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).

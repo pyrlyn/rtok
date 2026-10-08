@@ -35,7 +35,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.5 | todo | P2 | 4 | 0% | |
+| T330.5 | todo | P2 | 4 | 30% | |
+| T330.5.2 | todo | P2 | 3 | 0% | |
+| T330.5.3 | todo | P2 | 3 | 0% | |
+| T330.5.4 | todo | P2 | 2 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
@@ -1052,6 +1055,33 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 Part of T330. The review-class kinds with their keeps (worktrees through `git worktree remove`), `sessions` as class `explicit` (`stale_session_days` default 30, time only; only with `--kind sessions`, only on hosts whose §22.1 sessions cell documents the whole session unit and its index, recorded per host here; never the host's memory, index or store files), `snapshots` as `never` (size only), no token kind (D36), the `[agents.junk]` table (`stale_session_days`, `keep_logs_days`, `stale_worktree_days`, `crash_dump_min_age_days`, `temp_min_age_hours`, `exclude`, `extra`), `--session-days`, docs in `docs/config.md` (en, ru, uk). Depends on T330.4 and the investigation T341 (T338 closed: D36).
 
 Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rejected naming the key; `just check`.
+
+Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. T330.5.4 was split from T330.5.1 later the same day. It closes when all four are done.
+
+### T330.5.4. Junk: the `backups` kind
+
+Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 500-line cap; depends on T330.5.1. `backups` (review) over the T330.5.1 report, plan, re-check and apply: rtok's own `_backup/<name>.bak-<ts>` generations in the folders of a host's config files that `setup.backup_files` has no room for (a cap lowered after the copies were taken; the newest copy of a file always stays), with a read-only `rtok-agent-sdk::stale_backups` twin of `prune_backups`; other `*.bak`, `*.bak-<ts>` and `*~` files under an agent's folders are listed read-only (no D36 evidence), and rtok's own `_backup` folder is never walked for them. `backups` joins the `--kind` values. The code was written in T330.5.1 and saved as a patch; re-apply it over T330.5.1.
+
+Done means: `rtok agents junk list` shows the `backups` rows, `clear --include review` or `--kind backups` plans the generations past the cap and never the newest, a running host does not hold back rtok's own copies.
+
+Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
+
+### T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
+
+Part of T330.5. Depends on T330.5.1. `crash-dumps` (moved from T330.5.1): `crash_dump_min_age_days` (default 7, `0` to `3650`, rejected naming the key) and `crash-dumps` as an `extra` kind; macOS `~/Library/Logs/DiagnosticReports` files (`.ips`, `.crash`, `.dmp`, `.diag`) named for a host binary or app are listed read-only (no §22 row, D36), and an `extra` crash folder gives `safe` dumps past `crash_dump_min_age_days` and `review` ones before it. `stale_session_days` (default 30, `0` to `3650`, invalid values rejected naming the key and the run falls back to 30) and `--session-days N`; `sessions` as class `explicit` (only with `--kind sessions`, time only, the T330 "Old sessions: time only" rules), only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it, with the per-host verdict recorded here and in §22.1 (never the host's memory, index or store files: Claude Code `projects/<project>/memory/`, Kimi `session_index.jsonl`, Copilot `session-store.db`, Codex state DB); `list` shows the host's own retention (`cleanupPeriodDays`, `general.sessionRetention`). The file-based `index` kind (review): `.rtok-lsp-xdg/{data,state}`, LSP caches such as `.rust-analyzer/`, `-wal`/`-shm` of closed DBs. rtok's own session rows and graph/tags rows in `rtok.db` are T330.5.3.
+
+Check: the T330 "Session threshold" fixture and the sessions lines of "New kinds"; a crash dump is listed read-only and an `extra` crash folder clears only old dumps by default; `just check`.
+
+### T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
+
+Part of T330.5. Blocked: do not claim before the creator decides T341 and T340. `stale_worktree_days` (default 14), the `stale-worktrees` kind (review) and rtok's own rows (session rows and logs keyed by session id, T284; graph/tags index rows of projects no longer in the registry, T329).
+
+Open questions for the creator:
+
+1. T341 (worktrees). (a) Does `agents junk clear` remove worktrees at all? The T330 "More junk kinds" table and its `stale-worktrees` edge case say yes, through `git worktree remove` with the branch kept; T330's own edge case "A worktree rtok created for an agent that still has unmerged commits" says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". (b) Blanket `git worktree prune` after removal (T330) or per record only (T153: a blanket prune drops the records of another session's worktrees on an unmounted volume)? (c) An orphaned worktree (main repo missing): delete its folder with `--include review` (T330) or report only (T153: "Orphans are reported, never removed"; `clean`/`gc` never delete a worktree directory themselves)? Options: A, junk removes only clean, finished worktrees with a per-record `git worktree remove`, no prune, orphans reported only; B, `stale-worktrees` is list-only in junk and points at `rtok worktree gc`; C, as T330 says, relaxing T153.
+2. T340 (`rtok.db`). T330 "Never touched" lists `rtok.db` (as T182 did), and T330.4's re-check refuses any path that is or holds it, yet the `sessions` row clears rtok's own session rows and logs (T284) and the `index` row clears graph/tags rows of removed projects (T329), both inside `rtok.db`. May junk delete those rows through the store's Diesel API, or do they stay out of T330 until T340 decides?
+
+Check: per the decisions above; `just check`.
 
 ### T330.6. Junk: item breakdown, `doctor` line, web card
 

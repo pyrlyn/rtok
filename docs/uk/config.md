@@ -131,6 +131,12 @@ grok     = ["~/.grok/sessions"]        # позначається як unsupport
 zcode    = ["~/.zcode"]                # позначається як unsupported, коли є: ZCode не документує свої записи сесій
 antigravity = ["~/.gemini/antigravity"] # позначається як unsupported, коли є: Google не документує локальні дані Antigravity
 
+[agents.junk]                         # rtok agents junk list|clear: межі віку, захищені шляхи, ваші власні шляхи для сміття
+keep_logs_days          = 30          # записи `logs` (задокументовані теки логів агентів), змінені за стільки днів, лишаються; 0-3650
+temp_min_age_hours      = 24          # записи `temp`, торкнуті за стільки годин, лишаються; 0-87600
+exclude                 = []          # glob-и (~ = домашня тека), яких ніколи не чіпають, як і теки зі збігом, напр. ["~/.claude/debug/keep-*"]; хибний glob зберігає все
+extra                   = []          # шляхи, які ви визнаєте сміттям (D36), напр. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs; host = id хоста або rtok
+
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = усі інструменти ввімкнених плагінів; інакше список дозволених; `expand` завжди лишається в переліку (D4)
 max_description_tokens  = 60          # перевіряється тестом (T4.1)
@@ -747,6 +753,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читає `RTOK_AGENT_ID` і `[worktree] root` (T411); власного ключа немає (`--json` — див. рядок «читання») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записуються в `.rtok.toml` цієї копії репозиторію (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного виклику (без ключа): яке завдання і які рядки показати; адаптер і префікс вибирає `[tasks]` |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--trash`, `--bytes`, `--yes` | на один виклик (без ключа): що один запуск показує або видаляє; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.exclude`, `.extra` без прапорця |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а також `.dirs.<host>` без прапорця (`--unpriced` обирає вигляд одного виклику, `--json` — див. рядок «читання») |
 | `agents sessions` | `--all` | (дія: також перелічує завершені сесії; live чи idle визначає `agents.idle`) |
 | `agents show` | — | знаходить префікс id через сховище (T284); live чи idle визначає `agents.idle` (`--json` — див. рядок «читання») |
