@@ -46,6 +46,29 @@ pub struct NoteHit {
     pub snippet: String,
 }
 
+/// One synthetic observation title for ranked recall (T455).
+#[derive(Clone, Debug)]
+pub struct ObsTitle {
+    /// Observation id.
+    pub id: i32,
+    /// Session that wrote it (session diversify).
+    pub session: String,
+    /// Tool-name title injected at recall.
+    pub title: String,
+    /// Scrubbed narrative length in bytes (Measurement `before`).
+    pub narrative_bytes: u64,
+    /// 1..=10 working-memory importance (default 5).
+    pub importance: i32,
+    /// How many times this observation was recalled.
+    pub uses: i32,
+    /// Unix seconds of the last recall, if any.
+    pub last_used: Option<i64>,
+    /// Unix seconds when the observation was written.
+    pub ts: i64,
+    /// Pinned observations lead recall regardless of score.
+    pub pinned: bool,
+}
+
 /// The frozen decision for one archived tool result, from [`Archive::archive_decision`].
 ///
 /// A tool result is shortened once. Every later turn replays the same pointer text, because
@@ -371,6 +394,20 @@ pub trait Notes {
     /// FTS5 search over synthetic observations (T454). Default `Ok(Vec::new())`.
     fn search_observations(&self, _query: &str, _limit: u32) -> Result<Vec<NoteHit>> {
         Ok(Vec::new())
+    }
+
+    /// Live observation titles for ranked recall (T455). Default `Ok(Vec::new())`.
+    fn list_observations_for_recall(
+        &self,
+        _project: Option<&str>,
+        _limit: u32,
+    ) -> Result<Vec<ObsTitle>> {
+        Ok(Vec::new())
+    }
+
+    /// Bump access counters after recalling observation ids (T455). Default `Ok(())`.
+    fn touch_observations(&self, _ids: &[i32]) -> Result<()> {
+        Ok(())
     }
 }
 

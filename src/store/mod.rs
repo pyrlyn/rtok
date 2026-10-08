@@ -25,6 +25,7 @@ mod symbols;
 // T329.1: the graph project registry.
 mod note_files;
 mod observations;
+pub use observations::ObservationRecall;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};

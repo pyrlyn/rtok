@@ -90,8 +90,9 @@ impl Plugin for Guard {
 
     // T392: loaded bodies are gone after a compaction. `SessionStart` with `compact` covers hosts
     // that send no `PreCompact`.
-    fn pre_compact(&self, _ev: &PreCompact, cx: &Ctx) {
+    fn pre_compact(&self, _ev: &PreCompact, cx: &Ctx) -> Option<String> {
         skill::forget_loads(cx);
+        None
     }
 
     fn session_start(&self, ev: &SessionStart, cx: &Ctx) -> Option<Injection> {

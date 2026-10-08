@@ -101,7 +101,7 @@ pub mod wire;
 
 pub use host::{
     Archive, ArchiveDecision, ArchiveHit, Capabilities, Class, Ctx, Host, Ledger, NoteHit, Notes,
-    ReadCache, SymbolFileBatch, SymbolFileRows, Symbols,
+    ObsTitle, ReadCache, SymbolFileBatch, SymbolFileRows, Symbols,
 };
 pub use wire::{BlobRef, SkillRef, ToolResultRef, ToolResults, WireRequest};
 
@@ -354,7 +354,12 @@ pub trait Plugin: Send + Sync {
     }
 
     /// Last chance to persist state before the transcript is compacted.
-    fn pre_compact(&self, _ev: &PreCompact, _cx: &Ctx) {}
+    ///
+    /// Returning `Some(text)` asks the host to put that text in the PreCompact
+    /// `additionalContext` (titles only for memory — T455). Default `None`.
+    fn pre_compact(&self, _ev: &PreCompact, _cx: &Ctx) -> Option<String> {
+        None
+    }
 
     /// Text to offer a freshly spawned subagent before it processes anything; budgeted the
     /// same way as [`Plugin::session_start`].

@@ -562,16 +562,33 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
             inject_event(input, cx, &registry, agent.as_deref())
         }
         "PreCompact" => {
+            // T455: plugins may return title context (memory observations); Inject still only
+            // saves the checkpoint. Fail open: a panic drops that plugin's text, not the event.
+            let mut parts = Vec::new();
             if let Some(ev) = input.pre_compact() {
                 for p in registry.enabled() {
-                    if let Err(e) =
-                        panic::catch_unwind(AssertUnwindSafe(|| p.pre_compact(&ev, &Ctx::new(cx))))
-                    {
-                        log_panic(cx, p.manifest().id, "PreCompact", e);
+                    match panic::catch_unwind(AssertUnwindSafe(|| {
+                        p.pre_compact(&ev, &Ctx::new(cx))
+                    })) {
+                        Ok(Some(text)) if !text.is_empty() => parts.push(text),
+                        Ok(_) => {}
+                        Err(e) => log_panic(cx, p.manifest().id, "PreCompact", e),
                     }
                 }
             }
-            HookOutput::default()
+            if parts.is_empty() {
+                HookOutput::default()
+            } else {
+                let text = parts.join("\n");
+                HookOutput {
+                    hook_specific_output: Some(crate::hooks::types::HookSpecificOutput {
+                        hook_event_name: "PreCompact".into(),
+                        additional_context: Some(text),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }
+            }
         }
         "SessionEnd" => {
             #[cfg(feature = "inject")]

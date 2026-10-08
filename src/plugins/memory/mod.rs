@@ -9,6 +9,7 @@ mod files;
 pub mod handoff;
 pub mod import;
 mod observe;
+mod rank;
 mod scrub;
 pub mod status;
 pub mod sync;
@@ -16,8 +17,8 @@ pub mod sync;
 pub use crate::project::project_name;
 
 use rtok_plugin_sdk::{
-    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PostToolUse, PromptSubmit,
-    SessionStart, SubagentStart, Surface, ToolDef,
+    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, ObsTitle, Plugin, PostToolUse,
+    PreCompact, PromptSubmit, SessionStart, SubagentStart, Surface, ToolDef,
 };
 use serde_json::json;
 
@@ -82,6 +83,11 @@ impl Plugin for Memory {
         // fail open — observe::record swallows store errors.
         observe::record(ev, cx);
         None
+    }
+
+    fn pre_compact(&self, _ev: &PreCompact, cx: &Ctx) -> Option<String> {
+        // T455: re-inject observation titles before the host summarises (agentmemory PreCompact).
+        obs_title_index(cx)
     }
 
     fn prompt_submit(&self, ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
@@ -252,15 +258,111 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     })
 }
 
+/// Max observations fetched before rank/diversify (T455); in-memory only, not the inject cap.
+const OBS_FETCH: u32 = 64;
+/// Session diversify cap from agentmemory `diversifyBySession` (T455).
+const OBS_PER_SESSION: usize = 3;
+
+/// Rank live observations: pinned first, then working-memory × retention; diversify by session.
+fn rank_observations(rows: Vec<ObsTitle>, limit: usize, now: i64) -> Vec<ObsTitle> {
+    if limit == 0 || rows.is_empty() {
+        return Vec::new();
+    }
+    let mut pinned: Vec<ObsTitle> = Vec::new();
+    let mut rest: Vec<ObsTitle> = Vec::new();
+    for r in rows {
+        if r.pinned {
+            pinned.push(r);
+        } else {
+            rest.push(r);
+        }
+    }
+    rest.sort_by(|a, b| {
+        let sa = {
+            let age = days_since(now, a.ts);
+            let access_ages = a
+                .last_used
+                .map(|t| vec![days_since(now, t)])
+                .unwrap_or_default();
+            rank::rank_score(a.importance, age, a.uses, &access_ages)
+        };
+        let sb = {
+            let age = days_since(now, b.ts);
+            let access_ages = b
+                .last_used
+                .map(|t| vec![days_since(now, t)])
+                .unwrap_or_default();
+            rank::rank_score(b.importance, age, b.uses, &access_ages)
+        };
+        sb.partial_cmp(&sa)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.id.cmp(&a.id))
+    });
+    pinned.sort_by_key(|a| std::cmp::Reverse(a.id));
+    let ordered: Vec<ObsTitle> = pinned.into_iter().chain(rest).collect();
+    let sessions: Vec<&str> = ordered.iter().map(|o| o.session.as_str()).collect();
+    let idxs = rank::diversify_indices(&sessions, limit, OBS_PER_SESSION);
+    idxs.into_iter().map(|i| ordered[i].clone()).collect()
+}
+
+fn days_since(now: i64, then: i64) -> f64 {
+    ((now - then).max(0) as f64) / 86_400.0
+}
+
+fn narrative_tokens(cx: &Ctx, bytes: u64) -> u32 {
+    let n = bytes.min(400) as usize;
+    if n == 0 {
+        return 0;
+    }
+    cx.estimate(&"n".repeat(n), Class::Prose)
+}
+
+/// Titles-only observation index under `recall_tokens` (SessionStart and PreCompact share it).
+fn obs_title_index(cx: &Ctx) -> Option<String> {
+    let cfg = cx.plugin_config::<crate::config::Memory>("memory");
+    let n = cfg.recall_titles.max(1) as usize;
+    let cap = cfg.recall_tokens.max(1);
+    let project = resolved_project(cx);
+    let rows = cx
+        .list_observations_for_recall(project.as_deref(), OBS_FETCH)
+        .ok()?;
+    if rows.is_empty() {
+        return None;
+    }
+    let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+    let picked = rank_observations(rows, n, now);
+    let ids: Vec<i32> = picked.iter().map(|o| o.id).collect();
+    let mut entries: Vec<(i32, String, u32)> = picked
+        .iter()
+        .map(|o| {
+            (
+                o.id,
+                o.title.clone(),
+                narrative_tokens(cx, o.narrative_bytes),
+            )
+        })
+        .collect();
+    let text = render_title_index(cx, &mut entries, cap);
+    let _ = cx.touch_observations(&ids);
+    Some(text)
+}
+
 fn recall(cx: &Ctx) -> Option<Injection> {
     let cfg = cx.plugin_config::<crate::config::Memory>("memory");
     let n = cfg.recall_titles.max(1);
     let cap = cfg.recall_tokens.max(1);
     let project = resolved_project(cx);
     let rows = cx.list_note_titles(project.as_deref(), n).ok()?;
+    let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+    let obs_rows = cx
+        .list_observations_for_recall(project.as_deref(), OBS_FETCH)
+        .unwrap_or_default();
+    let obs = rank_observations(obs_rows, n as usize, now);
+
     let mut kept: Vec<(i32, String, u32)> = Vec::new();
     let mut sizes = std::collections::HashMap::new();
-    let text = if rows.is_empty() {
+
+    let text = if rows.is_empty() && obs.is_empty() {
         let line = empty_project_line(project.as_deref());
         if cx.estimate(&line, Class::Prose) > cap {
             return None;
@@ -268,15 +370,31 @@ fn recall(cx: &Ctx) -> Option<Injection> {
         line
     } else {
         sizes = body_sizes(cx, rows.iter().map(|r| r.0));
+        for o in &obs {
+            sizes.insert(
+                o.id,
+                (o.narrative_bytes, narrative_tokens(cx, o.narrative_bytes)),
+            );
+        }
         kept = rows
             .into_iter()
             .map(|(id, title)| (id, title, body_tokens(&sizes, id)))
             .collect();
+        for o in &obs {
+            kept.push((o.id, o.title.clone(), body_tokens(&sizes, o.id)));
+        }
         render_title_index(cx, &mut kept, cap)
     };
+    let kept_ids: Vec<i32> = kept.iter().map(|(id, _, _)| *id).collect();
+    let obs_touched: Vec<i32> = obs
+        .iter()
+        .map(|o| o.id)
+        .filter(|id| kept_ids.contains(id))
+        .collect();
     let (before_bytes, est_before) = bodies_before(&sizes, &kept);
     let after_bytes = text.len() as u64;
     let est_after = cx.estimate(&text, Class::Prose);
+    let _ = cx.touch_observations(&obs_touched);
     let _ = cx.record(&Measurement {
         plugin: "memory",
         kind: "recall",
@@ -437,6 +555,57 @@ mod tests {
             text.contains("1 x"),
             "the entry is shortened, not lost: {text}"
         );
+    }
+
+    /// T455: SessionStart recall includes ranked observation titles (not narratives).
+    #[test]
+    fn recall_includes_observation_titles_not_narratives() {
+        use serde_json::json;
+        let cx = crate::plugin::Runtime::in_memory("t455-recall").unwrap();
+        let input = json!({"file_path": "src/secret.rs"});
+        let response = json!("the vault-never-inject body");
+        let ev = PostToolUse {
+            tool_name: "Read",
+            tool_input: &input,
+            tool_response: &response,
+        };
+        assert!(Memory.post_tool(&ev, &Ctx::new(&cx)).is_none());
+        let inj = recall(&Ctx::new(&cx)).unwrap();
+        assert!(inj.text.contains("Read"), "{}", inj.text);
+        assert!(inj.text.contains(INDEX_GUIDE), "{}", inj.text);
+        assert!(
+            !inj.text.contains("vault-never-inject"),
+            "titles only: {}",
+            inj.text
+        );
+        let rows = cx.store.list_measurements("memory").unwrap();
+        assert_eq!(rows.iter().filter(|r| r.kind == "recall").count(), 1);
+    }
+
+    /// T455: PreCompact returns the observation title index as additionalContext.
+    #[test]
+    fn pre_compact_returns_observation_titles() {
+        use serde_json::json;
+        let cx = crate::plugin::Runtime::in_memory("t455-precompact").unwrap();
+        let input = json!({"command": "ls"});
+        let response = json!("ok");
+        let ev = PostToolUse {
+            tool_name: "Bash",
+            tool_input: &input,
+            tool_response: &response,
+        };
+        Memory.post_tool(&ev, &Ctx::new(&cx));
+        let text = Memory
+            .pre_compact(
+                &PreCompact {
+                    trigger: "auto",
+                    transcript_path: "/tmp/nope.jsonl",
+                },
+                &Ctx::new(&cx),
+            )
+            .expect("titles");
+        assert!(text.contains("Bash"), "{text}");
+        assert!(text.contains(INDEX_GUIDE), "{text}");
     }
 
     /// T454: PostToolUse stores a scrubbed synthetic observation; full output is archived.

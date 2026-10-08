@@ -65,8 +65,9 @@ impl Plugin for Inject {
         }
     }
 
-    fn pre_compact(&self, ev: &PreCompact, cx: &Ctx) {
+    fn pre_compact(&self, ev: &PreCompact, cx: &Ctx) -> Option<String> {
         let _ = super::checkpoint::save(ev.transcript_path, cx);
+        None
     }
 }
 

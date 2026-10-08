@@ -536,6 +536,33 @@ impl Notes for Runtime {
     fn search_observations(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
         self.store.search_observations(query, limit)
     }
+
+    fn list_observations_for_recall(
+        &self,
+        project: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<rtok_plugin_sdk::ObsTitle>> {
+        Ok(self
+            .store
+            .list_observations_for_recall(project, limit)?
+            .into_iter()
+            .map(|r| rtok_plugin_sdk::ObsTitle {
+                id: r.id,
+                session: r.session,
+                title: r.title,
+                narrative_bytes: r.narrative.len() as u64,
+                importance: r.importance,
+                uses: r.uses,
+                last_used: r.last_used,
+                ts: r.ts,
+                pinned: r.pinned != 0,
+            })
+            .collect())
+    }
+
+    fn touch_observations(&self, ids: &[i32]) -> Result<()> {
+        self.store.touch_observations(ids)
+    }
 }
 
 impl ReadCache for Runtime {

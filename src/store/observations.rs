@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T454: synthetic observations — insert and FTS5 search. Lifecycle is retire later; never DELETE.
+//! T454/T455: synthetic observations — insert, FTS5 search, ranked title recall. Never DELETE.
 
 use anyhow::Result;
 use diesel::prelude::*;
@@ -10,6 +10,20 @@ use diesel::prelude::*;
 use super::schema::observations;
 use super::sql_ext;
 use super::{NoteHit, Store, fts_phrase_query};
+
+/// One live observation for ranked title recall (T455).
+#[derive(Debug, Clone)]
+pub struct ObservationRecall {
+    pub id: i32,
+    pub session: String,
+    pub title: String,
+    pub narrative: String,
+    pub importance: i32,
+    pub uses: i32,
+    pub last_used: Option<i64>,
+    pub ts: i64,
+    pub pinned: i32,
+}
 
 impl Store {
     /// Insert one scrubbed synthetic observation. `files` is stored newline-joined.
@@ -72,6 +86,78 @@ impl Store {
             .optional()
             .map(|row| row.flatten())
             .map_err(Into::into)
+    }
+
+    /// Live observations for `project` (and unbound), newest-biased fetch for in-memory rank.
+    pub fn list_observations_for_recall(
+        &self,
+        project: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<ObservationRecall>> {
+        let mut conn = self.lock()?;
+        let lim = i64::from(limit.max(1));
+        let mut q = observations::table
+            .filter(observations::retired.is_null())
+            .order((observations::pinned.desc(), observations::id.desc()))
+            .limit(lim)
+            .select((
+                observations::id,
+                observations::session,
+                observations::title,
+                observations::narrative,
+                observations::importance,
+                observations::uses,
+                observations::last_used,
+                observations::ts,
+                observations::pinned,
+            ))
+            .into_boxed();
+        q = match project {
+            Some(p) => q.filter(
+                observations::project
+                    .eq(p)
+                    .or(observations::project.is_null()),
+            ),
+            None => q,
+        };
+        Ok(
+            q.load::<(i32, String, String, String, i32, i32, Option<i64>, i64, i32)>(&mut *conn)?
+                .into_iter()
+                .map(
+                    |(id, session, title, narrative, importance, uses, last_used, ts, pinned)| {
+                        ObservationRecall {
+                            id,
+                            session,
+                            title,
+                            narrative,
+                            importance,
+                            uses,
+                            last_used,
+                            ts,
+                            pinned,
+                        }
+                    },
+                )
+                .collect(),
+        )
+    }
+
+    /// Bump `uses` / `last_used` for recalled observation ids (rank inputs; never a delete).
+    pub fn touch_observations(&self, ids: &[i32]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let mut conn = self.lock()?;
+        for id in ids {
+            diesel::update(observations::table.find(id))
+                .set((
+                    observations::uses.eq(observations::uses + 1),
+                    observations::last_used.eq(now),
+                ))
+                .execute(&mut *conn)?;
+        }
+        Ok(())
     }
 }
 
