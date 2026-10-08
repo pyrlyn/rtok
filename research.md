@@ -2466,3 +2466,46 @@ Correction to the T441 card: Backlog.md and Taskmaster both lock id allocation a
 5. Bulk create and `sync` pace writes: GitHub's 500 content-creating requests/hour is the tightest limit; one write per second, honour `retry-after`.
 6. Collision check on a remote: list issues by the `rtok:R13` label with `state=all` (not the search API: 30/min and an undocumented index delay).
 7. Tokens: `GH_TOKEN` → `GITHUB_TOKEN` → `gh auth token`; `GITLAB_TOKEN`. User-owned GitHub projects need a classic token with `project`.
+
+## 36. Cross-session read duplication (T385.13, measured 2026-10-08)
+
+Question (optimization.md §5, "Cross-session read dedup"): how much of the input is the same file content read again in a second session on the same day. Build gate: at least 1 % of input. Ad-hoc read-only SQL and a scratch script over a copy of the owner's real store (`rtok.db`, 335k `calls`, 2026-09-14 to 2026-10-08); no code shipped, no `Measurement` row, no saving claimed.
+
+**Definitions.**
+
+- **Read** = a successful file read, from three `calls` sources. (1) Claude Code native `Read`: `kind='hook'`, `name='PostToolUse'`, `tool_name='Read'`, the text in `tool_response.file.content`. (2) rtok MCP `read`: `kind='mcp_call'`, `name='read'`, `ok=1`, the text in `response_json` (so a different `mode` or range is a different content). Errors, images and `file_unchanged` pointers are dropped. The hook copy of an MCP read (`mcp__rtok__read`) is not counted twice. (3) Cursor `Read`, only as a sensitivity row: its hook stores `content_length` and the path, never the text.
+- **Same content** = equal SHA-256 of the returned text, any path (a file read from two worktrees counts; the key is the content, not the path). Cursor: path plus length, which can miss an edit of the same size and cannot see a copy at another path.
+- **Within a day** = the same UTC calendar day (`strftime` of `calls.ts`). A whole-window row with no day bound is the upper bound for any 24 h window.
+- **Cross-session duplicate** = for each (day, content), the first read in every session except the earliest session. Repeats inside one session (and between a parent and its sub-agents, which share `session_id`) are the existing in-session dedup and are not counted. Bytes = the duplicate's result bytes, tokens = bytes / 4 (the estimator used in §2).
+- **Input** = uncached + cache_create + cache_read tokens of the same window from `RTOK_HOME=<copy> rtok stats --since 79h --json`, main transcripts plus sub-agent transcripts (`subagents.usage_*`), as in §2. The copy keeps `stats` from writing to the real store.
+- **Resident weighting**: a read stays in the context for the rest of the session, so its share of input is its tokens times the tool's context-token-turns per token (`tools.Read.ctt / est_tokens` = 735; `mcp__rtok__read` = 1,260 in the same window), divided by input. Generous: sub-agent windows are shorter than the main one.
+
+**Window A (the headline): 2026-10-05 to 2026-10-08, native Read plus MCP read.** Inline hook bodies exist only from 2026-10-05; before that `call_io` keeps hashes of the whole payload, which cannot identify a file.
+
+| Measure | Value |
+| --- | --- |
+| Sessions with a read / reads / bytes read | 38 / 3,049 (1,932 native, 1,117 MCP) / 13,613,229 B |
+| Reads whose content another session read the same UTC day | 232 reads in 25 (day, content) groups |
+| Cross-session duplicate reads | **38** (1.2 % of reads) |
+| Duplicate bytes / tokens | **56,561 B ≈ 14,140 tokens** (0.42 % of the bytes read) |
+| Input in the window (main + sub-agents) | 4,139,214,544 tokens |
+| Share of input, duplicate counted once | 0.00034 % |
+| Share of input, resident weighted | **0.25 %** (x735) to **0.43 %** (x1,260) |
+| No day bound (any gap inside the 3.3 days) | 59 reads, 78,598 B ≈ 19,649 tokens, resident 0.35 % to 0.60 % |
+| Same, keyed on path plus content instead of content | 2 reads, 2,698 B (the content matches found above sit at different paths, mostly different worktrees) |
+
+Where the duplicates sit (basenames only): `mod.rs`, `retry.rs`, `gc.rs`, `terminal.rs`, `sse.rs` (source files), then `AGENTS.md`, `Cargo.toml`, `release-plz.toml`. No file dominates; the largest basename is 21 % of the duplicate bytes.
+
+**Cross-checks.**
+
+| Source | Window | Result |
+| --- | --- | --- |
+| MCP `read` only, response hash | 2026-09-14 to 2026-10-08, 128 sessions, 5,615 reads, 26,192,465 B | 93 duplicate reads, 290,927 B ≈ 72,731 tokens (1.1 % of bytes); input 22,257,526,251 tokens (`--since 24d`, 279 sessions); share 0.00033 % once, 0.28 % resident (x864) |
+| `read_cache` (session, path, content hash) joined to `archive.bytes`, rtok-handled reads | 2026-09-04 to 2026-10-08, 146 sessions, 7,221 entries, 42,378,105 B | 56 duplicate entries, 354,322 B ≈ 88,580 tokens (0.84 % of the bytes); since 2026-10-05: 7 entries, 15,380 B (0.21 %) |
+| Cursor `Read`, path plus `content_length` | 2026-10-05 to 2026-10-07, 34 sessions, 4,477 reads | 76 duplicate reads, 488,485 B (0.20 % of the 242,932,224 B its hook reports). Cursor sessions are not in the `stats` input, so no share is given; the duplicate fraction of bytes is the same order as Claude Code's |
+
+**Result.** Under every definition tried the cross-session duplicate is **0.2 % to 1.1 % of the bytes read** and **0.25 % to 0.60 % of input** after weighting for how long a read stays resident (0.0005 % if each duplicate is counted once). That is below the 1 % gate, so no build task is filed and `optimization.md` §5 keeps "Cross-session read dedup" as not built.
+
+**Why it is small.** Sessions on this machine work in separate worktrees, so the same file sits at different paths and a path-keyed cache would catch almost nothing (2 reads); only a content-keyed cache would match, and the content-keyed pool is still 0.4 % of read bytes. Within a session the existing guard and read cache already collapse repeats, and `rtok read` returns line-range slices, so two sessions rarely ask for the same slice of the same file on the same day.
+
+**Limits.** (1) Native Read bodies exist for four days only; the 25-day figure is MCP `read`, which is a lower bound for all reads. (2) The denominator is every Claude Code transcript in the window, sub-agents included (63 % of the input), and the reads counted include sub-agent reads, so the whole-input figure is the matching one. Against main-session input alone (1,518,798,579 tokens) the resident-weighted share would read 0.68 % to 1.17 %, but that pairs sub-agent reads with a denominator that leaves their input out. (3) Reads by a different path to the same content in the same session are not cross-session and are not counted. (4) Commands: `sqlite3 -readonly` on a file copy of `rtok.db` for the schema checks; a Python 3 script (`sqlite3`, `hashlib`) grouped reads by (UTC day, SHA-256); `RTOK_HOME=<copy> rtok stats --since 79h --json` and `--since 24d --json` for input and the CTT ratios. Re-run these after a change to the read plugin or a move to shared worktrees; a result above 1 % would justify a content-keyed, cross-session pointer.

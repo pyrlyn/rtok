@@ -65,7 +65,6 @@
 - T385.10. Routing for `internal` and `bulk` calls
 - T385.11. Deferred tool schemas and thinking replay
 - T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
-- T385.13. Measure cross-session read duplication
 - T391. Junk map: the five missing hosts and VS Code `CachedData`
 - T393. `doctor` shows the saving a 120-character skill description cap would give
 - T394. Run the paid live benches and record them
