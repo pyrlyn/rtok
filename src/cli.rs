@@ -489,6 +489,8 @@ enum MemoryCmd {
     // T69.1
     /// Drop a note back to newest-first recall order
     Unpin { id: i32 },
+    /// Previous title and body of a note, oldest version first
+    History { id: i32 },
     // T69.1
     /// Save a replacement (title, body) for a note and retire the old row
     Revise {
@@ -2274,6 +2276,17 @@ pub fn run() -> Result<()> {
                         "{}",
                         crate::plugins::memory::mem_update(&cx, id, false, None, Some(false))?
                     );
+                }
+                MemoryCmd::History { id } => {
+                    let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+                    for (i, (version, title, body)) in
+                        cx.store.note_versions(id)?.iter().enumerate()
+                    {
+                        if i > 0 {
+                            println!();
+                        }
+                        println!("{version} {title}\n{body}");
+                    }
                 }
                 MemoryCmd::Revise { id, title, body } => {
                     let cx = crate::plugin::Runtime::open(cfg, "memory")?;

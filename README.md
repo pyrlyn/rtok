@@ -369,6 +369,7 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok memory retire <id> [--superseded-by <id>]` | tombstone a note: never recalled or searched, body kept |
 | `rtok memory pin / unpin <id>` | keep a note at the head of SessionStart recall, or drop it back |
 | `rtok memory revise <id> --title <t> --body <b>` | save a replacement note and retire the old one |
+| `rtok memory history <id>` | previous title and body of a note, oldest version first |
 | `rtok otel flush` / `status` | export the ledgers over OTLP, or report the watermarks |
 
 Agent ids, messages between agents and how worktrees bind to them on every host: [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md).

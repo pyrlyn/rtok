@@ -90,6 +90,18 @@ diesel::table! {
     }
 }
 
+// 0034: previous title and body of a note, one row per changed upsert.
+diesel::table! {
+    note_versions (id) {
+        id -> Integer,
+        note_id -> Integer,
+        title -> Text,
+        body -> Text,
+        version -> Integer,
+        ts -> BigInt,
+    }
+}
+
 diesel::table! {
     notes (id) {
         id -> Integer,
@@ -393,6 +405,7 @@ diesel::joinable!(measurements -> calls (call_id));
 diesel::joinable!(usage -> calls (call_id));
 diesel::joinable!(note_embeddings -> notes (note_id));
 diesel::joinable!(note_files -> notes (note_id));
+diesel::joinable!(note_versions -> notes (note_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     events,
@@ -403,6 +416,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     notes,
     note_embeddings,
     note_files,
+    note_versions,
     usage,
     hosts,
     providers,

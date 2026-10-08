@@ -52,7 +52,7 @@ pub use crate::plugin::{ArchiveDecision, NoteHit};
 // own `pub mod models` of Diesel row structs, so upsert_model qualifies it as `schema::models`.
 use schema::{
     archive, archive_decisions, call_io, calls, hook_sessions, hosts, kv, logs, measurements,
-    notes, providers, read_cache, sessions, tokens, usage,
+    note_versions, notes, providers, read_cache, sessions, tokens, usage,
 };
 
 pub(crate) use sql_ext::{coalesce, length, substr, sum_bigint, unixepoch};
@@ -156,6 +156,39 @@ thread_local! {
 
 /// Rows per write transaction when clearing hook bodies (T352).
 const HOOK_BODY_BATCH: i64 = 5_000;
+
+/// Session checkpoints and handoffs rewrite the same row every turn. They are not
+/// durable facts, so a body change does not fill `note_versions`.
+fn versionless_kind(kind: &str) -> bool {
+    kind.starts_with("checkpoint:") || kind.starts_with("session:")
+}
+
+/// Next version is `COALESCE(MAX(version), 0) + 1` for this note, then the previous
+/// title and body. Diesel expresses the aggregate; the upsert itself stays the one
+/// raw statement (`UpsertNote`) because its conflict target is an expression index.
+fn capture_note_version(
+    conn: &mut SqliteConnection,
+    note_id: i32,
+    title: &str,
+    body: &str,
+) -> diesel::QueryResult<()> {
+    use diesel::dsl::max;
+    let next = note_versions::table
+        .filter(note_versions::note_id.eq(note_id))
+        .select(max(note_versions::version))
+        .first::<Option<i32>>(conn)?
+        .unwrap_or(0)
+        .saturating_add(1);
+    diesel::insert_into(note_versions::table)
+        .values((
+            note_versions::note_id.eq(note_id),
+            note_versions::title.eq(title),
+            note_versions::body.eq(body),
+            note_versions::version.eq(next),
+        ))
+        .execute(conn)?;
+    Ok(())
+}
 
 impl Store {
     /// Open (creating directories and the file as needed) and migrate.
@@ -1233,28 +1266,55 @@ impl Store {
         body: &str,
     ) -> Result<(i32, bool)> {
         let mut conn = self.lock()?;
-        // Informational only (callers report "created" vs "updated"): read before the
-        // atomic write below, so a true concurrent race can make it stale without ever
-        // producing a duplicate row — the UNIQUE index and the single statement own that.
-        let mut existed_q = notes::table
-            .filter(notes::kind.eq(kind))
-            .filter(notes::title.eq(title))
-            .select(notes::id)
-            .into_boxed();
-        existed_q = match project {
-            Some(p) => existed_q.filter(notes::project.eq(p)),
-            None => existed_q.filter(notes::project.is_null()),
-        };
-        let updated = existed_q.first::<i32>(&mut *conn).optional()?.is_some();
-
-        let id = sql_ext::UpsertNote {
-            project: project.map(str::to_string),
-            kind: kind.to_string(),
-            title: title.to_string(),
-            body: body.to_string(),
-        }
-        .get_result(&mut *conn)?;
+        // The read and the version row share this transaction with the upsert, so a
+        // changed body keeps the previous text even if the process stops between them.
+        // BEGIN IMMEDIATE, not deferred: two connections that each read first and then
+        // write deadlock on the shared lock (the concurrent upsert test). A concurrent
+        // writer can still make `updated` stale; the UNIQUE index and the single upsert
+        // statement own "no duplicate row".
+        let (id, updated) = conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
+            let mut existed_q = notes::table
+                .filter(notes::kind.eq(kind))
+                .filter(notes::title.eq(title))
+                .select((notes::id, notes::title, notes::body))
+                .into_boxed();
+            existed_q = match project {
+                Some(p) => existed_q.filter(notes::project.eq(p)),
+                None => existed_q.filter(notes::project.is_null()),
+            };
+            let existing = existed_q.first::<(i32, String, String)>(conn).optional()?;
+            if let Some((id, old_title, old_body)) = existing.as_ref()
+                && old_body != body
+                && !versionless_kind(kind)
+            {
+                capture_note_version(conn, *id, old_title, old_body)?;
+            }
+            let id = sql_ext::UpsertNote {
+                project: project.map(str::to_string),
+                kind: kind.to_string(),
+                title: title.to_string(),
+                body: body.to_string(),
+            }
+            .get_result(conn)?;
+            Ok((id, existing.is_some()))
+        })?;
         Ok((id, updated))
+    }
+
+    /// Previous title and body of `id`, oldest version first. An unknown id, or a note
+    /// whose body has never changed, is an empty vec.
+    pub fn note_versions(&self, id: i32) -> Result<Vec<(i32, String, String)>> {
+        let mut conn = self.lock()?;
+        note_versions::table
+            .filter(note_versions::note_id.eq(id))
+            .order(note_versions::version.asc())
+            .select((
+                note_versions::version,
+                note_versions::title,
+                note_versions::body,
+            ))
+            .load(&mut *conn)
+            .map_err(Into::into)
     }
 
     /// Every note but the session-local `checkpoint:*` / `session:*` rows, id order
@@ -3241,6 +3301,66 @@ mod tests {
             "retired note does not search"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn upsert_same_title_with_a_new_body_keeps_the_old_body_in_history() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, created) = store
+            .upsert_note(Some("p"), "decision", "auth", "sessions")
+            .unwrap();
+        assert!(!created);
+        assert!(store.note_versions(id).unwrap().is_empty());
+        let (again, updated) = store
+            .upsert_note(Some("p"), "decision", "auth", "jwt")
+            .unwrap();
+        assert!(updated);
+        assert_eq!(again, id);
+        assert_eq!(
+            store.note_versions(id).unwrap(),
+            vec![(1, "auth".to_string(), "sessions".to_string())]
+        );
+        assert_eq!(store.get_note_body(id).unwrap().as_deref(), Some("jwt"));
+        let (third, _) = store
+            .upsert_note(Some("p"), "decision", "auth", "opaque tokens")
+            .unwrap();
+        assert_eq!(third, id);
+        assert_eq!(
+            store.note_versions(id).unwrap(),
+            vec![
+                (1, "auth".to_string(), "sessions".to_string()),
+                (2, "auth".to_string(), "jwt".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn checkpoint_upsert_writes_zero_version_rows() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, _) = store
+            .upsert_note(Some("p"), "checkpoint:s", "compact", "first")
+            .unwrap();
+        store
+            .upsert_note(Some("p"), "checkpoint:s", "compact", "second")
+            .unwrap();
+        assert!(store.note_versions(id).unwrap().is_empty());
+        let (sid, _) = store
+            .upsert_note(Some("p"), "session:s", "handoff", "one")
+            .unwrap();
+        store
+            .upsert_note(Some("p"), "session:s", "handoff", "two")
+            .unwrap();
+        assert!(store.note_versions(sid).unwrap().is_empty());
+    }
+
+    #[test]
+    fn same_body_upsert_writes_zero_version_rows() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, _) = store.upsert_note(None, "note", "topic", "same").unwrap();
+        let (_, updated) = store.upsert_note(None, "note", "topic", "same").unwrap();
+        assert!(updated);
+        assert!(store.note_versions(id).unwrap().is_empty());
+        assert!(store.note_versions(id + 1).unwrap().is_empty());
     }
 
     /// T209: a `rtok.db` already holding duplicate `(project, kind, title)` notes — the

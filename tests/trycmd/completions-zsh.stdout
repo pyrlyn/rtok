@@ -1661,6 +1661,14 @@ _arguments "${_arguments_options[@]}" : /
 ':id:_default' /
 && ret=0
 ;;
+(history)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id:_default' /
+&& ret=0
+;;
 (revise)
 _arguments "${_arguments_options[@]}" : /
 '--title=[The replacement title]:TITLE:_default' /
@@ -1722,6 +1730,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (unpin)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(history)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -2742,6 +2754,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (unpin)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(history)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -4259,6 +4275,7 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
+'history:Previous title and body of a note, oldest version first' /
 'revise:Save a replacement (title, body) for a note and retire the old row' /
 'sync:Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block' /
 'status:Notes live/pinned/retired, recall and MCP call counts' /
@@ -4269,6 +4286,11 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 _rtok__subcmd__help__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help memory export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__history_commands] )) ||
+_rtok__subcmd__help__subcmd__memory__subcmd__history_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help memory history commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__import_commands] )) ||
 _rtok__subcmd__help__subcmd__memory__subcmd__import_commands() {
@@ -4562,6 +4584,7 @@ _rtok__subcmd__memory_commands() {
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
+'history:Previous title and body of a note, oldest version first' /
 'revise:Save a replacement (title, body) for a note and retire the old row' /
 'sync:Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block' /
 'status:Notes live/pinned/retired, recall and MCP call counts' /
@@ -4582,6 +4605,7 @@ _rtok__subcmd__memory__subcmd__help_commands() {
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
+'history:Previous title and body of a note, oldest version first' /
 'revise:Save a replacement (title, body) for a note and retire the old row' /
 'sync:Write pinned-then-newest titles into a managed CLAUDE.md / AGENTS.md block' /
 'status:Notes live/pinned/retired, recall and MCP call counts' /
@@ -4598,6 +4622,11 @@ _rtok__subcmd__memory__subcmd__help__subcmd__export_commands() {
 _rtok__subcmd__memory__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory help help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__history_commands] )) ||
+_rtok__subcmd__memory__subcmd__help__subcmd__history_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory help history commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__import_commands] )) ||
 _rtok__subcmd__memory__subcmd__help__subcmd__import_commands() {
@@ -4633,6 +4662,11 @@ _rtok__subcmd__memory__subcmd__help__subcmd__sync_commands() {
 _rtok__subcmd__memory__subcmd__help__subcmd__unpin_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory help unpin commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__memory__subcmd__history_commands] )) ||
+_rtok__subcmd__memory__subcmd__history_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory history commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__memory__subcmd__import_commands] )) ||
 _rtok__subcmd__memory__subcmd__import_commands() {

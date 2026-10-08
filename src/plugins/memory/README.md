@@ -15,6 +15,8 @@ progressive disclosure.
   The title is the topic key: a second save with the same project, kind and title updates
   that row (`{"id", "updated": true}`) instead of adding a stale twin to recall (T66.1).
   An explicit re-save of a retired topic revives it (clears the tombstone).
+  `<private>`…`</private>` is stored as `[REDACTED]`. A body change keeps the previous
+  text for `rtok memory history <id>`; SessionStart recall still shows the current title only.
 - `mem_search(query, limit=5)` — ids, titles, 120-char snippets ranked by FTS5 `bm25`.
   Retired notes never appear.
 - `mem_get(id)` — full body. A retired note still returns its body, prefixed by one line

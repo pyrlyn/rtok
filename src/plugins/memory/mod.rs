@@ -13,11 +13,27 @@ pub mod sync;
 
 pub use crate::project::project_name;
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use rtok_plugin_sdk::{
     Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PromptSubmit,
     SessionStart, SubagentStart, Surface, ToolDef,
 };
 use serde_json::json;
+
+/// `<private>`…`</private>`, case-insensitive, dot matches newline. Non-greedy on purpose:
+/// a nested tag closes at the first `</private>`, same as a single unanchored match.
+static PRIVATE_TAG: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<private>.*?</private>").expect("private tag regex"));
+
+/// Replace each `<private>` block with `[REDACTED]` and trim. Nested tags are not balanced.
+pub fn strip_private(input: &str) -> String {
+    PRIVATE_TAG
+        .replace_all(input, "[REDACTED]")
+        .trim()
+        .to_string()
+}
 
 /// One line in the hook index: titles only; names the MCP tools that fetch bodies (T293).
 const INDEX_GUIDE: &str = "titles only; mem_search this turn; mem_get matching id for body";
@@ -173,16 +189,16 @@ fn bodies_before(
 
 fn remember_save(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     let first = ev.prompt.lines().next()?.trim();
-    let rest = first.strip_prefix("remember:")?.trim();
+    let rest = strip_private(first.strip_prefix("remember:")?.trim());
     if rest.is_empty() {
         return None;
     }
     let title: String = rest.chars().take(80).collect();
     let project = cx.cwd().map(std::path::Path::new).and_then(project_name);
     let id = cx
-        .upsert_note(project.as_deref(), "user", &title, rest)
+        .upsert_note(project.as_deref(), "user", &title, &rest)
         .ok()?;
-    files::link_note(cx, id, rest);
+    files::link_note(cx, id, &rest);
     Some(Injection {
         plugin: "memory",
         text: format!("saved note {id}"),
@@ -292,15 +308,25 @@ pub fn mem_save(
     body: &str,
     project: Option<&str>,
 ) -> anyhow::Result<(i32, bool)> {
+    let title = strip_private(title);
+    let body = strip_private(body);
+    // Same rejection an omitted title already gets at the MCP boundary (`missing `title``).
+    // A body that redacts to nothing is not stored.
+    if title.is_empty() {
+        anyhow::bail!("missing `title`");
+    }
+    if body.is_empty() {
+        anyhow::bail!("missing `body`");
+    }
     let proj = project
         .map(str::to_string)
         .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)));
     // The title is the topic key (T66.1): a re-save updates the row, recall never shows
     // a stale twin next to the new one.
-    let (id, updated) = rt.store.upsert_note(proj.as_deref(), kind, title, body)?;
-    files::link_note(&Ctx::new(rt), id, body);
+    let (id, updated) = rt.store.upsert_note(proj.as_deref(), kind, &title, &body)?;
+    files::link_note(&Ctx::new(rt), id, &body);
     rt.store
-        .upsert_note_embedding(id, title, body, &rt.config.plugins.memory.embed)?;
+        .upsert_note_embedding(id, &title, &body, &rt.config.plugins.memory.embed)?;
     Ok((id, updated))
 }
 
@@ -446,6 +472,56 @@ mod tests {
             prompt: "just a question",
         };
         assert!(Memory.prompt_submit(&plain, &ctx).is_none());
+    }
+
+    #[test]
+    fn strip_private_removes_a_tag_and_leaves_surrounding_text() {
+        assert_eq!(
+            strip_private("key <private>sk-test</private> ok"),
+            "key [REDACTED] ok"
+        );
+        // Non-greedy: the first closer wins, so a nested tag is not balanced.
+        assert_eq!(
+            strip_private("<private>a <private>b</private> c</private>"),
+            "[REDACTED] c</private>"
+        );
+    }
+
+    #[test]
+    fn strip_private_is_case_insensitive_and_spans_newlines() {
+        assert_eq!(
+            strip_private("pre <PRIVATE>\nsecret\n</PrIvAtE> post"),
+            "pre [REDACTED] post"
+        );
+    }
+
+    #[test]
+    fn mem_save_stores_the_redacted_body() {
+        let cx = crate::plugin::Runtime::in_memory("strip-private").unwrap();
+        let (id, _) = mem_save(
+            &cx,
+            "note",
+            "topic",
+            "key <private>sk-test</private> ok",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            mem_get(&cx, id).unwrap().as_deref(),
+            Some("key [REDACTED] ok")
+        );
+        // A field that is only a tag becomes `[REDACTED]`, which is not empty.
+        let (redacted, _) =
+            mem_save(&cx, "note", "secret title", "<private>sk</private>", None).unwrap();
+        assert_eq!(
+            mem_get(&cx, redacted).unwrap().as_deref(),
+            Some("[REDACTED]")
+        );
+        let err = mem_save(&cx, "note", "   ", "kept", None).unwrap_err();
+        assert_eq!(err.to_string(), "missing `title`");
+        let err = mem_save(&cx, "note", "only secret", "  \n  ", None).unwrap_err();
+        assert_eq!(err.to_string(), "missing `body`");
+        assert!(cx.store.note_bodies().unwrap().iter().all(|b| b != "kept"));
     }
 
     #[test]
@@ -744,6 +820,13 @@ mod tests {
         let hits = mem_search(&cx, "jwt", 5).unwrap();
         assert_eq!(hits[0].id, a);
         assert!(mem_search(&cx, "sessions", 5).unwrap().is_empty());
+        assert_eq!(
+            cx.store.note_versions(a).unwrap(),
+            vec![(1, "auth model".to_string(), "sessions".to_string())]
+        );
+        let recalled = recall(&Ctx::new(&cx)).unwrap().text;
+        assert!(!recalled.contains("sessions"), "{recalled}");
+        assert!(!recalled.contains("jwt"), "{recalled}");
     }
 
     #[test]

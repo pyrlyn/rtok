@@ -9,6 +9,8 @@ if split out per T2.5.
 
 **Invariants**
 - No LLM calls. Notes are written by the agent through `mem_save` or extracted mechanically.
+- `<private>`…`</private>` is replaced with `[REDACTED]` before a note is stored (`strip_private`). An empty title after that is `missing `title``; an empty body is not stored. `mem_get` returns the stored text.
+- An upsert that changes the body writes the previous title and body to `note_versions` (`rtok memory history <id>`). `checkpoint:*` and `session:*` do not. Recall and `mem_get` stay on the current body.
 - `mem_save` is an upsert on `(project, kind, title)` — the title is the topic key (T66.1).
   The `notes_topic` UNIQUE index enforces one row per key at the database level (T209):
   checkpoints (`checkpoint.rs`) and the SDK's `insert_note` both upsert now too (newest
