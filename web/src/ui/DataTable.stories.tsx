@@ -63,6 +63,12 @@ export const TenThousandRows: Story = {
     },
 };
 
+// A selected row in both themes: axe checks the cell text on the accent wash.
+export const SelectedRow: Story = {
+    args: { selectedId: String(sampleSnapshot.calls[0]?.id), onSelect: () => {} },
+};
+export const SelectedRowLight: Story = { ...SelectedRow, globals: { theme: "light" } };
+
 export const Selectable: Story = {
     render: (args) => {
         const [selected, setSelected] = useState<string>();

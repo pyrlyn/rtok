@@ -125,7 +125,10 @@ export class Stage implements ViewApi {
 
   setScene(scene: Scene): void {
     this.clear();
-    const fg = getComputedStyle(this.host).color || "#888";
+    const style = getComputedStyle(this.host);
+    // Named fallback only for hosts without the brand stylesheet (unit tests).
+    const fg = style.color || "gray";
+    const subtle = style.getPropertyValue("--pyr-fg-subtle").trim() || fg;
     for (const node of scene.nodes) {
       const color = new Color(node.color);
       const material = new MeshStandardMaterial({
@@ -151,7 +154,7 @@ export class Stage implements ViewApi {
     this.edges = scene.edges.filter((e) => this.nodes.has(e.from) && this.nodes.has(e.to));
     this.owner = this.edges.flatMap((e, i) => Array<number>(e.dashed ? DASHES : 1).fill(i));
     const tint = (e: SceneEdge) =>
-      new Color(e.inScope ? fg : "#888").multiplyScalar(e.inScope ? 1 : 0.6);
+      new Color(e.inScope ? fg : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
     const lineMat = new MeshBasicMaterial({ color: 0xffffff });
     this.lines = new InstancedMesh(this.cylinder, lineMat, Math.max(1, this.owner.length));
     this.heads = new InstancedMesh(
