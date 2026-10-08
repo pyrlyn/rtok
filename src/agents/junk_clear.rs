@@ -262,6 +262,8 @@ fn recheck(p: &Planned, keep: &[PathBuf], now: SystemTime) -> Option<(String, bo
 
 fn discard(path: &Path, trash: bool) -> std::io::Result<()> {
     if trash {
+        // Only macOS sets a delete method below; elsewhere the binding is never mutated.
+        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut ctx = trash::TrashContext::default();
         // Finder would ask for Automation permission and play a sound; a CLI wants neither.
         #[cfg(target_os = "macos")]
