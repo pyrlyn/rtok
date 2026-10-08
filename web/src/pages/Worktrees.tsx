@@ -171,7 +171,7 @@ function Table({ rows: all, total, note }: { rows: WorktreeRow[]; total: string;
 
 function Detail({ row: r }: { row: WorktreeRow }) {
     return (
-        <Panel title={baseName(r.path)} hint={r.state}>
+        <Panel title={baseName(r.path)} action={<StatePill state={r.state} />}>
             <Kv
                 rows={[
                     ["path", <span className="break-all">{r.path}</span>],

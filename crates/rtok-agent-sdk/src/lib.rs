@@ -119,6 +119,33 @@ pub fn prune_backups(kept: &Path, keep: usize) {
     }
 }
 
+/// The generations in the `_backup` folder `dir` that a cap of `keep` has no room for: per base
+/// name, all but the newest `keep`, oldest first. Read-only, the listing twin of
+/// [`prune_backups`] for a cap lowered after the copies were taken; `0` keeps all.
+pub fn stale_backups(dir: &Path, keep: usize) -> Vec<PathBuf> {
+    if keep == 0 || dir.file_name().is_none_or(|d| d != BACKUP_DIR) {
+        return Vec::new();
+    }
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| {
+            let f = e.ok()?.file_name().into_string().ok()?;
+            Some(f.rsplit_once(".bak-")?.0.to_string())
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    let mut out = Vec::new();
+    for name in names {
+        let mut all = generations(dir, &name);
+        all.sort();
+        let excess = all.len().saturating_sub(keep);
+        out.extend(all.into_iter().take(excess).map(|(_, p)| p));
+    }
+    out
+}
+
 /// Regular files in `dir` named `<name>.bak-<ts>[-<n>]`, with `(ts, n)` to sort them by.
 fn generations(dir: &Path, name: &str) -> Vec<((u64, u64), PathBuf)> {
     let prefix = format!("{name}.bak-");
@@ -1315,6 +1342,38 @@ mod tests {
             "a real edit must still be kept: {kept}"
         );
         assert!(read_json(&path).unwrap()["mcpServers"]["rtok"].is_object());
+    }
+
+    /// The listing twin of `prune_backups`: per base name all but the newest `keep`, foreign
+    /// names and other folders never, and `0` keeps every copy.
+    #[test]
+    fn stale_backups_lists_only_generations_past_the_cap() {
+        let dir = tmp("stale-backups").join(BACKUP_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        for f in [
+            "a.json.bak-1",
+            "a.json.bak-2-1",
+            "a.json.bak-2",
+            "b.json.bak-7",
+            "a.json.bak-x",
+        ] {
+            fs::write(dir.join(f), "x").unwrap();
+        }
+        let names = |keep| {
+            let mut n: Vec<String> = stale_backups(&dir, keep)
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            n.sort();
+            n
+        };
+        assert_eq!(names(1), ["a.json.bak-1", "a.json.bak-2"]);
+        assert_eq!(names(2), ["a.json.bak-1"]);
+        assert!(names(0).is_empty() && names(3).is_empty());
+        assert!(
+            stale_backups(dir.parent().unwrap(), 1).is_empty(),
+            "not a _backup folder"
+        );
     }
 
     #[test]

@@ -340,7 +340,7 @@
 # project = 0                           # repo owner's Projects v2 number: issues join it and its Status follows the task; 0 = issues only
 
 [tasks.gitlab]
-# url     = "https://gitlab.com"        # base URL; set it for a self-hosted instance
+# url     = "https://gitlab.com"        # https base URL; set it for a self-hosted instance
 # project = ""                          # group/name or numeric id; empty: the origin remote
 
 [otel]                                # OpenTelemetry export; off until endpoint resolves
