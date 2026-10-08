@@ -1,4 +1,4 @@
 Error: read no-such.jsonl
 
 Caused by:
-    No such file or directory (os error 2)
+    [..] (os error 2)
