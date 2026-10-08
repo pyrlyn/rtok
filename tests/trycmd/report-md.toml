@@ -112,8 +112,12 @@ Every effective key with its origin — the `config show --sources` page.
 | log.path | ~/.rtok/logs/rtok.log | default |
 | log.to_db | true | default |
 | log.tspin | auto | default |
+| mcp.http | 127.0.0.1:8791 | default |
+| mcp.http_tools | [read, search, tree] | default |
 | mcp.max_description_tokens | 60 | default |
 | mcp.max_result_chars | 20000 | default |
+| mcp.public_url |  | default |
+| mcp.token |  | default |
 | mcp.tools | [] | default |
 | otel.content | true | default |
 | otel.content_bytes | 65536 | default |
@@ -206,13 +210,46 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.toon.min_rows | 5 | default |
 | plugins.wasm.dir | ~/.rtok/plugins | default |
 | plugins.wasm.enabled | false | default |
+| proxy.batch.parse_results | false | default |
 | proxy.bind | 127.0.0.1 | default |
 | proxy.context_management | false | default |
 | proxy.dry_run | false | default |
 | proxy.enabled | true | default |
+| proxy.flex.backoff_ms | 1000 | default |
+| proxy.flex.force | false | default |
+| proxy.flex.on_429 | none | default |
+| proxy.flex.retries | 3 | default |
 | proxy.gemini_upstream | https://generativelanguage.googleapis.com | default |
 | proxy.include_usage | true | default |
+| proxy.lanes.bulk.compress | false | default |
+| proxy.lanes.bulk.context_management | false | default |
+| proxy.lanes.bulk.flex | false | default |
+| proxy.lanes.bulk.semantic_cache | false | default |
+| proxy.lanes.bulk.timeout_s | 0 | default |
+| proxy.lanes.bulk.tools_rewrite | false | default |
+| proxy.lanes.bulk.toon | false | default |
+| proxy.lanes.embeddings.compress | false | default |
+| proxy.lanes.embeddings.context_management | false | default |
+| proxy.lanes.embeddings.flex | false | default |
+| proxy.lanes.embeddings.semantic_cache | false | default |
+| proxy.lanes.embeddings.timeout_s | 0 | default |
+| proxy.lanes.embeddings.tools_rewrite | false | default |
+| proxy.lanes.embeddings.toon | false | default |
 | proxy.lanes.enabled | true | default |
+| proxy.lanes.internal.compress | false | default |
+| proxy.lanes.internal.context_management | false | default |
+| proxy.lanes.internal.flex | false | default |
+| proxy.lanes.internal.semantic_cache | false | default |
+| proxy.lanes.internal.timeout_s | 0 | default |
+| proxy.lanes.internal.tools_rewrite | false | default |
+| proxy.lanes.internal.toon | false | default |
+| proxy.lanes.meta.compress | false | default |
+| proxy.lanes.meta.context_management | false | default |
+| proxy.lanes.meta.flex | false | default |
+| proxy.lanes.meta.semantic_cache | false | default |
+| proxy.lanes.meta.timeout_s | 0 | default |
+| proxy.lanes.meta.tools_rewrite | false | default |
+| proxy.lanes.meta.toon | false | default |
 | proxy.mode | passthrough | default |
 | proxy.openai_upstream | https://api.openai.com | default |
 | proxy.port | 8790 | default |
@@ -318,7 +355,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-272 keys.
+309 keys.
 
 ## Doctor
 
@@ -513,7 +550,8 @@ agents
     proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
     plugin  not installed (--yes)
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
-  dry-refactoring project desc 154c body 2772B calls - WARN never invoked
+  descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
+  dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked
 config
   note tests/trycmd/input/json-readers.toml:2: stats.transcripts_dir = "tests/trycmd/input/stats-price-tx" (default ~/.claude/projects)
 ```

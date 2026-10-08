@@ -273,6 +273,17 @@ section! {
         max_description_tokens: u32 = 60,
         /// Above this, MCP tool results use head/tail + archive id.
         max_result_chars: u32 = 20000,
+        /// `rtok mcp --http` without an address binds here. Loopback, so only a tunnel the
+        /// user starts puts the server on the internet.
+        http: String = s("127.0.0.1:8791"),
+        /// The HTTP server's allow-list, used instead of `tools`: what an internet caller may
+        /// run is chosen apart from what a local host may, and starts read-only.
+        http_tools: Vec<String> = strs(&["read", "search", "tree"]),
+        /// Bearer token every HTTP request must carry. Empty: the HTTP server refuses to start.
+        token: String = String::new(),
+        /// The public HTTPS URL a tunnel serves the HTTP server at. Its host passes the Host
+        /// check and its origin the Origin check; anything else is refused.
+        public_url: String = String::new(),
     }
 }
 
@@ -291,21 +302,66 @@ section! {
     /// `[proxy.lanes]` — request lanes (T385.1): each request is tagged agent, bulk, batch,
     /// files, embeddings, meta or internal in the ledger (`calls.kind`). Off: every request is
     /// an untagged `api_request` and the `x-rtok-lane` header and `/lane/<name>/` prefix are
-    /// forwarded as the client sent them.
+    /// forwarded as the client sent them. The `agent` lane has no table: the global switches
+    /// decide for it exactly as before lanes; `batch` and `files` have none either, they are
+    /// always passed through.
     Lanes {
         enabled: bool = true,
+        bulk: LanePolicy = LanePolicy::default(),
+        embeddings: LanePolicy = LanePolicy::default(),
+        meta: LanePolicy = LanePolicy::default(),
+        internal: LanePolicy = LanePolicy::default(),
     }
 }
 
 section! {
-    /// `[proxy.batch]` — provider Batch observe (T385.4). No keys yet: the table exists so a
-    /// later step adds them without a schema break.
-    BatchPolicy {}
+    /// `[proxy.lanes.<lane>]` — what the proxy may change on one non-agent lane (T385.2).
+    /// Every switch narrows its global counterpart: a rewrite runs only when both the global
+    /// switch and the lane switch are on. All off by default, so a lane's bytes are forwarded
+    /// as the client sent them until the operator opts that lane in.
+    LanePolicy {
+        /// `proxy.mode = "compress"` rewrites (archive, compress, terminal-noise strip).
+        compress: bool = false,
+        /// The `toon` filter inside that pass; needs `compress`.
+        toon: bool = false,
+        /// `proxy.tools_rewrite`.
+        tools_rewrite: bool = false,
+        /// `proxy.context_management`.
+        context_management: bool = false,
+        /// `plugins.proxy.semantic_cache`, lookup and store.
+        semantic_cache: bool = false,
+        /// OpenAI `service_tier = "flex"` on this lane's chat and responses calls; see
+        /// `[proxy.flex]`. Never opened on the `agent` lane.
+        flex: bool = false,
+        /// Read timeout for this lane in seconds; 0 = `proxy.timeout_s`.
+        timeout_s: u64 = 0,
+    }
 }
 
 section! {
-    /// `[proxy.flex]` — Flex `service_tier` on bulk and internal lanes (T385.5). No keys yet.
-    FlexPolicy {}
+    /// `[proxy.batch]` — provider Batch observe (T385.4). The Batch calls themselves are
+    /// tagged by `[proxy.lanes]`; this table only decides whether result files are read.
+    BatchPolicy {
+        /// Parse a fetched Batch results file (Anthropic `/results`, OpenAI file content) into
+        /// one `usage` row per result line. Observation only: the body is forwarded untouched.
+        parse_results: bool = false,
+    }
+}
+
+section! {
+    /// `[proxy.flex]` — how the Flex tier is set and what happens when it has no capacity
+    /// (T385.5). Whether a lane gets Flex at all is `[proxy.lanes.<lane>] flex`.
+    FlexPolicy {
+        /// Overwrite a `service_tier` the client sent. Off: a client value is never changed.
+        force: bool = false,
+        /// On `429` from a request rtok set to Flex: `none` hands the 429 to the client,
+        /// `backoff` retries on Flex with doubling delays, `default` retries once on `auto`.
+        on_429: String = s("none"),
+        /// `backoff` only: retries before the 429 goes to the client; at most 5.
+        retries: u32 = 3,
+        /// `backoff` only: delay before the first retry, doubled each time, capped at 30 s.
+        backoff_ms: u64 = 1000,
+    }
 }
 
 section! {

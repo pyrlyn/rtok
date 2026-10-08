@@ -5,6 +5,7 @@
 import { Empty } from "../../states";
 import { focusRing } from "../../ui/cx";
 import { Pill } from "../../ui/Pill";
+import { Spinner } from "../../ui/Spinner";
 import { stateOf } from "../projectLogic";
 import type { Scene } from "./scene";
 
@@ -12,7 +13,16 @@ import type { Scene } from "./scene";
  * The overview as a plain list: the keyboard and screen-reader view of what the canvas draws,
  * available beside 3D and 2D. Each project names its outgoing links and whether it is in scope.
  */
-export function ProjectList({ scene, select }: { scene: Scene; select(id: number): void }) {
+export function ProjectList({
+    scene,
+    select,
+    waiting,
+}: {
+    scene: Scene;
+    select(id: number): void;
+    /** Projects whose select request has not been answered yet. */
+    waiting: ReadonlySet<number>;
+}) {
     if (scene.nodes.length === 0) return <Empty title="No project matches" />;
     const name = new Map(scene.nodes.map((n) => [n.id, n.label]));
     return (
@@ -20,15 +30,18 @@ export function ProjectList({ scene, select }: { scene: Scene; select(id: number
             {scene.nodes.map((n) => {
                 const out = scene.edges.filter((e) => e.from === n.id);
                 const s = stateOf(n);
+                const pending = waiting.has(n.id);
                 return (
                     <li key={n.id}>
                         <button
                             type="button"
                             aria-pressed={n.selected}
-                            disabled={n.hollow}
+                            aria-busy={pending || undefined}
+                            disabled={n.hollow || pending}
                             onClick={() => select(n.id)}
-                            className={`${focusRing} flex w-full flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs hover:border-border-strong aria-pressed:border-accent disabled:cursor-not-allowed disabled:opacity-50`}
+                            className={`${focusRing} flex w-full flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs hover:border-border-strong aria-pressed:border-accent disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:disabled:opacity-100`}
                         >
+                            {pending && <Spinner size="sm" />}
                             <span
                                 aria-hidden
                                 className="size-2.5 shrink-0 rounded-full"

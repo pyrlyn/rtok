@@ -8,6 +8,7 @@
 //! what the operator model serves (D27) and what a `rtok web` / `rtok tui` Doctor page will
 //! render; the command is one renderer of it.
 
+use crate::agents::skill::SKILL_DESC_MAX;
 use crate::config::Config;
 use crate::tokens::{self, Class};
 use anyhow::Result;
@@ -166,12 +167,24 @@ pub struct SkillRow {
     /// Invocations in the last 30 d from the T61.1 fold; `None` = no data.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invocations: Option<u64>,
-    /// `description:` over the measured 200-char median.
+    /// `description:` over [`SKILL_DESC_MAX`], the cap rtok's own skills follow.
     pub warn_desc: bool,
     /// Body over 8 KB — almost always a `references/` candidate.
     pub warn_body: bool,
     /// Listed but never invoked in the window (only when data exists).
     pub warn_never: bool,
+}
+
+impl SkillsAudit {
+    /// `(skills over the description cap, tokens a request would shed if each were cut to it)`;
+    /// the same chars-per-4 estimate as the header, so the two lines add up.
+    fn cap_saving(&self) -> (usize, u64) {
+        let over = self.rows.iter().filter(|r| r.desc_chars > SKILL_DESC_MAX);
+        let (n, chars) = over.fold((0, 0u64), |(n, c), r| {
+            (n + 1, c + (r.desc_chars - SKILL_DESC_MAX) as u64)
+        });
+        (n, chars / 4)
+    }
 }
 
 impl Report {
@@ -255,10 +268,16 @@ impl Report {
                 skills.desc_bytes,
                 skills.desc_bytes / 4
             ));
+            let (long, tokens) = skills.cap_saving();
+            if long > 0 {
+                out.push_str(&format!(
+                    "  descriptions over {SKILL_DESC_MAX} chars: {long} skills, ≈ {tokens} tokens/request recoverable\n"
+                ));
+            }
             for r in &skills.rows {
                 let mut flags = String::new();
                 if r.warn_desc {
-                    flags.push_str(" WARN desc>200");
+                    flags.push_str(&format!(" WARN desc>{SKILL_DESC_MAX}"));
                 }
                 if r.warn_body {
                     flags.push_str(" WARN body>8K (references/)");
@@ -944,7 +963,7 @@ fn skill_row(
         desc_chars,
         body_bytes,
         invocations: calls,
-        warn_desc: desc_chars > 200,
+        warn_desc: desc_chars > SKILL_DESC_MAX,
         warn_body: body_bytes > 8192,
         warn_never: invocations.is_some() && calls.is_none(),
     }
@@ -1993,8 +2012,46 @@ mod tests {
             text.contains("update-config user desc 205c body 248175B calls 4"),
             "{text}"
         );
-        assert!(text.contains("WARN desc>200"), "{text}");
+        assert!(text.contains("WARN desc>120"), "{text}");
         assert!(text.contains("WARN body>8K (references/)"), "{text}");
+    }
+
+    /// T393: one long and one short description — the line counts only the long one and prices
+    /// the characters above the cap; with nothing over the cap the line is absent.
+    #[test]
+    fn skills_audit_prices_the_description_cap() {
+        let row = |name: &str, desc_chars: usize| SkillRow {
+            name: name.into(),
+            source: "user".into(),
+            desc_chars,
+            body_bytes: 100,
+            invocations: None,
+            warn_desc: desc_chars > SKILL_DESC_MAX,
+            warn_body: false,
+            warn_never: false,
+        };
+        let render = |rows: Vec<SkillRow>| {
+            let mut r = report_fixture();
+            r.skills = Some(SkillsAudit {
+                desc_bytes: rows.iter().map(|r| r.desc_chars as u64).sum(),
+                rows,
+                ..SkillsAudit::default()
+            });
+            r.to_text()
+        };
+        let text = render(vec![row("long", 200), row("short", 100)]);
+        assert!(
+            text.contains(
+                "  descriptions over 120 chars: 1 skills, ≈ 20 tokens/request recoverable\n"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("long user desc 200c") && text.contains("WARN desc>120"),
+            "{text}"
+        );
+        let exact = render(vec![row("cap", 120), row("short", 100)]);
+        assert!(!exact.contains("descriptions over"), "{exact}");
     }
 
     #[test]

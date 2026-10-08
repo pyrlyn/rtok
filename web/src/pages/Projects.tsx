@@ -3,14 +3,17 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useState } from "react";
-import { useProjectMutation, useServerMessage } from "../api/query";
+import { useProjectMutation } from "../api/query";
 import type { ProjectRow } from "../api/snapshot.gen";
 import { Empty } from "../states";
+import { Button } from "../ui/Button";
 import { focusRing } from "../ui/cx";
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
+import { Result } from "../ui/Result";
 import { Search } from "../ui/Search";
+import { Spinner } from "../ui/Spinner";
 import { fmt } from "./format";
 import { filterProjects, linkTargets, SEARCH_ABOVE, stateOf } from "./projectLogic";
 
@@ -35,37 +38,45 @@ export function Projects({ rows }: { rows: ProjectRow[] }) {
     );
 }
 
-const button = `${focusRing} h-7 cursor-pointer rounded-md border border-border px-2.5 text-2xs font-semibold hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40`;
-
 function Selector({ rows }: { rows: ProjectRow[] }) {
     const [query, setQuery] = useState("");
-    const { mutate } = useProjectMutation();
+    const { mutate, error, inFlight } = useProjectMutation();
     const shown = filterProjects(rows, query);
-    const message = useServerMessage();
     return (
         <div className="flex flex-col gap-2">
             {rows.length > SEARCH_ABOVE && (
                 <Search label="find a project" value={query} onChange={setQuery} />
             )}
             <ul aria-label="projects" className="flex max-h-56 flex-col gap-1 overflow-y-auto">
-                {shown.map((p) => (
-                    <li key={p.id}>
-                        <button
-                            type="button"
-                            aria-pressed={p.selected}
-                            disabled={p.missing}
-                            onClick={() => mutate({ action: "select", project: String(p.id) })}
-                            className={`${focusRing} flex w-full items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs hover:border-border-strong aria-pressed:border-accent disabled:cursor-not-allowed disabled:opacity-50`}
-                        >
-                            <b className="truncate">{p.name}</b>
-                            <Pill tone={stateOf(p).tone}>{stateOf(p).label}</Pill>
-                            <span className="ml-auto text-2xs text-fg-muted">{p.origin}</span>
-                        </button>
-                    </li>
-                ))}
+                {shown.map((p) => {
+                    const pending = inFlight.some(
+                        (r) => r.action === "select" && r.project === String(p.id),
+                    );
+                    return (
+                        <li key={p.id}>
+                            <button
+                                type="button"
+                                aria-pressed={p.selected}
+                                aria-busy={pending || undefined}
+                                disabled={p.missing || pending}
+                                onClick={() => mutate({ action: "select", project: String(p.id) })}
+                                className={`${focusRing} flex w-full items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs hover:border-border-strong aria-pressed:border-accent disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:disabled:opacity-100`}
+                            >
+                                {pending && <Spinner size="sm" />}
+                                <b className="truncate">{p.name}</b>
+                                <Pill tone={stateOf(p).tone}>{stateOf(p).label}</Pill>
+                                <span className="ml-auto text-2xs text-fg-muted">{p.origin}</span>
+                            </button>
+                        </li>
+                    );
+                })}
             </ul>
             {shown.length === 0 && <Empty title="No project matches" />}
-            {message && <p className="text-2xs text-warn-fg">{message}</p>}
+            {error && (
+                <Result verb="select" kind="error">
+                    {error.message}
+                </Result>
+            )}
         </div>
     );
 }
@@ -101,7 +112,7 @@ function Current({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
 }
 
 function Links({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
-    const { mutate } = useProjectMutation();
+    const { mutate, error, inFlight } = useProjectMutation();
     const targets = linkTargets(rows, p);
     const [to, setTo] = useState("");
     const [both, setBoth] = useState(false);
@@ -119,9 +130,15 @@ function Links({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                             <b className="truncate">{l.name}</b>
                             <Pill tone={l.kind === "manual" ? "info" : "muted"}>{l.kind}</Pill>
                             {l.reason && <span className="truncate text-fg-muted">{l.reason}</span>}
-                            <button
-                                type="button"
-                                className={`${button} ml-auto`}
+                            <Button
+                                verb="unlink"
+                                pending={inFlight.some(
+                                    (r) =>
+                                        r.action === "unlink" &&
+                                        r.from === from &&
+                                        r.to === String(l.to),
+                                )}
+                                className="ml-auto"
                                 aria-label={`unlink ${l.name}`}
                                 onClick={() =>
                                     mutate({
@@ -133,7 +150,7 @@ function Links({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                                 }
                             >
                                 unlink
-                            </button>
+                            </Button>
                         </li>
                     ))}
                 </ul>
@@ -160,9 +177,9 @@ function Links({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                     />
                     both ways
                 </label>
-                <button
-                    type="button"
-                    className={button}
+                <Button
+                    verb="link"
+                    pending={inFlight.some((r) => r.action === "link" && r.from === from)}
                     disabled={!target}
                     onClick={() => {
                         mutate({ action: "link", from, to: target, both });
@@ -170,8 +187,13 @@ function Links({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                     }}
                 >
                     link
-                </button>
+                </Button>
             </div>
+            {error && (
+                <Result verb="link" kind="error">
+                    {error.message}
+                </Result>
+            )}
         </section>
     );
 }

@@ -12,11 +12,13 @@
 
 use axum::http::HeaderMap;
 
+use crate::config::{LanePolicy, Lanes};
+
 /// Request header naming the lane; stripped before the request goes upstream.
 pub const HEADER: &str = "x-rtok-lane";
 const PREFIX: &str = "/lane/";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lane {
     Agent,
     Bulk,
@@ -28,7 +30,7 @@ pub enum Lane {
 }
 
 impl Lane {
-    const ALL: [Lane; 7] = [
+    pub const ALL: [Lane; 7] = [
         Lane::Agent,
         Lane::Bulk,
         Lane::Batch,
@@ -57,6 +59,36 @@ impl Lane {
             .find(|lane| lane.name().eq_ignore_ascii_case(name))
     }
 
+    /// What the proxy may change on this lane (T385.2). The `agent` lane is the baseline:
+    /// every rewrite is allowed and the global switches alone decide, which is how the proxy
+    /// behaved before lanes. `batch` and `files` carry JSONL and uploads the proxy must never
+    /// rewrite, so no setting can open them. The rest read their `[proxy.lanes.<lane>]` table.
+    pub fn policy(self, lanes: &Lanes) -> LanePolicy {
+        match self {
+            Lane::Agent => LanePolicy {
+                compress: true,
+                toon: true,
+                tools_rewrite: true,
+                context_management: true,
+                semantic_cache: true,
+                // Never silently: an agent turn is Flex only when the client asks for it.
+                flex: false,
+                timeout_s: 0,
+            },
+            Lane::Batch | Lane::Files => LanePolicy::default(),
+            Lane::Bulk => lanes.bulk.clone(),
+            Lane::Embeddings => lanes.embeddings.clone(),
+            Lane::Meta => lanes.meta.clone(),
+            Lane::Internal => lanes.internal.clone(),
+        }
+    }
+
+    /// True for the lanes whose bodies are forwarded verbatim whatever the config says —
+    /// also past the usage-capture shaping (`stream_options`) that other lanes still get.
+    pub fn passes_through(self) -> bool {
+        matches!(self, Lane::Batch | Lane::Files)
+    }
+
     /// The `calls.kind` this lane is recorded under. The agent lane keeps the bare
     /// `api_request` every existing row and report already uses, so default traffic leaves
     /// the ledger exactly as before; the rest are `api_request:<lane>`, which `is_api_request`
@@ -77,6 +109,12 @@ impl Lane {
 /// True for a proxied-request `calls.kind`, whichever lane tagged it.
 pub fn is_api_request(kind: &str) -> bool {
     kind == "api_request" || kind.starts_with("api_request:")
+}
+
+/// The lane name a `calls.kind` was recorded under — the inverse of [`Lane::kind`]. The bare
+/// `api_request` is the agent lane, which is how rows written before lanes existed read back.
+pub fn lane_of_kind(kind: &str) -> &str {
+    kind.strip_prefix("api_request:").unwrap_or("agent")
 }
 
 /// The lane of one request and the path to forward (the `/lane/<name>` prefix removed).
@@ -218,6 +256,51 @@ mod tests {
     #[case("/lanes/bulk/v1/messages")]
     fn foreign_prefixes_are_forwarded_untouched(#[case] path: &str) {
         assert_eq!(lane_of(path, None), (Lane::Agent, path.to_string()));
+    }
+
+    #[test]
+    fn only_the_agent_lane_rewrites_by_default() {
+        let lanes = Lanes::default();
+        for lane in Lane::ALL {
+            let p = lane.policy(&lanes);
+            let all_on =
+                p.compress && p.toon && p.tools_rewrite && p.context_management && p.semantic_cache;
+            assert_eq!(all_on, lane == Lane::Agent, "{}", lane.name());
+            assert_eq!(p.timeout_s, 0, "{}", lane.name());
+            if lane != Lane::Agent {
+                assert_eq!(p, LanePolicy::default(), "{}", lane.name());
+            }
+        }
+    }
+
+    #[test]
+    fn batch_and_files_ignore_the_config() {
+        let on = LanePolicy {
+            compress: true,
+            tools_rewrite: true,
+            ..LanePolicy::default()
+        };
+        let lanes = Lanes {
+            bulk: on.clone(),
+            embeddings: on.clone(),
+            meta: on.clone(),
+            internal: on.clone(),
+            ..Lanes::default()
+        };
+        assert_eq!(Lane::Bulk.policy(&lanes), on);
+        assert_eq!(Lane::Internal.policy(&lanes), on);
+        for lane in [Lane::Batch, Lane::Files] {
+            assert!(lane.passes_through());
+            assert_eq!(lane.policy(&lanes), LanePolicy::default());
+        }
+        assert!(!Lane::Bulk.passes_through());
+    }
+
+    #[test]
+    fn every_kind_reads_back_as_its_lane() {
+        for lane in Lane::ALL {
+            assert_eq!(lane_of_kind(lane.kind()), lane.name());
+        }
     }
 
     #[test]

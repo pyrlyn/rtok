@@ -112,6 +112,13 @@ const ALLOW_KEYS: &[&str] = &[
     "junk.yes",
     // `agents junk list --bytes` (T330.1): how one call prints sizes, not a stored setting.
     "junk.bytes",
+    // `agents junk clear` filters (T330.4): what one run removes. A stored filter would widen
+    // a later bare `clear --yes` without anyone typing it; `--trash` is the same per-call choice.
+    "junk.agent",
+    "junk.kind",
+    "junk.include",
+    "junk.older_than",
+    "junk.trash",
     // `rtok mcp ping --timeout` (T275.1): one call's wait, default 60s, not a stored setting.
     "mcp.ping.timeout_s",
     // `agents send --all-live` / `agents inbox --unread` (T287): who gets one message and

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! `rtok mcp` — rmcp JSON-RPC over stdio (plan T4.1).
+//! `rtok mcp` — rmcp JSON-RPC over stdio (plan T4.1); `http` serves the same `Server` over
+//! Streamable HTTP (T401).
 //!
 //! A one-shot `tools/list` (the Check) is accepted without `initialize`.
 
@@ -21,6 +22,8 @@ use serde_json::{Value, json};
 pub mod wrap;
 
 pub mod ping;
+
+pub mod http;
 
 mod agents;
 mod messages;
@@ -76,22 +79,10 @@ pub fn run(cfg: &Config) -> Result<()> {
         };
     let stop = AtomicBool::new(false);
     std::thread::scope(|s| {
+        // T329.5: the project's scope is watched, not just its root.
         #[cfg(feature = "graph")]
         if let Some(root) = &watch_root {
-            // T263: never watch `/` or the home directory.
-            if let Err(e) = crate::plugins::read::walk_root_ok(root) {
-                let msg = format!("watcher skipped for {}: {e:#}", root.display());
-                eprintln!("rtok mcp: {msg}");
-                crate::log::append(cfg, "warn", "mcp", "watch", &msg);
-            } else {
-                s.spawn(|| {
-                    crate::plugins::graph::watch::run(
-                        &crate::plugin::Ctx::new(&server.cx),
-                        root,
-                        &stop,
-                    )
-                });
-            }
+            s.spawn(|| crate::plugins::graph::watch::run_scope(&server.cx, root, &stop));
         }
         // T329.8: register, link and index what the project's manifests reference, off the
         // request path so `initialize` and the first tool call are not delayed. Detached with its
@@ -225,6 +216,16 @@ const SUPPORTED_PROTOCOL_VERSIONS: &[ProtocolVersion] = &[
     ProtocolVersion::V_2025_03_26,
     ProtocolVersion::V_2025_06_18,
 ];
+
+/// The `initialize` result, the one place it is built: stdio (`handle_value`) and HTTP
+/// (`http::Http::get_info`) must announce the same name, version and capabilities.
+fn server_info(version: ProtocolVersion) -> ServerConfig {
+    // Default `Implementation` still comes from rmcp's build env (`name: "rmcp"`).
+    // 3.x types are non_exhaustive; construct via the public builders.
+    ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+        .with_server_info(Implementation::new("rtok", env!("CARGO_PKG_VERSION")))
+        .with_protocol_version(version)
+}
 
 fn negotiate_protocol_version(requested: &Value) -> ProtocolVersion {
     if let Ok(v) = serde_json::from_value::<ProtocolVersion>(requested.clone())
@@ -632,13 +633,8 @@ impl Server {
                 }
                 // T283.1: a first attempt now; `whoami` retries while hooks have not registered.
                 let _ = self.link();
-                // Default `Implementation` still comes from rmcp's build env (`name: "rmcp"`).
-                // 3.x types are non_exhaustive; construct via the public builders.
                 let version = negotiate_protocol_version(&req["params"]["protocolVersion"]);
-                let info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-                    .with_server_info(Implementation::new("rtok", env!("CARGO_PKG_VERSION")))
-                    .with_protocol_version(version);
-                serde_json::to_value(&info).unwrap_or(json!({}))
+                serde_json::to_value(server_info(version)).unwrap_or(json!({}))
             }
             "ping" => json!({}),
             "tools/list" => serde_json::to_value(ListToolsResult::with_all_items(self.tools()))

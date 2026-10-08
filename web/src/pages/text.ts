@@ -266,7 +266,8 @@ export function parseHosts(text: string): HostsView {
       });
       continue;
     }
-    const m = /^ {2}(\S+)\s+(.*)$/.exec(l);
+    // Module rows lead with a state mark (`✓`, `✗`, `−`) that the key must not swallow.
+    const m = /^ {2}(?:[✓✗−] )?(\S+)\s+(.*)$/.exec(l);
     const block = blocks[blocks.length - 1];
     if (!m || !block) {
       other.push(l);

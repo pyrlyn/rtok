@@ -124,7 +124,7 @@ Project programs and direct packages from the manifests.
 | ratatui | local | https://crates.io/crates/ratatui | TUI |
 | regex | local | https://crates.io/crates/regex | Rust dependency |
 | reqwest | local | https://crates.io/crates/reqwest | HTTP: proxy and otel (async), task adapters (`blocking`) |
-| rmcp | local | https://crates.io/crates/rmcp | Rust dependency |
+| rmcp | local | https://crates.io/crates/rmcp | MCP types; feature `transport-streamable-http-server` serves `rtok mcp --http` (T401) |
 | rstest | local | https://crates.io/crates/rstest | Rust dependency |
 | rust-embed | local | https://crates.io/crates/rust-embed | Embeds the built SPA (`web/dist`) in the binary in every profile; memory-serve reads disk in debug builds and has no run-time override, include_dir has no media types or digests |
 | rustix | local | https://crates.io/crates/rustix | Rust dependency |
@@ -138,8 +138,10 @@ Project programs and direct packages from the manifests.
 | serde-saphyr | local | https://crates.io/crates/serde-saphyr | T329.7: `pnpm-workspace.yaml` of project references; maintained (serde_yaml is deprecated) |
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
 | similar | local | https://crates.io/crates/similar | Rust dependency |
+| subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |
 | toml_edit | local | https://crates.io/crates/toml_edit | Rust dependency |
+| trash | local | https://crates.io/crates/trash | T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin |
 | tree-sitter | local | https://crates.io/crates/tree-sitter | Rust dependency |
 | tree-sitter-c | local | https://crates.io/crates/tree-sitter-c | Rust dependency |
 | tree-sitter-c-sharp | local | https://crates.io/crates/tree-sitter-c-sharp | C# grammar tags (T52.2) |
@@ -158,6 +160,7 @@ Project programs and direct packages from the manifests.
 | trycmd | local | https://crates.io/crates/trycmd | Full CLI command-output fixtures in tests/trycmd/ |
 | pulldown-cmark | local (dev) | https://crates.io/crates/pulldown-cmark | CommonMark parse of README and docs in tests/docs_structure.rs: unclosed fences, skipped heading levels (T359) |
 | tokio-tungstenite | local | https://crates.io/crates/tokio-tungstenite | WebSocket client for the `rtok web` e2e (tests/web_e2e.rs) |
+| unicode-width | local | https://crates.io/crates/unicode-width | T436: measures each operation icon so its gutter pads to one column width; already in the lock as a transitive dep |
 | url | local | https://crates.io/crates/url | `file://` MCP roots → path (T263) |
 | uuid | local | https://crates.io/crates/uuid | T282: random UUIDv4 rtok agent id (D34); already in the lock as a transitive dep |
 | wasmi | local | https://crates.io/crates/wasmi | Rust dependency |

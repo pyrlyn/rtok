@@ -735,6 +735,27 @@ impl Store {
             .load(&mut *conn)?)
     }
 
+    /// T329.5: which of `names` have a non-import reference row under `root`. The scoped `dead`
+    /// asks it of the other projects of a scope, so a definition only a linked project calls
+    /// stays live; the same rule as the `has_ref` test of [`Self::symbol_dead_candidates`].
+    pub fn symbol_referenced_names(&self, root: &str, names: &[String]) -> Result<HashSet<String>> {
+        let mut conn = self.lock()?;
+        let mut out = HashSet::new();
+        for chunk in names.chunks(NAME_CHUNK) {
+            out.extend(
+                symbols::table
+                    .filter(symbols::root.eq(root))
+                    .filter(symbols::name.eq_any(chunk))
+                    .filter(symbols::is_def.eq(0))
+                    .filter(symbols::kind.ne("import"))
+                    .select(symbols::name)
+                    .distinct()
+                    .load::<String>(&mut *conn)?,
+            );
+        }
+        Ok(out)
+    }
+
     /// Callers of `name` out to `depth`, each `(path, scope)` at its first depth (T8.13).
     ///
     /// Level-by-level BFS (T163.1) over the same two edges the old `WITH RECURSIVE` walk
