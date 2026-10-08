@@ -117,7 +117,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T441 | todo | P2 | 5 | 0% | |
 | T441.7 | todo | P2 | 4 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
-| T452 | in progress | P3 | 2 | 10% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -1819,14 +1818,6 @@ Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd sn
 Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
-
-### T452. Recall notes linked to a file the prompt names, without a text match
-
-Creator decision on T374 (2026-10-08). T374 links notes to files but only re-ranks notes that already matched the prompt text. A file named in the prompt (a path `files::mentioned` finds, relative, inside the root) is a strong signal, so the notes linked to it are recalled even with no text overlap: at most 2 such notes, taking slots from the existing `prompt_recall` budget (`n` titles, `recall_tokens`), never enlarging it, byte-stable. Files the session merely read earlier only re-rank text hits (no recall of their own). The wider variant, recall by every read file without a text match, is parked in `ideas.md` until a `Measurement` shows a saving.
-
-Plan: (1) in `src/plugins/memory/files.rs` split `linked_notes` into the named-file list and the read-file list, reusing `mentioned`, `relative` and `notes_for_files`; (2) read-file notes are kept only when they are already text hits, named-file notes not among the shown hits take at most 2 slots from the end of the `n`-hit list; (3) tests in `mod.rs`: named file recalls its note with no text overlap, no named file recalls nothing extra, cap of 2, bytes within budget, same input twice is byte-identical; (4) update `src/plugins/memory/AGENTS.md`; (5) add the wider variant to `ideas.md`.
-
-Check: `cargo test --lib memory`, clippy `--all-targets`, `cargo fmt --check`, `just check`.
 
 ## Reference
 
