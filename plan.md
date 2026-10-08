@@ -116,6 +116,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
+| T472 | in progress | P0 | 2 | 0% | Cursor / composer |
+| T473 | todo | P1 | 3 | 0% | |
+| T474 | todo | P1 | 2 | 0% | |
+| T475 | todo | P1 | 3 | 0% | |
 
 
 
@@ -1649,6 +1653,30 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
+
+### T472. Peel env and tool wrappers before the cmd family (repowise borrow)
+
+Extend `visible_argv`'s 4-iteration peel with `FOO=1 …`, `uv`/`npx`/`pnpm`/`yarn`/`poetry`/`pipenv`/`hatch`/`python -m`/`cmd /c`. Reuse `cmd_stem`. No regex crate. Do not treat a quoted `|` as a pipeline.
+
+Check: `cargo nextest run -p rtok --lib family_names`; table in the card (uv run cargo → cargo, FOO=1 cargo → cargo, uv run python -m pytest → pytest, `git commit -m "a|b"` → git); mise-without-command stays `mise`; `just check`.
+
+### T473. `symbol` accepts `names` (repowise borrow)
+
+One MCP `symbol` call can take `names: [str]`. Unknown names are lines in the answer, not Err. One `name` stays byte-exact. Cap with existing graph max_tokens / archive helper. Description total ≤ 150 est tokens.
+
+Check: `cargo nextest run -p rtok --test graph_contract`; `names:["b","c"]` shape; `name:"b"` unchanged; description budget ≤ 150; `just check`.
+
+### T474. Stale HEAD line on graph answers (repowise borrow)
+
+Remember `rev-parse HEAD` at index time (`plugin_state`). Prefix `symbol`/`callers`/`impact`/`explore` with `index <old> head <new>\n` when they differ. Not on `outline`. No `.git` → no prefix, no panic.
+
+Check: `cargo nextest run -p rtok --test graph_contract --test graph_scope`; empty-commit then symbol shows both full hex; plain dir unchanged; `just check`.
+
+### T475. Copy symbol rows into a new worktree (repowise borrow)
+
+`Store::copy_symbol_rows` copies indexed rows from the main checkout root to the worktree root (skip paths already present). `worktree claim::add` calls it after add succeeds. Copy error warns, does not fail the add. Do not run `graph::index` inside add.
+
+Check: `cargo nextest run -p rtok --lib copy_symbol_rows` and `--test graph_scope`; copy then symbol works; re-index skips; byte change re-indexes; `just check`.
 
 ## Reference
 

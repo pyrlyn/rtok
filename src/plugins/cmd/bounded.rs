@@ -11,6 +11,18 @@
 /// and a cut that names the archive beats one that does not.
 pub const MAX_BYTES: usize = 30_000;
 
+/// Claude Code delivers the first 30_000 characters of a Bash result.
+/// Savings use this prefix. `expand` still returns the archived body.
+pub const HOST_VISIBLE_CHARS: usize = 30_000;
+
+/// At most [`HOST_VISIBLE_CHARS`] Unicode scalars, never splitting a scalar.
+pub fn host_visible_prefix(text: &str) -> &str {
+    match text.char_indices().nth(HOST_VISIBLE_CHARS) {
+        None => text,
+        Some((end, _)) => &text[..end],
+    }
+}
+
 /// Whether every command in `snippet` ends in a bounding stage. A leading `cd`/`export`
 /// prints nothing and does not unbound the rest; at least one stage must bound.
 pub fn is_bounded(snippet: &str) -> bool {
@@ -280,7 +292,7 @@ fn sed_range(args: &[String]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_bounded;
+    use super::{HOST_VISIBLE_CHARS, host_visible_prefix, is_bounded};
     use rstest::rstest;
 
     #[rstest]
@@ -352,6 +364,23 @@ mod tests {
     #[test]
     fn backslash_newline_continuation_does_not_split_a_pipeline() {
         assert_eq!(super::lex("cargo test \\\n  --all").len(), 1);
+    }
+
+    #[test]
+    fn host_visible_prefix_caps_at_30_000_scalars() {
+        let s: String = std::iter::repeat_n('x', HOST_VISIBLE_CHARS + 1).collect();
+        let prefix = host_visible_prefix(&s);
+        assert_eq!(prefix.chars().count(), HOST_VISIBLE_CHARS);
+        assert_eq!(prefix.len(), HOST_VISIBLE_CHARS);
+    }
+
+    #[test]
+    fn host_visible_prefix_keeps_30_000_multibyte_scalars_whole() {
+        let s: String = std::iter::repeat_n('é', HOST_VISIBLE_CHARS).collect();
+        let prefix = host_visible_prefix(&s);
+        assert_eq!(prefix, s.as_str());
+        assert_eq!(prefix.len(), HOST_VISIBLE_CHARS * 'é'.len_utf8());
+        assert!(std::str::from_utf8(prefix.as_bytes()).is_ok());
     }
 
     /// T444: `\` outside quotes makes the next char literal; inside double quotes it

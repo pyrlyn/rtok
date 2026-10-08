@@ -1,5 +1,14 @@
 # rtok — completed tasks
 
+### T471. Host-cap the cmd Measurement (repowise borrow)
+
+Claude Code delivers the first 30_000 characters of a Bash result. Capture keeps up to 32 MiB, so a Measurement that estimates the whole body can claim tokens the host never showed. Cap the estimate baseline (and the after estimate) to that host-visible prefix. Archive and printed bytes stay unchanged; `expand` still returns the full body.
+
+Do: `HOST_VISIBLE_CHARS` + `host_visible_prefix` in `bounded.rs`; `emit_filtered_to` estimates that prefix for both raw and filtered paths; bytes and `ref_id` unchanged.
+
+Check: `host_visible` + `emit_filtered_host` nextest; `just check`.
+Result: 4 unit tests green; host-past-cap cut records equal est; cargo-test under the cap records a saving with the 64-hex expand trailer.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

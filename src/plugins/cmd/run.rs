@@ -360,7 +360,10 @@ fn emit_filtered_to(
         if !body.is_empty() && !body.ends_with(b"\n") {
             let _ = out.write_all(b"\n");
         }
-        let est = cx.estimate(&before, Class::Code);
+        let est = cx.estimate(
+            crate::plugins::cmd::bounded::host_visible_prefix(&before),
+            Class::Code,
+        );
         let _ = cx.record(&Measurement {
             plugin: "cmd",
             kind: "raw",
@@ -406,13 +409,21 @@ fn emit_filtered_to(
         shown.push('\n');
     }
     let _ = out.write_all(shown.as_bytes());
+    let est_before = cx.estimate(
+        crate::plugins::cmd::bounded::host_visible_prefix(&before),
+        Class::Code,
+    );
+    let est_after = cx.estimate(
+        crate::plugins::cmd::bounded::host_visible_prefix(&shown),
+        Class::Code,
+    );
     let _ = cx.record(&Measurement {
         plugin: "cmd",
         kind,
         before_bytes: body.len() as u64,
         after_bytes: shown.len() as u64,
-        est_before: cx.estimate(&before, Class::Code),
-        est_after: cx.estimate(&shown, Class::Code),
+        est_before,
+        est_after,
         ref_id: (pointer || named).then(|| format!("{family}:{id}")),
         call_id: None,
     });
@@ -446,6 +457,80 @@ mod tests {
         let mut cmd = std::process::Command::new("sh");
         cmd.args(["-c", "printf hi"]);
         assert_eq!(capture_body(cmd, 1024).unwrap(), (b"hi".to_vec(), 0));
+    }
+
+    /// T471: filter that only drops characters past the host cap leaves est unchanged.
+    #[test]
+    fn emit_filtered_host_visible_est_equal_when_cut_is_past_cap() {
+        let (c, dir) = cfg("host-vis-eq");
+        // 30_000 'x' then `index …` lines `git diff` drops — past what the host shows.
+        let mut body = "x".repeat(crate::plugins::cmd::bounded::HOST_VISIBLE_CHARS);
+        body.push('\n');
+        for _ in 0..200 {
+            body.push_str("index deadbeef..cafebabe 100644\n");
+        }
+        let mut printed = Vec::new();
+        emit_filtered_to(
+            &c,
+            &["git".into(), "diff".into()],
+            body.as_bytes(),
+            0,
+            None,
+            &mut printed,
+        );
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("cmd").unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            rows[0].est_before, rows[0].est_after,
+            "host-visible prefixes match: {rows:?}"
+        );
+        assert!(rows[0].before_bytes > rows[0].after_bytes, "{rows:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T471: cargo-test shortening inside the host window still records a saving, and the
+    /// printed bytes keep the expand trailer when the trailer rules say so.
+    #[test]
+    fn emit_filtered_host_visible_est_drops_under_cap_with_expand_trailer() {
+        let (c, dir) = cfg("host-vis-save");
+        let mut body = String::new();
+        for i in 0..60 {
+            body.push_str(&format!("test crate::t{i} ... ok\n"));
+        }
+        body.push_str("test crate::bad ... FAILED\n");
+        body.push_str("test result: FAILED. 1 failed; 60 passed\n");
+        assert!(
+            body.chars().count() < crate::plugins::cmd::bounded::HOST_VISIBLE_CHARS,
+            "fixture must sit under the host cap"
+        );
+        let mut printed = Vec::new();
+        emit_filtered_to(
+            &c,
+            &["cargo".into(), "test".into()],
+            body.as_bytes(),
+            1,
+            None,
+            &mut printed,
+        );
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("cmd").unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert!(
+            rows[0].est_before > rows[0].est_after,
+            "shortening under the cap must save: {rows:?}"
+        );
+        let out = String::from_utf8_lossy(&printed);
+        assert!(
+            out.contains("rtok expand "),
+            "expand trailer expected: {out}"
+        );
+        let id = crate::store::hex_sha256(body.as_bytes());
+        assert!(
+            out.contains(&format!("rtok expand {id}")),
+            "full 64-hex id in trailer: {out}"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
