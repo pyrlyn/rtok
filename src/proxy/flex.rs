@@ -147,8 +147,8 @@ impl Retry {
     /// The wait before retry `n` (0-based) and the body to send then (`None` = the same one),
     /// or `None` once the policy has no retry left. The wait is the longer of our delay and the
     /// server's `Retry-After`; one that exceeds [`MAX_DELAY`] is not waited for, because the
-    /// client's connection stays open meanwhile: `backoff` gives up, `default` goes to the
-    /// fallback tier at once.
+    /// client's connection stays open meanwhile: `backoff` gives up. `default` never waits: its
+    /// retry goes to another tier, and `Retry-After` speaks only of Flex capacity.
     fn next(&self, n: u32, server: Option<Duration>) -> Option<(Duration, Option<Bytes>)> {
         let too_long = server.is_some_and(|d| d > MAX_DELAY);
         match self.on_busy {
@@ -157,14 +157,7 @@ impl Retry {
                 Some((ours.max(server.unwrap_or_default()), None))
             }
             // One try on standard processing; a second 429 there is a real rate limit.
-            OnBusy::Default if n == 0 => {
-                let wait = if too_long {
-                    Duration::ZERO
-                } else {
-                    server.unwrap_or_default()
-                };
-                Some((wait, Some(self.fallback()?)))
-            }
+            OnBusy::Default if n == 0 => Some((Duration::ZERO, Some(self.fallback()?))),
             _ => None,
         }
     }
@@ -318,7 +311,7 @@ mod tests {
         assert_eq!(waits(&b, Some(30))[0], Some((30, false)));
         assert_eq!(waits(&b, None)[1], Some((20, false)));
         let d = retry("default");
-        assert_eq!(waits(&d, Some(7))[0], Some((7, true)));
+        assert_eq!(waits(&d, Some(7))[0], Some((0, true)));
     }
 
     #[test]
