@@ -36,7 +36,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 30% | |
-| T330.5.2 | todo | P2 | 3 | 0% | |
+| T330.5.2 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T330.5.3 | todo | P2 | 3 | 0% | |
 | T330.5.4 | todo | P2 | 2 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
