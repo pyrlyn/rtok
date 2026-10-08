@@ -92,7 +92,11 @@ fn a_cursor_mcp_call_records_one_row_across_both_events() {
             (after, call("afterMCPExecution")),
         ],
     );
-    assert_eq!(rows(&home), 1, "the long result is shortened once");
+    assert_eq!(
+        rows(&home),
+        2,
+        "the long result is shortened once, and one observation is stored"
+    );
 }
 
 fn claude(event: &str, tool: &str, input: Value, response: Value, cwd: &Path) -> Value {
