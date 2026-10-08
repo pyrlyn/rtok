@@ -27,7 +27,7 @@ When `[setup.pi] tools = true`, `session_start` registers the measured MCP set t
 tree 12, symbol 30, callers 27, expand 22, mem_search 11, mem_get 7). Hook and proxy surfaces
 have no path in. `toon` declares MCP but is not registered.
 
-Reachable: measure, cmd, read, archive, guard, memory, graph, toon
+Reachable: measure, cmd, read, archive, guard, memory, graph, toon, docs
 Not reachable: proxy, inject, compress
 
 ## Docs

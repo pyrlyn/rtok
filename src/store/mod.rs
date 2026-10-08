@@ -29,8 +29,10 @@ mod projects;
 pub use project_links::{Link, LinkKind};
 pub use projects::{Origin, Project, Resolved, canon_root};
 // T285: which agent a worktree is bound to (the git lock stays the source of truth).
+mod docs;
 mod task_counters;
 mod worktree_claims;
+pub use docs::DocHit;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::ErrorKind;
@@ -4825,6 +4827,11 @@ mod tests {
         "notes_fts_idx",              // FTS5 shadow table for notes_fts
         "notes_fts_docsize",          // FTS5 shadow table for notes_fts
         "notes_fts_config",           // FTS5 shadow table for notes_fts
+        "doc_items_fts",              // 0034: FTS5 virtual table, MATCH/bm25 in sql_ext (T471)
+        "doc_items_fts_data",         // FTS5 shadow table for doc_items_fts
+        "doc_items_fts_idx",          // FTS5 shadow table for doc_items_fts
+        "doc_items_fts_docsize",      // FTS5 shadow table for doc_items_fts
+        "doc_items_fts_config",       // FTS5 shadow table for doc_items_fts
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 

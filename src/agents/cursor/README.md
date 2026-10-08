@@ -26,7 +26,7 @@ https://cursor.com/docs/cli/overview). `--desktop` checks `mcp.json` and prints 
 Hooks carry the `hook` and `cli` surfaces; the linked plugin serves them. MCP carries `mcp`,
 served by `mcp.json` on its own. Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon
+Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon, docs
 Not reachable: proxy, compress
 
 ## Docs

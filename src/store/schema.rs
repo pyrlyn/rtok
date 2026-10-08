@@ -376,6 +376,29 @@ diesel::table! {
     }
 }
 
+// 0034 (T471): one row per cached crate version. The JSON blob lives under `~/.rtok/docs`.
+diesel::table! {
+    doc_crates (name, version) {
+        name -> Text,
+        version -> Text,
+        sha256 -> Text,
+        format_version -> Integer,
+        fetched_unix -> BigInt,
+    }
+}
+
+// 0034 (T471): one rustdoc item or llms.txt section. `doc_items_fts` is virtual.
+diesel::table! {
+    doc_items (id) {
+        id -> Integer,
+        crate_name -> Text,
+        version -> Text,
+        path -> Text,
+        kind -> Text,
+        docs -> Text,
+    }
+}
+
 diesel::joinable!(archive_decisions -> archive (archive_id));
 diesel::joinable!(models -> providers (provider_id));
 diesel::joinable!(sessions -> hosts (host_id));
@@ -423,4 +446,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     projects,
     project_links,
     task_counters,
+    doc_crates,
+    doc_items,
 );

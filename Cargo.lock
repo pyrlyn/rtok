@@ -3886,6 +3886,7 @@ dependencies = [
  "dunce",
  "env_logger",
  "figment",
+ "flate2",
  "futures-util",
  "globset",
  "httpmock",

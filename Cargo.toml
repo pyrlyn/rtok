@@ -48,7 +48,7 @@ harness = false
 
 [features]
 # One feature per catalogue plugin (plan T0.4). Default = all.
-default = ["measure", "cmd", "read", "archive", "proxy", "inject", "guard", "memory", "graph", "toon", "compress"]
+default = ["measure", "cmd", "read", "archive", "proxy", "inject", "guard", "memory", "graph", "toon", "compress", "docs"]
 measure = []
 cmd = []
 read = ["dep:tree-sitter", "dep:tree-sitter-tags", "lang-rust", "lang-ts", "lang-js", "lang-python", "lang-dart", "lang-c", "lang-go", "lang-java", "lang-kotlin", "lang-swift", "lang-csharp", "lang-ruby", "lang-php"]
@@ -61,6 +61,7 @@ graph = ["read"]
 toon = []
 wasm-host = ["dep:wasmi"]
 compress = []
+docs = [] # local Cargo.lock + cached docs.rs rustdoc JSON (T471)
 lang-rust = ["dep:tree-sitter-rust"]
 lang-ts = ["dep:tree-sitter-typescript"]
 lang-js = ["dep:tree-sitter-javascript"]
@@ -164,6 +165,7 @@ uuid = { version = "1.26", features = ["v4"] } # T282: the rtok agent id (D34, r
 humantime = "2.4" # T282 review: [agents] idle parsing, replacing a hand-rolled duplicate of measure::stats::parse_since; already in the lock as a transitive dep
 trash = { version = "5.2.9", default-features = false, features = ["coinit_apartmentthreaded"] } # T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin; chrono (metadata listing only) left off
 jiff = "0.2" # T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger
+flate2 = "1.1" # T471: gunzip docs.rs rustdoc JSON (`.json.gz`); already in the lock via reqwest
 
 [dev-dependencies]
 assert_cmd = "2" # CLI e2e through `Command::cargo_bin` (plan Working agreement)

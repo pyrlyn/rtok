@@ -27,6 +27,7 @@ Commands:
   config       The one config file
   memory       Notes (`mem_save` / import / export)
   graph        Symbol index (`rtok graph index`)
+  docs         Cached crate docs (`rtok docs fetch`)
   guard        Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
   demon        Keep `rtok proxy` (or `mcp` / `web`) running in the background
   otel         OpenTelemetry export (`rtok otel flush | status`)

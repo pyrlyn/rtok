@@ -117,8 +117,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 
-
-
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
 Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.

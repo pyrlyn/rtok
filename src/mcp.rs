@@ -296,6 +296,10 @@ fn prepare_args(name: &str, args: &Value) -> Value {
     {
         obj.insert("pattern".into(), q);
     }
+    #[cfg(feature = "docs")]
+    if name == "docs_query" {
+        crate::plugins::docs::alias_query_args(&mut args);
+    }
     args
 }
 
@@ -716,6 +720,19 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         "read" => read_file(cx, args),
         #[cfg(feature = "read")]
         "search" => search_files(cx, args),
+        #[cfg(feature = "docs")]
+        "docs_resolve" => {
+            crate::plugins::docs::docs_resolve(cx, args["name"].as_str().unwrap_or(""))
+        }
+        #[cfg(feature = "docs")]
+        "docs_query" => crate::plugins::docs::docs_query(
+            cx,
+            args["name"].as_str().unwrap_or(""),
+            args["version"].as_str(),
+            args["query"].as_str().unwrap_or(""),
+        ),
+        #[cfg(feature = "docs")]
+        "docs_get" => crate::plugins::docs::docs_get(cx, args["id"].as_i64().unwrap_or(0) as i32),
         #[cfg(feature = "read")]
         "tree" => tree_files(cx, args),
         #[cfg(feature = "graph")]

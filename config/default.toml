@@ -511,6 +511,12 @@
 [plugins.compress]
 # enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
 
+[plugins.docs]
+# enabled       = false                 # MCP docs_resolve / docs_query / docs_get
+# query_limit   = 5
+# snippet_chars = 400
+# max_tokens    = 800                   # docs_query reply cap
+
 [plugins.wasm]
 # enabled = false
 # dir = "~/.rtok/plugins"

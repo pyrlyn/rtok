@@ -27,7 +27,7 @@ Matchers are the aliases Qwen accepts exactly (`Bash`, `Read`, `Skill`) and
 
 Hooks carry `hook` and `cli`, MCP carries `mcp`. Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon
+Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon, docs
 Not reachable: proxy, compress
 
 ## Docs

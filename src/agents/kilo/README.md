@@ -33,7 +33,7 @@ module descriptor. The plugin reports as `--host opencode`. A missing `rtok` fai
 MCP carries `mcp`, and the linked plugin carries the bash call path (`cli`). Nothing carries
 `hook` or `proxy`.
 
-Reachable: measure, cmd, read, archive, guard, memory, graph, toon
+Reachable: measure, cmd, read, archive, guard, memory, graph, toon, docs
 Not reachable: proxy, inject, compress
 
 ## Docs

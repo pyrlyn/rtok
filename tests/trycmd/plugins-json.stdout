@@ -321,5 +321,38 @@
       "est_after": 0,
       "rows": 0
     }
+  },
+  {
+    "id": "docs",
+    "enabled": false,
+    "surfaces": [
+      "mcp"
+    ],
+    "title": "Docs",
+    "summary": "Exact dependency versions from Cargo.lock, snippets from a local rustdoc cache.",
+    "saves_tokens": true,
+    "fields": [
+      [
+        "query_limit",
+        "5"
+      ],
+      [
+        "snippet_chars",
+        "400"
+      ],
+      [
+        "max_tokens",
+        "800"
+      ]
+    ],
+    "stats": {
+      "input": 0,
+      "output": 0,
+      "cache_create": 0,
+      "cache_read": 0,
+      "est_before": 0,
+      "est_after": 0,
+      "rows": 0
+    }
   }
 ]

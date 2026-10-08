@@ -517,6 +517,41 @@ impl Query for SearchNotes {
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}
 
+/// FTS5 over one cached crate version. `snippet` is `substr` length, not a token count.
+#[derive(QueryId)]
+pub(crate) struct SearchDocs {
+    pub query: String,
+    pub name: String,
+    pub version: String,
+    pub snippet: i32,
+    pub limit: i32,
+}
+
+impl QueryFragment<Sqlite> for SearchDocs {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql("SELECT i.id, i.path, i.kind, substr(i.docs, 1, ");
+        out.push_bind_param::<Integer, _>(&self.snippet)?;
+        out.push_sql(
+            "), i.docs FROM doc_items_fts f JOIN doc_items i ON i.id = f.rowid \
+             WHERE doc_items_fts MATCH ",
+        );
+        out.push_bind_param::<Text, _>(&self.query)?;
+        out.push_sql(" AND i.crate_name = ");
+        out.push_bind_param::<Text, _>(&self.name)?;
+        out.push_sql(" AND i.version = ");
+        out.push_bind_param::<Text, _>(&self.version)?;
+        out.push_sql(" ORDER BY bm25(doc_items_fts) LIMIT ");
+        out.push_bind_param::<Integer, _>(&self.limit)?;
+        Ok(())
+    }
+}
+
+impl Query for SearchDocs {
+    type SqlType = (Integer, Text, Text, Text, Text);
+}
+
+impl RunQueryDsl<SqliteConnection> for SearchDocs {}
+
 /// `COUNT() OVER` and `ROW_NUMBER() OVER` — no window functions in Diesel 2.3's typed DSL.
 #[derive(QueryId)]
 pub(crate) struct UsageCtt;

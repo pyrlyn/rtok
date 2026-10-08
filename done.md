@@ -1,5 +1,13 @@
 # rtok — completed tasks
 
+### T471. Local crate docs from Cargo.lock and cached rustdoc JSON
+
+Dependency questions are answered from training data or a hosted docs API. This plugin answers them from the exact version in `Cargo.lock` and a local FTS index of docs.rs rustdoc JSON (gzip, no API key). Default off. No hook work and no network except `rtok docs fetch`.
+
+Check: `docs_resolve` prints the lockfile version; `docs_query` ranks a seeded `Deserialize` hit under `max_tokens` and records a `docs`/`query` measurement; a missing cache prints `not cached` and opens no socket; the three tool descriptions sum to ≤ 60 estimated tokens; `just check`.
+
+Result: `docs` is a catalogue plugin, default off, MCP only (`docs_resolve`, `docs_query`, `docs_get`). `rtok docs fetch` reads the version from `Cargo.lock` and stores `GET https://docs.rs/crate/<name>/<version>/json.gz` under `~/.rtok/docs` with no `Authorization` header. A failed download leaves the previous rows. `llms` indexes `llms.txt` / `llms-full.txt` from the workspace. Unit tests cover the lockfile version, a ranked `Deserialize` hit under `max_tokens` with a `docs`/`query` measurement, the missing-cache message with no socket, and tool descriptions summing to ≤ 60 estimated tokens. `cargo test --lib` 2076 passed; `cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings` clean; `cargo build --no-default-features --features measure` clean. Four proxy tests in `tests/proxy.rs` stayed running past several minutes on this machine and were stopped; `pi_plugin` and one OpenCode test need `vitest` via mise, which is not installed here.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).

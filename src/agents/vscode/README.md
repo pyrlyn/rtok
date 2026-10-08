@@ -31,7 +31,7 @@ carries hooks, so the plugins that declare either surface are reachable once it 
 Hooks carry the `hook` surface, MCP carries `mcp`; the linked plugin serves hooks, and MCP
 is served directly by this host's own `mcp.json` (T275/D33).
 
-Reachable (desktop): cmd, read, archive, inject, guard, memory, graph, toon
+Reachable (desktop): cmd, read, archive, inject, guard, memory, graph, toon, docs
 Not reachable (desktop): measure, proxy, compress
 
 ## Docs

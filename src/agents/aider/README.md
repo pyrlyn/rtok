@@ -21,7 +21,7 @@ The proxy carries the `proxy` surface. Hook- and MCP-only plugins have no path i
 There is no `anthropic-api-base` in aider's options reference — only `openai-api-base`.
 
 Reachable: measure, archive, proxy, toon, compress
-Not reachable: cmd, read, inject, guard, memory, graph
+Not reachable: cmd, read, inject, guard, memory, graph, docs
 
 ## Docs
 

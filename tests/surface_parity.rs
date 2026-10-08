@@ -590,6 +590,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "changes the registry; the selector is T329.12",
     ),
     (
+        "docs fetch",
+        "downloads one crate's rustdoc JSON into the local cache (T471); the Docs page reads that cache",
+    ),
+    (
         "logs export",
         "the same Logs selection, unnumbered and uncoloured",
     ),

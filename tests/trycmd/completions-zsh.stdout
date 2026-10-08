@@ -2008,6 +2008,58 @@ esac
     ;;
 esac
 ;;
+(docs)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+":: :_rtok__subcmd__docs_commands" /
+"*::: :->docs" /
+&& ret=0
+
+    case $state in
+    (docs)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-docs-command-$line[1]:"
+        case $line[1] in
+            (fetch)
+_arguments "${_arguments_options[@]}" : /
+'--version=[Version when the lockfile lists more than one]:VERSION:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+':name -- Crate name:_default' /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__docs__subcmd__help_commands" /
+"*::: :->help" /
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-docs-help-command-$line[1]:"
+        case $line[1] in
+            (fetch)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (guard)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -2833,6 +2885,26 @@ _arguments "${_arguments_options[@]}" : /
     ;;
 esac
 ;;
+(docs)
+_arguments "${_arguments_options[@]}" : /
+":: :_rtok__subcmd__help__subcmd__docs_commands" /
+"*::: :->docs" /
+&& ret=0
+
+    case $state in
+    (docs)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:rtok-help-docs-command-$line[1]:"
+        case $line[1] in
+            (fetch)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (guard)
 _arguments "${_arguments_options[@]}" : /
 ":: :_rtok__subcmd__help__subcmd__guard_commands" /
@@ -2994,6 +3066,7 @@ _rtok_commands() {
 'config:The one config file' /
 'memory:Notes (/`mem_save/` / import / export)' /
 'graph:Symbol index (/`rtok graph index/`)' /
+'docs:Cached crate docs (/`rtok docs fetch/`)' /
 'guard:Duplicate-call verdict (/`rtok guard check/` — pi / OpenCode plugin path)' /
 'dashboard:Deprecated spelling of /`rtok web/`; still runs, still prints where to go' /
 'demon:Keep /`rtok proxy/` (or /`mcp/` / /`web/`) running in the background' /
@@ -3571,6 +3644,37 @@ _rtok__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok demon upgrade commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__docs_commands] )) ||
+_rtok__subcmd__docs_commands() {
+    local commands; commands=(
+'fetch:Download rustdoc JSON for the Cargo.lock version and index it' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok docs commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__docs__subcmd__fetch_commands] )) ||
+_rtok__subcmd__docs__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok docs fetch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__docs__subcmd__help_commands] )) ||
+_rtok__subcmd__docs__subcmd__help_commands() {
+    local commands; commands=(
+'fetch:Download rustdoc JSON for the Cargo.lock version and index it' /
+'help:Print this message or the help of the given subcommand(s)' /
+    )
+    _describe -t commands 'rtok docs help commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__docs__subcmd__help__subcmd__fetch_commands] )) ||
+_rtok__subcmd__docs__subcmd__help__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok docs help fetch commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__docs__subcmd__help__subcmd__help_commands] )) ||
+_rtok__subcmd__docs__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok docs help help commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__doctor_commands] )) ||
 _rtok__subcmd__doctor_commands() {
     local commands; commands=()
@@ -3840,6 +3944,7 @@ _rtok__subcmd__help_commands() {
 'config:The one config file' /
 'memory:Notes (/`mem_save/` / import / export)' /
 'graph:Symbol index (/`rtok graph index/`)' /
+'docs:Cached crate docs (/`rtok docs fetch/`)' /
 'guard:Duplicate-call verdict (/`rtok guard check/` — pi / OpenCode plugin path)' /
 'dashboard:Deprecated spelling of /`rtok web/`; still runs, still prints where to go' /
 'demon:Keep /`rtok proxy/` (or /`mcp/` / /`web/`) running in the background' /
@@ -4100,6 +4205,18 @@ _rtok__subcmd__help__subcmd__demon__subcmd__supervise_commands() {
 _rtok__subcmd__help__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help demon upgrade commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__docs_commands] )) ||
+_rtok__subcmd__help__subcmd__docs_commands() {
+    local commands; commands=(
+'fetch:Download rustdoc JSON for the Cargo.lock version and index it' /
+    )
+    _describe -t commands 'rtok help docs commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__docs__subcmd__fetch_commands] )) ||
+_rtok__subcmd__help__subcmd__docs__subcmd__fetch_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help docs fetch commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__doctor_commands] )) ||
 _rtok__subcmd__help__subcmd__doctor_commands() {

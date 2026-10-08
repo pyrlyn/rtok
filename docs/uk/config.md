@@ -559,6 +559,12 @@ min_rows = 5
 [plugins.compress]
 enabled = true                        # екстрактивні зведення заархівованого виводу інструментів; працює лише в proxy.mode = "compress"
 
+[plugins.docs]
+enabled       = false                 # MCP docs_resolve / docs_query / docs_get (T471)
+query_limit   = 5
+snippet_chars = 400
+max_tokens    = 800                   # межа відповіді docs_query
+
 [plugins.wasm]
 enabled = false                      # типово вимкнено; жоден .wasm не завантажується до хоста T32.2 + feature `wasm-host`
 dir     = "~/.rtok/plugins"          # шукати *.wasm на один рівень углиб; D6 — цей репозиторій ніколи не вендорить сторонніх плагінів
@@ -820,6 +826,7 @@ color = false   # RTOK_UI_COLOR=false
 | `filter` | `--cmd` | `filter.cmd` |
 | `config init`, `config set`, `memory import`, `graph index` | `--dry-run` | (дія: показує зміну як git diff і нічого не записує) |
 | `memory export` | `--project` | для окремого виклику (без ключа): звужує один дамп до нотаток проєкту |
+| `docs fetch` | `--version` | для окремого виклику (без ключа): яку версію з Cargo.lock завантажити, коли їх більше однієї |
 
 Тест покриття (T12.4) обходить дерево команд clap і падає, якщо непозиційний прапорець
 з'являється без ключа в `config/default.toml`, тож ця таблиця не може непомітно розійтися з кодом.

@@ -88,6 +88,9 @@ Notes (`mem_save` / import / export)
 rtok/-graph(1)
 Symbol index (`rtok graph index`)
 .TP
+rtok/-docs(1)
+Cached crate docs (`rtok docs fetch`)
+.TP
 rtok/-guard(1)
 Duplicate/-call verdict (`rtok guard check` — pi / OpenCode plugin path)
 .TP
@@ -128,6 +131,7 @@ v[..] ([..])
 /fBrtok-config/fR(1),
 /fBrtok-memory/fR(1),
 /fBrtok-graph/fR(1),
+/fBrtok-docs/fR(1),
 /fBrtok-guard/fR(1),
 /fBrtok-demon/fR(1),
 /fBrtok-otel/fR(1),

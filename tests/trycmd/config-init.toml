@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,516 @@
+@@ -0,0 +1,522 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -517,6 +517,12 @@ target/tmp/t60-2-config-init.toml
 +
 +[plugins.compress]
 +# enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
++
++[plugins.docs]
++# enabled       = false                 # MCP docs_resolve / docs_query / docs_get
++# query_limit   = 5
++# snippet_chars = 400
++# max_tokens    = 800                   # docs_query reply cap
 +
 +[plugins.wasm]
 +# enabled = false

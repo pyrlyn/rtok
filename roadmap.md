@@ -296,6 +296,24 @@ Legend: **blocked by** = tasks that must land first; **gate** = keep-or-revert r
 
 ---
 
+## `docs`
+
+**Goal.** Exact crate versions from `Cargo.lock`, snippets from a local cache of docs.rs rustdoc JSON. No hosted docs API and no API key.
+
+**Replaces.** A hosted library-docs MCP that forwards the question to a private ranker.
+
+**Surfaces.** MCP (`docs_resolve`, `docs_query`, `docs_get`) and `rtok docs fetch`. Default **off**. Hooks never call the network.
+
+**Blocked by.** T13 (Diesel + FTS5).
+
+| Order | Task | Plan |
+|-------|------|------|
+| 1 | T471 | Resolve the lockfile version, FTS the cached rustdoc, fetch `json.gz` with no `Authorization` header. · done 2026-10-08 |
+
+**Gate.** a `docs_query` reply stays within `plugins.docs.max_tokens` (default 800) and the three tool descriptions sum to at most 60 estimated tokens.
+
+---
+
 ## Dependency sketch
 
 ```

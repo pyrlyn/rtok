@@ -100,6 +100,7 @@ Project programs and direct packages from the manifests.
 | dunce | local | https://crates.io/crates/dunce | Canonicalize without Windows UNC prefixes |
 | env_logger | local | https://crates.io/crates/env_logger | T225: `RUST_LOG` debug log on stderr, off by default |
 | figment | local | https://crates.io/crates/figment | Config |
+| flate2 | local | https://crates.io/crates/flate2 | T471: gunzip docs.rs rustdoc JSON (`.json.gz`); already in the lock via reqwest |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |
 | globset | local | https://crates.io/crates/globset | T329.7: workspace member globs of project references; already in the tree through `ignore` |
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |

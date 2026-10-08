@@ -1850,6 +1850,11 @@ fn config_fields(id: &str, cfg: &Config) -> Vec<(String, String)> {
         ],
         "graph" => vec![kv("max_tokens", p.graph.max_tokens)],
         "toon" => vec![kv("min_rows", p.toon.min_rows)],
+        "docs" => vec![
+            kv("query_limit", p.docs.query_limit),
+            kv("snippet_chars", p.docs.snippet_chars),
+            kv("max_tokens", p.docs.max_tokens),
+        ],
         "proxy" => vec![
             kv("enabled", cfg.proxy.enabled),
             kv("mode", &cfg.proxy.mode),

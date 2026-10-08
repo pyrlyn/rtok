@@ -558,6 +558,12 @@ min_rows = 5
 [plugins.compress]
 enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
 
+[plugins.docs]
+enabled       = false                 # MCP docs_resolve / docs_query / docs_get (T471)
+query_limit   = 5
+snippet_chars = 400
+max_tokens    = 800                   # docs_query reply cap
+
 [plugins.wasm]
 enabled = false                      # off by default; no .wasm loaded until T32.2 host + `wasm-host` feature
 dir     = "~/.rtok/plugins"          # scan one level for *.wasm; D6 — this repo never vendors third-party plugins
@@ -817,6 +823,7 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 | `filter` | `--cmd` | `filter.cmd` |
 | `config init`, `config set`, `memory import`, `graph index` | `--dry-run` | (action: renders the change as a git diff and writes nothing) |
 | `memory export` | `--project` | per call (no key): narrows one dump to a project's notes |
+| `docs fetch` | `--version` | per call (no key): which lockfile version to download when more than one is present |
 
 The coverage test (T12.4) walks the clap command tree and fails if a non-positional flag
 appears without a key in `config/default.toml`, so this table cannot silently drift.

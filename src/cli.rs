@@ -302,6 +302,12 @@ enum Cmd {
         #[command(subcommand)]
         action: GraphCmd,
     },
+    /// Cached crate docs (`rtok docs fetch`)
+    #[cfg(feature = "docs")]
+    Docs {
+        #[command(subcommand)]
+        action: DocsCmd,
+    },
     // T70.5
     /// Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
     #[cfg(feature = "guard")]
@@ -457,6 +463,19 @@ impl ReportFormat {
             Self::Pdf => "pdf",
         }
     }
+}
+
+#[cfg(feature = "docs")]
+#[derive(Subcommand)]
+enum DocsCmd {
+    /// Download rustdoc JSON for the Cargo.lock version and index it
+    Fetch {
+        /// Crate name
+        name: String,
+        /// Version when the lockfile lists more than one
+        #[arg(long)]
+        version: Option<String>,
+    },
 }
 
 #[cfg(feature = "memory")]
@@ -2308,6 +2327,28 @@ pub fn run() -> Result<()> {
                     since.as_deref(),
                     json,
                 )?,
+            }
+        }
+        #[cfg(feature = "docs")]
+        Cmd::Docs { action } => {
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let cx = crate::plugin::Runtime::open(cfg, "docs")?;
+            match action {
+                DocsCmd::Fetch { name, version } => {
+                    let home = Config::home_dir();
+                    let start = std::env::current_dir()?;
+                    println!(
+                        "{}",
+                        crate::plugins::docs::fetch_with(
+                            &cx,
+                            &home,
+                            &start,
+                            &name,
+                            version.as_deref(),
+                            crate::plugins::docs::download_rustdoc,
+                        )?
+                    );
+                }
             }
         }
         #[cfg(feature = "graph")]

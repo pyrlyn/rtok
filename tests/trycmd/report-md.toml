@@ -149,6 +149,10 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.cmd.shell |  | default |
 | plugins.cmd.trailer_min_lines | 40 | default |
 | plugins.compress.enabled | true | default |
+| plugins.docs.enabled | false | default |
+| plugins.docs.max_tokens | 800 | default |
+| plugins.docs.query_limit | 5 | default |
+| plugins.docs.snippet_chars | 400 | default |
 | plugins.graph.auto_add_projects | true | default |
 | plugins.graph.auto_index | true | default |
 | plugins.graph.auto_link_references | true | default |
@@ -410,7 +414,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-364 keys.
+368 keys.
 
 ## Doctor
 
