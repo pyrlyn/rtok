@@ -19,6 +19,7 @@ import { compact, fmt, hms, pct } from "./format";
 import { overview } from "./model";
 import { CallsPanel, DoctorPanel, SessionsPanel } from "./OverviewPanels";
 import { PanelLink, TokenMix, tokenTotal, WithSnapshot } from "./parts";
+import { tableLink } from "../tableSearch";
 import { SavingsTrend } from "./SavingsTrend";
 
 type Saving = ReturnType<typeof overview>["measured"][number];
@@ -183,7 +184,23 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
             key="calls"
             label="calls"
             value={fmt(snap.calls.length)}
-            sub={`${o.failed} failed · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+            to={tableLink("calls", {})}
+            sub={
+                <>
+                    {o.failed ? (
+                        // Lifted above the card's overlay so it is its own link; underlined because it sits inside a sentence.
+                        <PanelLink
+                            {...tableLink("calls", { result: "failed" })}
+                            className="relative z-10 underline"
+                        >
+                            {o.failed} failed
+                        </PanelLink>
+                    ) : (
+                        "0 failed"
+                    )}
+                    {` · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+                </>
+            }
             readout={{ group: CALLS_SYNC, x: times, values: perBucket, unit: "calls" }}
             viz={
                 <MiniBars
@@ -205,6 +222,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${o.hosts} hosts`}
+            to={tableLink("sessions", { show: "live" })}
             readout={{ group: CALLS_SYNC, x: times, values: o.liveSeries, unit: "live" }}
             viz={
                 <Sparkline
@@ -226,6 +244,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${snap.plugins.length - o.enabled} disabled`}
+            to={tableLink("plugins", { show: "on" })}
             viz={<Bitset items={snap.plugins} />}
         />,
     ];

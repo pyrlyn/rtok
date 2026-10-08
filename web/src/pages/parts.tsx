@@ -55,9 +55,23 @@ export function Count({ children }: { children: ReactNode }) {
     return <span className="ml-auto text-2xs text-fg-subtle">{children}</span>;
 }
 
-export function PanelLink({ to, children }: { to: `/${string}`; children: ReactNode }) {
+export function PanelLink({
+    to,
+    search,
+    className = "",
+    children,
+}: {
+    to: `/${string}`;
+    search?: Record<string, string | undefined>;
+    className?: string;
+    children: ReactNode;
+}) {
     return (
-        <Link to={to} className={`${focusRing} rounded-sm text-accent-fg hover:underline`}>
+        <Link
+            to={to}
+            search={search}
+            className={`${focusRing} rounded-sm text-accent-fg hover:underline ${className}`}
+        >
             {children}
         </Link>
     );
