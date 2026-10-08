@@ -58,7 +58,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T378 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.7 | todo | P3 | 4 | 10% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
@@ -98,7 +97,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.7 | todo | P2 | 4 | 0% | |
+| T441.11 | todo | P3 | 3 | 0% | |
+| T441.12 | todo | P3 | 3 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
 
 
@@ -1361,12 +1361,6 @@ optimization.md §5. `rtok bench` cost per passed task for each setting on and o
 
 Check: one dated `research.md` row per setting.
 
-### T385.7. Per-lane upstream and in-flight cap
-
-optimization.md §2.2 L5. `upstream` per lane (Batch always goes to the provider that owns the job); per-lane `max_in_flight` and a small queue; the `agent` lane is never queued behind `bulk`.
-
-Check: with a slow mock upstream, agent request latency is unchanged while a bulk burst runs; `just check`.
-
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
 optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
@@ -1988,10 +1982,12 @@ project = "group/name"
 4. **T441.4 Adapter trait + disk adapter** — trait, disk layout, archive on done.
 5. **T441.5 CLI** — `rtok task create/list/show/status/next/init`, `--json`.
 6. **T441.6 MCP tools** — `task_*` on `rtok mcp`, parity test. The server entry is already what `rtok agents install` writes for every host, so the tools need no install of their own.
-7. **T441.7 GitHub adapter** — issues, sub-issues, Projects v2 Status, label mapping, collision check, `sync`.
+7. **T441.7 GitHub adapter** — issues, sub-issues, label mapping, collision check. Done; Projects v2 Status split into T441.11, `sync` into T441.12.
 8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
+11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
+12. **T441.12 `rtok task sync`** (split from T441.7) — reconcile a remote adapter with the store counter and report drift: issues labelled by hand, ids above the counter, tasks whose `rtok:<id>` label was removed.
 
 #### 12. Open questions
 

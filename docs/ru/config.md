@@ -170,6 +170,9 @@ context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, чтение и запись
 flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
 timeout_s           = 0               # таймаут чтения для этой lane; 0 = proxy.timeout_s, но не меньше 900 при flex = true (гайд OpenAI по Flex берёт 15 мин)
+upstream            = ""              # базовый URL для каждого запроса этой lane, любой wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+max_in_flight       = 0               # запросов upstream одновременно; 0 = без лимита (lane agent не ограничивается никогда)
+max_queued          = 8               # при max_in_flight: сколько запросов ждут слот; следующий получает 429 + Retry-After
 
 [proxy.lanes.embeddings]              # те же ключи, что у bulk
 compress            = false
@@ -179,6 +182,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.meta]                    # те же ключи, что у bulk (models, подсчёт токенов)
 compress            = false
@@ -188,6 +194,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.internal]                # те же ключи, что у bulk (собственные вызовы модели rtok)
 compress            = false
@@ -197,6 +206,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.batch]                         # файлы результатов провайдерского Batch
 parse_results       = false           # разобрать полученный файл результатов в строку usage на запрос; тело пересылается как есть
@@ -426,7 +438,7 @@ dir = "tasks"                         # один Markdown-файл на зада
 
 [tasks.github]
 repo = ""                             # owner/name; пусто: remote origin
-project = 0                           # номер Projects v2, чьё поле Status ведёт задачи; 0 = только issues
+project = 0                           # номер Projects v2 для поля Status (читается с T441.11); 0 = только issues
 
 [tasks.gitlab]
 url = "https://gitlab.com"            # базовый URL; задайте для своего инстанса
@@ -606,10 +618,22 @@ Lane agent сохраняет `calls.kind = api_request`; остальные з�
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | чтение и запись кэша |
 | `flex` | нет | `false` | OpenAI `service_tier = "flex"` для вызовов chat и responses, см. [`[proxy.flex]`](#proxyflex) |
 | `timeout_s` | `proxy.timeout_s` | `0` | таймаут чтения этой lane в секундах; `0` = `proxy.timeout_s`, но не меньше 900 при `flex = true` (руководство OpenAI по Flex поднимает таймаут SDK до 15 минут: запросы Flex чаще упираются в таймаут) |
+| `upstream` | `proxy.upstream`, `openai_upstream`, `gemini_upstream` | `""` | базовый URL для каждого запроса этой lane, какой бы ни был wire (шлюз или локальный сервер, который их понимает); `""` = собственный upstream wire |
+| `max_in_flight` | нет | `0` | сколько запросов этой lane одновременно у upstream, считая до конца потока ответа; `0` = без лимита |
+| `max_queued` | нет | `8` | при `max_in_flight`: сколько запросов ждут слот; следующий получает `429` с `Retry-After: 1` и до upstream не доходит |
 
-Маршрутизации и upstream для отдельной lane здесь пока нет: каждый появится в этой таблице
-своим шагом (`[proxy.routing]` ниже). У lane `agent` нет переключателя `flex`: живой ход не меняет
-уровень, пока клиент сам его не попросит.
+У каждой lane свои слоты и своя очередь, а у lane `agent` нет ни того, ни другого: всплеск
+bulk заполняет только свою lane и никогда не задерживает ход агента. Запрос, которому
+отказала полная очередь, получает `rate_limit_error` в формате Anthropic, на который SDK
+провайдеров отвечают паузой и повтором; строки в `calls` он не пишет (до upstream он не
+дошёл), только строку `warn` в лог. Когда прокси выключен (`proxy.enabled`, `core.enabled`
+или `plugins.proxy.enabled` равны false), запросы не ограничиваются и не ставятся в очередь.
+У `batch` и `files` нет `upstream`: создание, опрос и результаты Batch-задачи всегда идут к
+провайдеру, которому она принадлежит.
+
+Маршрутизации здесь пока нет: она появится в этой таблице своим шагом (`[proxy.routing]`
+ниже). У lane `agent` нет переключателя `flex`: живой ход не меняет уровень, пока клиент сам
+его не попросит.
 
 ### `[proxy.batch]`
 

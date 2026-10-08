@@ -170,6 +170,9 @@ context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
 flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
 timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s, but 900 or more with flex = true (OpenAI's Flex guide uses 15 min)
+upstream            = ""              # base URL for every request on this lane, any wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+max_in_flight       = 0               # requests upstream at once; 0 = no cap (the agent lane is never capped)
+max_queued          = 8               # with max_in_flight: requests that wait for a slot; one more gets 429 + Retry-After
 
 [proxy.lanes.embeddings]              # same keys as bulk
 compress            = false
@@ -179,6 +182,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.meta]                    # same keys as bulk (models, token counting)
 compress            = false
@@ -188,6 +194,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
 compress            = false
@@ -197,6 +206,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.batch]                         # provider Batch result files
 parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
@@ -426,7 +438,7 @@ dir = "tasks"                         # one Markdown file per task, relative to 
 
 [tasks.github]
 repo = ""                             # owner/name; empty: the origin remote
-project = 0                           # Projects v2 number whose Status field tracks tasks; 0 = issues only
+project = 0                           # Projects v2 number for the Status field (not read yet); 0 = issues only
 
 [tasks.gitlab]
 url = "https://gitlab.com"            # base URL; set it for a self-hosted instance
@@ -607,10 +619,21 @@ counterpart: a rewrite runs on a lane when the global switch *and* the lane swit
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | cache lookup and store |
 | `flex` | none | `false` | OpenAI `service_tier = "flex"` on chat and responses calls, see [`[proxy.flex]`](#proxyflex) |
 | `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s`, raised to 900 when the lane has `flex = true` (the OpenAI Flex guide raises its SDK timeout to 15 minutes because Flex requests time out more often) |
+| `upstream` | `proxy.upstream`, `openai_upstream`, `gemini_upstream` | `""` | base URL for every request on this lane, whatever its wire (a gateway or local server that speaks them); `""` = the wire's own upstream |
+| `max_in_flight` | none | `0` | requests on this lane upstream at once, counted until the response stream ends; `0` = no cap |
+| `max_queued` | none | `8` | with `max_in_flight`: requests that wait for a slot; one more is answered `429` with `Retry-After: 1` and never reaches upstream |
 
-Routing and a per-lane upstream are not here yet: each joins this table with its own step
-(`[proxy.routing]` below). The `agent` lane has no `flex` switch: a live turn never changes tier unless
-the client asks for it.
+Each lane has its own slots and its own queue, and the `agent` lane has neither, so a bulk
+burst can fill its own lane but never delays an agent turn. A request turned away by a full
+queue gets an Anthropic-shaped `rate_limit_error` that the provider SDKs back off and retry
+on; it writes no `calls` row (it never went upstream), only a `warn` log line. With the proxy
+switched off (`proxy.enabled`, `core.enabled` or `plugins.proxy.enabled` false) no request is
+capped or queued. `batch` and `files` have no `upstream`: a Batch job's create, poll and
+results always go to the provider that owns it.
+
+Routing is not here yet: it joins this table with its own step (`[proxy.routing]` below).
+The `agent` lane has no `flex` switch: a live turn never changes tier unless the client asks
+for it.
 
 ### `[proxy.batch]`
 

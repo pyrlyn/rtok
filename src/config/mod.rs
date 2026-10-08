@@ -335,6 +335,15 @@ section! {
         flex: bool = false,
         /// Read timeout for this lane in seconds; 0 = `proxy.timeout_s`.
         timeout_s: u64 = 0,
+        /// Base URL for every request on this lane, whatever its wire (T385.7); empty = the
+        /// wire's own `proxy.upstream` / `openai_upstream` / `gemini_upstream`.
+        upstream: String = String::new(),
+        /// Requests on this lane upstream at once (T385.7); 0 = no cap. Other lanes, the
+        /// `agent` lane above all, never wait for this one.
+        max_in_flight: u32 = 0,
+        /// With `max_in_flight` set: requests that may wait for a slot. One more is answered
+        /// `429` with `Retry-After` and never reaches upstream.
+        max_queued: u32 = 8,
     }
 }
 
@@ -874,7 +883,7 @@ section! {
     TasksGithub {
         /// `owner/name`. Empty: the `origin` remote.
         repo: String = String::new(),
-        /// Projects v2 number whose Status field tracks the task; 0 = issues only.
+        /// Projects v2 number for the Status field, read from T441.11 on; 0 = issues only.
         project: u32 = 0,
     }
 }
