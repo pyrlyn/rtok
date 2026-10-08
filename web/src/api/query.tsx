@@ -27,6 +27,7 @@ import type { Connect, Connection, ConnectionState, Frame } from "./ws";
 export const snapshotKey = ["snapshot"] as const;
 export const connectionKey = ["connection"] as const;
 export const messageKey = ["message"] as const;
+export const pausedKey = ["paused"] as const;
 
 export const EXPAND_TIMEOUT_MS = 10_000;
 // A fix writes files and backs each one up first, so it gets longer than a read.
@@ -36,6 +37,8 @@ export interface Api {
     open(): void;
     close(): void;
     reconnect(): void;
+    pause(): void;
+    resume(): void;
     expand(id: string): Promise<string>;
     set(request: SetRequest): Promise<void>;
     project(request: ProjectRequest): Promise<void>;
@@ -65,6 +68,20 @@ export function createApi(
     let connection: Connection | null = null;
     let pending: PendingExpand[] = [];
     let pendingDoctor: PendingDoctor[] = [];
+    // While paused the socket keeps reading, but frames fold into `held` and the cache keeps the
+    // snapshot on screen, so `dataUpdatedAt` stays the age of what the reader sees.
+    let paused = false;
+    let held: Snapshot | undefined;
+
+    const writeSnapshot = (update: (prev: Snapshot | undefined) => Snapshot | undefined) => {
+        if (paused) held = update(held ?? queryClient.getQueryData<Snapshot>(snapshotKey));
+        else queryClient.setQueryData<Snapshot>(snapshotKey, update);
+    };
+
+    const setPaused = (value: boolean) => {
+        paused = value;
+        queryClient.setQueryData<boolean>(pausedKey, value);
+    };
 
     const rejectAll = (reason: string) => {
         const failed = pending;
@@ -112,14 +129,11 @@ export function createApi(
     const onFrame = (frame: Frame) => {
         switch (frame.type) {
             case "snapshot":
-                queryClient.setQueryData<Snapshot>(snapshotKey, frame.snapshot);
+                writeSnapshot(() => frame.snapshot);
                 return;
             case "snapshot_error":
                 // A failed tick has no page data; keep the last good one and surface the error.
-                queryClient.setQueryData<Snapshot>(
-                    snapshotKey,
-                    (prev) => prev && { ...prev, error: frame.error },
-                );
+                writeSnapshot((prev) => prev && { ...prev, error: frame.error });
                 return;
             case "expand": {
                 const done = pending.filter((p) => p.id === frame.id);
@@ -158,6 +172,17 @@ export function createApi(
         reconnect() {
             connection?.close();
             connection = connect({ onState, onFrame });
+        },
+        // There is nothing to freeze before the first snapshot, and a freeze with no frame would
+        // hide the first page behind a pause the reader cannot see.
+        pause() {
+            if (queryClient.getQueryData(snapshotKey)) setPaused(true);
+        },
+        resume() {
+            setPaused(false);
+            const next = held;
+            held = undefined;
+            if (next) queryClient.setQueryData<Snapshot>(snapshotKey, next);
         },
         expand(id) {
             return new Promise<string>((resolve, reject) => {
@@ -228,6 +253,13 @@ export const useConnection = (): ConnectionState =>
     useQuery<ConnectionState>(pushed(connectionKey)).data ?? "connecting";
 
 export const useServerMessage = () => useQuery<string>(pushed(messageKey)).data;
+
+export const usePaused = (): boolean => useQuery<boolean>(pushed(pausedKey)).data ?? false;
+
+export function usePauseToggle(): (paused: boolean) => void {
+    const api = useApi();
+    return (paused) => (paused ? api.pause() : api.resume());
+}
 
 export function useReconnect(): () => void {
     const api = useApi();
