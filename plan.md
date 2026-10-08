@@ -59,7 +59,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.6 | todo | P2 | 3 | 20% | |
 | T385.7 | todo | P3 | 4 | 10% | |
 | T385.8 | todo | P2 | 2 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
@@ -1382,12 +1381,6 @@ Check: each sub-task carries its own Check; this card closes when every step is 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
 Check: one dated `research.md` row per setting.
-
-### T385.6. Per-lane cache-hit ledger and a replay byte-stability test
-
-optimization.md §4.1. `rtok stats` shows prompt-cache hit rate per lane; a replay test proves the agent lane's request prefix stays byte-stable across turns with rtok's rewrites on.
-
-Check: per-lane hit rate from a fixture in `stats`; replay test green; `just check`.
 
 ### T385.7. Per-lane upstream and in-flight cap
 
