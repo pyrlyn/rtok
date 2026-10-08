@@ -332,6 +332,13 @@ pub trait Notes {
     /// Full-text search over notes. An empty query returns no hits rather than everything.
     fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>>;
 
+    /// FTS fused with vectors already stored (RRF). Does not embed missing rows.
+    ///
+    /// Default is [`Notes::search_notes`]: a host with no vector table stays on the text list.
+    fn search_notes_hybrid_stored(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        self.search_notes(query, limit)
+    }
+
     /// Replace the files note `id` is linked to (T374); paths are relative to the project root.
     /// Default `Ok(())` fails open for a host that keeps no links.
     fn set_note_files(&self, _id: i32, _paths: &[String]) -> Result<()> {

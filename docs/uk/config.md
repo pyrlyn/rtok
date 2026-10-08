@@ -535,7 +535,7 @@ enabled    = false                    # P29: якщо false — лише FTS5; �
 provider   = "local"                  # "local" | "openai"
 model      = "all-MiniLM-L6-v2"
 dimensions = 384
-hybrid     = true                     # коли ввімкнено: RRF(fts5, knn); false = лише knn
+hybrid     = true                     # коли ввімкнено: RRF(fts5, knn) для mem_search і prompt_recall; хук читає лише збережені вектори; false = лише knn
 
 [plugins.graph]
 enabled    = true

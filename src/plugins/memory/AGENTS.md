@@ -25,6 +25,8 @@ if split out per T2.5.
   to the existing files the body names and the session checkpoint's paths, root-relative and
   never outside the root. `prompt_recall` fuses the text hits with the notes linked to files the
   session read (`read_cache`) or the prompt names (RRF); any error there leaves the text hits.
+  Text hits are FTS, or RRF of FTS and vectors already stored when `embed.enabled && embed.hybrid`
+  (`search_notes_hybrid_stored`, T454); the hook does not call `embed_stale`.
   A file the prompt names (T452) also recalls up to 2 of its notes the text missed, taking slots
   from the same `prompt_recall` budget; a read file only re-ranks text hits (I-115 is the wider
   variant, off until a `Measurement` shows a saving).
