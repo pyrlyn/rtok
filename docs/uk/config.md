@@ -171,6 +171,9 @@ context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, читання і запис
 flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
 timeout_s           = 0               # таймаут читання для цієї смуги; 0 = proxy.timeout_s, але не менше 900 при flex = true (гайд OpenAI щодо Flex бере 15 хв)
+upstream            = ""              # базовий URL для кожного запиту цієї смуги, будь-який wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+max_in_flight       = 0               # запитів до upstream одночасно; 0 = без ліміту (смуга agent не обмежується ніколи)
+max_queued          = 8               # з max_in_flight: скільки запитів чекають на слот; наступний отримує 429 + Retry-After
 
 [proxy.lanes.embeddings]              # ті самі ключі, що в bulk
 compress            = false
@@ -180,6 +183,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.meta]                    # ті самі ключі, що в bulk (models, підрахунок токенів)
 compress            = false
@@ -189,6 +195,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.internal]                # ті самі ключі, що в bulk (власні виклики моделі rtok)
 compress            = false
@@ -198,6 +207,9 @@ context_management  = false
 semantic_cache      = false
 flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.batch]                         # файли результатів провайдерського Batch
 parse_results       = false           # розібрати отриманий файл результатів у рядок usage на запит; тіло пересилається як є
@@ -559,10 +571,22 @@ Gemini `:batchGenerateContent`), `files`, `embeddings` і `meta` (`/v1/models`,
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | читання і запис кешу |
 | `flex` | немає | `false` | OpenAI `service_tier = "flex"` для викликів chat і responses, див. [`[proxy.flex]`](#proxyflex) |
 | `timeout_s` | `proxy.timeout_s` | `0` | таймаут читання цієї смуги в секундах; `0` = `proxy.timeout_s`, але не менше 900 при `flex = true` (настанова OpenAI щодо Flex піднімає таймаут SDK до 15 хвилин: запити Flex частіше впираються в таймаут) |
+| `upstream` | `proxy.upstream`, `openai_upstream`, `gemini_upstream` | `""` | базовий URL для кожного запиту цієї смуги, хоч би який wire (шлюз або локальний сервер, що їх розуміє); `""` = власний upstream wire |
+| `max_in_flight` | немає | `0` | скільки запитів цієї смуги одночасно в upstream, рахуючи до кінця потоку відповіді; `0` = без ліміту |
+| `max_queued` | немає | `8` | з `max_in_flight`: скільки запитів чекають на слот; наступний отримує `429` з `Retry-After: 1` і до upstream не доходить |
 
-Маршрутизації та upstream для окремої смуги тут поки немає: кожен з'явиться в цій таблиці
-власним кроком (`[proxy.routing]` нижче). Смуга `agent` не має перемикача `flex`: живий хід не змінює
-рівень, доки клієнт сам його не попросить.
+Кожна смуга має власні слоти й власну чергу, а смуга `agent` не має ні того, ні іншого: сплеск
+bulk заповнює лише свою смугу й ніколи не затримує хід агента. Запит, якому відмовила повна
+черга, отримує `rate_limit_error` у форматі Anthropic, на який SDK провайдерів відповідають
+паузою та повтором; рядка в `calls` він не пише (до upstream він не дійшов), лише рядок `warn`
+у лог. Коли проксі вимкнено (`proxy.enabled`, `core.enabled` або `plugins.proxy.enabled`
+дорівнюють false), запити не обмежуються й не стають у чергу. `batch` і `files` не мають
+`upstream`: створення, опитування й результати Batch-задачі завжди йдуть до провайдера, якому
+вона належить.
+
+Маршрутизації тут поки немає: вона з'явиться в цій таблиці власним кроком (`[proxy.routing]`
+нижче). Смуга `agent` не має перемикача `flex`: живий хід не змінює рівень, доки клієнт сам
+його не попросить.
 
 ### `[proxy.batch]`
 
