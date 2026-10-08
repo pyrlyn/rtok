@@ -63,7 +63,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T378 | todo | P3 | 3 | 0% | |
 | T382 | todo | P2 | 2 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.2 | in progress | P2 | 3 | 20% | Claude Code / claude-sonnet-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.4 | todo | P2 | 3 | 20% | |
 | T385.5 | todo | P2 | 3 | 20% | |
@@ -1570,13 +1569,6 @@ Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id ord
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
 
-### T385.2. Per-lane policy table
-
-optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`, `tools_rewrite`, `context_management`, semantic cache, Flex, routing, upstream, timeout. Defaults: rewrites only on `agent`; `batch` and `files` always pass through.
-
-Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
-
-Execution plan: `[proxy.lanes.<lane>]` for `agent`, `bulk`, `embeddings`, `meta`, `internal` (`LanePolicy`: `compress`, `toon`, `tools_rewrite`, `context_management`, `semantic_cache`, `timeout_s`); `batch` and `files` are hard-coded pass-through with no keys. `agent` defaults all on, so the existing global switches decide as before; every other lane defaults off. A lane flag only narrows a global switch (effective = global AND lane). `shape_request`, `context_edits`, `rewrite_tools`, `compress` and the semantic-cache lookup read the policy instead of adding parallel checks. Flex, routing and upstream get their column from T385.5, T385.10 and T385.7. Files: `src/config/mod.rs`, `src/proxy/lane.rs`, `src/proxy/mod.rs`, `config/default.toml`, `docs/config.md` (+ ru, uk), trycmd snapshots, `tests/proxy_lane_policy.rs`. Verify: byte-identical bulk/batch bodies in `compress` mode with every switch on, agent request unchanged, `just check`.
 
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 

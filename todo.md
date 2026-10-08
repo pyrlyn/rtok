@@ -59,7 +59,6 @@
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
-- T385.2. Per-lane policy table
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.4. Batch observe and `parse_results` into `usage`
 - T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
