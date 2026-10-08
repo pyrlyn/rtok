@@ -13,7 +13,7 @@
 //! [`Measurement`] row does not exist. Default method bodies do nothing, so a plugin
 //! implements only the surfaces it declares in its [`Manifest`].
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -107,8 +107,8 @@ pub struct Runtime {
     /// Host process cwd, when the surface knows it (the hook surface sets this from the
     /// event's own `cwd`, T25.0). `project` is derived from it at write time.
     pub cwd: Option<String>,
-    /// Files the graph watcher has queued but not yet re-indexed (T68.3).
-    pub graph_watch_pending: Arc<Mutex<HashSet<String>>>,
+    /// Files the graph watcher has queued but not yet re-indexed (T68.3), per watched root.
+    pub graph_watch_pending: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     /// `Some` while [`Runtime::defer_measurements`] is on: `record` queues here and
     /// [`Runtime::flush_measurements`] writes the queue in one transaction.
     deferred: Mutex<Option<Vec<Measurement>>>,
@@ -148,7 +148,7 @@ impl Runtime {
             once: None,
             host_id,
             cwd: None,
-            graph_watch_pending: Arc::new(Mutex::new(HashSet::new())),
+            graph_watch_pending: Arc::new(Mutex::new(HashMap::new())),
             deferred: Mutex::new(None),
         })
     }
@@ -361,20 +361,23 @@ impl Host for Runtime {
         self.call_id
     }
 
-    fn graph_watch_pending(&self) -> Vec<String> {
+    fn graph_watch_pending(&self, root: &str) -> Vec<String> {
         let mut out: Vec<String> = self
             .graph_watch_pending
             .lock()
-            .map(|p| p.iter().cloned().collect())
+            .map(|p| p.get(root).into_iter().flatten().cloned().collect())
             .unwrap_or_default();
         out.sort();
         out
     }
 
-    fn publish_graph_watch_pending(&self, paths: &[String]) {
+    fn publish_graph_watch_pending(&self, root: &str, paths: &[String]) {
         if let Ok(mut guard) = self.graph_watch_pending.lock() {
-            guard.clear();
-            guard.extend(paths.iter().cloned());
+            if paths.is_empty() {
+                guard.remove(root);
+            } else {
+                guard.insert(root.to_string(), paths.iter().cloned().collect());
+            }
         }
     }
 }
@@ -492,6 +495,19 @@ impl Notes for Runtime {
     fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
         self.store.search_notes(query, limit)
     }
+
+    fn set_note_files(&self, id: i32, paths: &[String]) -> Result<()> {
+        self.store.set_note_files(id, paths)
+    }
+
+    fn notes_for_files(
+        &self,
+        project: Option<&str>,
+        paths: &[String],
+        limit: u32,
+    ) -> Result<Vec<NoteHit>> {
+        self.store.notes_for_files(project, paths, limit)
+    }
 }
 
 impl ReadCache for Runtime {
@@ -506,6 +522,10 @@ impl ReadCache for Runtime {
 
     fn clear_read_cache(&self, path: &str) -> Result<()> {
         self.store.clear_read_cache(&self.session, path)
+    }
+
+    fn read_cache_keys(&self) -> Result<Vec<String>> {
+        self.store.read_cache_keys(&self.session)
     }
 }
 
@@ -610,6 +630,10 @@ impl Symbols for Runtime {
 
     fn symbol_dead_candidates(&self, root: &str) -> Result<Vec<(String, String, String, i32)>> {
         self.store.symbol_dead_candidates(root)
+    }
+
+    fn symbol_referenced_names(&self, root: &str, names: &[String]) -> Result<HashSet<String>> {
+        self.store.symbol_referenced_names(root, names)
     }
 
     fn symbol_name_prefix(&self, root: &str, prefix: &str, limit: i64) -> Result<Vec<String>> {

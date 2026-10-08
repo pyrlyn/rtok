@@ -18,6 +18,42 @@ pub fn run(cx: &Ctx, root: &Path, stop: &AtomicBool) {
     run_with(cx, root, stop, &AtomicUsize::new(0), paths);
 }
 
+/// How often the scope is read again, so a link made after start-up (the manifest refresh runs
+/// beside the watcher) is watched from the next round.
+const RESCOPE: Duration = Duration::from_secs(2);
+
+/// T329.5: one watcher per project of `start`'s scope, so an edit in a linked project updates that
+/// project's index too. Each project keeps its own pending set and its own debounce loop; an
+/// unwatchable root is logged and skipped, never fatal for the rest.
+pub fn run_scope(rt: &crate::plugin::Runtime, start: &Path, stop: &AtomicBool) {
+    let cx = Ctx::new(rt);
+    std::thread::scope(|s| {
+        let mut watched: HashSet<PathBuf> = HashSet::new();
+        while !stop.load(Ordering::Relaxed) {
+            let members = super::scope::resolve(&rt.store, None, start).unwrap_or_default();
+            for m in members {
+                // Re-offered every round while the directory is missing, so one that returns
+                // is picked up without a restart.
+                if !m.root.is_dir() || !watched.insert(m.root.clone()) {
+                    continue;
+                }
+                // T263: never watch `/` or the home directory.
+                if let Err(e) = crate::plugins::read::walk_root_ok(&m.root) {
+                    let msg = format!("watcher skipped for {}: {e:#}", m.root.display());
+                    eprintln!("watch: {msg}");
+                    cx.log("warn", "graph", "watch", &msg);
+                    continue;
+                }
+                s.spawn(move || run(&Ctx::new(rt), &m.root, stop));
+            }
+            let round = Instant::now();
+            while round.elapsed() < RESCOPE && !stop.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    });
+}
+
 /// The paths an event names; a watcher error names none.
 fn paths(e: notify::Result<Event>) -> Vec<PathBuf> {
     e.ok().map(|ev| ev.paths).unwrap_or_default()
@@ -129,7 +165,7 @@ fn settle(
     *last = Instant::now();
     sync_watch_pending(cx, root, pending);
     pending.clear();
-    cx.publish_graph_watch_pending(&[]);
+    cx.publish_graph_watch_pending(&super::index::canon(root), &[]);
     *rescan = false;
 }
 
@@ -186,7 +222,7 @@ fn sync_watch_pending(cx: &Ctx, root: &Path, pending: &HashSet<PathBuf>) {
         })
         .collect();
     out.sort();
-    cx.publish_graph_watch_pending(&out);
+    cx.publish_graph_watch_pending(&super::index::canon(root), &out);
 }
 
 #[cfg(test)]
@@ -305,6 +341,61 @@ mod tests {
             gone,
             "deleted file kept its rows: store still contains a definition of watched"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.5: `a` links `b` and `b` links `c`; watching from `a` also indexes an edit made in
+    /// `c`, and a file removed there drops its rows. Each project has its own watcher, so the edit
+    /// in `c` is seen by the thread of `c`, not by the one of the project the scope started from.
+    #[test]
+    fn an_edit_in_a_linked_project_updates_its_index() {
+        use crate::store::{LinkKind, Origin};
+        let (mut cx, dir) = mk("watch-scope");
+        arm(&mut cx, "notify");
+        let mut ids = Vec::new();
+        for name in ["a", "b", "c"] {
+            let root = dir.join(name);
+            fs::create_dir(&root).unwrap();
+            fs::write(root.join("lib.rs"), "pub fn seed() {}\n").unwrap();
+            ids.push(cx.store.register_project(&root, Origin::Manual).unwrap().id);
+            super::super::index::run(&Ctx::new(&cx), &root, false).unwrap();
+        }
+        for (from, to) in [(0, 1), (1, 2)] {
+            let kind = LinkKind::Manual;
+            cx.store
+                .link_projects(ids[from], ids[to], kind, None)
+                .unwrap();
+        }
+        let c = dir.join("c");
+        let stop = AtomicBool::new(false);
+        let (found, gone) = std::thread::scope(|s| {
+            s.spawn(|| run_scope(&cx, &dir.join("a"), &stop));
+            std::thread::sleep(Duration::from_millis(80));
+            warm_watcher(&Ctx::new(&cx), &c);
+            fs::write(c.join("edited.rs"), "pub fn edited() {}\n").unwrap();
+            let found = wait_contains(&Ctx::new(&cx), &c, "edited", "edited.rs:1");
+            std::thread::sleep(QUIET + POLL_INTERVAL);
+            let _ = fs::remove_file(c.join("edited.rs"));
+            let gone = wait_contains(&Ctx::new(&cx), &c, "edited", "no definition of edited");
+            stop.store(true, Ordering::Relaxed);
+            (found, gone)
+        });
+        assert_reindexed(found, &Ctx::new(&cx), &c, "edited", "edited.rs:1");
+        assert!(gone, "a deleted file in the linked project kept its rows");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The pending set is per root: one project's queued edit is not another's stale banner.
+    #[test]
+    fn pending_paths_are_kept_per_root() {
+        let (cx, dir) = mk("watch-pending");
+        let ctx = Ctx::new(&cx);
+        ctx.publish_graph_watch_pending("/p/a", &["x.rs".into()]);
+        ctx.publish_graph_watch_pending("/p/b", &["y.rs".into()]);
+        assert_eq!(ctx.graph_watch_pending("/p/a"), ["x.rs"]);
+        ctx.publish_graph_watch_pending("/p/a", &[]);
+        assert!(ctx.graph_watch_pending("/p/a").is_empty());
+        assert_eq!(ctx.graph_watch_pending("/p/b"), ["y.rs"]);
         let _ = fs::remove_dir_all(dir);
     }
 

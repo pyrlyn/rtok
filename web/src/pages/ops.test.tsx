@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "vitest";
 import { sampleSnapshot } from "../api/sample";
 import { richSnapshot } from "./fixtures";
@@ -53,7 +53,8 @@ describe("sessions", () => {
         const table = await screen.findByRole("table", { name: "sessions" });
         expect(rowsOf(table)).toHaveLength(3);
         fireEvent.click(screen.getByRole("switch", { name: "live only" }));
-        expect(rowsOf(table)).toHaveLength(2);
+        // The filter lives in the URL, so the rows follow the router, not the click.
+        await waitFor(() => expect(rowsOf(table)).toHaveLength(2));
         fireEvent.click(rowsOf(table)[1]!);
         const detail = screen.getByRole("region", { name: "detail" });
         expect(within(detail).getByText("claude-sonnet-5-5")).toBeTruthy();
@@ -115,14 +116,13 @@ describe("logs", () => {
         const list = await screen.findByRole("list", { name: "log lines" });
         expect(within(list).getAllByRole("listitem")).toHaveLength(4);
         fireEvent.click(screen.getByRole("button", { name: "error 1" }));
-        const only = within(list).getAllByRole("listitem");
-        expect(only).toHaveLength(1);
-        expect(only[0]?.textContent).toContain("index not built");
+        await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(1));
+        expect(within(list).getByRole("listitem").textContent).toContain("index not built");
         fireEvent.click(screen.getByRole("button", { name: "all 4" }));
         fireEvent.change(screen.getByRole("searchbox", { name: "Filter log lines" }), {
             target: { value: "zzz" },
         });
-        expect(screen.getByText("No line matches")).toBeTruthy();
+        expect(await screen.findByText("No line matches")).toBeTruthy();
     });
 
     test("says so when there are no lines", async () => {

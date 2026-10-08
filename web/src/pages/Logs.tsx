@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useTableSearch } from "../tableSearch";
 import type { Snapshot } from "../api/snapshot.gen";
 import { Empty } from "../states";
 import { Chip } from "../ui/Chip";
@@ -14,13 +15,15 @@ export function Logs() {
 }
 
 function LogsBody({ snap }: { snap: Snapshot }) {
-    const [query, setQuery] = useState("");
-    const [level, setLevel] = useState<Level>("all");
+    const { q: query, setQ: setQuery, filter, setFilter, sort, setSort } = useTableSearch("logs");
+    const { level } = filter;
+    // Only ascending is the snapshot's order (newest first); the other direction reads oldest first.
+    const oldestFirst = sort?.desc === true;
     const lines = useMemo(() => snap.logs.map(parseLog), [snap.logs]);
-    const rows = useMemo(
-        () => lines.filter((l) => matchesLog(l, level, query)),
-        [lines, level, query],
-    );
+    const rows = useMemo(() => {
+        const shown = lines.filter((l) => matchesLog(l, level, query));
+        return oldestFirst ? shown.reverse() : shown;
+    }, [lines, level, query, oldestFirst]);
     const count = (lv: Level) =>
         lv === "all" ? lines.length : lines.filter((l) => l.level === lv).length;
 
@@ -32,12 +35,24 @@ function LogsBody({ snap }: { snap: Snapshot }) {
                 </div>
                 <div role="group" aria-label="Level" className="flex flex-wrap gap-1.5">
                     {LEVELS.map((lv) => (
-                        <Chip key={lv} pressed={level === lv} onPressedChange={() => setLevel(lv)}>
+                        <Chip
+                            key={lv}
+                            pressed={level === lv}
+                            onPressedChange={() => setFilter("level", lv)}
+                        >
                             {lv} {count(lv)}
                         </Chip>
                     ))}
                 </div>
-                <Count>{rows.length} lines · newest first</Count>
+                <Chip
+                    pressed={oldestFirst}
+                    onPressedChange={(on) => setSort(on ? { id: "line", desc: true } : undefined)}
+                >
+                    oldest first
+                </Chip>
+                <Count>
+                    {rows.length} lines · {oldestFirst ? "oldest" : "newest"} first
+                </Count>
             </Toolbar>
             <Panel title="logs" hint="timestamps UTC, as written">
                 {!lines.length ? (
