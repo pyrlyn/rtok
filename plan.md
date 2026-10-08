@@ -86,7 +86,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.3 | in progress | P2 | 3 | 10% | Claude Code / claude-sonnet-5-5 |
 | T414.4 | todo | P2 | 3 | 0% | |
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
@@ -1582,23 +1581,6 @@ Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pac
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.3. Restyle the `web/src/ui` components to the approved mockup
-
-Chip, DataTable, Kpi, Marks, Panel, Pill, Search, Sparkline, Switch: brand roles only (no hex literals), stories updated.
-
-Check: `just spa-stories` (axe) green; a grep over `web/src` finds no hex colour literal outside tests and fixtures.
-
-Plan (approved mockup: the T414.2 shell and Overview, built on the Pyrlyn base component specs in `brand/node_modules/@pyrlyn/brand/base/components/*.md`):
-1. Chip: `radius-md`, pressed border `accent`/50%, 44px minimum below 768px, colours over `duration-fast`.
-2. Pill: `fail` on the `danger` roles, tinted backgrounds at 10%.
-3. Switch: on state fills track and border with `accent`, knob `on-accent`; knob over `duration-base` with `ease-emphasized`; 44px hit area below 768px (not only on coarse pointers).
-4. Search: `bg`/60% field, `size-control`, 44px and `text-sm` below 768px, hover and transition.
-5. DataTable: row border at 60%, selected row `accent`/10%, hover over `duration-fast`.
-6. Panel and Kpi: `duration-fast` hover; a linked Kpi gets `border-strong` on hover.
-7. Marks: `BudgetGrid` cells on the `accent` and `delta` roles instead of the `--rtok-brand-*` fills (same values); Sparkline already draws on the `accent` role, so it only gets its story.
-8. No hex literal left in `web/src` outside tests: `theme.ts` reads `--pyr-bg`, `stage3d.ts` reads the `--pyr-fg-subtle` role.
-9. Stories: add the states the base specs name (disabled, pressed, invalid is out of scope), then `just js`, `spa-test`, `spa-stories`, `spa-e2e`.
 
 ### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
 
