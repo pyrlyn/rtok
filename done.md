@@ -1151,6 +1151,17 @@ Pages describe a chart, they never call a chart library. `web/src/charts/` holds
 
 Result: ECharts 6.1.0 (tree-shaken `echarts/core`, canvas) in its own lazy chunk (525 kB / 178 kB gzip); the entry chunk grew 18 kB. Its own tooltip box stays off; our React tooltip is placed with `@floating-ui/react-dom` 2.1.9 (positioning only, instead of the planned `@floating-ui/react`). Canvas reads the `--pyr-*` roles and redraws on a theme switch. The calls chart, the calls KPI mini and the live sessions mini share one sync group: hovering one draws the pointer in the others, and only the hovered chart shows a tooltip. Charts are focusable `role="img"`; arrows, Home and End move the hover, Escape leaves, the tooltip is linked by `aria-describedby`. A unit test keeps `from "echarts` inside `charts/echarts.ts`. Checked in light and dark themes in the dev server.
 
+### T414.16. Linked hover across charts and live values elsewhere
+
+Charts on the same time axis (the calls chart, the calls and live-sessions KPI minis) share one sync group: hovering one moves the axis pointer in the others, and only the hovered chart shows a tooltip. Places that would otherwise repeat the tooltip stay still; places that add information change live (the KPI subline shows the hovered bucket's time and value; the calls legend highlights the hovered series). The budget grid, plugin bitset, token mix and share bars get the shared tooltip.
+
+Check: a story hovers the calls chart and asserts the KPI minis' pointer and subline; axe green; e2e unchanged.
+
+Result: `web/src/charts/` gained `Readout.tsx` (`Scoped`, `HoverSub`) and `Mark.tsx` (DOM marks on the shared `Tooltip`). The calls and live-sessions KPIs swap their subline for "hh:mm:ss · N calls|live" while another chart of the `calls` group is hovered; the card whose own mini shows the tooltip stays still, and the original subline stays in the tree as `sr-only`, so the tooltip (keyboard: arrows, Home, End, Escape; `aria-describedby`) remains the accessible reading. The pointer's stacked segment travels with the shared hover (`Hover.series`, `seriesAt` in `spec.ts`, found by value in `echarts.ts`, no library series events) and lights its entry in the calls legend; a keyboard hover has no segment, so it lights none. The budget grid, plugin bitset (replacing the native `title`), token mix segments and savings share bars share the chart tooltip; their figures also stay in labels or visible text. Charts expose `data-pointer` for tests. Stories `HoverCallsChart`, `HoverMini`, `HoverLightsLegend` and `MarkTooltips` plus a `seriesAt` unit test; `just check`, `just spa-stories` (axe) and `just spa-e2e` green. #824.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T414.9. Command palette (⌘K / Ctrl+K) and keyboard shortcuts
 
 A palette to jump to any page, find a plugin, session or host by name in the current snapshot, and switch the theme. Two-key shortcuts (`g o` overview, `g p` plugins, …) and `?` for a help sheet. Shortcuts never fire inside inputs. Built on React Aria Components (`Autocomplete`, `Menu`, `Modal`; creator decision), styled on the `--pyr-*` roles.
@@ -1178,6 +1189,18 @@ Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reac
 Result: `web/src/Sidebar.tsx` holds the groups (`NAV_GROUPS`), a labelled `role="group"` per group, and a toggle with `aria-expanded` and a visible focus ring; collapsed links keep their name (screen-reader-only text plus `title`). A unit test pins that every page sits in exactly one group, and blocked storage still works. `Sidebar.stories.tsx` covers expanded, collapsed, phone and toggle. New rtok-only icon `brand/icons/ui/sidebar.svg`, since `@pyrlyn/brand` has no panel icon. `just check` green, `just spa-stories` 131 passed (axe), `just spa-e2e` 17 passed. #821.
 
 Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
+### T414.12. Live status: snapshot age and pause
+
+The header shows when the last snapshot arrived ("updated 3 s ago") next to the link pill, and a pause button freezes the rendered snapshot while the socket stays open, so a table does not move under the reader. Paused state is announced and visible.
+
+Check: unit test for the age formatter; a story for paused and live; pausing keeps rows stable while frames arrive (unit test on the query layer).
+
+Result: `createApi` gains `pause()`/`resume()` (`web/src/api/query.tsx`): while paused, snapshot and snapshot_error frames fold into a held copy and the cache keeps the rendered snapshot, so `dataUpdatedAt` is the age on screen; resume applies the held snapshot, and expand/doctor/set replies keep working. `LiveStatus` (`web/src/LiveStatus.tsx`) shows "updated 3s ago" (reusing `ago`) beside the link pill, a "paused" pill, an `aria-pressed` pause/play button (new `pause.svg`/`play.svg`) and a polite live region; it ticks its own 1 s clock so the Shell does not re-render. Tests: `ageLabel` and component tick/pause/resume (`LiveStatus.test.tsx`), rows stable while paused (`query.test.ts`), Live/Paused/WaitingForFirstSnapshot stories (axe), and an e2e pause/resume test. Web unit 194 passed; `just spa-e2e` 18 passed; `just spa-stories` 129 of 130 (the one failure, `Unknown.stories.tsx`, is a load flake that passes alone); `just dup js` and typecheck clean. #828.
+
+Status: done 2026-10-08
+
 Model: Claude Code / claude-sonnet-5-5
 
 ### T414.10. Table filters and sort in the URL
@@ -7373,6 +7396,16 @@ Check: `rrf_merge_breaks_score_ties_by_note_id` in `src/store/embed.rs`; `cargo 
 Status: done 2026-10-06
 Model: Grok Bot
 
+### T374. Memory notes linked to files: recall boosted by the files in play
+
+P29 recall matched on the prompt text only; a note about `src/proxy/semantic_cache.rs` was not preferred when the session was editing that file. Migration 0033 adds `note_files (note_id, path)`. `mem_save` and the `remember:` hook save link a note to the existing project files its body names and to the session checkpoint's paths (`checkpoint::last_paths`), root-relative and never outside the root. `prompt_recall` fuses the FTS hits with the notes linked to files the session read (`read_cache`) or the prompt names, through `rrf_merge_lists` (`rrf_merge` is a two-list wrapper). The linked list is scoped to the project plus unbound notes, and any error in it leaves the text hits. SDK: `Notes::set_note_files`, `Notes::notes_for_files`, `ReadCache::read_cache_keys`, all with default bodies. No config keys.
+
+Check: `cargo test --lib -- plugins::memory store::embed store::note_files schema_matches migrations_list`; `cargo test --test p29_memory` (file-context cases: recall@5 4/4, linked note first, existing cases unchanged); `just check`.
+Result: a linked note ranks above an equally text-matching unlinked note once its file is read (`a_note_linked_to_a_read_file_outranks_an_equal_text_match`); nextest 2731 passed. #837.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T413.1. `rtok agents install roo` — Roo Code
 
 VS Code extension forked from Cline. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
@@ -7819,6 +7852,18 @@ optimization.md §2.2 L2. One table decides, per lane: compress/archive, `toon`,
 Check: bulk and batch request bodies byte-identical in `compress` mode; agent behaviour unchanged; `just check`.
 
 Result: `[proxy.lanes.bulk|embeddings|meta|internal]` carry `compress`, `toon`, `tools_rewrite`, `context_management`, `semantic_cache` (all off) and `timeout_s` (0 = `proxy.timeout_s`). `Lane::policy` and `Lane::passes_through` (`src/proxy/lane.rs`) feed `shape_request`, `compress`, `context_edits`, `rewrite_tools`, the semantic-cache lookup and store, and a per-lane read-timeout client. A lane switch only narrows its global switch (global AND lane). `agent` has no table: the global switches decide as before, and a test shows its upstream bytes equal the lanes-off path. `batch` and `files` have no keys and are never rewritten, `stream_options` shaping included. Flex, routing and per-lane upstream join the table with T385.5, T385.10 and T385.7. Tests: `tests/proxy_lane_policy.rs` and unit tests in `lane.rs`; trycmd snapshots and `docs/config.md` (en, ru, uk) updated. `cargo nextest run --workspace` ended with 2713 of 2714 passed; the one failure (`hook_fail_open a_locked_session_end_is_deferred_not_lost`, a timing assertion under load) passes alone. #825.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T385.4. Batch observe and `parse_results` into `usage`
+
+optimization.md §2.2 L3 (roadmap S2/S3). Tag Batch create/poll/list/cancel/results calls on the `batch` lane; with `parse_results = true`, parse result lines into `usage` rows. Fail open on malformed lines.
+
+Check: fixture result streams (Anthropic and OpenAI) produce the expected `usage` rows; a malformed line is skipped, not fatal; `just check`.
+
+Result: `[proxy.batch] parse_results` (default `false`, needs `[proxy.lanes] enabled`) reads a forwarded results file after the fact, so the body is byte-for-byte unchanged. Anthropic `GET /v1/messages/batches/{id}/results` gives one `usage` row per `succeeded` line through the existing Anthropic wire parser. OpenAI `GET /v1/files/{id}/content` gives one row per 2xx `response.body` line through the Chat Completions or Responses parser, and a download that held such lines is re-tagged `api_request:batch` (any other download stays `files`). Errored, expired, cancelled, malformed and truncated lines are skipped; a store error is logged, never fatal. Rows are written in one transaction (`Store::insert_usage_rows`, `Store::set_call_kind`, Diesel); no `tokens` rows. Create, poll, list and cancel calls were already tagged `batch` by T385.1. Code in `src/proxy/batch_results.rs`; tests there and in `tests/proxy_batch_results.rs`. Config template, `docs/config.md` (en, ru, uk) and trycmd snapshots updated. `just check`: 2722 tests run, 2722 passed, 8 skipped. #829.
 
 Status: done 2026-10-08
 
@@ -9417,6 +9462,16 @@ Result: every listed statement in `research.md`, `ideas.md`, `plan.md` (T156) an
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T399. Re-check host docs for three open host questions
+
+Re-checked the three open host questions in `research.md` against primary sources (2026-10-08). Skills (§10.1, §10.6): Cursor documents `disable-model-invocation`; OpenCode, Copilot, Gemini and the Agent Skills spec do not; Codex uses `agents/openai.yaml` `allow_implicit_invocation: false`. Subagent-start hooks (§23): Grok and Antigravity still document no output schema and no subagent-start context hook, so the verdicts stay. Hook ancestry (§26): Devin and Command Code document no parent process, still unverified. Windows: the no-ancestor limit is written in `docs/agents-and-worktrees.md`. No code changed; `doctor` cites no `disable-model-invocation` advice today, so the card's doctor premise was stale.
+
+Check: `mise exec -- just docs-check`.
+Result: exit 0, 11 suites ok. #842.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-haiku-4-5
+
 ### T441.6. MCP task tools
 
 Sixth subtask of T441 (task adapters): `task_create`, `task_list`, `task_get`, `task_status` and `task_next` on `rtok mcp`, with the same JSON as the CLI.
@@ -9438,6 +9493,17 @@ Result: `docs/tasks.md`, `docs/ru/tasks.md` and `docs/uk/tasks.md` cover ids and
 
 Status: done 2026-10-07
 Model: Claude Code / claude-haiku-4-5
+
+### T441.10. Task instruction line through `rtok agents install`
+
+Split from T441.6: tell every host's agents to plan and track work as rtok tasks, installed through `rtok agents install`, with host configs unchanged except rtok's own entry (T441 §2, §11 milestone 10).
+
+Check: `tests/skill.rs` (`tasks_skill_names_only_commands_rtok_task_has`, `install_adds_the_tasks_skill_and_leaves_a_users_own_skill_alone`) and `mcp::tasks::tests::the_task_skill_names_exactly_these_tools`; CI `gate` green.
+
+Result: the rule line is a new skill, `skills/rtok-tasks/SKILL.md`, added to `SKILLS` in `src/agents/skill.rs`, so the skill sync that already installs `rtok` and `rtok-worktrees` installs and removes it on every host with a documented skill root. Its description is the always-visible rule (rtok tasks, not TODO files, unless `AGENTS.md` or the user names another tracker), and its body maps the five `task_*` MCP tools to their `rtok task` commands. No host config and no repository file is written. A managed block in AGENTS.md/CLAUDE.md was rejected because no install path writes into users' repositories today; MCP `initialize` instructions would be a second, always-on injection. Tests tie the skill to the real CLI flags and the MCP tool list.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
 
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
