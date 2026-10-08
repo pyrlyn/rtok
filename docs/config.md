@@ -168,7 +168,8 @@ toon                = false           # the toon filter inside that pass; needs 
 tools_rewrite       = false           # proxy.tools_rewrite
 context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
-timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
+flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
+timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s, but 900 or more with flex = true (OpenAI's Flex guide uses 15 min)
 
 [proxy.lanes.embeddings]              # same keys as bulk
 compress            = false
@@ -176,6 +177,7 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
 
 [proxy.lanes.meta]                    # same keys as bulk (models, token counting)
@@ -184,6 +186,7 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
 
 [proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
@@ -192,12 +195,17 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
 
 [proxy.batch]                         # provider Batch result files
 parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 
-[proxy.flex]                          # no keys yet (T385.5)
+[proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
+force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
+on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
+retries             = 3               # backoff only: retries before giving up; at most 5
+backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
 [proxy.routing]                       # no keys yet (D9)
 
@@ -548,10 +556,12 @@ counterpart: a rewrite runs on a lane when the global switch *and* the lane swit
 | `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | `tools[]` description rewrite |
 | `context_management` | `proxy.context_management` | `false` | Anthropic server-side context editing |
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | cache lookup and store |
-| `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s` |
+| `flex` | none | `false` | OpenAI `service_tier = "flex"` on chat and responses calls, see [`[proxy.flex]`](#proxyflex) |
+| `timeout_s` | `proxy.timeout_s` | `0` | read timeout in seconds for this lane; `0` = `proxy.timeout_s`, raised to 900 when the lane has `flex = true` (the OpenAI Flex guide raises its SDK timeout to 15 minutes because Flex requests time out more often) |
 
-Flex, routing and a per-lane upstream are not here yet: each joins this table with its own
-step (`[proxy.flex]`, `[proxy.routing]` below).
+Routing and a per-lane upstream are not here yet: each joins this table with its own step
+(`[proxy.routing]` below). The `agent` lane has no `flex` switch: a live turn never changes tier unless
+the client asks for it.
 
 ### `[proxy.batch]`
 
@@ -567,29 +577,50 @@ already tagged `api_request:batch` by `[proxy.lanes]`, and their bodies are neve
 parse_results = false
 ```
 
-### `[proxy.flex]` / `[proxy.routing]` — planned (see `docs/batch-flex.md`)
+### `[proxy.flex]`
 
-These two tables exist and are empty: none has a key
-yet. The keys below are the **intended** ones; adding any of them to a live config file
-still fails `rtok config validate` until the matching step ships. The proxy fallback already forwards unknown paths (including `/v1/batches` and
-`/v1/messages/batches`) without a `Wire`; Flex injection and routing rewrites are future
-`prepare` / policy work. Full semantics: [`docs/batch-flex.md`](batch-flex.md).
+OpenAI Flex processing bills a chat or responses call at Batch rates in exchange for latency
+([OpenAI: Flex processing](https://developers.openai.com/api/docs/guides/flex-processing), checked
+2026-10-08). With `flex = true` on a lane (`bulk`, `internal`, `embeddings` or `meta`; `agent`, `batch`
+and `files` have none), rtok sets `service_tier = "flex"` on that lane's calls to `/v1/chat/completions`
+and `/v1/responses`. Anthropic has no Flex tier and its wire is never touched.
 
-#### `[proxy.flex]`
+A `service_tier` the client sent (`auto`, `default`, `priority`, `flex`) is never overwritten unless
+`force = true`. When the field is absent, rtok adds it in front of the object and forwards every
+other byte as the client sent it.
 
-| Key | Type | Default (intended) | Meaning |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `false` | When true, `prepare` may set OpenAI `service_tier = "flex"` if the client omitted it |
-| `force` | bool | `false` | Overwrite a client-supplied `service_tier` |
-| `fallback` | string | `"none"` | `none` or `default` — behaviour on Flex `429` resource-unavailable (**TODO**) |
+When Flex has no capacity OpenAI answers `429 Resource Unavailable` and does not charge for it. The
+guide names no error code, so rtok treats any `429` on a request it set to Flex that way. A request
+whose Flex tier came from the client is never retried: that `429` is the client's to handle.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `force` | bool | `false` | Overwrite a client-supplied `service_tier` with `flex` |
+| `on_429` | string | `"none"` | `none` hands the `429` to the client; `backoff` retries on Flex with doubling delays; `default` retries once with `service_tier = "auto"` (standard processing, which costs more) |
+| `retries` | int | `3` | `backoff` only: retries before the last `429` goes to the client; at most `5` |
+| `backoff_ms` | int | `1000` | `backoff` only: wait before the first retry, doubled each time, capped at 30 s |
+
+The client waits while rtok retries and sees only the final response. A `default` retry restores the
+`service_tier` the client sent when `force` replaced it, and uses `auto` only when the client sent
+none. A `Retry-After` on the `429` (delta-seconds only; a date or other value is ignored) lengthens
+the wait to the larger of it and the backoff delay, never past 30 s. One that asks for more is not
+waited for: `backoff` hands the `429` to the client, `default` retries on the fallback tier at
+once. A `408` is never retried and reaches the client unchanged. Retries are logged at `warn`.
 
 ```toml
-# Planned — not loaded today
+[proxy.lanes.bulk]
+flex = true
+
 [proxy.flex]
-enabled = false
 force = false
-fallback = "none"
+on_429 = "backoff"
 ```
+
+### `[proxy.routing]` — planned (see `docs/batch-flex.md`)
+
+The table exists and is empty: it has no key yet. The keys below are the **intended** ones; adding
+any of them to a live config file still fails `rtok config validate` until the matching step ships.
+Routing rewrites are future `prepare` / policy work. Full semantics: [`docs/batch-flex.md`](batch-flex.md).
 
 #### `[proxy.routing]`
 

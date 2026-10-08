@@ -141,6 +141,7 @@ Project programs and direct packages from the manifests.
 | subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |
 | toml_edit | local | https://crates.io/crates/toml_edit | Rust dependency |
+| trash | local | https://crates.io/crates/trash | T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin |
 | tree-sitter | local | https://crates.io/crates/tree-sitter | Rust dependency |
 | tree-sitter-c | local | https://crates.io/crates/tree-sitter-c | Rust dependency |
 | tree-sitter-c-sharp | local | https://crates.io/crates/tree-sitter-c-sharp | C# grammar tags (T52.2) |

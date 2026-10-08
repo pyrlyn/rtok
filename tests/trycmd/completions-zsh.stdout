@@ -655,11 +655,16 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (clear)
 _arguments "${_arguments_options[@]}" : /
+'*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp build locks swap)' /
+'--include=[Also the review kinds]:CLASS:(review)' /
+'--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
-'-h[Print help]' /
-'--help[Print help]' /
+'--trash[Move to the OS trash instead of deleting]' /
+'-h[Print help (see more with '/''--help'/'')]' /
+'--help[Print help (see more with '/''--help'/'')]' /
 && ret=0
 ;;
 (help)
@@ -1054,11 +1059,16 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (clear)
 _arguments "${_arguments_options[@]}" : /
+'*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp build locks swap)' /
+'--include=[Also the review kinds]:CLASS:(review)' /
+'--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
-'-h[Print help]' /
-'--help[Print help]' /
+'--trash[Move to the OS trash instead of deleting]' /
+'-h[Print help (see more with '/''--help'/'')]' /
+'--help[Print help (see more with '/''--help'/'')]' /
 && ret=0
 ;;
 (help)
@@ -2874,7 +2884,7 @@ _rtok__subcmd__agents_commands() {
 'info:One host/: the same block /`agents list/` prints, just for that app' /
 'sessions:What is running in this project/: host, provider, model, tokens, start, run time' /
 'usage:Tokens and estimated cost per agent and month (or day), from the agents'/'' logs or rtok' /
-'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk' /
+'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk or, filtered, any agent'/''s' /
 'whoami:This session'/''s own rtok agent id/: /`RTOK_AGENT_ID/`, resolved through the store' /
 'show:One agent by id prefix/: host, model, ids, parent and sub-agents, cwd, activity, status' /
 'status:Say what this agent (/`RTOK_AGENT_ID/`) is busy with/: plain text, at most 120 chars' /
@@ -2895,7 +2905,7 @@ _rtok__subcmd__agents__subcmd__help_commands() {
 'info:One host/: the same block /`agents list/` prints, just for that app' /
 'sessions:What is running in this project/: host, provider, model, tokens, start, run time' /
 'usage:Tokens and estimated cost per agent and month (or day), from the agents'/'' logs or rtok' /
-'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk' /
+'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk or, filtered, any agent'/''s' /
 'whoami:This session'/''s own rtok agent id/: /`RTOK_AGENT_ID/`, resolved through the store' /
 'show:One agent by id prefix/: host, model, ids, parent and sub-agents, cwd, activity, status' /
 'status:Say what this agent (/`RTOK_AGENT_ID/`) is busy with/: plain text, at most 120 chars' /
@@ -3663,7 +3673,7 @@ _rtok__subcmd__help__subcmd__agents_commands() {
 'info:One host/: the same block /`agents list/` prints, just for that app' /
 'sessions:What is running in this project/: host, provider, model, tokens, start, run time' /
 'usage:Tokens and estimated cost per agent and month (or day), from the agents'/'' logs or rtok' /
-'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk' /
+'junk:Junk and agent folders/: /`list/` shows rtok'/''s and every installed host'/''s folders with sizes, /`clear/` removes rtok'/''s own junk or, filtered, any agent'/''s' /
 'whoami:This session'/''s own rtok agent id/: /`RTOK_AGENT_ID/`, resolved through the store' /
 'show:One agent by id prefix/: host, model, ids, parent and sub-agents, cwd, activity, status' /
 'status:Say what this agent (/`RTOK_AGENT_ID/`) is busy with/: plain text, at most 120 chars' /

@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,438 @@
+@@ -0,0 +1,446 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -106,7 +106,8 @@ target/tmp/t60-2-config-init.toml
 +# tools_rewrite       = false           # proxy.tools_rewrite
 +# context_management  = false           # proxy.context_management
 +# semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
-+# timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
++# flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
++# timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s, but 900 or more with flex = true (OpenAI's Flex guide uses 15 min)
 +
 +[proxy.lanes.embeddings]              # same keys as bulk
 +# compress            = false
@@ -114,6 +115,7 @@ target/tmp/t60-2-config-init.toml
 +# tools_rewrite       = false
 +# context_management  = false
 +# semantic_cache      = false
++# flex                = false
 +# timeout_s           = 0
 +
 +[proxy.lanes.meta]                    # same keys as bulk (models, token counting)
@@ -122,6 +124,7 @@ target/tmp/t60-2-config-init.toml
 +# tools_rewrite       = false
 +# context_management  = false
 +# semantic_cache      = false
++# flex                = false
 +# timeout_s           = 0
 +
 +[proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
@@ -130,12 +133,17 @@ target/tmp/t60-2-config-init.toml
 +# tools_rewrite       = false
 +# context_management  = false
 +# semantic_cache      = false
++# flex                = false
 +# timeout_s           = 0
 +
 +[proxy.batch]                         # provider Batch result files
 +# parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 +
-+[proxy.flex]                          # no keys yet
++[proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
++# force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
++# on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
++# retries             = 3               # backoff only: retries before giving up; at most 5
++# backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 +
 +[proxy.routing]                       # no keys yet
 +

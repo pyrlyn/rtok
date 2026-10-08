@@ -33,6 +33,11 @@ type Row = (String, String, i32, bool, i32, String);
 /// on the next run without opening the file again.
 const EMPTY_SHA: &str = "";
 
+/// Files per symbol-and-edge write transaction on a cold run. Each commit costs an fsync, so a
+/// larger batch means fewer of them, at the price of a longer `pending` list in memory. 64 and 200
+/// measured within noise of each other (`research.md` §2, T451); 200 keeps the transactions few.
+const SYMBOL_BATCH_FILES: usize = 200;
+
 /// `(mtime_nanos, size)` — the freshness key. Nanos keep two edits in the same second apart;
 /// an unreadable timestamp reads as 0, which never matches a stored stat, so the file is read.
 fn changed_abs(root: &Path, event_path: &Path) -> PathBuf {
@@ -163,7 +168,7 @@ pub fn run_with(
     each_parsed(&jobs, |job, parsed| {
         pb.inc(1);
         stage_parsed(job, parsed, &mut report, &mut pending, &mut touches);
-        if !dry_run && pending.len() >= 64 {
+        if !dry_run && pending.len() >= SYMBOL_BATCH_FILES {
             report.inserted += cx.replace_symbol_files(&rk, &pending)?;
             pending.clear();
         }
