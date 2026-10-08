@@ -62,5 +62,5 @@ pub fn outline(name: &str, src: &str, mode: &str) {
 /// Host tool name → Claude tool name, and the guard's duplicate key for that call.
 pub fn tool_names(tool: &str, input: &Value) -> Option<String> {
     let canonical = crate::hooks::types::canonical_tool_name(tool);
-    crate::plugins::guard::cache_key(&canonical, input, None)
+    crate::plugins::guard::cache_key(&canonical, input, None, None)
 }
