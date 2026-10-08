@@ -96,6 +96,21 @@ pub fn add(
     if let Some(agent) = agent_id {
         remember(store, &plan.path, agent, &plan.task);
     }
+    // T475: seed the worktree's symbol index from the main checkout so the first
+    // `graph index` there is warm (sha match → Parsed::Same). Best effort like register_project.
+    #[cfg(feature = "graph")]
+    if let Some(store) = store
+        && let Ok(list) = super::git::list(cwd)
+        && let Some(main) = list.first()
+    {
+        let from = crate::store::canon_root(&main.path);
+        let to = crate::store::canon_root(&plan.path);
+        if from != to
+            && let Err(e) = store.copy_symbol_rows(&from, &to)
+        {
+            eprintln!("warning: symbol rows not copied: {e:#}");
+        }
+    }
     register_project(store, auto_add, &plan.path, Some(&plan.branch));
     Ok(plan)
 }

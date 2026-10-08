@@ -318,6 +318,78 @@ impl Store {
         )
     }
 
+    /// Copy symbol rows from `from` to `to` in one transaction.
+    /// Rows whose relative path already exists under `to` are left alone.
+    /// Returns the number of rows inserted (T475).
+    pub fn copy_symbol_rows(&self, from: &str, to: &str) -> Result<usize> {
+        if from == to {
+            return Ok(0);
+        }
+        let mut conn = self.lock()?;
+        Ok(
+            conn.immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                let have: HashSet<String> = symbols::table
+                    .filter(symbols::root.eq(to))
+                    .select(symbols::path)
+                    .distinct()
+                    .load::<String>(conn)?
+                    .into_iter()
+                    .collect();
+                // path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope
+                type Row = (
+                    String,
+                    String,
+                    String,
+                    i32,
+                    i32,
+                    String,
+                    i64,
+                    i64,
+                    i32,
+                    String,
+                );
+                let rows: Vec<Row> = symbols::table
+                    .filter(symbols::root.eq(from))
+                    .select((
+                        symbols::path,
+                        symbols::name,
+                        symbols::kind,
+                        symbols::line,
+                        symbols::is_def,
+                        symbols::file_sha,
+                        symbols::mtime,
+                        symbols::size,
+                        symbols::end_line,
+                        symbols::scope,
+                    ))
+                    .load(conn)?;
+                let mut inserted = 0usize;
+                for (path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope) in rows
+                {
+                    if have.contains(&path) {
+                        continue;
+                    }
+                    inserted += diesel::insert_into(symbols::table)
+                        .values((
+                            symbols::root.eq(to),
+                            symbols::path.eq(&path),
+                            symbols::name.eq(&name),
+                            symbols::kind.eq(&kind),
+                            symbols::line.eq(line),
+                            symbols::is_def.eq(is_def),
+                            symbols::file_sha.eq(&file_sha),
+                            symbols::mtime.eq(mtime),
+                            symbols::size.eq(size),
+                            symbols::end_line.eq(end_line),
+                            symbols::scope.eq(&scope),
+                        ))
+                        .execute(conn)?;
+                }
+                Ok(inserted)
+            })?,
+        )
+    }
+
     pub fn replace_symbols(
         &self,
         root: &str,
