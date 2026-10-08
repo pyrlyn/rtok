@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use super::adapter::{Filter, TaskAdapter};
+use super::adapter::{Filter, TaskAdapter, set_status};
 use super::disk::DiskAdapter;
 use super::{NewTask, Status, Task, TaskId, check_prefix, resolve_prefix};
 use crate::config::layers::git_root;
@@ -98,10 +98,23 @@ impl Project {
         store.seed_task_counter(&self.key, parent, max)
     }
 
-    pub fn show(&self, id: &TaskId) -> Result<Option<Shown>> {
-        let Some(task) = self.adapter.get(id)? else {
-            return Ok(None);
-        };
+    /// The task, or an error naming the id.
+    pub fn get(&self, id: &TaskId) -> Result<Task> {
+        self.adapter
+            .get(id)?
+            .with_context(|| format!("no task {id}"))
+    }
+
+    /// `status <id> [<status>]`: set the status when given, else read it.
+    pub fn status(&self, id: &TaskId, status: Option<Status>, force: bool) -> Result<Task> {
+        match status {
+            Some(s) => set_status(self.adapter(), id, s, force),
+            None => self.get(id),
+        }
+    }
+
+    pub fn show(&self, id: &TaskId) -> Result<Shown> {
+        let task = self.get(id)?;
         let subtasks = self
             .adapter
             .list(&Filter {
@@ -112,7 +125,7 @@ impl Project {
             .into_iter()
             .map(|t| t.id)
             .collect();
-        Ok(Some(Shown { task, subtasks }))
+        Ok(Shown { task, subtasks })
     }
 
     /// The lowest open task with no active subtask: work starts at the leaves, and an
@@ -166,6 +179,18 @@ pub fn init(cwd: &Path, adapter: Option<&str>, prefix: Option<&str>) -> Result<P
     }
     crate::config::write_file(&path, &doc.to_string())?;
     Ok(path)
+}
+
+/// `list`'s filter from what a caller passed: status names, `all`, a parent id.
+pub fn filter(statuses: &[String], all: bool, parent: Option<&str>) -> Result<Filter> {
+    Ok(Filter {
+        statuses: statuses
+            .iter()
+            .map(|s| s.parse::<Status>())
+            .collect::<Result<_>>()?,
+        all,
+        parent: parent.map(str::parse::<TaskId>).transpose()?,
+    })
 }
 
 /// `rtok task list`: one line per task, subtasks indented under their parent.
@@ -252,7 +277,7 @@ mod tests {
         assert!(project.create(&store, &new("Orphan", Some("A99"))).is_err());
 
         assert_eq!(project.next().unwrap().unwrap().id.to_string(), "A7.1");
-        let shown = project.show(&pulled).unwrap().unwrap();
+        let shown = project.show(&pulled).unwrap();
         assert_eq!(shown.subtasks, vec![sub.id.clone()]);
         assert!(details(&shown).contains("subtasks: A7.1"));
         let listed = project.adapter().list(&Filter::default()).unwrap();

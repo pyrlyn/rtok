@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T329.4.1, T329.4.2: the five tools over a project scope — the project asked for (or the
-//! working directory's) followed by what it links to. Each project keeps its own index, so
-//! the scope is a loop over the per-root queries; the answer is one text under one cap.
-//! `Ctx` carries no project registry, so the scope is resolved by the caller (`mcp.rs`).
+//! T329.4.1, T329.4.2, T329.5: the five tools, `dead` and `affected` over a project scope — the
+//! project asked for (or the working directory's) followed by what it links to. Each project keeps
+//! its own index, so the scope is a loop over the per-root queries; the answer is one text under
+//! one cap. `Ctx` carries no project registry, so the scope is resolved by the caller (`mcp.rs`).
 
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
@@ -14,10 +15,11 @@ use anyhow::{Result, bail};
 use rtok_plugin_sdk::Ctx;
 
 use super::{
-    ExploreParts, Filter, Tag, TagsExplore, ambiguous_banner, assemble_explore, callers_filtered,
-    cap, cap_kind, defs_text, flag_ambiguous, impact_filtered, impact_lines_text,
-    impact_walk_roots, index, index_for, lsp, lsp_backend, outline_in, projects,
-    reverse_call_chain, stale_banner, symbol_filtered, with_stale,
+    DeadRow, ExploreParts, Filter, Hits, Tag, TagsExplore, ambiguous_banner, assemble_explore,
+    callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous, format_affected,
+    git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots, index, index_for,
+    is_test_path, lsp, lsp_backend, outline_in, projects, rel_of, reverse_call_chain, stale_banner,
+    symbol_filtered, tests_json, via_of, with_stale,
 };
 use crate::store::Store;
 
@@ -97,6 +99,12 @@ fn lsp_note(scope: &[Member]) -> String {
     )
 }
 
+/// The notes and banners that head an answer count against its one cap, so linking projects
+/// never grows a reply past `max_tokens` (T329.5).
+fn capped(cx: &Ctx, head: &str, body: String) -> Result<String> {
+    cap(cx, format!("{head}{body}"))
+}
+
 fn label(m: &Member) -> String {
     format!("[{}] ", m.name)
 }
@@ -156,7 +164,7 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
         };
         body.push_str(&defs_text(cx, &m.root, rows, callees, &tag));
     }
-    Ok(format!("{head}{}", cap(cx, body)?))
+    capped(cx, &head, body)
 }
 
 pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
@@ -198,7 +206,7 @@ pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Resul
         body = format!("no references to {name}{}", filter.scope_note());
         return Ok(head + &flag_ambiguous(defs, body));
     }
-    Ok(format!("{head}{}", cap(cx, flag_ambiguous(defs, body))?))
+    capped(cx, &head, flag_ambiguous(defs, body))
 }
 
 /// `impact` over the scope: one walk asked of every member's index, so a change in C reaches its
@@ -256,7 +264,7 @@ pub fn impact(
         }
         impact_lines_text(&rows)
     };
-    Ok(format!("{head}{}", cap(cx, flag_ambiguous(defs, body))?))
+    capped(cx, &head, flag_ambiguous(defs, body))
 }
 
 /// The scoped walk's rows, the member label in front of each path; the selected project's rows
@@ -311,7 +319,7 @@ pub fn explore(cx: &Ctx, scope: &[Member], query: &str, filter: &Filter) -> Resu
         labels: &labels,
     };
     let (text, before) = assemble_explore(query, filter, &mut all)?;
-    Ok(head + &cap_kind(cx, text, before, "explore")?)
+    cap_kind(cx, head + &text, before, "explore")
 }
 
 /// `ExploreParts` over several members' `TagsExplore`.
@@ -377,22 +385,199 @@ impl ExploreParts for Scoped<'_> {
     }
 }
 
-/// `outline` of a file in the scope: the first project that holds the path, else the first.
-pub fn outline(cx: &Ctx, scope: &[Member], path: &str) -> Result<String> {
+/// Index of the project that holds `path`: the first one that has it, else the first.
+fn holder(scope: &[Member], path: &str) -> usize {
     let p = Path::new(path);
     // Both sides canonical: Windows' `canonicalize` adds `\\?\` and expands 8.3 names
     // (`RUNNER~1`), macOS resolves `/var` to `/private/var`.
     let canon = |q: &Path| dunce::canonicalize(q).unwrap_or_else(|_| q.to_path_buf());
     let real = canon(p);
-    let holds = |m: &&Member| {
-        if p.is_absolute() {
-            real.starts_with(canon(&m.root))
-        } else {
-            m.root.join(p).exists()
+    scope
+        .iter()
+        .position(|m| {
+            if p.is_absolute() {
+                real.starts_with(canon(&m.root))
+            } else {
+                m.root.join(p).exists()
+            }
+        })
+        .unwrap_or(0)
+}
+
+/// `outline` of a file in the scope: the first project that holds the path, else the first.
+pub fn outline(cx: &Ctx, scope: &[Member], path: &str) -> Result<String> {
+    outline_in(cx, &scope[holder(scope, path)].root, path)
+}
+
+/// Dead rows per project of a scope.
+type DeadByProject<'a> = Vec<(&'a Member, Vec<DeadRow>)>;
+
+/// `dead` rows of each project of the scope. A definition no project in the scope references is
+/// dead; one only a linked project references stays live, as `callers` counts that project's call
+/// sites. The rows stay per project, so a symbol is still reported where it is defined.
+fn dead_by_project<'a>(cx: &Ctx, scope: &'a [Member]) -> Result<(DeadByProject<'a>, String)> {
+    let (mut done, notes) = fan_out(scope, |m| {
+        walkable(m)?;
+        super::dead_rows(cx, &m.root)
+    })?;
+    let keys: Vec<String> = done.iter().map(|(m, _)| index::canon(&m.root)).collect();
+    if keys.len() > 1 {
+        for (i, (_, rows)) in done.iter_mut().enumerate() {
+            let names: Vec<String> = rows
+                .iter()
+                .map(|r| r.name.clone())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            let mut used = HashSet::new();
+            for other in keys
+                .iter()
+                .enumerate()
+                .filter_map(|(j, k)| (j != i).then_some(k))
+            {
+                used.extend(cx.symbol_referenced_names(other, &names)?);
+            }
+            rows.retain(|r| !used.contains(&r.name));
         }
-    };
-    let m = scope.iter().find(holds).unwrap_or(&scope[0]);
-    outline_in(cx, &m.root, path)
+    }
+    Ok((done, notes))
+}
+
+/// `graph dead --json` over the scope: a scope of one prints the plain rows, several add the
+/// `project` each row belongs to. Uncapped, like the single-project form.
+pub fn dead_json(cx: &Ctx, scope: &[Member]) -> Result<String> {
+    if let [one] = scope {
+        walkable(one)?;
+        return Ok(serde_json::to_string_pretty(&super::dead_rows(
+            cx, &one.root,
+        )?)?);
+    }
+    let (done, _) = dead_by_project(cx, scope)?;
+    let rows: Vec<_> = done
+        .iter()
+        .flat_map(|(m, rows)| {
+            rows.iter().map(|r| {
+                serde_json::json!({"project": m.name, "path": r.path, "line": r.line,
+                                            "kind": r.kind, "name": r.name})
+            })
+        })
+        .collect();
+    Ok(serde_json::to_string_pretty(&rows)?)
+}
+
+/// `graph dead` over the scope: `[project] path:line kind name`, under one cap.
+pub fn dead(cx: &Ctx, scope: &[Member]) -> Result<String> {
+    if let [one] = scope {
+        walkable(one)?;
+        return super::dead(cx, &one.root);
+    }
+    let (done, notes) = dead_by_project(cx, scope)?;
+    let mut body = String::new();
+    for (m, rows) in &done {
+        for r in rows {
+            body.push_str(&format!(
+                "{}{}:{} {} {}\n",
+                label(m),
+                r.path,
+                r.line,
+                r.kind,
+                r.name
+            ));
+        }
+    }
+    if body.is_empty() {
+        let names: Vec<&str> = done.iter().map(|(m, _)| m.name.as_str()).collect();
+        return Ok(format!("{notes}no dead code in [{}]", names.join("], [")));
+    }
+    capped(cx, &notes, body)
+}
+
+/// Tests that reach the changes: `changed[i]` are the changed paths of `scope[i]`. Each
+/// project's changes start a walk over the whole scope, so a change in B finds the tests of A
+/// that call it; every test is listed under the project that holds it, with its command to run
+/// there. A scope of one is the plain answer.
+pub fn affected(
+    cx: &Ctx,
+    scope: &[Member],
+    changed: &[Vec<String>],
+    depth: u32,
+    json: bool,
+) -> Result<String> {
+    if let [one] = scope {
+        walkable(one)?;
+        return super::affected_from_paths(cx, &one.root, &changed[0], depth, json);
+    }
+    let mut at = 0;
+    let (done, notes) = fan_out(scope, |m| {
+        // Taken before anything can fail: a skipped project must not shift the rest.
+        let paths = &changed[at];
+        at += 1;
+        walkable(m)?;
+        index_for(cx, &m.root)?;
+        let key = index::canon(&m.root);
+        let (hits, starts) = changed_starts(cx, &m.root, &key, paths)?;
+        Ok((key, hits, starts))
+    })?;
+    let keys: Vec<&str> = done.iter().map(|(_, (k, ..))| k.as_str()).collect();
+    let mut hits: Vec<Hits> = done.iter().map(|(_, (_, h, _))| h.clone()).collect();
+    let starts: BTreeSet<&String> = done.iter().flat_map(|(_, (.., s))| s).collect();
+    for name in starts {
+        for (i, _, path, via) in impact_walk_roots(cx, &keys, name, depth, true)? {
+            if is_test_path(&path) {
+                hits[i].insert((path, via_of(name, via)));
+            }
+        }
+    }
+    if json {
+        let projects: Vec<_> = done
+            .iter()
+            .zip(&hits)
+            .filter(|(_, h)| !h.is_empty())
+            .map(|((m, _), h)| {
+                serde_json::json!({"project": m.name, "root": m.root, "tests": tests_json(h)})
+            })
+            .collect();
+        return Ok(if projects.is_empty() {
+            serde_json::json!({"projects": [], "message": super::EMPTY_AFFECTED}).to_string()
+        } else {
+            serde_json::json!({"projects": projects}).to_string()
+        });
+    }
+    if hits.iter().all(Hits::is_empty) {
+        return Ok(format!("{notes}{}", super::EMPTY_AFFECTED));
+    }
+    let mut body = String::new();
+    for ((m, _), h) in done.iter().zip(&hits).filter(|(_, h)| !h.is_empty()) {
+        body.push_str(&format!("[{}]\n{}", m.name, format_affected(h, false)));
+    }
+    capped(cx, &notes, body)
+}
+
+/// `affected` from `git diff` in every project of the scope; one that is not a git repo has no
+/// changes and adds nothing.
+pub fn affected_git(
+    cx: &Ctx,
+    scope: &[Member],
+    since: Option<&str>,
+    staged: bool,
+    json: bool,
+) -> Result<String> {
+    let changed: Vec<_> = scope
+        .iter()
+        .map(|m| git_changed_files(&m.root, since, staged))
+        .collect();
+    affected(cx, scope, &changed, 3, json)
+}
+
+/// `affected` for one path (MCP `impact` without a name): the path belongs to the project that
+/// holds it, as for `outline`.
+pub fn affected_path(cx: &Ctx, scope: &[Member], path: &str, depth: u32) -> Result<String> {
+    let mut changed = vec![Vec::new(); scope.len()];
+    if !path.is_empty() {
+        let at = holder(scope, path);
+        changed[at] = vec![rel_of(&scope[at].root, path)];
+    }
+    affected(cx, scope, &changed, depth, false)
 }
 
 #[cfg(test)]
@@ -668,6 +853,212 @@ mod tests {
                 .unwrap()
                 .contains("shared")
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// `a_top` is the only caller of `b_only`, in a linked project; `b_dead` has no caller anywhere.
+    fn dead_world(tag: &str) -> (Runtime, PathBuf) {
+        world(
+            tag,
+            [
+                "fn a_top() { b_only(); }\n",
+                "fn b_only() {}\nfn b_dead() {}\n",
+                "",
+                "",
+            ],
+        )
+    }
+
+    #[test]
+    fn dead_over_a_scope_spares_what_only_a_linked_project_calls() {
+        let (cx, dir) = dead_world("t3295-dead");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        // `a_top` is nobody's callee, so it is still reported, under its own project.
+        assert_eq!(
+            dead(&ctx, &scope).unwrap(),
+            "[a] lib.rs:1 function a_top\n[b] lib.rs:2 function b_dead\n"
+        );
+        // From b's own scope (b and c) nobody calls `b_only`.
+        let scope = scope_at(&cx, &dir, "b", None);
+        assert_eq!(
+            dead(&ctx, &scope).unwrap(),
+            "[b] lib.rs:1 function b_only\n[b] lib.rs:2 function b_dead\n"
+        );
+        // One project alone is the plain command.
+        let b = dir.join("b");
+        let scope = scope_at(&cx, &dir, "a", b.to_str());
+        let scope = &scope[..1];
+        assert_eq!(
+            dead(&ctx, scope).unwrap(),
+            super::super::dead(&ctx, &b).unwrap()
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn dead_json_names_the_project_of_each_row_and_a_single_project_keeps_plain_rows() {
+        let (cx, dir) = dead_world("t3295-dead-json");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let rows: serde_json::Value =
+            serde_json::from_str(&dead_json(&ctx, &scope).unwrap()).unwrap();
+        assert_eq!(
+            rows,
+            serde_json::json!([
+                {"project": "a", "path": "lib.rs", "line": 1, "kind": "function", "name": "a_top"},
+                {"project": "b", "path": "lib.rs", "line": 2, "kind": "function", "name": "b_dead"},
+            ])
+        );
+        let a = dir.join("a");
+        let one = &scope_at(&cx, &dir, "a", a.to_str())[..1];
+        let rows: serde_json::Value = serde_json::from_str(&dead_json(&ctx, one).unwrap()).unwrap();
+        assert!(rows[0].get("project").is_none(), "{rows}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn dead_with_nothing_dead_says_so_once_for_the_scope() {
+        let (cx, dir) = world(
+            "t3295-none",
+            ["fn a() { b(); }\n", "fn b() { a(); }\n", "", ""],
+        );
+        let scope = scope_at(&cx, &dir, "a", None);
+        assert_eq!(
+            dead(&Ctx::new(&cx), &scope).unwrap(),
+            "no dead code in [a], [b], [c]"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "{args:?} in {}", dir.display());
+    }
+
+    /// Each of `a`, `b`, `c` is its own git repo with one function and the test that calls it; `a`
+    /// also calls `b_fn`. Then `b` and `c` change their function, `a` does not change.
+    fn git_world(tag: &str) -> (Runtime, PathBuf) {
+        let (cx, dir) = world(
+            tag,
+            [
+                "fn a_top() { b_fn(); }\n",
+                "fn b_fn() {}\n",
+                "fn c_fn() {}\n",
+                "fn d_fn() {}\n",
+            ],
+        );
+        for (name, test) in [("a", "a_top"), ("b", "b_fn"), ("c", "c_fn"), ("d", "d_fn")] {
+            let p = dir.join(name);
+            fs::create_dir_all(p.join("tests")).unwrap();
+            fs::write(
+                p.join("tests").join(format!("{name}.rs")),
+                format!("fn test_{name}() {{ {test}(); }}\n"),
+            )
+            .unwrap();
+            git(&p, &["init", "-q", "-b", "main"]);
+            git(&p, &["add", "."]);
+            git(&p, &["commit", "-q", "-m", "init"]);
+        }
+        for name in ["b", "c", "d"] {
+            let f = dir.join(name).join("lib.rs");
+            let src = fs::read_to_string(&f).unwrap();
+            fs::write(&f, src.replace("{}", "{ let _ = 1; }")).unwrap();
+        }
+        (cx, dir)
+    }
+
+    #[test]
+    fn affected_maps_the_tests_of_each_project_and_climbs_into_the_linked_one() {
+        let (cx, dir) = git_world("t3295-affected");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        // `b_fn` changed: its own test in b, and a's test that reaches it through `a_top`. `d` is
+        // outside the scope, so its change is not looked at.
+        let out = affected_git(&ctx, &scope, None, false, false).unwrap();
+        assert_eq!(
+            out,
+            "[a]\ntests/a.rs \u{2190} via test_a\ncargo test test_a\n\
+             [b]\ntests/b.rs \u{2190} via test_b\ncargo test test_b\n\
+             [c]\ntests/c.rs \u{2190} via test_c\ncargo test test_c\n"
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&affected_git(&ctx, &scope, None, false, true).unwrap()).unwrap();
+        let names: Vec<_> = json["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["project"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["a", "b", "c"]);
+        assert_eq!(
+            json["projects"][1]["tests"][0]["command"],
+            "cargo test test_b"
+        );
+        // Staged changes only: nothing is staged anywhere.
+        assert_eq!(
+            affected_git(&ctx, &scope, None, true, false).unwrap(),
+            "no indexed test reaches the change; run the suite"
+        );
+        // One project is the plain answer, byte for byte.
+        let d = dir.join("d");
+        let one = &scope_at(&cx, &dir, "a", d.to_str())[..1];
+        assert_eq!(
+            affected_git(&ctx, one, None, false, false).unwrap(),
+            super::super::affected(&ctx, &d, None, false, false).unwrap()
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn affected_path_belongs_to_the_project_that_holds_the_file() {
+        let (cx, dir) = git_world("t3295-affected-path");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let c = dir.join("c").join("lib.rs");
+        let out = affected_path(&ctx, &scope, c.to_str().unwrap(), 3).unwrap();
+        assert_eq!(
+            out,
+            "[c]\ntests/c.rs \u{2190} via test_c\ncargo test test_c\n"
+        );
+        assert_eq!(
+            affected_path(&ctx, &scope, "", 3).unwrap(),
+            "no indexed test reaches the change; run the suite"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn three_linked_projects_answer_under_one_cap_notes_included() {
+        let many = |n: usize| {
+            (0..n)
+                .map(|i| format!("fn f{i}() {{}}\n"))
+                .collect::<String>()
+        };
+        let (mut cx, dir) = world("t3295-cap", [&many(400), &many(400), &many(400), ""]);
+        cx.config.plugins.graph.max_tokens = 200;
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        assert_eq!(scope.len(), 3);
+        // A skip note heads the answer: it is part of what the cap measures.
+        let mut broken = scope.clone();
+        broken.push(Member {
+            name: "gone".into(),
+            root: dir.join("gone"),
+        });
+        for out in [dead(&ctx, &scope).unwrap(), dead(&ctx, &broken).unwrap()] {
+            assert!(out.contains(" more, expand "), "{out}");
+            assert!(
+                ctx.estimate(&out, rtok_plugin_sdk::Class::Code) <= 200,
+                "{out}"
+            );
+        }
         let _ = fs::remove_dir_all(dir);
     }
 }

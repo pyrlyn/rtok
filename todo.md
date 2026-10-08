@@ -18,7 +18,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
-- T329.5. Scoped `dead` and `affected`, whole-answer caps, watch across the scope
 - T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
 - T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 - T329.11. Graph capability cache: one probe per project until the process restarts
@@ -48,7 +47,6 @@
 - T347. Investigate: D16 "one task = one PR" vs multi-PR execution plans
 - T348. Investigate: `--agent` means an agent id, a host, or both
 - T356. Never index `$HOME` or `/` as a graph root
-- T358. `rtok agents usage`: tokens and estimated cost across every coding agent
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
 - T372. Link tests to sources by naming convention in `affected_from_paths`
@@ -59,7 +57,6 @@
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T382. Installed plugin version in `rtok agents list` and on the web Hosts page
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
-- T385.2. Per-lane policy table
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.4. Batch observe and `parse_results` into `usage`
 - T385.5. Flex on `bulk` and `internal` lanes with a 429 policy
@@ -79,7 +76,6 @@
 - T397. Re-measure numbers that shipped fixes made stale
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T399. Re-check host docs for three open host questions
-- T400. Fix stale and broken statements in `research.md` and related docs
 - T401. Cloud MCP mode: rtok's tools over Streamable HTTP for the Grok API
 - T402. Measure how much tool output a structured schema would shrink
 - T403. A/B a path and identifier dictionary in proxy requests
@@ -107,23 +103,20 @@
 - T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
 - T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-- T414.8. Sidebar groups and a collapsible sidebar
-- T414.10. Table filters and sort in the URL
 - T414.11. Clickable KPIs and panels open the filtered page
 - T414.12. Live status: snapshot age and pause
 - T414.13. Δtok savings trend on Overview and Stats
 - T414.14. CSV and JSON export of tables
-- T433. Save hook session fields once instead of in every hook body
 - T416. Shared `change-preview` crate for dry-run output
 - T416.1. rtok renders previews through `change-preview`
 - T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
 - T416.3. `--stat` on the commands that show a diff
 - T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
-- T436. Operation icons and a spinner on every wait, the way ketch draws them
 - T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
+- T436.2. Spinners on the remaining waits and icons on `agents install/update`
+- T436.3. Shared operation-icon crate for rtok and ketch
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T441.6. MCP task tools and host setup
 - T441.7. GitHub adapter
 - T441.8. GitLab adapter
-- T441.9. Task adapter docs
+- T441.10. Task instruction line through `rtok agents install`
