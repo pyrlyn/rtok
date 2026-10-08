@@ -47,6 +47,12 @@ Every effective key with its origin — the `config show --sources` page.
 | --- | --- | --- |
 | agents.enabled | true | default |
 | agents.idle | 30m | default |
+| agents.junk.crash_dump_min_age_days | 7 | default |
+| agents.junk.exclude | [] | default |
+| agents.junk.extra | [] | default |
+| agents.junk.keep_logs_days | 30 | default |
+| agents.junk.stale_session_days | 30 | default |
+| agents.junk.temp_min_age_hours | 24 | default |
 | agents.push_bytes | 1024 | default |
 | agents.usage.by | agent | default |
 | agents.usage.dirs.antigravity | [~/.gemini/antigravity] | default |
@@ -112,8 +118,12 @@ Every effective key with its origin — the `config show --sources` page.
 | log.path | ~/.rtok/logs/rtok.log | default |
 | log.to_db | true | default |
 | log.tspin | auto | default |
+| mcp.http | 127.0.0.1:8791 | default |
+| mcp.http_tools | [read, search, tree] | default |
 | mcp.max_description_tokens | 60 | default |
 | mcp.max_result_chars | 20000 | default |
+| mcp.public_url |  | default |
+| mcp.token |  | default |
 | mcp.tools | [] | default |
 | otel.content | true | default |
 | otel.content_bytes | 65536 | default |
@@ -207,37 +217,58 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.toon.min_rows | 5 | default |
 | plugins.wasm.dir | ~/.rtok/plugins | default |
 | plugins.wasm.enabled | false | default |
+| proxy.batch.parse_results | false | default |
 | proxy.bind | 127.0.0.1 | default |
 | proxy.context_management | false | default |
 | proxy.dry_run | false | default |
 | proxy.enabled | true | default |
+| proxy.flex.backoff_ms | 1000 | default |
+| proxy.flex.force | false | default |
+| proxy.flex.on_429 | none | default |
+| proxy.flex.retries | 3 | default |
 | proxy.gemini_upstream | https://generativelanguage.googleapis.com | default |
 | proxy.include_usage | true | default |
 | proxy.lanes.bulk.compress | false | default |
 | proxy.lanes.bulk.context_management | false | default |
+| proxy.lanes.bulk.flex | false | default |
+| proxy.lanes.bulk.max_in_flight | 0 | default |
+| proxy.lanes.bulk.max_queued | 8 | default |
 | proxy.lanes.bulk.semantic_cache | false | default |
 | proxy.lanes.bulk.timeout_s | 0 | default |
 | proxy.lanes.bulk.tools_rewrite | false | default |
 | proxy.lanes.bulk.toon | false | default |
+| proxy.lanes.bulk.upstream |  | default |
 | proxy.lanes.embeddings.compress | false | default |
 | proxy.lanes.embeddings.context_management | false | default |
+| proxy.lanes.embeddings.flex | false | default |
+| proxy.lanes.embeddings.max_in_flight | 0 | default |
+| proxy.lanes.embeddings.max_queued | 8 | default |
 | proxy.lanes.embeddings.semantic_cache | false | default |
 | proxy.lanes.embeddings.timeout_s | 0 | default |
 | proxy.lanes.embeddings.tools_rewrite | false | default |
 | proxy.lanes.embeddings.toon | false | default |
+| proxy.lanes.embeddings.upstream |  | default |
 | proxy.lanes.enabled | true | default |
 | proxy.lanes.internal.compress | false | default |
 | proxy.lanes.internal.context_management | false | default |
+| proxy.lanes.internal.flex | false | default |
+| proxy.lanes.internal.max_in_flight | 0 | default |
+| proxy.lanes.internal.max_queued | 8 | default |
 | proxy.lanes.internal.semantic_cache | false | default |
 | proxy.lanes.internal.timeout_s | 0 | default |
 | proxy.lanes.internal.tools_rewrite | false | default |
 | proxy.lanes.internal.toon | false | default |
+| proxy.lanes.internal.upstream |  | default |
 | proxy.lanes.meta.compress | false | default |
 | proxy.lanes.meta.context_management | false | default |
+| proxy.lanes.meta.flex | false | default |
+| proxy.lanes.meta.max_in_flight | 0 | default |
+| proxy.lanes.meta.max_queued | 8 | default |
 | proxy.lanes.meta.semantic_cache | false | default |
 | proxy.lanes.meta.timeout_s | 0 | default |
 | proxy.lanes.meta.tools_rewrite | false | default |
 | proxy.lanes.meta.toon | false | default |
+| proxy.lanes.meta.upstream |  | default |
 | proxy.mode | passthrough | default |
 | proxy.openai_upstream | https://api.openai.com | default |
 | proxy.port | 8790 | default |
@@ -309,7 +340,7 @@ Every effective key with its origin — the `config show --sources` page.
 | stats.prices.claude-opus-5-5.cache_write | 5 | default |
 | stats.prices.claude-opus-5-5.input | 4 | default |
 | stats.prices.claude-opus-5-5.output | 20 | default |
-| stats.prices.claude-sonnet-5-5.cache_read | 0.2 | default |
+| stats.prices.claude-sonnet-5-5.cache_read | 0.1 | default |
 | stats.prices.claude-sonnet-5-5.cache_write | 2.5 | default |
 | stats.prices.claude-sonnet-5-5.input | 2 | default |
 | stats.prices.claude-sonnet-5-5.output | 10 | default |
@@ -343,7 +374,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-297 keys.
+328 keys.
 
 ## Doctor
 
@@ -355,7 +386,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (30 tools, ~808 desc tokens) [CWD]/target/[..]
+  rtok (30 tools, ~808 desc tokens) [CWD]/target/debug/rtok
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)
@@ -503,7 +534,7 @@ agents
     proxy   not supported: CodeWhale providers are [providers.<name>] tables with their own base_url and keys (docs/CONFIGURATION.md); setup does not edit them
     plugin  not supported: CodeWhale's plugin-bundle system needs a reviewed remote source and exact environment-source references (docs/PLUGIN_BUNDLES.md); there is no local directory to link
   mimo (cli)
-    hooks   not supported: MiMo Code has no shell hook events; like OpenCode, tool[..]cute.before/after run in-process through a linked plugin, which this task does not ship
+    hooks   not supported: MiMo Code has no shell hook events; like OpenCode, tool.execute.before/after run in-process through a linked plugin, which this task does not ship
     mcp     not installed
     proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
     plugin  not supported: MiMo's in-process plugin package (the @mimo-ai/plugin analogue of @opencode-ai/plugin) is undocumented; linking one here would be a guess, not a verified path
@@ -538,7 +569,8 @@ agents
     proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
     plugin  not installed (--yes)
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
-  dry-refactoring project desc 154c body 2772B calls - WARN never invoked
+  descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
+  dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked
 config
   note tests/trycmd/input/json-readers.toml:2: stats.transcripts_dir = "tests/trycmd/input/stats-price-tx" (default ~/.claude/projects)
 ```

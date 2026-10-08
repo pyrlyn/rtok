@@ -5,6 +5,7 @@
 //! Notes API: `mem_save` / `mem_search` / `mem_get` (plan T6.1).
 
 pub mod export;
+mod files;
 pub mod handoff;
 pub mod import;
 pub mod status;
@@ -181,6 +182,7 @@ fn remember_save(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     let id = cx
         .upsert_note(project.as_deref(), "user", &title, rest)
         .ok()?;
+    files::link_note(cx, id, rest);
     Some(Injection {
         plugin: "memory",
         text: format!("saved note {id}"),
@@ -204,7 +206,10 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     if query.is_empty() {
         return None;
     }
-    let hits = cx.search_notes(&query, n).ok()?;
+    // T374: twice as many text hits as shown, so a note ranked just below the cut can still be
+    // lifted by its file link; with no linked note the first `n` come back unchanged.
+    let text_hits = cx.search_notes(&query, n.saturating_mul(2)).ok()?;
+    let hits = files::recall_hits(cx, ev.prompt, text_hits, n as usize);
     if hits.is_empty() {
         return None;
     }
@@ -293,6 +298,7 @@ pub fn mem_save(
     // The title is the topic key (T66.1): a re-save updates the row, recall never shows
     // a stale twin next to the new one.
     let (id, updated) = rt.store.upsert_note(proj.as_deref(), kind, title, body)?;
+    files::link_note(&Ctx::new(rt), id, body);
     rt.store
         .upsert_note_embedding(id, title, body, &rt.config.plugins.memory.embed)?;
     Ok((id, updated))
@@ -822,5 +828,263 @@ mod tests {
         assert!(inj.text.contains("worktree note"), "{}", inj.text);
         assert_eq!(project_name(&wt).as_deref(), Some("repo"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A project directory holding `src/proxy/semantic_cache.rs`, with a runtime whose cwd is it.
+    fn linked_fixture(tag: &str) -> (crate::plugin::Runtime, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("rtok-t374-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src/proxy")).unwrap();
+        std::fs::write(dir.join("src/proxy/semantic_cache.rs"), "x").unwrap();
+        let mut cx = crate::plugin::Runtime::in_memory(format!("t374-{tag}")).unwrap();
+        cx.cwd = Some(dir.to_string_lossy().into_owned());
+        (cx, dir)
+    }
+
+    /// Two notes the text query cannot tell apart (same words, same length), one naming a real
+    /// file; the unlinked one is saved first so it wins any tie on text alone.
+    fn equal_pair(cx: &crate::plugin::Runtime) -> (i32, i32) {
+        let plain = mem_save(
+            cx,
+            "note",
+            "plain",
+            "eviction policy of the proxy src/proxy/something_other.rs",
+            None,
+        )
+        .unwrap()
+        .0;
+        let linked = mem_save(
+            cx,
+            "note",
+            "linked",
+            "eviction policy of the proxy src/proxy/semantic_cache.rs",
+            None,
+        )
+        .unwrap()
+        .0;
+        (plain, linked)
+    }
+
+    fn recall_order(cx: &crate::plugin::Runtime, prompt: &str) -> Vec<&'static str> {
+        use rtok_plugin_sdk::PromptSubmit;
+        let ev = PromptSubmit { prompt };
+        let Some(inj) = Memory.prompt_submit(&ev, &Ctx::new(cx)) else {
+            return Vec::new();
+        };
+        let mut at: Vec<(usize, &'static str)> = ["plain", "linked"]
+            .into_iter()
+            .filter_map(|t| inj.text.find(&format!(" {t} (")).map(|i| (i, t)))
+            .collect();
+        at.sort();
+        at.into_iter().map(|(_, t)| t).collect()
+    }
+
+    #[test]
+    fn a_save_links_the_existing_files_its_body_names() {
+        let (cx, dir) = linked_fixture("save");
+        let (plain, linked) = equal_pair(&cx);
+        let hit = |id| {
+            cx.store
+                .notes_for_files(None, &["src/proxy/semantic_cache.rs".into()], 5)
+                .unwrap()
+                .iter()
+                .any(|h| h.id == id)
+        };
+        assert!(hit(linked) && !hit(plain));
+        // A re-save under the same title re-derives the links from the new body.
+        mem_save(&cx, "note", "linked", "nothing about files now", None).unwrap();
+        assert!(!hit(linked));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_save_links_the_checkpoint_paths_under_the_root() {
+        let (cx, dir) = linked_fixture("ckpt");
+        let abs = dir.join("src/proxy/semantic_cache.rs");
+        let body = format!("path {}\npath /elsewhere/x.rs\n", abs.display());
+        cx.store
+            .upsert_note(None, "checkpoint:t374-ckpt", "compact", &body)
+            .unwrap();
+        let id = mem_save(&cx, "note", "about it", "no path in this body", None)
+            .unwrap()
+            .0;
+        let hits = cx
+            .store
+            .notes_for_files(None, &["src/proxy/semantic_cache.rs".into()], 5)
+            .unwrap();
+        assert_eq!(hits.iter().map(|h| h.id).collect::<Vec<_>>(), vec![id]);
+        assert!(
+            cx.store
+                .notes_for_files(None, &["/elsewhere/x.rs".into(), "x.rs".into()], 5)
+                .unwrap()
+                .is_empty()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The done criterion: a note linked to a file the session has read ranks above an equally
+    /// text-matching unlinked note, and only once the file has been read.
+    #[test]
+    fn a_note_linked_to_a_read_file_outranks_an_equal_text_match() {
+        let (cx, dir) = linked_fixture("rank");
+        equal_pair(&cx);
+        assert_eq!(
+            recall_order(&cx, "eviction policy"),
+            vec!["plain", "linked"],
+            "without the file in play the tie falls to the older note"
+        );
+        cx.store
+            .put_read_cache(
+                "t374-rank",
+                "src/proxy/semantic_cache.rs\tfull\t",
+                "h",
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            recall_order(&cx, "eviction policy"),
+            vec!["linked", "plain"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_named_in_the_prompt_boosts_its_notes_too() {
+        let (cx, dir) = linked_fixture("prompt");
+        equal_pair(&cx);
+        // The path's own words already favour the linked note in the text list; what the file
+        // adds is that the note is found with a `:line` suffix the text query cannot match.
+        let order = recall_order(&cx, "eviction policy in src/proxy/semantic_cache.rs:40");
+        assert_eq!(order.first(), Some(&"linked"), "{order:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_read_file_only_reranks_text_hits_and_never_recalls_alone() {
+        let (cx, dir) = linked_fixture("only");
+        equal_pair(&cx);
+        cx.store
+            .put_read_cache("another-session", "src/proxy/semantic_cache.rs", "h", None)
+            .unwrap();
+        assert!(recall_order(&cx, "zebra crossing").is_empty());
+        cx.store
+            .put_read_cache("t374-only", "read\tsrc/proxy/semantic_cache.rs", "h", None)
+            .unwrap();
+        assert!(
+            recall_order(&cx, "zebra crossing").is_empty(),
+            "T452: reading a file is not enough to recall its notes"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    const NAMED: &str = "src/proxy/semantic_cache.rs";
+
+    /// `count` notes whose words share nothing with `NAMED` or with each other's prompt, each
+    /// linked to `NAMED` by hand, so only the file can bring them back.
+    fn linked_without_text(cx: &crate::plugin::Runtime, count: usize) {
+        for i in 0..count {
+            let id = mem_save(
+                cx,
+                "note",
+                &format!("lone{i}"),
+                &format!("quartz{i} lichen"),
+                None,
+            )
+            .unwrap()
+            .0;
+            cx.store.set_note_files(id, &[NAMED.to_string()]).unwrap();
+        }
+    }
+
+    fn recall_text(cx: &crate::plugin::Runtime, prompt: &str) -> String {
+        use rtok_plugin_sdk::PromptSubmit;
+        let ev = PromptSubmit { prompt };
+        Memory
+            .prompt_submit(&ev, &Ctx::new(cx))
+            .map_or_else(String::new, |i| i.text)
+    }
+
+    fn lone_titles(text: &str) -> usize {
+        (0..8)
+            .filter(|i| text.contains(&format!(" lone{i} (")))
+            .count()
+    }
+
+    #[test]
+    fn a_file_named_in_the_prompt_recalls_its_note_without_a_text_match() {
+        let (cx, dir) = linked_fixture("named");
+        linked_without_text(&cx, 1);
+        let text = recall_text(&cx, &format!("please look at {NAMED}:40 today"));
+        assert!(text.contains(" lone0 ("), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_prompt_naming_no_file_recalls_nothing_extra() {
+        let (cx, dir) = linked_fixture("nofile");
+        linked_without_text(&cx, 2);
+        // The second path does not exist, the third climbs out of the root.
+        for prompt in [
+            "please look at the cache",
+            "please look at src/proxy/other.rs",
+            "please look at ../semantic_cache.rs",
+        ] {
+            assert_eq!(recall_text(&cx, prompt), "", "{prompt}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn at_most_two_named_file_notes_are_added() {
+        let (cx, dir) = linked_fixture("cap");
+        linked_without_text(&cx, 4);
+        let text = recall_text(&cx, &format!("please look at {NAMED}"));
+        assert_eq!(lone_titles(&text), 2, "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn named_file_notes_take_slots_from_the_budget_and_never_enlarge_it() {
+        let (cx, dir) = linked_fixture("budget");
+        for i in 0..7 {
+            mem_save(
+                &cx,
+                "note",
+                &format!("hit{i}"),
+                "eviction policy text",
+                None,
+            )
+            .unwrap();
+        }
+        linked_without_text(&cx, 3);
+        let prompt = format!("eviction policy of {NAMED}");
+        let text_hits = cx.store.search_notes("eviction policy", 10).unwrap();
+        let hits = files::recall_hits(&Ctx::new(&cx), &prompt, text_hits, 5);
+        assert_eq!(hits.len(), 5, "{hits:?}");
+        assert_eq!(
+            hits.iter().filter(|h| h.title.starts_with("lone")).count(),
+            2
+        );
+        let text = recall_text(&cx, &prompt);
+        assert!(
+            Ctx::new(&cx).estimate(&text, rtok_plugin_sdk::Class::Prose) <= 200,
+            "{text}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn named_file_recall_is_byte_stable() {
+        let run = |tag: &str| {
+            let (cx, dir) = linked_fixture(tag);
+            equal_pair(&cx);
+            linked_without_text(&cx, 3);
+            let text = recall_text(&cx, &format!("eviction policy of {NAMED}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            text
+        };
+        let (a, b) = (run("stable"), run("stable"));
+        assert!(a.contains(" lone"), "{a}");
+        assert_eq!(a, b);
     }
 }

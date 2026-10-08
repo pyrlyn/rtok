@@ -11,7 +11,7 @@ import { AxisPointerComponent, GridComponent, TooltipComponent } from "echarts/c
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import type { Renderer } from "./renderer";
-import { stackAt, type ChartSpec, type Tone } from "./spec";
+import { seriesAt, stackAt, type ChartSpec, type Tone } from "./spec";
 
 echarts.use([
   BarChart,
@@ -125,7 +125,7 @@ export function toOption(spec: ChartSpec, p: Palette) {
           itemStyle: { color, opacity, borderRadius: axes ? 0 : 1 },
           // Minis fade low bars so the shape reads at 28px, as the SVG minis did.
           data: s.values.map((v) =>
-            axes ? v : { value: v, itemStyle: { opacity: 0.45 + 0.55 * (v / peak) } },
+            axes || v == null ? v : { value: v, itemStyle: { opacity: 0.45 + 0.55 * (v / peak) } },
           ),
         };
       }),
@@ -139,7 +139,7 @@ export function toOption(spec: ChartSpec, p: Palette) {
               symbolOffset: [0, -6],
               itemStyle: toneStyle(p, spec.dots.tone),
               emphasis: { disabled: true },
-              data: spec.dots.values.map((v, i) => (v > 0 ? topAt(spec, i) : null)),
+              data: spec.dots.values.map((v, i) => ((v ?? 0) > 0 ? topAt(spec, i) : null)),
             },
           ]
         : []),
@@ -159,7 +159,18 @@ export const echartsRenderer: Renderer = (el, first, events) => {
     const i = (e as { axesInfo?: { value?: unknown }[] }).axesInfo?.[0]?.value;
     if (!quiet && typeof i === "number") events.hover(i);
   });
-  chart.getZr().on("globalout", () => events.leave());
+  let onSeries: string | null = null;
+  chart.getZr().on("mousemove", (e) => {
+    if (!events.series || !spec.axes) return;
+    // Hit-testing by value, not by ECharts' own series events, which stay quiet with emphasis off.
+    const at = chart.convertFromPixel({ gridIndex: 0 }, [e.offsetX, e.offsetY]);
+    const id = at ? seriesAt(spec, Math.round(at[0] ?? NaN), at[1] ?? NaN) : null;
+    if (id !== onSeries) events.series((onSeries = id));
+  });
+  chart.getZr().on("globalout", () => {
+    onSeries = null;
+    events.leave();
+  });
 
   const resize = new ResizeObserver(() => chart.resize());
   resize.observe(el);

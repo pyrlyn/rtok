@@ -17,7 +17,11 @@ export interface Column<T extends RowData> {
     cell: (row: T) => ReactNode;
     /** Makes the header a sort button; `null` and `undefined` always sort last. */
     sortValue?: (row: T) => number | string | null | undefined;
+    /** Plain value for CSV and JSON export; defaults to `sortValue`, and a column with neither is left out. */
+    exportValue?: (row: T) => Cell;
 }
+
+export type Cell = number | string | boolean | null | undefined;
 
 export interface Sort {
     id: string;
@@ -207,7 +211,7 @@ export function DataTable<T extends RowData>({
                                     height: item.size,
                                     transform: `translateY(${item.start}px)`,
                                 }}
-                                className={`${focusRing} grid items-center gap-x-3 border-b border-border/50 px-3 text-xs hover:bg-surface-2/70 aria-selected:bg-accent/15 ${onSelect ? "cursor-pointer" : ""}`}
+                                className={`${focusRing} grid items-center gap-x-3 border-b border-border/60 px-3 text-xs transition-colors duration-fast ease-standard hover:bg-surface-2/70 aria-selected:bg-accent/10${onSelect ? "cursor-pointer" : ""}`}
                             >
                                 {row.getAllCells().map((cell, i) => (
                                     <div

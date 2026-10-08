@@ -96,6 +96,13 @@ impl Store {
         }
     }
 
+    /// A counter as it stands, without touching it; 0 when nothing was ever allocated.
+    pub fn task_counter(&self, project: &str, parent: Option<&TaskId>) -> Result<u32> {
+        let mut conn = self.lock()?;
+        let last = read_last(&mut conn, project, &counter_key(parent))?;
+        u32::try_from(last).context("task counter overflow")
+    }
+
     /// Raise a counter to at least `at_least`, never lower it: seeding from a tracker that
     /// already has ids, or skipping past an id another machine took. Returns the counter.
     pub fn seed_task_counter(

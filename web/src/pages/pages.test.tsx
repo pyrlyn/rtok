@@ -11,7 +11,7 @@ import { richSnapshot } from "./fixtures";
 import { callBuckets, doctorChecks, overview, tokensOf } from "./model";
 import { matchesPlugin } from "./Plugins";
 import { matchesCall } from "./Calls";
-import { mount, serving } from "./testHelpers";
+import { mount, serving, wire } from "./testHelpers";
 
 afterEach(cleanup);
 
@@ -130,6 +130,33 @@ describe("overview", () => {
         expect(screen.getByRole("img", { name: "3 of 4 plugins enabled" })).toBeTruthy();
     });
 
+    test("each KPI card and panel links to its page with the matching filter", async () => {
+        mount(serving(richSnapshot), "/overview");
+        await screen.findByRole("alert");
+        // The sidebar links to the same pages, so only links outside the nav count.
+        const href = (name: RegExp | string) => {
+            const found = screen.getAllByRole("link", { name }).filter((a) => !a.closest("nav"));
+            expect(found).toHaveLength(1);
+            return found[0]?.getAttribute("href");
+        };
+        expect(href("calls")).toBe("/calls");
+        expect(href(/^1 failed$/)).toBe("/calls?result=failed");
+        expect(href("live sessions")).toBe("/sessions?show=live");
+        expect(href("plugins on")).toBe("/plugins?show=on");
+        expect(href(/^mcp \d+$/)).toBe("/calls?surface=mcp");
+        expect(href(/^failed 1$/)).toBe("/calls?result=failed");
+        expect(href(/ live →$/)).toBe("/sessions?show=live");
+        // The chart sits above the card's overlay, so it is not inside any link.
+        expect(screen.getByRole("img", { name: /^Calls over time/ }).closest("a")).toBeNull();
+    });
+
+    test("clicking a KPI opens the page already filtered", async () => {
+        mount(serving(richSnapshot), "/overview");
+        fireEvent.click(await screen.findByRole("link", { name: "live sessions" }));
+        const liveOnly = await screen.findByRole("switch", { name: "live only" });
+        expect(liveOnly.getAttribute("aria-checked")).toBe("true");
+    });
+
     test("renders a failed doctor probe and an empty ledger instead of zeros", async () => {
         mount(serving({ ...richSnapshot, doctor: null, calls: [], sessions: [] }), "/overview");
         const doctor = await screen.findByRole("region", { name: "doctor" });
@@ -170,6 +197,37 @@ describe("plugins", () => {
         );
     });
 
+    test("the switch spins in its old position until the server answers", async () => {
+        const w = wire(richSnapshot);
+        mount(w.connect, "/plugins");
+        const toggle = await screen.findByRole("switch", { name: "toggle shell" });
+        fireEvent.click(toggle);
+        await waitFor(() => expect(w.sent).toHaveLength(1));
+        const busy = screen.getByRole("switch", { name: "toggle shell" }) as HTMLButtonElement;
+        expect(busy.getAttribute("aria-busy")).toBe("true");
+        expect(busy.disabled).toBe(true);
+        expect(busy.getAttribute("aria-checked")).toBe("true");
+
+        w.push(richSnapshot);
+        await waitFor(() =>
+            expect(
+                screen.getByRole("switch", { name: "toggle shell" }).getAttribute("aria-busy"),
+            ).toBeNull(),
+        );
+    });
+
+    test("a refused switch stays where it was and shows the refusal", async () => {
+        const w = wire(richSnapshot);
+        mount(w.connect, "/plugins");
+        fireEvent.click(await screen.findByRole("switch", { name: "toggle shell" }));
+        await waitFor(() => expect(w.sent).toHaveLength(1));
+        w.message("config set plugins.shell.enabled: read-only");
+        expect((await screen.findByRole("alert")).textContent).toContain("read-only");
+        const toggle = screen.getByRole("switch", { name: "toggle shell" }) as HTMLButtonElement;
+        expect(toggle.getAttribute("aria-checked")).toBe("true");
+        expect(toggle.disabled).toBe(false);
+    });
+
     test("a switch inside a row does not need the row's keys", async () => {
         mount(serving(richSnapshot), "/plugins");
         const toggle = await screen.findByRole("switch", { name: "toggle shell" });
@@ -179,6 +237,15 @@ describe("plugins", () => {
 });
 
 describe("calls", () => {
+    test("an idle detail column says what to do, and gives way to the detail", async () => {
+        mount(serving(richSnapshot), "/calls");
+        const table = await screen.findByRole("table", { name: "calls" });
+        expect(screen.getByText("Select a call to see its detail.")).toBeTruthy();
+        fireEvent.click(within(table).getAllByRole("row")[1]!);
+        await screen.findByRole("region", { name: "detail" });
+        expect(screen.queryByText("Select a call to see its detail.")).toBeNull();
+    });
+
     test("selecting a failed call shows its error and details", async () => {
         mount(serving(richSnapshot), "/calls");
         const table = await screen.findByRole("table", { name: "calls" });

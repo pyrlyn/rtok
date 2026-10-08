@@ -22,6 +22,9 @@ pub enum Verdict {
     /// Merged, clean and idle past `stale_lock` under someone else's lock (T418): the
     /// session that took it is gone and nothing is left to lose. Holds the lock's owner.
     Reclaim(String),
+    /// A finished task ([`Entry::done`]), idle, that a live agent or someone else's lock
+    /// would otherwise keep (T453). Holds what it overrides.
+    Finished(String),
     /// The directory is gone: drop this one record (never a blanket `prune`).
     DropRecord,
     Keep(String),
@@ -63,20 +66,36 @@ pub fn decide(
         return keep("the worktree this command runs from");
     }
     let agent = record.owner().and_then(|o| o.agent);
-    if let Some(agent) = agent.filter(|a| p.live.contains(a)) {
+    let live = agent.filter(|a| p.live.contains(a)).map(|agent| {
         let short: String = agent.chars().take(8).collect();
-        return keep(&format!("agent {short} is live"));
-    }
-    if record.held_against(p.owner) {
+        format!("agent {short} is live")
+    });
+    let held = record.held_against(p.owner);
+    let owner = || {
         let owner = record.owner().map(|o| o.owner);
-        let owner = owner.map_or(", owner unknown".into(), |o| format!(" by {o}"));
+        owner.map_or(", owner unknown".into(), |o| format!(" by {o}"))
+    };
+    // The age of the newest file, asked once on whichever path decides; an unreadable mtime is
+    // no evidence of age.
+    let age = |within: Duration| modified(within).map(|m| p.age(m));
+    // T453: every commit of a finished task is in the base, so neither its lock nor its live
+    // agent (a sub-agent's worktree is bound to its long-lived parent) has anything to keep.
+    if entry.done && (live.is_some() || held) {
+        let why = live.unwrap_or_else(|| format!("locked{}", owner()));
+        return match age(p.idle).is_some_and(|a| a >= p.idle) {
+            true => Verdict::Finished(why),
+            false => Verdict::Keep(why),
+        };
+    }
+    if let Some(why) = live {
+        return Verdict::Keep(why);
+    }
+    if held {
+        let owner = owner();
         // Only a merged, clean worktree: a dirty, unmerged or vanished one may still be
-        // the only copy of someone's work, so its lock holds however old it is. An
-        // unreadable mtime is no evidence of age.
+        // the only copy of someone's work, so its lock holds however old it is.
         let fresh = p.idle.max(p.stale_lock);
-        let stale =
-            entry.state == State::Merged && modified(fresh).is_some_and(|m| p.age(m) >= fresh);
-        return match stale {
+        return match entry.state == State::Merged && age(fresh).is_some_and(|a| a >= fresh) {
             true => Verdict::Reclaim(owner),
             false => keep(&format!("locked{owner}")),
         };
@@ -88,9 +107,7 @@ pub fn decide(
             Some(b) => keep(&format!("not merged into the base; check `gh pr view {b}`")),
             None => keep("detached HEAD not merged into the base"),
         },
-        _ if modified(p.idle).is_some_and(|m| p.age(m) < p.idle) => {
-            keep("modified within the idle window")
-        }
+        _ if age(p.idle).is_some_and(|a| a < p.idle) => keep("modified within the idle window"),
         _ => Verdict::Remove,
     }
 }
@@ -128,6 +145,7 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
         let (action, planned) = match &verdict {
             Verdict::Remove => ("remove", "merged, clean and idle".into()),
             Verdict::Reclaim(owner) => ("remove", format!("merged, clean, abandoned lock{owner}")),
+            Verdict::Finished(over) => ("remove", format!("finished task, idle, though {over}")),
             Verdict::DropRecord => ("drop-record", "directory is gone".into()),
             Verdict::Keep(why) => ("keep", why.clone()),
         };
@@ -180,6 +198,16 @@ mod tests {
     const ME: &str = "Claude Code / sonnet";
     const MINE: &str = "Claude Code / sonnet | t1 | 2026-09-22";
     const THEIRS: &str = "Cursor / grok | t2 | 2026-09-22";
+
+    fn label(verdict: Verdict) -> String {
+        match verdict {
+            Verdict::Remove => "remove".to_string(),
+            Verdict::Reclaim(owner) => format!("reclaim:{owner}"),
+            Verdict::Finished(over) => format!("finished:{over}"),
+            Verdict::DropRecord => "drop-record".to_string(),
+            Verdict::Keep(why) => format!("keep:{why}"),
+        }
+    }
 
     #[rstest]
     #[case::main(State::Main, None, false, 0, "keep:main checkout")]
@@ -259,6 +287,7 @@ mod tests {
             record,
             state,
             merged: state == State::Merged,
+            done: false,
         };
         let policy = Policy {
             owner: Some(ME),
@@ -272,12 +301,7 @@ mod tests {
             asked.set(Some(within));
             Some(at(modified))
         };
-        let got = match decide(&entry, walk, current, &policy) {
-            Verdict::Remove => "remove".to_string(),
-            Verdict::Reclaim(owner) => format!("reclaim:{owner}"),
-            Verdict::DropRecord => "drop-record".to_string(),
-            Verdict::Keep(why) => format!("keep:{why}"),
-        };
+        let got = label(decide(&entry, walk, current, &policy));
         assert_eq!(got, want);
         // The walk runs only where its answer can still change the verdict, told the age
         // that settles it: the idle window, or the stale-lock age under a foreign lock.
@@ -300,6 +324,7 @@ mod tests {
             record,
             state: State::Merged,
             merged: true,
+            done: false,
         };
         let policy = Policy {
             owner: None,
@@ -310,5 +335,45 @@ mod tests {
         };
         let verdict = decide(&entry, |_| None, false, &policy);
         assert_eq!(verdict, Verdict::Keep(format!("locked by {ME}")));
+    }
+
+    const LIVE: &str = "Cursor / grok | t1 | 2026-09-22 | agent 0193ab12-live";
+
+    /// T453: a finished task goes past a live agent or a foreign lock once idle; inside the
+    /// idle window, or with an unreadable mtime, it keeps the reason it had before.
+    #[rstest]
+    #[case::live(Some(LIVE), Some(0), "finished:agent 0193ab12 is live")]
+    #[case::live_busy(Some(LIVE), Some(990), "keep:agent 0193ab12 is live")]
+    #[case::theirs(Some(THEIRS), Some(0), "finished:locked by Cursor / grok")]
+    #[case::theirs_busy(Some(THEIRS), Some(990), "keep:locked by Cursor / grok")]
+    #[case::theirs_unreadable(Some(THEIRS), None, "keep:locked by Cursor / grok")]
+    #[case::bare_lock(Some(""), Some(0), "finished:locked, owner unknown")]
+    #[case::mine(Some(MINE), Some(0), "remove")]
+    #[case::unlocked(None, Some(0), "remove")]
+    fn a_finished_task_is_kept_by_no_lock_and_no_live_agent(
+        #[case] locked: Option<&str>,
+        #[case] modified: Option<u64>,
+        #[case] want: &str,
+    ) {
+        let record = Record {
+            branch: Some("t1".into()),
+            locked: locked.map(Into::into),
+            ..Record::default()
+        };
+        let entry = Entry {
+            record,
+            state: State::Merged,
+            merged: true,
+            done: true,
+        };
+        let policy = Policy {
+            owner: Some(ME),
+            idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
+            now: at(1_000),
+            live: ["0193ab12-live".to_string()].into(),
+        };
+        let got = label(decide(&entry, |_| modified.map(at), false, &policy));
+        assert_eq!(got, want);
     }
 }

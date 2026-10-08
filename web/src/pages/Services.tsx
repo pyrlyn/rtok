@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { Empty } from "../states";
+import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { orUnknown } from "../ui/Unknown";
@@ -73,16 +74,19 @@ function ServicesBody({ view }: { view: ServicesView }) {
 
 function Service({ service: s }: { service: ServiceRow }) {
     return (
-        <Panel title={s.name} hint="service">
-            <div>
-                {s.running ? (
+        <Panel
+            title={s.name}
+            hint="service"
+            action={
+                s.running ? (
                     <Pill tone="ok" dot>
                         running
                     </Pill>
                 ) : (
                     <Pill>stopped</Pill>
-                )}
-            </div>
+                )
+            }
+        >
             <Kv
                 rows={[
                     ["pid", orUnknown(s.pid, why.servicePid, "none")],
@@ -108,17 +112,26 @@ function Otel({ otel, lastFlush }: { otel: OtelView; lastFlush: string | null })
             <Kv rows={[["endpoint", orUnknown(otel.endpoint, why.otelEndpoint, "not set")]]} />
             <div className="grid grid-cols-3 gap-2">
                 {tiles.map(([label, mark, pending]) => (
-                    <div key={label} className="rounded-md bg-surface-2 p-2.5">
-                        <div className="text-2xs font-semibold tracking-kicker text-fg-muted uppercase">
-                            {label}
-                        </div>
-                        <div className="text-sm font-semibold">{fmt(mark)}</div>
-                        <div
-                            className={`text-2xs ${typeof pending === "number" && pending > 0 ? "text-warn-fg" : "text-fg-muted"}`}
-                        >
-                            {pending === "watermark" ? "watermark" : `${fmt(pending)} pending`}
-                        </div>
-                    </div>
+                    <Kpi
+                        key={label}
+                        label={label}
+                        value={fmt(mark)}
+                        sub={
+                            pending === "watermark" ? (
+                                "watermark"
+                            ) : (
+                                <span
+                                    className={
+                                        typeof pending === "number" && pending > 0
+                                            ? "text-warn-fg"
+                                            : ""
+                                    }
+                                >
+                                    {fmt(pending)} pending
+                                </span>
+                            )
+                        }
+                    />
                 ))}
             </div>
             {lastFlush && <p className="text-2xs text-fg-muted">{lastFlush}</p>}

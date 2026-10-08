@@ -27,8 +27,18 @@ export function Hosts() {
     );
 }
 
-/** The state word a module row starts with; the rest (a flag to run) stays beside it. */
+/**
+ * The state word a module row starts with; the rest (a flag to run) stays beside it. A plugin
+ * whose installed version differs from the running rtok (`installed 0.14.0 (marketplace), rtok
+ * is 0.15.1 — rtok agents update codex`, T382) is `outdated`, or `newer` when nothing needs
+ * updating.
+ */
 export function moduleState(value: string): { tone: PillTone; label: string; rest: string } {
+    const rest = value.startsWith("installed") ? value.slice("installed".length).trim() : "";
+    if (rest.includes(", rtok is "))
+        return rest.includes(" — rtok agents update ")
+            ? { tone: "warn", label: "outdated", rest }
+            : { tone: "ok", label: "newer", rest };
     for (const [prefix, tone] of [
         ["installed", "ok"],
         ["not installed", "warn"],
@@ -78,10 +88,15 @@ function HostsBody({ view }: { view: HostsView }) {
 function Host({ block: b }: { block: HostBlock }) {
     const note = hostNote(b.note);
     return (
-        <Panel title={b.name} hint={b.kind}>
-            <Pill tone={note.tone} dot={note.tone === "ok"}>
-                {note.label}
-            </Pill>
+        <Panel
+            title={b.name}
+            hint={b.kind}
+            action={
+                <Pill tone={note.tone} dot={note.tone === "ok"}>
+                    {note.label}
+                </Pill>
+            }
+        >
             <Kv
                 rows={[
                     ["app", orUnknown(b.app, why.hostApp, "not found")],

@@ -23,6 +23,7 @@ mod sql_ext;
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
 // T329.1: the graph project registry.
+mod note_files;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
@@ -241,10 +242,19 @@ impl Store {
         // one migration run plus the queue of other openers outlives it. Restored below. The
         // hook keeps its few ms here too and fails open instead (T178).
         set_busy(&mut conn, self.wait.migrate)?;
-        let applied = conn.exclusive_transaction::<_, anyhow::Error, _>(|conn| {
-            migrations::bridge_legacy(conn)?;
-            migrations::run_pending(conn)
-        });
+        let apply = |conn: &mut SqliteConnection| {
+            conn.exclusive_transaction::<_, anyhow::Error, _>(|conn| {
+                migrations::bridge_legacy(conn)?;
+                migrations::run_pending(conn)
+            })
+        };
+        // A person at a terminal waits out an upgrade's migrations. The hook's few-ms wait
+        // draws nothing: it must stay inside its budget and fails open instead of waiting.
+        let applied = if self.wait.migrate < std::time::Duration::from_secs(1) {
+            apply(&mut conn)
+        } else {
+            crate::render::with_loader("migrating the store", || apply(&mut conn))
+        };
         set_busy(&mut conn, self.wait.busy)?;
         applied
     }
@@ -1689,18 +1699,36 @@ impl Store {
                 sum(measurements::est_after),
             ))
             .order((measurements::plugin, measurements::kind))
-            .load::<(String, String, i64, Option<i64>, Option<i64>)>(&mut *conn)?;
+            .load::<MeasurementTotalRow>(&mut *conn)?;
+        Ok(rows.into_iter().map(MeasurementTotal::from_row).collect())
+    }
+
+    /// [`Self::measurement_totals`] over the rows stamped at or after `since`, one group per
+    /// `(plugin, kind, ts)`: the same aggregate with the row's second as its grain, which the
+    /// caller folds into day buckets in a time zone (T414.13). Diesel 2.3 cannot `GROUP BY` a
+    /// computed `ts / N` bucket (the gap [`Self::usage_slices`] documents), and a day edge
+    /// moves with the zone's offset anyway.
+    pub fn measurement_totals_since(&self, since: i64) -> Result<Vec<(i64, MeasurementTotal)>> {
+        use diesel::dsl::{count_star, sum};
+        let mut conn = self.lock()?;
+        let rows = measurements::table
+            .filter(measurements::ts.ge(since))
+            .group_by((measurements::plugin, measurements::kind, measurements::ts))
+            .select((
+                measurements::ts,
+                (
+                    measurements::plugin,
+                    measurements::kind,
+                    count_star(),
+                    sum(measurements::est_before),
+                    sum(measurements::est_after),
+                ),
+            ))
+            .order(measurements::ts)
+            .load::<(i64, MeasurementTotalRow)>(&mut *conn)?;
         Ok(rows
             .into_iter()
-            .map(
-                |(plugin, kind, rows, est_before, est_after)| MeasurementTotal {
-                    plugin,
-                    kind,
-                    rows,
-                    est_before: est_before.unwrap_or(0),
-                    est_after: est_after.unwrap_or(0),
-                },
-            )
+            .map(|(ts, row)| (ts, MeasurementTotal::from_row(row)))
             .collect())
     }
 
@@ -1934,6 +1962,52 @@ impl Store {
         Ok(())
     }
 
+    /// Many `usage` rows for one call in a single transaction — a Batch results file (T385.4)
+    /// carries one per request. Each row is `(model, api, [input, cache_create, cache_read,
+    /// output])`, the same four counters as [`Store::insert_usage`].
+    pub fn insert_usage_rows(
+        &self,
+        session: &str,
+        call_id: i32,
+        rows: &[(Option<&str>, &str, [i64; 4])],
+    ) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.transaction::<_, anyhow::Error, _>(|conn| {
+            // 8 binds per row, well under SQLite's 32766-variable cap per statement.
+            for chunk in rows.chunks(500) {
+                let values: Vec<_> = chunk
+                    .iter()
+                    .map(|(model, api, [input, cache_create, cache_read, output])| {
+                        (
+                            usage::session.eq(session),
+                            usage::model.eq(*model),
+                            usage::api.eq(*api),
+                            usage::input.eq(*input),
+                            usage::cache_create.eq(*cache_create),
+                            usage::cache_read.eq(*cache_read),
+                            usage::output.eq(*output),
+                            usage::call_id.eq(call_id),
+                        )
+                    })
+                    .collect();
+                diesel::insert_into(usage::table)
+                    .values(&values)
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Re-tag a call once its response showed what it was (T385.4: an OpenAI file download
+    /// that held Batch results).
+    pub fn set_call_kind(&self, id: i32, kind: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(calls::table.filter(calls::id.eq(id)))
+            .set(calls::kind.eq(kind))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
     /// Test-only: one proxy `usage` turn — the session row, a bare `api_request` call
     /// and the `usage` row. Tests that need request bodies (cache-bust causes) still
     /// write their own `call_io`.
@@ -2133,6 +2207,37 @@ impl Store {
                 cache_read: cache_read.unwrap_or(0),
                 output: output.unwrap_or(0),
             })
+            .collect())
+    }
+
+    /// Usage totals grouped by the `calls.kind` of the request that produced them, which is
+    /// the proxy lane that handled it (T385.6). Every proxy `usage` row carries its call, so
+    /// the inner join drops nothing.
+    pub fn usage_by_lane(&self) -> Result<Vec<LaneUsage>> {
+        let mut conn = self.lock()?;
+        let rows = usage::table
+            .inner_join(calls::table)
+            .group_by(calls::kind)
+            .select((
+                calls::kind,
+                sum_bigint(usage::input),
+                sum_bigint(usage::cache_create),
+                sum_bigint(usage::cache_read),
+                sum_bigint(usage::output),
+            ))
+            .order(calls::kind)
+            .load::<(String, Option<i64>, Option<i64>, Option<i64>, Option<i64>)>(&mut *conn)?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(kind, input, cache_create, cache_read, output)| LaneUsage {
+                    kind,
+                    input: input.unwrap_or(0),
+                    cache_create: cache_create.unwrap_or(0),
+                    cache_read: cache_read.unwrap_or(0),
+                    output: output.unwrap_or(0),
+                },
+            )
             .collect())
     }
 
@@ -2764,7 +2869,8 @@ fn host_by_session(conn: &mut SqliteConnection) -> Result<HashMap<String, Option
         .collect())
 }
 
-/// One `(plugin, kind)` group from [`Store::measurement_totals`] (T207).
+/// One `(plugin, kind)` group from [`Store::measurement_totals`] (T207), or one
+/// `(plugin, kind, ts)` group from [`Store::measurement_totals_since`].
 #[derive(Debug, Clone)]
 pub struct MeasurementTotal {
     pub plugin: String,
@@ -2774,10 +2880,35 @@ pub struct MeasurementTotal {
     pub est_after: i64,
 }
 
+/// What both measurement aggregates select: plugin, kind, `COUNT(*)` and the two sums.
+type MeasurementTotalRow = (String, String, i64, Option<i64>, Option<i64>);
+
+impl MeasurementTotal {
+    fn from_row((plugin, kind, rows, est_before, est_after): MeasurementTotalRow) -> Self {
+        Self {
+            plugin,
+            kind,
+            rows,
+            est_before: est_before.unwrap_or(0),
+            est_after: est_after.unwrap_or(0),
+        }
+    }
+}
+
 /// Aggregated usage totals grouped by API (T11.6).
 #[derive(Debug, Clone)]
 pub struct ApiUsage {
     pub api: String,
+    pub input: i64,
+    pub cache_create: i64,
+    pub cache_read: i64,
+    pub output: i64,
+}
+
+/// Aggregated usage totals grouped by `calls.kind` (T385.6).
+#[derive(Debug, Clone)]
+pub struct LaneUsage {
+    pub kind: String,
     pub input: i64,
     pub cache_create: i64,
     pub cache_read: i64,

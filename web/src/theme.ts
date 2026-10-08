@@ -19,9 +19,9 @@ function apply(dark: boolean) {
   root.classList.toggle("dark", dark);
   root.classList.toggle("light", !dark);
   root.setAttribute("data-theme", dark ? "dark" : "light");
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", dark ? "#06101A" : "#F4F8FB");
+  // The browser chrome follows the canvas role; read it after the attribute above so the theme is already applied.
+  const bg = getComputedStyle(root).getPropertyValue("--pyr-bg").trim();
+  if (bg) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bg);
 }
 
 export function useTheme() {

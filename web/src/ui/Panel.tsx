@@ -20,7 +20,7 @@ export function Panel({
     const id = useId();
     return (
         <section aria-labelledby={id} className={`glass flex min-w-0 flex-col ${className}`}>
-            <header className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border/70 px-4 py-3">
+            <header className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border/60 px-4 py-3">
                 <h2 id={id} className="text-sm font-bold">
                     {title}
                 </h2>

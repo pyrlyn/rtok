@@ -5,27 +5,37 @@
 import { useMemo, type ReactNode } from "react";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
+import { ExportButtons } from "../ui/ExportButtons";
+
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
-import { Bitset, BudgetGrid, MiniBars } from "../ui/Marks";
+import { Bitset, BudgetGrid, MiniBars, ShareBar } from "../ui/Marks";
 import { Sparkline } from "../ui/Sparkline";
 import { CALLS_SYNC } from "./CallsChart";
 import { compact, fmt, hms, pct } from "./format";
 import { overview } from "./model";
 import { CallsPanel, DoctorPanel, SessionsPanel } from "./OverviewPanels";
 import { PanelLink, TokenMix, tokenTotal, WithSnapshot } from "./parts";
+import { tableLink } from "../tableSearch";
+import { SavingsTrend } from "./SavingsTrend";
 
 type Saving = ReturnType<typeof overview>["measured"][number];
 
 function savingColumns(max: number): Column<Saving>[] {
     return [
-        { id: "plugin", header: "plugin", cell: (r) => <b>{r.plugin.id}</b> },
+        {
+            id: "plugin",
+            header: "plugin",
+            exportValue: (r) => r.plugin.id,
+            cell: (r) => <b>{r.plugin.id}</b>,
+        },
         {
             id: "rows",
             header: "rows",
             width: "64px",
             align: "right",
+            exportValue: (r) => r.plugin.stats?.rows,
             cell: (r) => fmt(r.plugin.stats?.rows),
         },
         {
@@ -33,20 +43,28 @@ function savingColumns(max: number): Column<Saving>[] {
             header: "saved",
             width: "72px",
             align: "right",
+            exportValue: (r) => r.saved,
             cell: (r) => compact(r.saved),
         },
-        { id: "share", header: "share", cell: (r) => <Share value={r.saved} max={max} /> },
+        {
+            id: "share",
+            header: "share",
+            cell: (r) => <Share id={r.plugin.id} value={r.saved} max={max} />,
+        },
     ];
 }
 
-function Share({ value, max }: { value: number; max: number }) {
+function Share({ id, value, max }: { id: string; value: number; max: number }) {
     return (
-        <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-            <div
-                className="h-full rounded-full bg-delta-fg/80"
-                style={{ width: `${max ? (value / max) * 100 : 0}%` }}
-            />
-        </div>
+        <ShareBar
+            title={id}
+            share={max ? value / max : 0}
+            tone="delta"
+            rows={[
+                ["saved", compact(value)],
+                ["of the top plugin", pct(max ? value / max : 0, 0)],
+            ]}
+        />
     );
 }
 
@@ -156,7 +174,24 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
             key="calls"
             label="calls"
             value={fmt(snap.calls.length)}
-            sub={`${o.failed} failed · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+            to={tableLink("calls", {})}
+            sub={
+                <>
+                    {o.failed ? (
+                        // Lifted above the card's overlay so it is its own link; underlined because it sits inside a sentence.
+                        <PanelLink
+                            {...tableLink("calls", { result: "failed" })}
+                            className="relative z-10 underline"
+                        >
+                            {o.failed} failed
+                        </PanelLink>
+                    ) : (
+                        "0 failed"
+                    )}
+                    {` · p95 ${o.p95 == null ? "-" : `${o.p95.toFixed(0)} ms`}`}
+                </>
+            }
+            readout={{ group: CALLS_SYNC, x: times, values: perBucket, unit: "calls" }}
             viz={
                 <MiniBars
                     values={perBucket}
@@ -177,6 +212,8 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${o.hosts} hosts`}
+            to={tableLink("sessions", { show: "live" })}
+            readout={{ group: CALLS_SYNC, x: times, values: o.liveSeries, unit: "live" }}
             viz={
                 <Sparkline
                     values={o.liveSeries}
@@ -197,6 +234,7 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 </>
             }
             sub={`${snap.plugins.length - o.enabled} disabled`}
+            to={tableLink("plugins", { show: "on" })}
             viz={<Bitset items={snap.plugins} />}
         />,
     ];
@@ -223,10 +261,20 @@ function OverviewBody({ snap }: { snap: Parameters<typeof overview>[0] }) {
                 >
                     <TokenMix tokens={u} />
                 </Panel>
+                <SavingsTrend days={u.savings} className="xl:col-span-12" />
                 <Panel
                     title="savings by plugin"
                     hint="Σ est before − after, measured plugins only"
-                    action={<PanelLink to="/plugins">plugins →</PanelLink>}
+                    action={
+                        <span className="flex items-center gap-3">
+                            <ExportButtons
+                                label="savings by plugin"
+                                rows={o.measured}
+                                columns={columns}
+                            />
+                            <PanelLink to="/plugins">plugins →</PanelLink>
+                        </span>
+                    }
                     className="xl:col-span-7"
                 >
                     <DataTable

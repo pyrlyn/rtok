@@ -523,6 +523,7 @@ fn check_table(
 const CHOICES: &[(&str, &[&str])] = &[
     ("log.tspin", &["auto", "always", "off"]),
     ("plugins.graph.map_rank", &["refs", "pagerank"]),
+    ("proxy.flex.on_429", &["none", "backoff", "default"]),
     // Any other value turns the semantic tier on with the placeholder hash embedding
     // (`proxy::semantic_cache`); `"hash"` is the only backend until P29 ships real ones.
     ("plugins.proxy.semantic_cache.embed_backend", &["hash"]),
@@ -544,6 +545,10 @@ fn check_leaf(
     errors: &mut Vec<String>,
 ) {
     let at = loc(path, src, item);
+    // `[[agents.junk.extra]]` is an array of tables, which the generic arm below would refuse.
+    if dotted == "agents.junk.extra" {
+        return check_junk_extra(&at, item, errors);
+    }
     match expected {
         FigValue::String(..) => {
             let Some(value) = item.as_str() else {
@@ -620,6 +625,10 @@ fn check_leaf(
             "plugins.archive.keep_turns" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
             }
+            // Each retry holds the client's connection open; past a handful it is a hang.
+            "proxy.flex.retries" if n > 5 => {
+                errors.push(format!("{at}: {dotted} must be ≤ 5"));
+            }
             "tui.tick_secs" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
             }
@@ -638,7 +647,30 @@ fn check_leaf(
             "log.files" if n > 20 => {
                 errors.push(format!("{at}: {dotted} must be ≤ 20"));
             }
+            // Ten years: a larger floor is a typo, and it would keep junk forever.
+            "agents.junk.keep_logs_days"
+            | "agents.junk.stale_session_days"
+            | "agents.junk.crash_dump_min_age_days"
+                if n > 3650 =>
+            {
+                errors.push(format!("{at}: {dotted} must be ≤ 3650"));
+            }
+            "agents.junk.temp_min_age_hours" if n > 87_600 => {
+                errors.push(format!("{at}: {dotted} must be ≤ 87600"));
+            }
             _ => {}
+        }
+    }
+    // A glob that does not compile would keep nothing it was meant to protect.
+    if dotted == "agents.junk.exclude"
+        && let Some(globs) = item.as_array()
+    {
+        for (i, g) in globs.iter().enumerate() {
+            match g.as_str().map(globset::Glob::new) {
+                Some(Ok(_)) => {}
+                Some(Err(e)) => errors.push(format!("{at}: {dotted}[{i}]: {e}")),
+                None => errors.push(format!("{at}: {dotted}[{i}]: expected string")),
+            }
         }
     }
     if let Some(s) = item.as_str() {
@@ -685,7 +717,57 @@ fn check_leaf(
                     "{at}: {dotted} must be error, warn, info, or debug"
                 ));
             }
+            // Caught here, not as a 400 on every request of that lane once the proxy runs.
+            lane if lane.starts_with("proxy.lanes.")
+                && lane.ends_with(".upstream")
+                && !s.trim().is_empty()
+                && !reqwest::Url::parse(s.trim())
+                    .is_ok_and(|u| matches!(u.scheme(), "http" | "https")) =>
+            {
+                errors.push(format!("{at}: {dotted} must be empty or an http(s) URL"));
+            }
             _ => {}
+        }
+    }
+}
+
+/// `[agents.junk] extra`: every entry a table of a known host (or `rtok`), an extra kind and a
+/// path. Each problem names the entry, so `[[agents.junk.extra]]` and the inline form read alike.
+fn check_junk_extra(at: &str, item: &Item, errors: &mut Vec<String>) {
+    let dotted = "agents.junk.extra";
+    let entries: Vec<Option<&dyn TableLike>> = match (item.as_array_of_tables(), item.as_array()) {
+        (Some(tables), _) => tables.iter().map(|t| Some(t as &dyn TableLike)).collect(),
+        (None, Some(values)) => values
+            .iter()
+            .map(|v| v.as_inline_table().map(|t| t as &dyn TableLike))
+            .collect(),
+        (None, None) => return errors.push(format!("{at}: {dotted}: expected array")),
+    };
+    let kinds = super::JUNK_EXTRA_KINDS;
+    for (i, entry) in entries.into_iter().enumerate() {
+        let key = format!("{dotted}[{i}]");
+        let Some(t) = entry else {
+            errors.push(format!("{at}: {key}: expected table"));
+            continue;
+        };
+        for (k, _) in t.iter() {
+            if !matches!(k, "host" | "kind" | "path") {
+                errors.push(format!("{at}: unknown key: {key}.{k}"));
+            }
+        }
+        let field = |k: &str| t.get(k).and_then(|v| v.as_str());
+        match field("host") {
+            Some(h) if h == "rtok" || crate::agents::HOSTS.contains(&h) => {}
+            _ => errors.push(format!(
+                "{at}: {key}.host must be rtok or a host id (see `rtok agents list`)"
+            )),
+        }
+        if !field("kind").is_some_and(|k| kinds.contains(&k)) {
+            let all = kinds.join(", ");
+            errors.push(format!("{at}: {key}.kind must be one of {all}"));
+        }
+        if field("path").is_none_or(str::is_empty) {
+            errors.push(format!("{at}: {key}.path must be a non-empty path"));
         }
     }
 }
@@ -732,6 +814,88 @@ mod tests {
             std::fs::write(&path, format!("[log]\ntspin = \"{ok}\"\n")).unwrap();
             assert!(issues(&path).unwrap().is_empty(), "{ok}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T330.5.1: every `[agents.junk]` key refuses what it cannot mean, naming the key.
+    #[test]
+    fn agents_junk_values_are_checked_by_name() {
+        let dir = tmp("agents-junk");
+        let path = dir.join("c.toml");
+        let errs = |body: &str| {
+            std::fs::write(&path, format!("[agents.junk]\n{body}\n")).unwrap();
+            issues(&path).unwrap()
+        };
+        for (body, want) in [
+            (
+                "keep_logs_days = -1",
+                "agents.junk.keep_logs_days must be ≥ 0",
+            ),
+            (
+                "keep_logs_days = 2.5",
+                "agents.junk.keep_logs_days: expected number",
+            ),
+            (
+                "keep_logs_days = \"abc\"",
+                "agents.junk.keep_logs_days: expected number",
+            ),
+            (
+                "keep_logs_days = 3651",
+                "agents.junk.keep_logs_days must be ≤ 3650",
+            ),
+            (
+                "stale_session_days = 3651",
+                "agents.junk.stale_session_days must be ≤ 3650",
+            ),
+            (
+                "stale_session_days = -1",
+                "agents.junk.stale_session_days must be ≥ 0",
+            ),
+            (
+                "stale_session_days = 2.5",
+                "agents.junk.stale_session_days: expected number",
+            ),
+            (
+                "crash_dump_min_age_days = 3651",
+                "agents.junk.crash_dump_min_age_days must be ≤ 3650",
+            ),
+            (
+                "temp_min_age_hours = 87601",
+                "agents.junk.temp_min_age_hours must be ≤ 87600",
+            ),
+            ("exclude = [\"[\"]", "agents.junk.exclude[0]"),
+            ("exclude = [1]", "agents.junk.exclude[0]: expected string"),
+            (
+                "extra = [{ host = \"nope\", kind = \"cache\", path = \"/x\" }]",
+                "agents.junk.extra[0].host",
+            ),
+            (
+                "extra = [{ host = \"cursor\", kind = \"sessions\", path = \"/x\" }]",
+                "agents.junk.extra[0].kind must be one of cache, temp, logs, crash-dumps",
+            ),
+            (
+                "extra = [{ host = \"rtok\", kind = \"temp\" }]",
+                "agents.junk.extra[0].path",
+            ),
+            (
+                "extra = [{ host = \"rtok\", kind = \"temp\", path = \"/x\", why = 1 }]",
+                "unknown key: agents.junk.extra[0].why",
+            ),
+            ("extra = [\"/x\"]", "agents.junk.extra[0]: expected table"),
+        ] {
+            let got = errs(body);
+            assert!(got.iter().any(|e| e.contains(want)), "{body}: {got:?}");
+        }
+        let ok = "keep_logs_days = 0\nexclude = [\"~/keep/**\"]\n\n[[agents.junk.extra]]\nhost = \"cursor\"\nkind = \"cache\"\npath = \"~/c\"";
+        assert_eq!(errs(ok), Vec::<String>::new());
+        // Loading refuses a value of the wrong type the same way, naming the key.
+        std::fs::write(
+            dir.join("config.toml"),
+            "[agents.junk]\nkeep_logs_days = \"abc\"\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load_from(&dir).unwrap_err());
+        assert!(err.contains("keep_logs_days"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -790,6 +954,29 @@ mod tests {
         )
         .unwrap();
         assert!(issues(&path).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_lane_upstream_must_be_an_http_url() {
+        let dir = tmp("laneup");
+        let path = dir.join("c.toml");
+        for bad in ["localhost:8080", "ftp://mirror", "not a url"] {
+            std::fs::write(&path, format!("[proxy.lanes.bulk]\nupstream = \"{bad}\"\n")).unwrap();
+            let errs = issues(&path).unwrap();
+            assert!(
+                errs.iter().any(|e| e.contains("proxy.lanes.bulk.upstream")),
+                "{bad}: {errs:?}"
+            );
+        }
+        for good in ["", "http://127.0.0.1:4000", "https://gateway.example/v1"] {
+            std::fs::write(
+                &path,
+                format!("[proxy.lanes.bulk]\nupstream = \"{good}\"\n"),
+            )
+            .unwrap();
+            assert!(issues(&path).unwrap().is_empty(), "{good}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1018,6 +1205,29 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn flex_policy_values_are_checked() {
+        let dir = tmp("flex");
+        let path = dir.join("c.toml");
+        for (key, bad) in [("on_429", "\"retry\""), ("retries", "6")] {
+            std::fs::write(&path, format!("[proxy.flex]\n{key} = {bad}\n")).unwrap();
+            let errs = issues(&path).unwrap();
+            assert!(
+                errs.iter().any(|e| e.contains(key)),
+                "{key} = {bad}: {errs:?}"
+            );
+        }
+        for (key, ok) in [
+            ("on_429", "\"backoff\""),
+            ("on_429", "\"default\""),
+            ("retries", "5"),
+        ] {
+            std::fs::write(&path, format!("[proxy.flex]\n{key} = {ok}\n")).unwrap();
+            assert!(issues(&path).unwrap().is_empty(), "{key} = {ok}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

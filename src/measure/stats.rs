@@ -74,6 +74,10 @@ pub struct Report {
     pub archive_candidates: u64,
     #[serde(default)]
     pub api: BTreeMap<String, ApiRow>,
+    /// T385.6: the same counters per proxy lane. Present only once traffic ran off the agent
+    /// lane, so a store of agent turns alone prints exactly what it did before lanes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lanes: BTreeMap<String, ApiRow>,
     /// `Some` only for `rtok stats --price`: the default report is byte-identical
     /// with and without the price table (T49.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -108,6 +112,13 @@ pub struct Report {
     /// T137: `image` content blocks. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "ImageRow::is_empty")]
     pub images: ImageRow,
+    /// T403: repeated long paths and identifiers, and the net a legend would save. Absent
+    /// when nothing repeated.
+    #[serde(
+        default,
+        skip_serializing_if = "super::dictionary::DictionaryRow::is_empty"
+    )]
+    pub dictionary: super::dictionary::DictionaryRow,
     /// T61.1: skill bodies the transcripts inject as `isMeta` records, per skill
     /// name. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -476,37 +487,8 @@ impl Report {
                 ));
             }
         }
-        if !self.api.is_empty() {
-            // The old fixed widths ride along as column floors, so the bytes a golden
-            // pinned do not move (T25.2 moved the padding into `render::table`).
-            let cols = [
-                Col::left(24),
-                Col::right(8),
-                Col::right(12),
-                Col::right(10),
-                Col::right(6),
-                Col::right(6),
-            ];
-            let mut rows = vec![vec![
-                "api".into(),
-                "input".into(),
-                "cache_create".into(),
-                "cache_read".into(),
-                "output".into(),
-                "hit".into(),
-            ]];
-            for (api, r) in &self.api {
-                rows.push(vec![
-                    api.clone(),
-                    r.input.to_string(),
-                    r.cache_create.to_string(),
-                    r.cache_read.to_string(),
-                    r.output.to_string(),
-                    format!("{:.1}%", r.hit * 100.0),
-                ]);
-            }
-            s.push_str(&table(&cols, &rows));
-        }
+        s.push_str(&api_table("api", &self.api));
+        s.push_str(&api_table("lane", &self.lanes));
         if self.ctt_total > 0 {
             let pct =
                 100.0 * (self.ctt_total as f64 - self.ctt_archive as f64) / self.ctt_total as f64;
@@ -602,6 +584,26 @@ impl Report {
                 s.push_str(&format!(
                     "  images {src}  blocks {}  bytes {}  est. tokens {}\n",
                     r.blocks, r.bytes, r.tokens
+                ));
+            }
+        }
+        if !self.dictionary.is_empty() {
+            let d = &self.dictionary;
+            // Bytes to tokens at the report's chars-per-token, so a byte saving is compared
+            // with the provider's token count (the shares are bytes saved, not tokens).
+            let input = d.request_tokens.saturating_mul(CHARS_PER_TOKEN as u64);
+            s.push_str(&format!(
+                "dictionary requests {}  content bytes {}  billed input est. bytes {}\n",
+                d.requests, d.input_bytes, input
+            ));
+            for (name, k) in [("paths", d.paths), ("idents", d.idents)] {
+                s.push_str(&format!(
+                    "  {name} repeated {} ({:.2}% of billed)  cache-safe saving {} ({:.2}% of billed, {:.2}% of content)\n",
+                    k.repeated,
+                    pct(k.repeated, input),
+                    k.saved,
+                    pct(k.saved, input),
+                    pct(k.saved, d.input_bytes)
                 ));
             }
         }
@@ -829,6 +831,42 @@ fn skills_section(skills: &BTreeMap<String, SkillRow>) -> String {
     table(&cols, &out)
 }
 
+/// The `api` / `lane` counters table; empty input prints nothing.
+fn api_table(label: &str, rows: &BTreeMap<String, ApiRow>) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    // The old fixed widths ride along as column floors, so the bytes a golden
+    // pinned do not move (T25.2 moved the padding into `render::table`).
+    let cols = [
+        Col::left(24),
+        Col::right(8),
+        Col::right(12),
+        Col::right(10),
+        Col::right(6),
+        Col::right(6),
+    ];
+    let mut out = vec![vec![
+        label.into(),
+        "input".into(),
+        "cache_create".into(),
+        "cache_read".into(),
+        "output".into(),
+        "hit".into(),
+    ]];
+    for (name, r) in rows {
+        out.push(vec![
+            name.clone(),
+            r.input.to_string(),
+            r.cache_create.to_string(),
+            r.cache_read.to_string(),
+            r.output.to_string(),
+            format!("{:.1}%", r.hit * 100.0),
+        ]);
+    }
+    table(&cols, &out)
+}
+
 /// `<n>`, `<n>d` or `<n>h` from the `--since` flag.
 pub fn parse_since(s: &str) -> Result<Duration> {
     parse_since_from(s, "--since")
@@ -852,27 +890,52 @@ pub fn parse_since_from(s: &str, source: &str) -> Result<Duration> {
     Ok(Duration::from_secs(secs))
 }
 
+/// The counters of one bucket with its prompt-cache hit rate: cache reads over every input
+/// token the provider billed (uncached, written and read).
+fn api_row(input: i64, cache_create: i64, cache_read: i64, output: i64) -> ApiRow {
+    let denom = cache_read
+        .saturating_add(cache_create)
+        .saturating_add(input);
+    let hit = if denom == 0 {
+        0.0
+    } else {
+        cache_read as f64 / denom as f64
+    };
+    ApiRow {
+        input,
+        cache_create,
+        cache_read,
+        output,
+        hit,
+    }
+}
+
 pub fn attach_api(report: &mut Report, store: &Store) -> Result<()> {
     for row in store.usage_by_api()? {
-        let denom = row
-            .cache_read
-            .saturating_add(row.cache_create)
-            .saturating_add(row.input);
-        let hit = if denom == 0 {
-            0.0
-        } else {
-            row.cache_read as f64 / denom as f64
-        };
         report.api.insert(
             row.api,
-            ApiRow {
-                input: row.input,
-                cache_create: row.cache_create,
-                cache_read: row.cache_read,
-                output: row.output,
-                hit,
-            },
+            api_row(row.input, row.cache_create, row.cache_read, row.output),
         );
+    }
+    Ok(())
+}
+
+/// Per-lane cache-hit rows (T385.6). Left empty while every request ran on the agent lane:
+/// the `api` table already says the same, and the default report stays byte-identical.
+pub fn attach_lanes(report: &mut Report, store: &Store) -> Result<()> {
+    let lanes: BTreeMap<String, ApiRow> = store
+        .usage_by_lane()?
+        .into_iter()
+        .map(|row| {
+            let lane = crate::proxy::lane::lane_of_kind(&row.kind).to_string();
+            (
+                lane,
+                api_row(row.input, row.cache_create, row.cache_read, row.output),
+            )
+        })
+        .collect();
+    if lanes.keys().any(|lane| lane != "agent") {
+        report.lanes = lanes;
     }
     Ok(())
 }
@@ -1186,6 +1249,7 @@ fn fold_session(
 
     fold_thinking(parsed, report);
     fold_images(parsed, &id_name, &mut report.images);
+    super::dictionary::fold(parsed, &mut report.dictionary);
 
     fold_skills(parsed, &id_skill, report, &mut samples.skills);
     for u in &parsed.usages {
@@ -2129,6 +2193,33 @@ mod tests {
         .unwrap();
         assert_eq!(r.thinking.blocks, 2);
         assert_eq!(r.thinking.bytes, 11);
+    }
+
+    /// T403: the dictionary row prints against the provider-billed input, and stays out of
+    /// the table and the JSON when no request was sampled.
+    #[test]
+    fn dictionary_row_prints_shares_of_billed_input() {
+        use crate::measure::dictionary::{DictKind, DictionaryRow};
+        let mut r = Report::default();
+        assert!(!r.to_table().contains("dictionary"));
+        r.dictionary = DictionaryRow {
+            requests: 2,
+            input_bytes: 4000,
+            request_tokens: 2500,
+            paths: DictKind {
+                repeated: 400,
+                saved: 100,
+            },
+            idents: DictKind::default(),
+        };
+        let table = r.to_table();
+        assert!(
+            table.contains(
+                "dictionary requests 2  content bytes 4000  billed input est. bytes 10000"
+            ),
+            "{table}"
+        );
+        assert!(table.contains("paths repeated 400 (4.00% of billed)  cache-safe saving 100 (1.00% of billed, 2.50% of content)"), "{table}");
     }
 
     /// T137: a PNG screenshot in a tool_result and a JPEG pasted into a prompt, both before

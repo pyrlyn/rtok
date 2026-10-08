@@ -62,10 +62,22 @@
 # zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
 # antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 
+[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
+# keep_logs_days          = 30          # `logs` entries modified within this many days stay (0-3650)
+# temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay (0-87600)
+# stale_session_days      = 30          # `--kind sessions` only: sessions not touched for more than this many days are junk (0-3650); `--session-days N` for one run
+# crash_dump_min_age_days = 7           # a crash dump in an `extra` crash-dumps folder older than this is safe to clear, a younger one is review (0-3650)
+# exclude                 = []          # globs never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]
+# extra                   = []          # paths you vouch for as junk, e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs | crash-dumps; host = a host id or rtok
+
 [mcp]                                 # rtok mcp
 # tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed
 # max_description_tokens  = 60          # enforced by a test
 # max_result_chars        = 20000       # above this, head/tail + archive id
+# http                    = "127.0.0.1:8791"  # `rtok mcp --http` with no address; keep it on loopback
+# http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
+# token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start
+# public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
 
 [proxy]                               # rtok proxy
 # enabled         = true                # false = plain reverse proxy (bypass compress/bookkeeping); does NOT stop HTTP
@@ -95,7 +107,11 @@
 # tools_rewrite       = false           # proxy.tools_rewrite
 # context_management  = false           # proxy.context_management
 # semantic_cache      = false           # plugins.proxy.semantic_cache, lookup and store
-# timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s
+# flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
+# timeout_s           = 0               # read timeout for this lane; 0 = proxy.timeout_s, but 900 or more with flex = true (OpenAI's Flex guide uses 15 min)
+# upstream            = ""              # base URL for every request on this lane, any wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+# max_in_flight       = 0               # requests upstream at once; 0 = no cap (the agent lane is never capped)
+# max_queued          = 8               # with max_in_flight: requests that wait for a slot; one more gets 429 + Retry-After
 
 [proxy.lanes.embeddings]              # same keys as bulk
 # compress            = false
@@ -103,7 +119,11 @@
 # tools_rewrite       = false
 # context_management  = false
 # semantic_cache      = false
+# flex                = false
 # timeout_s           = 0
+# upstream            = ""
+# max_in_flight       = 0
+# max_queued          = 8
 
 [proxy.lanes.meta]                    # same keys as bulk (models, token counting)
 # compress            = false
@@ -111,7 +131,11 @@
 # tools_rewrite       = false
 # context_management  = false
 # semantic_cache      = false
+# flex                = false
 # timeout_s           = 0
+# upstream            = ""
+# max_in_flight       = 0
+# max_queued          = 8
 
 [proxy.lanes.internal]                # same keys as bulk (rtok's own model calls)
 # compress            = false
@@ -119,11 +143,20 @@
 # tools_rewrite       = false
 # context_management  = false
 # semantic_cache      = false
+# flex                = false
 # timeout_s           = 0
+# upstream            = ""
+# max_in_flight       = 0
+# max_queued          = 8
 
-[proxy.batch]                         # no keys yet
+[proxy.batch]                         # provider Batch result files
+# parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 
-[proxy.flex]                          # no keys yet
+[proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
+# force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
+# on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
+# retries             = 3               # backoff only: retries before giving up; at most 5
+# backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
 [proxy.routing]                       # no keys yet
 
@@ -156,7 +189,7 @@
 # baseline        = ""                  # default name for --compare; "" = none
 # price           = false               # show per-model USD costs (--price)
 # USD per MTok rows for --price. Sources, fetched 2026-09-17 (Anthropic claude-fable-5-1,
-# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-06):
+# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-08):
 # Anthropic claude-* rows: https://platform.claude.com/docs/en/about-claude/pricing
 # (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 # https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -175,7 +208,7 @@
 # [stats.prices."claude-sonnet-5-5"]
 # input = 2.0
 # cache_write = 2.5
-# cache_read = 0.2
+# cache_read = 0.1
 # output = 10.0
 # [stats.prices."claude-sonnet-5"]
 # input = 2.0
@@ -306,10 +339,10 @@
 
 [tasks.github]
 # repo    = ""                          # owner/name; empty: the origin remote
-# project = 0                           # Projects v2 number whose Status field tracks tasks; 0 = issues only
+# project = 0                           # repo owner's Projects v2 number: issues join it and its Status follows the task; 0 = issues only
 
 [tasks.gitlab]
-# url     = "https://gitlab.com"        # base URL; set it for a self-hosted instance
+# url     = "https://gitlab.com"        # https base URL; set it for a self-hosted instance
 # project = ""                          # group/name or numeric id; empty: the origin remote
 
 [otel]                                # OpenTelemetry export; off until endpoint resolves

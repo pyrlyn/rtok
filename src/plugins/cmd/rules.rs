@@ -4,6 +4,7 @@
 
 //! Pure line filter for `rtok run` output (plan T3.2). No I/O.
 
+use std::collections::HashMap;
 use std::ffi::OsStr;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -509,6 +510,24 @@ fn trace_blocks(lines: &[String]) -> Vec<bool> {
     keep
 }
 
+/// Total trace lines `apply` prints past the budget. A few full backtraces fit
+/// (a deep Rust or Java trace runs 50-100 frames), but an exit-0 body that is
+/// nothing but stacks (`kubectl logs` with thousands of exceptions, a Go
+/// goroutine dump) must still be cut, or `max_lines` bounds nothing for it.
+const MAX_TRACE_LINES: usize = 400;
+
+/// Demote trace lines past [`MAX_TRACE_LINES`] to ordinary lines, so they go through
+/// the normal head/tail budget and the omitted marker counts them.
+fn cap_trace_lines(kept: &mut [bool]) {
+    let mut n = 0;
+    for k in kept.iter_mut().filter(|k| **k) {
+        n += 1;
+        if n > MAX_TRACE_LINES {
+            *k = false;
+        }
+    }
+}
+
 fn normalize_line_key(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut i = 0usize;
@@ -756,6 +775,9 @@ fn fold(
     fmt: impl Fn(&str, &str, &[String], usize) -> String,
 ) -> Vec<String> {
     let mut groups: Vec<(String, String, Vec<String>, usize)> = Vec::new();
+    // A linear scan per line is O(lines x groups); `find .` over a big tree has both in
+    // the hundreds of thousands.
+    let mut index: HashMap<String, usize> = HashMap::new();
     let mut placed = Vec::new();
     let mut out: Vec<Result<usize, String>> = Vec::new();
     for line in lines {
@@ -763,12 +785,14 @@ fn fold(
             out.push(Err(line));
             continue;
         };
-        let i = match groups.iter().position(|(k, _, _, _)| k == &key) {
-            Some(i) => i,
+        let i = match index.get(&key) {
+            Some(&i) => i,
             None => {
+                let i = groups.len();
+                index.insert(key.clone(), i);
                 groups.push((key, msg, Vec::new(), 0));
                 placed.push(false);
-                groups.len() - 1
+                i
             }
         };
         groups[i].3 += 1;
@@ -900,28 +924,15 @@ fn group_diag(lines: Vec<String>) -> Vec<String> {
     })
 }
 
-/// True when `s` trims to a JSON object or array. Primitives (`true`, `"x"`) stay
-/// on the line-cut path so a one-word command is not rewritten.
-pub(crate) fn is_json_body(s: &str) -> bool {
-    parse_json_body(s).is_some()
-}
-
-fn parse_json_body(s: &str) -> Option<serde_json::Value> {
+/// A JSON object or array body, parsed. Primitives (`true`, `"x"`) stay on the
+/// line-cut path so a one-word command is not rewritten.
+pub(crate) fn parse_json_body(s: &str) -> Option<serde_json::Value> {
     let t = s.trim();
     let b = t.as_bytes().first()?;
     if *b != b'{' && *b != b'[' {
         return None;
     }
     serde_json::from_str(t).ok()
-}
-
-/// Rewrite a JSON object/array before the line cut (T65.2). `None` = unparseable,
-/// leave the body untouched.
-fn compact_json(output: &str, items: u32, string_max: u32) -> Option<String> {
-    let v = parse_json_body(output)?;
-    let items = items.max(1) as usize;
-    let string_max = string_max.max(1) as usize;
-    Some(fmt_top(&v, items, string_max))
 }
 
 fn fmt_top(v: &serde_json::Value, items: usize, string_max: usize) -> String {
@@ -1002,50 +1013,73 @@ pub fn apply(
     rule: &Rule,
     archive_id: &str,
 ) -> String {
-    let mut lines: Vec<String> = output.lines().map(str::to_string).collect();
+    // The parse is skipped on a failed run: that path never reads the body as JSON.
+    let json = if exit == 0 {
+        parse_json_body(output)
+    } else {
+        None
+    };
+    apply_parsed(settings, output, json, exit, rule, archive_id)
+}
+
+/// [`apply`] for a caller that already parsed `output` with [`parse_json_body`], so a
+/// large JSON body is not parsed twice.
+pub(crate) fn apply_parsed(
+    settings: &Settings,
+    output: &str,
+    json: Option<serde_json::Value>,
+    exit: i32,
+    rule: &Rule,
+    archive_id: &str,
+) -> String {
     if exit != 0 {
+        let lines: Vec<&str> = output.lines().collect();
         let n = lines.len().saturating_sub(settings.fail_tail_lines);
         return lines[n..].join("\n");
     }
-    lines.retain(|l| {
-        let low = l.to_ascii_lowercase();
-        is_keep(&low, rule) || !is_drop(&low, rule)
-    });
-    // T65.4 first: when a trace block is in the output the columnar pass stands
-    // down — traceback/YAML/diff indentation and frame padding are not columnar.
-    let trace_kept = trace_blocks(&lines);
-    if rule.collapse_columns && !trace_kept.iter().any(|t| *t) {
-        for l in &mut lines {
-            *l = collapse_columns(l);
+    let mut lines: Vec<String> = if let Some(v) = json {
+        // T65.2: rewrite a JSON body before the cut. It replaces every line of the
+        // original payload, so drop/keep/dedupe on those lines could not change it.
+        fmt_top(
+            &v,
+            rule.json_items.max(1) as usize,
+            rule.json_string.max(1) as usize,
+        )
+        .lines()
+        .map(str::to_string)
+        .collect()
+    } else {
+        let mut lines: Vec<String> = output.lines().map(str::to_string).collect();
+        lines.retain(|l| {
+            let low = l.to_ascii_lowercase();
+            is_keep(&low, rule) || !is_drop(&low, rule)
+        });
+        // T65.4 first: when a trace block is in the output the columnar pass stands
+        // down — traceback/YAML/diff indentation and frame padding are not columnar.
+        if rule.collapse_columns && !trace_blocks(&lines).iter().any(|t| *t) {
+            for l in &mut lines {
+                *l = collapse_columns(l);
+            }
         }
-    }
-    lines = match rule.dedupe {
-        Dedupe::Off => lines,
-        Dedupe::Adjacent => dedupe(lines),
-        Dedupe::Normalized => normalized_dedupe(lines),
+        match rule.dedupe {
+            Dedupe::Off => lines,
+            Dedupe::Adjacent => dedupe(lines),
+            Dedupe::Normalized => normalized_dedupe(lines),
+        }
     };
+    // One pass, after the JSON rewrite. A grouped line is a summary, not a path or a
+    // diagnostic, so the second pass this replaced found nothing left to fold.
     match rule.group {
         Group::Dir => lines = group_dir(lines),
         Group::Diag => lines = group_diag(lines),
         Group::Off => {}
     }
-    // T65.2: rewrite a JSON body after grouping and before the cut. Parse the
-    // original payload so drop/keep/dedupe cannot poison a pretty-printed object.
-    // The rewrite replaces `lines`, so `trace_kept` (indexed by line below) is
-    // recomputed after every transform that can change the line count.
-    if let Some(compacted) = compact_json(output, rule.json_items, rule.json_string) {
-        lines = compacted.lines().map(str::to_string).collect();
-    }
-    match rule.group {
-        Group::Dir => lines = group_dir(lines),
-        Group::Diag => lines = group_diag(lines),
-        Group::Off => {}
-    }
-    let trace_kept = trace_blocks(&lines);
     let max = rule.max_lines.max(1) as usize;
     if lines.len() <= max {
         return lines.join("\n");
     }
+    let mut trace_kept = trace_blocks(&lines);
+    cap_trace_lines(&mut trace_kept);
     let head = rule.head.min(rule.max_lines) as usize;
     let tail = rule.tail.min(rule.max_lines.saturating_sub(rule.head)) as usize;
     let keep_idx: Vec<usize> = lines
@@ -1318,6 +1352,48 @@ mod tests {
         let out = apply(&settings(80), &lines.join("\n"), 0, &rule, "arc");
         let shown = out.lines().filter(|l| lines.iter().any(|x| x == l)).count();
         assert_eq!(shown + omitted_sum(&out), lines.len(), "{out}");
+    }
+
+    /// An exit-0 body that is only stacks (`kubectl logs` of a crash-looping Java
+    /// service) is cut: trace lines past the cap are ordinary lines, and the shown
+    /// lines plus the trailers still add up to the input.
+    #[test]
+    fn trace_lines_past_the_cap_go_through_the_budget() {
+        let lines: Vec<String> = (0..2000)
+            .flat_map(|i| {
+                [
+                    format!("Exception in thread \"t{i}\" java.lang.IllegalStateException"),
+                    format!("\tat Svc.run{i}(Svc.java:1)"),
+                    format!("\tat Svc.main{i}(Svc.java:2)"),
+                ]
+            })
+            .collect();
+        let rule = Rule {
+            max_lines: 50,
+            head: 10,
+            tail: 10,
+            dedupe: Dedupe::Off,
+            ..Rule::default()
+        };
+        let out = apply(&settings(80), &lines.join("\n"), 0, &rule, "arc");
+        let shown = out.lines().filter(|l| !l.starts_with("… ")).count();
+        assert!(
+            shown <= MAX_TRACE_LINES + 2 * rule.max_lines as usize,
+            "{shown} lines kept"
+        );
+        assert!(out.contains("lines omitted (expand arc)"), "{out}");
+        assert_eq!(shown + omitted_sum(&out), lines.len());
+        // The first trace block is still whole; the last one is cut.
+        assert!(out.contains("Svc.main0(Svc.java:2)"), "{out}");
+        assert!(!out.contains("Svc.run1900("), "{out}");
+    }
+
+    #[test]
+    fn cap_trace_lines_demotes_trace_lines_past_the_cap() {
+        let mut kept = vec![true; MAX_TRACE_LINES + 10];
+        kept.insert(5, false);
+        cap_trace_lines(&mut kept);
+        assert_eq!(kept.iter().filter(|k| **k).count(), MAX_TRACE_LINES);
     }
 
     /// No archive id (store unavailable) → the marker names no `expand` target.
@@ -1959,6 +2035,29 @@ mod tests {
         assert!(!on.contains("lines omitted"), "{on}");
     }
 
+    /// `find .` over a big tree: grouping used to rescan every group per line, which
+    /// stalls `rtok run` for seconds at this size.
+    #[test]
+    fn group_dir_scales_to_a_find_over_a_large_tree() {
+        let dirs = 20_000;
+        let body: String = (0..200_000)
+            .map(|i| format!("./d{}/sub/f{i}.rs", i % dirs))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let s = settings(80);
+        let t = std::time::Instant::now();
+        let out = apply(&s, &body, 0, &uncut(Group::Dir), "id");
+        let ms = t.elapsed().as_millis();
+        // Generous: the linear version needs well under a second even in debug, the
+        // quadratic one several seconds.
+        let budget = if cfg!(debug_assertions) { 5000 } else { 1000 };
+        assert!(ms < budget, "{ms} ms");
+        assert!(
+            out.contains("d0/sub/ (10 files): f0.rs, f20000.rs, f40000.rs …"),
+            "{out}"
+        );
+    }
+
     #[test]
     fn group_diag_beats_the_same_rule_without_group() {
         let mut lines = Vec::new();
@@ -1982,6 +2081,36 @@ mod tests {
             on.contains("no-var ×20: Unexpected var (0:1, 1:1, 2:1, …)"),
             "{on}"
         );
+    }
+
+    /// `apply` groups once. The pass it dropped re-grouped already grouped lines, so
+    /// these must be fixed points for the output to stay what it was.
+    #[test]
+    fn grouping_is_a_fixed_point_on_its_own_output() {
+        let paths: Vec<String> = (0..30)
+            .flat_map(|i| {
+                [
+                    format!("./src/a{i}.rs"),
+                    format!("tests/t{i}.rs"),
+                    "x.md".into(),
+                ]
+            })
+            .collect();
+        let once = group_dir(paths);
+        assert_eq!(group_dir(once.clone()), once);
+        let mut diags = Vec::new();
+        for i in 0..8 {
+            diags.push(format!(
+                "src/f{i}.ts({i},1): error TS2322: Type 'a' is not 'b'."
+            ));
+            diags.push("error[E0308]: mismatched types".into());
+            diags.push(format!("  {i}:1  error  Unexpected var  no-var"));
+            diags.push(format!("FAILED t{i}.py::t - ValueError: bad {i}"));
+            diags.push("E   KeyError: 'k'".into());
+            diags.push(format!("plain line {i}"));
+        }
+        let once = group_diag(diags);
+        assert_eq!(group_diag(once.clone()), once);
     }
 
     #[test]

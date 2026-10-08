@@ -7,11 +7,13 @@ import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
 import { Kpi } from "../ui/Kpi";
 import { Panel } from "../ui/Panel";
+import { ShareBar } from "../ui/Marks";
 import { Pill } from "../ui/Pill";
 import { orUnknown } from "../ui/Unknown";
-import { compact, fmt } from "./format";
+import { compact, fmt, pct } from "./format";
 import { why } from "./missing";
 import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./parts";
+import { SavingsTrend } from "./SavingsTrend";
 import { parseStats, type Bust, type HealthRow, type PricedRow, type StatsView } from "./text";
 
 // A missing key reads as unknown (`-`), never as NaN or 0.
@@ -30,14 +32,17 @@ export function Stats() {
     return (
         <WithSnapshot>
             {(snap) => (
-                <TextPage
-                    page="stats"
-                    text={snap.stats}
-                    command="rtok stats --price"
-                    note="`rtok stats --price` plus `rtok stats --cache`, as one report"
-                >
-                    {(text) => <StatsBody view={parseStats(text)} />}
-                </TextPage>
+                <div className="flex flex-col gap-3">
+                    <TextPage
+                        page="stats"
+                        text={snap.stats}
+                        command="rtok stats --price"
+                        note="`rtok stats --price` plus `rtok stats --cache`, as one report"
+                    >
+                        {(text) => <StatsBody view={parseStats(text)} />}
+                    </TextPage>
+                    <SavingsTrend days={snap.usage.savings} />
+                </div>
             )}
         </WithSnapshot>
     );
@@ -97,15 +102,14 @@ function StatsBody({ view: v }: { view: StatsView }) {
                 header: "share",
                 width: "72px",
                 cell: (r) => (
-                    <div
-                        aria-hidden="true"
-                        className="h-1.5 overflow-hidden rounded-full bg-surface-3"
-                    >
-                        <div
-                            className="h-full rounded-full bg-accent-fg"
-                            style={{ width: `${(((r.cost ?? 0) / maxCost) * 100).toFixed(1)}%` }}
-                        />
-                    </div>
+                    <ShareBar
+                        title={r.model}
+                        share={(r.cost ?? 0) / maxCost}
+                        rows={[
+                            ["cost", r.cost == null ? "-" : `$${money(r.cost)}`],
+                            ["of the top model", pct((r.cost ?? 0) / maxCost, 0)],
+                        ]}
+                    />
                 ),
             },
         ],
@@ -153,7 +157,7 @@ function StatsBody({ view: v }: { view: StatsView }) {
                 {fmt(n(a.lines))} transcript lines · {a.malformed ?? "?"} malformed ·{" "}
                 {a.no_checkpoint ?? "?"} sessions without checkpoint
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
                 <Kpi
                     label="sessions"
                     value={fmt(n(a.sessions))}
@@ -178,7 +182,7 @@ function StatsBody({ view: v }: { view: StatsView }) {
                 <Kpi
                     label="saved"
                     value={`$${t.saved.toFixed(2)}`}
-                    tone="ok"
+                    tone="saved"
                     sub="cache reads priced"
                 />
             </div>

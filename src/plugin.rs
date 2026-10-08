@@ -495,6 +495,19 @@ impl Notes for Runtime {
     fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
         self.store.search_notes(query, limit)
     }
+
+    fn set_note_files(&self, id: i32, paths: &[String]) -> Result<()> {
+        self.store.set_note_files(id, paths)
+    }
+
+    fn notes_for_files(
+        &self,
+        project: Option<&str>,
+        paths: &[String],
+        limit: u32,
+    ) -> Result<Vec<NoteHit>> {
+        self.store.notes_for_files(project, paths, limit)
+    }
 }
 
 impl ReadCache for Runtime {
@@ -509,6 +522,10 @@ impl ReadCache for Runtime {
 
     fn clear_read_cache(&self, path: &str) -> Result<()> {
         self.store.clear_read_cache(&self.session, path)
+    }
+
+    fn read_cache_keys(&self) -> Result<Vec<String>> {
+        self.store.read_cache_keys(&self.session)
     }
 }
 

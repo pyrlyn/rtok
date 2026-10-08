@@ -6,8 +6,8 @@
 //! left behind past `[log] files` and archive payloads past `core.retain_calls_days`. With
 //! `--yes` it also clears old hook bodies (`core.retain_hook_bodies_days`) and converts the
 //! store to incremental vacuum if it is not already (T352; `mcp`/`proxy` do the same in the
-//! background at session start). Dry run by default; `--yes` applies. `clear` never touches a
-//! host directory. `list` (T330.1, T330.2) also shows every installed host's folders from
+//! background at session start). Dry run by default; `--yes` applies. Bare `clear` never
+//! touches a host directory; with filters it is `junk_clear` (T330.4). `list` (T330.1, T330.2) also shows every installed host's folders from
 //! the `junk_map` of `research.md` §22, read-only, sized with a per-agent time limit.
 //!
 //! Inventory for T182 found nothing else unbounded in `~/.rtok`: log rotation (`src/log.rs`)
@@ -25,6 +25,8 @@ use serde::Serialize;
 use super::junk_cache::{self, Ctx, Item, Owned};
 use super::junk_kinds;
 use super::junk_map::{Role, Roots, specs};
+use super::junk_review;
+use super::junk_sessions;
 use super::{Agent, HOSTS, host, present};
 use crate::config::Config;
 use crate::info::human_bytes;
@@ -81,21 +83,23 @@ fn outcome(kind: &'static str, path: PathBuf, note: String) -> Outcome {
 /// Everything `clear` would touch. Read-only; an unreadable path is skipped, not fatal
 /// (fail open).
 pub fn scan(cfg: &Config) -> Vec<Outcome> {
+    scan_with(cfg, cfg.core.retain_calls_days)
+}
+
+/// [`scan`] with the archive retention window `days` (`clear --older-than` may only widen it).
+pub fn scan_with(cfg: &Config, days: u32) -> Vec<Outcome> {
     let mut out: Vec<Outcome> = stale_log_siblings(cfg)
         .into_iter()
         .map(|p| outcome("log", p, format!("past `[log] files` = {}", cfg.log.files)))
         .collect();
     if let Ok(store) = Store::open(&cfg.core.db_path)
-        && let Ok(paths) = store.archives_pending_retention(cfg.core.retain_calls_days)
+        && let Ok(paths) = store.archives_pending_retention(days)
     {
         out.extend(paths.into_iter().map(|p| {
             outcome(
                 "archive",
                 p,
-                format!(
-                    "past `core.retain_calls_days` = {}",
-                    cfg.core.retain_calls_days
-                ),
+                format!("past `core.retain_calls_days` = {days}"),
             )
         }));
     }
@@ -210,7 +214,13 @@ pub struct AgentJunk {
     /// Every directory `clear` may empty (T330.3), with the evidence and, for one it would
     /// leave alone, the reason. Only an item without a reason is in `kinds` and the totals.
     pub items: Vec<Item>,
+    /// Lines `list` prints under the kinds: the session threshold in use and the host's own
+    /// session retention (T330.5.2).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
     pub freed_default_bytes: u64,
+    /// What `--include review` would free on top of the `safe` kinds (T330.5.1).
+    pub freed_review_bytes: u64,
 }
 
 /// `rtok agents junk list` (T330.1): per-agent folders, junk kinds and space `clear` frees.
@@ -220,6 +230,7 @@ pub struct Report {
     /// Every folder once, however many agents share it.
     pub total_bytes: u64,
     pub freed_default_bytes: u64,
+    pub freed_review_bytes: u64,
 }
 
 /// What one walk found. A folder it could not read or finish is a lower bound, never an error.
@@ -319,22 +330,23 @@ fn rtok_owned(cfg: &Config, roots: &Roots, cache: &Path) -> Vec<Owned> {
         evidence: junk_cache::RTOK_OWN,
         idle_rule: false,
     }];
-    owned.extend(project_lsp_caches(cfg));
+    owned.extend(project_lsp_dirs(cfg, &["cache", "pub-cache"]));
     owned.extend(junk_kinds::staging_caches(&roots.resolve("{claude}")));
     owned
 }
 
-/// Language-server caches rtok confines to each registered project. Absent from the
-/// `measure`-only build: that binary has no graph plugin, so it never writes these dirs.
+/// The `subdirs` (`cache`, `pub-cache`, `data`, `state`) of the language-server state rtok
+/// confines to each registered project. Absent from the `measure`-only build: that binary has
+/// no graph plugin, so it never writes these dirs.
 #[cfg(feature = "graph")]
-fn project_lsp_caches(cfg: &Config) -> Vec<Owned> {
+fn project_lsp_dirs(cfg: &Config, subdirs: &[&str]) -> Vec<Owned> {
     let projects = Store::open(&cfg.core.db_path).and_then(|s| s.projects());
     projects
         .unwrap_or_default()
         .into_iter()
         .flat_map(|p| {
             let state = crate::plugins::graph::lsp::lsp_state_root(Path::new(&p.root));
-            ["cache", "pub-cache"].map(|d| Owned {
+            subdirs.iter().map(move |d| Owned {
                 path: state.join(d),
                 evidence: junk_cache::RTOK_OWN,
                 idle_rule: true,
@@ -344,7 +356,7 @@ fn project_lsp_caches(cfg: &Config) -> Vec<Owned> {
 }
 
 #[cfg(not(feature = "graph"))]
-fn project_lsp_caches(_cfg: &Config) -> Vec<Owned> {
+fn project_lsp_dirs(_cfg: &Config, _subdirs: &[&str]) -> Vec<Owned> {
     Vec::new()
 }
 
@@ -357,28 +369,78 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     paths
 }
 
-/// The junk kinds in the order the T330 table lists them.
-const KINDS: [&str; 5] = ["cache", "temp", "build", "locks", "swap"];
+/// The junk kinds in the order the T330 tables list them.
+const KINDS: [&str; 12] = [
+    "cache",
+    "temp",
+    "logs",
+    "build",
+    "deps",
+    "locks",
+    "backups",
+    "swap",
+    "snapshots",
+    "index",
+    "crash-dumps",
+    "sessions",
+];
 
-/// One row per kind of `items`: only an item `clear` would take now counts.
-fn kind_rows(items: &[Item]) -> Vec<KindRow> {
-    KINDS
-        .iter()
-        .filter_map(|&kind| {
-            let counted = items.iter().filter(|i| i.kind == kind && i.counted());
-            let (n, bytes) = counted.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
-            (n > 0).then_some(KindRow {
-                kind,
-                class: "safe",
-                items: n,
-                size_bytes: bytes,
-            })
-        })
-        .collect()
+/// What `list` says about the session threshold in use (T330 "Old sessions: time only").
+fn session_note(days: u32) -> String {
+    let note = format!("old sessions: not touched for more than {days} days");
+    match days {
+        0 => format!("{note} (threshold 0: every closed session is junk)"),
+        _ => note,
+    }
 }
 
-fn freed(items: &[Item]) -> u64 {
-    kind_rows(items).iter().map(|k| k.size_bytes).sum()
+/// One row per kind and class of `items`: only an item `clear` would take now counts. A kind
+/// row says its class, so `review` rows are counted apart from what a plain `clear` frees, and
+/// an `explicit` row (sessions) is shown but belongs to neither "Freed" total.
+fn kind_rows(items: &[Item]) -> Vec<KindRow> {
+    let mut rows = Vec::new();
+    for kind in KINDS {
+        for class in ["safe", "review", "explicit"] {
+            let counted = items.iter().filter(|i| i.kind == kind && i.class == class);
+            let counted = counted.filter(|i| i.counted());
+            let (n, bytes) = counted.fold((0, 0), |(n, b), i| (n + 1, b + i.bytes));
+            if n > 0 {
+                rows.push(KindRow {
+                    kind,
+                    class,
+                    items: n,
+                    size_bytes: bytes,
+                });
+            }
+        }
+    }
+    rows
+}
+
+/// What `clear` frees: the `safe` rows, plus the `review` ones with `review`.
+fn freed(rows: &[KindRow], review: bool) -> u64 {
+    let wanted = rows
+        .iter()
+        .filter(|k| k.class == "safe" || (review && k.class == "review"));
+    wanted.map(|k| k.size_bytes).sum()
+}
+
+/// The folders a host's own config files sit in, under the home `Roots` names only: a marker
+/// such as Claude Desktop's config has a fixed platform path no fixture can redirect, and a test
+/// must not size the real one. rtok keeps its `_backup` copies of those files there (T249).
+fn marker_dirs(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = a
+        .variants()
+        .iter()
+        .flat_map(|v| a.markers(cfg, v.kind))
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .filter(|d| {
+            d.parent().is_some() && d != roots.home() && d.starts_with(roots.home()) && d.is_dir()
+        })
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    dirs
 }
 
 /// A folder a host writes, before it is sized.
@@ -386,6 +448,7 @@ struct Found {
     path: PathBuf,
     role: Role,
     documented: bool,
+    per_commit: bool,
 }
 
 /// The folders of one host that exist: the §22 map, then the folders its own config files sit
@@ -402,20 +465,11 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
                 path,
                 role: s.role,
                 documented: s.documented,
+                per_commit: s.per_commit,
             });
         }
     }
-    let mut parents: Vec<PathBuf> = a
-        .variants()
-        .iter()
-        .flat_map(|v| a.markers(cfg, v.kind))
-        .filter_map(|p| p.parent().map(Path::to_path_buf))
-        // Under the home `Roots` names only: a marker such as Claude Desktop's config has a
-        // fixed platform path no fixture can redirect, and a test must not size the real one.
-        .filter(|d| {
-            d.parent().is_some() && d != roots.home() && d.starts_with(roots.home()) && d.is_dir()
-        })
-        .collect();
+    let mut parents = marker_dirs(a, cfg, roots);
     parents.sort_by_key(|d| d.components().count());
     for d in parents {
         if !found.iter().any(|f| d.starts_with(&f.path)) {
@@ -423,6 +477,7 @@ fn host_folders(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<Found> {
                 path: d,
                 role: Role::Data,
                 documented: false,
+                per_commit: false,
             });
         }
     }
@@ -466,10 +521,13 @@ fn host_rows(
         let mut agent_keys = Vec::new();
         let mut owned = Vec::new();
         let mut temp = Vec::new();
+        let mut logs = Vec::new();
         for f in host_folders(a, cfg, roots) {
             let target = symlink_target(&f.path);
             let key = target.clone().unwrap_or_else(|| f.path.clone());
-            if f.role == Role::Cache && f.documented {
+            if f.per_commit {
+                owned.extend(junk_kinds::stale_code_caches(&f.path));
+            } else if f.role == Role::Cache && f.documented {
                 owned.push(Owned {
                     path: f.path.clone(),
                     evidence: junk_cache::SECTION_22,
@@ -478,6 +536,9 @@ fn host_rows(
             }
             if f.role == Role::Temp && f.documented {
                 temp.push(f.path.clone());
+            }
+            if f.role == Role::Logs && f.documented {
+                logs.push(f.path.clone());
             }
             let usage = *sized
                 .entry(key.clone())
@@ -506,17 +567,51 @@ fn host_rows(
                 note: (!notes.is_empty()).then(|| notes.join("; ")),
             });
         }
-        let roots = outermost(agent_keys.clone());
-        let mut items = junk_cache::cache_items(&owned, &roots, cx, limit);
-        items.extend(junk_kinds::temp_items(&temp, cx, limit));
-        items.extend(junk_kinds::found_items(&roots, limit));
+        let junk = &cfg.agents.junk;
+        let temp_age = junk_review::hours(junk.temp_min_age_hours);
+        let (extra_owned, extra) =
+            junk_review::extra_items(junk, a.id(), &cfg.home, roots.home(), cx, limit);
+        owned.extend(extra_owned);
+        let tag_roots = outermost(agent_keys.clone());
+        let mut items = junk_cache::cache_items(&owned, &tag_roots, cx, limit);
+        items.extend(extra);
+        items.extend(junk_kinds::temp_items(&temp, temp_age, cx, limit));
+        items.extend(junk_review::log_items(&logs, junk, cx, limit));
+        items.extend(junk_kinds::found_items(&tag_roots, limit));
+        let backups = marker_dirs(a, cfg, roots);
+        items.extend(junk_review::backup_items(
+            &backups,
+            cfg.setup.backup_files,
+            limit,
+        ));
+        if a.id() == "gemini" {
+            items.extend(junk_review::snapshot_items(roots, limit));
+        }
+        items.extend(junk_review::diagnostic_reports(
+            &junk_review::process_names(a),
+            roots,
+            limit,
+        ));
+        let mut notes = Vec::new();
+        if a.id() == "claude" {
+            let old = junk_sessions::session_items(roots, junk.stale_session_days, cx, limit);
+            if !old.is_empty() {
+                notes.push(session_note(junk.stale_session_days));
+            }
+            items.extend(old);
+        }
+        if !folders.is_empty() {
+            notes.extend(junk_sessions::retention(roots, a.id()));
+        }
         let own: Vec<PathBuf> = worktrees
             .iter()
             .filter(|(h, _)| *h == a.id())
             .map(|(_, p)| p.clone())
             .collect();
         items.extend(junk_kinds::build_items(&own, cx, limit));
+        junk_review::exclude(&mut items, &junk.exclude, &cfg.home, roots.home(), limit);
         let items = junk_cache::drop_nested(items);
+        let kinds = kind_rows(&items);
         keys.push(agent_keys);
         rows.push(AgentJunk {
             name: a.id(),
@@ -524,9 +619,11 @@ fn host_rows(
             installed,
             folders,
             total_bytes: 0,
-            kinds: kind_rows(&items),
-            freed_default_bytes: freed(&items),
+            freed_default_bytes: freed(&kinds, false),
+            freed_review_bytes: freed(&kinds, true),
+            kinds,
             items,
+            notes,
         });
     }
     for (row, agent_keys) in rows.iter_mut().zip(&keys) {
@@ -586,8 +683,8 @@ impl Default for Options {
 }
 
 /// Read-only: the same [`scan`] `clear` runs, summed per kind for rtok, plus every installed
-/// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` itself removes
-/// only rtok's logs and archives until T330.4.
+/// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` with filters
+/// plans from this report (`junk_clear`, T330.4).
 pub fn report(cfg: &Config) -> Report {
     let opts = Options::default();
     let worktrees = junk_kinds::agent_worktrees(cfg, &opts.cwd);
@@ -621,12 +718,23 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         .iter()
         .map(|f| PathBuf::from(&f.path))
         .collect();
-    let cache = junk_cache::cache_items(
-        &rtok_owned(cfg, roots, &rtok_cache),
-        &outermost(tag_roots),
-        &cx,
-        limit,
-    );
+    let junk = &cfg.agents.junk;
+    let (extra_owned, extra) =
+        junk_review::extra_items(junk, "rtok", &cfg.home, roots.home(), &cx, limit);
+    let mut owned = rtok_owned(cfg, roots, &rtok_cache);
+    owned.extend(extra_owned);
+    let mut cache = junk_cache::cache_items(&owned, &outermost(tag_roots), &cx, limit);
+    cache.extend(extra);
+    // The language servers' data and state hold their index: review, and the project folder
+    // stays like a cache's (T152's idle rule applies as for the caches).
+    let index =
+        junk_cache::cache_items(&project_lsp_dirs(cfg, &["data", "state"]), &[], &cx, limit);
+    cache.extend(index.into_iter().map(|i| Item {
+        kind: "index",
+        class: "review",
+        ..i
+    }));
+    junk_review::exclude(&mut cache, &junk.exclude, &cfg.home, roots.home(), limit);
     let cache = junk_cache::drop_nested(cache);
     kinds.extend(kind_rows(&cache));
     let rtok_total = rtok_folders.iter().map(|f| f.size_bytes).sum::<u64>();
@@ -636,9 +744,11 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         installed: true,
         folders: rtok_folders,
         total_bytes: rtok_total,
-        freed_default_bytes: kinds.iter().map(|k| k.size_bytes).sum(),
+        freed_default_bytes: freed(&kinds, false),
+        freed_review_bytes: freed(&kinds, true),
         kinds,
         items: cache,
+        notes: Vec::new(),
     }];
     let (hosts, mut by_key) = host_rows(cfg, roots, opts.all, limit, &cx, &opts.worktrees);
     agents.extend(hosts);
@@ -653,10 +763,17 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         .filter(|k| !KINDS.contains(&k.kind))
         .map(|k| k.size_bytes)
         .sum();
-    let cache = agents.iter().flat_map(|a| &a.items).filter(|i| i.counted());
-    let cache: BTreeMap<&Path, u64> = cache.map(|i| (Path::new(&i.path), i.bytes)).collect();
+    // Each path once however many agents list it, and a nested one inside its parent.
+    let freed = |review: bool| {
+        let wanted = |c: &str| c == "safe" || (review && c == "review");
+        let items = agents.iter().flat_map(|a| &a.items);
+        let items = items.filter(|i| i.counted() && wanted(i.class));
+        let by_path: BTreeMap<&Path, u64> = items.map(|i| (Path::new(&i.path), i.bytes)).collect();
+        log_archive + top_level_bytes(by_path.iter().map(|(p, b)| (*p, *b)))
+    };
     Report {
-        freed_default_bytes: log_archive + top_level_bytes(cache.iter().map(|(p, b)| (*p, *b))),
+        freed_default_bytes: freed(false),
+        freed_review_bytes: freed(true),
         agents,
         total_bytes,
     }
@@ -712,6 +829,9 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
                 size(k.size_bytes)
             ));
         }
+        for note in &a.notes {
+            out.push_str(&format!("  {note}\n"));
+        }
         // A find nothing documents is one line per kind: a worktree can hold hundreds.
         let (listed, kept): (Vec<&Item>, Vec<&Item>) = a
             .items
@@ -729,25 +849,39 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
                 ));
             }
         }
+        // One line per reason when several items share it: a log folder keeps hundreds of
+        // fresh files, and each would otherwise be its own line.
+        let mut groups: Vec<(&str, &str, Vec<&Item>)> = Vec::new();
         for i in kept {
             let why = i.kept.as_deref().unwrap_or_default();
-            out.push_str(&format!(
-                "    kept {}  {}  ({why})\n",
-                i.path,
-                size(i.bytes)
-            ));
+            match groups.iter_mut().find(|g| (g.0, g.1) == (i.kind, why)) {
+                Some(g) => g.2.push(i),
+                None => groups.push((i.kind, why, vec![i])),
+            }
+        }
+        for (kind, why, items) in groups {
+            let bytes = size(items.iter().map(|i| i.bytes).sum());
+            match items.as_slice() {
+                [one] => out.push_str(&format!("    kept {}  {bytes}  ({why})\n", one.path)),
+                many => out.push_str(&format!(
+                    "    kept {kind}: {} items, {bytes}  ({why})\n",
+                    many.len()
+                )),
+            }
         }
         if !a.host || !a.kinds.is_empty() {
             out.push_str(&format!(
-                "  Freed by `clear`: {}\n",
-                size(a.freed_default_bytes)
+                "  Freed by `clear`: {}\n  Freed with `--include review`: {}\n",
+                size(a.freed_default_bytes),
+                size(a.freed_review_bytes)
             ));
         }
     }
     out.push_str(&format!(
-        "total\n  Folders: {}\n  Freed by `clear`: {}\n",
+        "total\n  Folders: {}\n  Freed by `clear`: {}\n  Freed with `--include review`: {}\n",
         size(report.total_bytes),
-        size(report.freed_default_bytes)
+        size(report.freed_default_bytes),
+        size(report.freed_review_bytes)
     ));
     out
 }
@@ -1009,6 +1143,40 @@ mod tests {
         assert!(!text.contains("\x1b]8"), "no link off a terminal: {text}");
         let linked = to_list(&report, true, true);
         assert!(linked.contains("\x1b]8;;file://"), "{linked}");
+    }
+
+    /// T391: only the commit folders of `CachedData` that are not the newest are VS Code cache,
+    /// and only after the idle window; Cursor's `CachedData` stays a read-only folder.
+    #[cfg(unix)]
+    #[test]
+    fn vscode_code_cache_offers_old_commit_folders_and_cursor_none() {
+        let (mut cfg, dir) = crate::testutil::config("junk-code-cache");
+        cfg.log.path = dir.join("none/rtok.log");
+        cfg.core.archive_dir = dir.join("none/archive");
+        let code = dir.join(".config/Code/CachedData");
+        for (name, secs) in [("new", 60), ("old", 40 * 86_400)] {
+            let f = code.join(name).join("f.cache");
+            write(&f, 100);
+            let when = SystemTime::now() - Duration::from_secs(secs);
+            for p in [&f, &code.join(name)] {
+                std::fs::File::open(p).unwrap().set_modified(when).unwrap();
+            }
+        }
+        write(&dir.join(".config/Cursor/CachedData/x/f"), 100);
+
+        let opts = Options {
+            all: true,
+            cwd: std::env::temp_dir(),
+            ..Options::default()
+        };
+        let report = report_with(&cfg, &roots(&dir, &[]), opts, AGENT_SCAN_LIMIT);
+
+        let v = agent(&report, "vscode");
+        let paths: Vec<_> = v.items.iter().map(|i| i.path.clone()).collect();
+        assert_eq!(paths, [code.join("old").display().to_string()]);
+        assert!(v.items[0].kept.is_none(), "{:?}", v.items);
+        assert!(folder(v, &code).documented);
+        assert!(agent(&report, "cursor").items.is_empty());
     }
 
     /// An override that points two hosts at one directory: it is listed under both with a
@@ -1395,5 +1563,65 @@ mod tests {
             "{text}"
         );
         assert_eq!(walk_names(&dir), before, "a report changes no file");
+    }
+
+    /// T330.5.2: sessions are an `explicit` row outside both "Freed" totals, rtok's language-server
+    /// data and state are `review` index items, and `.rust-analyzer/` and a `-wal` are listed only.
+    #[cfg(unix)]
+    #[test]
+    fn sessions_and_index_rows_follow_their_classes() {
+        use super::junk_cache::age_files;
+        let (mut cfg, dir) = crate::testutil::config("junk-sessions-index");
+        cfg.log.path = dir.join("none/rtok.log");
+        cfg.core.archive_dir = dir.join("none/archive");
+        let r = roots(&dir, &[]);
+        let id = "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0";
+        let claude = dir.join(".claude");
+        write(&claude.join(format!("projects/p/{id}.jsonl")), 100);
+        write(&claude.join("projects/p/state.db-wal"), 10);
+        write(&claude.join("projects/p/.rust-analyzer/db"), 10);
+        let project = dir.join("proj");
+        write(&project.join(".rtok-lsp-xdg/data/idx"), 70);
+        write(&project.join(".rtok-lsp-xdg/state/s"), 30);
+        let store = Store::open(&cfg.core.db_path).unwrap();
+        store
+            .register_project(&project, crate::store::Origin::Manual)
+            .unwrap();
+        for d in [&claude, &project] {
+            age_files(d, 40 * 86_400);
+        }
+        let opts = Options {
+            all: true,
+            cwd: std::env::temp_dir(),
+            ..Options::default()
+        };
+
+        let report = report_with(&cfg, &r, opts, AGENT_SCAN_LIMIT);
+
+        let c = agent(&report, "claude");
+        let sessions = c.kinds.iter().find(|k| k.kind == "sessions").unwrap();
+        assert_eq!((sessions.class, sessions.items), ("explicit", 1));
+        assert_eq!(c.freed_review_bytes, 0, "an explicit kind is in no total");
+        let listed = |kind: &'static str| {
+            c.items
+                .iter()
+                .filter(move |i| i.kind == kind && !i.counted())
+        };
+        assert_eq!(listed("index").count(), 2, "{:?}", c.items);
+        assert!(listed("index").all(|i| i.kept.as_deref() == Some(junk_kinds::NOT_DOCUMENTED)));
+        assert_eq!(
+            c.notes[0],
+            "old sessions: not touched for more than 30 days"
+        );
+        assert!(c.notes[1].starts_with("host retention: cleanupPeriodDays"));
+
+        let own = agent(&report, "rtok");
+        let index = own.kinds.iter().find(|k| k.kind == "index").unwrap();
+        assert_eq!((index.class, index.items), ("review", 2));
+        assert_eq!(own.freed_default_bytes, 0);
+        assert!(own.freed_review_bytes >= 100);
+        let text = to_list(&report, true, false);
+        assert!(text.contains("sessions (explicit): 1 items"), "{text}");
+        assert!(text.contains("index (review): 2 items"), "{text}");
     }
 }

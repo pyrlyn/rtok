@@ -54,7 +54,7 @@ impl Plugin for Guard {
         if let Some(d) = native_redirect(ev.tool_name, cx) {
             return Some(d);
         }
-        let key = cache_key(ev.tool_name, ev.tool_input, cx.agent_id())?;
+        let key = cache_key(ev.tool_name, ev.tool_input, cx.agent_id(), cx.cwd())?;
         let (id, ts) = cx.get_read_cache(&key).ok().flatten()?;
         let id = id?;
         let n = cx.calls_since(ts).unwrap_or(0);
@@ -105,8 +105,19 @@ impl Plugin for Guard {
         if ev.tool_name == "Skill" {
             return skill::note_load(ev, cx);
         }
-        match cache_key(ev.tool_name, ev.tool_input, cx.agent_id()) {
+        match cache_key(ev.tool_name, ev.tool_input, cx.agent_id(), cx.cwd()) {
             Some(key) => {
+                // A kept `cd` hop moves the shell for every later call: no earlier Bash
+                // answer was taken from the directory the next command will run in.
+                if ev.tool_name == "Bash"
+                    && ev
+                        .tool_input
+                        .get("command")
+                        .and_then(Value::as_str)
+                        .is_some_and(has_cd_hop)
+                {
+                    let _ = cx.clear_read_cache("bash");
+                }
                 let body = payload(ev.tool_response);
                 if body.len() <= ARCHIVE_CAP_BYTES {
                     let id = cx.put_archive(&body).ok()?;
@@ -205,7 +216,12 @@ fn native_redirect(tool: &str, cx: &Ctx) -> Option<PreToolDecision> {
     Some(PreToolDecision::Deny { reason })
 }
 
-pub(crate) fn cache_key(tool: &str, input: &Value, agent: Option<&str>) -> Option<String> {
+pub(crate) fn cache_key(
+    tool: &str,
+    input: &Value,
+    agent: Option<&str>,
+    cwd: Option<&str>,
+) -> Option<String> {
     let key = match tool {
         // Claude Code sends `file_path`; Copilot's `read_file`/`view` are adapted to the
         // tool name `Read` but keep their own input key `path` — either names the file.
@@ -239,7 +255,18 @@ pub(crate) fn cache_key(tool: &str, input: &Value, agent: Option<&str>) -> Optio
             let c = norm_cmd(&input.get("command")?.as_str()?.replace(['\n', '\r'], " ; "));
             // Only read-only commands are keyed: a repeat of `cargo test` after an Edit is
             // new information, not a duplicate.
-            read_only(&c).then(|| format!("bash\t{c}"))
+            // A relative hop resolves against a directory the key cannot name: PostToolUse
+            // already sees the cwd after the command's own `cd`, so the repeat would match
+            // and run one level deeper. Over-invalidating is safe, a false deny is not.
+            if relative_hop(&c) {
+                return None;
+            }
+            // The starting directory is part of the key: the host keeps the shell's cwd
+            // between calls, so the same text run elsewhere prints something else.
+            read_only(&c).then(|| match cwd.filter(|d| !d.is_empty()) {
+                Some(d) => format!("bash\t{d}\t{c}"),
+                None => format!("bash\t{c}"),
+            })
         }
         _ => None,
     }?;
@@ -374,31 +401,54 @@ fn sed_in_place(t: &str) -> bool {
         || (t.starts_with("-i") && !t.starts_with("--"))
 }
 
-/// Normalized Bash key body: whitespace collapsed, the `rtok run --` wrap stripped,
-/// leading `cd … &&` hops folded to the *last* hop's target (T55.9 — the key keeps the
-/// directory the rest of the command runs from: relative paths and `git status` differ
-/// per directory, so `cd a && ls` ≠ `ls` ≠ `cd b && ls`, and `cd a && cd a && ls`
-/// = `cd a && ls`). Quote-aware: `cd 'a && b' && ls` is one hop to `'a && b'`.
+/// Normalized Bash key body: whitespace collapsed, the `rtok run --` wrap stripped, every
+/// leading `cd … &&` hop kept verbatim and in order. Hops are relative to the shell's
+/// current directory, so `cd sub` twice is `sub/sub`, not `sub` — folding them to the last
+/// hop would key two different directories as one and deny a first-time listing.
+/// Quote-aware: `cd 'a && b' && ls` is one hop to `'a && b'`.
 fn norm_cmd(s: &str) -> String {
-    let t = collapse(s);
-    let t = strip_wrap(&t);
-    let (dir, rest) = fold_cd(&t);
-    match dir {
-        Some(d) => format!("cd {d} && {rest}"),
-        None => rest,
-    }
+    let (hops, rest) = split_cd(&strip_wrap(&collapse(s)));
+    hops.into_iter()
+        .map(|d| format!("cd {d} && "))
+        .chain([rest])
+        .collect()
 }
 
-/// Folds leading `cd <dir> &&` hops to the last hop's target. Each remainder re-runs
+/// Splits the leading `cd <dir> &&` hops from the command. Each remainder re-runs
 /// `strip_wrap` because PostToolUse re-wraps the command the model actually ran.
-fn fold_cd(s: &str) -> (Option<String>, String) {
-    let mut dir = None;
+fn split_cd(s: &str) -> (Vec<String>, String) {
+    let mut hops = Vec::new();
     let mut t = s.to_string();
     while let Some((d, rest)) = strip_cd_hop(&t) {
-        dir = Some(d);
+        hops.push(d);
         t = strip_wrap(&rest);
     }
-    (dir, t)
+    (hops, t)
+}
+
+/// Whether any leading `cd` hop of the normalized command is relative (`cd sub`, `cd -`,
+/// `cd $HOME/x`). Absolute means a rooted path, `~…` or a Windows drive.
+fn relative_hop(cmd: &str) -> bool {
+    split_cd(cmd).0.iter().any(|t| {
+        let t = t
+            .strip_prefix('\'')
+            .and_then(|r| r.strip_suffix('\''))
+            .or_else(|| t.strip_prefix('"').and_then(|r| r.strip_suffix('"')))
+            .unwrap_or(t);
+        let b = t.as_bytes();
+        let drive = b.len() >= 3
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && matches!(b[2], b'\\' | b'/');
+        !(t.starts_with(['/', '~']) || drive)
+    })
+}
+
+/// Whether the command moves the host's persistent shell, so every cached listing was
+/// taken from a different directory.
+fn has_cd_hop(command: &str) -> bool {
+    let t = collapse(&command.replace(['\n', '\r'], " ; "));
+    strip_cd_hop(&strip_wrap(&t)).is_some()
 }
 
 /// One `cd <dir> &&` prefix: the target word (quotes kept as typed) and the remainder
@@ -415,17 +465,17 @@ pub(crate) fn strip_cd_hop(s: &str) -> Option<(String, String)> {
     Some((target.to_string(), rest.to_string()))
 }
 
-/// Strips the `cd <dir> &&` prefix [`norm_cmd`] folded in, so the read-only stem check
-/// sees the command that actually runs (`cd a && ls` → `ls`).
-fn after_cd_prefix(s: &str) -> &str {
-    let after = match s.strip_prefix("cd ") {
-        Some(a) => a,
-        None => return s,
-    };
-    match crate::plugins::skip_word(after).and_then(|r| r.strip_prefix("&&")) {
-        Some(rest) => rest.trim_start(),
-        None => s,
+/// Strips every `cd <dir> &&` hop [`norm_cmd`] kept, so the read-only stem check sees the
+/// command that actually runs (`cd a && cd b && ls` → `ls`).
+fn after_cd_prefix(mut s: &str) -> &str {
+    while let Some(rest) = s
+        .strip_prefix("cd ")
+        .and_then(crate::plugins::skip_word)
+        .and_then(|r| r.strip_prefix("&&"))
+    {
+        s = rest.trim_start();
     }
+    s
 }
 
 /// PreToolUse sees the user's command; PostToolUse often sees `rtok run -- '…'`.
@@ -499,30 +549,70 @@ mod tests {
         crate::testutil::runtime("guard").0
     }
 
-    /// T55.9: the Bash key keeps the effective `cd` target — relative paths and
-    /// `git status` differ per directory, so a repeat behind a `cd` is new information.
+    /// T445: every `cd` hop stays in the key, verbatim and in order, and the starting
+    /// directory is part of the key. A relative hop is never keyed at all.
     #[test]
-    fn bash_key_keeps_the_cd_target() {
-        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None);
+    fn bash_key_keeps_every_absolute_cd_hop_and_the_cwd() {
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
         assert_eq!(k("ls"), Some("bash\tls".to_string()));
-        assert_eq!(k("cd a && ls"), Some("bash\tcd a && ls".to_string()));
-        assert_eq!(k("cd b && ls"), Some("bash\tcd b && ls".to_string()));
-        // Consecutive hops fold to the last one (that is where the command runs).
+        assert_eq!(k("cd /a && ls"), Some("bash\tcd /a && ls".to_string()));
+        assert_eq!(k("cd /b && ls"), Some("bash\tcd /b && ls".to_string()));
         assert_eq!(
-            k("cd a && cd b && ls"),
-            Some("bash\tcd b && ls".to_string())
+            k("cd /a && cd /b && ls"),
+            Some("bash\tcd /a && cd /b && ls".to_string())
         );
-        assert_eq!(
-            k("cd a && cd a && ls"),
-            Some("bash\tcd a && ls".to_string())
-        );
+        assert_ne!(k("cd /a && cd /a && ls"), k("cd /a && ls"));
         // A quoted path with `&&` inside is one target word, not a split point.
         assert_eq!(
-            k("cd 'a && b' && ls"),
-            Some("bash\tcd 'a && b' && ls".to_string())
+            k("cd '/a && b' && ls"),
+            Some("bash\tcd '/a && b' && ls".to_string())
         );
-        // Whitespace normalization survives the fold.
-        assert_eq!(k("cd   a   &&   ls"), k("cd a && ls"));
+        for abs in ["~", "~/x", "~u/x", "'/a b'", "\"/a b\"", "C:\\x", "d:/x"] {
+            assert!(k(&format!("cd {abs} && ls")).is_some(), "{abs}");
+        }
+        // Whitespace normalization and the `rtok run` wrap behind hops do not split a key:
+        // PreToolUse sees the typed command, PostToolUse the rewritten one.
+        assert_eq!(k("cd   /a   &&   ls"), k("cd /a && ls"));
+        assert_eq!(k("cd /a && rtok run -- 'ls'"), k("cd /a && ls"));
+        assert_eq!(
+            k("cd /a && cd /b && rtok run -- 'ls'"),
+            k("cd /a && cd /b && ls")
+        );
+
+        let at = |cwd, agent| cache_key("Bash", &json!({"command": "ls"}), agent, cwd);
+        assert_eq!(at(Some("/r"), None), Some("bash\t/r\tls".to_string()));
+        assert_ne!(at(Some("/r"), None), at(Some("/s"), None));
+        assert_ne!(at(Some("/r"), None), at(None, None));
+        assert_eq!(at(Some(""), None), at(None, None));
+        // The agent suffix still trails the key, so the `bash` prefix clear reaches it.
+        assert_eq!(
+            at(Some("/r"), Some("ag")),
+            Some("bash\t/r\tls\tag".to_string())
+        );
+    }
+
+    /// A hop that resolves against the current directory has no stable key: the same text
+    /// runs somewhere else once the shell has moved.
+    #[test]
+    fn bash_behind_a_relative_cd_hop_has_no_key() {
+        for c in [
+            "cd a && ls",
+            "cd - && ls",
+            "cd .. && ls",
+            "cd $HOME/x && ls",
+            "cd 'a b' && ls",
+            "cd /r && cd sub && ls",
+            "cd sub && cd /r && ls",
+            "cd a && rtok run -- 'ls'",
+        ] {
+            for cwd in [None, Some("/s")] {
+                assert_eq!(
+                    cache_key("Bash", &json!({"command": c}), None, cwd),
+                    None,
+                    "{c}"
+                );
+            }
+        }
     }
 
     /// A redirect glued to a word (`echo x>file`) is still a writer: the
@@ -538,63 +628,116 @@ mod tests {
             "grep foo bar 2>err",
         ] {
             assert!(!read_only(w), "{w}");
-            assert!(cache_key("Bash", &json!({"command": w}), None).is_none());
+            assert!(cache_key("Bash", &json!({"command": w}), None, None).is_none());
         }
         for r in ["ls", "cat file", "grep foo bar", "grep 'a>b' file"] {
             assert!(read_only(r), "{r}");
         }
     }
 
-    /// T55.9 rewrite of the cwd-blind pin: the same command behind a `cd` is a new
-    /// key (no deny); the same `cd` + command still denies as a duplicate.
-    #[test]
-    fn bash_repeat_behind_cd_prefix_is_a_new_key() {
-        let cx = setup();
-        let g = Guard;
-        let first = json!({"command": "ls   -la"});
-        let resp = json!({"stdout": "total 3"});
-        let post = PostToolUse {
-            tool_name: "Bash",
-            tool_input: &first,
-            tool_response: &resp,
-        };
-        assert!(g.post_tool(&post, &Ctx::new(&cx)).is_none());
-        let pre = |input| PreToolUse {
-            tool_name: "Bash",
-            tool_input: input,
-        };
-        let behind_cd = json!({"command": "cd /repo && cd sub && ls -la"});
-        assert!(
-            g.pre_tool(&pre(&behind_cd), &Ctx::new(&cx)).is_none(),
-            "a repeat from another directory is new information, not a duplicate"
-        );
-        let again = json!({"command": "ls -la"});
-        assert!(
-            matches!(
-                g.pre_tool(&pre(&again), &Ctx::new(&cx)),
-                Some(PreToolDecision::Deny { .. })
-            ),
-            "the same directory-less repeat is still a duplicate"
-        );
-        let same_hop = g.post_tool(
-            &PostToolUse {
+    /// T445: the key is only a duplicate when the shell sits where it sat before.
+    struct Shell {
+        cx: crate::plugin::Runtime,
+    }
+
+    impl Shell {
+        fn new() -> Self {
+            Self { cx: setup() }
+        }
+
+        fn at(&mut self, cwd: &str) {
+            self.cx.cwd = Some(cwd.to_string());
+        }
+
+        fn ran(&self, command: &str) {
+            let input = json!({"command": command});
+            let resp = json!({"stdout": "listing"});
+            let ev = PostToolUse {
                 tool_name: "Bash",
-                tool_input: &behind_cd,
+                tool_input: &input,
                 tool_response: &resp,
-            },
-            &Ctx::new(&cx),
-        );
-        assert!(same_hop.is_none());
-        let folded = json!({"command": "cd sub && ls -la"});
-        assert!(
+            };
+            assert!(Guard.post_tool(&ev, &Ctx::new(&self.cx)).is_none());
+        }
+
+        fn denied(&self, command: &str) -> bool {
+            let input = json!({"command": command});
+            let ev = PreToolUse {
+                tool_name: "Bash",
+                tool_input: &input,
+            };
             matches!(
-                g.pre_tool(&pre(&folded), &Ctx::new(&cx)),
+                Guard.pre_tool(&ev, &Ctx::new(&self.cx)),
                 Some(PreToolDecision::Deny { .. })
-            ),
-            "same effective directory + command is the same key"
+            )
+        }
+    }
+
+    /// The shell is persistent, so by PostToolUse the host cwd is already past the
+    /// command's own `cd`: a relative repeat would match that key and run one level deeper.
+    #[test]
+    fn relative_cd_repeat_is_not_denied() {
+        let mut sh = Shell::new();
+        sh.at("/s/a");
+        sh.ran("cd a && ls");
+        assert!(!sh.denied("cd a && ls"), "would run in /s/a/a");
+        sh.ran("cd a && ls");
+        assert!(!sh.denied("cd a && ls"));
+        assert!(!sh.denied("ls"));
+    }
+
+    /// An absolute hop is safe: the post cwd is the hop target, and the repeat lists it again.
+    #[test]
+    fn absolute_cd_repeat_is_denied() {
+        let mut sh = Shell::new();
+        sh.at("/s");
+        sh.ran("ls");
+        sh.at("/r/sub");
+        sh.ran("cd /r && cd /r/sub && ls -la");
+        assert!(
+            !sh.denied("ls"),
+            "the shell moved, the parent listing is stale"
         );
-        let other = json!({"command": "ls -l"});
-        assert!(g.pre_tool(&pre(&other), &Ctx::new(&cx)).is_none());
+        assert!(sh.denied("cd /r && cd /r/sub && ls -la"));
+        assert!(
+            !sh.denied("cd /r/sub && ls -la"),
+            "one hop fewer is another key"
+        );
+    }
+
+    /// `cd /r && ls` is a read-only listing, yet it moves the shell: a plain `ls` after it
+    /// runs in `/r`, and a relative `cd a && ls` (unkeyed) moves it just the same.
+    #[test]
+    fn cd_hop_drops_earlier_bash_answers() {
+        for hop in ["cd /r && ls", "cd a && ls"] {
+            let mut sh = Shell::new();
+            sh.at("/repo");
+            sh.ran("ls");
+            sh.ran("git status");
+            sh.ran(hop);
+            assert!(
+                !sh.denied("ls"),
+                "the parent listing is stale after `{hop}`"
+            );
+            assert!(!sh.denied("git status"));
+            // No hop, no flush: ordinary read-only commands keep each other's answers.
+            sh.ran("ls");
+            sh.ran("git status");
+            assert!(sh.denied("ls"));
+            assert!(sh.denied("git status"));
+        }
+    }
+
+    /// The same text from another starting directory prints something else.
+    #[test]
+    fn bash_repeat_from_another_cwd_is_a_new_key() {
+        let mut sh = Shell::new();
+        sh.at("/repo/a");
+        sh.ran("ls");
+        sh.at("/repo/b");
+        assert!(!sh.denied("ls"));
+        sh.at("/repo/a");
+        assert!(sh.denied("ls"));
     }
 
     /// `cargo test` is never keyed, and a mutating Bash, Edit or Write drops every Bash key.
@@ -812,7 +955,7 @@ mod tests {
             )
             .is_none()
         );
-        let key = cache_key("Read", &path, None).unwrap();
+        let key = cache_key("Read", &path, None, None).unwrap();
         let (id, _) = cx.store.get_read_cache(&cx.session, &key).unwrap().unwrap();
         let id = id.unwrap();
         std::fs::remove_file(cx.config.core.archive_dir.join(&id)).unwrap();
@@ -1042,7 +1185,7 @@ mod tests {
             )
             .is_none()
         );
-        let key = cache_key("Read", &path, None).unwrap();
+        let key = cache_key("Read", &path, None, None).unwrap();
         let (id, _) = cx.store.get_read_cache(&cx.session, &key).unwrap().unwrap();
         let id = id.unwrap();
         let file = cx.config.core.archive_dir.join(&id);
@@ -1065,7 +1208,7 @@ mod tests {
     /// behind `;`, `&&`, `||`, `&`, a newline or a substitution must take the mutating path.
     #[test]
     fn compound_commands_with_a_writer_are_not_keyed() {
-        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None);
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
         for w in [
             "ls && rm -rf build",
             "cat a; rm a",
@@ -1082,7 +1225,7 @@ mod tests {
             "ls && cat a",
             "cat a; ls",
             "grep 'a;b' f",
-            "cd d && ls; wc f",
+            "cd /d && ls; wc f",
         ] {
             assert!(k(r).is_some(), "{r:?}");
         }
@@ -1091,7 +1234,7 @@ mod tests {
     /// T322: only the plain listing forms of `git branch` are read-only.
     #[test]
     fn git_branch_is_read_only_only_when_listing() {
-        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None);
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
         for w in ["git branch -D x", "git branch -m a b", "git branch newname"] {
             assert!(k(w).is_none(), "{w}");
         }
@@ -1108,7 +1251,7 @@ mod tests {
     /// T322: an awk program can write (`system(`, `print >`, `| cmd`) inside its quotes.
     #[test]
     fn awk_writers_are_not_read_only() {
-        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None);
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
         assert!(k(r#"awk 'BEGIN{system("rm x")}'"#).is_none());
         assert!(k(r#"awk '{print > "f"}' g"#).is_none());
         assert!(k(r#"awk '{print | "sh"}' g"#).is_none());
@@ -1118,7 +1261,7 @@ mod tests {
     /// T322: each Read slice is its own key; a plain Read keeps the bare path key.
     #[test]
     fn read_slices_get_distinct_keys() {
-        let k = |v: Value| cache_key("Read", &v, None).unwrap();
+        let k = |v: Value| cache_key("Read", &v, None, None).unwrap();
         let plain = k(json!({"file_path": "/f"}));
         assert_eq!(plain, "read\t/f");
         let a = k(json!({"file_path": "/f", "offset": 1, "limit": 50}));
@@ -1139,7 +1282,7 @@ mod tests {
     /// T57.1: flag-aware read-only keys — writer markers take the mutating path.
     #[test]
     fn flag_aware_read_only_keys() {
-        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None);
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
         assert!(k("sed -n 1,40p f").is_some(), "sed -n is read-only");
         assert!(k("sed -i s/a/b/ f").is_none(), "sed -i is mutating");
         assert!(

@@ -198,3 +198,295 @@ fn list_shows_each_installed_host_with_its_folders_and_exact_sizes() {
         "--all lists a host that is not installed"
     );
 }
+
+/// T330.4: `clear` with filters through the binary, in a fixture home with no host installed
+/// (no process is ever probed) and rtok's own cache under it.
+struct Clear {
+    home: PathBuf,
+    cache: PathBuf,
+}
+
+impl Clear {
+    fn new(name: &str) -> Self {
+        let home = home(name);
+        let env = |k: &str| match k {
+            "XDG_CACHE_HOME" => Some(home.join(".cache").into_os_string()),
+            "LOCALAPPDATA" => Some(home.join("AppData/Local").into_os_string()),
+            _ => None,
+        };
+        let roots = rtok::agents::junk_map::Roots::new(home.clone(), env);
+        let cache = roots.resolve("{rtok_cache}");
+        Self { home, cache }
+    }
+
+    fn run(&self, args: &[&str]) -> std::process::Output {
+        let base = ["agents", "junk", "clear"];
+        Command::new(bin())
+            .args(base.iter().chain(args))
+            .current_dir(&self.home)
+            .env("RTOK_HOME", &self.home)
+            .env("HOME", &self.home)
+            .env("USERPROFILE", &self.home)
+            .env("XDG_CACHE_HOME", self.home.join(".cache"))
+            .env("XDG_DATA_HOME", self.home.join(".local/share"))
+            .env("LOCALAPPDATA", self.home.join("AppData/Local"))
+            .env("RTOK_HOST_SANDBOX", "1")
+            .env("PATH", self.home.join(".fake-hosts"))
+            .output()
+            .unwrap()
+    }
+
+    fn json(&self, args: &[&str]) -> (i32, serde_json::Value) {
+        let out = self.run(args);
+        let json = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
+            panic!("{e}: {}", String::from_utf8_lossy(&out.stderr));
+        });
+        (out.status.code().unwrap(), json)
+    }
+}
+
+/// Every file under `dir` with its length and mtime, for "nothing changed".
+fn tree(dir: &Path) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
+    let mut out = Vec::new();
+    for e in fs::read_dir(dir).unwrap().flatten() {
+        let meta = e.metadata().unwrap();
+        if meta.is_dir() {
+            out.extend(tree(&e.path()));
+        } else {
+            out.push((e.path(), meta.len(), meta.modified().unwrap()));
+        }
+    }
+    out.sort();
+    out
+}
+
+fn age(path: &Path, secs: u64) {
+    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(secs);
+    let f = fs::File::options().write(true).open(path).unwrap();
+    f.set_modified(when).unwrap();
+}
+
+#[test]
+fn clear_with_a_kind_plans_exactly_and_yes_empties_the_cache_keeping_the_store() {
+    let c = Clear::new("clear-kind");
+    let cfg = rtok::config::Config::load_from(&c.home).expect("config");
+    drop(rtok::store::Store::open(&cfg.core.db_path).expect("store"));
+    write(&c.cache.join("a/blob"), 300);
+    age(&c.cache.join("a/blob"), 2 * 86_400);
+    write(&c.home.join("project/Cargo.lock"), 10);
+
+    let before = tree(&c.home);
+    let (code, plan) = c.json(&["--agent", "rtok", "--kind", "cache", "--json"]);
+    assert_eq!(code, 0);
+    assert_eq!(tree(&c.home), before, "a dry run changes no file");
+    let items = plan["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "{plan}");
+    assert_eq!(items[0]["kind"], "cache");
+    assert_eq!(items[0]["path"], c.cache.display().to_string());
+    assert_eq!(items[0]["action"], "clear");
+    assert_eq!(plan["freed_bytes"], 0);
+
+    let (code, done) = c.json(&["--agent", "rtok", "--kind", "cache", "--yes", "--json"]);
+    assert_eq!(code, 0, "{done}");
+    assert_eq!(done["freed_bytes"], plan["planned_bytes"]);
+    assert!(c.cache.is_dir() && !c.cache.join("a").exists());
+    assert!(cfg.core.db_path.is_file() && c.home.join("project/Cargo.lock").is_file());
+
+    let (code, again) = c.json(&["--kind", "cache", "--yes", "--json"]);
+    assert_eq!((code, again["planned_bytes"].as_u64()), (0, Some(0)));
+}
+
+/// A file written after the scan's idea of "idle" is refused at removal time and the run
+/// exits 1; nothing is removed.
+#[test]
+fn clear_yes_skips_an_item_modified_in_the_last_minute_and_exits_1() {
+    let c = Clear::new("clear-fresh");
+    write(&c.cache.join("blob"), 10);
+    let out = c.run(&["--kind", "cache", "--yes", "--json"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("some junk could not be removed"));
+    let done: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(done["items"][0]["note"], "modified in the last minute");
+    assert!(c.cache.join("blob").is_file());
+}
+
+#[test]
+fn a_bad_clear_flag_is_a_usage_error() {
+    let c = Clear::new("clear-usage");
+    for args in [
+        ["--kind", "nope"],
+        ["--agent", "nope"],
+        ["--older-than", "soon"],
+        ["--include", "everything"],
+    ] {
+        let out = c.run(&args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+    }
+}
+
+/// `--trash` moves to the freedesktop trash of the fixture home. Only on Linux: the macOS and
+/// Windows trash cans belong to the real user, never a test's.
+#[cfg(target_os = "linux")]
+#[test]
+fn clear_trash_moves_the_cache_to_the_home_trash() {
+    let c = Clear::new("clear-trash");
+    write(&c.cache.join("blob"), 10);
+    age(&c.cache.join("blob"), 2 * 86_400);
+    let (code, done) = c.json(&["--kind", "cache", "--yes", "--trash", "--json"]);
+    assert_eq!(code, 0, "{done}");
+    assert_eq!(done["items"][0]["note"], "moved to trash");
+    assert!(!c.cache.join("blob").exists());
+    assert!(c.home.join(".local/share/Trash/files/blob").is_file());
+}
+
+/// T330.5.1: a Claude Code debug log past `keep_logs_days` is `review` junk (only with
+/// `--include review` or `--kind logs`), a fresher one stays, and the config key moves the line.
+#[test]
+fn review_logs_need_the_flag_and_follow_keep_logs_days() {
+    let c = Clear::new("clear-logs");
+    common::agents::fake_hosts(&c.home);
+    let debug = c.home.join(".claude/debug");
+    write(&debug.join("old.log"), 100);
+    write(&debug.join("new.log"), 10);
+    age(&debug.join("old.log"), 31 * 86_400);
+    age(&debug.join("new.log"), 29 * 86_400);
+    let planned = |args: &[&str]| {
+        let (code, plan) = c.json(args);
+        assert_eq!(code, 0, "{plan}");
+        let items = plan["items"].as_array().unwrap().iter();
+        let names = items.filter(|i| i["action"] == "clear" && i["kind"] == "logs");
+        let mut names: Vec<String> = names
+            .map(|i| {
+                i["path"]
+                    .as_str()
+                    .unwrap()
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap()
+                    .into()
+            })
+            .collect();
+        names.sort();
+        names
+    };
+
+    assert!(planned(&["--agent", "claude", "--json"]).is_empty());
+    assert_eq!(
+        planned(&["--agent", "claude", "--kind", "logs", "--json"]),
+        ["old.log"]
+    );
+    let review = ["--agent", "claude", "--include", "review", "--json"];
+    assert_eq!(planned(&review), ["old.log"]);
+
+    fs::write(
+        c.home.join("config.toml"),
+        "[agents.junk]\nkeep_logs_days = 7\n",
+    )
+    .unwrap();
+    assert_eq!(planned(&review), ["new.log", "old.log"]);
+    let (code, done) = c.json(&["--agent", "claude", "--kind", "logs", "--yes", "--json"]);
+    assert_eq!(code, 0, "{done}");
+    assert!(!debug.join("old.log").exists() && !debug.join("new.log").exists());
+    assert!(debug.is_dir(), "the log folder itself stays");
+}
+
+/// T330.5.2: a Claude Code session past `stale_session_days` is junk only for `--kind sessions`
+/// (never by default nor with `--include review`), goes with its restore points, leaves the
+/// project's memory alone, and `--session-days` or the config key moves the line.
+#[test]
+fn sessions_need_kind_sessions_and_follow_the_threshold() {
+    let c = Clear::new("clear-sessions");
+    common::agents::fake_hosts(&c.home);
+    let id = "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0";
+    let transcript = c.home.join(format!(".claude/projects/p/{id}.jsonl"));
+    let history = c.home.join(format!(".claude/file-history/{id}/f@v1"));
+    let memory = c.home.join(".claude/projects/p/memory/MEMORY.md");
+    for p in [&transcript, &history, &memory] {
+        write(p, 10);
+        age(p, 31 * 86_400);
+    }
+    let planned = |args: &[&str]| -> usize {
+        let (code, plan) = c.json(args);
+        assert_eq!(code, 0, "{plan}");
+        let items = plan["items"].as_array().unwrap().iter();
+        let sessions = items.filter(|i| i["action"] == "clear" && i["kind"] == "sessions");
+        sessions.count()
+    };
+
+    assert_eq!(planned(&["--agent", "claude", "--json"]), 0);
+    assert_eq!(
+        planned(&["--agent", "claude", "--include", "review", "--json"]),
+        0
+    );
+    let by_kind = ["--agent", "claude", "--kind", "sessions"];
+    assert_eq!(planned(&[&by_kind[..], &["--json"]].concat()), 2);
+    assert_eq!(
+        planned(&[&by_kind[..], &["--session-days", "60", "--json"]].concat()),
+        0
+    );
+
+    let list = rtok(&["agents", "junk", "list"], &c.home);
+    assert!(
+        list.contains("old sessions: not touched for more than 30 days"),
+        "{list}"
+    );
+    assert!(list.contains("cleanupPeriodDays = 30 (default)"), "{list}");
+
+    fs::write(
+        c.home.join("config.toml"),
+        "[agents.junk]\nstale_session_days = 60\n",
+    )
+    .unwrap();
+    assert_eq!(planned(&[&by_kind[..], &["--json"]].concat()), 0);
+    fs::write(
+        c.home.join("config.toml"),
+        "[agents.junk]\nstale_session_days = 30\n",
+    )
+    .unwrap();
+
+    let (code, done) = c.json(&[&by_kind[..], &["--yes", "--json"]].concat());
+    assert_eq!(code, 0, "{done}");
+    assert!(!transcript.exists() && !history.exists());
+    assert!(memory.is_file(), "the host's memory is never a session");
+}
+
+/// T330.5.2: an `extra` crash folder clears only dumps past `crash_dump_min_age_days` by default;
+/// a younger one needs `--kind crash-dumps`.
+#[test]
+fn an_extra_crash_folder_clears_only_old_dumps_unless_named() {
+    let c = Clear::new("clear-crash");
+    common::agents::fake_hosts(&c.home);
+    let dumps = c.home.join("dumps");
+    write(&dumps.join("old.dmp"), 10);
+    write(&dumps.join("young.dmp"), 10);
+    age(&dumps.join("old.dmp"), 10 * 86_400);
+    age(&dumps.join("young.dmp"), 2 * 86_400);
+    let extra = format!(
+        "[[agents.junk.extra]]\nhost = \"cursor\"\nkind = \"crash-dumps\"\npath = '{}'\n",
+        dumps.display()
+    );
+    fs::write(c.home.join("config.toml"), extra).unwrap();
+    let planned = |args: &[&str]| -> Vec<String> {
+        let (code, plan) = c.json(args);
+        assert_eq!(code, 0, "{plan}");
+        let items = plan["items"].as_array().unwrap().iter();
+        let found = items.filter(|i| i["kind"] == "crash-dumps" && i["action"] == "clear");
+        let mut names: Vec<String> = found
+            .map(|i| {
+                i["path"]
+                    .as_str()
+                    .unwrap()
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap()
+                    .into()
+            })
+            .collect();
+        names.sort();
+        names
+    };
+
+    assert_eq!(planned(&["--agent", "cursor", "--json"]), ["old.dmp"]);
+    let named = ["--agent", "cursor", "--kind", "crash-dumps", "--json"];
+    assert_eq!(planned(&named), ["old.dmp", "young.dmp"]);
+}

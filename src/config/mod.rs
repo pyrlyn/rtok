@@ -175,8 +175,44 @@ section! {
         /// the agent's context; the rest become one "and N more" line.
         push_bytes: u32 = 1024,
         usage: AgentsUsage = AgentsUsage::default(),
+        junk: AgentsJunk = AgentsJunk::default(),
     }
 }
+
+section! {
+    /// `[agents.junk]` — `rtok agents junk list|clear` (T330.5.1): the age floors of the
+    /// junk kinds, paths never touched, and the paths the user vouches for as junk (the third
+    /// kind of D36 evidence beside a §22 row and a `CACHEDIR.TAG`). `~` in a path or glob is the
+    /// user's home.
+    AgentsJunk {
+        /// `logs` entries modified within this many days stay.
+        keep_logs_days: u32 = 30,
+        /// `temp` entries touched within this many hours stay.
+        temp_min_age_hours: u32 = 24,
+        /// `sessions` (only with `--kind sessions`) older than this many days are junk; time
+        /// is the only criterion (D36, T330 "Old sessions: time only"). `--session-days` is
+        /// the one-run override.
+        stale_session_days: u32 = 30,
+        /// A crash dump in an `extra` crash folder older than this many days is `safe`; a
+        /// younger one is `review`.
+        crash_dump_min_age_days: u32 = 7,
+        /// Globs of paths never touched, nor any folder that holds one.
+        exclude: Vec<String> = Vec::new(),
+        extra: Vec<JunkExtra> = Vec::new(),
+    }
+}
+
+section! {
+    /// One `[agents.junk] extra` entry: `path` is junk of `kind` for `host` (a host id or `rtok`).
+    JunkExtra {
+        host: String = String::new(),
+        kind: String = String::new(),
+        path: String = String::new(),
+    }
+}
+
+/// The kinds an `[agents.junk] extra` entry may name: folders whose content ages out.
+pub const JUNK_EXTRA_KINDS: [&str; 4] = ["cache", "temp", "logs", "crash-dumps"];
 
 section! {
     /// `[agents.usage]` — `rtok agents usage` (T358): tokens and estimated cost per agent, day
@@ -273,6 +309,17 @@ section! {
         max_description_tokens: u32 = 60,
         /// Above this, MCP tool results use head/tail + archive id.
         max_result_chars: u32 = 20000,
+        /// `rtok mcp --http` without an address binds here. Loopback, so only a tunnel the
+        /// user starts puts the server on the internet.
+        http: String = s("127.0.0.1:8791"),
+        /// The HTTP server's allow-list, used instead of `tools`: what an internet caller may
+        /// run is chosen apart from what a local host may, and starts read-only.
+        http_tools: Vec<String> = strs(&["read", "search", "tree"]),
+        /// Bearer token every HTTP request must carry. Empty: the HTTP server refuses to start.
+        token: String = String::new(),
+        /// The public HTTPS URL a tunnel serves the HTTP server at. Its host passes the Host
+        /// check and its origin the Origin check; anything else is refused.
+        public_url: String = String::new(),
     }
 }
 
@@ -319,20 +366,47 @@ section! {
         context_management: bool = false,
         /// `plugins.proxy.semantic_cache`, lookup and store.
         semantic_cache: bool = false,
+        /// OpenAI `service_tier = "flex"` on this lane's chat and responses calls; see
+        /// `[proxy.flex]`. Never opened on the `agent` lane.
+        flex: bool = false,
         /// Read timeout for this lane in seconds; 0 = `proxy.timeout_s`.
         timeout_s: u64 = 0,
+        /// Base URL for every request on this lane, whatever its wire (T385.7); empty = the
+        /// wire's own `proxy.upstream` / `openai_upstream` / `gemini_upstream`.
+        upstream: String = String::new(),
+        /// Requests on this lane upstream at once (T385.7); 0 = no cap. Other lanes, the
+        /// `agent` lane above all, never wait for this one.
+        max_in_flight: u32 = 0,
+        /// With `max_in_flight` set: requests that may wait for a slot. One more is answered
+        /// `429` with `Retry-After` and never reaches upstream.
+        max_queued: u32 = 8,
     }
 }
 
 section! {
-    /// `[proxy.batch]` — provider Batch observe (T385.4). No keys yet: the table exists so a
-    /// later step adds them without a schema break.
-    BatchPolicy {}
+    /// `[proxy.batch]` — provider Batch observe (T385.4). The Batch calls themselves are
+    /// tagged by `[proxy.lanes]`; this table only decides whether result files are read.
+    BatchPolicy {
+        /// Parse a fetched Batch results file (Anthropic `/results`, OpenAI file content) into
+        /// one `usage` row per result line. Observation only: the body is forwarded untouched.
+        parse_results: bool = false,
+    }
 }
 
 section! {
-    /// `[proxy.flex]` — Flex `service_tier` on bulk and internal lanes (T385.5). No keys yet.
-    FlexPolicy {}
+    /// `[proxy.flex]` — how the Flex tier is set and what happens when it has no capacity
+    /// (T385.5). Whether a lane gets Flex at all is `[proxy.lanes.<lane>] flex`.
+    FlexPolicy {
+        /// Overwrite a `service_tier` the client sent. Off: a client value is never changed.
+        force: bool = false,
+        /// On `429` from a request rtok set to Flex: `none` hands the 429 to the client,
+        /// `backoff` retries on Flex with doubling delays, `default` retries once on `auto`.
+        on_429: String = s("none"),
+        /// `backoff` only: retries before the 429 goes to the client; at most 5.
+        retries: u32 = 3,
+        /// `backoff` only: delay before the first retry, doubled each time, capped at 30 s.
+        backoff_ms: u64 = 1000,
+    }
 }
 
 section! {
@@ -444,7 +518,8 @@ section! {
 
 /// The shipped `[stats.prices]` rows (T49.1, T389). Sources: Anthropic
 /// `claude-sonnet-5` / `claude-haiku-4-5` fetched 2026-09-17 and `claude-fable-5-1` /
-/// `claude-opus-5-5` / `claude-sonnet-5-5` fetched 2026-10-06, all from
+/// `claude-opus-5-5` fetched 2026-10-06 and `claude-sonnet-5-5` re-checked 2026-10-08 (its
+/// cache read is 0.05x input, not 0.1x), all from
 /// https://platform.claude.com/docs/en/about-claude/pricing (input / 5m write /
 /// read / output per MTok); OpenAI `gpt-5` / `gpt-5-mini` from
 /// https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -483,7 +558,7 @@ fn default_stats_prices() -> BTreeMap<String, ModelPrice> {
             ModelPrice {
                 input: 2.0,
                 cache_write: 2.5,
-                cache_read: 0.2,
+                cache_read: 0.1,
                 output: 10.0,
             },
         ),
@@ -814,15 +889,18 @@ section! {
     TasksGithub {
         /// `owner/name`. Empty: the `origin` remote.
         repo: String = String::new(),
-        /// Projects v2 number whose Status field tracks the task; 0 = issues only.
+        /// Projects v2 number under the repo owner (user or organization): each issue joins it and its
+        /// `Status` single-select follows the task (open → Todo, in-progress → In Progress, done and
+        /// closed → Done). Needs the `project` token scope; any failure only warns. 0 = issues only.
         project: u32 = 0,
     }
 }
 
 section! {
-    /// `[tasks.gitlab]` — GitLab Issues; tasks under an issue are subtasks.
+    /// `[tasks.gitlab]` — GitLab Issues with `status::` labels; a subtask's issue links to
+    /// its parent's.
     TasksGitlab {
-        /// Base URL, for self-hosted instances.
+        /// https base URL, for self-hosted instances.
         url: String = s("https://gitlab.com"),
         /// `group/name` path or numeric id. Empty: the `origin` remote.
         project: String = String::new(),

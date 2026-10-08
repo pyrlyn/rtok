@@ -323,3 +323,81 @@ fn stats_page_matches_price_and_cache_on_the_fixture_store() {
     }
     let _ = fs::remove_dir_all(&h);
 }
+
+/// T385.6: one store, three lanes. The agent lane keeps its cache, the bulk lane never hits,
+/// and the `internal` lane sits in between; `lane` rows carry each lane's own hit rate.
+fn seed_lanes(home: &Path) {
+    let cfg = rtok::config::Config::load_from(home).expect("config");
+    let store = rtok::store::Store::open(&cfg.core.db_path).expect("store");
+    store
+        .upsert_session("s1", None, None, None, Some("proxy"))
+        .unwrap();
+    for (kind, legs) in [
+        ("api_request", (5, 5, 90, 7)),
+        ("api_request", (0, 0, 100, 1)),
+        ("api_request:bulk", (100, 0, 0, 9)),
+        ("api_request:internal", (10, 10, 80, 2)),
+    ] {
+        let call = store
+            .insert_call(
+                "s1",
+                "proxy",
+                kind,
+                None,
+                None,
+                None,
+                None,
+                Some("/v1/messages"),
+            )
+            .unwrap();
+        let (input, cache_create, cache_read, output) = legs;
+        store
+            .insert_usage(
+                "s1",
+                Some("m"),
+                "anthropic",
+                input,
+                cache_create,
+                cache_read,
+                output,
+                call,
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn stats_shows_the_cache_hit_rate_per_lane() {
+    let h = home("lanes");
+    seed_lanes(&h);
+    let out = rtok(&["stats"], &h);
+    assert!(
+        out.contains(
+            "\
+lane                        input cache_create cache_read output    hit
+agent                           5            5        190      8  95.0%
+bulk                          100            0          0      9   0.0%
+internal                       10           10         80      2  80.0%
+"
+        ),
+        "{out}"
+    );
+    let json: serde_json::Value = serde_json::from_str(&rtok(&["stats", "--json"], &h)).unwrap();
+    assert_eq!(json["lanes"]["agent"]["hit"], 0.95);
+    assert_eq!(json["lanes"]["bulk"]["hit"], 0.0);
+    assert_eq!(json["lanes"]["internal"]["cache_read"], 80);
+    // The `api` table is still the whole ledger, lanes folded together.
+    assert_eq!(json["api"]["anthropic"]["cache_read"], 270);
+    let _ = fs::remove_dir_all(&h);
+}
+
+/// A store that only ever saw agent turns prints no `lane` table (the goldens above).
+#[test]
+fn stats_has_no_lane_table_for_agent_only_traffic() {
+    let h = home("lanes-agent-only");
+    seed(&h);
+    let json: serde_json::Value = serde_json::from_str(&rtok(&["stats", "--json"], &h)).unwrap();
+    assert!(json.get("lanes").is_none());
+    assert!(!rtok(&["stats"], &h).contains("lane "));
+    let _ = fs::remove_dir_all(&h);
+}

@@ -37,8 +37,8 @@ Raw `git worktree` records no owner, age or size. `rtok worktree` gives each wor
 | `rtok worktree adopt [<path>] [--task <id>]` | `worktree_adopt` | binds a worktree the host made to the calling agent; the directory stays where the host put it |
 | `rtok worktree claim <path>` | — | the same for an existing worktree you name; rewrites its lock only when it has none or is already yours |
 | `rtok worktree list` | `worktree_list` | every worktree of the repository with owner, bound agent and its state, `origin`, size; plus orphans git no longer lists |
-| `rtok worktree remove <path\|task>` | `worktree_remove` | removes your own clean worktree and its merged branch; refuses a dirty one, an unmerged branch, someone else's lock and the one you stand in; never forces |
-| `rtok worktree gc`, `clean` | — | sweep finished worktrees, delete idle build caches; dry runs until `--yes`; a live agent's worktree is kept; someone else's lock on a merged, clean worktree untouched for `--stale-lock` (`7d`) counts as abandoned |
+| `rtok worktree remove <path\|task>` | `worktree_remove` | removes your own clean worktree and its merged branch; refuses a dirty one, an unmerged branch, the one you stand in, and someone else's lock unless the task is finished (merged, clean, with commits of its own); never forces |
+| `rtok worktree gc`, `clean` | — | sweep finished worktrees, delete idle build caches; dry runs until `--yes`; a live agent's worktree is kept, unless its task is finished and idle past `--idle`, which opens any lock too; someone else's lock on a merged, clean worktree untouched for `--stale-lock` (`7d`) counts as abandoned |
 
 The owner is `<host> / <model>` of the agent unless a CLI call passes `--owner`; an MCP call never does. The root is `[worktree] root`, `~/.rtok/worktrees` by default. With `[worktree] enabled = false` rtok leaves worktrees alone: every `rtok worktree` command (`list` too) says they are not enabled, MCP lists no `worktree_*` tool, and Claude's `WorktreeCreate`/`WorktreeRemove` hooks do what Claude does without rtok.
 
@@ -85,3 +85,7 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | `zed` | no | MCP | threads can point at a worktree you make | `worktree_adopt` |
 
 Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add` (CLI); a host with no agent row passes `--owner` on the CLI. A worktree whose path matches none of the pools above is listed with origin `other` and adopted the same way.
+
+### Windows
+
+On Windows rtok cannot read a process's parent pid (`rtok-sys::parent_pid` returns nothing; the Windows snapshot value is not updated after the parent exits), so no ancestor chain is read and only the cwd rule decides which agent a hook call belongs to. No host doc records this limit. Sources and dates are in `research.md` §26.

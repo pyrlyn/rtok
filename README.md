@@ -186,7 +186,7 @@ proxy 8788→8787
 mcp_tool_search likely disabled (ANTHROPIC_BASE_URL is set)
 autoCompactWindow 300000
 skills (68 listed, 12963 desc bytes ≈ 3240 tokens per request)
-  design-is plugin:claude-mem desc 374c body 18403B calls - WARN desc>200 WARN body>8K …
+  design-is plugin:claude-mem desc 374c body 18403B calls - WARN desc>120 WARN body>8K …
   caveman-setup user desc 1c body 10304B calls - WARN body>8K (references/) …
 ```
 
@@ -354,6 +354,7 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok task create <title> [-d <text> \| --body-file <path\|->] [--parent <id>] [--json]` | add a task under the next free id (`A12`, or `A12.3` under `--parent`); ids come from a per-project counter in the store, raised past every id the adapter already holds, so parallel agents never collide |
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` / `show <id>` / `next` | active tasks with subtasks indented; one task with its subtasks; the lowest open task with no active subtask |
 | `rtok task status <id> [<status>] [--force] [--json]` | read or set `open`, `in-progress`, `done` or `closed`; finishing a parent with active subtasks is refused unless `--force`; on disk, finished tasks move to `tasks/done/` |
+| `rtok task sync [--json]` | raise the store's id counters to the highest ids the adapter holds (never lower them) and report drift: ids above the counter, duplicate ids, issues that kept the `rtok` label but lost `rtok:<id>`; reads the adapter only |
 | `rtok run -- <cmd>` | run, archive, and format a command result |
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode) |
 | `rtok expand <id>` | retrieve an archived original (`--lines`, `--grep`) |
