@@ -1169,16 +1169,6 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e`, `just js` green; `gr
 
 Result: `web/src/ui/Unknown.tsx` renders the label at once and the "?" with its React Aria `Tooltip` from a lazy chunk (`UnknownWhy`, 5.8 kB gzip; entry +1 kB), so a chunk that fails leaves the word. `orUnknown(value, why, label?)` turns null, "" and the CLI's "-" into it; zero passes through. Every reason lives in `web/src/pages/missing.ts`, each restating where Rust leaves the field null (`src/store` call and session rows, `src/web/model.rs` plugin stats, hosts and services, `src/worktree/list.rs`). Where absence is a fact the label says so with the same tooltip: "top-level" parent, "none" ref_id, host config, worktree branch, owner, agent and pid, "never" seen, "not found" host app, "n/a" saved for plugins that save no tokens, "not set" OTel endpoint. Plugins now show a measured zero or negative saving instead of "-". Covered: Calls, Sessions, Overview's recent sessions, Plugins, Hosts, Worktrees, Services and Stats. Tooltip opens on hover, keyboard focus and touch tap (checked in the dev server at phone width with touch pointer events). `ui/lazyPart.ts` is the shared fail-open lazy loader, now also used by the command palette in `Shell.tsx`. The calls tokens column widened to fit "Unknown ?". The card's grep still finds `web/src/pages/text.ts`, the parser that fills absent CLI columns with "-"; pages render those through `orUnknown`.
 
-### T414.10. Table filters and sort in the URL
-
-Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
-
-Check: unit tests for search-param parsing (bad values fall back to defaults), page tests for URL-driven rows and back/forward, a DataTable story (axe), and an e2e that opens a filtered and sorted Calls link, reloads and steps back.
-
-Result: one shared module (`web/src/tableSearch.ts`) holds a spec per page, the parse (untrusted values fall back to defaults, text capped at 200 chars) and the `useTableSearch` hook. Params: `q`, `sort` (`col` / `-col`), `surface` and `result` on Calls, `show` on Sessions and Plugins, `level` on Logs; defaults never appear in the URL, and the palette's `?id=` survives every change. `DataTable` gained opt-in sortable headers (`sortValue`, `aria-sort`, exported `sortRows`); Logs got an "oldest first" chip (`sort=-line`). `just check` 2706 passed, 8 skipped; unit 197 passed; `just spa-stories` 128 passed (axe); `just spa-e2e` 18 passed. #826.
-
-Status: done 2026-10-08
-
 ### T414.8. Sidebar groups and a collapsible sidebar
 
 The 14 flat nav links become three labelled groups: Monitor (overview, stats, usage, calls, sessions, logs), Configure (plugins, hosts, skills, config, services, worktrees), Diagnose (doctor, graph). On `md` and up the sidebar collapses to icons; the choice is kept per browser like the theme, through one shared storage helper (`web/src/storage.ts`) that the theme now uses too. The bottom bar on phones stays one scrolling row.
@@ -1186,6 +1176,17 @@ The 14 flat nav links become three labelled groups: Monitor (overview, stats, us
 Check: a story per state (expanded, collapsed, phone) passes axe; e2e still reaches every page from the nav.
 
 Result: `web/src/Sidebar.tsx` holds the groups (`NAV_GROUPS`), a labelled `role="group"` per group, and a toggle with `aria-expanded` and a visible focus ring; collapsed links keep their name (screen-reader-only text plus `title`). A unit test pins that every page sits in exactly one group, and blocked storage still works. `Sidebar.stories.tsx` covers expanded, collapsed, phone and toggle. New rtok-only icon `brand/icons/ui/sidebar.svg`, since `@pyrlyn/brand` has no panel icon. `just check` green, `just spa-stories` 131 passed (axe), `just spa-e2e` 17 passed. #821.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
+### T414.10. Table filters and sort in the URL
+
+Filters, search text and sort of the Calls, Sessions, Plugins and Logs tables live in the route's search params (TanStack Router `validateSearch`), so a link restores the view and back/forward step through it. Blocker of T414.11.
+
+Check: unit tests for search-param parsing (bad values fall back to defaults), page tests for URL-driven rows and back/forward, a DataTable story (axe), and an e2e that opens a filtered and sorted Calls link, reloads and steps back.
+
+Result: one shared module (`web/src/tableSearch.ts`) holds a spec per page, the parse (untrusted values fall back to defaults, text capped at 200 chars) and the `useTableSearch` hook. Params: `q`, `sort` (`col` / `-col`), `surface` and `result` on Calls, `show` on Sessions and Plugins, `level` on Logs; defaults never appear in the URL, and the palette's `?id=` survives every change. `DataTable` gained opt-in sortable headers (`sortValue`, `aria-sort`, exported `sortRows`); Logs got an "oldest first" chip (`sort=-line`). `just check` 2706 passed, 8 skipped; unit 197 passed; `just spa-stories` 128 passed (axe); `just spa-e2e` 18 passed. #826.
 
 Status: done 2026-10-08
 
