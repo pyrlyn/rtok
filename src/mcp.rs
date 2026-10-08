@@ -1464,6 +1464,9 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    // Only where `rtok_sys::ancestors` can read this process's parents: without its own chain
+    // the server cannot tell it sits outside a session (Windows reads none).
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
     fn whoami_says_when_no_live_session_is_above_this_process_or_in_its_cwd() {
         let (mut cfg, dir) = tmp("whoami-outside");
