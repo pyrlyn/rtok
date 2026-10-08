@@ -26,7 +26,7 @@ use crate::worktree::list::{is_cache_dir, usage_until};
 
 /// What `--kind` takes today: rtok's own T182 junk, then the T330.3 and T330.5.1 kinds.
 /// `snapshots` is accepted and never clears anything: its class is `never`.
-pub const KINDS: [&str; 10] = [
+pub const KINDS: [&str; 11] = [
     "log",
     "archive",
     "cache",
@@ -35,6 +35,7 @@ pub const KINDS: [&str; 10] = [
     "build",
     "deps",
     "locks",
+    "backups",
     "swap",
     "snapshots",
 ];
@@ -531,6 +532,7 @@ mod tests {
                 classed("logs", "review", &p("old.log"), SECTION_22),
                 classed("temp", "safe", &p("old.tmp"), EXTRA),
                 classed("logs", "review", &p("app.log"), EXTRA),
+                classed("backups", "review", &p("s.json.bak-1"), RTOK_OWN),
                 snap,
             ],
         )]);
@@ -548,13 +550,13 @@ mod tests {
             include_review: true,
             ..filter(&["claude"], &[])
         };
-        let all = ["old.log", "old.tmp", "app.log"];
+        let all = ["old.log", "old.tmp", "app.log", "s.json.bak-1"];
         assert_eq!(names(&review, &idle), all);
         let logs = names(&filter(&[], &["logs"]), &idle);
         assert_eq!(logs, ["old.log", "app.log"]);
         assert!(names(&filter(&[], &["snapshots"]), &idle).is_empty());
-        // Running: the §22 log and the `extra` paths stay.
-        assert!(names(&review, &|_| true).is_empty());
+        // Running: the §22 log and the `extra` paths stay, rtok's own backup does not.
+        assert_eq!(names(&review, &|_| true), ["s.json.bak-1"]);
     }
 
     #[test]
