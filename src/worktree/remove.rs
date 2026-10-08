@@ -54,8 +54,8 @@ pub struct Removed {
 }
 
 /// Remove the worktree at `target` (a path, else a task id) for `who`. Refuses a dirty
-/// worktree, anyone else's lock, the one holding `cwd`, and an unmerged branch unless
-/// `keep_branch`.
+/// worktree, anyone else's lock on one that is not [`super::Entry::done`], the one holding
+/// `cwd`, and an unmerged branch unless `keep_branch`.
 pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<Removed> {
     let real = |p: &Path| crate::fs::canon(p);
     let as_path = cwd.join(target);
@@ -95,10 +95,15 @@ pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<
         bail!("{shown} holds the current directory; run from the main checkout");
     }
     // An unknown caller holds no lock: "" is never a parsed owner or agent.
-    if !record.claimable_by(who.owner.unwrap_or(""), who.agent.unwrap_or("")) {
-        let held = record
-            .owner()
-            .map_or("an unknown owner".into(), |o| o.reason());
+    let held =
+        (!record.claimable_by(who.owner.unwrap_or(""), who.agent.unwrap_or(""))).then(|| {
+            record
+                .owner()
+                .map_or("an unknown owner".into(), |o| o.reason())
+        });
+    // A finished task has nothing left to protect, and its owner often cannot name itself
+    // (T453: no `RTOK_AGENT_ID` in the desktop app's shell), so its lock does not hold.
+    if let Some(held) = held.as_ref().filter(|_| !entry.done) {
         bail!("{shown} is locked by {held}; not removed");
     }
     match (entry.state, &record.branch) {
@@ -114,7 +119,10 @@ pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<
         }
         _ => {}
     }
-    let note = detach(main, record, entry.merged && !keep_branch)?;
+    let mut note = detach(main, record, entry.merged && !keep_branch)?;
+    if let Some(held) = held {
+        note.push_str(&format!("; finished, so the lock by {held} was opened"));
+    }
     Ok(Removed {
         path: path.display().to_string(),
         branch: record.branch.clone(),

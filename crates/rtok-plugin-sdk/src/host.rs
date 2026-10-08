@@ -331,6 +331,25 @@ pub trait Notes {
 
     /// Full-text search over notes. An empty query returns no hits rather than everything.
     fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>>;
+
+    /// Replace the files note `id` is linked to (T374); paths are relative to the project root.
+    /// Default `Ok(())` fails open for a host that keeps no links.
+    fn set_note_files(&self, _id: i32, _paths: &[String]) -> Result<()> {
+        Ok(())
+    }
+
+    /// Live notes of `project` (and unbound ones; `None` = any) linked to any of `paths` (T374), the
+    /// one linked to most of them first. Root-relative paths repeat across projects, so the
+    /// project scope keeps another repository's `src/main.rs` note out.
+    /// Default `Ok(Vec::new())` fails open for a host that keeps no links.
+    fn notes_for_files(
+        &self,
+        _project: Option<&str>,
+        _paths: &[String],
+        _limit: u32,
+    ) -> Result<Vec<NoteHit>> {
+        Ok(Vec::new())
+    }
 }
 
 /// Per-session memory of what has already been read, so the same file is not sent twice.
@@ -346,6 +365,13 @@ pub trait ReadCache {
 
     /// Forget `path` and anything stored under it — call this when the file changes.
     fn clear_read_cache(&self, path: &str) -> Result<()>;
+
+    /// The keys of everything remembered this session (T374), so a caller can tell which files
+    /// were read. A key is a path or a path followed by `\t` and a mode; a host that cannot list
+    /// them returns none.
+    fn read_cache_keys(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
 }
 
 /// A read-only look back at this session's own traffic, for plugins that need a window

@@ -28,8 +28,11 @@ pub mod hook_events;
 pub mod jsonc;
 pub mod junk;
 pub mod junk_cache;
+pub mod junk_clear;
 pub mod junk_kinds;
 pub mod junk_map;
+pub mod junk_review;
+pub mod junk_sessions;
 pub mod kilo;
 pub mod kimi;
 pub mod link;
@@ -61,6 +64,7 @@ use serde_json::json;
 use toml_edit::DocumentMut;
 
 use crate::config::Config;
+use crate::ui::style;
 
 /// Every host rtok installs into, in `agents list` order.
 pub const HOSTS: &[&str] = &[
@@ -188,6 +192,18 @@ pub enum Mode {
     Update,
 }
 
+impl Mode {
+    /// The word [`crate::ui::style::icon`] looks up to pick this mode's operation icon.
+    pub fn verb(self) -> &'static str {
+        match self {
+            Mode::Install => "install",
+            Mode::Remove => "remove",
+            Mode::Replace => "replace",
+            Mode::Update => "update",
+        }
+    }
+}
+
 /// The contract every host folder implements. The generic [`run`] loop, [`list`] and
 /// `rtok doctor` know nothing else about a host.
 pub trait Agent: Sync {
@@ -243,6 +259,11 @@ const HOST_SANDBOX_ENV: &str = "RTOK_HOST_SANDBOX";
 /// The home dir when [`HOST_SANDBOX_ENV`] is set.
 fn host_sandbox() -> Option<PathBuf> {
     std::env::var_os(HOST_SANDBOX_ENV).map(|_| home_dir())
+}
+
+/// True under the test harness: a probe of the machine's real processes is off too.
+pub(crate) fn host_sandboxed() -> bool {
+    host_sandbox().is_some()
 }
 
 /// [`expand_spec`], re-rooted under the home dir when [`HOST_SANDBOX_ENV`] is set.
@@ -809,7 +830,21 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
         Outcome::Shared(_) => " — same files as above",
         Outcome::NotInstalled => " — not installed",
     };
-    let mut out = format!("{}: {}{note}\n", v.kind.label(), v.name);
+    let header = format!("{}: {}{note}", v.kind.label(), v.name);
+    // An install/update/remove result carries its operation's icon on a terminal; every other
+    // block, and any pipe, keeps the bare line the snapshots pin.
+    let mut out = match &outcome {
+        Outcome::Applied { mode, reports } => {
+            let kind = if cfg.setup.dry_run || reports.iter().all(|r| r == NO_CHANGES) {
+                style::Kind::Info
+            } else {
+                style::Kind::Success
+            };
+            style::line_op(mode.verb(), kind, owo_colors::Stream::Stdout, &header)
+        }
+        _ => header,
+    };
+    out.push('\n');
     if matches!(outcome, Outcome::NotInstalled) {
         out.push_str(&format!(
             "  skip    nothing of rtok here; run `rtok agents install {}`\n",
@@ -843,7 +878,13 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
     }
     // T278: the `mcp` row becomes one line per surface wherever the host has an entry.
     let surfaces = mcp::rows(agent, cfg, v.kind);
-    for row in module_rows(agent, v.kind, cfg) {
+    for mut row in module_rows(agent, v.kind, cfg) {
+        if row.name == "plugin"
+            && row.state == ModuleState::Installed
+            && let Some(status) = plugin_status(agent, v.kind, cfg)
+        {
+            row.note = format!(" {}", status.note);
+        }
         if row.name == "mcp" && !surfaces.is_empty() {
             out.push_str(&mcp::lines(&surfaces, "  "));
         } else {
@@ -1015,7 +1056,8 @@ fn carry_flags(cfg: &Config, have: &[&str]) -> Config {
 }
 
 pub use outdated::{
-    EXIT_OUTDATED, Outdated, OutdatedReport, OutdatedSelection, outdated, print_human, report,
+    EXIT_OUTDATED, Outdated, OutdatedReport, OutdatedSelection, PluginStatus, outdated,
+    plugin_status, print_human, report,
 };
 
 /// `rtok agents update` with no host named: every host with an rtok module in at least one
@@ -1960,6 +2002,16 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn each_mode_picks_its_operation_icon() {
+        // `replace` has no row of its own and takes its kind's icon, like any other verb.
+        let icon = |m: Mode| style::icon(m.verb(), style::Kind::Success);
+        assert_eq!(icon(Mode::Install), "📦");
+        assert_eq!(icon(Mode::Update), "⏫");
+        assert_eq!(icon(Mode::Remove), "🧹");
+        assert_eq!(icon(Mode::Replace), style::Kind::Success.emoji());
+    }
 
     #[test]
     fn resolve_rtok_command_keeps_bare_name_when_on_path() {

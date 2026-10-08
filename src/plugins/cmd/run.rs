@@ -258,6 +258,35 @@ fn push_canonical_line(line: &[u8], out: &mut Vec<u8>) {
     out.extend_from_slice(t);
 }
 
+/// Most bytes of stdout+stderr one `rtok run` keeps. The host shows an agent ~30 000 chars of
+/// a command, so this is three orders of magnitude past anything read; it only has to stop a
+/// `cat huge.log` from taking gigabytes, because the body is copied several times on its way
+/// through the filters and the archive. 32 MiB leaves that peak in the low hundreds of MiB.
+const CAPTURE_CAP: u64 = 32 * 1024 * 1024;
+
+/// Run `cmd` and return its stdout then stderr (at most `cap` bytes together) and its exit
+/// code. A capped body ends with a notice line, so the archive says it is partial.
+fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> {
+    let out = crate::proc::capture_capped(cmd, None, Some(cap))?;
+    let (mut body, code) = (out.stdout, out.code.unwrap_or(1));
+    body.extend(out.stderr);
+    if out.dropped > 0 {
+        if !body.is_empty() && !body.ends_with(b"\n") {
+            body.push(b'\n');
+        }
+        let cap = match cap {
+            c if c % (1024 * 1024) == 0 => format!("{} MiB", c / (1024 * 1024)),
+            c => format!("{c} bytes"),
+        };
+        let notice = format!(
+            "[rtok: output capped at {cap}; {} bytes not captured]\n",
+            out.dropped
+        );
+        body.extend_from_slice(notice.as_bytes());
+    }
+    Ok((body, code))
+}
+
 /// Run `args` via the configured/host shell, archive stdout+stderr, print, return the exit
 /// code. `agent` is the sub-agent id the `PreToolUse(Bash)` rewrite embedded as `--agent`
 /// (T127), or `None` for the main window / any other caller — it scopes the dedup pointer
@@ -268,9 +297,7 @@ pub fn run(cfg: &Config, args: &[String], agent: Option<&str>) -> Result<i32> {
     }
     let sh = shell(cfg);
     let sh_kind = shell_kind(&sh);
-    let out = crate::proc::capture(shell_command(&sh, &script_for(sh_kind, args)), None)?;
-    let (mut body, code) = (out.stdout, out.code.unwrap_or(1));
-    body.extend(out.stderr);
+    let (body, code) = capture_body(shell_command(&sh, &script_for(sh_kind, args)), CAPTURE_CAP)?;
     emit_filtered(cfg, args, &body, code, agent);
     Ok(code)
 }
@@ -396,6 +423,30 @@ mod tests {
     use super::*;
     use crate::testutil::config as cfg;
     use std::fs;
+
+    /// T448: a body past the cap is cut at the cap and ends with one notice naming the bytes
+    /// left out; the command's exit code survives the discarded tail.
+    #[cfg(unix)]
+    #[test]
+    fn capture_body_caps_and_appends_the_notice() {
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args(["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"]);
+        let (body, code) = capture_body(cmd, 1024).unwrap();
+        let notice = "[rtok: output capped at 1024 bytes; 3976 bytes not captured]\n";
+        assert_eq!(code, 2);
+        assert_eq!(body.len(), 1024 + 1 + notice.len());
+        assert!(body.ends_with(notice.as_bytes()));
+        assert!(body.starts_with(&[b'x'; 1024]));
+    }
+
+    /// T448: output within the cap is returned as is, with no notice.
+    #[cfg(unix)]
+    #[test]
+    fn capture_body_without_overflow_has_no_notice() {
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args(["-c", "printf hi"]);
+        assert_eq!(capture_body(cmd, 1024).unwrap(), (b"hi".to_vec(), 0));
+    }
 
     #[test]
     fn emit_filtered_archives_stdin_and_records() {

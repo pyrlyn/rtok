@@ -46,6 +46,19 @@ describe("page logic", () => {
             rest: "--plugin",
         });
         expect(moduleState("installed").tone).toBe("ok");
+        expect(moduleState("installed 0.15.1 (marketplace)")).toEqual({
+            tone: "ok",
+            label: "installed",
+            rest: "0.15.1 (marketplace)",
+        });
+        const old = "0.14.0 (marketplace), rtok is 0.15.1 — rtok agents update claude";
+        expect(moduleState(`installed ${old}`)).toEqual({
+            tone: "warn",
+            label: "outdated",
+            rest: old,
+        });
+        expect(moduleState("installed 0.16.0 (local), rtok is 0.15.1").label).toBe("newer");
+        expect(moduleState("installed (legacy, no version)").rest).toBe("(legacy, no version)");
         expect(moduleState("weird").tone).toBe("muted");
         expect(hostNote("not found").tone).toBe("muted");
         expect(hostNote("").label).toBe("present");

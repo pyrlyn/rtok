@@ -1048,6 +1048,84 @@ fn remove_guards_commits_and_reports_a_branch_it_could_not_delete() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
+/// T453: a finished task — squash-merged, clean, with commits of its own — goes whoever holds
+/// it: `remove` from a shell that names no agent opens a foreign lock, and `gc` takes it from
+/// a live agent or another owner. A fresh branch under the same lock is not finished and stays.
+#[test]
+fn a_finished_task_goes_past_a_foreign_lock_and_a_live_agent() {
+    let tmp = rtok::testutil::tmp_dir("worktree-finished");
+    run(&tmp, &["init", "-q", "--bare", "origin.git"]);
+    run(&tmp, &["clone", "-q", "origin.git", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    run(&work, &["push", "-q", "-u", "origin", "main"]);
+    run(&work, &["remote", "set-head", "origin", "main"]);
+    let (_store, ids) = agents(&tmp, &["sess-live", "sess-other"]);
+    let v2 = |id: &str| format!("{ME} | t1 | 2026-10-08 | agent {id}");
+    let theirs = "Cursor / grok | t9 | 2026-10-08";
+    add(&work, "other-done", Some(&v2(&ids[1])));
+    add(&work, "other-fresh", Some(&v2(&ids[1])));
+    add(&work, "live-done", Some(&v2(&ids[0])));
+    add(&work, "theirs-done", Some(theirs));
+    for name in ["other-done", "live-done", "theirs-done"] {
+        commit(&tmp.join(format!("wt-{name}")), &format!("{name}.txt"));
+        squash(&work, &format!("t-{name}"));
+    }
+    run(&work, &["push", "-q", "origin", "main"]);
+    let remove = |path: &str| rtok_as(&tmp, &work, None, &["worktree", "remove", path], b"");
+
+    let out = remove("../wt-other-fresh");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.code() == Some(1) && err.contains("not removed"),
+        "{err}"
+    );
+    let out = remove("../wt-other-done");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let opened = format!(
+        "removed with its branch; finished, so the lock by {} was opened",
+        v2(&ids[1])
+    );
+    assert!(text.contains(&opened), "{text}");
+    assert!(!tmp.join("wt-other-done").exists());
+
+    let gc = ["worktree", "gc", "--json", "--idle", "0h"];
+    let plan = json_in(&tmp, &work, &gc);
+    let planned = |name: &str| {
+        let row = by_name(&plan, name);
+        format!(
+            "{}: {}",
+            row["action"].as_str().unwrap(),
+            row["note"].as_str().unwrap()
+        )
+    };
+    let live = format!(
+        "remove: finished task, idle, though agent {} is live",
+        &ids[0][..8]
+    );
+    assert_eq!(planned("wt-live-done"), live);
+    let locked = "remove: finished task, idle, though locked by Cursor / grok";
+    assert_eq!(planned("wt-theirs-done"), locked);
+    let busy = format!("keep: agent {} is live", &ids[1][..8]);
+    assert_eq!(planned("wt-other-fresh"), busy);
+
+    json_in(&tmp, &work, &[&gc[..], &["--yes"]].concat());
+    for name in ["wt-live-done", "wt-theirs-done"] {
+        assert!(!tmp.join(name).exists(), "{name}");
+    }
+    assert!(tmp.join("wt-other-fresh").exists());
+    let branches = run(&work, &["branch", "--format=%(refname:short)"]);
+    let mut branches: Vec<&str> = branches.lines().collect();
+    branches.sort_unstable();
+    assert_eq!(branches, ["main", "t-other-fresh"]);
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
 /// T285 PR 2: MCP `worktree_add` creates the worktree for the session's linked agent (lock
 /// and claim row name it, as on the CLI) and `worktree_list` shows it bound; a session that
 /// is linked to no agent gets an error and creates nothing.

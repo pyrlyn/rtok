@@ -17,6 +17,8 @@ type Story = StoryObj<typeof meta>;
 export const Off: Story = {};
 export const On: Story = { args: { pressed: true } };
 export const Disabled: Story = { args: { disabled: true } };
+// The pressed text is `accent-fg`, which differs per theme.
+export const OnLight: Story = { ...On, globals: { theme: "light" } };
 
 export const Toggles: Story = {
     render: (args) => {

@@ -6,10 +6,14 @@ import { lazy, type RefObject, Suspense, useEffect, useRef, useState } from "rea
 import { useProjectMutation } from "../../api/query";
 import type { ProjectRow } from "../../api/snapshot.gen";
 import { Empty } from "../../states";
-import { focusRing } from "../../ui/cx";
+import { Button } from "../../ui/Button";
+import { Chip } from "../../ui/Chip";
+import { tooltipBox } from "../../ui/cx";
 import { Kpi } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
+import { Result } from "../../ui/Result";
 import { Search } from "../../ui/Search";
+import { Spinner } from "../../ui/Spinner";
 import { Switch } from "../../ui/Switch";
 import { ProjectList } from "./ProjectList";
 import Scene2D from "./Scene2D";
@@ -75,7 +79,10 @@ export function ProjectsOverview({
     const positions = useLayout(scene);
     const own = useRef<ViewApi | null>(null);
     const api = probe ?? own;
-    const { mutate } = useProjectMutation();
+    const { mutate, error, inFlight } = useProjectMutation();
+    const waiting = new Set(
+        inFlight.flatMap((r) => (r.action === "select" ? [Number(r.project)] : [])),
+    );
 
     const view: View = choice === "3d" && (!canGl || lost !== null) ? "2d" : choice;
     const why = lost ?? (canGl ? null : "WebGL is not available in this browser");
@@ -122,36 +129,47 @@ export function ProjectsOverview({
                 </label>
                 <div role="group" aria-label="view" className="ml-auto flex gap-1">
                     {VIEWS.map((v) => (
-                        <button
+                        <Chip
                             key={v.id}
-                            type="button"
-                            aria-pressed={choice === v.id}
-                            onClick={() => pick(v.id)}
-                            className={`${focusRing} rounded-md border border-border px-2.5 py-1 text-xs hover:border-border-strong aria-pressed:border-accent`}
+                            pressed={choice === v.id}
+                            onPressedChange={() => pick(v.id)}
                         >
                             {v.label}
-                        </button>
+                        </Chip>
                     ))}
                 </div>
                 {view !== "list" && (
                     <div className="flex gap-1">
                         {(["fit", "reset"] as const).map((a) => (
-                            <button
-                                key={a}
-                                type="button"
-                                onClick={() => api.current?.[a]()}
-                                className={`${focusRing} rounded-md border border-border px-2.5 py-1 text-xs hover:border-border-strong`}
-                            >
+                            <Button key={a} onClick={() => api.current?.[a]()}>
                                 {a === "fit" ? "Fit all" : "Reset view"}
-                            </button>
+                            </Button>
                         ))}
                     </div>
                 )}
             </div>
+            {waiting.size > 0 && (
+                // The canvas and the menu have no control that can hold the spinner.
+                <p
+                    role="status"
+                    aria-busy
+                    className="flex items-center gap-1.5 text-xs text-fg-muted"
+                >
+                    <span className="text-accent">
+                        <Spinner size="sm" />
+                    </span>
+                    Selecting {rows.find((r) => waiting.has(r.id))?.name ?? "project"}…
+                </p>
+            )}
+            {error && (
+                <Result verb="select" kind="error">
+                    {error.message}
+                </Result>
+            )}
             {choice === "3d" && why && (
                 <p
                     role="status"
-                    className="rounded-md border border-warn/40 px-2.5 py-1.5 text-xs text-warn-fg"
+                    className="rounded-md border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn-fg"
                 >
                     3D view unavailable ({why}); showing the 2D view.
                 </p>
@@ -163,11 +181,11 @@ export function ProjectsOverview({
                 </p>
             )}
             {view === "list" ? (
-                <ProjectList scene={scene} select={select} />
+                <ProjectList scene={scene} select={select} waiting={waiting} />
             ) : scene.nodes.length === 0 ? (
                 <Empty title="No project matches" />
             ) : (
-                <div className="relative h-[28rem] overflow-hidden rounded-md border border-border">
+                <div className="relative h-[28rem] overflow-hidden rounded-md border border-border bg-bg/60">
                     {view === "3d" ? (
                         <Suspense
                             fallback={
@@ -191,7 +209,7 @@ export function ProjectsOverview({
                 <div
                     role="tooltip"
                     style={{ left: tip.x + 12, top: tip.y + 12 }}
-                    className="pointer-events-none fixed z-30 rounded-md border border-border-strong bg-surface-2 px-2 py-1 text-2xs text-fg shadow-lg"
+                    className={`${tooltipBox} fixed`}
                 >
                     {tip.text}
                 </div>
@@ -237,7 +255,7 @@ function NodeMenu({
     }, [onClose]);
     if (!node) return null;
     const item =
-        "block w-full px-3 py-1.5 text-left text-xs hover:bg-surface-3 disabled:opacity-40";
+        "block w-full px-3 py-1.5 text-left text-xs transition-colors duration-fast hover:bg-surface-3 disabled:opacity-40";
     const act = (fn: () => void) => () => (fn(), onClose());
     return (
         <div
@@ -245,7 +263,7 @@ function NodeMenu({
             role="menu"
             aria-label={`${node.name} actions`}
             style={{ left: at.x, top: at.y }}
-            className="fixed z-40 min-w-36 rounded-md border border-border-strong bg-surface-2 py-1 shadow-lg"
+            className="fixed z-40 min-w-36 rounded-md border border-border-strong bg-surface py-1 shadow-e3"
         >
             <button
                 type="button"

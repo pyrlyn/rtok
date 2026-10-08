@@ -64,6 +64,15 @@ That is the whole ledger captured by the proxy: with archive rewriting older too
 on the wire, no bust was ever recorded and the hit rate is 97.5% (95.2% on the `codex`
 api, which reports 0 cache-creation tokens).
 
+### Per lane — the hit rate and the replay test
+
+Once the proxy has served traffic off the agent lane (bulk, internal, …), `rtok stats` adds a
+`lane` table beside `api` with the same counters and the prompt-cache hit rate of each lane
+(`lanes` in `--json`). A store of agent turns alone prints no such table. The agent lane's
+stability is pinned by `tests/proxy_cache_replay.rs`: it replays one growing conversation
+through the proxy with every rewrite on and asserts that `tools`, `system` and every message
+before the previous turn's live edge reach upstream byte for byte the same.
+
 ### guard — denials add no bytes
 
 A `guard` denial is a PreToolUse decision, not content: it suppresses a duplicate call

@@ -56,9 +56,9 @@ lang: ru
 | `rtok config get <key>` | напечатать одно итоговое значение, например `rtok config get proxy.port` |
 | `rtok config set <key> <value>` | отредактировать пользовательский файл на месте, сохраняя комментарии (использует `toml_edit`) |
 
-Учётные данные никогда не печатаются: `otel.headers` (он содержит ключи приёма OTLP) после установки показывается как `<redacted>`
-в `show`, `get`, `set` и `rtok report` — его источник при этом всё равно показывается. Чтобы увидеть значение, прочитайте
-сам файл.
+Учётные данные никогда не печатаются: `otel.headers` (он содержит ключи приёма OTLP) и `mcp.token` (bearer-токен
+`rtok mcp --http`) после установки показываются как `<redacted>` в `show`, `get`, `set` и `rtok report` — их
+источник при этом всё равно показывается. Чтобы увидеть значение, прочитайте сам файл.
 
 ## Эталонный файл
 
@@ -130,10 +130,22 @@ grok     = ["~/.grok/sessions"]        # listed as unsupported when present: xAI
 zcode    = ["~/.zcode"]                # listed as unsupported when present: ZCode does not document its session records
 antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Google does not document Antigravity's local data
 
+[agents.junk]                         # rtok agents junk list|clear: age floors, protected paths, your own junk paths
+keep_logs_days          = 30          # `logs` entries (the agents' documented log folders) modified within this many days stay; 0-3650
+temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay; 0-87600
+stale_session_days      = 30          # `--kind sessions` only: sessions not touched for more than this many days are junk, time is the only criterion; 0-3650; `--session-days N` for one run
+crash_dump_min_age_days = 7           # a crash dump in an `extra` crash-dumps folder older than this many days is safe to clear, a younger one is review; 0-3650
+exclude                 = []          # globs (~ = home) never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]; a bad glob keeps everything
+extra                   = []          # paths you vouch for as junk (D36), e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs | crash-dumps; host = a host id or rtok
+
 [mcp]                                 # rtok mcp
 tools                   = []          # [] = all tools from enabled plugins; else an allow-list; `expand` always stays listed (D4)
 max_description_tokens  = 60          # enforced by a test (T4.1)
 max_result_chars        = 20000       # above this, head/tail + archive id
+http                    = "127.0.0.1:8791"  # `rtok mcp --http` with no address; keep it on loopback
+http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
+token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start (T401)
+public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
 
 [proxy]                               # rtok proxy
 enabled         = true                # false = plain reverse proxy (bypass compress/bookkeeping); does NOT stop HTTP
@@ -164,7 +176,11 @@ toon                = false           # фильтр toon внутри этог�
 tools_rewrite       = false           # proxy.tools_rewrite
 context_management  = false           # proxy.context_management
 semantic_cache      = false           # plugins.proxy.semantic_cache, чтение и запись
-timeout_s           = 0               # таймаут чтения для этой lane; 0 = proxy.timeout_s
+flex                = false           # OpenAI service_tier = "flex" on this lane; see [proxy.flex]
+timeout_s           = 0               # таймаут чтения для этой lane; 0 = proxy.timeout_s, но не меньше 900 при flex = true (гайд OpenAI по Flex берёт 15 мин)
+upstream            = ""              # базовый URL для каждого запроса этой lane, любой wire; "" = proxy.upstream / openai_upstream / gemini_upstream
+max_in_flight       = 0               # запросов upstream одновременно; 0 = без лимита (lane agent не ограничивается никогда)
+max_queued          = 8               # при max_in_flight: сколько запросов ждут слот; следующий получает 429 + Retry-After
 
 [proxy.lanes.embeddings]              # те же ключи, что у bulk
 compress            = false
@@ -172,7 +188,11 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.meta]                    # те же ключи, что у bulk (models, подсчёт токенов)
 compress            = false
@@ -180,7 +200,11 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
 [proxy.lanes.internal]                # те же ключи, что у bulk (собственные вызовы модели rtok)
 compress            = false
@@ -188,11 +212,20 @@ toon                = false
 tools_rewrite       = false
 context_management  = false
 semantic_cache      = false
+flex                = false
 timeout_s           = 0
+upstream            = ""
+max_in_flight       = 0
+max_queued          = 8
 
-[proxy.batch]                         # no keys yet (T385.4)
+[proxy.batch]                         # файлы результатов провайдерского Batch
+parse_results       = false           # разобрать полученный файл результатов в строку usage на запрос; тело пересылается как есть
 
-[proxy.flex]                          # no keys yet (T385.5)
+[proxy.flex]                          # OpenAI Flex tier; which lanes get it is [proxy.lanes.<lane>] flex
+force               = false           # overwrite a service_tier the client sent (off: a client value is never changed)
+on_429              = "none"          # Flex has no capacity: none = the 429 goes to the client | backoff = retry on Flex | default = retry once on service_tier "auto" (the client's own tier, if force replaced one)
+retries             = 3               # backoff only: retries before giving up; at most 5
+backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
 [proxy.routing]                       # no keys yet (D9)
 
@@ -218,7 +251,7 @@ calibrate_samples = 30                # per class        (--calibrate)
 baseline        = ""                  # default name for --compare; "" = none
 price           = false               # show per-model USD costs (--price)
 # USD per MTok rows for --price (T49.1). Sources, fetched 2026-09-17 (Anthropic claude-fable-5-1,
-# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-06):
+# claude-opus-5-5 and claude-sonnet-5-5: 2026-10-08):
 # Anthropic claude-* rows: https://platform.claude.com/docs/en/about-claude/pricing
 # (input / 5m cache write / cache read / output). OpenAI gpt-5 / gpt-5-mini:
 # https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -237,7 +270,7 @@ output = 20.0
 [stats.prices."claude-sonnet-5-5"]
 input = 2.0
 cache_write = 2.5
-cache_read = 0.2
+cache_read = 0.1
 output = 10.0
 [stats.prices."claude-sonnet-5"]
 input = 2.0
@@ -364,10 +397,10 @@ dir = "tasks"                         # один Markdown-файл на зада
 
 [tasks.github]
 repo = ""                             # owner/name; пусто: remote origin
-project = 0                           # номер Projects v2, чьё поле Status ведёт задачи; 0 = только issues
+project = 0                           # номер Projects v2 владельца репо: issues попадают в него, поле Status следует за задачей; 0 = только issues
 
-[tasks.gitlab]
-url = "https://gitlab.com"            # базовый URL; задайте для своего инстанса
+[tasks.gitlab]                        # метки status::in-progress | status::done | status::wont-do; подзадача связана с родителем (relates_to)
+url = "https://gitlab.com"            # https базовый URL; задайте для своего инстанса; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, иначе glab
 project = ""                          # group/name или числовой id; пусто: remote origin
 
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
@@ -542,51 +575,84 @@ Lane agent сохраняет `calls.kind = api_request`; остальные з�
 | `tools_rewrite` | `proxy.tools_rewrite.enabled` | `false` | переписывание описаний в `tools[]` |
 | `context_management` | `proxy.context_management` | `false` | серверное редактирование контекста Anthropic |
 | `semantic_cache` | `plugins.proxy.semantic_cache.enabled` | `false` | чтение и запись кэша |
-| `timeout_s` | `proxy.timeout_s` | `0` | таймаут чтения этой lane в секундах; `0` = `proxy.timeout_s` |
+| `flex` | нет | `false` | OpenAI `service_tier = "flex"` для вызовов chat и responses, см. [`[proxy.flex]`](#proxyflex) |
+| `timeout_s` | `proxy.timeout_s` | `0` | таймаут чтения этой lane в секундах; `0` = `proxy.timeout_s`, но не меньше 900 при `flex = true` (руководство OpenAI по Flex поднимает таймаут SDK до 15 минут: запросы Flex чаще упираются в таймаут) |
+| `upstream` | `proxy.upstream`, `openai_upstream`, `gemini_upstream` | `""` | базовый URL для каждого запроса этой lane, какой бы ни был wire (шлюз или локальный сервер, который их понимает); `""` = собственный upstream wire |
+| `max_in_flight` | нет | `0` | сколько запросов этой lane одновременно у upstream, считая до конца потока ответа; `0` = без лимита |
+| `max_queued` | нет | `8` | при `max_in_flight`: сколько запросов ждут слот; следующий получает `429` с `Retry-After: 1` и до upstream не доходит |
 
-Flex, маршрутизации и upstream для отдельной lane здесь пока нет: каждый появится в этой
-таблице своим шагом (`[proxy.flex]`, `[proxy.routing]` ниже).
+У каждой lane свои слоты и своя очередь, а у lane `agent` нет ни того, ни другого: всплеск
+bulk заполняет только свою lane и никогда не задерживает ход агента. Запрос, которому
+отказала полная очередь, получает `rate_limit_error` в формате Anthropic, на который SDK
+провайдеров отвечают паузой и повтором; строки в `calls` он не пишет (до upstream он не
+дошёл), только строку `warn` в лог. Когда прокси выключен (`proxy.enabled`, `core.enabled`
+или `plugins.proxy.enabled` равны false), запросы не ограничиваются и не ставятся в очередь.
+У `batch` и `files` нет `upstream`: создание, опрос и результаты Batch-задачи всегда идут к
+провайдеру, которому она принадлежит.
 
-### `[proxy.batch]` / `[proxy.flex]` / `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
+Маршрутизации здесь пока нет: она появится в этой таблице своим шагом (`[proxy.routing]`
+ниже). У lane `agent` нет переключателя `flex`: живой ход не меняет уровень, пока клиент сам
+его не попросит.
 
-Эти три таблицы существуют и пусты: пустая `[proxy.batch]` загружается, но ни в одной пока нет
-ключа. Ключи ниже — **задуманные**; добавление любого из них в рабочий файл конфигурации
-по-прежнему не проходит `rtok config validate`, пока не появится соответствующий шаг. Fallback прокси
-уже пересылает неизвестные пути (включая `/v1/batches` и
-`/v1/messages/batches`) без `Wire`; внедрение Flex и переписывания маршрутизации — будущая работа над
-`prepare` / политикой. Полная семантика: [`docs/batch-flex.md`](batch-flex.md).
+### `[proxy.batch]`
 
-#### `[proxy.batch]`
+Наблюдение за провайдерским Batch. Сами вызовы Batch (создание, опрос, список, отмена, результаты)
+уже помечены `api_request:batch` через `[proxy.lanes]`, а их тела никогда не переписываются.
 
-| Ключ | Тип | По умолчанию (задумано) | Значение |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `true` | Главный переключатель; сегодня fallback axum всегда пересылает пути Batch |
-| `observe` | bool | `true` | Записывать создание/опрос/результаты Batch как отличимые строки журнала (**запланировано**) |
-| `parse_results` | bool | `false` | Если true, разбирать файлы/потоки результатов в строки `usage` (**запланировано**) |
+| Ключ | Тип | По умолчанию | Значение |
+|-----|------|--------------|---------|
+| `parse_results` | bool | `false` | После пересылки файла результатов записывает по одной строке `usage` на успешный запрос: Anthropic `GET /v1/messages/batches/{id}/results` и OpenAI `GET /v1/files/{id}/content`, если его строки — результаты Batch (такой вызов получает метку `api_request:batch`). Строки с ошибкой, истёкшие и повреждённые пропускаются. Нужен `[proxy.lanes] enabled`; байты ответа не меняются. |
 
 ```toml
-# Запланировано — сегодня не загружается
 [proxy.batch]
-enabled = true
-observe = true
 parse_results = false
 ```
 
-#### `[proxy.flex]`
+### `[proxy.flex]`
 
-| Ключ | Тип | По умолчанию (задумано) | Значение |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `false` | Если true, `prepare` может задать OpenAI `service_tier = "flex"`, если клиент его не указал |
-| `force` | bool | `false` | Перезаписывать `service_tier`, переданный клиентом |
-| `fallback` | string | `"none"` | `none` или `default` — поведение при `429` resource-unavailable от Flex (**TODO**) |
+Обработка Flex в OpenAI тарифицирует вызов chat или responses по ставкам Batch в обмен на задержку
+([OpenAI: Flex processing](https://developers.openai.com/api/docs/guides/flex-processing), проверено
+2026-10-08). При `flex = true` в lane (`bulk`, `internal`, `embeddings` или `meta`; у `agent`, `batch`
+и `files` его нет) rtok задаёт `service_tier = "flex"` в вызовах этой lane к `/v1/chat/completions`
+и `/v1/responses`. У Anthropic нет уровня Flex, его протокол не затрагивается никогда.
+
+Переданный клиентом `service_tier` (`auto`, `default`, `priority`, `flex`) не перезаписывается, пока не
+задано `force = true`. Если поля нет, rtok добавляет его в начало объекта, а все остальные байты
+пересылает так, как их прислал клиент.
+
+Когда у Flex нет мощности, OpenAI отвечает `429 Resource Unavailable` и ничего не списывает. Код ошибки
+в руководстве не назван, поэтому rtok считает так любой `429` на запрос, которому сам задал Flex. Запрос,
+у которого Flex задал клиент, не повторяется: этот `429` обрабатывает клиент.
+
+| Ключ | Тип | По умолчанию | Значение |
+|-----|------|---------|---------|
+| `force` | bool | `false` | Перезаписывать переданный клиентом `service_tier` значением `flex` |
+| `on_429` | string | `"none"` | `none` отдаёт `429` клиенту; `backoff` повторяет на Flex с удваиваемыми паузами; `default` повторяет один раз с `service_tier = "auto"` (стандартная обработка, дороже) |
+| `retries` | int | `3` | только `backoff`: повторов до того, как последний `429` уйдёт клиенту; не более `5` |
+| `backoff_ms` | int | `1000` | только `backoff`: пауза до первого повтора, удваивается, максимум 30 с |
+
+Пока rtok повторяет запрос, клиент ждёт и видит только итоговый ответ. Повтор `default` возвращает
+`service_tier`, который прислал клиент, если `force` его заменил, и ставит `auto` только когда клиент
+его не прислал. `Retry-After` на `429` (только секунды; дата и прочее игнорируются) удлиняет паузу до
+большего из него и задержки backoff, но не больше 30 с. Если он просит больше, ждать не станут: `backoff`
+отдаёт `429` клиенту, `default` сразу повторяет на запасном уровне. `408` не повторяется и доходит до
+клиента без изменений. Повторы пишутся в лог на уровне `warn`.
 
 ```toml
-# Запланировано — сегодня не загружается
+[proxy.lanes.bulk]
+flex = true
+
 [proxy.flex]
-enabled = false
 force = false
-fallback = "none"
+on_429 = "backoff"
 ```
+
+### `[proxy.routing]` — запланировано (см. `docs/batch-flex.md`)
+
+Таблица существует и пуста: ключей пока нет. Ключи ниже — **задуманные**; добавление любого из них
+в рабочий файл конфигурации по-прежнему не проходит `rtok config validate`, пока не появится
+соответствующий шаг. Переписывание для маршрутизации — будущая работа над `prepare` / политикой.
+Полная семантика: [`docs/batch-flex.md`](batch-flex.md).
 
 #### `[proxy.routing]`
 
@@ -687,6 +753,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `--session-days` это `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.exclude`, `.extra` без флага |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |
 | `agents sessions` | `--all` | (действие: также перечисляет завершённые сессии; live или idle — по `agents.idle`) |
 | `agents show` | — | разрешает префикс id через хранилище (T284); live или idle — по `agents.idle` (`--json` — строка «чтение») |

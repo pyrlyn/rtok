@@ -165,6 +165,7 @@ migration is forbidden; add the next directory.
 | `archive` | `cmd`, `read`, `archive`, `call_io` spill | `rtok expand`, `guard` |
 | `read_cache` | `read` | `read` (dedup) |
 | `notes` + `notes_fts` | `memory` | `memory` |
+| `note_files` | `memory` (`mem_save`, `remember:`: files the body names, the checkpoint's paths; T374) | `memory` prompt recall (RRF boost for files the session read or the prompt names; T452: up to 2 notes of a file the prompt names are recalled without a text match) |
 | `usage` | `proxy` (optional `call_id`) | `measure` |
 
 Raw payloads live on disk under `archive_dir/<id>`; the DB holds size, sha256 and path.

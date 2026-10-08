@@ -200,15 +200,19 @@ impl Store {
 }
 
 pub fn rrf_merge(fts: &[NoteHit], knn: &[NoteHit], limit: u32) -> Vec<NoteHit> {
+    rrf_merge_lists(&[fts, knn], limit)
+}
+
+/// Reciprocal rank fusion over any number of ranked lists (T374 adds the file-linked list to
+/// the text list). The first list to name a note supplies its title and snippet.
+pub fn rrf_merge_lists(lists: &[&[NoteHit]], limit: u32) -> Vec<NoteHit> {
     let mut scores: HashMap<i32, f32> = HashMap::new();
     let mut hits: HashMap<i32, NoteHit> = HashMap::new();
-    for (rank, h) in fts.iter().enumerate() {
-        *scores.entry(h.id).or_default() += 1.0 / (RRF_K + rank as f32 + 1.0);
-        hits.insert(h.id, h.clone());
-    }
-    for (rank, h) in knn.iter().enumerate() {
-        *scores.entry(h.id).or_default() += 1.0 / (RRF_K + rank as f32 + 1.0);
-        hits.entry(h.id).or_insert_with(|| h.clone());
+    for list in lists {
+        for (rank, h) in list.iter().enumerate() {
+            *scores.entry(h.id).or_default() += 1.0 / (RRF_K + rank as f32 + 1.0);
+            hits.entry(h.id).or_insert_with(|| h.clone());
+        }
     }
     let mut order: Vec<(i32, f32)> = scores.into_iter().collect();
     // T373: equal RRF scores break ties by note id ascending (byte-stable across runs).

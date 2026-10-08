@@ -11,14 +11,20 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use super::adapter::{Filter, TaskAdapter, set_status};
+use super::adapter::{Filter, Taken, TaskAdapter, set_status};
 use super::disk::DiskAdapter;
+use super::github::{self, GithubAdapter};
+use super::gitlab::{self, GitlabAdapter};
+use super::remote;
 use super::{NewTask, Status, Task, TaskId, check_prefix, resolve_prefix};
 use crate::config::layers::git_root;
 use crate::store::Store;
 
 /// The adapters `[tasks] adapter` accepts; the config validator checks the same set.
 pub const ADAPTERS: [&str; 3] = ["disk", "github", "gitlab"];
+
+/// Creates tried when the id keeps turning out taken, before the last error is the answer.
+const TAKEN_RETRIES: usize = 3;
 
 /// One project's tasks: where they are stored, the counter they are numbered from and the
 /// prefix new ids get.
@@ -49,18 +55,51 @@ impl Project {
         let prefix = resolve_prefix(&cfg.prefix, name.as_deref())?;
         let adapter: Box<dyn TaskAdapter> = match cfg.adapter.as_str() {
             "disk" => Box::new(DiskAdapter::new(root.join(&cfg.disk.dir))),
-            "github" | "gitlab" => bail!(
-                "rtok task: the {} adapter is not built yet (T441.7, T441.8); set [tasks] adapter = \"disk\"",
-                cfg.adapter
-            ),
+            "github" => {
+                let repo = github::repo(&cfg.github.repo, &key)?;
+                let token = remote::token(
+                    "github",
+                    &["GH_TOKEN", "GITHUB_TOKEN"],
+                    &["gh", "auth", "token"],
+                )?;
+                Box::new(
+                    GithubAdapter::new(github::API, &repo, &token, remote::WRITE_GAP)?
+                        .with_project(cfg.github.project.into()),
+                )
+            }
+            "gitlab" => {
+                let instance = gitlab::instance(&cfg.gitlab.url)?;
+                let project = gitlab::project(&cfg.gitlab.project, &instance, &key)?;
+                let host = instance.host_str().unwrap_or_default();
+                let token = remote::token(
+                    "gitlab",
+                    &["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "GL_TOKEN"],
+                    &["glab", "config", "get", "token", "--host", host],
+                )?;
+                Box::new(GitlabAdapter::new(
+                    &gitlab::api_base(&instance),
+                    &project,
+                    &token,
+                    remote::WRITE_GAP,
+                )?)
+            }
             other => bail!("rtok task: unknown [tasks] adapter {other:?}"),
         };
-        Ok(Self {
+        Ok(Self::with_adapter(key, root, prefix, adapter))
+    }
+
+    pub fn with_adapter(
+        key: String,
+        root: PathBuf,
+        prefix: String,
+        adapter: Box<dyn TaskAdapter>,
+    ) -> Self {
+        Self {
             key,
             root,
             prefix,
             adapter,
-        })
+        }
     }
 
     pub fn adapter(&self) -> &dyn TaskAdapter {
@@ -76,8 +115,18 @@ impl Project {
         {
             bail!("rtok task: no parent task {p}");
         }
-        self.seed(store, new.parent.as_ref())?;
-        let id = store.allocate_task_id(&self.key, &self.prefix, new.parent.as_ref())?;
+        let parent = new.parent.as_ref();
+        self.seed(store, parent)?;
+        for _ in 1..TAKEN_RETRIES {
+            let id = store.allocate_task_id(&self.key, &self.prefix, parent)?;
+            match self.adapter.create(new, &id) {
+                // Another machine's counter got there between the seed and the create (a
+                // remote adapter's own check); seeding again jumps past everything it made.
+                Err(e) if e.downcast_ref::<Taken>().is_some() => self.seed(store, parent)?,
+                done => return done,
+            };
+        }
+        let id = store.allocate_task_id(&self.key, &self.prefix, parent)?;
         self.adapter.create(new, &id)
     }
 
@@ -309,14 +358,21 @@ mod tests {
     }
 
     #[test]
-    fn remote_adapters_say_they_are_not_built_yet() {
+    fn gitlab_needs_an_origin_on_its_host_and_an_https_url() {
         let dir = checkout("remote");
-        let cfg = crate::config::Tasks {
+        let mut cfg = crate::config::Tasks {
             adapter: "gitlab".into(),
             ..crate::config::Tasks::default()
         };
+        // Both fail before any token lookup or request.
         let err = Project::open(&cfg, &dir).err().unwrap();
-        assert!(err.to_string().contains("not built yet"), "{err}");
+        assert!(
+            err.to_string().contains("set [tasks.gitlab] project"),
+            "{err}"
+        );
+        cfg.gitlab.url = "http://gitlab.example.com".into();
+        let err = Project::open(&cfg, &dir).err().unwrap();
+        assert!(err.to_string().contains("https://"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

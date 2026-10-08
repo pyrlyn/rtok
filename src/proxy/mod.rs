@@ -45,7 +45,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
-use axum::http::header::{ACCEPT_ENCODING, CONTENT_TYPE};
+use axum::http::header::{ACCEPT_ENCODING, CONTENT_TYPE, RETRY_AFTER};
 use axum::http::{HeaderMap, HeaderName, Request, Response, StatusCode};
 use axum::response::Response as AxumResponse;
 use axum::routing::get;
@@ -64,7 +64,10 @@ use rtok_plugin_sdk::Measurement;
 use wire::{API_ANTHROPIC, Wire, WireRequest, api_of, join_upstream};
 
 pub mod anthropic;
+pub mod batch_results;
 pub mod cli;
+mod flex;
+mod gate;
 pub mod gemini;
 pub mod lane;
 pub mod live;
@@ -128,6 +131,10 @@ pub struct ProxyState {
     client: Client,
     /// Clients for the lanes that set their own `timeout_s` (T385.2); the rest use `client`.
     lane_clients: HashMap<lane::Lane, Client>,
+    /// Lanes sent to their own `[proxy.lanes.<lane>] upstream` (T385.7).
+    lane_upstreams: HashMap<lane::Lane, String>,
+    /// Lanes with a `max_in_flight` cap (T385.7); the rest, `agent` always, go straight on.
+    gates: HashMap<lane::Lane, gate::Gate>,
     upstream: String,
     /// Where the OpenAI wires go; Anthropic paths keep using `upstream` (D11).
     openai_upstream: String,
@@ -150,9 +157,22 @@ impl ProxyState {
         let client = build_client(cfg.proxy.timeout_s)?;
         let mut lane_clients = HashMap::new();
         for lane in lane::Lane::ALL {
-            let secs = lane.policy(&cfg.proxy.lanes).timeout_s;
+            let policy = lane.policy(&cfg.proxy.lanes);
+            let secs = flex::lane_timeout_s(policy.flex, policy.timeout_s, cfg.proxy.timeout_s);
             if secs > 0 && secs != cfg.proxy.timeout_s {
                 lane_clients.insert(lane, build_client(secs)?);
+            }
+        }
+        let mut lane_upstreams = HashMap::new();
+        let mut gates = HashMap::new();
+        for lane in lane::Lane::ALL {
+            let policy = lane.policy(&cfg.proxy.lanes);
+            let base = policy.upstream.trim().trim_end_matches('/');
+            if !base.is_empty() {
+                lane_upstreams.insert(lane, base.to_string());
+            }
+            if let Some(gate) = gate::Gate::new(policy.max_in_flight, policy.max_queued) {
+                gates.insert(lane, gate);
             }
         }
         // Host agent: the `[hook] host` setting (T5.1 says `core.host`, which T12 removed —
@@ -162,6 +182,8 @@ impl ProxyState {
             store,
             client,
             lane_clients,
+            lane_upstreams,
+            gates,
             upstream: cfg.proxy.upstream.trim_end_matches('/').to_string(),
             openai_upstream: cfg.proxy.openai_upstream.trim_end_matches('/').to_string(),
             gemini_upstream: cfg.proxy.gemini_upstream.trim_end_matches('/').to_string(),
@@ -180,9 +202,18 @@ impl ProxyState {
         self.lane_clients.get(&lane).unwrap_or(&self.client)
     }
 
-    /// The upstream owning `wire`. Paths this build has no wire for keep the Anthropic
-    /// default, which is what they did before P11 (`/v1/responses` until T11.3).
-    fn upstream_for(&self, wire: Option<&'static dyn Wire>) -> &str {
+    /// Requests on `lane` waiting for an upstream slot right now (T385.7); 0 when uncapped.
+    pub fn queued(&self, lane: lane::Lane) -> usize {
+        self.gates.get(&lane).map_or(0, gate::Gate::waiting)
+    }
+
+    /// The lane's own upstream when it names one, else the upstream owning `wire`. Paths
+    /// this build has no wire for keep the Anthropic default, which is what they did before
+    /// P11 (`/v1/responses` until T11.3).
+    fn upstream_for(&self, lane: lane::Lane, wire: Option<&'static dyn Wire>) -> &str {
+        if let Some(base) = self.lane_upstreams.get(&lane) {
+            return base;
+        }
         match wire.map(Wire::provider) {
             Some("openai") => &self.openai_upstream,
             Some("gemini") => &self.gemini_upstream,
@@ -295,6 +326,24 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         );
     }
 
+    // The lane's in-flight cap (T385.7), taken before the body is read so a queued request
+    // holds no body in memory. Plain mode is rtok switched off, which never turns a request
+    // away. The slot rides with the response stream and frees when that stream ends.
+    let slot = match state.gates.get(&req_lane) {
+        Some(gate) if !state.plain() => match gate.enter().await {
+            Some(slot) => Some(slot),
+            None => {
+                let msg = format!(
+                    "{method} {path}: {} lane at max_in_flight with a full queue, answered 429",
+                    req_lane.name()
+                );
+                log_off_worker(&state, "warn", msg.clone());
+                return queue_full(&msg);
+            }
+        },
+        _ => None,
+    };
+
     let request_body = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(b) => b,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
@@ -305,8 +354,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     // bookkeeping, compress, or request shaping. Listener stays up until process exit.
     // An earlier rtok hop already shaped and recorded this request (T442).
     let plain = state.plain() || hops > 0;
-    let (request_body, recorded, context_armed) = if plain {
-        (request_body, None, false)
+    let (request_body, recorded, context_armed, flex_retry) = if plain {
+        (request_body, None, false, None)
     } else {
         // Request bookkeeping is CPU-bound (serde parse of up to `MAX_BODY_BYTES`,
         // tokenizer estimates, sync store writes) — run it off the tokio worker so a
@@ -333,7 +382,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
             // The task panicked or was cancelled: fail open exactly like `record` /
             // `compress` / `prepare` already do on their own internal errors — forward
             // the original bytes unmodified rather than failing the request.
-            Err(_join_err) => (original_body, None, false),
+            Err(_join_err) => (original_body, None, false, None),
         }
     };
 
@@ -360,7 +409,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
         }
     }
 
-    let target = match join_upstream(state.upstream_for(wire), &path, query.as_deref()) {
+    let target = match join_upstream(state.upstream_for(req_lane, wire), &path, query.as_deref()) {
         Ok(u) => u,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
     };
@@ -389,7 +438,22 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     {
         rb = rb.header("anthropic-beta", anthropic::CONTEXT_BETA);
     }
-    let upstream = match rb.body(request_body.clone()).send().await {
+    let flex::Sent {
+        result,
+        body: request_body,
+        retries,
+    } = flex::send(rb, request_body, flex_retry.as_ref()).await;
+    if retries > 0 {
+        let r = recorded.as_ref();
+        log(
+            &state,
+            r.map_or("?", |r| r.session.as_str()),
+            r.map(|r| r.call_id),
+            "warn",
+            &format!("flex 429 on {method} {path}: {retries} retry(ies)"),
+        );
+    }
+    let upstream = match result {
         Ok(r) => r,
         Err(e) => {
             if plain {
@@ -452,6 +516,10 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let req_len = request_body.len();
     let model_live = request_model(&request_body);
     let provider_live = wire.map(Wire::provider).map(str::to_string);
+    // Batch results are read only after they were forwarded (T385.4), and only when asked.
+    let results = (state.cfg.proxy.batch.parse_results && status.is_success())
+        .then(|| batch_results::source(req_lane, &method, &path))
+        .flatten();
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(TEE_CHANNEL_CHUNKS);
     let recorder = state.clone();
     let body_stream = upstream.bytes_stream();
@@ -486,6 +554,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
             }
         }
         drop(tx);
+        // Upstream is done with this request; bookkeeping below needs no slot.
+        drop(slot);
         // A body past the `buf` cap is incomplete as recorded too.
         let complete = complete && total_bytes == buf.len();
         if plain {
@@ -518,6 +588,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
                     total_bytes,
                     complete,
                     cache_lane.then_some(caller.as_str()),
+                    results,
                 );
             })
             .await;
@@ -551,7 +622,7 @@ fn shape_request(
     headers: &HeaderMap,
     lane: lane::Lane,
     request_body: Bytes,
-) -> (Bytes, Option<Recorded>, bool) {
+) -> (Bytes, Option<Recorded>, bool, Option<flex::Retry>) {
     // Each rewrite below runs only when its global switch and this lane's switch are both on.
     let policy = lane.policy(&state.cfg.proxy.lanes);
     let parsed = serde_json::from_slice::<Value>(&request_body).ok();
@@ -607,7 +678,16 @@ fn shape_request(
     if let (Some(delta), Some(r)) = (tools_delta, recorded.as_ref()) {
         record_tools_rewrite(state, r, delta);
     }
-    (request_body, recorded, context_armed)
+    // Last, so the tier is the only thing that differs from what the other rewrites left.
+    let flex_cfg = &state.cfg.proxy.flex;
+    let (request_body, flex_retry) = match wire {
+        Some(wire) if policy.flex => match flex::apply(wire.provider(), &request_body, flex_cfg) {
+            Some(flexed) => (flexed, flex::Retry::new(request_body, flex_cfg)),
+            None => (request_body, None),
+        },
+        _ => (request_body, None),
+    };
+    (request_body, recorded, context_armed, flex_retry)
 }
 
 /// `compress` mode: run every enabled plugin's `proxy_filter` over the parsed body and
@@ -917,6 +997,7 @@ fn finish(
     response_total_bytes: usize,
     complete: bool,
     caller: Option<&str>,
+    results: Option<batch_results::Source>,
 ) {
     let Some(r) = recorded else { return };
     let session = r.session.clone();
@@ -989,7 +1070,20 @@ fn finish(
                 "no usage in upstream response",
             );
         }
-        None => {}
+        None => {
+            if let Some(source) = results
+                && let Err(e) = batch_results::record(
+                    &state.store,
+                    &session,
+                    r.call_id,
+                    r.model.as_deref(),
+                    source,
+                    response_body,
+                )
+            {
+                log_err("batch results", e);
+            }
+        }
     }
 }
 
@@ -1131,13 +1225,24 @@ fn hop_by_hop(name: &str) -> bool {
     )
 }
 
+/// A lane at its in-flight cap with a full queue (T385.7). `429` + `Retry-After` rather than
+/// `503`: the provider SDKs already back off and retry on it, and it says "you, slow down",
+/// which is what a lane over its own cap is.
+fn queue_full(message: &str) -> AxumResponse {
+    let mut response = error_response(StatusCode::TOO_MANY_REQUESTS, message);
+    response
+        .headers_mut()
+        .insert(RETRY_AFTER, gate::RETRY_AFTER_S.into());
+    response
+}
+
 fn error_response(status: StatusCode, message: &str) -> AxumResponse {
     let body = format!(
         r#"{{"type":"error","error":{{"type":"{}","message":{}}}}}"#,
-        if status == StatusCode::BAD_GATEWAY {
-            "upstream_error"
-        } else {
-            "invalid_request_error"
+        match status {
+            StatusCode::BAD_GATEWAY => "upstream_error",
+            StatusCode::TOO_MANY_REQUESTS => "rate_limit_error",
+            _ => "invalid_request_error",
         },
         serde_json::to_string(message).unwrap_or_else(|_| "\"proxy error\"".to_string())
     );
@@ -1520,14 +1625,22 @@ mod tests {
             .expect("request");
         assert_eq!(resp.status(), reqwest::StatusCode::LOOP_DETECTED);
         mock.assert_calls(0);
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let logged = state
+        // The log row is written off the response path; a fixed sleep lost that race on a
+        // loaded CI runner, so wait for it with a generous deadline instead.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while !state
             .store
             .logs_after(0, 10)
             .unwrap()
             .iter()
-            .any(|r| r.level == "error" && r.message.contains("proxy.upstream"));
-        assert!(logged);
+            .any(|r| r.level == "error" && r.message.contains("proxy.upstream"))
+        {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "no proxy.upstream error row"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
         task.abort();
     }
 }

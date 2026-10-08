@@ -8,7 +8,7 @@ import { expect, userEvent, within } from "storybook/test";
 import { sampleSnapshot } from "../api/sample";
 import type { CallRow } from "../api/snapshot.gen";
 import { Empty, ErrorState } from "../states";
-import { DataTable, type Column } from "./DataTable";
+import { DataTable, nextSort, type Column, type Sort } from "./DataTable";
 import { Pill } from "./Pill";
 
 const columns: Column<CallRow>[] = [
@@ -63,6 +63,12 @@ export const TenThousandRows: Story = {
     },
 };
 
+// A selected row in both themes: axe checks the cell text on the accent wash.
+export const SelectedRow: Story = {
+    args: { selectedId: String(sampleSnapshot.calls[0]?.id), onSelect: () => {} },
+};
+export const SelectedRowLight: Story = { ...SelectedRow, globals: { theme: "light" } };
+
 export const Selectable: Story = {
     render: (args) => {
         const [selected, setSelected] = useState<string>();
@@ -80,5 +86,40 @@ export const Selectable: Story = {
         first.focus();
         await userEvent.keyboard("{Enter}");
         await expect(first).toHaveAttribute("aria-selected", "true");
+    },
+};
+
+const sortable: Column<CallRow>[] = columns.map((c) =>
+    c.id === "ms" || c.id === "name"
+        ? { ...c, sortValue: (r: CallRow) => (c.id === "ms" ? r.ms : r.name) }
+        : c,
+);
+
+export const Sortable: Story = {
+    render: (args) => {
+        const [sort, setSort] = useState<Sort>();
+        return (
+            <DataTable
+                {...args}
+                columns={sortable}
+                sort={sort}
+                onSortChange={(next) => setSort(next)}
+            />
+        );
+    },
+    play: async ({ canvasElement }) => {
+        const ms = within(canvasElement).getByRole("columnheader", { name: /ms/ });
+        await expect(ms).toHaveAttribute("aria-sort", "none");
+        await userEvent.click(within(ms).getByRole("button"));
+        await expect(ms).toHaveAttribute("aria-sort", "ascending");
+        await userEvent.click(within(ms).getByRole("button"));
+        await expect(ms).toHaveAttribute("aria-sort", "descending");
+        await expect(nextSort({ id: "ms", desc: true }, "ms")).toBeUndefined();
+        // A column without `sortValue` stays a plain header.
+        await expect(
+            within(within(canvasElement).getByRole("columnheader", { name: /kind/ })).queryByRole(
+                "button",
+            ),
+        ).toBeNull();
     },
 };

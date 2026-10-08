@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { useSnapshot } from "../api/query";
+import { Mark, MarkRows } from "../charts/Mark";
 import type { Snapshot } from "../api/snapshot.gen";
 import { Loading } from "../states";
 import { Chip } from "../ui/Chip";
@@ -13,7 +14,8 @@ import { focusRing } from "../ui/cx";
 import type { Column } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
-import { compact, pct } from "./format";
+import { Result } from "../ui/Result";
+import { compact, fmt, pct } from "./format";
 import type { CheckState } from "./model";
 
 /** Renders `children` once a snapshot exists; while offline the shell renders no page at all. */
@@ -54,9 +56,23 @@ export function Count({ children }: { children: ReactNode }) {
     return <span className="ml-auto text-2xs text-fg-subtle">{children}</span>;
 }
 
-export function PanelLink({ to, children }: { to: `/${string}`; children: ReactNode }) {
+export function PanelLink({
+    to,
+    search,
+    className = "",
+    children,
+}: {
+    to: `/${string}`;
+    search?: Record<string, string | undefined>;
+    className?: string;
+    children: ReactNode;
+}) {
     return (
-        <Link to={to} className={`${focusRing} rounded-sm text-accent-fg hover:underline`}>
+        <Link
+            to={to}
+            search={search}
+            className={`${focusRing} rounded-sm text-accent-fg hover:underline ${className}`}
+        >
             {children}
         </Link>
     );
@@ -114,7 +130,20 @@ export function TokenMix({ tokens }: { tokens: Tokens }) {
                 className="flex h-2 overflow-hidden rounded-full bg-surface-3"
             >
                 {parts.map(([k, v, cls]) => (
-                    <div key={k} className={cls} style={{ width: `${(v / total) * 100}%` }} />
+                    <Mark
+                        key={k}
+                        tip={
+                            <MarkRows
+                                title={k}
+                                rows={[
+                                    ["tokens", fmt(v)],
+                                    ["share", pct(v / total, 1)],
+                                ]}
+                            />
+                        }
+                        className={cls}
+                        style={{ width: `${(v / total) * 100}%` }}
+                    />
                 ))}
             </div>
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-2xs text-fg-muted">
@@ -133,10 +162,10 @@ export function TokenMix({ tokens }: { tokens: Tokens }) {
 export function Missing({ page, command }: { page: string; command: string }) {
     return (
         <Panel title={page}>
-            <p role="alert" className="text-xs text-delta-fg">
+            <Result kind="error">
                 {page} did not answer this tick (Snapshot.{page} = null).{" "}
                 <code className="text-fg-muted">{command}</code> has the details.
-            </p>
+            </Result>
         </Panel>
     );
 }

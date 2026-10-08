@@ -1,8 +1,10 @@
 # Cloud MCP mode for the Grok API
 
-Research and design note (2026-09-26). Status: proposal, nothing built yet. xAI facts were
-checked against docs.x.ai on 2026-09-26; rtok paths were checked against `origin/main`
-(8f318517).
+Research and design note (2026-09-26). Status (2026-10-08, T401): the remote MCP path is
+built as `rtok mcp --http` (§9); the client-side functions path is documented in §10 and has
+no flag of its own. xAI facts were checked against docs.x.ai on 2026-09-26; rtok paths were
+checked against `origin/main` (8f318517); the MCP transport rules in §9 were checked on
+2026-10-08.
 
 ## 1. Summary
 
@@ -172,3 +174,67 @@ Hooks
 - Remote MCP supports only Streamable HTTP and SSE, and needs a public HTTPS URL.
 - Remote-MCP tool outputs are never returned to the client.
 - `src/mcp/wrap.rs` (foreign servers) stays stdio-only.
+
+## 9. What T401 built: `rtok mcp --http`
+
+- `rtok mcp --http [IP:PORT]` serves the stdio server's tools over Streamable HTTP at `/mcp`.
+  Without an address it binds `[mcp] http` (`127.0.0.1:8791`). Code: `src/mcp/http.rs`.
+- Transport: rmcp's own `StreamableHttpService` (feature `transport-streamable-http-server`,
+  rmcp 3.4.1 in `Cargo.lock`), stateless, JSON replies, no SSE stream on `GET`. A thin
+  `ServerHandler` passes `tools/list` and `tools/call` to the stdio `Server`, so the
+  allow-list, the required-field gate, `invoke` and `record` are one code path. A `read` call
+  over HTTP writes the same `calls` and `tokens` rows as over stdio (`tests/mcp_http.rs`).
+- Auth: every request needs `Authorization: Bearer <token>`, compared in constant time
+  (`subtle`). The token comes from `RTOK_MCP_TOKEN` or `[mcp] token`, never a flag, so it does
+  not show in `ps`. It must be at least 16 visible ASCII characters; otherwise the server does
+  not start. `config show/get` print `mcp.token` as `<redacted>`.
+- Host and Origin: rmcp refuses a `Host` other than `localhost`, `127.0.0.1`, `::1`, the bound
+  IP or the host of `[mcp] public_url` with 403, and any `Origin` other than the origin of
+  `public_url` with 403.
+- Allow-list: `[mcp] http_tools` replaces `[mcp] tools` for the HTTP server. The default is
+  `["read", "search", "tree"]`; `expand`, `ping` and `whoami` stay listed as on stdio.
+
+MCP transport rules this follows, checked 2026-10-08:
+
+- "Servers **MUST** validate the `Origin` header on all incoming connections"; a present,
+  invalid one gets 403 Forbidden. Local servers "**SHOULD** bind only to localhost".
+  https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+- A server "**MAY** assign a session ID"; sessions are optional, so stateless is allowed.
+  Same page, "Session Management".
+- `GET` answers either an SSE stream or 405 Method Not Allowed. A notification or response
+  `POST` gets 202 Accepted. A request `POST` gets `application/json` or `text/event-stream`.
+  An unsupported `MCP-Protocol-Version` gets 400; an absent one means `2025-03-26`.
+  https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
+
+Setup for the Grok API:
+
+```sh
+export RTOK_MCP_TOKEN="$(openssl rand -hex 32)"
+cloudflared tunnel --url http://127.0.0.1:8791      # prints https://<name>.trycloudflare.com
+export RTOK_MCP_PUBLIC_URL=https://<name>.trycloudflare.com
+rtok mcp --http
+```
+
+The xAI tools entry (§2) is then `{"type": "mcp", "server_url":
+"https://<name>.trycloudflare.com/mcp", "server_label": "rtok", "allowed_tools": ["read",
+"search", "tree"], "authorization": "<token>"}`.
+
+Not built: SSE on `GET`, sessions, the legacy HTTP+SSE transport, a `POST /call` shortcut,
+and `rtok proxy` running rtok's own `function_call`s (§5 step 3).
+
+## 10. Client-side functions without a flag
+
+API users who run the tool loop themselves do not need the HTTP server. The stdio server
+answers a lone `tools/list` without `initialize`, and its `inputSchema` is already a JSON
+Schema, so the xAI `function` tools (§5 step 3) are one `jq` away:
+
+```sh
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | rtok mcp \
+  | jq -c '[.result.tools[] | {type: "function", name, description, parameters: .inputSchema}]'
+```
+
+`[mcp] tools` narrows that list the same way it narrows stdio. For each `function_call` the
+model returns, run `rtok mcp --call <name> --json '<arguments>'` and send its stdout back as
+`{"type": "function_call_output", "call_id", "output"}` with `previous_response_id`. The exit
+code is 1 when the tool failed; the text is then the error. `--call` goes through the same
+`invoke_text` and `record` as `tools/call`, so these calls are measured too.

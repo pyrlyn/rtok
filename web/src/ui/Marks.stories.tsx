@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Bitset, MiniBars } from "./Marks";
+import { Bitset, BudgetGrid, MiniBars, ShareBar } from "./Marks";
 
 const meta = {
     title: "UI/Marks",
@@ -23,6 +23,12 @@ const plugin = (id: string, enabled: boolean, saves_tokens = true) => ({
     saves_tokens,
 });
 
+// The grid sits on the mark tile, which stays dark in both themes.
+export const Budget: StoryObj = {
+    render: () => <BudgetGrid cut={0.62} label="62% of estimated tokens cut" />,
+};
+export const BudgetLight: StoryObj = { ...Budget, globals: { theme: "light" } };
+
 export const PluginBitset: StoryObj = {
     render: () => (
         <Bitset
@@ -38,3 +44,27 @@ export const PluginBitset: StoryObj = {
         />
     ),
 };
+
+const shareRows: [string, string][] = [
+    ["cost", "$12.84"],
+    ["of the top model", "62%"],
+];
+
+// The bar is a picture beside a figure, so each tone is shown on its row's own track.
+export const ShareAccent: StoryObj = {
+    render: () => (
+        <div className="w-48">
+            <ShareBar title="claude-sonnet-5" share={0.62} rows={shareRows} />
+        </div>
+    ),
+};
+export const ShareAccentLight: StoryObj = { ...ShareAccent, globals: { theme: "light" } };
+
+export const ShareDelta: StoryObj = {
+    render: () => (
+        <div className="w-48">
+            <ShareBar title="graph" share={0.35} tone="delta" rows={shareRows} />
+        </div>
+    ),
+};
+export const ShareDeltaLight: StoryObj = { ...ShareDelta, globals: { theme: "light" } };

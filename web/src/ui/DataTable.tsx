@@ -15,9 +15,48 @@ export interface Column<T extends RowData> {
     width?: string;
     align?: "right";
     cell: (row: T) => ReactNode;
+    /** Makes the header a sort button; `null` and `undefined` always sort last. */
+    sortValue?: (row: T) => number | string | null | undefined;
+    /** Plain value for CSV and JSON export; defaults to `sortValue`, and a column with neither is left out. */
+    exportValue?: (row: T) => Cell;
 }
 
-// No sorting or filtering yet: those register as features here when a page needs them.
+export type Cell = number | string | boolean | null | undefined;
+
+export interface Sort {
+    id: string;
+    desc: boolean;
+}
+
+/** Stable sort by one column; unknown or unsortable ids leave the order alone. */
+export function sortRows<T extends RowData>(
+    rows: readonly T[],
+    columns: readonly Column<T>[],
+    sort?: Sort,
+): T[] {
+    const value = columns.find((c) => c.id === sort?.id)?.sortValue;
+    if (!sort || !value) return [...rows];
+    const dir = sort.desc ? -1 : 1;
+    return rows
+        .map((row, i) => ({ row, i, v: value(row) }))
+        .sort((a, b) => {
+            if (a.v == null || b.v == null) return a.v == null ? (b.v == null ? a.i - b.i : 1) : -1;
+            const c =
+                typeof a.v === "number" && typeof b.v === "number"
+                    ? a.v - b.v
+                    : String(a.v).localeCompare(String(b.v));
+            return c * dir || a.i - b.i;
+        })
+        .map((x) => x.row);
+}
+
+/** none, then ascending, then descending, then none again. */
+export function nextSort(current: Sort | undefined, id: string): Sort | undefined {
+    if (current?.id !== id) return { id, desc: false };
+    return current.desc ? undefined : { id, desc: true };
+}
+
+// Sorting is ours (`sortRows`): the pages hold the sort in the URL, so the table only displays it.
 const features = tableFeatures({});
 
 // ARIA table roles on divs instead of <table>: only the visible rows exist in the DOM, so
@@ -33,6 +72,8 @@ export function DataTable<T extends RowData>({
     rowHeight = 36,
     selectedId,
     onSelect,
+    sort,
+    onSortChange,
 }: {
     label: string;
     rows: readonly T[];
@@ -44,7 +85,10 @@ export function DataTable<T extends RowData>({
     rowHeight?: number;
     selectedId?: string;
     onSelect?: (row: T) => void;
+    sort?: Sort;
+    onSortChange?: (next: Sort | undefined) => void;
 }) {
+    const sorted = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort]);
     const defs = useMemo<ColumnDef<typeof features, T>[]>(
         () =>
             columns.map((c) => ({
@@ -54,7 +98,7 @@ export function DataTable<T extends RowData>({
             })),
         [columns],
     );
-    const table = useTable({ features, columns: defs, data: rows as T[], getRowId });
+    const table = useTable({ features, columns: defs, data: sorted, getRowId });
     const body = table.getRowModel().rows;
     const scroller = useRef<HTMLDivElement>(null);
     // A short table shrinks to its rows instead of leaving a tall empty panel.
@@ -96,9 +140,30 @@ export function DataTable<T extends RowData>({
                             <div
                                 key={header.id}
                                 role="columnheader"
+                                aria-sort={ariaSort(columns[i], sort)}
                                 className={`truncate ${align(i)}`}
                             >
-                                {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                                {header.isPlaceholder ? null : columns[i]?.sortValue &&
+                                  onSortChange ? (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            onSortChange(nextSort(sort, header.column.id))
+                                        }
+                                        className={`${focusRing} cursor-pointer rounded-sm uppercase hover:text-fg`}
+                                    >
+                                        {columns[i].header}
+                                        <span aria-hidden="true">
+                                            {sort?.id === header.column.id
+                                                ? sort.desc
+                                                    ? " ↓"
+                                                    : " ↑"
+                                                : ""}
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <table.FlexRender header={header} />
+                                )}
                             </div>
                         ))}
                     </div>
@@ -146,7 +211,7 @@ export function DataTable<T extends RowData>({
                                     height: item.size,
                                     transform: `translateY(${item.start}px)`,
                                 }}
-                                className={`${focusRing} grid items-center gap-x-3 border-b border-border/50 px-3 text-xs hover:bg-surface-2/70 aria-selected:bg-accent/15 ${onSelect ? "cursor-pointer" : ""}`}
+                                className={`${focusRing} grid items-center gap-x-3 border-b border-border/60 px-3 text-xs transition-colors duration-fast ease-standard hover:bg-surface-2/70 aria-selected:bg-accent/10${onSelect ? "cursor-pointer" : ""}`}
                             >
                                 {row.getAllCells().map((cell, i) => (
                                     <div
@@ -164,4 +229,9 @@ export function DataTable<T extends RowData>({
             </div>
         </div>
     );
+}
+
+function ariaSort<T extends RowData>(column: Column<T> | undefined, sort: Sort | undefined) {
+    if (!column?.sortValue) return undefined;
+    return sort?.id === column.id ? (sort.desc ? "descending" : "ascending") : "none";
 }
