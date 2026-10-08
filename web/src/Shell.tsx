@@ -5,6 +5,7 @@
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
+import { LiveStatus } from "./LiveStatus";
 import { Orb } from "./Orb";
 import { Kbd, paletteKeys } from "./palette/Kbd";
 import type { Target } from "./palette/Palette";
@@ -16,15 +17,6 @@ import { useTheme } from "./theme";
 import { focusRing } from "./ui/cx";
 import { Icon } from "./ui/Icon";
 import { lazyPart } from "./ui/lazyPart";
-import { Pill, type PillTone } from "./ui/Pill";
-import type { ConnectionState } from "./api/ws";
-
-// The label says the state; the tone only repeats it.
-const linkTone: Record<ConnectionState, PillTone> = {
-    open: "ok",
-    connecting: "info",
-    closed: "fail",
-};
 
 // React Aria comes with the palette, so neither weighs on the first paint.
 const Palette = lazyPart("the command palette", () =>
@@ -120,9 +112,7 @@ export function Shell() {
                                 {title}
                             </h1>
                         </div>
-                        <Pill tone={linkTone[connection]} dot>
-                            {connection === "open" ? "live" : connection}
-                        </Pill>
+                        <LiveStatus />
                         <button
                             type="button"
                             onClick={() => setPalette(true)}

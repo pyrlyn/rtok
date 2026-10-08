@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,433 @@
+@@ -0,0 +1,434 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -128,7 +128,8 @@ target/tmp/t60-2-config-init.toml
 +# semantic_cache      = false
 +# timeout_s           = 0
 +
-+[proxy.batch]                         # no keys yet
++[proxy.batch]                         # provider Batch result files
++# parse_results       = false           # read a fetched results file into one usage row per request; the body is forwarded as is
 +
 +[proxy.flex]                          # no keys yet
 +

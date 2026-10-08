@@ -14,6 +14,8 @@ export interface RendererEvents {
   /** The pointer is over x index `index`. */
   hover(index: number): void;
   leave(): void;
+  /** The pointer moved onto the segment of series `id` (null: none) of a stacked column. */
+  series?(id: string | null): void;
 }
 
 export interface ChartView {

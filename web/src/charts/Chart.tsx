@@ -12,7 +12,7 @@ import {
     type KeyboardEvent,
 } from "react";
 import { focusRing } from "../ui/cx";
-import { setHover, useHover } from "./hover";
+import { setHover, useHover, useScope } from "./hover";
 import { loadRenderer, type Anchor, type ChartView } from "./renderer";
 import { stackAt, type ChartSpec, type Tone } from "./spec";
 import { Tooltip } from "./Tooltip";
@@ -40,22 +40,32 @@ export function Chart({
     const view = useRef<ChartView | null>(null);
     const latest = useRef(spec);
     latest.current = spec;
-    const me = useMemo(() => Symbol("chart"), []);
+    // A chart inside a card takes the card's identity, so the card can tell the hover is its own.
+    const scope = useScope();
+    const me = useMemo(() => scope ?? Symbol("chart"), [scope]);
     const tipId = useId();
     const [hovered, setHovered] = useState<number | null>(null);
     const [anchor, setAnchor] = useState<Anchor | null>(null);
     const shared = useHover(spec.sync);
+    const sharedIndex = shared?.index ?? null;
+    const sharedOwner = shared?.owner;
     const sharedNow = useRef(shared);
     sharedNow.current = shared;
     const hoveredNow = useRef(hovered);
     hoveredNow.current = hovered;
 
+    // The renderer reports the segment on mouse moves, which can land before the hover itself.
+    const segment = useRef<string | null>(null);
+    const column = useRef<number | null>(null);
     const own = useCallback(
         (i: number | null) => {
             setHovered(i);
             setAnchor(i == null ? null : (view.current?.anchor(i) ?? null));
             const group = latest.current.sync;
-            if (group) setHover(group, i == null ? null : { index: i, owner: me });
+            if (!group) return;
+            column.current = i;
+            if (i == null) segment.current = null;
+            setHover(group, i == null ? null : { index: i, owner: me, series: segment.current });
         },
         [me],
     );
@@ -72,6 +82,13 @@ export function Chart({
                         if (!(s && s.owner !== me && s.index === i)) own(i);
                     },
                     leave: () => own(null),
+                    series: (id) => {
+                        segment.current = id;
+                        const group = latest.current.sync;
+                        const index = column.current;
+                        if (group && index != null)
+                            setHover(group, { index, owner: me, series: id });
+                    },
                 });
             })
             // Fail open: without a renderer the box keeps its accessible label and the page works.
@@ -95,9 +112,10 @@ export function Chart({
     // Another chart in the group owns the hover: show its pointer here, without a tooltip.
     useEffect(() => {
         if (!spec.sync) return;
-        if (shared && shared.owner !== me) view.current?.pointer(shared.index);
-        else if (!shared) view.current?.pointer(null);
-    }, [shared, me, spec.sync]);
+        if (sharedIndex != null && sharedOwner !== me) view.current?.pointer(sharedIndex);
+        else if (sharedIndex == null) view.current?.pointer(null);
+        // The segment alone changes often and must not move the pointer again.
+    }, [sharedIndex, sharedOwner, me, spec.sync]);
 
     const n = spec.x.length;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -117,9 +135,12 @@ export function Chart({
         if (next === undefined || !n) return;
         e.preventDefault();
         view.current?.pointer(next);
+        segment.current = null;
         own(next);
     };
 
+    // Where this chart's marker sits, hovered here or echoed from the group; tests read it.
+    const pointer = hovered ?? (shared && shared.owner !== me ? shared.index : null);
     const tip = hovered != null && anchor && (shared?.owner ?? me) === me;
     return (
         <>
@@ -128,6 +149,7 @@ export function Chart({
                 role="img"
                 aria-label={spec.label}
                 aria-describedby={tip ? tipId : undefined}
+                data-pointer={pointer ?? undefined}
                 tabIndex={0}
                 onKeyDown={onKeyDown}
                 onBlur={() => {
@@ -145,14 +167,21 @@ export function Chart({
     );
 }
 
+const NO_DATA = "no data";
+const show = (v: number | null | undefined, format: (v: number) => string) =>
+    v == null ? NO_DATA : format(v);
+
 function Rows({ spec, i, format }: { spec: ChartSpec; i: number; format: (v: number) => string }) {
     const rows = spec.dots ? [...spec.series, spec.dots] : spec.series;
+    const empty = spec.series.every((s) => s.values[i] == null);
     return (
         <>
             <p className="mb-1 flex gap-3 font-semibold text-fg">
                 {(spec.titles ?? spec.x)[i]}
                 {spec.kind === "stacked-bars" && (
-                    <span className="ml-auto tabular-nums">{format(stackAt(spec, i))}</span>
+                    <span className="ml-auto tabular-nums">
+                        {empty ? NO_DATA : format(stackAt(spec, i))}
+                    </span>
                 )}
             </p>
             <ul className="flex flex-col gap-0.5">
@@ -164,7 +193,7 @@ function Rows({ spec, i, format }: { spec: ChartSpec; i: number; format: (v: num
                         />
                         {s.label}
                         <span className="ml-auto pl-3 text-fg tabular-nums">
-                            {format(s.values[i] ?? 0)}
+                            {show(s.values[i], format)}
                         </span>
                     </li>
                 ))}
