@@ -1351,7 +1351,7 @@ _rtok() {
                     return 0
                     ;;
                 --kind)
-                    COMPREPLY=($(compgen -W "log archive cache temp build locks swap" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "log archive cache temp logs build deps locks swap snapshots" -- "${cur}"))
                     return 0
                     ;;
                 --include)

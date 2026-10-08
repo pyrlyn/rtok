@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Bitset, MiniBars } from "./Marks";
+import { Bitset, BudgetGrid, MiniBars } from "./Marks";
 
 const meta = {
     title: "UI/Marks",
@@ -22,6 +22,12 @@ const plugin = (id: string, enabled: boolean, saves_tokens = true) => ({
     enabled,
     saves_tokens,
 });
+
+// The grid sits on the mark tile, which stays dark in both themes.
+export const Budget: StoryObj = {
+    render: () => <BudgetGrid cut={0.62} label="62% of estimated tokens cut" />,
+};
+export const BudgetLight: StoryObj = { ...Budget, globals: { theme: "light" } };
 
 export const PluginBitset: StoryObj = {
     render: () => (

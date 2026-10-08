@@ -1284,6 +1284,29 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T414.3. Restyle the `web/src/ui` components to the approved mockup
+
+Chip, DataTable, Kpi, Marks, Panel, Pill, Search, Sparkline, Switch: brand roles only (no hex literals), stories updated.
+
+Check: `just spa-stories` (axe) green; a grep over `web/src` finds no hex colour literal outside tests and fixtures.
+
+Plan (approved mockup: the T414.2 shell and Overview, built on the Pyrlyn base component specs in `brand/node_modules/@pyrlyn/brand/base/components/*.md`):
+1. Chip: `radius-md`, pressed border `accent`/50%, 44px minimum below 768px, colours over `duration-fast`.
+2. Pill: `fail` on the `danger` roles, tinted backgrounds at 10%.
+3. Switch: on state fills track and border with `accent`, knob `on-accent`; knob over `duration-base` with `ease-emphasized`; 44px hit area below 768px (not only on coarse pointers).
+4. Search: `bg`/60% field, `size-control`, 44px and `text-sm` below 768px, hover and transition.
+5. DataTable: row border at 60%, selected row `accent`/10%, hover over `duration-fast`.
+6. Panel and Kpi: `duration-fast` hover; a linked Kpi gets `border-strong` on hover.
+7. Marks: `BudgetGrid` cells on the `accent` and `delta` roles instead of the `--rtok-brand-*` fills (same values); Sparkline already draws on the `accent` role, so it only gets its story.
+8. No hex literal left in `web/src` outside tests: `theme.ts` reads `--pyr-bg`, `stage3d.ts` reads the `--pyr-fg-subtle` role.
+9. Stories for the states the base specs name, then `just js`, `spa-test`, `spa-stories`, `spa-e2e`.
+
+Result (2026-10-08, Claude Code / claude-sonnet-5-5): the components follow the Pyrlyn base component specs the T414.2 mockup is built on. `Chip`: `radius-md`, pressed border `accent`/50%, `size-control-sm`, 44px below 768px, colours over `duration-fast`. `Pill`: `fail` on the `danger` roles, washes at 10%. `Switch`: on track and border solid `accent`, knob and spinner `on-accent`, knob over `duration-base` with `ease-emphasized`, 44px hit area below 768px instead of only on coarse pointers. `Search`: `size-control`, `bg`/60%, 44px and `text-sm` below 768px. `DataTable`: row rule at 60%, selected row `accent`/10%, hover over `duration-fast`. `Kpi`: a linked card takes `border-strong` on hover. `Panel`: header rule at 60%. `BudgetGrid` cells use the `accent` and `delta` roles instead of `--rtok-brand-*` (same values). `Sparkline` already drew on the `accent` role and needed no change. `theme.ts` reads the `theme-color` from `--pyr-bg` and `stage3d.ts` reads `--pyr-fg-subtle`, so `web/src` holds no hex literal outside tests. New stories: `Chip` OnLight, `Switch` OnLight and PendingOnLight, `DataTable` SelectedRow and SelectedRowLight, `BudgetGrid` Budget and BudgetLight. `just js`, `spa-typecheck`, `spa-test`, `spa-stories` (168) and `spa-e2e` green.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
@@ -8406,6 +8429,18 @@ Result: new `src/agents/junk_clear.rs` (`Filter`, `plan`, `apply`, `to_text`) ov
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5
 
+### T330.5.1. Junk: `[agents.junk]` table and the `logs`, `deps`, `snapshots` kinds
+
+Part of T330.5. Depends on T330.4 (#822). The `[agents.junk]` table with the keys these kinds read (`keep_logs_days` 30, `temp_min_age_hours` 24, `exclude`, `extra`), each range-checked by `rtok config validate` naming the key; `extra` entries name a host (or `rtok`), a kind (`cache`, `temp`, `logs`) and a path. Kinds over the T330.4 report, plan, re-check and apply (no second deleter): `logs` (review) = entries of the §22 log folders older than `keep_logs_days`; `deps` (review) = `node_modules`, `.venv`, `vendor`, `.gradle`, `Pods` in agent worktrees, listed read-only (no D36 evidence), with "no lockfile or manifest" when nothing could reinstall it; `snapshots` (never) = Gemini's `~/.gemini/history/<hash>` and `tmp/<hash>/checkpoints`, size only, with `/restore` named. `exclude` globs keep any item that matches or holds a match. `temp` reads `temp_min_age_hours`. `crash-dumps` moved to T330.5.2 and `backups` to T330.5.4 to keep this task under the 500-line cap.
+
+Check: a log 31 days old is planned by `--include review` and one 29 days old is kept; `node_modules` with and without a lockfile is listed, never planned; a Gemini history dir is listed with its size and never planned, even with `--kind snapshots`; an `exclude` glob keeps a cache that holds a match; invalid values (`-1`, `2.5`, `abc`, an unknown `extra` kind or host, a bad glob) are rejected naming the key; `just check`.
+
+Result: `AgentsJunk`/`JunkExtra` in `src/config/mod.rs` with range, `extra` and glob checks in `validate.rs`; new `src/agents/junk_review.rs` (`snapshot_items`, `extra_items`, `exclude`) and the `logs`/`deps` items in `junk_kinds.rs`, wired into `junk.rs` (one row per kind and class) and the `junk_clear` `--kind` set. Docs in `docs/config.md` (en, ru, uk). Non-test code 477 added lines against the T330.4 base merged with main (566 before the `backups` split), tests about 344. Targeted runs after the split: `agents_junk` 7, `--lib junk` 44, `cli_trycmd`, `config_coverage`, `surface_parity` 16, `rtok-agent-sdk` 41 passed; CI green. #827.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-opus-5-5
+
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
 From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
@@ -9560,6 +9595,17 @@ Result: `style.rs` has a verb → icon table on ketch's model (ketch's rows plus
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T436.2. Spinners on the remaining waits and icons on `agents install/update`
+
+Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
+
+Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
+
+Result: `render::with_loader` now wraps the pending-migration apply in `Store::migrate` (skipped under the hook's few-ms lock wait, so hooks draw nothing and keep their budget), `rtok memory sync`, `rtok report` (building the document), `rtok otel flush` (not the hook-spawned coalesced child) and `rtok info` (the daemon health probe). The header line of an applied `agents install/update/remove` block goes through `style::line_op` with `Mode::verb()`, so a terminal gets the operation's icon (📦, ⏫, 🧹) and colour while a pipe, the snapshots and `--json` get the bare line. `tests/ui_style.rs` runs the five commands plus a dry-run `agents install` on pipes and asserts no control bytes, emoji or spinner text. The `agents install/update` spinner itself stays T276's `ProgressRunner`; the `with_loader("updating host")` already around the restart path is unchanged.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
@@ -9724,6 +9770,14 @@ Split from T441.7: reconcile the store's task id counters with the project's `[t
 Check: `tasks::sync` unit tests (disk, counter ahead, fake adapter, GitHub mock, JSON); `tests/task_cli.rs` brings a lost counter back and a second sync is quiet; the trycmd help case, completion goldens, `surface_parity` and `config_coverage` pass; `just check` green.
 
 Result: `rtok task sync [--json]` (`src/tasks/sync.rs`) lists every task through the `TaskAdapter` trait, finished ones included, and raises the top-level and each per-parent counter to the highest number found with `seed_task_counter`; it never lowers a counter and never writes to the adapter. `Store::task_counter` is the new read-only getter (Diesel). The report names the counters raised, ids above their counter, duplicate ids, and issues that kept the `rtok` label but lost `rtok:<id>` (new defaulted `TaskAdapter::unlabelled`, implemented for GitHub, with the id still in the title shown as the label to restore). Drift is reported with exit 0. CLI only: `surface_parity` exempts it because `task_create` already seeds the counter first. README and `docs/commands.md` (en, ru, uk) list the `rtok task` commands. GitLab's `unlabelled` is not implemented yet and reports none. #820.
+
+### T441.11. GitHub Projects v2 Status
+
+Split from T441.7: with `[tasks.github] project` set, keep each task's issue on that Projects v2 board with its Status in step with the task status; `project = 0` stays issues only.
+
+Check: mock-server tests in `src/tasks/github_project.rs` (a new issue joins as Todo, every status maps to its option with the ids resolved once, `project = 0` makes no GraphQL call, five failure modes still write the task, a failed resolve is retried); `just check` green.
+
+Result: new `src/tasks/github_project.rs`: one GraphQL query resolves the user- or org-owned project (owner from the repo), its `Status` single-select field and option ids, cached per adapter and not cached on failure, so a long MCP session recovers from one network blip. After every create and status write `addProjectV2ItemById` (idempotent, so an older issue joins on its next change) and `updateProjectV2ItemFieldValue` set the option: open → Todo/To do, in-progress → In Progress, done and closed → Done (the default field has no won't-do column; the `not_planned` reason stays on the issue). Names match case-insensitively. Any project problem (no project, missing token scope, no Status field or option, HTTP error, no `node_id`) only warns and never fails the task write. `GithubAdapter::with_project` wires it; the config docs (en/ru/uk, `default.toml`, `config/mod.rs`) describe the real behaviour. GitHub Enterprise's `/api/graphql` path is not handled, since there is no base-URL setting yet. #817.
 
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5

@@ -22,7 +22,7 @@ export function Chip({
             aria-pressed={pressed}
             disabled={disabled}
             onClick={() => onPressedChange?.(!pressed)}
-            className={`${focusRing} inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border px-2.5 text-2xs font-semibold text-fg-muted hover:border-border-strong hover:text-fg aria-pressed:border-accent aria-pressed:bg-accent/15 aria-pressed:text-accent-fg disabled:cursor-not-allowed disabled:opacity-40`}
+            className={`${focusRing} inline-flex h-control-sm cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border px-2.5 text-2xs font-semibold text-fg-muted transition-colors duration-fast ease-standard max-md:min-h-touch max-md:min-w-touch hover:border-border-strong hover:text-fg aria-pressed:border-accent/50 aria-pressed:bg-accent/15 aria-pressed:text-accent-fg disabled:cursor-not-allowed disabled:opacity-40`}
         >
             {children}
         </button>

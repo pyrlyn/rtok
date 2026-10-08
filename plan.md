@@ -35,7 +35,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.5 | todo | P2 | 4 | 0% | |
+| T330.5 | todo | P2 | 4 | 30% | |
+| T330.5.2 | todo | P2 | 3 | 0% | |
+| T330.5.3 | todo | P2 | 3 | 0% | |
+| T330.5.4 | todo | P2 | 2 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
@@ -83,7 +86,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.3 | todo | P2 | 3 | 0% | |
 | T414.4 | todo | P2 | 3 | 0% | |
 | T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
@@ -94,10 +96,9 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T416.3 | todo | P2 | 3 | 0% | |
 | T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.2 | todo | P2 | 2 | 0% | |
 | T436.3 | todo | P2 | 2 | 0% | |
+| T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T441.11 | todo | P3 | 3 | 0% | |
 | T441.8 | todo | P3 | 4 | 0% | |
 
 
@@ -1052,6 +1053,33 @@ Part of T330. The review-class kinds with their keeps (worktrees through `git wo
 
 Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rejected naming the key; `just check`.
 
+Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. T330.5.4 was split from T330.5.1 later the same day. It closes when all four are done.
+
+### T330.5.4. Junk: the `backups` kind
+
+Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 500-line cap; depends on T330.5.1. `backups` (review) over the T330.5.1 report, plan, re-check and apply: rtok's own `_backup/<name>.bak-<ts>` generations in the folders of a host's config files that `setup.backup_files` has no room for (a cap lowered after the copies were taken; the newest copy of a file always stays), with a read-only `rtok-agent-sdk::stale_backups` twin of `prune_backups`; other `*.bak`, `*.bak-<ts>` and `*~` files under an agent's folders are listed read-only (no D36 evidence), and rtok's own `_backup` folder is never walked for them. `backups` joins the `--kind` values. The code was written in T330.5.1 and saved as a patch; re-apply it over T330.5.1.
+
+Done means: `rtok agents junk list` shows the `backups` rows, `clear --include review` or `--kind backups` plans the generations past the cap and never the newest, a running host does not hold back rtok's own copies.
+
+Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
+
+### T330.5.2. Junk: `sessions` (explicit) with the per-host verdict, `--session-days`, file-based `index`, `crash-dumps`
+
+Part of T330.5. Depends on T330.5.1. `crash-dumps` (moved from T330.5.1): `crash_dump_min_age_days` (default 7, `0` to `3650`, rejected naming the key) and `crash-dumps` as an `extra` kind; macOS `~/Library/Logs/DiagnosticReports` files (`.ips`, `.crash`, `.dmp`, `.diag`) named for a host binary or app are listed read-only (no §22 row, D36), and an `extra` crash folder gives `safe` dumps past `crash_dump_min_age_days` and `review` ones before it. `stale_session_days` (default 30, `0` to `3650`, invalid values rejected naming the key and the run falls back to 30) and `--session-days N`; `sessions` as class `explicit` (only with `--kind sessions`, time only, the T330 "Old sessions: time only" rules), only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it, with the per-host verdict recorded here and in §22.1 (never the host's memory, index or store files: Claude Code `projects/<project>/memory/`, Kimi `session_index.jsonl`, Copilot `session-store.db`, Codex state DB); `list` shows the host's own retention (`cleanupPeriodDays`, `general.sessionRetention`). The file-based `index` kind (review): `.rtok-lsp-xdg/{data,state}`, LSP caches such as `.rust-analyzer/`, `-wal`/`-shm` of closed DBs. rtok's own session rows and graph/tags rows in `rtok.db` are T330.5.3.
+
+Check: the T330 "Session threshold" fixture and the sessions lines of "New kinds"; a crash dump is listed read-only and an `extra` crash folder clears only old dumps by default; `just check`.
+
+### T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
+
+Part of T330.5. Blocked: do not claim before the creator decides T341 and T340. `stale_worktree_days` (default 14), the `stale-worktrees` kind (review) and rtok's own rows (session rows and logs keyed by session id, T284; graph/tags index rows of projects no longer in the registry, T329).
+
+Open questions for the creator:
+
+1. T341 (worktrees). (a) Does `agents junk clear` remove worktrees at all? The T330 "More junk kinds" table and its `stale-worktrees` edge case say yes, through `git worktree remove` with the branch kept; T330's own edge case "A worktree rtok created for an agent that still has unmerged commits" says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". (b) Blanket `git worktree prune` after removal (T330) or per record only (T153: a blanket prune drops the records of another session's worktrees on an unmounted volume)? (c) An orphaned worktree (main repo missing): delete its folder with `--include review` (T330) or report only (T153: "Orphans are reported, never removed"; `clean`/`gc` never delete a worktree directory themselves)? Options: A, junk removes only clean, finished worktrees with a per-record `git worktree remove`, no prune, orphans reported only; B, `stale-worktrees` is list-only in junk and points at `rtok worktree gc`; C, as T330 says, relaxing T153.
+2. T340 (`rtok.db`). T330 "Never touched" lists `rtok.db` (as T182 did), and T330.4's re-check refuses any path that is or holds it, yet the `sessions` row clears rtok's own session rows and logs (T284) and the `index` row clears graph/tags rows of removed projects (T329), both inside `rtok.db`. May junk delete those rows through the store's Diesel API, or do they stay out of T330 until T340 decides?
+
+Check: per the decisions above; `just check`.
+
 ### T330.6. Junk: item breakdown, `doctor` line, web card
 
 Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5 and the investigation T343 (the two `--sort` value sets).
@@ -1558,12 +1586,6 @@ Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos a
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
 
-### T414.3. Restyle the `web/src/ui` components to the approved mockup
-
-Chip, DataTable, Kpi, Marks, Panel, Pill, Search, Sparkline, Switch: brand roles only (no hex literals), stories updated.
-
-Check: `just spa-stories` (axe) green; a grep over `web/src` finds no hex colour literal outside tests and fixtures.
-
 ### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
 
 Apply the approved shell and components; chart series colours come from the brand roles.
@@ -1642,17 +1664,17 @@ Execution plan:
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
-### T436.2. Spinners on the remaining waits and icons on `agents install/update`
-
-Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
-
-Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
-
 ### T436.3. Shared operation-icon crate for rtok and ketch
 
 Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
+
+### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
+
+Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
+
+Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
 ## Reference
 
@@ -1985,7 +2007,7 @@ project = "group/name"
 8. **T441.8 GitLab adapter** — issues, scoped status labels, close on done, self-hosted URL.
 9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
-11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — `[tasks.github] project` set: add each new issue to that project and keep its Status single-select in step with the task status through the GraphQL API; `project = 0` stays issues only.
+11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
 12. **T441.12 `rtok task sync`** (split from T441.7) — done: counters raised to what the adapter holds, drift reported, the adapter never written (#820).
 
 #### 12. Open questions

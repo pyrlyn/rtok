@@ -108,3 +108,45 @@ fn the_color_key_wins_over_clicolor_force() {
     assert!(out.contains("ui.color = false (default true)"), "{out}");
     no_emoji(&out);
 }
+
+/// T436.2: every wait that gained a spinner stays byte-clean on pipes. indicatif draws nothing
+/// when stderr is not a terminal; this pins that for each command, so a later swap of the
+/// helper for a hand-rolled one cannot start printing control bytes into CI logs.
+#[test]
+fn a_wait_draws_nothing_on_a_pipe() {
+    let home = home("waits");
+    let claude_md = home.join("CLAUDE.md");
+    let claude_md = claude_md.to_str().unwrap();
+    // No `PATH` for the host run: a dry run must not reach a real agent's CLI.
+    type Run<'a> = (&'a [&'a str], &'a [(&'a str, &'a str)]);
+    let runs: [Run; 5] = [
+        (&["info"], &[]),
+        (&["report"], &[]),
+        (&["otel", "flush"], &[]),
+        (&["memory", "sync", "--dry-run", "--file", claude_md], &[]),
+        (
+            &["agents", "install", "claude", "--dry-run"],
+            &[("PATH", "/nonexistent")],
+        ),
+    ];
+    for (args, env) in runs {
+        let out = rtok(&home, args, env);
+        let (so, se) = (
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
+        for text in [&so, &se] {
+            assert!(!text.contains(ESC), "{args:?}: control bytes: {text:?}");
+            no_emoji(text);
+            for msg in [
+                "migrating the store",
+                "syncing memory",
+                "building the report",
+                "flushing telemetry",
+                "reading status",
+            ] {
+                assert!(!text.contains(msg), "{args:?}: spinner text: {text:?}");
+            }
+        }
+    }
+}
