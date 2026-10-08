@@ -78,6 +78,16 @@ Plan (as executed):
 Result: `runs_git` and the early return in `pre_tool` (`src/plugins/cmd/hook.rs`); tests `sub_agent_git_commands_are_never_wrapped`, `sub_agent_non_git_commands_stay_wrapped`, `main_session_git_commands_stay_wrapped`. The shared dispatch in `src/hooks/mod.rs` builds the `Ctx` from the payload `agent_id` for every host, so any host that sends one gets the same behaviour. Reaches the plugin hook only with the next installed rtok binary.
 
 Status: done 2026-10-07
+
+### T444. `cmd` wrap skips `never_wrap`/interactive checks behind a `cd` hop
+
+`skip_wrap` in `src/plugins/cmd/hook.rs` took the stem from the first word of the whole command (`cd`), and after the `strip_cd_hop` loop in `pre_tool` nothing re-checked the remainder. `cd /tmp && rtok expand abc` was rewritten to `cd /tmp && rtok run -- 'rtok expand abc'`, so expand output was compressed again and broke the lossless contract; `cd /tmp && sudo ls` was wrapped although `never_wrap` lists `rtok` and `sudo`; `cd x && python -i` likewise. Second issue: `bounded::lex` ignored backslash escapes, so `echo it\'s && cd sub` hid the `cd` from `changes_shell_state` and the command was wrapped (the `cd` lost in the child shell). `changes_shell_state` also missed `set`, `shopt`, `umask`, `trap`, `declare`, `typeset`, `readonly` and a bare `NAME=value` stage.
+
+Done means: skip rules run on the post-hop remainder too; the lexer honours `\` outside quotes (next char literal, `\`+newline stays a line continuation) and inside double quotes (`\"`, `\\`, `\$`, `` \` `` escape; single quotes have no escapes); the builtin list grows; each fix has a unit test.
+
+Result: `pre_tool` calls `skip_wrap` on the remainder after the hop loop; `bounded::lex` gained the escape rules; `changes_shell_state` lists the new builtins and `is_bare_assignment` (`A=1` alone, not `A=1 cargo test`). Tests: `skip_rules_apply_behind_cd_hops`, `escaped_quote_does_not_hide_a_cd`, `more_state_builtins_and_bare_assignments_stay_unwrapped`, `lexer_backslash_escapes`.
+
+Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
 ### T380. `rtok-` prefix on every shipped skill, and the prefix as the third ownership mark
