@@ -9605,6 +9605,17 @@ Result: `style.rs` has a verb → icon table on ketch's model (ketch's rows plus
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T436.2. Spinners on the remaining waits and icons on `agents install/update`
+
+Split from T436 (2026-10-08): T436 added the operation icons, the measured gutter and the public `render::with_loader`, wired into `bench`, `worktree add/remove`, `graph index`, the daemon start/stop lines and the references line. Left: a spinner on store migrations, network fetches and `memory sync`/`report`, and operation icons on the `agents install/update` result lines, whose spinner is T276's `ProgressRunner`. Same rules as T436: nothing drawn off a terminal, hook/MCP/`--json`/piped output byte-for-byte unchanged. Depends on T276.
+
+Check: a non-TTY test per new wait that no spinner bytes reach a pipe; trycmd snapshots unchanged; the creator's manual run of `rtok agents install`, `rtok worktree add` and `rtok graph index` in a terminal; `just check`.
+
+Result: `render::with_loader` now wraps the pending-migration apply in `Store::migrate` (skipped under the hook's few-ms lock wait, so hooks draw nothing and keep their budget), `rtok memory sync`, `rtok report` (building the document), `rtok otel flush` (not the hook-spawned coalesced child) and `rtok info` (the daemon health probe). The header line of an applied `agents install/update/remove` block goes through `style::line_op` with `Mode::verb()`, so a terminal gets the operation's icon (📦, ⏫, 🧹) and colour while a pipe, the snapshots and `--json` get the bare line. `tests/ui_style.rs` runs the five commands plus a dry-run `agents install` on pipes and asserts no control bytes, emoji or spinner text. The `agents install/update` spinner itself stays T276's `ProgressRunner`; the `with_loader("updating host")` already around the restart path is unchanged.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-sonnet-5-5
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
