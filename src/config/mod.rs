@@ -511,7 +511,8 @@ section! {
 
 /// The shipped `[stats.prices]` rows (T49.1, T389). Sources: Anthropic
 /// `claude-sonnet-5` / `claude-haiku-4-5` fetched 2026-09-17 and `claude-fable-5-1` /
-/// `claude-opus-5-5` / `claude-sonnet-5-5` fetched 2026-10-06, all from
+/// `claude-opus-5-5` fetched 2026-10-06 and `claude-sonnet-5-5` re-checked 2026-10-08 (its
+/// cache read is 0.05x input, not 0.1x), all from
 /// https://platform.claude.com/docs/en/about-claude/pricing (input / 5m write /
 /// read / output per MTok); OpenAI `gpt-5` / `gpt-5-mini` from
 /// https://platform.openai.com/docs/pricing (short-context input / cached input /
@@ -550,7 +551,7 @@ fn default_stats_prices() -> BTreeMap<String, ModelPrice> {
             ModelPrice {
                 input: 2.0,
                 cache_write: 2.5,
-                cache_read: 0.2,
+                cache_read: 0.1,
                 output: 10.0,
             },
         ),
@@ -920,9 +921,10 @@ section! {
 }
 
 section! {
-    /// `[tasks.gitlab]` — GitLab Issues; tasks under an issue are subtasks.
+    /// `[tasks.gitlab]` — GitLab Issues with `status::` labels; a subtask's issue links to
+    /// its parent's.
     TasksGitlab {
-        /// Base URL, for self-hosted instances.
+        /// https base URL, for self-hosted instances.
         url: String = s("https://gitlab.com"),
         /// `group/name` path or numeric id. Empty: the `origin` remote.
         project: String = String::new(),

@@ -119,6 +119,8 @@ async fn anthropic_results_become_usage_rows_and_skip_bad_lines() {
         "the results stream is forwarded as is"
     );
 
+    // The calls row lands after the usage rows, so wait for it instead of reading it at once.
+    settle(&state.store, "api_request:batch").await;
     let rows = usage_rows(&state.store, 2).await;
     assert_eq!(
         rows.iter().map(legs).collect::<Vec<_>>(),
@@ -145,6 +147,8 @@ async fn openai_file_content_with_results_becomes_usage_rows_and_a_batch_call() 
     assert!(status.is_success());
     assert_eq!(body, OPENAI_JSONL);
 
+    // The calls row lands after the usage rows, so wait for it instead of reading it at once.
+    settle(&state.store, "api_request:batch").await;
     let rows = usage_rows(&state.store, 2).await;
     assert_eq!(
         rows.iter().map(legs).collect::<Vec<_>>(),

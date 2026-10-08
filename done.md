@@ -1307,6 +1307,25 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+
+### T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
+
+As T414.4 for these pages.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
+
+Plan:
+1. Audit the six pages against the approved T414.2 shell, the restyled T414.3 `web/src/ui` components and the Pyrlyn base component specs.
+2. Move hand-rolled pieces onto the shared components and `--pyr-*` roles.
+3. Stories for the new component; keep the page tests green.
+4. Verify and take dark and light screenshots of each page.
+
+Result (2026-10-08, Claude Code / claude-sonnet-5-5): the six pages already sat on the T414.3 components, so the work closed the places that still drew their own controls. New `ui/Select`: a native `<select>` with the Pyrlyn input field look (`size-control`, `radius-md`, `bg`/60, `border-strong` on hover, 44px and `text-sm` below 768px), stories Default, OnLight and Picks. `Projects`: the "link to" picker is that `Select`, "both ways" is a `Switch` (was a bare checkbox), and the project rows follow the Chip spec (pressed border `accent`/50% with an `accent`/10% wash, colours over `duration-fast`, 44px below 768px). `Services`: the three OpenTelemetry tiles are `Kpi` cards instead of hand-rolled `surface-2` boxes, and the running/stopped `Pill` moved into the card header. `Hosts` and `Worktrees`: the state `Pill` sits in the `Panel` header action like the other cards. No shared component changed. `spa-typecheck`, `spa-test` (255), `spa-stories` (171) and `just js` green. `spa-e2e` and `just check` were not run on this host (copying a seeded `target/` was refused and a cold Rust build did not fit the free disk); CI runs both.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
@@ -8451,6 +8470,18 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-opus-5-5
 
+### T330.5.4. Junk: the `backups` kind
+
+Part of T330.5. Split from T330.5.1 on 2026-10-08 to keep that task under the 500-line cap; depends on T330.5.1 (#827). `backups` (review) over the T330.5.1 report, plan, re-check and apply: rtok's own `_backup/<name>.bak-<ts>` generations in the folders of a host's config files that `setup.backup_files` has no room for (a cap lowered after the copies were taken; the newest copy of a file always stays), with a read-only `rtok-agent-sdk::stale_backups` twin of `prune_backups`; other `*.bak`, `*.bak-<ts>` and `*~` files under an agent's folders are listed read-only (no D36 evidence), and rtok's own `_backup` folder is never walked for them. `backups` joins the `--kind` values.
+
+Check: a `_backup` past the cap is planned and the newest kept; a `notes.txt~` is listed, never planned; the `--kind` completions and help goldens list `backups`; `just check`.
+
+Result: `rtok_agent_sdk::stale_backups` (per base name all but the newest `keep`, oldest first; `0` keeps all; only a `_backup` folder), `junk_review::backup_items` (class `review`, evidence `RTOK_OWN`) fed from `junk::marker_dirs` (extracted from `host_folders`), and `*.bak`, `*.bak-<ts>`, `*~` files found by `junk_kinds::found_items` (`is_backup`, class `review`, "not documented", `_backup` skipped). `"backups"` is in both `KINDS`; completions goldens (bash, zsh, clink) and `help-subcommands` updated; `junk_clear` test covers a running host not holding back rtok's own copy. No new dependency; docs list no junk kinds, so none changed.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
 From `research.md` §22: the junk map says "all 17 hosts", but `HOSTS` (`src/agents/mod.rs`) has 22. `junk_map.rs` has no rows for commandcode, cline, mimo and devin, and antigravity has Electron folders only. §22.2 also names VS Code `CachedData/<commit>` for every commit but the current one (VS Code's own cleaner removes them after about three months).
@@ -9769,6 +9800,17 @@ Seventh subtask of T441 (task adapters): `adapter = "github"` keeps each task as
 Check: the adapter against a mock GitHub server (create, sub-issue link, list, get, status, id collision, missing label, rate limit); `just check` green.
 
 Result: `src/tasks/remote.rs` holds what the GitHub and GitLab adapters share: the `rtok` and `rtok:<id>` labels, the `R12. Title` issue title, the token lookup (`GH_TOKEN`/`GITHUB_TOKEN`, else `gh auth token`), and one blocking client that paces writes one second apart, waits out `retry-after` or the primary-limit reset up to a minute, and follows `Link: rel="next"` only on the API host, since every request carries the token. `src/tasks/github.rs` creates the issue with both labels, links a subtask as a sub-issue of its parent (a failed link only warns), maps `rtok:in-progress` and the close reason (`completed` → done, `not_planned` → closed), and refuses an issue GitHub stored without its label (no push access). An id another machine already issued comes back as the typed `Taken` error, and `Project::create` allocates the next id and tries again; the disk adapter returns the same error. reqwest gains its `blocking` feature. The Projects v2 Status field moved to T441.11 and `rtok task sync` to T441.12; `[tasks.github] project` is documented as read from T441.11 on. #814.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
+### T441.8. GitLab adapter
+
+Eighth subtask of T441 (task adapters): `adapter = "gitlab"` keeps each task as one issue in the project on gitlab.com or a self-hosted instance.
+
+Check: the adapter against a mock GitLab server (create, parent link, failed link, list, get, status label swaps with close/reopen, id collision, missing parent, dropped label, URL and project parsing); `just check` green.
+
+Result: `src/tasks/gitlab.rs` uses the REST API v4 through `src/tasks/remote.rs` (labels `rtok` and `rtok:<id>`, the `R12. Title` issue title, the paced client with rate-limit waits and same-host paging), and `remote.rs` now also holds `secs` and `max_with_prefix`, which the GitHub adapter uses too. Status rides on `status::in-progress`, `status::done` and `status::wont-do` labels set through `add_labels`/`remove_labels` (scoped on Premium; on Free the adapter removes the others itself); done and closed close the issue, open and in-progress reopen it, and the label tells done from won't-do since REST has no close reason. A subtask's issue gets a `relates_to` link to its parent's issue (a failed link only warns); the GraphQL parent-child hierarchy stays out until research §35.3 verifies its arguments. `[tasks.gitlab] url` must be plain https, since every request carries the token; `project` is `group/name` or a numeric id, else the origin's path on that host, URL-encoded into every request path. The token comes from `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN` or `GL_TOKEN`, else `glab config get token --host <host>`, sent as a Bearer header. An id another machine already issued returns `Taken`, and `Project::create` re-allocates. #819.
 
 Status: done 2026-10-08
 Model: Claude Code / claude-opus-5-5

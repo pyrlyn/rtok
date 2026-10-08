@@ -13,7 +13,9 @@ import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Result } from "../ui/Result";
 import { Search } from "../ui/Search";
+import { Select } from "../ui/Select";
 import { Spinner } from "../ui/Spinner";
+import { Switch } from "../ui/Switch";
 import { fmt } from "./format";
 import { filterProjects, linkTargets, SEARCH_ABOVE, stateOf } from "./projectLogic";
 
@@ -60,7 +62,7 @@ function Selector({ rows }: { rows: ProjectRow[] }) {
                                 aria-busy={pending || undefined}
                                 disabled={p.missing || pending}
                                 onClick={() => mutate({ action: "select", project: String(p.id) })}
-                                className={`${focusRing} flex w-full items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs hover:border-border-strong aria-pressed:border-accent disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:disabled:opacity-100`}
+                                className={`${focusRing} flex min-h-control w-full items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-xs transition-colors duration-fast ease-standard max-md:min-h-touch hover:border-border-strong aria-pressed:border-accent/50 aria-pressed:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:disabled:opacity-100`}
                             >
                                 {pending && <Spinner size="sm" />}
                                 <b className="truncate">{p.name}</b>
@@ -156,25 +158,16 @@ function Links({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                 </ul>
             )}
             <div className="flex flex-wrap items-center gap-2 text-xs">
-                <select
-                    aria-label="link to"
-                    value={target}
-                    onChange={(e) => setTo(e.target.value)}
-                    className={`${focusRing} h-7 rounded-md border border-border bg-bg px-2`}
-                >
+                <Select label="link to" value={target} onChange={setTo}>
                     <option value="">link to…</option>
                     {targets.map((t) => (
                         <option key={t.id} value={t.id}>
                             {t.name}
                         </option>
                     ))}
-                </select>
-                <label className="flex items-center gap-1.5 text-fg-muted">
-                    <input
-                        type="checkbox"
-                        checked={both}
-                        onChange={(e) => setBoth(e.target.checked)}
-                    />
+                </Select>
+                <label className="flex items-center gap-2 text-fg-muted">
+                    <Switch checked={both} onCheckedChange={setBoth} label="both ways" />
                     both ways
                 </label>
                 <Button
