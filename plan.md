@@ -57,7 +57,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T374 | todo | P3 | 2 | 0% | |
-| T375 | in progress | P3 | 2 | 10% | Claude Code / claude-sonnet-5-5 |
 | T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
 | T382 | todo | P2 | 2 | 30% | |
@@ -1362,22 +1361,6 @@ Plan: new `note_files (note_id, path)` table (migration); filled at `mem_save` (
 Done when: a note linked to a file the session has read ranks above an equally text-matching unlinked note.
 
 Check: new cases in `tests/fixtures/p29_memory.toml` with file context; recall@5 on the file-context cases ≥ 0.6 and no drop on the existing cases; `just check`.
-
-### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
-
-From the Empryo study (idea-only, clean-room; Empryo `compaction/working-state.ts`, `extractor.ts`: a deterministic working state built from tool calls, not from an LLM). `Checkpoint` (`src/plugins/checkpoint.rs:11`) records paths without what happened to them, so after compact the agent re-reads files it only looked at and may miss the ones it changed.
-
-Plan: extend the checkpoint's path list to `(path, action, last_line_range)` from PostToolUse events (Read → read, Edit/MultiEdit → edited, Write on a new path → created, `rm`/`git rm` in Bash → deleted); render edited/created first. Backward-compatible decode of old rows (missing action = read).
-
-Done when: after a session that reads A and edits B, the checkpoint lists `B (edited)` before `A (read)`.
-
-Check: unit tests for the event → action mapping and old-row decode; the checkpoint rendering snapshot (`insta`) updated; `just check`.
-
-Execution plan:
-1. `src/plugins/checkpoint.rs`: the checkpoint is built from the transcript JSONL (not from live PostToolUse events), so the action comes from `tool_use` blocks; `Checkpoint.paths` becomes `Vec<PathEntry { path, action, lines }>`. `Read` → read (+ `offset`/`limit` range), `Edit`/`MultiEdit` → edited, `Write` → edited unless its `tool_result` says it created the file (`toolUseResult.type == "create"` or the "File created successfully" text), then created; Bash `rm` / `git rm` (via `shlex`, already a dependency) → deleted, relative paths resolved against the record's `cwd`. Any other `file_path` stays read, as before. No schema change: the checkpoint is note text.
-2. Render `path <p> (<action>[ <a>-<b>])`, changed files first (edited, created, deleted), then read, each group by path, so the order is byte-stable. `last_paths` strips the new suffix and still reads old `path <p>` rows (no suffix = read).
-3. `worth_parsing` lets through Bash lines that mention `rm` and result lines that carry `"type":"create"`; the superset test covers both.
-4. Tests: event to action mapping, upgrade rules (read then edit, delete then create), Write created vs updated, Bash rm / git rm, old-row decode, an `insta` snapshot of the read-A / edit-B session render, prefilter superset on the new shapes; then `just check`.
 
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
