@@ -1,5 +1,12 @@
 # rtok — completed tasks
 
+### T472. Peel env and tool wrappers before the cmd family (repowise borrow)
+
+Extend `visible_argv` with `FOO=1`, `uv`/`npx`/`pnpm`/`yarn`/`poetry`/`pipenv`/`hatch`/`python -m`/`cmd /c`. Reuse `cmd_stem`. No regex crate.
+
+Check: `family_names` nextest; uv/FOO=1/pytest/`a|b` cases; `just check`.
+Result: `family_names_peel_env_and_tool_wrappers` green; quoted `|` stays `git`.
+
 ### T471. Host-cap the cmd Measurement (repowise borrow)
 
 Claude Code delivers the first 30_000 characters of a Bash result. Capture keeps up to 32 MiB, so a Measurement that estimates the whole body can claim tokens the host never showed. Cap the estimate baseline (and the after estimate) to that host-visible prefix. Archive and printed bytes stay unchanged; `expand` still returns the full body.

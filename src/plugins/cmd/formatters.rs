@@ -186,11 +186,16 @@ fn resolve(settings: &rules::Settings, argv: &[String], output: &str) -> Resolve
     }
 }
 
-/// Argv after `mise exec`/`mise x` and `just -c`. A recipe stays as written.
+/// Argv after `mise exec`/`mise x`, `just -c`, leading `FOO=1`, and tool wrappers
+/// (`uv`/`npx`/`python -m`/…). A recipe stays as written.
 pub(crate) fn visible_argv(argv: &[String]) -> Vec<String> {
     let mut cur = argv.to_vec();
     for _ in 0..4 {
-        let Some(inner) = peel_mise_exec(&cur).or_else(|| peel_just_command(&cur)) else {
+        let Some(inner) = peel_mise_exec(&cur)
+            .or_else(|| peel_just_command(&cur))
+            .or_else(|| peel_leading_env(&cur))
+            .or_else(|| peel_tool_wrapper(&cur))
+        else {
             break;
         };
         if inner == cur {
@@ -199,6 +204,54 @@ pub(crate) fn visible_argv(argv: &[String]) -> Vec<String> {
         cur = inner;
     }
     cur
+}
+
+/// Drop a leading `NAME=value` assignment (ASCII name, non-empty value).
+/// An unclosed quote in the value fails open (no peel), matching
+/// `bash_family_strips_quoted_cd_paths`.
+fn peel_leading_env(argv: &[String]) -> Option<Vec<String>> {
+    let first = argv.first()?;
+    let (name, value) = first.split_once('=')?;
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    if value.is_empty() {
+        return None;
+    }
+    if let Some(q @ ('\'' | '"')) = value.chars().next()
+        && (value.len() < 2 || !value.ends_with(q))
+    {
+        return None;
+    }
+    let rest = argv[1..].to_vec();
+    (!rest.is_empty()).then_some(rest)
+}
+
+/// Drop one package-runner / `python -m` / `cmd /c` wrapper so `cmd_stem` sees the family.
+fn peel_tool_wrapper(argv: &[String]) -> Option<Vec<String>> {
+    let stem = cmd_stem(argv.first()?);
+    let rest = &argv[1..];
+    let inner: Vec<String> = match stem {
+        "uvx" | "npx" => rest.to_vec(),
+        "uv" if rest.first().map(String::as_str) == Some("run") => rest[1..].to_vec(),
+        "pnpm" if matches!(rest.first().map(String::as_str), Some("exec" | "dlx")) => {
+            rest[1..].to_vec()
+        }
+        "yarn" if rest.first().map(String::as_str) == Some("dlx") => rest[1..].to_vec(),
+        "poetry" | "pipenv" | "hatch" if rest.first().map(String::as_str) == Some("run") => {
+            rest[1..].to_vec()
+        }
+        "python" | "python3" | "py" if rest.first().map(String::as_str) == Some("-m") => {
+            rest[1..].to_vec()
+        }
+        "cmd" if rest.first().is_some_and(|s| s.eq_ignore_ascii_case("/c")) => rest
+            .get(1)?
+            .split_whitespace()
+            .map(str::to_string)
+            .collect(),
+        _ => return None,
+    };
+    (!inner.is_empty()).then_some(inner)
 }
 
 /// Same inner command on every wrapper stage. Peeling `cargo build && cargo test` would keep only `cargo test`'s needles, so that chain stays on [`family_argv`].
@@ -1601,5 +1654,46 @@ mod tests {
             family_of(&settings, &words("mise exec -- just test"), &nested),
             "cargo"
         );
+    }
+
+    /// T472: env assigns and package runners peel inside the same 4-iteration cap.
+    #[test]
+    fn family_names_peel_env_and_tool_wrappers() {
+        let settings = rules::Settings::builtin();
+        let failed = "test a::bad ... FAILED\ntest result: FAILED. 1 failed\n";
+        assert_eq!(
+            family_of(&settings, &words("uv run cargo test"), failed),
+            "cargo"
+        );
+        assert_eq!(
+            family_of(&settings, &words("FOO=1 cargo test"), failed),
+            "cargo"
+        );
+        assert_eq!(
+            family_of(&settings, &words(".venv/bin/pytest -q"), "1 passed\n"),
+            "pytest"
+        );
+        assert_eq!(
+            family_of(
+                &settings,
+                &words("uv run python -m pytest -q"),
+                "1 passed\n"
+            ),
+            "pytest"
+        );
+        assert_eq!(
+            family_of(&settings, &words("mise exec -- cargo test"), failed),
+            "cargo"
+        );
+        // Quoted `|` is not a pipeline; family stays git (mixed_chain does not fire).
+        assert_eq!(
+            family_of(
+                &settings,
+                &words("git commit -m \"a|b\""),
+                "[main abc] a|b\n"
+            ),
+            "git"
+        );
+        assert_eq!(family_of(&settings, &words("mise exec -c"), failed), "mise");
     }
 }
