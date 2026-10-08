@@ -1,5 +1,10 @@
 agents.enabled = true
 agents.idle = 30m
+agents.junk.crash_dump_min_age_days = 7
+agents.junk.exclude = []
+agents.junk.extra = []
+agents.junk.keep_logs_days = 30
+agents.junk.temp_min_age_hours = 24
 agents.push_bytes = 1024
 agents.usage.by = agent
 agents.usage.dirs.antigravity = [~/.gemini/antigravity]

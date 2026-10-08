@@ -175,8 +175,39 @@ section! {
         /// the agent's context; the rest become one "and N more" line.
         push_bytes: u32 = 1024,
         usage: AgentsUsage = AgentsUsage::default(),
+        junk: AgentsJunk = AgentsJunk::default(),
     }
 }
+
+section! {
+    /// `[agents.junk]` — `rtok agents junk list|clear` (T330.5.1): the age floors of the
+    /// junk kinds, paths never touched, and the paths the user vouches for as junk (the third
+    /// kind of D36 evidence beside a §22 row and a `CACHEDIR.TAG`). `~` in a path or glob is the
+    /// user's home.
+    AgentsJunk {
+        /// `logs` entries modified within this many days stay.
+        keep_logs_days: u32 = 30,
+        /// A crash dump in an `extra` folder is `safe` past this age and `review` before it.
+        crash_dump_min_age_days: u32 = 7,
+        /// `temp` entries touched within this many hours stay.
+        temp_min_age_hours: u32 = 24,
+        /// Globs of paths never touched, nor any folder that holds one.
+        exclude: Vec<String> = Vec::new(),
+        extra: Vec<JunkExtra> = Vec::new(),
+    }
+}
+
+section! {
+    /// One `[agents.junk] extra` entry: `path` is junk of `kind` for `host` (a host id or `rtok`).
+    JunkExtra {
+        host: String = String::new(),
+        kind: String = String::new(),
+        path: String = String::new(),
+    }
+}
+
+/// The kinds an `[agents.junk] extra` entry may name: folders whose content ages out.
+pub const JUNK_EXTRA_KINDS: [&str; 4] = ["cache", "temp", "logs", "crash-dumps"];
 
 section! {
     /// `[agents.usage]` — `rtok agents usage` (T358): tokens and estimated cost per agent, day

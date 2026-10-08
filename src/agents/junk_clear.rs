@@ -16,6 +16,7 @@ use serde::Serialize;
 use super::junk::{self, AGENT_SCAN_LIMIT, Report};
 use super::junk_cache::{RTOK_OWN, SECTION_22, TAG, real};
 use super::junk_kinds::{PACKAGE_LOCKS, held_reason};
+use super::junk_review::EXTRA;
 use super::restart::{RealProcs, host_running};
 use super::{HOSTS, host};
 use crate::config::Config;
@@ -23,8 +24,22 @@ use crate::info::human_bytes;
 use crate::store::Store;
 use crate::worktree::list::{is_cache_dir, usage_until};
 
-/// What `--kind` takes today: rtok's own T182 junk, then the T330.3 kinds.
-pub const KINDS: [&str; 7] = ["log", "archive", "cache", "temp", "build", "locks", "swap"];
+/// What `--kind` takes today: rtok's own T182 junk, then the T330.3 and T330.5.1 kinds.
+/// `snapshots` is accepted and never clears anything: its class is `never`.
+pub const KINDS: [&str; 12] = [
+    "log",
+    "archive",
+    "cache",
+    "temp",
+    "logs",
+    "build",
+    "deps",
+    "locks",
+    "backups",
+    "swap",
+    "crash-dumps",
+    "snapshots",
+];
 
 /// Kinds a running agent may be writing right now. A §22 cache joins them; a tagged cache is
 /// judged by T152's idle rule whether or not its agent runs (T342).
@@ -190,11 +205,13 @@ pub fn plan(
         let mut live: Option<bool> = None;
         for i in a.items.iter().filter(|i| i.counted()) {
             // D36 evidence only, whatever else marked the item counted.
-            let documented = matches!(i.evidence, SECTION_22 | TAG | RTOK_OWN);
+            let documented = matches!(i.evidence, SECTION_22 | TAG | RTOK_OWN | EXTRA);
             if !documented || !f.wants_kind(i.kind, i.class) || !old(Path::new(&i.path)) {
                 continue;
             }
-            let sensitive = LIVE_KINDS.contains(&i.kind) || i.evidence == SECTION_22;
+            // A path the user named is no more known to tolerate a running agent than §22's.
+            let sensitive =
+                LIVE_KINDS.contains(&i.kind) || matches!(i.evidence, SECTION_22 | EXTRA);
             let busy = a.host && sensitive && *live.get_or_insert_with(|| running(a.name));
             let note = busy.then_some(RUNNING);
             out.push(item(a.name, i.kind, &i.path, i.bytes, i.evidence, note));
@@ -455,6 +472,7 @@ mod tests {
             kinds: Vec::new(),
             items,
             freed_default_bytes: 0,
+            freed_review_bytes: 0,
         }
     }
 
@@ -463,6 +481,7 @@ mod tests {
             agents,
             total_bytes: 0,
             freed_default_bytes: 0,
+            freed_review_bytes: 0,
         }
     }
 
@@ -485,6 +504,58 @@ mod tests {
 
     fn idle(_: &str) -> bool {
         false
+    }
+
+    fn classed(kind: &'static str, class: &'static str, path: &Path, ev: &'static str) -> Item {
+        Item {
+            class,
+            ..item(kind, path, ev)
+        }
+    }
+
+    /// T330.5.1: a §22 log goes only with `--include review` or `--kind logs`, an `extra` crash
+    /// dump past its age by default, a snapshot never (not even named), and a running host keeps
+    /// its `extra` path like a §22 one.
+    #[test]
+    fn review_kinds_need_the_flag_extra_paths_plan_and_snapshots_never_do() {
+        let (cfg, dir) = crate::testutil::config("junk-clear-review");
+        let p = |n: &str| dir.join(n);
+        let mut snap = classed("snapshots", "never", &p("history"), SECTION_22);
+        snap.kept = Some("snapshot: never cleared".into());
+        let r = report(vec![row(
+            "claude",
+            vec![
+                classed("logs", "review", &p("old.log"), SECTION_22),
+                classed("crash-dumps", "safe", &p("old.ips"), EXTRA),
+                classed("crash-dumps", "review", &p("new.ips"), EXTRA),
+                classed("backups", "review", &p("s.json.bak-1"), RTOK_OWN),
+                snap,
+            ],
+        )]);
+        let now = SystemTime::now();
+        let names = |f: &Filter, running: &dyn Fn(&str) -> bool| {
+            let planned = plan(&cfg, &r, f, now, running);
+            let names = planned
+                .iter()
+                .filter(|p| p.planned)
+                .map(|p| name(p).to_owned());
+            names.collect::<Vec<_>>()
+        };
+        assert_eq!(names(&filter(&["claude"], &[]), &idle), ["old.ips"]);
+        let review = Filter {
+            include_review: true,
+            ..filter(&["claude"], &[])
+        };
+        let all = ["old.log", "old.ips", "new.ips", "s.json.bak-1"];
+        assert_eq!(names(&review, &idle), all);
+        assert_eq!(names(&filter(&[], &["logs"]), &idle), ["old.log"]);
+        assert_eq!(
+            names(&filter(&[], &["crash-dumps"]), &idle),
+            ["old.ips", "new.ips"]
+        );
+        assert!(names(&filter(&[], &["snapshots"]), &idle).is_empty());
+        // Running: the §22 log and the `extra` dumps stay, rtok's own backup does not.
+        assert_eq!(names(&review, &|_| true), ["s.json.bak-1"]);
     }
 
     #[test]

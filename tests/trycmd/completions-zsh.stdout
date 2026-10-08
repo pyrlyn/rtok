@@ -655,7 +655,7 @@ _arguments "${_arguments_options[@]}" : /
 (clear)
 _arguments "${_arguments_options[@]}" : /
 '*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
-'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp build locks swap)' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks backups swap crash-dumps snapshots)' /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -1059,7 +1059,7 @@ _arguments "${_arguments_options[@]}" : /
 (clear)
 _arguments "${_arguments_options[@]}" : /
 '*--agent=[Only this agent/: /`rtok/` or a host id (repeatable)]:AGENT:_default' /
-'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp build locks swap)' /
+'*--kind=[Only this junk kind (repeatable)]:KIND:(log archive cache temp logs build deps locks backups swap crash-dumps snapshots)' /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
