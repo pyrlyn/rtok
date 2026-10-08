@@ -88,10 +88,15 @@ function HostsBody({ view }: { view: HostsView }) {
 function Host({ block: b }: { block: HostBlock }) {
     const note = hostNote(b.note);
     return (
-        <Panel title={b.name} hint={b.kind}>
-            <Pill tone={note.tone} dot={note.tone === "ok"}>
-                {note.label}
-            </Pill>
+        <Panel
+            title={b.name}
+            hint={b.kind}
+            action={
+                <Pill tone={note.tone} dot={note.tone === "ok"}>
+                    {note.label}
+                </Pill>
+            }
+        >
             <Kv
                 rows={[
                     ["app", orUnknown(b.app, why.hostApp, "not found")],
