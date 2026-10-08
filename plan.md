@@ -65,7 +65,8 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
-| T385.12 | todo | P3 | 3 | 20% | |
+| T385.12.1 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T385.12.2 | todo | P3 | 3 | 0% | |
 | T391 | todo | P3 | 2 | 30% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
@@ -1419,11 +1420,24 @@ optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas an
 
 Check: per-wire tests and a dated bench row; `just check`.
 
-### T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+### T385.12.1. `rtok batch` CLI and Batch/Flex price rows
 
-optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
+Split from T385.12 (2026-10-08): the whole card would pass the 500-line cap, and its last third reads T385.6's per-lane stats (PR #848, not merged yet). optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]` (key `<model>@batch`, `<model>@flex`), and `stats --price` costing the Batch-lane usage rows at the `@batch` row.
 
-Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+Execution plan:
+
+1. `src/batch.rs`: provider (`anthropic` | `openai`), one blocking-free reqwest call per verb against the proxy URL (`--url` overrides `[proxy]` bind/port). `submit` posts the JSONL (Anthropic wraps the lines as `requests`; OpenAI uploads the file as `purpose=batch`, then creates the batch), `status` polls, `fetch` streams the results (Anthropic `/results`, OpenAI the output file) to a file. Keys come from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` only; the CLI never touches the lane header, the proxy already tags the paths `batch`.
+2. `src/proxy/mod.rs`: `/v1/batches*` and `/v1/files*` without an `anthropic-version` header go to `openai_upstream` (they went to the Anthropic upstream, so an OpenAI batch never worked through one proxy).
+3. `src/config/mod.rs`: `@batch` rows for the shipped models and `@flex` rows for the two OpenAI models, with provider pricing pages and the date; `Store::usage_by_model_tier` keys Batch-lane rows `<model>@batch`; `attach_costs` uses it.
+4. Docs `docs/batch-flex.md`, `docs/commands.md`, `docs/config.md` (en, ru, uk); trycmd for `rtok batch`; mock-upstream test.
+
+Check: trycmd for `rtok batch`; a mock-upstream round trip for both providers; a `stats --price` fixture with a Batch row; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+
+### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
+
+Split from T385.12. Needs T385.6 (#848) merged and T385.12.1. Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
+
+Check: a report fixture with Batch and Flex rows; `just check`.
 
 ### T391. Junk map: the five missing hosts and VS Code `CachedData`
 
