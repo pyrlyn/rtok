@@ -86,7 +86,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.4 | todo | P2 | 3 | 0% | |
-| T414.5 | todo | P2 | 3 | 0% | |
 | T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1580,12 +1579,6 @@ Check: every sub-task below is closed in `done.md`, and no file under `web/` is 
 ### T414.4. Restyle Overview, Stats, Usage, Calls, Sessions
 
 Apply the approved shell and components; chart series colours come from the brand roles.
-
-Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
-
-### T414.5. Restyle Hosts, Plugins, Skills, Services, Worktrees, Projects
-
-As T414.4 for these pages.
 
 Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
 
