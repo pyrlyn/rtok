@@ -252,17 +252,19 @@ rtok plugins
 ```
 
 ```text
-id       enabled  surfaces
-measure  on       cli,proxy
-cmd      on       hook,cli
-read     on       mcp,hook
-archive  on       proxy,mcp
-proxy    on       proxy
-inject   on       hook
-guard    on       hook
-memory   on       mcp,hook
-graph    on       mcp
-toon     on       proxy,mcp
+id        enabled   surfaces
+measure   on        cli,proxy
+cmd       on        hook,cli
+read      on        mcp,hook
+json_tree off       proxy,mcp
+archive   on        proxy,mcp,cli
+proxy     on        proxy
+inject    on        hook
+guard     on        hook,cli
+memory    on        mcp,hook
+graph     on        mcp,hook
+toon      on        proxy,mcp
+compress  on        proxy
 ```
 
 Turn one off with `rtok config set plugins.cmd.enabled false`, or turn `toon` off with

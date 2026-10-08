@@ -296,6 +296,18 @@ Legend: **blocked by** = tasks that must land first; **gate** = keep-or-revert r
 
 ---
 
+## `json_tree`
+
+**Goal.** Fold a large nested JSON tool result (a design tree or an AST) before `archive` replaces it with a head/tail pointer.
+
+**Replaces.** Nothing by dependency. The hoist and element-template idea is Figma-Context-MCP (`finalize.ts`, MIT); the algorithm is written here (D6).
+
+**Surfaces.** `proxy_filter` and MCP `shorten_result`. Default **off** until a `Measurement` row shows a saving.
+
+**Gate.** a nested JSON tool result is folded only when the folded form estimates fewer tokens than the original, and expand returns those original bytes.
+
+---
+
 ## Dependency sketch
 
 ```

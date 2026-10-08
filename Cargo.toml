@@ -48,11 +48,12 @@ harness = false
 
 [features]
 # One feature per catalogue plugin (plan T0.4). Default = all.
-default = ["measure", "cmd", "read", "archive", "proxy", "inject", "guard", "memory", "graph", "toon", "compress"]
+default = ["measure", "cmd", "read", "json_tree", "archive", "proxy", "inject", "guard", "memory", "graph", "toon", "compress"]
 measure = []
 cmd = []
 read = ["dep:tree-sitter", "dep:tree-sitter-tags", "lang-rust", "lang-ts", "lang-js", "lang-python", "lang-dart", "lang-c", "lang-go", "lang-java", "lang-kotlin", "lang-swift", "lang-csharp", "lang-ruby", "lang-php"]
 archive = []
+json_tree = ["toon", "archive"]
 proxy = []
 inject = []
 guard = []
