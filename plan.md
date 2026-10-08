@@ -88,7 +88,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.4 | todo | P2 | 3 | 0% | |
 | T414.5 | todo | P2 | 3 | 0% | |
-| T414.6 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
@@ -1598,19 +1597,6 @@ Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light
 As T414.4 for these pages.
 
 Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page.
-
-### T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
-
-As T414.4; the Graph 3D view keeps its renderer and takes its colours from the roles.
-
-Plan (shared components stay as T414.3 left them; T414.4 and T414.5 own the other pages):
-1. `states.tsx`: `Empty` becomes a dashed, centred block with no nested glass, `ErrorState` and `Missing` take the `danger` roles (border and wash at 50% and 10%, `danger-fg` text), `Offline` reuses `Button` (solid, 44px below 768px) instead of a hand-made one.
-2. Logs: the error row and message on the `danger` roles, row rules at 60%, a placeholder on the filter. Config: row rules at 60%. Doctor: removed diff lines on `danger-fg`, module cells on `bg`/60%, checkboxes on the `accent` colour.
-3. Graph: view and fit/reset controls become `Chip` and `Button`, the tooltip and menu take `tooltipBox`, the 3D fallback notice the `warn` roles; project colours come from the `accent`, `delta`, `success` and `fg-muted` roles (hash of the root picks one) instead of an HSL hue, resolved from the tokens in the 3D stage.
-4. Tests and stories for the new behaviour; stories in both themes for each state.
-5. Verify with `just spa-test`, `just spa-stories`, `just spa-e2e`, `just check`; dark and light screenshots of Config, Doctor, Logs, Graph from `?sample` and of the states from Storybook.
-
-Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page and state.
 
 ### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 
