@@ -8341,6 +8341,21 @@ Result (2026-10-07, creator decision): D33/T275 wins. Install and update keep wr
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T332. Investigate: rtok's own MCP duplicate: T331 keep rule vs D33/T275
+
+In the plan, T331 (plan.md on branch `docs/plan-doctor-hooks-mcp`, ~line 711, from PR #542 (T331), not merged yet) says "for rtok's own server, the rules of T275 (plugin serves MCP, so the separate entry goes)" and keeps the "plugin-provided first" copy by default, reporting a host that de-duplicates by name as "shadowed, unused, still removable" (~line 706). D33 (plan.md@966f067 line 709) and T275 (plan.md@966f067 lines 171-175) say "Install and update always write the config entry `rtok`; only `remove` takes it out, and a plugin no longer suppresses or strips it", "the rtok plugin ships no MCP server", and "Gemini keeps both, since settings.json wins over an extension's same-name server". These contradict each other because `rtok doctor --fix --yes` would delete exactly the config entry D33 requires (on Gemini, and on any host where an old plugin still serves MCP), and the next `rtok agents install|update` would write it back, so the two features undo each other.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): D33 wins (research option A). The config entry `rtok` that install and update write is always the kept copy and is never fixable; `rtok doctor --fix` never removes it. A same-name copy in two scopes of one host and a plugin copy (Gemini, Devin, Antigravity) are reported as information only, because the host merges or shadows them; the plugin copy comes with the hint `rtok agents update <host>`. Only a hand-written copy under another name that also launches rtok (for example `rtok-mcp` running `rtok mcp`) is removable. No code changed: `src/doctor/mcp_dupes.rs` and `src/doctor/fix.rs` already refuse rtok's own entry. Updated in `plan.md`: the T331 "Which copy is kept" rule for MCP now follows D33; D33 gained "`rtok doctor --fix` never removes it (T332)"; the T331 split note and the T331.10 card are rewritten with the four rules and a Check, and T331.10 no longer depends on T332 or on T333 (T333 is done, done.md).
+
+Open note (side findings of the research, not decisions; recorded in the T331.10 card): Claude Code's docs now describe plugin MCP servers being matched by endpoint against user, project and local servers, which conflicts with `research.md` §25 and with T331.11's "plugin copy is kept first" (installed-version behaviour unverified); and whether Devin runs two servers (install writes `mcp_config.json`, the plugin ships `.mcp.json`) is unknown.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
+
 ### T246.1. MCP entries written through the SDK
 
 First of T246.1–T246.4 (creator request 2026-09-24): removing rtok takes back only what rtok wrote, and asks about what the user changed.
