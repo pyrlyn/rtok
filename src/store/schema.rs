@@ -145,7 +145,6 @@ diesel::table! {
     }
 }
 
-
 diesel::table! {
     notes (id) {
         id -> Integer,
