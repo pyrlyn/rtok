@@ -489,7 +489,8 @@ enum MemoryCmd {
     // T69.1
     /// Drop a note back to newest-first recall order
     Unpin { id: i32 },
-    /// Previous title and body of a note, oldest version first
+    // T472
+    /// Print the earlier title and body kept when an upsert changed this note
     History { id: i32 },
     // T69.1
     /// Save a replacement (title, body) for a note and retire the old row
@@ -630,9 +631,61 @@ enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
-    /// The task to work on next: the lowest open one with no open subtask
+    /// The first ready task: free or stale, not blocked; a leaf when nothing is blocked
     Next {
         /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Tasks that can be claimed, highest priority first
+    Ready {
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Claim a task for this agent, or the first ready task when no id is given.
+    /// On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set.
+    Claim {
+        /// Task id; omit to take the first ready task
+        id: Option<String>,
+        /// The rtok agent id; defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// Print the task as JSON, with `changed`
+        #[arg(long)]
+        json: bool,
+    },
+    /// Clear the assignee and set the task open. Only the holder, unless --force.
+    Release {
+        /// Task id, e.g. `R12`
+        id: String,
+        /// The rtok agent id; defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// Release a task held by someone else
+        #[arg(long)]
+        force: bool,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Record that this task waits on another. A cycle is refused and nothing is written.
+    Dep {
+        /// The task that waits
+        id: String,
+        /// The task that must finish first
+        blocker: String,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set priority from 0 (highest) to 4. 2 is the default and is not stored.
+    Priority {
+        /// Task id, e.g. `R12`
+        id: String,
+        /// 0 to 4
+        level: u8,
+        /// Print the task as JSON
         #[arg(long)]
         json: bool,
     },
@@ -829,6 +882,21 @@ enum GraphCmd {
         /// JSON instead of a table
         #[arg(long, global = true)]
         json: bool,
+    },
+    /// Risk-ranked reading list for a git diff (files, untested defs, line ranges)
+    Review {
+        /// Diff against this ref
+        #[arg(long, conflicts_with = "staged")]
+        since: Option<String>,
+        /// Staged files only (`git diff --cached --name-only`)
+        #[arg(long)]
+        staged: bool,
+        /// JSON instead of the text list
+        #[arg(long)]
+        json: bool,
+        /// Project id or directory instead of the cwd (see `rtok graph projects`)
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Tests that reach files changed in git (`git diff --name-only`)
     Affected {
@@ -2027,9 +2095,7 @@ pub fn run() -> Result<()> {
             AgentCmd::Whoami { json } => {
                 let cfg = Config::load_with(config_file.as_deref(), None)?;
                 let store = crate::store::Store::open(&cfg.core.db_path)?;
-                let detail = std::env::var("RTOK_AGENT_ID")
-                    .ok()
-                    .filter(|s| !s.is_empty())
+                let detail = crate::agents::link::shell_agent(Some(&store), env_var)
                     .and_then(|raw| store.resolve_agent(&raw).ok())
                     .and_then(|id| store.agent_detail(&id).ok().flatten());
                 let Some(detail) = detail else {
@@ -2053,7 +2119,8 @@ pub fn run() -> Result<()> {
             }
             AgentCmd::Status { text } => {
                 let cfg = Config::load_with(config_file.as_deref(), None)?;
-                let me = std::env::var("RTOK_AGENT_ID").ok();
+                let store = crate::store::Store::open(&cfg.core.db_path).ok();
+                let me = crate::agents::link::shell_agent(store.as_ref(), env_var);
                 match model::set_status(&cfg, me.as_deref(), &text)? {
                     Some(text) => println!("status: {text}"),
                     None => println!("status cleared"),
@@ -2279,14 +2346,7 @@ pub fn run() -> Result<()> {
                 }
                 MemoryCmd::History { id } => {
                     let cx = crate::plugin::Runtime::open(cfg, "memory")?;
-                    for (i, (version, title, body)) in
-                        cx.store.note_versions(id)?.iter().enumerate()
-                    {
-                        if i > 0 {
-                            println!();
-                        }
-                        println!("{version} {title}\n{body}");
-                    }
+                    println!("{}", crate::plugins::memory::mem_history(&cx, id)?);
                 }
                 MemoryCmd::Revise { id, title, body } => {
                     let cx = crate::plugin::Runtime::open(cfg, "memory")?;
@@ -2443,6 +2503,29 @@ pub fn run() -> Result<()> {
                                 ..crate::plugins::graph::Filter::none()
                             },
                             to.as_deref(),
+                        )?
+                    );
+                }
+                GraphCmd::Review {
+                    since,
+                    staged,
+                    json,
+                    project,
+                } => {
+                    let root = crate::plugins::graph::cli_root(None)?;
+                    let scope = crate::plugins::graph::scope::resolve(
+                        &cx.store,
+                        project.as_deref(),
+                        &root,
+                    )?;
+                    print!(
+                        "{}",
+                        crate::plugins::graph::scope::review_git(
+                            &crate::plugin::Ctx::new(&cx),
+                            &scope,
+                            since.as_deref(),
+                            staged,
+                            json,
                         )?
                     );
                 }
@@ -3028,13 +3111,16 @@ fn report_flags(
     Some(flags)
 }
 
-/// T287: the caller's own rtok agent id — `RTOK_AGENT_ID` resolved, `None` when unset (the
-/// user at a terminal). A set but unresolvable id is an error, never a silent "user".
+/// The process environment, as [`crate::agents::link::shell_agent`] reads it.
+fn env_var(k: &str) -> Option<String> {
+    std::env::var(k).ok()
+}
+
+/// T287: the caller's own rtok agent id — `RTOK_AGENT_ID` resolved, else (T473) the host
+/// session's agent, `None` when neither names one (the user at a terminal). A set but
+/// unresolvable `RTOK_AGENT_ID` is an error, never a silent "user".
 fn caller_agent(store: &crate::store::Store) -> Result<Option<String>> {
-    match std::env::var("RTOK_AGENT_ID")
-        .ok()
-        .filter(|s| !s.is_empty())
-    {
+    match crate::agents::link::shell_agent(Some(store), env_var) {
         None => Ok(None),
         Some(raw) => store
             .resolve_agent(&raw)
@@ -3273,7 +3359,8 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
         } => {
             let id = id_of(&id)?;
             let status = status.as_deref().map(str::parse::<Status>).transpose()?;
-            let task = open()?.status(&id, status, force)?;
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let task = open()?.status(&store, &id, status, force)?;
             if json {
                 print_json(&task)?;
             } else {
@@ -3290,11 +3377,68 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
             }
         }
         TaskCmd::Next { json } => {
-            let next = open()?.next()?;
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let next = open()?.next(&store)?;
             match (next, json) {
                 (next, true) => print_json(&next)?,
                 (Some(t), false) => println!("{}  {}", t.id, t.title),
-                (None, false) => println!("no open task"),
+                (None, false) => println!("no ready task"),
+            }
+        }
+        TaskCmd::Ready { json } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let ready = open()?.ready(&store)?;
+            if json {
+                print_json(&ready)?;
+            } else {
+                print!("{}", crate::tasks::run::ready_text(&ready));
+            }
+        }
+        TaskCmd::Claim { id, agent, json } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let agent = crate::tasks::run::require_agent(&store, agent.as_deref())?;
+            let id = id.as_deref().map(id_of).transpose()?;
+            let outcome = open()?.claim(&store, id.as_ref(), &agent)?;
+            if json {
+                print_json(&outcome)?;
+            } else if outcome.changed {
+                println!("{}  {}", outcome.task.id, outcome.task.title);
+            } else {
+                println!(
+                    "{}  {}  (already yours)",
+                    outcome.task.id, outcome.task.title
+                );
+            }
+        }
+        TaskCmd::Release {
+            id,
+            agent,
+            force,
+            json,
+        } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let agent = crate::tasks::run::require_agent(&store, agent.as_deref())?;
+            let task = open()?.release(&store, &id_of(&id)?, &agent, force)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{}: {}", task.id, task.status);
+            }
+        }
+        TaskCmd::Dep { id, blocker, json } => {
+            let task = open()?.block(&id_of(&id)?, &id_of(&blocker)?)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{id}: blocked by {blocker}");
+            }
+        }
+        TaskCmd::Priority { id, level, json } => {
+            let task = open()?.set_priority(&id_of(&id)?, level)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{}: priority {level}", task.id);
             }
         }
     }

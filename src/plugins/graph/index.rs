@@ -12,7 +12,7 @@ use anyhow::Result;
 
 use crate::plugins::read::outline;
 use crate::store;
-use rtok_plugin_sdk::Ctx;
+use rtok_plugin_sdk::{Ctx, SymbolRow};
 
 #[derive(Debug, Default)]
 pub struct Report {
@@ -26,8 +26,11 @@ pub struct Report {
     pub extension_mapped: u32,
 }
 
-/// One symbol row: name, kind, line, is-definition, end line, enclosing definition.
-type Row = (String, String, i32, bool, i32, String);
+/// One symbol row. The byte span, content hash, signature, and doc ride along (T474).
+type Row = SymbolRow;
+
+/// Doc comments stored on a definition, in bytes.
+const DOC_CAP: usize = 512;
 
 /// `file_sha` for a file that cannot be decoded or parsed (T36.16). The stat gate can skip it
 /// on the next run without opening the file again.
@@ -348,7 +351,7 @@ fn parse(job: &Job) -> Parsed {
         return Parsed::Same;
     }
     match outline::tags_with_extensions(&job.path, &src, &job.extensions) {
-        Ok(hits) => Parsed::Rows(sha, scoped(&hits)),
+        Ok(hits) => Parsed::Rows(sha, scoped(&src, &hits)),
         Err(_) => Parsed::Unparsed,
     }
 }
@@ -391,8 +394,8 @@ fn each_parsed(jobs: &[Job], mut write: impl FnMut(&Job, Parsed) -> Result<()>) 
     })
 }
 
-/// Bump when [`scoped`] changes (T35.5). T368's full import path in `scope` rewrites version-3 roots once.
-const INDEX_VERSION: u32 = 4;
+/// Bump when [`scoped`] changes (T35.5). T474's byte span, hash, and doc rewrite version-4 roots once.
+const INDEX_VERSION: u32 = 5;
 
 /// Hex sha256 of `INDEX_VERSION` and every query string [`outline::tags`] compiles —
 /// tags **and** locals, because a language whose locals query changed produces different
@@ -468,7 +471,58 @@ fn extractor_fingerprint() -> String {
 /// definition (or the upstream reference) always stands and no site counts twice.
 /// Verified on the `truth-constructs` fixture: `OnlyTyped:1` yields the def row
 /// only, `impl Recv` the implementation row only.
-fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
+/// Contiguous `///` or `//!` lines directly above `line`, capped at [`DOC_CAP`] bytes.
+fn doc_above(src: &str, line: i32) -> String {
+    if line <= 1 {
+        return String::new();
+    }
+    let lines: Vec<&str> = src.lines().collect();
+    let mut i = (line as usize).saturating_sub(1).min(lines.len());
+    let mut rev = Vec::new();
+    while i > 0 {
+        i -= 1;
+        let Some(text) = lines.get(i) else {
+            break;
+        };
+        let trimmed = text.trim();
+        if trimmed.starts_with("///") || trimmed.starts_with("//!") {
+            rev.push(*text);
+        } else {
+            break;
+        }
+    }
+    rev.reverse();
+    let mut out = String::new();
+    for (n, line) in rev.iter().enumerate() {
+        if n > 0 && out.len() + 1 >= DOC_CAP {
+            break;
+        }
+        if n > 0 {
+            out.push('\n');
+        }
+        let room = DOC_CAP.saturating_sub(out.len());
+        if line.len() <= room {
+            out.push_str(line);
+        } else {
+            let mut end = room;
+            while end > 0 && !line.is_char_boundary(end) {
+                end -= 1;
+            }
+            out.push_str(&line[..end]);
+            break;
+        }
+    }
+    out
+}
+
+fn content_hash(src: &str, start: usize, end: usize) -> String {
+    let bytes = src.as_bytes();
+    let start = start.min(bytes.len());
+    let end = end.min(bytes.len()).max(start);
+    store::hex_sha256(&bytes[start..end])
+}
+
+fn scoped(src: &str, hits: &[outline::TagHit]) -> Vec<Row> {
     let defs: Vec<(usize, usize, &str)> = hits
         .iter()
         .filter(|h| h.is_def)
@@ -489,14 +543,27 @@ fn scoped(hits: &[outline::TagHit]) -> Vec<Row> {
                     .map(|(_, _, n)| n.to_string())
                     .unwrap_or_default()
             };
-            (
-                h.name.clone(),
-                h.kind.clone(),
-                h.line as i32,
-                h.is_def,
-                h.end_line as i32,
+            SymbolRow {
+                name: h.name.clone(),
+                kind: h.kind.clone(),
+                line: h.line as i32,
+                is_def: h.is_def,
+                end_line: h.end_line as i32,
                 scope,
-            )
+                start_byte: i64::try_from(h.start_byte).unwrap_or(i64::MAX),
+                end_byte: i64::try_from(h.end_byte).unwrap_or(i64::MAX),
+                content_hash: content_hash(src, h.start_byte, h.end_byte),
+                signature: if h.is_def {
+                    h.line_text.trim_end_matches(['\r', '\n']).to_string()
+                } else {
+                    String::new()
+                },
+                doc: if h.is_def {
+                    doc_above(src, h.line as i32)
+                } else {
+                    String::new()
+                },
+            }
         })
         .collect()
 }
@@ -873,6 +940,35 @@ fn touched() {}
             ["chain.rs/x1"],
             "file-level call has no scope"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T474: a definition stores its byte span, the sha256 of those bytes, and the
+    /// doc comment directly above it. A blank line ends the comment.
+    #[test]
+    fn index_stores_the_byte_span_hash_and_doc() {
+        let (cx, dir) = cx("span");
+        let src = "/// counts things\nfn keep() {\n    1\n}\n";
+        fs::write(dir.join("a.rs"), src).unwrap();
+        fs::write(dir.join("gap.rs"), "/// lost\n\nfn gone() {}\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        run(&ctx, &dir, false).unwrap();
+        let k = canon(&dir);
+        let span = cx
+            .store
+            .symbol_span(&k, "a.rs", "keep", "function", 2)
+            .unwrap()
+            .expect("span");
+        let file = fs::read(dir.join("a.rs")).unwrap();
+        let bytes = &file[span.start_byte as usize..span.end_byte as usize];
+        let text = std::str::from_utf8(bytes).unwrap();
+        assert!(text.starts_with("fn keep"), "{text}");
+        assert_eq!(span.content_hash, crate::store::hex_sha256(bytes));
+        assert_eq!(span.file_sha, crate::store::hex_sha256(&file));
+        let found = cx.store.symbol_fts(&k, "counts things", 5).unwrap();
+        assert!(found.iter().any(|h| h.1 == "keep"), "{found:?}");
+        let lost = cx.store.symbol_fts(&k, "lost", 5).unwrap();
+        assert!(lost.iter().all(|h| h.1 != "gone"), "{lost:?}");
         let _ = fs::remove_dir_all(dir);
     }
 }

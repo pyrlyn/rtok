@@ -6,12 +6,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 
 ## Cloud review findings (2026-10-08)
 
-New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. None of these is in the task table yet: to take one, add its row and a card with a `Check:` line.
+New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457 and T458 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
 
 | ID | Priority | Kind | Status | Where | Fix |
 | --- | --- | --- | --- | --- | --- |
-| T457 | P1 | bug | confirmed | `src/plugins/guard/mod.rs:432-433`, `:124-135`; wrap emitted at `src/plugins/cmd/hook.rs:153-157` | `strip_wrap` strips only `rtok run -- `, not `rtok run --agent <id> --`, so the stem looks like `rtok`, `cache_key` is `None`, and every sub-agent wrap clears all `bash` and `read` guard keys. Strip the `--agent <id>` form too and add a regression test. |
-| T458 | P2 | bug | confirmed | `src/mcp/wrap.rs:152-154` | The MCP wrap reads a declared `Content-Length` with no cap (`take(len).read_to_end`). Cap it like `rtok_hook::MAX_FRAME` (64 MiB) and fall back to `Framing::Raw` on overflow. |
 | T459 | P2 | bug | confirmed | `src/bin/rtok-hook.rs:41-42` | The `rtok-hook` client reads all of stdin before `Request::encode()`; only the resident caps later (T201). Bound the read to `hook_max_input_bytes + 1`. |
 | T460 | P2 | bug | suspected | `src/plugins/read/hook.rs:154-164` | `same_path` compares case-sensitively (`a == b`, then `Path::ends_with`). Case-fold or canonicalize on Windows. |
 | T461 | P2 | bug | suspected | `src/hooks/resident.rs:105` (Windows) vs `:80` (Unix) | The Windows resident exits only when `hook.lock` vanishes; Unix also exits when the socket vanishes. Mirror the Unix condition. |

@@ -28,7 +28,7 @@ the CLI file) and in the extension file
 Hooks carry the `hook` and `cli` surfaces, MCP carries `mcp`; the hook links are the
 plugin unit, so nothing extra is linked. Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon
+Reachable: measure, cmd, read, json_tree, archive, inject, guard, memory, graph, toon
 Not reachable: proxy, compress
 
 ## Docs

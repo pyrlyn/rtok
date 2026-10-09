@@ -8,7 +8,7 @@ Every agent session that works through rtok gets one **rtok agent id**, and ever
 - **Hooks** register the agent on the first event of a session and touch it on every later one (`SessionStart`, tool calls, `SessionEnd`). A host whose install carries hooks needs nothing else.
 - **MCP** serves a host without hooks. `rtok mcp --host <host>` links itself to the session's agent by the host's own session id where the host puts one in the environment (Grok Build: `GROK_SESSION_ID`), else by the one live agent of that host in the same directory that has been seen since the process started. Two candidates bind nothing, so a message never lands with the wrong agent. A host that can carry neither hooks nor a session id gets a row of its own, registered by the MCP process.
 - The agent always comes from the session. No tool takes an agent or owner argument, so a model cannot claim a worktree or send a message in another agent's name.
-- `rtok agents whoami` prints the id (`RTOK_AGENT_ID`, set by the Claude Code hook into the session environment and quoted in the session-start context line); MCP `whoami` returns it with how it was linked.
+- `rtok agents whoami` prints the id (`RTOK_AGENT_ID`, set by the Claude Code hook into the session environment and quoted in the session-start context line; when that is missing, as in Claude's desktop app, the agent of `CLAUDE_CODE_SESSION_ID`); MCP `whoami` returns it with how it was linked.
 
 ## See and talk to agents
 
@@ -89,3 +89,7 @@ Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add`
 ### Windows
 
 On Windows rtok cannot read a process's parent pid (`rtok-sys::parent_pid` returns nothing; the Windows snapshot value is not updated after the parent exits), so no ancestor chain is read and only the cwd rule decides which agent a hook call belongs to. No host doc records this limit. Sources and dates are in `research.md` §26.
+
+### Claude desktop app
+
+In the desktop app's Code tab, rtok's MCP tools are served by the one `rtok mcp` the app starts from `claude_desktop_config.json` for every session, not by a process of the session itself. That process sits under no session and in no session's directory, so MCP `whoami`, `worktree_*` and `agent_*` cannot tell which agent called them and answer "not linked to an agent session" with that reason. Use `rtok agents` and `rtok worktree` from the agent's shell there. Keeping the shared entry from hiding the session's own server is T456.

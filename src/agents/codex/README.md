@@ -20,7 +20,7 @@ non-interactively (https://developers.openai.com/codex/cli/reference, checked 20
 
 MCP carries the `mcp` surface, the proxy carries `proxy`, hooks carry `hook` / `cli`.
 
-Reachable: measure, cmd, read, archive, proxy, inject, guard, memory, graph, toon, compress
+Reachable: measure, cmd, read, json_tree, archive, proxy, inject, guard, memory, graph, toon, compress
 Not reachable: -
 
 ## Docs

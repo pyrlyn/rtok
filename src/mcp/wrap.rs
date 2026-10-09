@@ -31,8 +31,9 @@ use crate::plugins::cmd::rules::{self, Settings};
 enum Framing {
     Line,
     Header,
-    /// A malformed header block (unparseable `Content-Length`, or a body shorter than the
-    /// one declared): the exact bytes consumed so far, forwarded with no framing added.
+    /// A malformed header block (unparseable `Content-Length`, a declared length over
+    /// [`rtok_hook::MAX_FRAME`], or a body shorter than the one declared): the exact
+    /// bytes consumed so far, forwarded with no framing added.
     Raw,
 }
 
@@ -149,8 +150,16 @@ fn read_frame(r: &mut impl BufRead, buf: &mut Vec<u8>) -> Option<Framing> {
         *buf = header;
         return Some(Framing::Raw);
     };
+    if len > rtok_hook::MAX_FRAME {
+        // Over the same 64 MiB cap `rtok_hook` refuses. Do not buffer the declared
+        // body and do not block a live pipe until that many bytes arrive. The header
+        // is forwarded raw; the following bytes stay on the stream.
+        *buf = header;
+        return Some(Framing::Raw);
+    }
     // Grow with the bytes that actually arrive: the length is the peer's claim, and
-    // allocating it up front let one bogus header abort the wrapper.
+    // allocating it up front let one bogus header abort the wrapper. The claim is
+    // already at or under `MAX_FRAME`.
     let _ = r.by_ref().take(len as u64).read_to_end(buf);
     if buf.len() < len {
         // Body shorter than declared: forward the header plus whatever body bytes
@@ -233,6 +242,11 @@ pub fn shorten_result(
         let Ok(id) = cx.put_archive(text.as_bytes()) else {
             continue;
         };
+        if let Some(printed) = json_tree_fold(cx, &rule, tool, text, &id) {
+            block["text"] = Value::String(printed);
+            changed = true;
+            continue;
+        }
         let cut = rules::apply(settings, text, 0, &rule, &id);
         if cut.len() >= text.len() {
             continue;
@@ -252,6 +266,55 @@ pub fn shorten_result(
         changed = true;
     }
     changed
+}
+
+/// Fold one JSON value when `json_tree` is on, the tool is not `read` or `search`,
+/// and the fold fits the mcp rule's line cap and is shorter than the original.
+/// `None` keeps today's line cut. The original is already archived under `archive_id`.
+fn json_tree_fold(
+    cx: &Runtime,
+    rule: &rules::Rule,
+    tool: &str,
+    text: &str,
+    archive_id: &str,
+) -> Option<String> {
+    #[cfg(not(feature = "json_tree"))]
+    {
+        let _ = (cx, rule, tool, text, archive_id);
+        return None;
+    }
+    #[cfg(feature = "json_tree")]
+    {
+        if !cx.config.plugins.json_tree.enabled {
+            return None;
+        }
+        if tool.eq_ignore_ascii_case("read") || tool.eq_ignore_ascii_case("search") {
+            return None;
+        }
+        let value: Value = serde_json::from_str(text).ok()?;
+        let folded = crate::plugins::json_tree::fold_json(&value)?;
+        if folded.text.lines().count() as u32 > rule.max_lines {
+            return None;
+        }
+        if folded.text.len() >= text.len() {
+            return None;
+        }
+        let printed = format!("{}\n[json-tree {archive_id}]", folded.text.trim_end());
+        if printed.len() >= text.len() {
+            return None;
+        }
+        let _ = cx.record(&Measurement {
+            plugin: "json_tree",
+            kind: "fold",
+            before_bytes: text.len() as u64,
+            after_bytes: printed.len() as u64,
+            est_before: cx.estimate(text, Class::Code),
+            est_after: cx.estimate(&printed, Class::Code),
+            ref_id: Some(archive_id.to_string()),
+            call_id: None,
+        });
+        Some(printed)
+    }
 }
 
 fn shorten(
@@ -299,12 +362,38 @@ mod tests {
         assert!(read_frame(&mut r, &mut buf).is_none());
     }
 
-    /// A peer-declared `Content-Length` far past what it sends must not be allocated up
-    /// front: `usize::MAX` used to panic with `capacity overflow` (and a merely huge value
-    /// aborted on OOM), killing the wrapper. The bytes that did arrive pass through raw.
+    /// A declared length over [`rtok_hook::MAX_FRAME`] is not read. The header goes out
+    /// raw and the next frame stays readable, so a live pipe is not asked to buffer or
+    /// block on the peer's claim. `usize::MAX` used to be allocated up front.
     #[test]
-    fn huge_declared_content_length_is_not_preallocated() {
-        let head = format!("Content-Length: {}\r\n\r\n", usize::MAX);
+    fn oversized_content_length_is_raw_and_does_not_swallow_the_next_frame() {
+        let next = br#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+        for len in [rtok_hook::MAX_FRAME as u128 + 1, usize::MAX as u128] {
+            let head = format!("Content-Length: {len}\r\n\r\n");
+            let mut stream = head.clone().into_bytes();
+            stream.extend_from_slice(next);
+            stream.push(b'\n');
+            let mut r = Cursor::new(stream);
+            let mut buf = Vec::new();
+            assert!(
+                matches!(read_frame(&mut r, &mut buf), Some(Framing::Raw)),
+                "len {len}"
+            );
+            assert_eq!(buf, head.as_bytes(), "len {len}");
+            assert!(
+                matches!(read_frame(&mut r, &mut buf), Some(Framing::Line)),
+                "len {len}"
+            );
+            assert_eq!(buf, next, "len {len}");
+            assert!(read_frame(&mut r, &mut buf).is_none(), "len {len}");
+        }
+    }
+
+    /// At the cap the short-body path still reads what arrived. Only a claim past the
+    /// cap skips the body.
+    #[test]
+    fn content_length_at_the_cap_still_reads_a_short_body() {
+        let head = format!("Content-Length: {}\r\n\r\n", rtok_hook::MAX_FRAME);
         let mut stream = head.clone().into_bytes();
         stream.extend_from_slice(b"{}");
         let mut r = Cursor::new(stream);

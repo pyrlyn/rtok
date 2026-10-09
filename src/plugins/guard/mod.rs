@@ -478,9 +478,10 @@ fn after_cd_prefix(mut s: &str) -> &str {
     s
 }
 
-/// PreToolUse sees the user's command; PostToolUse often sees `rtok run -- '…'`.
+/// PreToolUse sees the user's command; PostToolUse often sees `rtok run -- '…'`,
+/// or `rtok run --agent <id> -- '…'` when the dispatch carried a sub-agent id (T457).
 fn strip_wrap(s: &str) -> String {
-    let s = s.strip_prefix("rtok run -- ").unwrap_or(s);
+    let s = strip_run_wrap(s);
     if s.len() >= 2 && s.starts_with('\'') && s.ends_with('\'') {
         let inner = &s[1..s.len() - 1];
         // POSIX sh_quote embedding, or PowerShell doubled single-quotes (T55.4).
@@ -492,6 +493,36 @@ fn strip_wrap(s: &str) -> String {
     } else {
         s.to_string()
     }
+}
+
+/// Drops one `rtok run` wrapper. `<id>` is the token `cmd` embeds: 1–64 bytes of ASCII
+/// alnum, `_` or `-`. A lookalike stays intact, so it is not keyed as the inner command.
+fn strip_run_wrap(s: &str) -> &str {
+    if let Some(rest) = s.strip_prefix("rtok run -- ") {
+        return rest;
+    }
+    let Some(after) = s.strip_prefix("rtok run --agent ") else {
+        return s;
+    };
+    let Some((id, rest)) = after.split_once(' ') else {
+        return s;
+    };
+    if wrap_agent_id(id)
+        && let Some(cmd) = rest.strip_prefix("-- ")
+    {
+        cmd
+    } else {
+        s
+    }
+}
+
+/// Same shape as `cmd::hook::is_valid_agent_id`. Kept here so the hook path does not
+/// call back into `cmd` (that module already calls `guard::strip_cd_hop`).
+fn wrap_agent_id(id: &str) -> bool {
+    (1..=64).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 fn collapse(s: &str) -> String {
@@ -578,6 +609,14 @@ mod tests {
             k("cd /a && cd /b && rtok run -- 'ls'"),
             k("cd /a && cd /b && ls")
         );
+        // T457: the sub-agent form carries `--agent <id>` before `--`.
+        assert_eq!(k("rtok run --agent sub_1 -- 'ls'"), k("ls"));
+        assert_eq!(
+            k("cd /a && rtok run --agent sub_1 -- 'ls'"),
+            k("cd /a && ls")
+        );
+        assert_eq!(k("rtok run --agent ../x -- 'ls'"), None);
+        assert_eq!(k("rtok run --agent -- 'ls'"), None);
 
         let at = |cwd, agent| cache_key("Bash", &json!({"command": "ls"}), agent, cwd);
         assert_eq!(at(Some("/r"), None), Some("bash\t/r\tls".to_string()));
@@ -1385,6 +1424,104 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    /// T457: `rtok run --agent <id> -- '…'` used to leave the stem as `rtok`, so
+    /// `cache_key` was `None` and PostToolUse cleared every `bash` and `read` key.
+    #[test]
+    fn agent_wrap_matches_the_inner_command_and_keeps_other_keys() {
+        let cx = setup();
+        let g = Guard;
+        let path = json!({"file_path": "/proj/src/main.rs"});
+        let read = PreToolUse {
+            tool_name: "Read",
+            tool_input: &path,
+        };
+        assert!(
+            g.post_tool(
+                &PostToolUse {
+                    tool_name: "Read",
+                    tool_input: &path,
+                    tool_response: &json!({"content": "fn main() {}"}),
+                },
+                &Ctx::new(&cx),
+            )
+            .is_none()
+        );
+        let ls = json!({"command": "ls"});
+        assert!(
+            g.post_tool(
+                &PostToolUse {
+                    tool_name: "Bash",
+                    tool_input: &ls,
+                    tool_response: &json!({"stdout": "a\n"}),
+                },
+                &Ctx::new(&cx),
+            )
+            .is_none()
+        );
+        let quoted = format!(
+            "rtok run --agent sub_1 -- {}",
+            crate::plugins::cmd::run::sh_quote("git status")
+        );
+        assert!(
+            g.post_tool(
+                &PostToolUse {
+                    tool_name: "Bash",
+                    tool_input: &json!({"command": quoted}),
+                    tool_response: &json!({"stdout": "clean"}),
+                },
+                &Ctx::new(&cx),
+            )
+            .is_none()
+        );
+        assert!(
+            matches!(
+                g.pre_tool(&read, &Ctx::new(&cx)),
+                Some(PreToolDecision::Deny { .. })
+            ),
+            "a read-only sub-agent wrap must not drop read keys"
+        );
+        assert!(
+            matches!(
+                g.pre_tool(
+                    &PreToolUse {
+                        tool_name: "Bash",
+                        tool_input: &ls,
+                    },
+                    &Ctx::new(&cx),
+                ),
+                Some(PreToolDecision::Deny { .. })
+            ),
+            "a read-only sub-agent wrap must not drop bash keys"
+        );
+        assert!(matches!(
+            g.pre_tool(
+                &PreToolUse {
+                    tool_name: "Bash",
+                    tool_input: &json!({"command": "git status"}),
+                },
+                &Ctx::new(&cx),
+            ),
+            Some(PreToolDecision::Deny { .. })
+        ));
+        // A writer behind the same wrap still clears, as an unwrapped writer does.
+        let writer = format!(
+            "rtok run --agent sub_1 -- {}",
+            crate::plugins::cmd::run::sh_quote("echo x>f")
+        );
+        assert!(
+            g.post_tool(
+                &PostToolUse {
+                    tool_name: "Bash",
+                    tool_input: &json!({"command": writer}),
+                    tool_response: &json!({"stdout": ""}),
+                },
+                &Ctx::new(&cx),
+            )
+            .is_none()
+        );
+        assert!(g.pre_tool(&read, &Ctx::new(&cx)).is_none());
     }
 
     #[test]

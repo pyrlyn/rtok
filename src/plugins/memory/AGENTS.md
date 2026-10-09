@@ -10,7 +10,6 @@ if split out per T2.5.
 **Invariants**
 - No LLM calls. Notes are written by the agent through `mem_save` or extracted mechanically.
 - `<private>`…`</private>` is replaced with `[REDACTED]` before a note is stored (`strip_private`). An empty title after that is `missing `title``; an empty body is not stored. `mem_get` returns the stored text.
-- An upsert that changes the body writes the previous title and body to `note_versions` (`rtok memory history <id>`). `checkpoint:*` and `session:*` do not. Recall and `mem_get` stay on the current body.
 - `mem_save` is an upsert on `(project, kind, title)` — the title is the topic key (T66.1).
   The `notes_topic` UNIQUE index enforces one row per key at the database level (T209):
   checkpoints (`checkpoint.rs`) and the SDK's `insert_note` both upsert now too (newest
@@ -22,6 +21,11 @@ if split out per T2.5.
   (`ORDER BY pinned DESC, id DESC`).
 - MCP `mem_update` and `rtok memory retire|pin|unpin|revise` call the same functions here —
   one call path per capability (D21); `revise` is `mem_save` + `retire_note`, nothing else.
+- An upsert that changes the body keeps the previous title and body in `note_versions`
+  (T472, migration `0035_note_versions`). `rtok memory history <id>` prints them oldest
+  first. `checkpoint:*` and `session:*` are not versioned, and a same-body upsert writes
+  nothing. Recall and `mem_get` stay on the current body. There is no MCP tool. Versions
+  are not part of the JSONL export.
 - Recall injects titles and ids only; bodies are fetched on demand with `mem_get`.
 - Notes are linked to files (T374, `note_files`, `files.rs`): at `mem_save` and `remember:`,
   to the existing files the body names and the session checkpoint's paths, root-relative and
@@ -44,6 +48,16 @@ if split out per T2.5.
   note is skipped too, whatever its body — import must never let an older export replace a
   newer local one (T209); `insert_note_if_absent` (`INSERT OR IGNORE`, no upsert).
 - Search returns the right note first for the T6.1 fixture (three notes, one obvious match).
+- A `PostToolUse` stores one mechanical observation (`observe.rs`): type, title, scrubbed
+  narrative ≤ 400 characters, and existing root-relative files. The raw tool output is not
+  copied. A repeat of the same session, tool and narrative within 5 seconds inserts nothing.
+  `mem_*` tools are not observed. `mem_get` with `obs` returns that narrative.
+- `notes.uses` / `last_used` move on `mem_get` and on a prompt-recall injection. Recall order
+  is pinned, then retention score, then newest id. A low score is never a delete.
+- `prompt_recall` appends at most two `obs <id> <title> (<session>)` lines inside
+  `recall_tokens`, after the note index, diversified to 3 hits per session before the cut.
+- `PreCompact` adds that same title index plus this session's observations when either exists.
+  The hook stays `{}` when both are empty.
 
 **Schema** lives in `migrations/0001_schema_v1/up.sql` (`notes`, `notes_fts` + triggers). Changing
 it means a new migration directory, never an edit to `0001_schema_v1/up.sql`.

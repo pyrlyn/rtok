@@ -18,6 +18,7 @@ use serde_json::{Value, json};
 
 use super::adapter::{Filter, Stray, Taken, TaskAdapter};
 use super::github_project::ProjectSync;
+use super::meta;
 use super::remote::{
     Http, LABEL, id_label, issue_title, label_id, max_with_prefix, secs, task_title, title_id,
 };
@@ -28,6 +29,9 @@ pub const API: &str = "https://api.github.com";
 
 /// The label `in-progress` sets; open without it is `open`.
 pub const IN_PROGRESS: &str = "rtok:in-progress";
+
+/// GitHub rejects a label name longer than this. `rtok:owner:` plus a UUID is 47.
+const LABEL_MAX: usize = 50;
 
 pub struct GithubAdapter {
     http: Http,
@@ -77,6 +81,8 @@ impl Issue {
             _ if self.labels.iter().any(|l| l.name == IN_PROGRESS) => Status::InProgress,
             _ => Status::Open,
         };
+        let names: Vec<&str> = self.labels.iter().map(|l| l.name.as_str()).collect();
+        let (priority, assignee, blocked_by) = meta::read_meta(&names);
         Some(Task {
             title: task_title(&id, &self.title),
             description: self.body.unwrap_or_default().trim().to_string(),
@@ -90,6 +96,9 @@ impl Issue {
                 url: self.html_url,
                 node_id: self.node_id,
             }),
+            priority,
+            assignee,
+            blocked_by,
             id,
         })
     }
@@ -277,6 +286,44 @@ impl TaskAdapter for GithubAdapter {
         updated
             .into_task()
             .with_context(|| format!("github tasks: {id} lost its label"))
+    }
+
+    /// Assignee, blockers and priority. Not compare-and-set: two callers can both PATCH, and
+    /// the last write wins. `claim` refuses a live foreign assignee before this runs.
+    fn save(&self, task: &Task) -> Result<Task> {
+        let issue = self
+            .find(&task.id)?
+            .with_context(|| format!("github tasks: no task {} in {}", task.id, self.repo))?;
+        for label in meta::managed_for(task) {
+            if label.len() > LABEL_MAX {
+                bail!("github tasks: label {label:?} is longer than {LABEL_MAX} characters");
+            }
+        }
+        let names: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
+        let mut labels = meta::merge_labels(&names, task);
+        labels.retain(|label| label != IN_PROGRESS);
+        if task.status == Status::InProgress {
+            labels.push(IN_PROGRESS.to_string());
+        }
+        let mut body = json!({
+            "labels": labels,
+            "state": if task.status.is_active() { "open" } else { "closed" },
+        });
+        let reason = match task.status {
+            Status::Done => Some("completed"),
+            Status::Closed => Some("not_planned"),
+            _ if issue.state == "closed" => Some("reopened"),
+            _ => None,
+        };
+        if let Some(reason) = reason {
+            body["state_reason"] = json!(reason);
+        }
+        let path = format!("/repos/{}/issues/{}", self.repo, issue.number);
+        let updated: Issue = self.http.send(Method::PATCH, &path, &body)?;
+        self.sync_project(&task.id, &updated, task.status);
+        updated
+            .into_task()
+            .with_context(|| format!("github tasks: {} lost its label", task.id))
     }
 
     fn max_id(&self, prefix: &str) -> Result<Option<TaskId>> {
@@ -598,5 +645,57 @@ mod tests {
         assert!(repo("../etc", "").is_err());
         assert!(repo("me/app?x=1", "").is_err());
         assert!(repo("me/app/extra", "").is_err());
+    }
+
+    #[test]
+    fn save_merges_claim_labels_and_keeps_the_users() {
+        let server = MockServer::start();
+        let gh = adapter(&server);
+        by_label(
+            &server,
+            "rtok:A1",
+            "all",
+            json!([issue(1, "A1", "open", None, &["bug", "rtok:p:0"])]),
+        );
+        let patch = server.mock(|when, then| {
+            when.method("PATCH")
+                .path(format!("{ISSUES}/1"))
+                .json_body(json!({
+                    "labels": [
+                        "rtok",
+                        "rtok:A1",
+                        "bug",
+                        "rtok:owner:agent-1",
+                        "rtok:needs:A2",
+                        "rtok:p:0",
+                        IN_PROGRESS,
+                    ],
+                    "state": "open",
+                }));
+            then.status(200).json_body(issue(
+                1,
+                "A1",
+                "open",
+                None,
+                &[
+                    "bug",
+                    "rtok:owner:agent-1",
+                    "rtok:needs:A2",
+                    "rtok:p:0",
+                    IN_PROGRESS,
+                ],
+            ));
+        });
+        let mut task = gh.get(&id("A1")).unwrap().unwrap();
+        assert_eq!(task.priority, 0);
+        task.assignee = Some("agent-1".into());
+        task.blocked_by = vec![id("A2")];
+        task.status = Status::InProgress;
+        let saved = gh.save(&task).unwrap();
+        patch.assert();
+        assert_eq!(saved.assignee.as_deref(), Some("agent-1"));
+        assert_eq!(saved.blocked_by, vec![id("A2")]);
+        assert_eq!(saved.priority, 0);
+        assert_eq!(saved.status, Status::InProgress);
     }
 }

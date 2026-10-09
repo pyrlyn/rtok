@@ -20,12 +20,31 @@ pub mod disk;
 pub mod github;
 mod github_project;
 pub mod gitlab;
+mod meta;
+mod ready;
 pub mod remote;
 pub mod run;
 pub mod sync;
 
 /// Subtasks go one level deep (`R2.1`) until a second level is asked for (T441 §5).
 pub const MAX_DEPTH: usize = 2;
+
+/// Priority when a task names none. `0` is the highest, `4` the lowest (T442).
+pub const DEFAULT_PRIORITY: u8 = 2;
+
+/// Highest priority number accepted. Above this, `task priority` refuses.
+pub const PRIORITY_MAX: u8 = 4;
+
+/// A claim whose agent was last seen longer ago than this can be taken (T442).
+pub const STALE_SECS: i64 = 30 * 60;
+
+pub(crate) fn default_priority() -> u8 {
+    DEFAULT_PRIORITY
+}
+
+pub(crate) fn is_default_priority(priority: &u8) -> bool {
+    *priority == DEFAULT_PRIORITY
+}
 
 /// Longest prefix accepted. A short project tag (`R`, `AT`) keeps ids readable in titles.
 pub const MAX_PREFIX: usize = 8;
@@ -271,7 +290,83 @@ pub struct Task {
     pub updated_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external: Option<ExternalRef>,
+    /// `0` is highest. [`DEFAULT_PRIORITY`] is omitted from JSON and Markdown.
+    #[serde(
+        default = "default_priority",
+        skip_serializing_if = "is_default_priority"
+    )]
+    pub priority: u8,
+    /// The agent that claimed this task. Empty means nobody.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+    /// Tasks that must finish before this one can be claimed. Only `blocks`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_by: Vec<TaskId>,
 }
+
+impl Task {
+    /// An open task with default priority and nobody assigned. `parent` follows the id.
+    pub fn open(
+        id: TaskId,
+        title: impl Into<String>,
+        description: impl Into<String>,
+        now: i64,
+    ) -> Self {
+        let parent = id.parent();
+        Self {
+            id,
+            title: title.into(),
+            description: description.into(),
+            status: Status::Open,
+            parent,
+            created_at: now,
+            updated_at: now,
+            external: None,
+            priority: DEFAULT_PRIORITY,
+            assignee: None,
+            blocked_by: Vec::new(),
+        }
+    }
+}
+
+/// One ready task. `stale` means the assignee's `agents.last_seen` is old enough to take.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReadyItem {
+    #[serde(flatten)]
+    pub task: Task,
+    pub stale: bool,
+}
+
+/// What `claim` did. `changed` is false when this agent already holds the task, and the
+/// file or issue is left untouched.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ClaimOutcome {
+    #[serde(flatten)]
+    pub task: Task,
+    pub changed: bool,
+}
+
+/// Why `claim` refused a task. Callers that try the next ready task match on this.
+#[derive(Debug)]
+pub enum ClaimConflict {
+    Already { id: TaskId, assignee: String },
+    NotClaimable { id: TaskId, status: Status },
+    Blocked { id: TaskId, by: TaskId },
+}
+
+impl fmt::Display for ClaimConflict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Already { id, assignee } => write!(f, "{id} is claimed by {assignee}"),
+            Self::NotClaimable { id, status } => {
+                write!(f, "{id} is {status} and cannot be claimed")
+            }
+            Self::Blocked { id, by } => write!(f, "{id} is blocked by {by}"),
+        }
+    }
+}
+
+impl std::error::Error for ClaimConflict {}
 
 #[cfg(test)]
 mod tests {
@@ -376,18 +471,18 @@ mod tests {
     #[test]
     fn a_task_round_trips_through_json_without_empty_optionals() {
         let task = Task {
-            id: "R3".parse().unwrap(),
-            title: "Ship it".into(),
-            description: String::new(),
             status: Status::InProgress,
-            parent: None,
             created_at: 1,
             updated_at: 2,
-            external: None,
+            ..Task::open("R3".parse().unwrap(), "Ship it", "", 0)
         };
         let json = serde_json::to_string(&task).unwrap();
         assert!(
-            !json.contains("parent") && !json.contains("external"),
+            !json.contains("parent")
+                && !json.contains("external")
+                && !json.contains("priority")
+                && !json.contains("assignee")
+                && !json.contains("blocked_by"),
             "{json}"
         );
         assert_eq!(serde_json::from_str::<Task>(&json).unwrap(), task);

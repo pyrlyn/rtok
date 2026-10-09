@@ -260,16 +260,7 @@ mod tests {
     }
 
     fn task(s: &str) -> Task {
-        Task {
-            id: id(s),
-            title: "T".into(),
-            description: String::new(),
-            status: Status::Open,
-            parent: id(s).parent(),
-            created_at: 0,
-            updated_at: 0,
-            external: None,
-        }
+        Task::open(id(s), "T", "", 0)
     }
 
     #[test]
