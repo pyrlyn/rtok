@@ -20,11 +20,18 @@ if split out per T2.5.
   (`ORDER BY pinned DESC, id DESC`).
 - MCP `mem_update` and `rtok memory retire|pin|unpin|revise` call the same functions here —
   one call path per capability (D21); `revise` is `mem_save` + `retire_note`, nothing else.
+- An upsert that changes the body keeps the previous title and body in `note_versions`
+  (T472, migration `0035_note_versions`). `rtok memory history <id>` prints them oldest
+  first. `checkpoint:*` and `session:*` are not versioned, and a same-body upsert writes
+  nothing. Recall and `mem_get` stay on the current body. There is no MCP tool. Versions
+  are not part of the JSONL export.
 - Recall injects titles and ids only; bodies are fetched on demand with `mem_get`.
 - Notes are linked to files (T374, `note_files`, `files.rs`): at `mem_save` and `remember:`,
   to the existing files the body names and the session checkpoint's paths, root-relative and
   never outside the root. `prompt_recall` fuses the text hits with the notes linked to files the
   session read (`read_cache`) or the prompt names (RRF); any error there leaves the text hits.
+  Text hits are FTS, or RRF of FTS and vectors already stored when `embed.enabled && embed.hybrid`
+  (`search_notes_hybrid_stored`, T454); the hook does not call `embed_stale`.
   A file the prompt names (T452) also recalls up to 2 of its notes the text missed, taking slots
   from the same `prompt_recall` budget; a read file only re-ranks text hits (I-115 is the wider
   variant, off until a `Measurement` shows a saving).
@@ -42,6 +49,16 @@ if split out per T2.5.
   note is skipped too, whatever its body — import must never let an older export replace a
   newer local one (T209); `insert_note_if_absent` (`INSERT OR IGNORE`, no upsert).
 - Search returns the right note first for the T6.1 fixture (three notes, one obvious match).
+- A `PostToolUse` stores one mechanical observation (`observe.rs`): type, title, scrubbed
+  narrative ≤ 400 characters, and existing root-relative files. The raw tool output is not
+  copied. A repeat of the same session, tool and narrative within 5 seconds inserts nothing.
+  `mem_*` tools are not observed. `mem_get` with `obs` returns that narrative.
+- `notes.uses` / `last_used` move on `mem_get` and on a prompt-recall injection. Recall order
+  is pinned, then retention score, then newest id. A low score is never a delete.
+- `prompt_recall` appends at most two `obs <id> <title> (<session>)` lines inside
+  `recall_tokens`, after the note index, diversified to 3 hits per session before the cut.
+- `PreCompact` adds that same title index plus this session's observations when either exists.
+  The hook stays `{}` when both are empty.
 
 **Schema** lives in `migrations/0001_schema_v1/up.sql` (`notes`, `notes_fts` + triggers). Changing
 it means a new migration directory, never an edit to `0001_schema_v1/up.sql`.

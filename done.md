@@ -8,6 +8,77 @@ Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
 
 Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
 
+### T458. Cap the MCP wrap `Content-Length` read at the hook frame limit
+
+`rtok mcp -- <server>` read an LSP-style body with `take(len).read_to_end` and no upper bound. A declared length over `rtok_hook::MAX_FRAME` (64 MiB) is now forwarded as `Framing::Raw` of the header only; the following bytes stay on the stream. A length at or under the cap still reads the body, including the short-body path.
+
+Check: a declared length above `rtok_hook::MAX_FRAME` is `Framing::Raw` of the header only and the next frame is still read; a length at the cap still reads a short body; `just check`.
+
+Result: `just check` against `6f8e4147`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 551 passed.
+Status: done 2026-10-09
+Model: Cursor / grok 4.7
+
+### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
+
+`strip_wrap` only removed `rtok run -- `, so a sub-agent rewrite (`rtok run --agent <id> -- '…'`) still had stem `rtok`. `cache_key` was `None`, and PostToolUse treated that read-only command as a mutation and cleared every `bash` and `read` guard key.
+
+`strip_run_wrap` also drops `rtok run --agent <id> -- ` when `<id>` is 1–64 bytes of ASCII alnum, `_` or `-` (the token `cmd` embeds). A lookalike is left intact. A writer behind the same wrap still clears.
+
+Check: `agent_wrap_matches_the_inner_command_and_keeps_other_keys` and the `--agent` asserts in `bash_key_keeps_every_absolute_cd_hop_and_the_cwd`; `just check`.
+
+Result: `just check` against `61d491aa`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 506 passed.
+Status: done 2026-10-09
+Model: Cursor / grok 4.7
+
+### T474. Symbol byte spans, a recoverable cut body, and id lookup
+
+Merged as T454 (pyrlyn/rtok#898); renumbered to T474 because #888, opened earlier, also took T454.
+
+Ideas only from jCodeMunch (no code, schema, or comments copied; no MCP tool, embeddings, or second copy of source files). `symbols` keeps `start_byte`, `end_byte`, and `content_hash` (sha256 of that slice). A definition longer than `body_lines` archives the uncut span and ends with `expand <id>`. Every definition head prints `{path}::{name}#{kind}@{line}`. `symbol` takes optional `id` and, when set, returns that one row. `symbols_fts` indexes definition name, signature (`line_text`), and the contiguous `///`/`//!` doc above the line (512 bytes). `explore` falls through to that index when a name does not resolve, ranking a name-token hit above a signature hit above a doc hit.
+
+Check: a body over 40 lines round-trips through `expand`; a shorter body is unchanged aside from the id prefix; an unchanged mtime and size is still skipped; `symbol` with an id returns that row; `explore` of `truncated source lines` includes `body_lines`; `cargo test --test graph_contract --test graph_model` and the `outline` / `index` / `graph` unit tests pass; `just check`.
+
+Result: `symbol` prints the id on every definition head and reads a cut body back from the file span when the file sha matches. `rtok expand <id>` returns the uncut span. `explore` of `truncated source lines` on the graph plugin includes `body_lines`. `just check`: 2978 passed, 6 skipped.
+Status: done 2026-10-08
+
+### T454. Mechanical observations, retention rank, and PreCompact recall
+
+A tool call now stores one scrubbed observation (title, type, narrative ≤ 400 characters, existing root-relative files). The raw output stays in the archive. The same session, tool and narrative within 5 seconds does not insert again. `mem_*` tools are not observed. `mem_get` with `obs` returns the narrative.
+
+`notes.uses` and `last_used` move on a live `mem_get` and on a prompt-recall injection. Recall order is pinned, then retention score, then newest id. A low score is never a delete.
+
+`prompt_recall` fuses observation FTS with file-linked observations (RRF, k = 60), keeps at most 3 hits from one session, and appends at most two `obs <id> <title> (<session>)` lines inside `recall_tokens`. `PreCompact` adds the title index and this session's observations when either exists, and stays `{}` when both are empty.
+
+Check: `cargo test --lib plugins::memory`; `cargo test --lib schema_matches_the_migrated_tables_and_snapshot`.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
+
+### T442. Atomic task claim and a ready queue
+
+Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.
+
+A disk claim takes `<tasks>/.claim.lock` (`create_new`, a lock older than 10s is stolen). GitHub and GitLab labels are `rtok:owner:<agent>`, `rtok:needs:<id>` and `rtok:p:<n>` (omitted at the default 2). Those writes are last-write-wins, not compare-and-set. A claim whose agent row is missing, or whose `last_seen` is older than 30 minutes, can be taken. A store error does not steal a live claim. The same agent claiming again does not rewrite the file. A cycle, a self-edge or a missing blocker writes nothing. When the plan has no `blocked_by` edges, `next` is still the lowest open leaf.
+
+### T475. Fold nested JSON before archive replaces it with a pointer
+
+Merged as T455 (pyrlyn/rtok#897); renumbered to T475 because #872, opened earlier, also took T455.
+
+`archive` runs before any structural encoder and, past `plugins.archive.min_tokens`, replaces a large tool result with a head/tail pointer. `rtok mcp -- <server>` does the same by line count. A design or AST JSON therefore never reaches an encoder that can hoist repeated values and element bodies.
+
+Plan: plugin `json_tree` (Proxy, Mcp), `default_on` false, registered immediately before `archive`. `fold_json` returns `None` unless the value is an object or array of at least 256 bytes with a nested object, and `toon::tabular_keys(value, 1)` is `None` so tables stay with `toon`. Values used by two or more objects are hoisted into a `VARS:` block (sha1-8, lengthened on collision). An object body that repeats, ignoring identity keys `id` and `name`, becomes `EL-<sha1-8>`; a body that is only a type-like field is not templated. One line per node. The original is archived first; rewrite only when the folded form estimates fewer tokens. `archive` and `toon` leave a `[json-tree ` pointer alone. MCP `shorten_result` folds before the line cut when the fold fits `max_lines` and is smaller, and does not fold `read` or `search`.
+
+Check: `just check`; `cargo test -p rtok json_tree -- --test-threads=8`. `rtok expand <id>` returns the pre-fold bytes. A block `toon` encodes still has a `[toon ` prefix and no `[json-tree ` prefix. No saving without a `Measurement` row (`plugin: "json_tree"`, `kind: "fold"`).
+
+Result: `just check` 2981 passed, 6 skipped. `cargo test -p rtok json_tree -- --test-threads=8` 11 passed.
+
+### T454. Risk-ranked reading list for a git diff
+
+`rtok graph review` (CLI only, same flags as `affected`) scores each changed file from the symbol index: an untested definition is 0.30, a tested one is 0.05, a whole-token security keyword adds 0.20, and callers add at most 0.10. It prints the level, the untested names, and the hunk ranges that fit an 800-line budget. No sixth MCP tool. No new crate. No `Measurement` unless `cap` shortens the answer. The repo `.coderabbit.yaml` stub is removed so the central pyrlyn config applies. A pull request uploads the report from an unprivileged job; a `workflow_run` on the default branch posts the sticky comment and does not check out pull-request code. A high score does not fail CI.
+
+Check: `cargo test --lib plugins::graph::review`; `graph_surface_is_five_tools_under_150_tokens`; `just check`.
+
+Result: 8 review tests passed; the MCP surface stays five tools. `just check` ran the full gate (trycmd snapshots are a shared input): 2978 passed, 6 skipped.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
@@ -7609,6 +7680,16 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T454. Hook recall uses the stored hybrid leg when embeddings are on
+
+`prompt_recall` ranked with FTS only while `mem_search` used `search_notes_hybrid` when `embed.enabled && embed.hybrid`. The hook now uses that same RRF over FTS and vectors already stored (`Store::search_notes_hybrid_stored`, on `Notes` / `Ctx` with an FTS default). It does not call `embed_stale`: a missing or stale row is not rewritten. An empty embedding table returns the FTS list, so the title index matches the flag-off path. `files::recall_hits` still wraps that list. Titles and ids only. One `Measurement` row, kind `prompt_recall`. Embeddings stay off by default. No change to `src/plugins/graph/`, `src/hooks/`, `src/proxy/`, or the `Plugin` trait. Amends D35: a stored-vector read is allowed on the hook only when embeddings are already on.
+
+Check: `mise exec rust -- cargo test --lib -- plugins::memory store::embed` (66 passed). `mise exec rust -- cargo clippy --all-targets -- -D warnings` clean. `mise exec rust -- cargo test --test latency --release` missed 10 ms on this host for every event, including PreToolUse (p95 13.8 ms, min 6.7 ms, `--test-threads=1`), which this change does not touch — the same spawn-floor miss T428 records on a loaded host.
+
+Result: lib tests 66 passed; clippy clean; `tests/trycmd/config-init.toml` matches the new `hybrid` comment. #894.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
+
 ### T452. Recall notes linked to a file the prompt names, without a text match
 
 Creator decision on T374 (2026-10-08). A file named in the prompt (a path `files::mentioned` finds, relative, inside the root) recalls up to 2 notes linked to it even with no text match. They take slots from the existing `prompt_recall` budget (`n` titles, `recall_tokens`) and never enlarge it; output is byte-stable. Files the session merely read only re-rank notes that already matched the prompt text, so T374's recall of read-file notes with no text match is gone. The wider variant, recall by every read file without a text match, is parked as I-115 until a `Measurement` shows a saving. `files::recall_hits` replaces `linked_notes`; no config keys, no SDK change.
@@ -9157,6 +9238,17 @@ Check: store unit tests (register is idempotent, sub-agent row, resolve prefix /
 Status: done 2026-09-27 (#439; hook bench p95 9.10 ms PreToolUse, 9.51 ms PostToolUse)
 Model: Claude Code / claude-opus-5-5
 
+### T455. MCP `whoami` says when this process sits under no live session
+
+Creator request 2026-10-08: find why `link::resolve` returned `Link::None` for a Claude Code desktop session whose agent row had matching `ancestors` and cwd. Finding: `resolve` is right. In the desktop app's Code tab every `mcp__rtok__*` call is served by the one `rtok mcp` Claude.app spawns from `claude_desktop_config.json` (`calls.session_id = mcp-<pid>` of that process; parent `disclaimer` → `Claude.app`, cwd of an unrelated project, no `CLAUDE_*` env), not by the session's child of `claude` (the `rtok@rtok` plugin's server), which never served a call in a day of the creator's store. Its parent chain and cwd match no session, so nothing can link it, and T454's `CLAUDE_CODE_SESSION_ID` rule does not reach it either. Replayed against a scratch `RTOK_HOME` (fresh store, then a `sqlite3 .backup` of the live store with the live config): a process inside the session's tree links by `ancestor`. The install-side fix is T456 (`roadmap.md`).
+
+Check: `resolve` returns `Link::Outside` instead of `Link::None` when live agents of the host recorded hook chains since this process started yet none shares a pid with this process or its cwd, and MCP `whoami`/`worktree_*`/`agent_*` answer with that reason and the CLI to use; `Link::None` keeps its exact text; `just check`.
+
+Result: `Link::Outside` in `src/agents/link.rs`, after the hookless rule (a hookless host sharing the `other` host row with a hooked one still registers its own row) and only when both this process and a live candidate have a chain (an old client without one could still be this session). Like `None` it is never cached, since a new session's MCP looks the same until its first hook lands. `src/mcp.rs` `agent()` maps it to "not linked to an agent session: this rtok mcp process is under no live <host> session and in none's cwd, …". `docs/agents-and-worktrees.md` (and `ru`/`uk`) gain a "Claude desktop app" section. Tests: three `link.rs` cases with fake pids in an in-memory store (outside; no chained row or no own chain stays `None`; hookless beside chained rows registers itself) and one RPC `whoami` case. Live: a debug build and the installed 0.15.1 against the scratch replay, with the session's chain swapped for fake pids and a foreign cwd: the new text vs the old one.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
 ### T283.3. MCP link rule (b): the nearest common host ancestor pid
 
 PR 2 of T283, part 3. The hook wire request (`crates/rtok-hook`, `src/hooks/resident.rs`: `version, fingerprint, event, host, cwd, stdin`) carries no pid, and the resident hook process is not the host's child, so a hook cannot record its own ancestry today. Add the client's parent pid to the request (protocol version bump), store it on the agent row (migration), record it on registration, and let `link.rs` match it against the `rtok mcp` process's ancestor chain (nearest first; two agents behind one ancestor are ambiguous). Doc-derived like the rest of the rule order; the T281 probe confirms it per host.
@@ -9295,6 +9387,23 @@ Plan:
 Check: `cargo nextest run -E 'test(/worktree::gc::/) | binary(worktree)'`, `TRYCMD=overwrite` for `cli_trycmd` and `completions`, and `just check`; a dry-run `rtok worktree gc --idle 1h` on the live repository.
 
 Result (2026-10-08, Claude Code / claude-opus-5-5): `Entry::done` marks a merged, clean worktree whose branch has commits outside the base. `remove` opens a foreign or unknown lock on it and says so in the note; `gc` removes it past a live agent or a foreign lock once idle past `--idle` (`Verdict::Finished`), and keeps the old reason inside the window. A fresh branch under a foreign lock is still refused. On the live repository, `gc --idle 1h` now plans to remove 7 of the orchestrator's 8 merged worktrees (the eighth was touched within the hour) and keeps every open PR's. Not fixed here: the desktop app leaves `RTOK_AGENT_ID` unset and MCP unlinked, so an agent still cannot name itself.
+
+### T473. Agent identity in Claude desktop sessions through `CLAUDE_CODE_SESSION_ID`
+
+Desktop-app (Code tab) sessions often have no rtok agent identity: `~/.claude/session-env/<session>/` stays empty, so `RTOK_AGENT_ID` is unset in the agent's Bash tool, and MCP `whoami`/`worktree_*` answer "not linked to an agent session". `rtok worktree remove`, `agents whoami/status/inbox` from an agent's shell cannot name the caller. T453 only works around it for finished worktrees.
+
+Finding (2026-10-08, the creator's own store and `~/.claude/session-env`): across 28 recent desktop sessions the env file exists exactly when rtok recorded a `SessionStart` call for that session, and in most of those (16 of 19 checked) the first `SessionStart` came hours after the session's first hook (resume/compact). The plugin's `SessionStart` (and often the first `UserPromptSubmit`) never reaches rtok at desktop startup, while a user-settings `SessionStart` hook of the same session does run. `CLAUDE_ENV_FILE` is fine; the startup event is what is missing. Claude Code documents `CLAUDE_CODE_SESSION_ID` (https://code.claude.com/docs/en/env-vars, checked 2026-10-08) in Bash/PowerShell tool, hook and stdio MCP subprocesses, equal to the hooks' `session_id`; an MCP server keeps the id it was spawned with.
+
+Plan:
+1. `src/store/agents.rs`: `Store::main_agent(host_id, host_session)` (the lookup `register_agent` already does for a sub-agent's parent, shared).
+2. `src/agents/link.rs`: `SESSION_ENV` gains `claude` → `CLAUDE_CODE_SESSION_ID`, lookup-only (an MCP's spawn id can be stale after `/clear` or `--continue`, so it never registers a row; no row yet → the old rules run, nothing cached). New `shell_agent(store, env)`: `RTOK_AGENT_ID`, else the main agent of the host session named by a `SESSION_ENV` var.
+3. `src/cli.rs` (`agents whoami/status`, `caller_agent`) and `src/worktree/claim.rs::caller` read the caller through `shell_agent`.
+4. Tests: link rules (claude env links an existing row, does not register, falls through), `shell_agent`, a CLI test (`agents whoami` with only `CLAUDE_CODE_SESSION_ID`); trycmd strips the var.
+5. `research.md` §26: the Claude row and the desktop finding.
+
+Check: `just check`; built binary from this session's own shell: `rtok agents whoami` and MCP `whoami` name this session's agent with no `RTOK_AGENT_ID`.
+
+Result: `CLAUDE_CODE_SESSION_ID` names the caller in `rtok agents whoami/status/send/inbox` and `rtok worktree …` when `RTOK_AGENT_ID` is unset, and links `rtok mcp` to the session's existing agent row (lookup only, never registers). `research.md` §26 records the finding and sources; `docs/agents-and-worktrees.md` (+ ru/uk) says where the id comes from.
 
 ### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
 
@@ -10160,3 +10269,14 @@ Check result: `src/ui/style.rs` unit tests (emoji key × tty matrix, prefix shap
 
 Status: done 2026-09-30 (#532)
 Model: Grok Bot
+
+### T472. Keep the previous note body when an upsert changes it
+
+An upsert on `(project, kind, title)` replaces the body. The previous title and body go into `note_versions` before that write, in the same immediate transaction, with `version = COALESCE(MAX(version), 0) + 1`. Migration `0035_note_versions` (`0034` is already used by open pull requests). Kinds `checkpoint:*` and `session:*` write no version rows; a same-body upsert writes none. `rtok memory history <id>` prints the rows oldest first. SessionStart recall and `mem_get` stay on the current body. No MCP tool. Private-tag redaction is a separate change and is not part of this task.
+
+Check: `cargo test --lib plugins::memory::`; `cargo test --lib store::`; `cargo test --test memory_status`; `just check`.
+
+Result: `upsert_note` records the previous title and body in `note_versions` inside one immediate transaction. `rtok memory history <id>` prints those rows oldest first. Checkpoint and session kinds, and a same-body upsert, write no version row. Recall and `mem_get` stay on the current body. `just check`: 2972 passed, 6 skipped.
+
+Status: done 2026-10-08
+Model: Cursor / grok 4.7

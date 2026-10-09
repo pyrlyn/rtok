@@ -1,3 +1,6 @@
+> [!NOTE]
+> This project is under active development. We need "testing volunteers": try it and report what breaks.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-wordmark-dark.svg">
   <img src="assets/logo-wordmark.svg" alt="rtok" width="200">
@@ -249,17 +252,19 @@ rtok plugins
 ```
 
 ```text
-id       enabled  surfaces
-measure  on       cli,proxy
-cmd      on       hook,cli
-read     on       mcp,hook
-archive  on       proxy,mcp
-proxy    on       proxy
-inject   on       hook
-guard    on       hook
-memory   on       mcp,hook
-graph    on       mcp
-toon     on       proxy,mcp
+id        enabled   surfaces
+measure   on        cli,proxy
+cmd       on        hook,cli
+read      on        mcp,hook
+json_tree off       proxy,mcp
+archive   on        proxy,mcp,cli
+proxy     on        proxy
+inject    on        hook
+guard     on        hook,cli
+memory    on        mcp,hook
+graph     on        mcp,hook
+toon      on        proxy,mcp
+compress  on        proxy
 ```
 
 Turn one off with `rtok config set plugins.cmd.enabled false`, or turn `toon` off with
@@ -352,8 +357,11 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok worktree clean [<path>…] [--yes] [--idle 24h]` | dry run by default; deletes build caches that carry a valid `CACHEDIR.TAG` and were idle for `--idle`, keeps the worktree and every untagged file; the worktree the command runs from is cleaned only when named; the one deletion `expand` cannot undo — a tagged cache holds no source and the next build recreates it |
 | `rtok task init [--adapter disk\|github\|gitlab] [--prefix <letters>]` | write `[tasks]` into the checkout's `.rtok.toml` and print the next id; the prefix defaults to the project name's first letter |
 | `rtok task create <title> [-d <text> \| --body-file <path\|->] [--parent <id>] [--json]` | add a task under the next free id (`A12`, or `A12.3` under `--parent`); ids come from a per-project counter in the store, raised past every id the adapter already holds, so parallel agents never collide |
-| `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` / `show <id>` / `next` | active tasks with subtasks indented; one task with its subtasks; the lowest open task with no active subtask |
+| `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` / `show <id>` | active tasks with subtasks indented; one task with its subtasks |
 | `rtok task status <id> [<status>] [--force] [--json]` | read or set `open`, `in-progress`, `done` or `closed`; finishing a parent with active subtasks is refused unless `--force`; on disk, finished tasks move to `tasks/done/` |
+| `rtok task next [--json]` / `ready [--json]` | the first ready task (with no blockers, still the lowest open task with no active subtask); every claimable task, highest priority first |
+| `rtok task claim [id] [--agent <id>] [--json]` / `release <id> [--force]` | claim a task for this agent, or the first ready one; clear the assignee and set it open (only the holder, unless `--force`) |
+| `rtok task dep <id> <blocker> [--json]` / `priority <id> <0-4>` | record that `id` waits on `blocker` (a cycle is refused); set priority, `0` highest, `2` the default and not stored |
 | `rtok task sync [--json]` | raise the store's id counters to the highest ids the adapter holds (never lower them) and report drift: ids above the counter, duplicate ids, issues that kept the `rtok` label but lost `rtok:<id>`; reads the adapter only |
 | `rtok batch submit <file.jsonl> [--provider anthropic\|openai] [--url <proxy>]` | create a provider Batch job from a file of provider-shaped requests through `rtok proxy` (the JSONL is sent as written; nothing is converted from a live request); prints the batch object; the key comes only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
 | `rtok batch status <id>` / `fetch <id> <out>` | the provider's state of a batch; its results written to a new file (an existing file is never overwritten); the provider is read from the id (`msgbatch_` is Anthropic) unless `--provider` says so; the proxy tags every call to the `batch` lane, and `stats --price` costs that usage at the `<model>@batch` price row |
@@ -369,6 +377,7 @@ Batch, Flex, and model routing on the proxy (pass-through vs rewrite, what is pl
 | `rtok memory retire <id> [--superseded-by <id>]` | tombstone a note: never recalled or searched, body kept |
 | `rtok memory pin / unpin <id>` | keep a note at the head of SessionStart recall, or drop it back |
 | `rtok memory revise <id> --title <t> --body <b>` | save a replacement note and retire the old one |
+| `rtok memory history <id>` | earlier title and body kept when an upsert changed the note |
 | `rtok otel flush` / `status` | export the ledgers over OTLP, or report the watermarks |
 
 Agent ids, messages between agents and how worktrees bind to them on every host: [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md).

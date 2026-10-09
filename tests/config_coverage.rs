@@ -69,6 +69,10 @@ const ALLOW_KEYS: &[&str] = &[
     // `graph affected` (T68.x): which diff to read on one call, not a stored setting.
     "graph.affected.since",
     "graph.affected.staged",
+    // `graph review` (T454): which diff to read on one call, same as `affected`.
+    "graph.review.since",
+    "graph.review.staged",
+    "graph.review.project",
     // `memory export --project` narrows one dump; the store, not a setting, decides it.
     "memory.export.project",
     // `memory retire/revise` (T69.1): one-shot lifecycle values on a single call, not settings.

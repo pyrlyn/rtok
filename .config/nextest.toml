@@ -60,6 +60,9 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 [[profile.default.overrides]]
 filter = 'test(/labelled_symbols_are_found/)'
 threads-required = "num-test-threads"
+# Symbol spans and symbols_fts make the cold index and the rank walk heavier.
+# Windows debug CI crossed the 180s kill (3x60s) while still printing rank lines.
+slow-timeout = { period = "60s", terminate-after = 6 }
 
 [[profile.default.overrides]]
 filter = 'test(/memory_recall_bench/)'

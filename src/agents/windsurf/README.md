@@ -26,7 +26,7 @@ directory, like ZCode).
 
 MCP carries `mcp`. Nothing carries `hook`, `cli` or `proxy`.
 
-Reachable: read, archive, memory, graph, toon
+Reachable: read, json_tree, archive, memory, graph, toon
 Not reachable: measure, cmd, proxy, inject, guard, compress
 
 ## Docs

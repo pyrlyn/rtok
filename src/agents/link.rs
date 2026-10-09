@@ -9,7 +9,8 @@
 //! vendor docs and spawn code recorded in `research.md` §26; the T281 live probe only
 //! confirms it per host:
 //!
-//! 1. the host's own session-id env var in this process ([`SESSION_ENV`]);
+//! 1. the host's own session-id env var in this process ([`SESSION_ENV`]); for Claude Code
+//!    only a row its hooks already wrote, and nothing cached until one exists (T473);
 //! 2. the nearest common host ancestor pid: a hook records the pids above its own process on
 //!    the agent row (T283.3), and this process's own parent chain is matched against them.
 //!    Hooks and MCP children both descend from the host, usually the hook through a shell
@@ -24,6 +25,11 @@
 //!    re-run on every call, never cached (see [`Rule::is_stable`]).
 //!
 //! A host without hooks never writes a row, so its MCP process registers its own.
+//!
+//! T455: a process none of whose ancestors any live session's hook had, and whose cwd no
+//! live session has, is [`Link::Outside`]: an app-level server that serves every session at
+//! once (Claude desktop's Code tab runs the `claude_desktop_config.json` entry this way) can
+//! never be linked, and says so instead of looking like hooks that have not fired yet.
 
 use anyhow::Result;
 
@@ -31,8 +37,15 @@ use crate::agents::Support;
 use crate::store::{AgentRow, Store};
 
 /// Hosts whose MCP children inherit a session id in the environment, matching the `session_id`
-/// their hooks send (`research.md` §26: only Grok Build confirms one by first-party code).
-const SESSION_ENV: &[(&str, &str)] = &[("grok", "GROK_SESSION_ID")];
+/// their hooks send, and whether an MCP process may register that session's row itself.
+/// Grok Build sets it at MCP spawn by first-party code (`research.md` §26). Claude Code
+/// documents `CLAUDE_CODE_SESSION_ID` for Bash, hook and stdio MCP subprocesses, but an MCP
+/// server keeps the id it was spawned with, which goes stale on `/clear` and may be the startup
+/// id on `--continue` (T473), so a Claude MCP only links a row its hooks already wrote.
+const SESSION_ENV: &[(&str, &str, bool)] = &[
+    ("grok", "GROK_SESSION_ID", true),
+    ("claude", "CLAUDE_CODE_SESSION_ID", false),
+];
 
 /// How many ancestors a hook records and an MCP process compares. Three reaches the host past
 /// a shell wrapper and stops short of a shared terminal, `tmux` server or `launchd`.
@@ -76,6 +89,11 @@ pub enum Link {
     },
     /// Several live agents of the host share this cwd; none is picked.
     Ambiguous(Vec<String>),
+    /// Live agents of the host recorded their hooks' parent chains since this process
+    /// started, and none of them is above this process or in its cwd. A new session whose
+    /// first hook has not landed yet looks the same for a moment, so, like `None`, it is
+    /// never remembered.
+    Outside,
     None,
 }
 
@@ -112,15 +130,22 @@ pub fn hookless(host: &str) -> bool {
 pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>) -> Result<Link> {
     let session = SESSION_ENV
         .iter()
-        .find(|(h, _)| *h == who.host)
-        .and_then(|(_, var)| env(var))
-        .filter(|v| !v.trim().is_empty());
-    if let Some(session) = session {
-        let id = store.register_agent(who.host_id, session.trim(), None, who.cwd, None)?;
-        return Ok(Link::Linked {
-            id,
-            rule: Rule::Env,
-        });
+        .find(|(h, _, _)| *h == who.host)
+        .and_then(|(_, var, registers)| Some((env(var)?, *registers)))
+        .filter(|(v, _)| !v.trim().is_empty());
+    if let Some((session, registers)) = session {
+        let session = session.trim();
+        let id = if registers {
+            Some(store.register_agent(who.host_id, session, None, who.cwd, None)?)
+        } else {
+            store.main_agent(who.host_id, session)?
+        };
+        if let Some(id) = id {
+            return Ok(Link::Linked {
+                id,
+                rule: Rule::Env,
+            });
+        }
     }
     let live: Vec<AgentRow> = store
         .live_agents(who.idle)?
@@ -128,6 +153,9 @@ pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>
         .filter(|a| a.host_id == who.host_id && a.parent_key.is_empty())
         .filter(|a| a.last_seen >= who.since)
         .collect();
+    // A session whose hook wrote no chain (an old client) could still be ours, so only rows
+    // with a chain prove this process sits outside every live session's tree.
+    let chained = !who.ancestors.is_empty() && live.iter().any(|a| !a.ancestors.is_empty());
     // Index into this process's chain of the nearest ancestor an agent's hook also had.
     let depth = |a: &AgentRow| who.ancestors.iter().position(|p| a.ancestors.contains(p));
     if let Some(best) = live.iter().filter_map(depth).min() {
@@ -177,7 +205,30 @@ pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>
             rule: Rule::Own,
         });
     }
-    Ok(Link::None)
+    Ok(if chained { Link::Outside } else { Link::None })
+}
+
+/// T473: the agent an `rtok` command run from an agent's own shell acts for, as a raw id:
+/// `RTOK_AGENT_ID` (T283's env file), else the main agent of the host session a
+/// [`SESSION_ENV`] var names. Claude Code's desktop app often never delivers the plugin's
+/// startup `SessionStart` that writes `RTOK_AGENT_ID` (`research.md` §26), while
+/// `CLAUDE_CODE_SESSION_ID` reaches every Bash command and follows `/clear`. Never registers a
+/// row: the hook of the tool call running this command has already written it when there is one.
+pub fn shell_agent(store: Option<&Store>, env: impl Fn(&str) -> Option<String>) -> Option<String> {
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    if let Some(id) = set("RTOK_AGENT_ID") {
+        return Some(id);
+    }
+    let store = store?;
+    SESSION_ENV.iter().find_map(|(host, var, _)| {
+        let session = set(var)?;
+        // A host the `hosts` table does not know registers under `other`, as hooks do.
+        let host_id = store
+            .host_id(host)
+            .ok()?
+            .or_else(|| store.host_id("other").ok().flatten())?;
+        store.main_agent(host_id, session.trim()).ok()?
+    })
 }
 
 #[cfg(test)]
@@ -224,9 +275,74 @@ mod tests {
     #[test]
     fn env_var_of_another_host_is_ignored() {
         let store = Store::open_in_memory().unwrap();
-        let who = caller("claude", &store, Some("/r"));
+        let who = caller("cursor", &store, Some("/r"));
         let got = resolve(&store, &who, |_| Some("s-9".into())).unwrap();
         assert_eq!(got, Link::None);
+    }
+
+    fn claude_session(k: &str) -> Option<String> {
+        (k == "CLAUDE_CODE_SESSION_ID").then(|| "s-1".into())
+    }
+
+    #[test]
+    fn claude_env_links_the_row_its_hooks_wrote_over_a_cwd_match() {
+        let store = Store::open_in_memory().unwrap();
+        let who = caller("claude", &store, Some("/r"));
+        let mine = store
+            .register_agent(who.host_id, "s-1", None, Some("/worktree"), None)
+            .unwrap();
+        store
+            .register_agent(who.host_id, "s-2", None, Some("/r"), None)
+            .unwrap();
+        assert_eq!(
+            resolve(&store, &who, claude_session).unwrap(),
+            Link::Linked {
+                id: mine,
+                rule: Rule::Env
+            }
+        );
+    }
+
+    #[test]
+    fn claude_env_without_a_row_registers_nothing_and_falls_through() {
+        let store = Store::open_in_memory().unwrap();
+        let who = caller("claude", &store, Some("/r"));
+        let other = store
+            .register_agent(who.host_id, "s-2", None, Some("/r"), None)
+            .unwrap();
+        assert_eq!(
+            resolve(&store, &who, claude_session).unwrap(),
+            Link::Linked {
+                id: other,
+                rule: Rule::Cwd
+            }
+        );
+        assert_eq!(store.main_agent(who.host_id, "s-1").unwrap(), None);
+    }
+
+    #[test]
+    fn shell_agent_prefers_rtok_agent_id_then_the_host_session_main_row() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let main = store
+            .register_agent(claude, "s-1", None, Some("/r"), None)
+            .unwrap();
+        store
+            .register_agent(claude, "s-1", Some("sub"), Some("/r"), None)
+            .unwrap();
+        let both = |k: &str| match k {
+            "RTOK_AGENT_ID" => Some("from-env-file".to_string()),
+            k => claude_session(k),
+        };
+        assert_eq!(
+            shell_agent(Some(&store), both).as_deref(),
+            Some("from-env-file")
+        );
+        assert_eq!(shell_agent(Some(&store), claude_session), Some(main));
+        assert_eq!(shell_agent(None, claude_session), None);
+        let unknown = |k: &str| (k == "CLAUDE_CODE_SESSION_ID").then(|| "s-9".to_string());
+        assert_eq!(shell_agent(Some(&store), unknown), None);
+        assert_eq!(store.main_agent(claude, "s-9").unwrap(), None);
     }
 
     #[test]
@@ -455,6 +571,64 @@ mod tests {
                 id: old,
                 rule: Rule::Cwd
             }
+        );
+    }
+
+    #[test]
+    fn a_process_under_no_live_session_and_in_no_ones_cwd_is_outside() {
+        let store = Store::open_in_memory().unwrap();
+        // The T455 shape: the desktop app (11149) started this server through a wrapper
+        // (11381) in an unrelated project; each session's hook ran under its own `claude`.
+        let mut who = caller("claude", &store, Some("/cox"));
+        hooked(&store, who.host_id, "a", "/rtok", &[30709, 25435, 25434]);
+        hooked(&store, who.host_id, "b", "/weft", &[26000, 13793, 13792]);
+        seen(
+            &store,
+            &caller("claude", &store, Some("/mail")),
+            "old-client",
+            0,
+        );
+        who.ancestors = &[11381, 11149];
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::Outside);
+        // Its own chain unreadable: nothing proves where it sits.
+        who.ancestors = &[];
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::None);
+    }
+
+    #[test]
+    fn without_a_chained_live_row_nothing_is_outside() {
+        let store = Store::open_in_memory().unwrap();
+        let mut who = caller("claude", &store, Some("/cox"));
+        who.ancestors = &[11381, 11149];
+        // No session has fired a hook yet.
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::None);
+        // Only old clients that record no chain: one of them could still be ours.
+        seen(
+            &store,
+            &caller("claude", &store, Some("/r")),
+            "old-client",
+            0,
+        );
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::None);
+    }
+
+    #[test]
+    fn a_hookless_host_registers_itself_even_beside_chained_rows_of_its_shared_host_row() {
+        let store = Store::open_in_memory().unwrap();
+        let mut who = caller("zed", &store, Some("/r"));
+        // Grok shares the `other` host row with Zed and its hooks record chains.
+        hooked(&store, who.host_id, "grok-1", "/g", &[700, 701]);
+        who.ancestors = &[11381, 11149];
+        let got = resolve(&store, &who, no_env).unwrap();
+        assert!(
+            matches!(
+                got,
+                Link::Linked {
+                    rule: Rule::Own,
+                    ..
+                }
+            ),
+            "{got:?}"
         );
     }
 }

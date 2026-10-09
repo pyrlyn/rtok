@@ -54,6 +54,16 @@ fn rewrite(results: Vec<ToolResultRef<'_>>, cx: &Ctx) -> Vec<Measurement> {
         .collect()
 }
 
+/// A decision this plugin did not write. `json_tree` is named on its own so a build
+/// without that feature still compiles, and so its pointer is never replayed as TOON.
+fn skips_foreign_pointer(pointer: &str) -> bool {
+    #[cfg(feature = "json_tree")]
+    if pointer.starts_with(crate::plugins::json_tree::PREFIX) {
+        return true;
+    }
+    !pointer.starts_with(PREFIX)
+}
+
 fn rewrite_block(
     tool_use_id: &str,
     content: &mut Value,
@@ -68,9 +78,9 @@ fn rewrite_block(
 
     match cx.archive_decision(tool_use_id) {
         Ok(Some(d)) if d.expanded => return None,
-        // An `archive` pointer under the same `tool_use_id` is that plugin's block, and its
-        // saving was measured there; replaying it here added a second `toon` row.
-        Ok(Some(d)) if !d.pointer.starts_with(PREFIX) => return None,
+        // An `archive` or `json_tree` pointer under the same `tool_use_id` is that plugin's
+        // block, and its saving was measured there; replaying it here added a second `toon` row.
+        Ok(Some(d)) if skips_foreign_pointer(&d.pointer) => return None,
         Ok(Some(d)) => {
             let m = Measurement {
                 plugin: "toon",
