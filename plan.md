@@ -45,7 +45,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
-| T329.11 | todo | P2 | 3 | 0% | |
+| T329.11 | in progress | P2 | 3 | 10% | Claude Code / sonnet-5.5 |
 | T329.14 | todo | P2 | 4 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
@@ -830,6 +830,9 @@ Check: a project in a language with no grammar answers from text search, tagged 
 T329 §6b: a per-project (and language) record of which mode works, in memory for the hot path and mirrored into the store so the CLI, web and `rtok doctor` see it; single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page with `checked_at` and `next_probe_at`. Exposes a `reprobe(project)` entry point for the §8d health check (T329.17); requests never call it. T337 is decided: requests never re-probe. Depends on T329.9.
 
 Check: a test counts probes, 100 requests after the first run zero lookups or spawns; a `reprobe` after installing the server picks it up while 100 requests still run zero probes; a `backend` change re-checks only affected projects; concurrent first requests run one check; a second process reads the mirrored record; `just check`.
+
+Execution plan: new `src/plugins/graph/capability.rs` holds the in-memory map (canonical root to a slot behind its own lock, which gives the single-flight) and the store mirror (`plugin_state` key `capability:<root>`, JSON). The `lsp_or_tags` door asks it first: a missing record runs the injected probe (marker plus binary on `PATH`) and, for a server that probes well, the first server call under the same lock; a failure downgrades the record to tags once and later requests skip the server. A record remembers the `backend` value it was made under, so a config change re-checks only the projects whose mode value changed. `reprobe(cx, root, probe)` clears and re-runs one record; only T329.17 will call it. `scope::plan` reads the record instead of `lsp::usable`. `projects::row` adds the mirrored record to `rtok graph projects --json` and `/ws`; schema blessed. Tests use the probe and server closures and a counter. Docs: `docs/lsp.md` (en, ru, uk).
+
 
 ### T329.14. Graph page level 2: drill-down into one project
 
