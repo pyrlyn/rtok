@@ -5027,7 +5027,7 @@ mod tests {
         "observations_fts_idx",
         "observations_fts_docsize",
         "observations_fts_config",
-        "symbols_fts",         // 0038: FTS5 virtual table, MATCH/bm25 in sql_ext (T454)
+        "symbols_fts",         // 0038: FTS5 virtual table, MATCH/bm25 in sql_ext (T474)
         "symbols_fts_data",    // FTS5 shadow table for symbols_fts
         "symbols_fts_idx",     // FTS5 shadow table for symbols_fts
         "symbols_fts_docsize", // FTS5 shadow table for symbols_fts

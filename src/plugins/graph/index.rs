@@ -26,7 +26,7 @@ pub struct Report {
     pub extension_mapped: u32,
 }
 
-/// One symbol row. The byte span, content hash, signature, and doc ride along (T454).
+/// One symbol row. The byte span, content hash, signature, and doc ride along (T474).
 type Row = SymbolRow;
 
 /// Doc comments stored on a definition, in bytes.
@@ -394,7 +394,7 @@ fn each_parsed(jobs: &[Job], mut write: impl FnMut(&Job, Parsed) -> Result<()>) 
     })
 }
 
-/// Bump when [`scoped`] changes (T35.5). T454's byte span, hash, and doc rewrite version-4 roots once.
+/// Bump when [`scoped`] changes (T35.5). T474's byte span, hash, and doc rewrite version-4 roots once.
 const INDEX_VERSION: u32 = 5;
 
 /// Hex sha256 of `INDEX_VERSION` and every query string [`outline::tags`] compiles —
@@ -943,7 +943,7 @@ fn touched() {}
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T454: a definition stores its byte span, the sha256 of those bytes, and the
+    /// T474: a definition stores its byte span, the sha256 of those bytes, and the
     /// doc comment directly above it. A blank line ends the comment.
     #[test]
     fn index_stores_the_byte_span_hash_and_doc() {

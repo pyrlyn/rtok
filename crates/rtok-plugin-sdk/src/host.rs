@@ -749,7 +749,7 @@ pub trait Symbols {
         Ok(())
     }
 
-    /// Byte span of one definition (T454). `None` when that row is not indexed.
+    /// Byte span of one definition (T474). `None` when that row is not indexed.
     fn symbol_span(
         &self,
         root: &str,
@@ -762,7 +762,7 @@ pub trait Symbols {
         Ok(None)
     }
 
-    /// Definitions whose name, signature, or doc matches `query` (T454).
+    /// Definitions whose name, signature, or doc matches `query` (T474).
     ///
     /// A hit whose name contains a query token ranks above a signature hit, which
     /// ranks above a doc hit. At most `limit` rows. Empty when nothing matches.

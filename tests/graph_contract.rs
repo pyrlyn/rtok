@@ -314,7 +314,7 @@ fn filters_narrow_to_one_subtree() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// T454: a definition longer than 40 lines archives the uncut span, and `rtok expand`
+/// T474: a definition longer than 40 lines archives the uncut span, and `rtok expand`
 /// returns it. `id` selects that one row even when `name` names something else.
 #[test]
 fn long_body_expands_and_symbol_id_selects_one_row() {
