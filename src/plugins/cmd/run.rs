@@ -360,7 +360,7 @@ fn emit_filtered_to(
         if !body.is_empty() && !body.ends_with(b"\n") {
             let _ = out.write_all(b"\n");
         }
-        let est = cx.estimate(&before, Class::Code);
+        let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
         let _ = cx.record(&Measurement {
             plugin: "cmd",
             kind: "raw",
@@ -411,8 +411,8 @@ fn emit_filtered_to(
         kind,
         before_bytes: body.len() as u64,
         after_bytes: shown.len() as u64,
-        est_before: cx.estimate(&before, Class::Code),
-        est_after: cx.estimate(&shown, Class::Code),
+        est_before: cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code),
+        est_after: cx.estimate(super::bounded::host_visible_prefix(&shown), Class::Code),
         ref_id: (pointer || named).then(|| format!("{family}:{id}")),
         call_id: None,
     });
@@ -843,6 +843,63 @@ mod tests {
         assert_eq!(rows[0].after_bytes, rows[0].before_bytes, "{rows:?}");
         assert_eq!(rows[0].est_after, rows[0].est_before, "{rows:?}");
         assert!(rows[0].ref_id.is_none(), "{rows:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Past the host cap, bytes the model never sees do not count as a saving.
+    #[test]
+    fn emit_filtered_ignores_bytes_past_the_host_cap() {
+        let (c, dir) = cfg("host-cap");
+        let mut lines = vec!["x".repeat(super::super::bounded::HOST_VISIBLE_CHARS)];
+        for i in 0..50 {
+            lines.push(format!("tail line {i} that the host already dropped"));
+        }
+        let body = lines.join("\n");
+        assert!(body.chars().count() > super::super::bounded::HOST_VISIBLE_CHARS);
+        let mut printed = Vec::new();
+        emit_filtered_to(&c, &["echo".into()], body.as_bytes(), 0, None, &mut printed);
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("cmd").unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert!(
+            rows[0].before_bytes > rows[0].after_bytes,
+            "the tail was cut: {rows:?}"
+        );
+        assert_eq!(
+            rows[0].est_before, rows[0].est_after,
+            "both estimates stop at the host prefix: {rows:?}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+        let _ = printed;
+    }
+
+    /// Under the cap, a real shrink still records a saving and the expand trailer.
+    #[test]
+    fn emit_filtered_under_the_cap_still_counts_a_shrink() {
+        let (c, dir) = cfg("host-under");
+        let mut lines = vec!["running 50 tests".to_string()];
+        for i in 0..50 {
+            lines.push(format!("test a::ok{i} ... ok"));
+        }
+        lines.push("test a::bad ... FAILED".into());
+        lines.push("test result: FAILED. 1 failed; 50 passed".into());
+        let body = lines.join("\n");
+        assert!(body.chars().count() < super::super::bounded::HOST_VISIBLE_CHARS);
+        let mut printed = Vec::new();
+        emit_filtered_to(
+            &c,
+            &["cargo".into(), "test".into()],
+            body.as_bytes(),
+            0,
+            None,
+            &mut printed,
+        );
+        let shown = String::from_utf8(printed).unwrap();
+        assert!(shown.contains("expand"), "{shown}");
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("cmd").unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert!(rows[0].est_before > rows[0].est_after, "{rows:?}\n{shown}");
         let _ = fs::remove_dir_all(&dir);
     }
 

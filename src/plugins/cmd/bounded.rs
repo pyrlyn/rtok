@@ -11,6 +11,18 @@
 /// and a cut that names the archive beats one that does not.
 pub const MAX_BYTES: usize = 30_000;
 
+/// Unicode scalars the host keeps of a Bash result (Claude Code: 30 000 chars).
+/// A `Measurement` estimates this prefix: bytes past it never reach the model.
+pub const HOST_VISIBLE_CHARS: usize = 30_000;
+
+/// The prefix the host receives: at most [`HOST_VISIBLE_CHARS`] scalars, on a char boundary.
+pub fn host_visible_prefix(text: &str) -> &str {
+    match text.char_indices().nth(HOST_VISIBLE_CHARS) {
+        Some((idx, _)) => &text[..idx],
+        None => text,
+    }
+}
+
 /// Whether every command in `snippet` ends in a bounding stage. A leading `cd`/`export`
 /// prints nothing and does not unbound the rest; at least one stage must bound.
 pub fn is_bounded(snippet: &str) -> bool {
@@ -280,8 +292,21 @@ fn sed_range(args: &[String]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_bounded;
+    use super::{HOST_VISIBLE_CHARS, host_visible_prefix, is_bounded};
     use rstest::rstest;
+
+    #[test]
+    fn host_visible_prefix_stops_at_thirty_thousand_scalars() {
+        let over: String = "x".repeat(HOST_VISIBLE_CHARS + 1);
+        let prefix = host_visible_prefix(&over);
+        assert_eq!(prefix.chars().count(), HOST_VISIBLE_CHARS);
+        assert!(prefix.bytes().all(|b| b == b'x'));
+
+        let exact: String = "é".repeat(HOST_VISIBLE_CHARS);
+        let whole = host_visible_prefix(&exact);
+        assert_eq!(whole, exact);
+        assert!(std::str::from_utf8(whole.as_bytes()).is_ok());
+    }
 
     #[rstest]
     #[case("sed -n '1,620p' src/hooks/types.rs")]
