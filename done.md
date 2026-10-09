@@ -8353,6 +8353,21 @@ Result (2026-10-07, creator decision): D33/T275 wins. Install and update keep wr
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T332. Investigate: rtok's own MCP duplicate: T331 keep rule vs D33/T275
+
+In the plan, T331 (plan.md on branch `docs/plan-doctor-hooks-mcp`, ~line 711, from PR #542 (T331), not merged yet) says "for rtok's own server, the rules of T275 (plugin serves MCP, so the separate entry goes)" and keeps the "plugin-provided first" copy by default, reporting a host that de-duplicates by name as "shadowed, unused, still removable" (~line 706). D33 (plan.md@966f067 line 709) and T275 (plan.md@966f067 lines 171-175) say "Install and update always write the config entry `rtok`; only `remove` takes it out, and a plugin no longer suppresses or strips it", "the rtok plugin ships no MCP server", and "Gemini keeps both, since settings.json wins over an extension's same-name server". These contradict each other because `rtok doctor --fix --yes` would delete exactly the config entry D33 requires (on Gemini, and on any host where an old plugin still serves MCP), and the next `rtok agents install|update` would write it back, so the two features undo each other.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): D33 wins (research option A). The config entry `rtok` that install and update write is always the kept copy and is never fixable; `rtok doctor --fix` never removes it. A same-name copy in two scopes of one host and a plugin copy (Gemini, Devin, Antigravity) are reported as information only, because the host merges or shadows them; the plugin copy comes with the hint `rtok agents update <host>`. Only a hand-written copy under another name that also launches rtok (for example `rtok-mcp` running `rtok mcp`) is removable. No code changed: `src/doctor/mcp_dupes.rs` and `src/doctor/fix.rs` already refuse rtok's own entry. Updated in `plan.md`: the T331 "Which copy is kept" rule for MCP now follows D33; D33 gained "`rtok doctor --fix` never removes it (T332)"; the T331 split note and the T331.10 card are rewritten with the four rules and a Check, and T331.10 no longer depends on T332 or on T333 (T333 is done, done.md).
+
+Open note (side findings of the research, not decisions; recorded in the T331.10 card): Claude Code's docs now describe plugin MCP servers being matched by endpoint against user, project and local servers, which conflicts with `research.md` §25 and with T331.11's "plugin copy is kept first" (installed-version behaviour unverified); and whether Devin runs two servers (install writes `mcp_config.json`, the plugin ships `.mcp.json`) is unknown.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
+
 ### T246.1. MCP entries written through the SDK
 
 First of T246.1–T246.4 (creator request 2026-09-24): removing rtok takes back only what rtok wrote, and asks about what the user changed.
@@ -8630,6 +8645,66 @@ Recommendation: the caller's current directory. The selection is one global valu
 Decision (creator, 2026-10-06): the cwd project plus its links is the default for every graph command and graph MCP tool; the web UI selection never replaces it. T329 Terms, the T329 split note and the T329.4 card now say so.
 
 Check result (2026-10-06, Claude Code / opus-5.5): decision recorded here; T329 Terms ("Selected project"), the T329 split note (T336 no longer gates T329.4) and the T329.4 card updated; no other card mentions T336.
+
+### T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
+
+In the plan, T329 §6a (plan.md on branch `docs/plan-graph-projects`, ~line 752, from PR #540 (T329), not merged yet) says "T329 changes the default to an ordered fallback chain, `backend = "auto"`: LSP first, tree-sitter second, plain text search last", with per-request fallback on timeout. `src/plugins/graph/PLAN.md` (P30 survey) says "**C** rejected for gate honesty" (line 229, alternative C = tags-first with LSP fallback), lists under Rejected "**Default-on LSP** — tags stay default" (line 278) and "Hybrid tags+LSP per call without a mode flag (alternative C)" (line 279), and requires that the default answers stay byte-identical to tags (lines 246, 272); `roadmap.md:407` says "tags index remains default". These contradict each other because T329 makes the rejected design the default without revisiting the measured reasons (cold LSP start vs 23-26 ms warm tags, Gate P30 byte identity).
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): `tags` stays the graph default (research option 1); `auto` (LSP first, then tags, then text) is an opt-in value. Changing the default later needs a new gate with recorded `lsp.*` cold and warm latency rows (there are none on record, so "no `Measurement` row = no claim" applies), the `lsp_fallback` rate, and a creator decision that supersedes P30. Also fixed the stale claim that a pinned `backend = "lsp"` errors without a server: since T376 it answers from tags with a `(tags; lsp: <reason>)` header and an `lsp_fallback` row.
+
+Updated: `plan.md` T329 §6a (heading, intro, "Mode 1", config default `tags`), §8f "Backend alive" (the configured backend working scores 1; 0.6 and 0.3 only for fallbacks under `auto`/`lsp`), the T329 acceptance lines for `lsp` without a server and for the health ring, the T329 split note, and the T329.9 and T329.19 cards; `src/plugins/graph/PLAN.md` (one dated line in the P30 Rejected list); `docs/lsp.md` "Without the server" and its `docs/ru` and `docs/uk` translations, which still said the tool returns an error and records nothing. `roadmap.md` needed no change.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
+
+### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
+
+In the plan, T329 §6b (branch `docs/plan-graph-projects`, ~lines 787-791, from PR #540 (T329), not merged yet) says later requests "do not re-probe the modes that failed", the cache "is kept until that process restarts" and "nothing else invalidates it". T329 §8d (~lines 917-923) says a background check every 60 s detects **unreachable** (SSH root stops answering) and **backend down**, and "when the project comes back, the alert clears automatically"; §8f (~line 943) scores "Backend alive" from the same record. These contradict each other because detecting an unreachable SSH host or a recovered backend requires probing again, which §6b forbids; under §6b a backend-down alert can never clear without a restart.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): requests never re-probe; only the T329 §8d background health check re-probes (research option 2). Each interval it runs cheap checks (the root exists, the server binary appeared on `PATH`, a running server is alive) and restarts a server only on a change or on a backoff that starts at 60 s and is capped; an alert clears after two consecutive good checks. The "100 requests, zero probes" test stays. The capability record is mirrored into the store, so the MCP server, `rtok web`, the CLI and `rtok doctor` see the same record.
+
+Updated in `plan.md`: T329 §6b (heading, in-memory plus store mirror, downgrade lasts until two good checks, config changes and the health check as the only updaters, `checked_at`/`next_probe_at`), §8d detection (cheap tier, backoff, every process that hosts graph) and recovery (two good checks), §8f fix text, the T329 acceptance lines for a mid-session crash, the capability cache and alerts, the split note, and the T329.11, T329.17 and T329.19 cards (`reprobe(project)` entry point, store mirror). The T329.10 card is unchanged: its SSH reachability probe follows T335's outcome. The optional decision row was not added.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
+
+### T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
+
+In the plan, T330 "Never touched" (branch `docs/plan-agents-junk`, ~line 701, from PR #541 (T330), not merged yet) lists "`rtok.db`" (as T182 did: "It never touches `rtok.db`", done.md:6879). The same task clears "rtok's own session rows and logs keyed by session id (T284)" (`sessions` kind, ~line 730) and "Graph/tags index rows ... for projects no longer in the registry" (`index` kind, ~line 710); T182's result says the graph index "live[s] in the DB" (D18, line 695). These contradict each other because both row kinds live in `rtok.db`, so T330 cannot clear them without touching it.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): reworded to match the shipped code (research option C). The `rtok.db` file and its `-wal`/`-shm` files are never deleted, moved or emptied (`protected()` in `src/agents/junk_clear.rs` already enforces it). Rows change only through the store's retention: `Store::run_retention`, which `agents junk clear` already runs, and `Store::remove_project`. Junk adds no new row deletion; rtok's own agent and session rows stay out of T330 (the logs keyed by session id already age out with their calls). The graph/tags index rows of a gone root or a removed project are already delivered by retention and `remove_project`, so the `rtok.db` part of T330.5.3 is delivered. Rows of a root that exists but is not registered are not handled; how often that happens is unmeasured, so it would be a separate measured task.
+
+Updated in `plan.md`: T330 "Never touched", the cache bullet for index rows, the `sessions` row, and the T330.5.3 card (title, scope, question 2 removed). Stale reference fixed: T182's "never touches `rtok.db`" is in this file, not at the old `done.md:6879`. The optional D36 note was not added.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
+
+### T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
+
+In the plan, T330 (branch `docs/plan-agents-junk`, ~line 741, from PR #541 (T330), not merged yet) says stale-worktree removal "uses `git worktree remove` ..., then `git worktree prune`" and that an "orphaned" worktree is "removed only by deleting its folder with `--include review`". Done task T153 (done.md:5181-5187) says "per record, never a blanket `git worktree prune`, which would also drop the records of another session's worktrees on a volume that is merely unmounted", "Orphans are reported, never removed", and "`rtok worktree clean`/`gc` never delete a worktree directory themselves". T330's own edge case (~line 812) also says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". These contradict each other because T330 reintroduces the two removal actions T153 forbids and disagrees with itself about whether `agents junk clear` removes worktrees at all.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): junk delegates to `rtok worktree gc` (research option A, deleting the merged branch as gc does). The `stale-worktrees` kind lists exactly what `gc::decide` would remove (merged, clean, idle at least `stale_worktree_days`, lock absent or own, agent not live) and everything else with gc's reason. `clear --include review --yes` removes the listed worktrees through the same per-record `worktree::remove::detach`, one record at a time, and deletes the merged local branch as gc does. No blanket `git worktree prune`; orphans and stale records are reported, never removed. This keeps both T153 guarantees and one removal path, and unmerged or unpushed work can never be lost.
+
+Updated in `plan.md`: the T330 `stale-worktrees` row, its edge case, the unmerged-worktree edge case, the `stale_worktree_days` config note, the "New kinds" check, the T330.5 card (dropped the T341 dependency and the `git worktree remove` wording), and the T330.5.3 card (unblocked, question removed, scope rewritten to `stale-worktrees` only). Stale reference fixed: T153 is at `done.md` in this file, not at the old `done.md:5181-5187`.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
 
 ### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 

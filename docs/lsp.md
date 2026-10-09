@@ -89,10 +89,15 @@ skip otherwise.
 
 ## Without the server
 
-When the binary is missing, or no marker file is found above the queried file,
-the tool returns an error instead of an answer — for example
-`lsp: rust-analyzer not on PATH`, or
-`lsp: no Cargo.toml / compile_commands.json / tsconfig.json / pubspec.yaml in <root>`.
-Nothing is indexed as a substitute and nothing is recorded. To go back to the
-built-in index, set `backend = "tags"` again (the default); the tags answers
-are byte-identical with the flag off, per the `graph_lsp_gate` contract test.
+`backend = "lsp"` does not fail when the server cannot answer. When the binary
+is missing, no marker file is found above the queried file, the server is not
+ready or has died, or it answers "nothing" for a name the tags index knows, the
+tool gives the tags answer headed `(tags; lsp: <reason>)` — for example
+`(tags; lsp: rust-analyzer not on PATH)`, or
+`(tags; lsp: no Cargo.toml / compile_commands.json / tsconfig.json / pubspec.yaml in <root>)` —
+so you can see which backend spoke and why. Each fallback records an
+`lsp_fallback` measurement row (its `before_bytes` is the time lost). To go back
+to the built-in index, set `backend = "tags"` again (the default); the tags
+answers are byte-identical with the flag off, per the `graph_lsp_gate` contract
+test. The default stays `tags`: a default change needs a new gate with recorded
+`lsp.*` latency rows.

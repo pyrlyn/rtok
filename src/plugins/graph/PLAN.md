@@ -311,6 +311,7 @@ T30.2 adds `tests/graph_lsp_gate.rs` (or extends `graph_contract.rs`) that runs 
 - **Exposing serena-shaped MCP tools** (`find_symbol`, `find_referencing_symbols`, …) — breaks MCP-name stability and `graph_contract.rs`.
 - **Default-on LSP** — tags stay default; cold index **1.3 s** debug / **341 ms** release on 3 000 files (P35) beats LSP startup for most calls.
 - **Hybrid tags+LSP per call without a mode flag (alternative C)** — cannot satisfy "off → tags-only bytes".
+- **T334 (2026-10-09, creator):** the P30 default stands; T329 adds `auto` (LSP, then tags, then text) as an opt-in value only. A default change needs a new gate with recorded `lsp.*` latency rows.
 - **LSP on the hook path** — violates D1 ≤ 10 ms; graph stays MCP-only for LSP.
 - **Embedding rust-analyzer as a library** — no stable in-process API; subprocess is the portable seam (serena, VS Code, clangd all spawn).
 - **A fifth tool for call hierarchy / implementations** — `impact` and richer `symbol` lines absorb it; surface stays four tools / ≤ 150 description tokens (`doctor`).
