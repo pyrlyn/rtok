@@ -56,7 +56,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 30% | |
-| T330.5.3 | todo | P2 | 3 | 0% | |
+| T330.5.3 | in progress | P2 | 3 | 5% | Claude Code / sonnet-5.5 |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
@@ -1068,6 +1068,8 @@ Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card st
 ### T330.5.3. Junk: `stale-worktrees` through `rtok worktree gc`'s verdict
 
 Part of T330.5. Decided (T341 and T340, creator 2026-10-09), so it is no longer blocked. `stale_worktree_days` (default 14, the idle window passed to gc's policy for junk) and the `stale-worktrees` kind (review): `list` shows exactly what `rtok worktree gc` would remove (`gc::decide`, T153: merged, clean, idle at least `stale_worktree_days`, lock absent or own, agent not live) and everything else with gc's keep reason; `clear --include review --yes` removes those worktrees through the same per-record `worktree::remove::detach`, one record at a time, and deletes the merged local branch as gc does. No blanket `git worktree prune`; orphans and stale records are reported, never removed. The scope is `stale-worktrees` only: no `rtok.db` rows (T340, already delivered by store retention).
+
+Execution plan: (1) `gc.rs`: split `run` into `judge` (inventory plus `decide`, one verdict per record) and the apply loop, and share the verdict wording, so junk calls the same code; (2) `[agents.junk] stale_worktree_days` through `rtok-config` (types, validate, default.toml, `docs/config.md` en/ru/uk, goldens); (3) `junk_kinds::stale_worktree_items` builds `stale-worktrees` items (class review, evidence the gc verdict) for the repo `cwd` is in, a keep or drop-record verdict becoming the item's kept reason; (4) `junk_clear::apply` re-judges once per repository and calls `worktree::remove::detach` per record, never `git worktree prune`; (5) tests on temp git repos in `tests/agents_junk.rs` plus unit tests; docs for junk; `just check`.
 
 Check: a finished-session worktree idle 20 days that `rtok worktree gc` would remove is listed and removed per record with its merged branch deleted; the `stale-worktrees` list equals the gc dry-run set; worktrees with uncommitted changes, unpushed or unmerged commits, a lock owned by another, or a live agent are listed with the reason and never removed; no `git worktree prune` runs; an orphan is only reported; `just check`.
 
