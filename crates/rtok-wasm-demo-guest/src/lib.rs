@@ -4,6 +4,10 @@
 
 //! First-party Gate P32 example guest — built to `wasm32-unknown-unknown`, not in `all()`.
 #![no_std]
+// `no_mangle` exports and the host import block are unsafe. Same reason as
+// `rtok-sys`: the workspace denies `unsafe_code` and a member cannot override
+// one inherited lint in Cargo.toml.
+#![allow(unsafe_code)]
 
 // Host imports exist only under wasmi on wasm32. Native `cargo test` / nextest
 // (Windows MSVC especially) still builds this crate as `(lib test)` and must link.

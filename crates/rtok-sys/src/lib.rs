@@ -1,8 +1,10 @@
 //! Cross-platform process and file-lock helpers for rtok.
 //!
 //! File locks go through [`fs4`] (safe API). Process helpers use rustix on Unix
-//! and `windows-sys` on Windows (`unsafe_code = allow` lives only in this crate —
-//! the main `rtok` package keeps `forbid`).
+//! and `windows-sys` on Windows. This crate allows `unsafe_code`; the workspace
+//! lint denies it everywhere else.
+
+#![allow(unsafe_code)]
 
 use std::fs::File;
 use std::io;

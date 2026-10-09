@@ -1,23 +1,20 @@
 [package]
 name = "rtok-mcp"
 version = "0.0.1"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
 publish = false
 description = "The per-host MCP install/status core (T277): spec, config read/write behind an Fs trait, and apply"
 license = "MIT"
 
 [dependencies]
-anyhow = "1.0.104"
-serde_json = "1.0.151"
+anyhow = { workspace = true }
+serde_json = { workspace = true }
 # `cst`: lossless edit (comments, formatting) of a JSONC document; `serde_json`: read a CST
 # node back out as a `serde_json::Value` to compare against the entry rtok wants (T277 config.rs).
-jsonc-parser = { version = "0.34.0", features = ["cst", "serde_json"] }
-toml_edit = "0.25"
+jsonc-parser = { workspace = true, features = ["cst", "serde_json"] }
+toml_edit = { workspace = true }
 
-[lints.rust]
-unsafe_code = "forbid"
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-dbg_macro = "warn"
-todo = "warn"
+[lints]
+workspace = true

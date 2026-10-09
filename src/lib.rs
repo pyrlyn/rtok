@@ -18,6 +18,8 @@
 //! - [`tui`]     — `rtok tui`, the terminal rendering of the operator model (D23)
 //! - [`worktree`] — git worktree inventory: records, owners, states (T150)
 
+#![forbid(unsafe_code)]
+
 pub mod agent_view;
 pub mod agents;
 pub mod batch;

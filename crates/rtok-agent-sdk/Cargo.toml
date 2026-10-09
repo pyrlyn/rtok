@@ -1,10 +1,10 @@
 [package]
 name = "rtok-agent-sdk"
 version = "0.0.1"
-edition = "2024"
-rust-version = "1.98.1" # the pin in mise.toml; a host-integration author needs no newer toolchain
+edition.workspace = true
+rust-version.workspace = true # a host-integration author needs no newer toolchain than mise.toml
 readme = "README.md"
-repository = "https://github.com/pyrlyn/rtok"
+repository.workspace = true
 homepage = "https://pyrlyn.github.io/landing/rtok/"
 description = "The rtok agent-host contract: reversible, idempotent installs for `rtok agent setup <host>`"
 license = "Apache-2.0"
@@ -14,16 +14,11 @@ keywords = ["rtok", "agents", "install", "mcp", "hooks"]
 [dependencies]
 # Same two-dependency line the plugin SDK holds; the installer's prompt is one plain
 # stdout line + stdin read (T81), so no prompt crate is needed.
-serde_json = "1.0.151"
-anyhow = "1.0.104"
+serde_json = { workspace = true }
+anyhow = { workspace = true }
 
-[lints.rust]
-unsafe_code = "forbid"
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-dbg_macro = "warn"
-todo = "warn"
+[lints]
+workspace = true
 
 [dev-dependencies]
-rstest = "0.27.0"
+rstest = { workspace = true }
