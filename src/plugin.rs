@@ -496,6 +496,11 @@ impl Notes for Runtime {
         self.store.search_notes(query, limit)
     }
 
+    fn search_notes_hybrid_stored(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        self.store
+            .search_notes_hybrid_stored(query, limit, &self.config.plugins.memory.embed)
+    }
+
     fn set_note_files(&self, id: i32, paths: &[String]) -> Result<()> {
         self.store.set_note_files(id, paths)
     }

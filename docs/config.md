@@ -537,7 +537,7 @@ enabled    = false                    # P29: FTS5-only when false; vector search
 provider   = "local"                  # "local" | "openai"
 model      = "all-MiniLM-L6-v2"
 dimensions = 384
-hybrid     = true                     # when enabled: RRF(fts5, knn); false = knn only
+hybrid     = true                     # when enabled: RRF(fts5, knn) for mem_search and prompt_recall; the hook reads stored vectors only; false = knn only
 
 [plugins.graph]
 enabled    = true
