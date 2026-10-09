@@ -1106,7 +1106,7 @@ update `src/store/schema.rs` + diesel models — separate mini-PR, not required 
 **Tests if no migration:** schema-drift guard still green; document the decision in
 `docs/batch-flex.md`.
 
-Check: `rg 'service_tier' migrations/` empty (unless mini-PR); `just check`.
+Check: `rg 'service_tier' crates/rtok-store/migrations/` empty (unless mini-PR); `just check`.
 
 ### T259. Docs flip planned→today + acceptance
 

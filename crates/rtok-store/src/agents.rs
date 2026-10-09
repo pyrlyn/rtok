@@ -9,7 +9,7 @@
 //! (`HookInput::agent_id`, `research.md` §17.2); `parent_id` is the resolved rtok id of a
 //! sub-agent's parent row.
 
-use anyhow::{Result, bail};
+use crate::Result;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -173,6 +173,7 @@ pub fn idle_secs(idle: &str) -> Result<i64> {
         .as_secs()
         .try_into()
         .map_err(|_| anyhow::anyhow!("[agents] idle {idle:?} is out of range"))
+        .map_err(Into::into)
 }
 
 fn main_agent_id(
@@ -393,8 +394,8 @@ impl Store {
 
     /// Test-only: place `last_seen` at an exact time, so a fixture can say "seen before the
     /// MCP process started" without sleeping.
-    #[cfg(test)]
-    pub(crate) fn set_agent_last_seen(&self, id: &str, ts: i64) -> Result<()> {
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn set_agent_last_seen(&self, id: &str, ts: i64) -> Result<()> {
         let mut conn = self.lock()?;
         diesel::update(agents::table.filter(agents::id.eq(id)))
             .set(agents::last_seen.eq(ts))
@@ -404,8 +405,8 @@ impl Store {
 
     /// Test/debug: one row by its exact id. `pub(crate)` so `hooks::mod`'s dispatch-level
     /// fixture tests can assert on what a full hook run wrote (T282).
-    #[cfg(test)]
-    pub(crate) fn agent_row(&self, id: &str) -> Result<Option<AgentRow>> {
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn agent_row(&self, id: &str) -> Result<Option<AgentRow>> {
         let mut conn = self.lock()?;
         agents::table
             .filter(agents::id.eq(id))

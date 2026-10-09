@@ -201,6 +201,7 @@ fn pair(rt: &Runtime, to: &str, from: Option<&str>) -> Result<(Project, Project)
 fn link(rt: &Runtime, from: &Project, to: &Project, reason: Option<&str>) -> Result<bool> {
     rt.store
         .link_projects(from.id, to.id, LinkKind::Manual, reason)
+        .map_err(Into::into)
 }
 
 fn changes(done: &[(&Project, &Project, bool)], yes: &str, no: &str, json: bool) -> Result<String> {

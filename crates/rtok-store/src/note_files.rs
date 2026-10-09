@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 
 use super::schema::{note_files, notes, read_cache};

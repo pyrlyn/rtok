@@ -67,7 +67,7 @@ pub fn run(cfg: &Config) -> Result<()> {
     let server = Server::new(cfg)?;
     // Background, own connection: housekeeping must neither delay `initialize` nor die on a
     // contended store (T75, T352).
-    crate::store::Store::spawn_retention(cfg, "mcp");
+    crate::store::spawn_retention(cfg, "mcp");
     crate::otel::export::spawn_ticker(cfg);
     // P8d watcher (T8.16): a thread inside this process, never a second writer.
     // Any value but `off` arms the notify backend.

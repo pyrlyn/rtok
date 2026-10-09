@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -137,7 +137,7 @@ impl Store {
     /// use them as a root. `name` (a worktree's branch) labels only the row this call created,
     /// so a rename or a manual add of the same root is never overwritten.
     pub fn auto_add_project(&self, path: &Path, origin: Origin, name: Option<&str>) -> Result<()> {
-        if !path.is_dir() || crate::fs::is_unwalkable_root(path, std::env::home_dir().as_deref()) {
+        if !path.is_dir() || crate::is_unwalkable_root(path, std::env::home_dir().as_deref()) {
             return Ok(());
         }
         let project = self.register_project(path, origin)?;

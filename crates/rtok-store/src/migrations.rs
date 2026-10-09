@@ -9,7 +9,7 @@
 //! onto the directory version (`0001.sql` → `0001_schema_v1`) and are marked applied, so
 //! `up.sql` does not run again.
 
-use anyhow::Result;
+use crate::Result;
 use diesel::migration::{Migration, MigrationSource};
 use diesel::prelude::*;
 use diesel::query_builder::{AstPass, Query, QueryFragment, QueryId};
@@ -43,7 +43,7 @@ pub fn bridge_legacy(conn: &mut SqliteConnection) -> Result<()> {
             matches.then_some(version)
         });
         let Some(version) = version else {
-            anyhow::bail!("schema_migrations name {name} has no Diesel version");
+            crate::bail!("schema_migrations name {name} has no Diesel version");
         };
         MarkVersion { version }.execute(conn)?;
     }
@@ -53,6 +53,7 @@ pub fn bridge_legacy(conn: &mut SqliteConnection) -> Result<()> {
 pub fn has_pending(conn: &mut SqliteConnection) -> Result<bool> {
     conn.has_pending_migration(MIGRATIONS)
         .map_err(|e| anyhow::anyhow!(e))
+        .map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -105,7 +106,9 @@ pub fn run_before(conn: &mut SqliteConnection, tag: &str) -> Result<()> {
 }
 
 fn embedded_migrations() -> Result<Vec<Box<dyn Migration<Sqlite>>>> {
-    MigrationSource::<Sqlite>::migrations(&MIGRATIONS).map_err(|e| anyhow::anyhow!(e))
+    MigrationSource::<Sqlite>::migrations(&MIGRATIONS)
+        .map_err(|e| anyhow::anyhow!(e))
+        .map_err(Into::into)
 }
 
 #[derive(QueryId)]

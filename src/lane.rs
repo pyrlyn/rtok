@@ -11,7 +11,7 @@
 /// Agent lane. Existing rows and reports already use the bare name.
 pub const KIND_AGENT: &str = "api_request";
 pub const KIND_BULK: &str = "api_request:bulk";
-pub const KIND_BATCH: &str = "api_request:batch";
+pub const KIND_BATCH: &str = rtok_store::BATCH_CALL_KIND;
 pub const KIND_FILES: &str = "api_request:files";
 pub const KIND_EMBEDDINGS: &str = "api_request:embeddings";
 pub const KIND_META: &str = "api_request:meta";

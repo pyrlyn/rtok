@@ -63,7 +63,7 @@ if split out per T2.5.
 - `PreCompact` adds that same title index plus this session's observations when either exists.
   The hook stays `{}` when both are empty.
 
-**Schema** lives in `migrations/0001_schema_v1/up.sql` (`notes`, `notes_fts` + triggers). Changing
+**Schema** lives in `crates/rtok-store/migrations/0001_schema_v1/up.sql` (`notes`, `notes_fts` + triggers). Changing
 it means a new migration directory, never an edit to `0001_schema_v1/up.sql`.
 
 **Checks**: `plan.md` T2.5, T6.1–T6.3.

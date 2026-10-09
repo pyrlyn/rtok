@@ -4,7 +4,7 @@
 
 //! Cached rustdoc rows for the `docs` plugin (T455). Diesel only; FTS MATCH lives in sql_ext.
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 
 use super::schema::{doc_crates, doc_items};

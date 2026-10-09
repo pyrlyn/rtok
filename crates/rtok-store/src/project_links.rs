@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{Result, bail};
+use crate::Result;
 use diesel::prelude::*;
 use serde::Serialize;
 

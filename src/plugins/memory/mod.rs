@@ -434,8 +434,8 @@ pub fn mem_save(
     // a stale twin next to the new one.
     let (id, updated) = rt.store.upsert_note(proj.as_deref(), kind, &title, &body)?;
     files::link_note(&Ctx::new(rt), id, &body);
-    rt.store
-        .upsert_note_embedding(id, &title, &body, &rt.config.plugins.memory.embed)?;
+    let embed = crate::store::embed_settings(&rt.config.plugins.memory.embed);
+    rt.store.upsert_note_embedding(id, &title, &body, &embed)?;
     Ok((id, updated))
 }
 
@@ -486,14 +486,19 @@ pub fn mem_search(
     limit: u32,
 ) -> anyhow::Result<Vec<crate::store::NoteHit>> {
     let lim = limit.max(1);
-    let embed = &rt.config.plugins.memory.embed;
-    if !embed.enabled {
-        return rt.store.search_notes(query, lim);
+    let cfg = &rt.config.plugins.memory.embed;
+    if !cfg.enabled {
+        return rt.store.search_notes(query, lim).map_err(Into::into);
     }
-    if embed.hybrid {
-        rt.store.search_notes_hybrid(query, lim, embed)
+    let embed = crate::store::embed_settings(cfg);
+    if cfg.hybrid {
+        rt.store
+            .search_notes_hybrid(query, lim, &embed)
+            .map_err(Into::into)
     } else {
-        rt.store.search_notes_embed(query, lim, embed)
+        rt.store
+            .search_notes_embed(query, lim, &embed)
+            .map_err(Into::into)
     }
 }
 

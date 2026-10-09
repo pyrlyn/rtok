@@ -320,7 +320,7 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
     let mut cx = match Runtime::open_with(cfg.clone(), session, wait) {
         Ok(cx) => cx,
         Err(e) => {
-            if crate::store::is_locked(&e) {
+            if crate::store::is_locked(e.as_ref()) {
                 defer_session_end(cfg, &input.hook_event_name, stdin);
             }
             return Err(format!("hook {event}: store open: {e}"));
@@ -526,7 +526,7 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
         Ok(id) => Some(id),
         // T178: another process held the writer lock past `LOCK_WAIT`. Every later write would
         // wait again, so pass the input through unchanged and record nothing.
-        Err(e) if crate::store::is_locked(&e) => {
+        Err(e) if crate::store::is_locked(e.as_ref()) => {
             let msg = format!("skipped: store locked: {e:#}");
             eprintln!("rtok: hook {} {msg}", input.hook_event_name);
             crate::log::append(&cx.config, "error", "hook", &input.hook_event_name, &msg);

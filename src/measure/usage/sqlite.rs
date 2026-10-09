@@ -13,18 +13,8 @@
 //! others cannot break the read.
 
 use crate::store::UsageSlice;
-use diesel::prelude::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-
-diesel::table! {
-    message (id) {
-        id -> Text,
-        session_id -> Text,
-        time_created -> BigInt,
-        data -> Text,
-    }
-}
 
 /// Every request of `host` (`opencode` or `kilo`) in the databases under `dirs`, and the
 /// first database that could not be read. A host names a database `<host>.db`, or
@@ -82,16 +72,10 @@ fn read_only_uri(path: &Path) -> Option<String> {
     Some(url.into())
 }
 
-fn read(host: &str, path: &Path, since: i64) -> Result<Vec<UsageSlice>, diesel::result::Error> {
-    let url = read_only_uri(path)
-        .ok_or_else(|| diesel::result::Error::QueryBuilderError("path is not a file URI".into()))?;
-    let mut conn = SqliteConnection::establish(&url)
-        .map_err(|e| diesel::result::Error::QueryBuilderError(e.to_string().into()))?;
-    let rows: Vec<(String, i64, String)> = message::table
-        .filter(message::time_created.ge(since.saturating_mul(1000)))
-        .order(message::time_created.asc())
-        .select((message::session_id, message::time_created, message::data))
-        .load(&mut conn)?;
+fn read(host: &str, path: &Path, since: i64) -> Result<Vec<UsageSlice>, ()> {
+    let url = read_only_uri(path).ok_or(())?;
+    let rows =
+        crate::store::read_host_messages(&url, since.saturating_mul(1000)).map_err(|_| ())?;
     Ok(rows
         .into_iter()
         .filter_map(|(session, created, data)| request(host, &session, created, &data, since))
@@ -138,30 +122,19 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::connection::SimpleConnection;
     use serde_json::json;
 
-    /// A database with the one table this reader declares. Diesel has no DDL builder and
-    /// the host's schema is not rtok's to migrate, so the fixture creates it with one
-    /// `CREATE TABLE`; every row goes in through the query builder.
+    /// A database with the one table this reader declares.
     fn fixture(path: &Path, rows: &[(&str, i64, Value)]) {
-        let mut c = SqliteConnection::establish(&path.display().to_string()).unwrap();
-        c.batch_execute(
-            "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, \
-             time_created INTEGER NOT NULL, data TEXT NOT NULL)",
-        )
-        .unwrap();
-        for (i, (session, created, data)) in rows.iter().enumerate() {
-            diesel::insert_into(message::table)
-                .values((
-                    message::id.eq(format!("m{i}")),
-                    message::session_id.eq(*session),
-                    message::time_created.eq(*created),
-                    message::data.eq(data.to_string()),
-                ))
-                .execute(&mut c)
-                .unwrap();
-        }
+        let owned: Vec<(String, i64, String)> = rows
+            .iter()
+            .map(|(session, created, data)| ((*session).to_string(), *created, data.to_string()))
+            .collect();
+        let borrowed: Vec<(&str, i64, &str)> = owned
+            .iter()
+            .map(|(session, created, data)| (session.as_str(), *created, data.as_str()))
+            .collect();
+        crate::store::seed_host_messages(path, &borrowed).unwrap();
     }
 
     fn assistant(model: &str, tokens: [i64; 5]) -> Value {

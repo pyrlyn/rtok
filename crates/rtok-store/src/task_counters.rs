@@ -5,7 +5,8 @@
 //! T441.3: the task id allocator. One counter per project (and one per parent for subtasks),
 //! shared by every process that opens this store, so parallel agents never get the same id.
 
-use anyhow::{Context, Result, bail};
+use crate::Result;
+use anyhow::Context;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
@@ -49,16 +50,18 @@ fn write_last(conn: &mut SqliteConnection, project: &str, key: &str, last: i64) 
 
 /// A clear error instead of SQLite's bare "database is locked" when another process held the
 /// write lock past `busy_timeout`.
-fn locked_hint(e: anyhow::Error) -> anyhow::Error {
+fn locked_hint(e: crate::StoreError) -> crate::StoreError {
     if is_locked(&e) {
-        e.context("task id allocation: another rtok process held the store's write lock past its busy timeout; retry")
+        anyhow::Error::from(e)
+            .context("task id allocation: another rtok process held the store's write lock past its busy timeout; retry")
+            .into()
     } else {
         e
     }
 }
 
 impl Store {
-    /// The next task id of `project` (a [`crate::project::project_key`]): `R13` after `R12`,
+    /// The next task id of `project` (a a project key): `R13` after `R12`,
     /// or `R2.4` after `R2.3` with `parent` `R2`. Read, increment and write are one
     /// `BEGIN EXCLUSIVE`, so concurrent processes each get their own number and none is reused.
     pub fn allocate_task_id(
@@ -75,7 +78,7 @@ impl Store {
         let key = counter_key(parent);
         let mut conn = self.lock()?;
         let n = conn
-            .exclusive_transaction::<_, anyhow::Error, _>(|c| {
+            .exclusive_transaction(|c| {
                 if let Some(p) = parent {
                     // Ids are only handed out here or seeded above remote ones, so a parent
                     // past the top counter was never a task of this project.
@@ -91,8 +94,8 @@ impl Store {
             .map_err(locked_hint)?;
         let n = u32::try_from(n).context("task counter overflow")?;
         match parent {
-            Some(p) => p.child(n),
-            None => TaskId::new(prefix, n),
+            Some(p) => p.child(n).map_err(Into::into),
+            None => TaskId::new(prefix, n).map_err(Into::into),
         }
     }
 
@@ -100,7 +103,9 @@ impl Store {
     pub fn task_counter(&self, project: &str, parent: Option<&TaskId>) -> Result<u32> {
         let mut conn = self.lock()?;
         let last = read_last(&mut conn, project, &counter_key(parent))?;
-        u32::try_from(last).context("task counter overflow")
+        u32::try_from(last)
+            .context("task counter overflow")
+            .map_err(Into::into)
     }
 
     /// Raise a counter to at least `at_least`, never lower it: seeding from a tracker that
@@ -114,13 +119,15 @@ impl Store {
         let key = counter_key(parent);
         let mut conn = self.lock()?;
         let last = conn
-            .exclusive_transaction::<_, anyhow::Error, _>(|c| {
+            .exclusive_transaction(|c| {
                 let last = read_last(c, project, &key)?.max(i64::from(at_least));
                 write_last(c, project, &key, last)?;
                 Ok(last)
             })
             .map_err(locked_hint)?;
-        u32::try_from(last).context("task counter overflow")
+        u32::try_from(last)
+            .context("task counter overflow")
+            .map_err(Into::into)
     }
 }
 

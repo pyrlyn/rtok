@@ -4,9 +4,9 @@
 
 //! T287: messages between agents and the user — `rtok agents send` / `inbox` (MCP in PR 2).
 //! Local store only. `from_agent: None` is the user at a terminal. Rendering lives in one
-//! place, [`crate::render::agent_message_frame`], so every surface frames a body the same.
+//! place, the renderer's agent message frame, so every surface frames a body the same.
 
-use anyhow::{Result, bail};
+use crate::Result;
 use diesel::prelude::*;
 use serde::Serialize;
 

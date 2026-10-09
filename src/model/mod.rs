@@ -1439,6 +1439,7 @@ fn usage_page(cfg: &Config) -> UsagePage {
 /// `[agents.usage]` value is the page's text, not a failed snapshot.
 fn read_usage_page(cfg: &Config) -> UsagePage {
     let report = Store::open(&cfg.core.db_path)
+        .map_err(anyhow::Error::from)
         .and_then(|store| usage::report(cfg, &store, crate::log::now() as i64));
     match report {
         Ok(report) => UsagePage {
