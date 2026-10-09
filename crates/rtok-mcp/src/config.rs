@@ -183,6 +183,10 @@ fn jsonc_options() -> ParseOptions {
         allow_single_quoted_strings: false,
         allow_hexadecimal_numbers: false,
         allow_unary_plus_numbers: false,
+        // 0.34 adds JSON5. Stay on comments and trailing commas only.
+        allow_bare_decimal_point_numbers: false,
+        allow_non_finite_numbers: false,
+        allow_extended_string_escapes: false,
     }
 }
 
