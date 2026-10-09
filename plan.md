@@ -6,11 +6,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 
 ## Cloud review findings (2026-10-08)
 
-New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457 is done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
+New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457 and T458 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
 
 | ID | Priority | Kind | Status | Where | Fix |
 | --- | --- | --- | --- | --- | --- |
-| T458 | P2 | bug | claimed | `src/mcp/wrap.rs:152-154` | The MCP wrap reads a declared `Content-Length` with no cap (`take(len).read_to_end`). Cap it like `rtok_hook::MAX_FRAME` (64 MiB) and fall back to `Framing::Raw` on overflow. In the task table. |
 | T459 | P2 | bug | confirmed | `src/bin/rtok-hook.rs:41-42` | The `rtok-hook` client reads all of stdin before `Request::encode()`; only the resident caps later (T201). Bound the read to `hook_max_input_bytes + 1`. |
 | T460 | P2 | bug | suspected | `src/plugins/read/hook.rs:154-164` | `same_path` compares case-sensitively (`a == b`, then `Path::ends_with`). Case-fold or canonicalize on Windows. |
 | T461 | P2 | bug | suspected | `src/hooks/resident.rs:105` (Windows) vs `:80` (Unix) | The Windows resident exits only when `hook.lock` vanishes; Unix also exits when the socket vanishes. Mirror the Unix condition. |
@@ -115,7 +114,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T458 | in progress | P2 | 2 | 0% | Cursor / grok 4.7 |
 
 
 
@@ -1649,12 +1647,6 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
-
-### T458. Cap the MCP wrap `Content-Length` read at the hook frame limit
-
-`rtok mcp -- <server>` reads an LSP-style body with `take(len).read_to_end` and no upper bound. A declared length over `rtok_hook::MAX_FRAME` (64 MiB) must not be buffered and must not block a live pipe waiting for that many bytes. Forward the header block as `Framing::Raw` and leave the following bytes on the stream, the same resync as an unparseable `Content-Length`. A length at or under the cap keeps today's read, including the short-body raw path.
-
-Check: a declared length above `rtok_hook::MAX_FRAME` is `Framing::Raw` of the header only and the next frame is still read; a length at the cap still reads a short body; `just check`.
 
 ## Reference
 
