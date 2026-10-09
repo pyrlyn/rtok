@@ -8368,6 +8368,25 @@ Open note (side findings of the research, not decisions; recorded in the T331.10
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
 
+### T331.10. Doctor: rtok's own MCP entry in the duplicate check
+
+Part of T331. T331.4 leaves rtok's own MCP server out of the duplicate check. Include rtok's own entry (detected with `rtok_agent_sdk::runs_bin` and `agents::is_rtok_bin`, as T331.4 does to exclude it) in the detector and the keep recommendation of T331.4 with the rules decided in T332 (D33 wins; creator 2026-10-09):
+
+1. The config entry `rtok` that install writes is always the kept copy and is never fixable (the existing refusal in `src/doctor/fix.rs`, "rtok's own entry", stays).
+2. Same name `rtok` in two scopes of one host (for example `~/.claude.json` and `<repo>/.mcp.json`) is reported as information only ("host uses X"); the host merges it (D33: same-name entries are left to the agent).
+3. A plugin copy (Gemini `plugins/gemini/gemini-extension.json`, Devin `plugins/devin/.mcp.json`, Antigravity `plugins/antigravity/mcp_config.json`) next to the config entry is reported as information only, with the hint `rtok agents update <host>`; the host shadows or merges it (Gemini: settings.json wins). Doctor reads plugin MCP only for Claude CLI today (`src/doctor/mcp_dupes.rs`), so each host needs its reader.
+4. Only a hand-written copy under another name that also launches rtok (for example `rtok-mcp` running `rtok mcp`) is a real double launch and is removable. Recognise "ours" with `surfaces()`/`has_entry` in `src/agents/mcp.rs`; no new detector.
+
+The comment at the top of `src/doctor/mcp_dupes.rs` changes with this task. Depends on T331.4.
+
+Check: the four rules above as scenarios per host (the config entry never offered for removal, same-name and plugin copies shown as information, `rtok-mcp` removable, `--fix --yes` leaves the `rtok` entry and then reports zero fixable problems); `just check`.
+
+Execution (2026-10-09): (1) `src/doctor/mcp_dupes.rs` no longer drops an entry that runs the rtok binary (`rtok_agent_sdk::runs_bin` with `agents::is_rtok_bin`, as T331.4 used to exclude it); such entries are collected as rtok's own and judged apart from the launch grouping by `own_findings`, per host surface. The kept copy is the entry named `rtok` in the file install writes (the `surfaces()` user spec), else the best-ranked `rtok`-named one, and is never fixable. A second `rtok` under the same name in another scope, and a plugin copy, are `own-mcp` findings: information only, not in `fix::KINDS`, so `--fix` neither lists nor counts them (`left` stays 0); the same-name text says which scope the host uses, the plugin text gives `rtok agents update <host>`. A hand-written copy under another name that also runs rtok (`rtok-mcp`) is a `duplicate-mcp` extra, fixable, in one group with the kept entry. (2) Plugin reader: Gemini's extension manifest (`gemini::plugin_manifest`, `<dir>/extensions/rtok/gemini-extension.json`) is one more source of the Gemini set, read through the same injected `Fs`; the Claude plugin `.mcp.json` of T331.11 already carried rtok's copy the same way. Devin and Antigravity get no reader: Devin's plugin store is undocumented (`src/agents/devin/mod.rs`), and Antigravity has no config entry beside its plugin (`surfaces()` is empty, its MCP ships only in the plugin), so there is nothing to pair. (3) `fix.rs` refuses `duplicate-mcp` findings by the entry name `rtok` instead of by the command, so `rtok-mcp` is removable while the `rtok` entry is not. (4) `dupes::render_mcp` prints `own-mcp` with the role `info`; the `kind` doc strings in `hooks.rs`, `ws.schema.json` and `snapshot.gen.ts` name it; `docs/agents.md` and its `ru`/`uk` mirrors describe the rules. (5) Tests with fake homes only: `rtok-mcp` removable next to the kept `rtok` (JSON and TOML), the same name in user, project and local scopes as information, a Gemini extension copy and an enabled Claude plugin copy as information with the hint, both groups at once with the entry listed once, a disabled copy ignored, and in `fix.rs` `--fix --yes` removes `rtok-mcp`, leaves `rtok` and reports 0 left, and information-only copies are never touched. The open note of the T331.10 card (Claude Code matching plugin MCP servers by endpoint; Devin's two servers) is not part of this task and stays in the T332 entry.
+
+Result: `rtok doctor` reports rtok's own MCP entry per the D33 rules: the `rtok` config entry is always kept and never offered for removal, same-name and plugin copies are information only, and only a hand-written copy under another name is removable; after `--fix --yes` the `rtok` entry is still there and zero fixable problems are left.
+
+Status: done 2026-10-09 · Model: Claude Code / sonnet-5.5
+
 ### T246.1. MCP entries written through the SDK
 
 First of T246.1–T246.4 (creator request 2026-09-24): removing rtok takes back only what rtok wrote, and asks about what the user changed.
