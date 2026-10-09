@@ -21,13 +21,13 @@
 - T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
 - T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 - T329.11. Graph capability cache: one probe per project until the process restarts
-- T329.14. Graph page level 2: drill-down into one project
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 - T329.17. Graph alerts: linked project down or unreachable
 - T329.18. Graph diff: compare before and after a change
 - T329.19. Graph health score per project
 - T329.21. Project badges in the graph page lists
+- T329.22. Graph page level 2: the drill-down view (SPA)
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 - T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)

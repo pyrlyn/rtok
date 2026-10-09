@@ -31,6 +31,7 @@ use rtok_plugin_sdk::{
 
 pub mod blast;
 pub mod cochange;
+pub mod drill;
 pub mod follow;
 pub mod index;
 pub mod lsp;

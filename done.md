@@ -2938,6 +2938,16 @@ Deviations: edge width is a constant, because the snapshot carries no cross-proj
 
 Status: done 2026-10-03 · Model: Claude Code / sonnet-5
 
+## T329.14 — Graph page level 2: the drill-down data path (page split to T329.22)
+
+T329 §8a level 2, server half. A client sends `{"graph": {"project", "expand", "focus", "depth", "limit", "query"}}` over `/ws` and gets a `graph` frame (`DrillGraph`): nodes (file, type, module, function, external) and aggregated edges (contains, calls, implements, imports) with counts. It starts at files, with the calls between them summed and the imports resolved by the rules `symbol_imported_defs` uses (the longest matching file only); an expanded file shows its definitions with `contains` edges from the file and from the type around a method; a focus shows the symbol with its callers and callees to `depth` (1 to 4, the limit `impact` has). A call into a linked project of the scope ends at an `external` node that carries the target's project, path and line. Nodes beyond `limit` (default 500) are counted in `more`, the asked-for symbols first, then by degree. `query` returns up to 8 hits per project of the scope; `partial` and `stale` follow the pending files; an unindexed or missing project answers with its state. A name defined in more than 3 files draws no edge, so a common name does not invent edges. The reads are four new Diesel scans in `crates/rtok-store/src/symbol_graph.rs` (definitions, grouped references, import edges, definitions by name), the logic is `src/plugins/graph/drill.rs`, the message is answered off the executor like the project writes, and the schema and `snapshot.gen.ts` are regenerated.
+
+Check: `drill` unit tests on a temp store (files with a call summed to 2, an expanded file with `contains` and its caller landing on the function, a focus at depth 1 and 2, a call into a linked project ending at an external node of that project plus a search hit from the scope, 120 files with a cap of 100 giving `more` 20, an unindexed and a missing project), three `symbol_graph` store tests, `ws_graph_answers_a_project_with_its_files_and_refuses_an_unknown_one` (tests/web.rs), `client_messages_parse` and `committed_schema_is_current`; `just check`.
+
+Deviations: the page half (breadcrumb, URL state, expand and focus on the canvas, side panel, search box, "+N more" control, live re-request under `watch`, docs) is T329.22, because the two together were over the 500-line cap. The text-mode banner and the dead-symbol toggle are not here: only the tags backend answers today (T329.9), and the toggle needs the scoped dead list on the page. A file with parse errors is not marked (the index keeps no parse status); `stale` marks files changed since the last index run.
+
+Status: done 2026-10-09 · Model: Claude Code / sonnet-5.5
+
 ## T329.7 — Reference discovery from manifests (Cargo, npm, Go, Python, submodules)
 
 T329 §4b sources, in the card's order: Cargo `path`/`[patch]`/out-of-root workspace members, npm/pnpm/yarn `file:`/`link:`/`workspace:`, Go `replace` and `go.work`, Python path dependencies, `.gitmodules`. A pure function from a project root to a list of `(directory, reason)`, plus warnings for paths that do not exist. Import-resolver references are left to a later sub-id once T329.9 lands. Fixture repos only; no registry writes.
