@@ -237,6 +237,9 @@ section! {
         /// is the only criterion (D36, T330 "Old sessions: time only"). `--session-days` is
         /// the one-run override.
         stale_session_days: u32 = 30,
+        /// A worktree `rtok worktree gc` would remove is the `stale-worktrees` kind once it
+        /// has been idle this many days (gc's `--idle`, T330.5.3).
+        stale_worktree_days: u32 = 14,
         /// A crash dump in an `extra` crash folder older than this many days is `safe`; a
         /// younger one is `review`.
         crash_dump_min_age_days: u32 = 7,

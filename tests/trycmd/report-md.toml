@@ -52,6 +52,7 @@ Every effective key with its origin — the `config show --sources` page.
 | agents.junk.extra | [] | default |
 | agents.junk.keep_logs_days | 30 | default |
 | agents.junk.stale_session_days | 30 | default |
+| agents.junk.stale_worktree_days | 14 | default |
 | agents.junk.temp_min_age_hours | 24 | default |
 | agents.push_bytes | 1024 | default |
 | agents.usage.by | agent | default |
@@ -415,7 +416,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-369 keys.
+370 keys.
 
 ## Doctor
 

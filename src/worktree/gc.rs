@@ -6,7 +6,7 @@
 //! drop the records of worktrees whose directory is already gone. [`decide`] is pure;
 //! [`run`] applies one verdict at a time and never forces anything.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
@@ -123,15 +123,36 @@ pub struct Outcome {
     pub failed: bool,
 }
 
-pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome>> {
+impl Verdict {
+    /// The action `gc` takes and what it says about it before `--yes`.
+    pub fn plan(&self) -> (&'static str, String) {
+        match self {
+            Verdict::Remove => ("remove", "merged, clean and idle".into()),
+            Verdict::Reclaim(owner) => ("remove", format!("merged, clean, abandoned lock{owner}")),
+            Verdict::Finished(over) => ("remove", format!("finished task, idle, though {over}")),
+            Verdict::DropRecord => ("drop-record", "directory is gone".into()),
+            Verdict::Keep(why) => ("keep", why.clone()),
+        }
+    }
+}
+
+/// A worktree of the repository and the verdict `gc` reaches for it.
+pub struct Judged {
+    pub entry: Entry,
+    pub verdict: Verdict,
+}
+
+/// Every worktree of the repository `cwd` is in, judged by [`decide`], and the main
+/// checkout's path (where removals must run from, since `cwd` may be a worktree that goes).
+/// `agents junk` reads the same verdicts, so the two never disagree about what is removable.
+pub fn judge(cwd: &Path, policy: &Policy) -> anyhow::Result<(PathBuf, Vec<Judged>)> {
     let here = crate::fs::canon(cwd);
     let entries = inventory(cwd)?;
-    // Removing worktrees from inside one of them: git needs a directory that survives.
     let repo = entries
         .first()
-        .map_or(cwd, |main| main.record.path.as_path());
+        .map_or(cwd, |main| main.record.path.as_path())
+        .to_path_buf();
     // The walks are the expensive part: side by side, and stopped at the first recent file.
-    // Removals below stay one at a time — each takes the repository's locks.
     let verdicts = par_map(&entries, |_, entry| {
         let path = &entry.record.path;
         let current = path
@@ -140,19 +161,24 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
         let modified = |within| newest_until(path, |m| policy.age(m) < within);
         decide(entry, modified, current, policy)
     });
-    let outcomes = entries.iter().zip(verdicts).map(|(entry, verdict)| {
-        let path = &entry.record.path;
-        let (action, planned) = match &verdict {
-            Verdict::Remove => ("remove", "merged, clean and idle".into()),
-            Verdict::Reclaim(owner) => ("remove", format!("merged, clean, abandoned lock{owner}")),
-            Verdict::Finished(over) => ("remove", format!("finished task, idle, though {over}")),
-            Verdict::DropRecord => ("drop-record", "directory is gone".into()),
-            Verdict::Keep(why) => ("keep", why.clone()),
-        };
+    let judged = entries.into_iter().zip(verdicts);
+    Ok((
+        repo,
+        judged
+            .map(|(entry, verdict)| Judged { entry, verdict })
+            .collect(),
+    ))
+}
+
+pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome>> {
+    let (repo, judged) = judge(cwd, policy)?;
+    // Removals stay one at a time: each takes the repository's locks.
+    let outcomes = judged.iter().map(|Judged { entry, verdict }| {
+        let (action, planned) = verdict.plan();
         let done = (yes && action != "keep")
-            .then(|| super::remove::detach(repo, &entry.record, entry.merged));
+            .then(|| super::remove::detach(&repo, &entry.record, entry.merged));
         Outcome {
-            path: path.display().to_string(),
+            path: entry.record.path.display().to_string(),
             branch: entry.record.branch.clone(),
             action,
             failed: matches!(done, Some(Err(_))),
