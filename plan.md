@@ -62,7 +62,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
 | T335 | todo | research | 1 | 0% | |
-| T340 | todo | research | 1 | 0% | |
 | T341 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
@@ -920,7 +919,7 @@ Paths `clear` may delete (D36, `research.md` §22.2): a path `research.md` §22 
 
 #### Never touched
 
-Settings, credentials and tokens (never read for expiry, never deleted; D36), MCP and hook config, installed plugins and extensions, user-written files (rules, memories, prompts, skills), `rtok.db`, any archive a call still references, the user's main checkouts, package-manager lockfiles, and anything outside the paths listed per host. Session history and snapshots are touched only by an explicit `--kind sessions` run (see the `sessions` row). Symlinks are never followed out of an agent folder.
+Settings, credentials and tokens (never read for expiry, never deleted; D36), MCP and hook config, installed plugins and extensions, user-written files (rules, memories, prompts, skills), the `rtok.db` file and its `-wal`/`-shm` files (never deleted, moved or emptied; its rows change only through the store's retention, `Store::run_retention`, which `clear` already runs, and `Store::remove_project`; junk adds no row deletion of its own, T340), any archive a call still references, the user's main checkouts, package-manager lockfiles, and anything outside the paths listed per host. Session history and snapshots are touched only by an explicit `--kind sessions` run (see the `sessions` row). Symlinks are never followed out of an agent folder.
 
 #### Cache: rtok's own and each agent's
 
@@ -929,7 +928,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 **rtok's cache (row `rtok`):**
 
 - The per-project LSP state rtok confines language servers to (`<root>/.rtok-lsp-xdg/{cache,data,state,pub-cache}`, `src/plugins/graph/lsp.rs`): `cache` and `pub-cache` are `cache` kind (safe); `data` and `state` are `index` kind (review).
-- Graph/tags index rows and files for projects no longer in the registry (T329) or whose root is gone: `index` kind (review).
+- Graph/tags index rows: rows of a gone root are dropped by store retention (`Store::run_retention`) and rows of a removed project by `Store::remove_project`; junk shows nothing extra for them and deletes nothing else (T340).
 - Any other directory under rtok's home or `$XDG_CACHE_HOME/rtok` (`~/Library/Caches/rtok` on macOS, `%LOCALAPPDATA%\rtok\cache` on Windows) that rtok writes as a cache, and every directory under rtok-owned paths carrying a valid `CACHEDIR.TAG` (the same test `worktree::list::is_cache_dir` uses).
 - Plugin download/staging caches (version-numbered plugin copies a host no longer points to, T279): `cache` kind (safe) once no host config references them.
 
@@ -950,7 +949,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 
 | Kind | What | Class | Detection | Kept |
 | --- | --- | --- | --- | --- |
-| `sessions` | old sessions and their logs: transcripts (`*.jsonl`), per-session log files, per-session attachments, tool output dirs and per-session snapshots (for example Claude Code's `file-history/<session>/`) | explicit | only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it (T330.5 records the per-host verdict); never the host's memory, index or store files (Claude Code `projects/<project>/memory/`, Kimi `session_index.jsonl`, Copilot `session-store.db`, Codex state DB); rtok's own session rows and logs keyed by session id (T284, subject to T340) | anything touched within `stale_session_days` (default 30, creator 2026-10-03); never in a default or `--include review` run, only with `--kind sessions`; `list` shows the host's own retention next to rtok's (Claude Code `cleanupPeriodDays`, Gemini `general.sessionRetention`); see "Old sessions: time only" below |
+| `sessions` | old sessions and their logs: transcripts (`*.jsonl`), per-session log files, per-session attachments, tool output dirs and per-session snapshots (for example Claude Code's `file-history/<session>/`) | explicit | only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it (T330.5 records the per-host verdict); never the host's memory, index or store files (Claude Code `projects/<project>/memory/`, Kimi `session_index.jsonl`, Copilot `session-store.db`, Codex state DB); never rtok's own session and agent rows in `rtok.db` (T284; the logs keyed by session id age out with their calls through store retention, T340) | anything touched within `stale_session_days` (default 30, creator 2026-10-03); never in a default or `--include review` run, only with `--kind sessions`; `list` shows the host's own retention next to rtok's (Claude Code `cleanupPeriodDays`, Gemini `general.sessionRetention`); see "Old sessions: time only" below |
 | `stale-worktrees` | temporary worktrees an agent created and did not finish: rtok-tagged worktrees (T285) or host-created ones (T289) whose agent session ended, idle longer than `stale_worktree_days` (default 14) | review | `worktree::inventory` (T150) plus agent attribution | worktrees with uncommitted changes or unpushed commits are listed but **never** removed here; locked worktrees are never removed |
 | `crash-dumps` | dumps and tracebacks from crashed runs: `*.dmp`, `*.crash`, `*.ips` for the agent's binary, Crashpad/Breakpad `Crashpad/completed`, `pending` folders, panic logs, core files named for the agent | safe after 7 days, review before | §22 crash paths; macOS `~/Library/Logs/DiagnosticReports/<app>*`; Linux `$XDG_STATE_HOME`/app crash dirs (not system `/var/crash`, which needs root) | dumps newer than 7 days stay unless named with `--kind crash-dumps` |
 | `snapshots` | agent state snapshots not tied to one session: per-project checkpoint/undo stores and shadow git repos (Gemini `~/.gemini/history/<project_hash>`) | never | §22 snapshot paths per host; not scanned for hosts §22 marks "not documented" | always kept: size only, with the host's own restore command named; per-session snapshots go with their session (`sessions` row) |
@@ -1068,14 +1067,13 @@ Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rej
 
 Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. T330.5.4 was split from T330.5.1 later the same day. It closes when all four are done.
 
-### T330.5.3. Junk: `stale-worktrees` and `rtok.db` rows (blocked on T341 and T340)
+### T330.5.3. Junk: `stale-worktrees` (blocked on T341)
 
-Part of T330.5. Blocked: do not claim before the creator decides T341 and T340. `stale_worktree_days` (default 14), the `stale-worktrees` kind (review) and rtok's own rows (session rows and logs keyed by session id, T284; graph/tags index rows of projects no longer in the registry, T329).
+Part of T330.5. Blocked: do not claim before the creator decides T341. `stale_worktree_days` (default 14) and the `stale-worktrees` kind (review). T340 is decided (2026-10-09): no `rtok.db` rows in this task; the `rtok.db` part is already delivered by store retention and `remove_project`.
 
 Open questions for the creator:
 
 1. T341 (worktrees). (a) Does `agents junk clear` remove worktrees at all? The T330 "More junk kinds" table and its `stale-worktrees` edge case say yes, through `git worktree remove` with the branch kept; T330's own edge case "A worktree rtok created for an agent that still has unmerged commits" says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". (b) Blanket `git worktree prune` after removal (T330) or per record only (T153: a blanket prune drops the records of another session's worktrees on an unmounted volume)? (c) An orphaned worktree (main repo missing): delete its folder with `--include review` (T330) or report only (T153: "Orphans are reported, never removed"; `clean`/`gc` never delete a worktree directory themselves)? Options: A, junk removes only clean, finished worktrees with a per-record `git worktree remove`, no prune, orphans reported only; B, `stale-worktrees` is list-only in junk and points at `rtok worktree gc`; C, as T330 says, relaxing T153.
-2. T340 (`rtok.db`). T330 "Never touched" lists `rtok.db` (as T182 did), and T330.4's re-check refuses any path that is or holds it, yet the `sessions` row clears rtok's own session rows and logs (T284) and the `index` row clears graph/tags rows of removed projects (T329), both inside `rtok.db`. May junk delete those rows through the store's Diesel API, or do they stay out of T330 until T340 decides?
 
 Check: per the decisions above; `just check`.
 
@@ -1221,14 +1219,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-
-### T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
-
-In the plan, T330 "Never touched" (branch `docs/plan-agents-junk`, ~line 701, from PR #541 (T330), not merged yet) lists "`rtok.db`" (as T182 did: "It never touches `rtok.db`", done.md:6879). The same task clears "rtok's own session rows and logs keyed by session id (T284)" (`sessions` kind, ~line 730) and "Graph/tags index rows ... for projects no longer in the registry" (`index` kind, ~line 710); T182's result says the graph index "live[s] in the DB" (D18, line 695). These contradict each other because both row kinds live in `rtok.db`, so T330 cannot clear them without touching it.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
 
