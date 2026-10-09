@@ -40,7 +40,17 @@ fn main() -> ExitCode {
         return rtok(&args, None);
     };
     let mut stdin = Vec::new();
-    let _ = io::stdin().read_to_end(&mut stdin);
+    let cap = u64::from(rtok_hook::HOOK_MAX_INPUT_BYTES);
+    let _ = io::stdin().take(cap + 1).read_to_end(&mut stdin);
+    if stdin.len() as u64 > cap {
+        // Over the default cap: the resident would only refuse it, and `rtok hook` knows the
+        // configured cap. It gets the bytes already read, then the rest of the stream.
+        drop(stream);
+        return rtok(
+            &args,
+            Some(Box::new(io::Cursor::new(stdin).chain(io::stdin()))),
+        );
+    }
     let req = Request {
         version: env!("CARGO_PKG_VERSION").into(),
         fingerprint: rtok_hook::fingerprint(std::env::vars_os()),
@@ -61,7 +71,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(RecvTimeoutError::Timeout) => fail_open(),
-        _ => rtok(&args, Some(&req.stdin)),
+        _ => rtok(&args, Some(Box::new(io::Cursor::new(req.stdin)))),
     }
 }
 
@@ -86,8 +96,8 @@ fn rtok_exe() -> PathBuf {
 }
 
 /// `rtok hook <args>` with its exit code. `stdin` is the payload when this process already read
-/// it; otherwise `rtok` reads the host's stdin itself.
-fn rtok(args: &[OsString], stdin: Option<&[u8]>) -> ExitCode {
+/// some of it; otherwise `rtok` reads the host's stdin itself.
+fn rtok(args: &[OsString], stdin: Option<Box<dyn Read>>) -> ExitCode {
     let mut cmd = Command::new(rtok_exe());
     cmd.arg("hook").args(args);
     if stdin.is_some() {
@@ -96,8 +106,8 @@ fn rtok(args: &[OsString], stdin: Option<&[u8]>) -> ExitCode {
     let Ok(mut child) = cmd.spawn() else {
         return fail_open();
     };
-    if let (Some(bytes), Some(mut pipe)) = (stdin, child.stdin.take()) {
-        let _ = pipe.write_all(bytes);
+    if let (Some(mut bytes), Some(mut pipe)) = (stdin, child.stdin.take()) {
+        let _ = io::copy(&mut bytes, &mut pipe);
     }
     match child.wait().ok().and_then(|s| s.code()) {
         Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),

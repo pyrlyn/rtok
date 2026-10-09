@@ -6,11 +6,10 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 
 ## Cloud review findings (2026-10-08)
 
-New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457 and T458 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
+New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457, T458 and T459 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
 
 | ID | Priority | Kind | Status | Where | Fix |
 | --- | --- | --- | --- | --- | --- |
-| T459 | P2 | bug | confirmed | `src/bin/rtok-hook.rs:41-42` | The `rtok-hook` client reads all of stdin before `Request::encode()`; only the resident caps later (T201). Bound the read to `hook_max_input_bytes + 1`. |
 | T460 | P2 | bug | suspected | `src/plugins/read/hook.rs:154-164` | `same_path` compares case-sensitively (`a == b`, then `Path::ends_with`). Case-fold or canonicalize on Windows. |
 | T461 | P2 | bug | suspected | `src/hooks/resident.rs:105` (Windows) vs `:80` (Unix) | The Windows resident exits only when `hook.lock` vanishes; Unix also exits when the socket vanishes. Mirror the Unix condition. |
 | T462 | P2 | dead code | confirmed | `src/plugins/guard/mod.rs:464` | `guard::check_json` has no callers; the CLI uses `guard::check` (`src/cli.rs:2393`). Remove it. |
@@ -114,7 +113,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T459 | in progress | P2 | 2 | 0% | Claude Code / sonnet-5.5 |
 
 
 
@@ -1648,14 +1646,6 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
-
-### T459. Bound the `rtok-hook` client's stdin read to the resident's input cap
-
-Cloud review finding (`src/bin/rtok-hook.rs`): the client reads all of stdin with `read_to_end` before `Request::encode()`, so a multi-hundred-MB payload is allocated in full and then copied into the frame; only the resident caps it later (T201, `core.hook_max_input_bytes`). Done means the client never holds more than the cap plus one byte, and an oversized body still reaches `rtok hook` complete so its own cap decides (exit 0, `{}`, one stderr line).
-
-Plan: put the 8 MiB default in `rtok-hook` as `HOOK_MAX_INPUT_BYTES` (std-only crate both sides already link) and make `core.hook_max_input_bytes` default to it. The client reads `take(cap + 1)`; over the cap it skips the resident and runs `rtok hook`, writing the bytes already read and then the rest of stdin to its pipe. Files: `crates/rtok-hook/src/lib.rs`, `crates/rtok-config/src/lib.rs`, `src/bin/rtok-hook.rs`, a test in `tests/`.
-
-Check: a test feeding `cap + 1` bytes through the `rtok-hook` binary with a fake resident asserts the resident is never sent the body and `rtok hook` receives every byte; it fails on the unfixed client; `just check`.
 
 ## Reference
 
