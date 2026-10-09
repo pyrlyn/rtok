@@ -85,12 +85,18 @@ pub fn run(cfg: &Config, path: &Path, dry_run: bool) -> Result<Report> {
             r.malformed += 1;
             continue;
         };
-        let h = sha(&row.body);
+        let title = super::strip_private(&row.title);
+        let body = super::strip_private(&row.body);
+        if title.is_empty() || body.is_empty() {
+            r.skipped += 1;
+            continue;
+        }
+        let h = sha(&body);
         if !seen.insert(h) {
             r.skipped += 1;
             continue;
         }
-        let key = (row.project.clone(), row.kind.clone(), row.title.clone());
+        let key = (row.project.clone(), row.kind.clone(), title.clone());
         if !keys.insert(key) {
             r.skipped += 1;
             continue;
@@ -104,8 +110,8 @@ pub fn run(cfg: &Config, path: &Path, dry_run: bool) -> Result<Report> {
             .insert_portable_note_if_absent(crate::store::PortableNote {
                 project: row.project.as_deref(),
                 kind: &row.kind,
-                title: &row.title,
-                body: &row.body,
+                title: &title,
+                body: &body,
                 id: row.id,
                 ts: row.ts,
                 retired: row.retired,
@@ -255,6 +261,33 @@ mod tests {
         let rows = cx.store.list_notes(Some("p"), false).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].3, "from old export");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn private_tags_are_stripped_before_insert() {
+        let (c, dir) = cfg("strip-import");
+        let p = dir.join("n.jsonl");
+        fs::write(
+            &p,
+            "{\"kind\":\"note\",\"title\":\"topic\",\"body\":\"key <private>sk-test</private> ok\"}\n\
+             {\"kind\":\"note\",\"title\":\"   \",\"body\":\"kept\"}\n",
+        )
+        .unwrap();
+        let report = run(&c, &p, false).unwrap();
+        assert_eq!(
+            report,
+            Report {
+                inserted: 1,
+                skipped: 1,
+                malformed: 0
+            }
+        );
+        let cx = crate::plugin::Runtime::open(c, "verify").unwrap();
+        let rows = cx.store.list_notes(None, false).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].2, "topic");
+        assert_eq!(rows[0].3, "key [REDACTED] ok");
         let _ = fs::remove_dir_all(&dir);
     }
 }
