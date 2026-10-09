@@ -8661,6 +8661,19 @@ Updated: `plan.md` T329 §6a (heading, intro, "Mode 1", config default `tags`), 
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
 
+### T329.9. Graph backend `auto` (opt-in): LSP first, tree-sitter second, chosen per project and language
+
+T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, default `tags`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's behaviour (`tags` byte-identical, `lsp` = the T376 fallback to tags). Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 is decided: `tags` stays the default and `auto` is opt-in. Depends on T329.4.
+
+Check: under `backend = "auto"`, with the server on `PATH` the answer is tagged LSP, without it (MCP restarted) tree-sitter, a scope mixing both labels each project; the default `tags` answers stay byte-identical (`graph_contract.rs`); `backend = "lsp"` with no server falls back to tags with the `(tags; lsp: <reason>)` header; a crash mid-session falls back with a notice; `just check`.
+
+Done: `[plugins.graph]` gains `lsp_timeout_ms` (10000) and `backend_by_language` (a language name to a mode, values checked by `rtok config validate`), and `backend` accepts `auto`; `text` is left out of the accepted values, so `config validate` and `config set` refuse it until T329.10 ships it (the smaller honest option, no placeholder error path in the graph). `lsp.rs` has one table of project kinds (marker file, language name, server) behind `pick`, `language_of`, `has_server`, `usable` and the workspace walk, and its 40 s wait is the configured `lsp_timeout_ms`. In `graph/mod.rs`, `Mode` and `mode_of(cx, root)` (the language's override, else `backend`) replace `lsp_backend`, and the `lsp_or_tags` door takes the tool name: under `auto` a server answer is headed `(lsp)`, a language with no server goes straight to tags headed `(tags)`, and a server that is missing, slow or dead gives `(tags; lsp: <reason>)`; every `auto` tags answer records a `tags.<tool>` `Measurement` row beside the existing `lsp.*` and `lsp_fallback` rows. In `scope.rs`, `auto` over several projects with a server installed for some asks each project through its own door (parts labelled `[name]`, silent projects dropped); a scope where no server is installed keeps the linked tags traversal and prints one `[name] (tags)` line per project. `docs/lsp.md` and `docs/config.md` (en, ru, uk) describe the keys and the answer format; the config-init, config-show and report goldens follow.
+
+Deviations: the default LSP wait drops from 40 s to the epic's 10 s (`lsp_timeout_ms`), so `lsp` on a large cold project falls back to tags sooner. A mixed `auto` scope does not walk links through the tags index (a server sees its own workspace); the capability cache and the per-request probe record are T329.11. The `lsp_timeout_ms` wiring (a process-wide cell the door sets) has no test of its own, as any test of it would race the door tests that set the same cell. Tests use closures as the language-server seam, so none needs a server installed.
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
 In the plan, T329 §6b (branch `docs/plan-graph-projects`, ~lines 787-791, from PR #540 (T329), not merged yet) says later requests "do not re-probe the modes that failed", the cache "is kept until that process restarts" and "nothing else invalidates it". T329 §8d (~lines 917-923) says a background check every 60 s detects **unreachable** (SSH root stops answering) and **backend down**, and "when the project comes back, the alert clears automatically"; §8f (~line 943) scores "Backend alive" from the same record. These contradict each other because detecting an unreachable SSH host or a recovered backend requires probing again, which §6b forbids; under §6b a backend-down alert can never clear without a restart.

@@ -1231,7 +1231,15 @@ section! {
         body_lines: u32 = 40,
         auto_index: bool = true,
         auto_add_projects: bool = true,
+        /// T329.9: `tags` (default), `lsp` (language server, tags when it cannot answer) or `auto`
+        /// (server first, tags second, per project and language). `text` arrives with T329.10.
         backend: String = s("tags"),
+        /// T329.9: how long one language-server wait (an initializing or still-indexing server)
+        /// may take before the request falls back to tags.
+        lsp_timeout_ms: u32 = 10_000,
+        /// T329.9: `backend` for one language, keyed by language name (`go = "tags"`).
+        backend_by_language: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new(),
         watch: String = s("off"),
         /// T329.8: follow the references a project's manifests make to other directories on this
         /// machine, register them and link them into the graph scope.
@@ -2128,6 +2136,37 @@ bogus = true
     fn graph_backend_overlay_from_toml() {
         let cfg = parse("[plugins.graph]\nbackend = \"lsp\"\n").unwrap();
         assert_eq!(cfg.plugins.graph.backend, "lsp");
+    }
+
+    /// T329.9: `auto` and the per-language table parse, the timeout defaults to 10 s, and a
+    /// backend the graph cannot honour (`text`, until T329.10) is refused by validation.
+    #[test]
+    fn graph_auto_backend_keys() {
+        let g = Config::default().plugins.graph;
+        assert_eq!((g.lsp_timeout_ms, g.backend_by_language.len()), (10_000, 0));
+        let toml = "[plugins.graph]\nbackend = \"auto\"\nlsp_timeout_ms = 500\n\
+                    [plugins.graph.backend_by_language]\ngo = \"tags\"\n";
+        let cfg = parse(toml).unwrap();
+        assert_eq!(cfg.plugins.graph.backend, "auto");
+        assert_eq!(cfg.plugins.graph.lsp_timeout_ms, 500);
+        assert_eq!(cfg.plugins.graph.backend_by_language["go"], "tags");
+        let dir = std::env::temp_dir().join(format!("rtok-auto-keys-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("c.toml");
+        std::fs::write(&path, toml).unwrap();
+        assert!(validate::issues(&path).unwrap().is_empty());
+        for bad in [
+            "[plugins.graph]\nbackend = \"text\"\n",
+            "[plugins.graph.backend_by_language]\ngo = \"text\"\n",
+        ] {
+            std::fs::write(&path, bad).unwrap();
+            let errs = validate::issues(&path).unwrap();
+            assert!(
+                errs.iter().any(|e| e.contains("plugins.graph.backend")),
+                "{bad}: {errs:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

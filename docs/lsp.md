@@ -10,7 +10,7 @@ not consulted for that call. Each LSP answer records one `Measurement` row with
 
 Each of the five tools takes an optional `project` (id or directory). Without it a call answers for
 the working directory's project and the projects it links to; the language server answers one root,
-so with `backend = "lsp"` only the first project of that scope answers and the reply says so.
+so with `backend = "lsp"` only the first project of that scope answers and the reply says so. (`auto` asks every project, see below.)
 
 The server is picked from the workspace root — rtok never links or shells out to
 anything else (D6); it spawns one of these from `PATH`:
@@ -86,6 +86,27 @@ cargo test --test graph_lsp_gate
 
 All six tests pass when both servers are on `PATH`; the Dart and LSP tests
 skip otherwise.
+
+## Backend `auto`
+
+`backend = "auto"` (T329.9) is opt-in; the default stays `tags`. It chooses per project and language
+instead of once for the process. A project whose language has a server (the table above) is asked
+first and the answer is headed `(lsp)`. A language with no server gives the tags answer headed
+`(tags)`; a server that is missing, not ready, slower than `lsp_timeout_ms` (default 10000) or dead
+mid-session gives the tags answer headed `(tags; lsp: <reason>)`, so a crash is a notice, not an
+error. Every tags answer records a `tags.symbol | tags.callers | tags.impact | tags.outline |
+tags.explore` measurement row beside the `lsp.*` ones, so `rtok stats` shows how often each mode
+answered.
+
+In a scope of several projects where a server is installed for some, each project answers for
+itself and its part is labelled `[name]` and headed with its mode, so a Rust project can come from
+rust-analyzer and a Go project from tags in one reply. A linked project's callers are that project's
+own answer; the linked tags traversal runs only when no project of the scope has a server installed,
+and then each project's mode is one `[name] (tags)` line at the top.
+
+`[plugins.graph.backend_by_language]` pins one language, named by the project's marker file (`rust`,
+`c`, `typescript`, `dart`, `go`, `python`, `javascript`): `go = "tags"` keeps Go on the index while the
+rest use `auto`. `text` is not accepted until T329.10.
 
 ## Without the server
 

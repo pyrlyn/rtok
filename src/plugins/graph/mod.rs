@@ -214,8 +214,40 @@ pub(crate) fn with_stale(cx: &Ctx, root: &Path, text: String) -> Result<String> 
     }
 }
 
-fn lsp_backend(cx: &Ctx) -> bool {
-    cx.plugin_config::<crate::config::Graph>("graph").backend == "lsp"
+/// T329.9: how one project is answered. `Tags` is the default and never looks at a server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Mode {
+    Tags,
+    /// Server first, tags when it cannot answer (T376); the answer carries no mode header.
+    Lsp,
+    /// Per project and language: server first, tags second, and the answer says which spoke.
+    Auto,
+}
+
+/// The mode of the project at `root`: its language's `backend_by_language` entry, else `backend`.
+/// A value the config schema refuses (`text` until T329.10) reads as `Tags`, the safe answer.
+pub(crate) fn mode_of(cx: &Ctx, root: &Path) -> Mode {
+    let cfg = cx.plugin_config::<crate::config::Graph>("graph");
+    // Only a config with overrides pays for the language lookup, so the default path stays stat-free.
+    let named = (!cfg.backend_by_language.is_empty())
+        .then(|| lsp::language_of(root))
+        .flatten()
+        .and_then(|lang| cfg.backend_by_language.get(lang))
+        .unwrap_or(&cfg.backend);
+    match named.as_str() {
+        "lsp" => Mode::Lsp,
+        "auto" => Mode::Auto,
+        _ => Mode::Tags,
+    }
+}
+
+/// The text after the line that names the mode (`(lsp)`, `(tags)`, `(tags; lsp: <reason>)`).
+pub(crate) fn without_mode_line(text: &str) -> &str {
+    if text.starts_with("(lsp)\n") || text.starts_with("(tags") {
+        text.split_once('\n').map_or(text, |(_, rest)| rest)
+    } else {
+        text
+    }
 }
 
 /// What an LSP answer prints when the server found nothing; the answer is then checked
@@ -233,28 +265,71 @@ fn lsp_none_answer(text: &str) -> bool {
         .any(|p| text.starts_with(p))
 }
 
-/// T376: the one door the five tools take. `backend = "lsp"` tries the language server; a
-/// server that is missing, not ready or dead (`Err`), or one that answers "nothing" for a
+/// Not a saving, so before == after, as in `lsp::finish`: `before_bytes` is the milliseconds
+/// spent. Fail open: a lost statistic must not turn a good answer into an error.
+fn record_mode_row(cx: &Ctx, kind: &'static str, t0: std::time::Instant, out: &str) {
+    let est = cx.estimate(out, Class::Code);
+    let _ = cx.record(&Measurement {
+        plugin: "graph",
+        kind,
+        before_bytes: t0.elapsed().as_millis() as u64,
+        after_bytes: out.len() as u64,
+        est_before: est,
+        est_after: est,
+        ref_id: None,
+        call_id: cx.call_id(),
+    });
+}
+
+fn tags_kind(tool: &str) -> &'static str {
+    match tool {
+        "symbol" => "tags.symbol",
+        "callers" => "tags.callers",
+        "outline" => "tags.outline",
+        "explore" => "tags.explore",
+        _ => "tags.impact",
+    }
+}
+
+/// T376, T329.9: the one door the five tools take. `Lsp` and `Auto` try the language server;
+/// a server that is missing, not ready or dead (`Err`), or one that answers "nothing" for a
 /// name the tags index knows, gives the tags answer headed `(tags; lsp: <reason>)`, so the
-/// caller sees which backend spoke and why. `names` are the identifiers the tags index is
-/// asked about; empty means any empty LSP answer falls back. No retry: a dead server is
-/// restarted by `lsp::with_session` on the next call, not here.
+/// caller sees which backend spoke and why. `Auto` also heads an LSP answer `(lsp)`, goes
+/// straight to tags (`(tags)`) for a language with no server, and records a `tags.<tool>`
+/// row for every tags answer. `names` are the identifiers the tags index is asked about;
+/// empty means any empty LSP answer falls back. No retry: a dead server is restarted by
+/// `lsp::with_session` on the next call, not here.
 fn lsp_or_tags(
     cx: &Ctx,
     root: &Path,
+    tool: &'static str,
     names: &[&str],
     lsp: impl FnOnce() -> Result<String>,
     tags: impl FnOnce() -> Result<String>,
 ) -> Result<String> {
-    if !lsp_backend(cx) {
+    let mode = mode_of(cx, root);
+    if mode == Mode::Tags {
         return tags();
     }
+    let auto = mode == Mode::Auto;
     let t0 = std::time::Instant::now();
-    let reason = match lsp() {
-        Ok(text) if !lsp_none_answer(&text) => return Ok(text),
+    lsp::set_timeout_ms(u64::from(
+        cx.plugin_config::<crate::config::Graph>("graph")
+            .lsp_timeout_ms,
+    ));
+    if auto && !lsp::has_server(root) {
+        let out = format!("(tags)\n{}", tags()?);
+        record_mode_row(cx, tags_kind(tool), t0, &out);
+        return Ok(out);
+    }
+    let said = |text: String| {
+        if auto { format!("(lsp)\n{text}") } else { text }
+    };
+    let reason: String = match lsp() {
+        Ok(text) if !lsp_none_answer(&text) => return Ok(said(text)),
         Ok(text) => {
             if !names.is_empty() && !tags_know(cx, root, names)? {
-                return Ok(text);
+                return Ok(said(text));
             }
             "empty answer".to_string()
         }
@@ -266,20 +341,16 @@ fn lsp_or_tags(
             .take(120)
             .collect(),
     };
-    let out = format!("(tags; lsp: {reason})\n{}", tags()?);
-    // Fail open: a lost statistic must not turn a good tags answer into an error.
-    // Not a saving, so before == after, as in `lsp::finish`: before_bytes is the time lost.
-    let est = cx.estimate(&out, Class::Code);
-    let _ = cx.record(&Measurement {
-        plugin: "graph",
-        kind: "lsp_fallback",
-        before_bytes: t0.elapsed().as_millis() as u64,
-        after_bytes: out.len() as u64,
-        est_before: est,
-        est_after: est,
-        ref_id: None,
-        call_id: cx.call_id(),
-    });
+    // Every server error already starts with "lsp: "; the header says it once under `auto`.
+    let shown = match (auto, reason.strip_prefix("lsp: ")) {
+        (true, Some(rest)) => rest,
+        _ => &reason,
+    };
+    let out = format!("(tags; lsp: {shown})\n{}", tags()?);
+    record_mode_row(cx, "lsp_fallback", t0, &out);
+    if auto {
+        record_mode_row(cx, tags_kind(tool), t0, &out);
+    }
     Ok(out)
 }
 
@@ -446,6 +517,7 @@ pub fn symbol_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Re
     lsp_or_tags(
         cx,
         root,
+        "symbol",
         &[name],
         || lsp::symbol(cx, root, name, filter),
         || symbol_tags(cx, root, name, filter),
@@ -739,6 +811,7 @@ pub fn callers_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> R
     lsp_or_tags(
         cx,
         root,
+        "callers",
         &[name],
         || lsp::callers(cx, root, name, filter),
         || callers_tags(cx, root, name, filter),
@@ -807,6 +880,7 @@ pub fn impact_filtered(
     lsp_or_tags(
         cx,
         root,
+        "impact",
         &[name],
         || with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?),
         || impact_tags(cx, root, name, depth, filter, to),
@@ -1475,7 +1549,7 @@ pub fn outline(cx: &Ctx, path: &str) -> Result<String> {
 fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
     // The path guard runs outside the wrapper: a refused path is an error to report, not
     // a server failure to paper over with the tags answer.
-    let abs = if lsp_backend(cx) {
+    let abs = if mode_of(cx, root) != Mode::Tags {
         let allow = &cx.plugin_config::<crate::config::Read>("read").allow_paths;
         Some(crate::plugins::read::resolve(root, Path::new(path), allow)?)
     } else {
@@ -1484,6 +1558,7 @@ fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
     lsp_or_tags(
         cx,
         root,
+        "outline",
         &[],
         || {
             let abs = abs.as_deref().unwrap_or(Path::new(path));
@@ -1623,6 +1698,7 @@ pub fn explore(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<St
     lsp_or_tags(
         cx,
         root,
+        "explore",
         &names,
         || lsp::explore(cx, root, query, filter),
         || explore_tags(cx, root, query, filter),
@@ -2536,6 +2612,7 @@ mod tests {
         let known = lsp_or_tags(
             &ctx,
             &dir,
+            "symbol",
             &["alpha"],
             || Ok("no definition of alpha".into()),
             tags,
@@ -2545,6 +2622,7 @@ mod tests {
         let unknown = lsp_or_tags(
             &ctx,
             &dir,
+            "symbol",
             &["zzz"],
             || Ok("no definition of zzz".into()),
             tags,
@@ -2554,6 +2632,7 @@ mod tests {
         let real = lsp_or_tags(
             &ctx,
             &dir,
+            "symbol",
             &["alpha"],
             || Ok("a.rs:1 function".into()),
             tags,
@@ -2561,11 +2640,140 @@ mod tests {
         .unwrap();
         assert_eq!(real, "a.rs:1 function");
         let (plain, dir2) = crate::testutil::runtime("t376-plain");
-        let out =
-            lsp_or_tags(&Ctx::new(&plain), &dir2, &["alpha"], || panic!("lsp"), tags).unwrap();
+        let out = lsp_or_tags(
+            &Ctx::new(&plain),
+            &dir2,
+            "symbol",
+            &["alpha"],
+            || panic!("lsp"),
+            tags,
+        )
+        .unwrap();
         assert_eq!(out, "tags answer");
         let _ = fs::remove_dir_all(dir);
         let _ = fs::remove_dir_all(dir2);
+    }
+
+    fn auto_runtime(tag: &str, by_language: &[(&str, &str)]) -> (crate::plugin::Runtime, PathBuf) {
+        let (mut c, dir) = crate::testutil::config(tag);
+        c.plugins.graph.backend = "auto".into();
+        for (lang, mode) in by_language {
+            c.plugins
+                .graph
+                .backend_by_language
+                .insert((*lang).into(), (*mode).into());
+        }
+        (crate::plugin::Runtime::open(c, tag).unwrap(), dir)
+    }
+
+    fn kinds(cx: &crate::plugin::Runtime) -> Vec<String> {
+        let mut kinds: Vec<String> = cx
+            .store
+            .list_measurements("graph")
+            .unwrap()
+            .into_iter()
+            .map(|r| r.kind)
+            .collect();
+        kinds.sort();
+        kinds
+    }
+
+    /// T329.9: a language with no server goes straight to tags, a server answer is headed
+    /// `(lsp)`, and a server that is missing or died mid-session gives the tags answer with the
+    /// reason. The fake closures stand in for the server, so none needs to be installed.
+    #[test]
+    fn auto_says_which_mode_answered_and_why_tags_did() {
+        let (cx, dir) = auto_runtime("t3299-auto", &[]);
+        let ctx = Ctx::new(&cx);
+        let tags = || Ok("tags answer".to_string());
+        let ask = |lsp: Result<String>| lsp_or_tags(&ctx, &dir, "symbol", &["alpha"], || lsp, tags);
+        // No marker file: nothing to ask, and the server closure is never run.
+        let none = lsp_or_tags(&ctx, &dir, "symbol", &["alpha"], || panic!("lsp"), tags);
+        assert_eq!(none.unwrap(), "(tags)\ntags answer");
+        fs::write(dir.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        assert_eq!(
+            ask(Ok("a.rs:1 function".into())).unwrap(),
+            "(lsp)\na.rs:1 function"
+        );
+        assert_eq!(
+            ask(Err(anyhow::anyhow!("lsp: rust-analyzer not on PATH"))).unwrap(),
+            "(tags; lsp: rust-analyzer not on PATH)\ntags answer"
+        );
+        // A crash while a request is open: the notice names how the server ended.
+        let died = ask(Err(anyhow::anyhow!("lsp: eof; exited signal: 9"))).unwrap();
+        assert_eq!(died, "(tags; lsp: eof; exited signal: 9)\ntags answer");
+        assert_eq!(
+            kinds(&cx),
+            [
+                "lsp_fallback",
+                "lsp_fallback",
+                "tags.symbol",
+                "tags.symbol",
+                "tags.symbol"
+            ]
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.9: `backend_by_language` wins over `backend`, in both directions, and `lsp` keeps the
+    /// T376 shape: no header on a server answer.
+    #[test]
+    fn a_language_override_picks_the_mode_of_its_projects() {
+        let (cx, dir) = auto_runtime("t3299-by-lang", &[("rust", "tags")]);
+        let ctx = Ctx::new(&cx);
+        fs::write(dir.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        assert_eq!(mode_of(&ctx, &dir), Mode::Tags);
+        let out = lsp_or_tags(
+            &ctx,
+            &dir,
+            "symbol",
+            &[],
+            || panic!("lsp"),
+            || Ok("tags answer".into()),
+        );
+        assert_eq!(out.unwrap(), "tags answer");
+        assert!(kinds(&cx).is_empty());
+        for (by, want) in [("lsp", Mode::Lsp), ("auto", Mode::Auto)] {
+            let (cx, dir) = auto_runtime("t3299-by-lang-2", &[("rust", by)]);
+            fs::write(dir.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+            assert_eq!(mode_of(&Ctx::new(&cx), &dir), want);
+            let _ = fs::remove_dir_all(dir);
+        }
+        let (mut c, dir2) = crate::testutil::config("t3299-lsp-plain");
+        c.plugins.graph.backend = "lsp".into();
+        let cx = crate::plugin::Runtime::open(c, "t3299-lsp-plain").unwrap();
+        let ok = lsp_or_tags(
+            &Ctx::new(&cx),
+            &dir2,
+            "symbol",
+            &[],
+            || Ok("a.rs:1 function".into()),
+            || panic!("tags"),
+        );
+        assert_eq!(ok.unwrap(), "a.rs:1 function");
+        let _ = fs::remove_dir_all(dir);
+        let _ = fs::remove_dir_all(dir2);
+    }
+
+    /// The language name comes from the marker file; a value the schema refuses reads as tags.
+    #[test]
+    fn mode_of_reads_the_language_and_distrusts_unknown_values() {
+        let (cx, dir) = auto_runtime("t3299-mode", &[("go", "tags"), ("rust", "text")]);
+        let ctx = Ctx::new(&cx);
+        assert_eq!(mode_of(&ctx, &dir), Mode::Auto);
+        fs::write(dir.join("go.mod"), "module x\n").unwrap();
+        assert_eq!(lsp::language_of(&dir), Some("go"));
+        assert_eq!(mode_of(&ctx, &dir), Mode::Tags);
+        fs::write(dir.join("Cargo.toml"), "").unwrap();
+        assert_eq!(lsp::language_of(&dir), Some("rust"));
+        assert_eq!(mode_of(&ctx, &dir), Mode::Tags);
+        assert_eq!(without_mode_line("(tags; lsp: x)\nbody\n"), "body\n");
+        assert_eq!(without_mode_line("(lsp)\nbody"), "body");
+        assert_eq!(
+            without_mode_line("(not a mode line)\n"),
+            "(not a mode line)\n"
+        );
+        let _ = fs::remove_dir_all(dir);
     }
 
     // ---------- T68.1: explore ----------
