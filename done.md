@@ -1,5 +1,17 @@
 # rtok — completed tasks
 
+### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
+
+`strip_wrap` only removed `rtok run -- `, so a sub-agent rewrite (`rtok run --agent <id> -- '…'`) still had stem `rtok`. `cache_key` was `None`, and PostToolUse treated that read-only command as a mutation and cleared every `bash` and `read` guard key.
+
+`strip_run_wrap` also drops `rtok run --agent <id> -- ` when `<id>` is 1–64 bytes of ASCII alnum, `_` or `-` (the token `cmd` embeds). A lookalike is left intact. A writer behind the same wrap still clears.
+
+Check: `agent_wrap_matches_the_inner_command_and_keeps_other_keys` and the `--agent` asserts in `bash_key_keeps_every_absolute_cd_hop_and_the_cwd`; `just check`.
+
+Result: `just check` against `61d491aa`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 506 passed.
+Status: done 2026-10-09
+Model: Cursor / grok 4.7
+
 ### T474. Symbol byte spans, a recoverable cut body, and id lookup
 
 Merged as T454 (pyrlyn/rtok#898); renumbered to T474 because #888, opened earlier, also took T454.
@@ -9339,6 +9351,23 @@ Plan:
 Check: `cargo nextest run -E 'test(/worktree::gc::/) | binary(worktree)'`, `TRYCMD=overwrite` for `cli_trycmd` and `completions`, and `just check`; a dry-run `rtok worktree gc --idle 1h` on the live repository.
 
 Result (2026-10-08, Claude Code / claude-opus-5-5): `Entry::done` marks a merged, clean worktree whose branch has commits outside the base. `remove` opens a foreign or unknown lock on it and says so in the note; `gc` removes it past a live agent or a foreign lock once idle past `--idle` (`Verdict::Finished`), and keeps the old reason inside the window. A fresh branch under a foreign lock is still refused. On the live repository, `gc --idle 1h` now plans to remove 7 of the orchestrator's 8 merged worktrees (the eighth was touched within the hour) and keeps every open PR's. Not fixed here: the desktop app leaves `RTOK_AGENT_ID` unset and MCP unlinked, so an agent still cannot name itself.
+
+### T473. Agent identity in Claude desktop sessions through `CLAUDE_CODE_SESSION_ID`
+
+Desktop-app (Code tab) sessions often have no rtok agent identity: `~/.claude/session-env/<session>/` stays empty, so `RTOK_AGENT_ID` is unset in the agent's Bash tool, and MCP `whoami`/`worktree_*` answer "not linked to an agent session". `rtok worktree remove`, `agents whoami/status/inbox` from an agent's shell cannot name the caller. T453 only works around it for finished worktrees.
+
+Finding (2026-10-08, the creator's own store and `~/.claude/session-env`): across 28 recent desktop sessions the env file exists exactly when rtok recorded a `SessionStart` call for that session, and in most of those (16 of 19 checked) the first `SessionStart` came hours after the session's first hook (resume/compact). The plugin's `SessionStart` (and often the first `UserPromptSubmit`) never reaches rtok at desktop startup, while a user-settings `SessionStart` hook of the same session does run. `CLAUDE_ENV_FILE` is fine; the startup event is what is missing. Claude Code documents `CLAUDE_CODE_SESSION_ID` (https://code.claude.com/docs/en/env-vars, checked 2026-10-08) in Bash/PowerShell tool, hook and stdio MCP subprocesses, equal to the hooks' `session_id`; an MCP server keeps the id it was spawned with.
+
+Plan:
+1. `src/store/agents.rs`: `Store::main_agent(host_id, host_session)` (the lookup `register_agent` already does for a sub-agent's parent, shared).
+2. `src/agents/link.rs`: `SESSION_ENV` gains `claude` → `CLAUDE_CODE_SESSION_ID`, lookup-only (an MCP's spawn id can be stale after `/clear` or `--continue`, so it never registers a row; no row yet → the old rules run, nothing cached). New `shell_agent(store, env)`: `RTOK_AGENT_ID`, else the main agent of the host session named by a `SESSION_ENV` var.
+3. `src/cli.rs` (`agents whoami/status`, `caller_agent`) and `src/worktree/claim.rs::caller` read the caller through `shell_agent`.
+4. Tests: link rules (claude env links an existing row, does not register, falls through), `shell_agent`, a CLI test (`agents whoami` with only `CLAUDE_CODE_SESSION_ID`); trycmd strips the var.
+5. `research.md` §26: the Claude row and the desktop finding.
+
+Check: `just check`; built binary from this session's own shell: `rtok agents whoami` and MCP `whoami` name this session's agent with no `RTOK_AGENT_ID`.
+
+Result: `CLAUDE_CODE_SESSION_ID` names the caller in `rtok agents whoami/status/send/inbox` and `rtok worktree …` when `RTOK_AGENT_ID` is unset, and links `rtok mcp` to the session's existing agent row (lookup only, never registers). `research.md` §26 records the finding and sources; `docs/agents-and-worktrees.md` (+ ru/uk) says where the id comes from.
 
 ### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
 

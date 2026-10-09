@@ -2080,9 +2080,7 @@ pub fn run() -> Result<()> {
             AgentCmd::Whoami { json } => {
                 let cfg = Config::load_with(config_file.as_deref(), None)?;
                 let store = crate::store::Store::open(&cfg.core.db_path)?;
-                let detail = std::env::var("RTOK_AGENT_ID")
-                    .ok()
-                    .filter(|s| !s.is_empty())
+                let detail = crate::agents::link::shell_agent(Some(&store), env_var)
                     .and_then(|raw| store.resolve_agent(&raw).ok())
                     .and_then(|id| store.agent_detail(&id).ok().flatten());
                 let Some(detail) = detail else {
@@ -2106,7 +2104,8 @@ pub fn run() -> Result<()> {
             }
             AgentCmd::Status { text } => {
                 let cfg = Config::load_with(config_file.as_deref(), None)?;
-                let me = std::env::var("RTOK_AGENT_ID").ok();
+                let store = crate::store::Store::open(&cfg.core.db_path).ok();
+                let me = crate::agents::link::shell_agent(store.as_ref(), env_var);
                 match model::set_status(&cfg, me.as_deref(), &text)? {
                     Some(text) => println!("status: {text}"),
                     None => println!("status cleared"),
@@ -3074,13 +3073,16 @@ fn report_flags(
     Some(flags)
 }
 
-/// T287: the caller's own rtok agent id — `RTOK_AGENT_ID` resolved, `None` when unset (the
-/// user at a terminal). A set but unresolvable id is an error, never a silent "user".
+/// The process environment, as [`crate::agents::link::shell_agent`] reads it.
+fn env_var(k: &str) -> Option<String> {
+    std::env::var(k).ok()
+}
+
+/// T287: the caller's own rtok agent id — `RTOK_AGENT_ID` resolved, else (T473) the host
+/// session's agent, `None` when neither names one (the user at a terminal). A set but
+/// unresolvable `RTOK_AGENT_ID` is an error, never a silent "user".
 fn caller_agent(store: &crate::store::Store) -> Result<Option<String>> {
-    match std::env::var("RTOK_AGENT_ID")
-        .ok()
-        .filter(|s| !s.is_empty())
-    {
+    match crate::agents::link::shell_agent(Some(store), env_var) {
         None => Ok(None),
         Some(raw) => store
             .resolve_agent(&raw)
