@@ -16,6 +16,9 @@ pub mod cmd;
 #[cfg(feature = "read")]
 pub mod read;
 
+#[cfg(feature = "json_tree")]
+pub mod json_tree;
+
 #[cfg(feature = "archive")]
 pub mod archive;
 
@@ -60,6 +63,8 @@ pub fn all() -> Vec<Box<dyn Plugin>> {
     v.push(Box::new(cmd::Cmd));
     #[cfg(feature = "read")]
     v.push(Box::new(read::Read));
+    #[cfg(feature = "json_tree")]
+    v.push(Box::new(json_tree::JsonTree));
     #[cfg(feature = "archive")]
     v.push(Box::new(archive::Archive));
     #[cfg(feature = "proxy")]
@@ -193,7 +198,7 @@ mod tests {
         let on: Vec<&str> = reg.enabled().map(|p| p.manifest().id).collect();
         assert!(!on.contains(&"cmd"));
         assert!(on.contains(&"toon"));
-        assert!(reg.table().contains("cmd      off"));
+        assert!(reg.table().contains("cmd       off"));
     }
 
     /// The external-plugin path: a plugin that is not in the catalogue, registered by hand.

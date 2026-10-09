@@ -5,7 +5,7 @@ four servers with 130+ tool descriptions in every request.
 
 | | |
 |---|---|
-| Surfaces | MCP `symbol(name, path?, kind?)`, `callers(name, path?)`, `impact(name?, depth?, path?)`, `outline(path)`, `explore(query, path?)` (T68.1); CLI `rtok graph affected [--since|--staged] [--json]` (T68.5) |
+| Surfaces | MCP `symbol(name, path?, kind?)`, `callers(name, path?)`, `impact(name?, depth?, path?)`, `outline(path)`, `explore(query, path?)` (T68.1); CLI `rtok graph affected [--since|--staged] [--json]` (T68.5); CLI `rtok graph review [--since|--staged] [--json]` (T454) |
 | Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
 | Default | on |
 
@@ -57,4 +57,5 @@ description tokens and index time. Gate P8b is open: it needs the P9 task-set co
 its recall clause was amended after T8.8 measured the index (`plan.md` §6). T68.1 added
 `explore` 2026-09-18; the surface is five tools / 127 description tokens (measured,
 `cargo nextest run -p rtok graph_surface`), still ≤ 150. T68.5 added `rtok graph affected`
-and `impact(path)` with no `name` (same walk, no Measurement on print).
+and `impact(path)` with no `name` (same walk, no Measurement on print). T454 added
+`rtok graph review`: a risk-ranked reading list for a git diff, CLI only, same five MCP tools.

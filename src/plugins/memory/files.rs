@@ -62,6 +62,35 @@ fn clean(token: &str) -> &str {
     }
 }
 
+/// Root-relative paths among `raw` that exist as files under the project. A path outside
+/// the root, or one that climbs, is dropped.
+pub(super) fn existing_rels(cx: &Ctx, raw: &[String]) -> Vec<String> {
+    let Some(root) = project_root(cx.cwd()) else {
+        return Vec::new();
+    };
+    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let mut out = Vec::new();
+    for r in raw {
+        if let Some(rel) = relative(&root, &canon, r)
+            && root.join(&rel).is_file()
+            && !out.contains(&rel)
+        {
+            out.push(rel);
+        }
+    }
+    out.truncate(MAX_FILES);
+    out
+}
+
+/// Files the prompt names that exist under the project, root-relative.
+pub(super) fn prompt_paths(cx: &Ctx, prompt: &str) -> Vec<String> {
+    let Some(root) = project_root(cx.cwd()) else {
+        return Vec::new();
+    };
+    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    mentioned(&root, &canon, prompt)
+}
+
 /// Existing files under `root` that `text` names, in order of first mention.
 fn mentioned(root: &Path, canon: &Path, text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();

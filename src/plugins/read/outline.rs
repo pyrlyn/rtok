@@ -22,6 +22,10 @@ pub struct TagHit {
     /// Last line of the tagged node, from the tag's byte range (T8.5). A reference spans
     /// one line, so `end_line == line`; a definition covers its whole body.
     pub end_line: usize,
+    /// First byte of the tagged node (`tag.range.start`).
+    pub start_byte: usize,
+    /// One past the last byte of the tagged node (`tag.range.end`).
+    pub end_byte: usize,
     pub is_def: bool,
     pub line_text: String,
     /// Full import specifier when `kind == "import"` (T368). `name` stays the last segment.
@@ -108,6 +112,8 @@ pub fn tags_with_extensions(
         let kind = cfg.syntax_type_name(tag.syntax_type_id).to_string();
         let line = tag.span.start.row + 1;
         let end_line = line_of(tag.range.end.saturating_sub(1));
+        let start_byte = tag.range.start;
+        let end_byte = tag.range.end;
         let is_def = tag.is_definition;
         let items = if kind == "import" {
             expand_import(name)
@@ -120,6 +126,8 @@ pub fn tags_with_extensions(
                 name: item,
                 line,
                 end_line,
+                start_byte,
+                end_byte,
                 is_def,
                 line_text: line_text.clone(),
                 import_path,
@@ -869,5 +877,20 @@ mod tests {
             imports.contains(&("Qux".into(), "crate::foo::baz::Qux".into())),
             "{imports:?}"
         );
+    }
+
+    /// T474: the tag keeps the node's byte range, so a later read can seek to it.
+    #[test]
+    fn tag_hit_keeps_the_byte_range() {
+        let src = "fn keep() {\n    1\n}\n";
+        let hits = tags(Path::new("a.rs"), src).unwrap();
+        let def = hits
+            .iter()
+            .find(|h| h.is_def && h.name == "keep")
+            .expect("keep");
+        assert!(def.end_byte > def.start_byte);
+        let slice = &src[def.start_byte..def.end_byte];
+        assert!(slice.starts_with("fn keep"), "{slice}");
+        assert!(slice.contains('1'), "{slice}");
     }
 }

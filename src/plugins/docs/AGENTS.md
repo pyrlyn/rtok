@@ -1,6 +1,6 @@
 # Agent notes — `docs`
 
-**Owns** `src/plugins/docs/**`, `src/store/docs.rs`, migration `0034_docs_fts`.
+**Owns** `src/plugins/docs/**`, `src/store/docs.rs`, migration `0039_docs_fts`.
 
 **Contract**: import `rtok_plugin_sdk::…`, not `crate::plugin`.
 

@@ -24,9 +24,9 @@ use crate::tokens;
 
 pub use rtok_plugin_sdk::{
     Archive, ArchiveDecision, ArchiveHit, Capabilities, Class, Ctx, DashboardPage, Host, Injection,
-    Ledger, Manifest, Measurement, NoteHit, Notes, Plugin, PostToolUse, PreCompact,
-    PreToolDecision, PreToolUse, PromptSubmit, ReadCache, SessionStart, SubagentStart, Surface,
-    Symbols, ToolDef, ToolResultRef, ToolResults, WireRequest,
+    Ledger, Manifest, Measurement, NewObservation, NoteHit, Notes, ObsHit, Plugin, PostToolUse,
+    PreCompact, PreToolDecision, PreToolUse, PromptSubmit, ReadCache, SessionStart, SubagentStart,
+    Surface, Symbols, ToolDef, ToolResultRef, ToolResults, WireRequest,
 };
 
 /// The longest prefix of `text` that estimates to at most `budget` tokens.
@@ -496,6 +496,11 @@ impl Notes for Runtime {
         self.store.search_notes(query, limit)
     }
 
+    fn search_notes_hybrid_stored(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        self.store
+            .search_notes_hybrid_stored(query, limit, &self.config.plugins.memory.embed)
+    }
+
     fn set_note_files(&self, id: i32, paths: &[String]) -> Result<()> {
         self.store.set_note_files(id, paths)
     }
@@ -507,6 +512,40 @@ impl Notes for Runtime {
         limit: u32,
     ) -> Result<Vec<NoteHit>> {
         self.store.notes_for_files(project, paths, limit)
+    }
+
+    fn touch_note(&self, id: i32) -> Result<()> {
+        self.store.touch_note(id)
+    }
+
+    fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
+        self.store.insert_observation(obs)
+    }
+
+    fn search_observations(
+        &self,
+        project: Option<&str>,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<ObsHit>> {
+        self.store.search_observations(project, query, limit)
+    }
+
+    fn observations_for_files(
+        &self,
+        project: Option<&str>,
+        paths: &[String],
+        limit: u32,
+    ) -> Result<Vec<ObsHit>> {
+        self.store.observations_for_files(project, paths, limit)
+    }
+
+    fn recent_observations(&self, session_id: &str, limit: u32) -> Result<Vec<ObsHit>> {
+        self.store.recent_observations(session_id, limit)
+    }
+
+    fn observation_narrative(&self, id: i32) -> Result<Option<String>> {
+        self.store.observation_narrative(id)
     }
 }
 
@@ -574,7 +613,7 @@ impl Symbols for Runtime {
         path: &str,
         file_sha: &str,
         stat: (i64, i64),
-        rows: &[(String, String, i32, bool, i32, String)],
+        rows: &[rtok_plugin_sdk::SymbolRow],
     ) -> Result<usize> {
         self.store.replace_symbols(root, path, file_sha, stat, rows)
     }
@@ -698,6 +737,26 @@ impl Symbols for Runtime {
 
     fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
         self.store.file_rank_put(root, graph)
+    }
+
+    fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<rtok_plugin_sdk::SymbolSpan>> {
+        self.store.symbol_span(root, path, name, kind, line)
+    }
+
+    fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, String, String, i32)>> {
+        self.store.symbol_fts(root, query, limit)
     }
 }
 

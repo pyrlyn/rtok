@@ -490,6 +490,9 @@ tree_depth       = 2
 delta            = true               # T58.1: змінене повторне читання → unified diff щодо останнього архіву (7.3 % байтів Read, 2026-09-18, `rtok stats --since 90d`)
 delta_max_ratio  = 0.6                # повний файл, коли diff не менший за цю частку
 
+[plugins.json_tree]
+enabled = false                     # fold repeated nested JSON in old tool results; off until a measurement shows a saving
+
 [plugins.archive]
 enabled    = true
 keep_turns = 4                        # ніколи не торкатися останніх N ходів
@@ -535,7 +538,7 @@ enabled    = false                    # P29: якщо false — лише FTS5; �
 provider   = "local"                  # "local" | "openai"
 model      = "all-MiniLM-L6-v2"
 dimensions = 384
-hybrid     = true                     # коли ввімкнено: RRF(fts5, knn); false = лише knn
+hybrid     = true                     # коли ввімкнено: RRF(fts5, knn) для mem_search і prompt_recall; хук читає лише збережені вектори; false = лише knn
 
 [plugins.graph]
 enabled    = true

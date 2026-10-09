@@ -292,7 +292,7 @@ impl Symbols for MemoryHost {
         _path: &str,
         _file_sha: &str,
         _stat: (i64, i64),
-        _rows: &[(String, String, i32, bool, i32, String)],
+        _rows: &[crate::host::SymbolRow],
     ) -> Result<usize> {
         Ok(0)
     }

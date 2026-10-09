@@ -547,6 +547,13 @@ impl Server {
                     short.join(", ")
                 );
             }
+            link::Link::Outside => bail!(
+                "not linked to an agent session: this rtok mcp process is under no live {} \
+                 session and in none's cwd, so one app likely shares it across sessions \
+                 (Claude desktop's claude_desktop_config.json entry); use `rtok agents` and \
+                 `rtok worktree` from the agent's shell",
+                self.cx.config.hook.host
+            ),
             link::Link::None => bail!("not linked to an agent session"),
         };
         let Some(d) = self.cx.store.agent_detail(&id)? else {
@@ -722,6 +729,8 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         #[cfg(feature = "docs")]
         "docs_get" => docs_get(cx, args),
         #[cfg(feature = "memory")]
+        "mem_pack" => mem_pack(cx, args),
+        #[cfg(feature = "memory")]
         "mem_get" => mem_get(cx, args),
         #[cfg(feature = "memory")]
         "mem_update" => mem_update(cx, args),
@@ -820,6 +829,16 @@ fn docs_get(cx: &Runtime, args: &Value) -> Result<String> {
 }
 
 #[cfg(feature = "memory")]
+fn mem_pack(cx: &Runtime, args: &Value) -> Result<String> {
+    let query = args["query"].as_str().unwrap_or("");
+    let limit = args["limit"].as_u64().map_or(8, |n| n.clamp(1, 20)) as u32;
+    let max_tokens = args["max_tokens"]
+        .as_u64()
+        .map_or(400, |n| n.clamp(1, 2000)) as u32;
+    crate::plugins::memory::mem_pack(cx, query, limit, max_tokens)
+}
+
+#[cfg(feature = "memory")]
 fn mem_search(cx: &Runtime, args: &Value) -> Result<String> {
     let query = args["query"].as_str().unwrap_or("");
     // `plugins.memory.search_limit` is the ceiling, not just the default: the caller's
@@ -866,6 +885,11 @@ fn read_file(cx: &Runtime, args: &Value) -> Result<String> {
 
 #[cfg(feature = "memory")]
 fn mem_get(cx: &Runtime, args: &Value) -> Result<String> {
+    if let Some(n) = args.get("obs").and_then(Value::as_i64) {
+        let id = i32::try_from(n).map_err(|_| anyhow::anyhow!("invalid obs id: {n}"))?;
+        return crate::plugins::memory::obs_get(cx, id)?
+            .ok_or_else(|| anyhow::anyhow!("unknown observation id: {id}"));
+    }
     let id = args["id"]
         .as_i64()
         .and_then(|n| i32::try_from(n).ok())
@@ -1513,6 +1537,38 @@ mod tests {
             .unwrap();
         let (is_err, text) = whoami_over_rpc(&server);
         assert!(is_err && text == "not linked to an agent session", "{text}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    // Only where `rtok_sys::ancestors` can read this process's parents: without its own chain
+    // the server cannot tell it sits outside a session (Windows reads none).
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn whoami_says_when_no_live_session_is_above_this_process_or_in_its_cwd() {
+        let (mut cfg, dir) = tmp("whoami-outside");
+        cfg.hook.host = "claude".into();
+        let server = Server::new(&cfg).unwrap();
+        let host = server.cx.host_id().unwrap();
+        let other = server
+            .cx
+            .store
+            .register_agent(host, "sess-a", None, Some("/elsewhere-t455"), None)
+            .unwrap();
+        // Above any real pid limit, so no process of the test run can be in this chain.
+        server
+            .cx
+            .store
+            .set_agent_ancestors(&other, &[2_000_000_001, 2_000_000_002])
+            .unwrap();
+        let (is_err, text) = whoami_over_rpc(&server);
+        assert!(
+            is_err
+                && text.starts_with(
+                    "not linked to an agent session: this rtok mcp process is under no live \
+                     claude session"
+                ),
+            "{text}"
+        );
         let _ = fs::remove_dir_all(dir);
     }
 

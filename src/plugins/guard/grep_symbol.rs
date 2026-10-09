@@ -131,8 +131,10 @@ fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<Strin
         }
         defs.push_str(&graph::def_text(
             text,
+            name,
             (path, kind, *line, *end_line),
             budget,
+            &mut |bytes| cx.put_archive(bytes).ok(),
         ));
     }
     let refs: i64 = cx

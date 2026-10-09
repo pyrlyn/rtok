@@ -15,8 +15,79 @@ use diesel::sqlite::SqliteConnection;
 
 use super::Store;
 use super::schema::{extractor, file_rank, symbol_stale, symbols};
+use rtok_plugin_sdk::{SymbolRow, SymbolSpan};
 
-const INSERT_CHUNK: usize = 999 / 11;
+/// The span [`Store::symbol_span`] returns (T474).
+pub type Span = SymbolSpan;
+
+/// Columns bound per inserted symbol row. SQLite's default variable limit is 999.
+const INSERT_CHUNK: usize = 999 / 16;
+
+#[derive(Insertable)]
+#[diesel(table_name = symbols)]
+struct NewSymbol<'a> {
+    root: &'a str,
+    path: &'a str,
+    name: &'a str,
+    kind: &'a str,
+    line: i32,
+    is_def: i32,
+    file_sha: &'a str,
+    mtime: i64,
+    size: i64,
+    end_line: i32,
+    scope: &'a str,
+    start_byte: i64,
+    end_byte: i64,
+    content_hash: &'a str,
+    signature: &'a str,
+    doc: &'a str,
+}
+
+fn fts_tokens(query: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    query
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|t| !t.is_empty())
+        .filter(|t| seen.insert(t.to_ascii_lowercase()))
+        .map(str::to_string)
+        .collect()
+}
+
+fn fts_or(tokens: &[String]) -> String {
+    tokens
+        .iter()
+        .map(|t| format!("\"{}\"", t.replace('"', "")))
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+
+fn fts_has(hay: &str, token: &str) -> bool {
+    hay.to_ascii_lowercase()
+        .contains(&token.to_ascii_lowercase())
+}
+
+fn fts_hits(hay: &str, tokens: &[&str]) -> usize {
+    tokens.iter().filter(|t| fts_has(hay, t)).count()
+}
+
+/// 0 name, 1 signature, 2 doc.
+fn fts_tier(name: &str, signature: &str, _doc: &str, tokens: &[&str]) -> u8 {
+    if fts_hits(name, tokens) > 0 {
+        0
+    } else if fts_hits(signature, tokens) > 0 {
+        1
+    } else {
+        2
+    }
+}
+
+fn fts_coverage(name: &str, signature: &str, doc: &str, tokens: &[&str]) -> usize {
+    tokens
+        .iter()
+        .filter(|t| fts_has(name, t) || fts_has(signature, t) || fts_has(doc, t))
+        .count()
+}
 
 /// SQLite's default `SQLITE_MAX_VARIABLE_NUMBER` is 999; a BFS level's frontier is chunked
 /// below that so a wide fan-out never blows the bind limit in one `eq_any`.
@@ -143,7 +214,7 @@ fn replace_one(
     path: &str,
     file_sha: &str,
     stat: (i64, i64),
-    rows: &[(String, String, i32, bool, i32, String)],
+    rows: &[SymbolRow],
 ) -> QueryResult<usize> {
     diesel::delete(symbols::table.filter(symbols::root.eq(root).and(symbols::path.eq(path))))
         .execute(conn)?;
@@ -164,22 +235,25 @@ fn replace_one(
         return Ok(0);
     }
     for chunk in rows.chunks(INSERT_CHUNK) {
-        let values: Vec<_> = chunk
+        let values: Vec<NewSymbol> = chunk
             .iter()
-            .map(|(name, kind, line, is_def, end_line, scope)| {
-                (
-                    symbols::root.eq(root),
-                    symbols::path.eq(path),
-                    symbols::name.eq(name),
-                    symbols::kind.eq(kind),
-                    symbols::line.eq(line),
-                    symbols::is_def.eq(i32::from(*is_def)),
-                    symbols::file_sha.eq(file_sha),
-                    symbols::mtime.eq(stat.0),
-                    symbols::size.eq(stat.1),
-                    symbols::end_line.eq(end_line),
-                    symbols::scope.eq(scope),
-                )
+            .map(|row| NewSymbol {
+                root,
+                path,
+                name: &row.name,
+                kind: &row.kind,
+                line: row.line,
+                is_def: i32::from(row.is_def),
+                file_sha,
+                mtime: stat.0,
+                size: stat.1,
+                end_line: row.end_line,
+                scope: &row.scope,
+                start_byte: row.start_byte,
+                end_byte: row.end_byte,
+                content_hash: &row.content_hash,
+                signature: &row.signature,
+                doc: &row.doc,
             })
             .collect();
         diesel::insert_into(symbols::table)
@@ -324,7 +398,7 @@ impl Store {
         path: &str,
         file_sha: &str,
         stat: (i64, i64),
-        rows: &[(String, String, i32, bool, i32, String)],
+        rows: &[SymbolRow],
     ) -> Result<usize> {
         let mut conn = self.lock()?;
         // One transaction per file: thousands of autocommit inserts dominated index time.
@@ -494,6 +568,86 @@ impl Store {
                 symbols::end_line,
             ))
             .load(&mut *conn)?)
+    }
+
+    /// Byte span of one definition (T474).
+    pub fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<Span>> {
+        let mut conn = self.lock()?;
+        let row: Option<(i64, i64, String, String)> = symbols::table
+            .filter(symbols::root.eq(root))
+            .filter(symbols::path.eq(path))
+            .filter(symbols::name.eq(name))
+            .filter(symbols::kind.eq(kind))
+            .filter(symbols::line.eq(line))
+            .filter(symbols::is_def.eq(1))
+            .select((
+                symbols::start_byte,
+                symbols::end_byte,
+                symbols::content_hash,
+                symbols::file_sha,
+            ))
+            .first(&mut *conn)
+            .optional()?;
+        Ok(
+            row.map(|(start_byte, end_byte, content_hash, file_sha)| Span {
+                start_byte: u64::try_from(start_byte).unwrap_or(0),
+                end_byte: u64::try_from(end_byte).unwrap_or(0),
+                content_hash,
+                file_sha,
+            }),
+        )
+    }
+
+    /// Definitions matching `query` in name, signature, or doc (T474).
+    ///
+    /// A name that contains a query token outranks a signature hit, which outranks a doc hit.
+    pub fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, String, String, i32)>> {
+        let limit = usize::try_from(limit).unwrap_or(0);
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let tokens = fts_tokens(query);
+        let match_query = fts_or(&tokens);
+        if match_query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut conn = self.lock()?;
+        let mut hits = super::sql_ext::SearchSymbols {
+            root: root.to_string(),
+            query: match_query,
+            limit: 200,
+        }
+        .load::<(String, String, String, i32, String, String, f64)>(&mut *conn)?;
+        let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
+        hits.sort_by(|a, b| {
+            fts_tier(&a.1, &a.4, &a.5, &tokens)
+                .cmp(&fts_tier(&b.1, &b.4, &b.5, &tokens))
+                .then(
+                    fts_coverage(&b.1, &b.4, &b.5, &tokens)
+                        .cmp(&fts_coverage(&a.1, &a.4, &a.5, &tokens)),
+                )
+                .then(a.6.partial_cmp(&b.6).unwrap_or(std::cmp::Ordering::Equal))
+                .then(a.0.cmp(&b.0))
+                .then(a.3.cmp(&b.3))
+                .then(a.1.cmp(&b.1))
+        });
+        hits.truncate(limit);
+        Ok(hits
+            .into_iter()
+            .map(|(path, name, kind, line, _, _, _)| (path, name, kind, line))
+            .collect())
     }
 
     /// Reference sites of `name` as `(path, line)`, ordered by path then line (T8.2 `callers`).
@@ -1177,39 +1331,18 @@ fn import_matches_file(spec: &str, file: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn row(name: &str, line: i32, is_def: bool) -> (String, String, i32, bool, i32, String) {
-        (
-            name.into(),
-            "function".into(),
-            line,
-            is_def,
-            line,
-            String::new(),
-        )
+    fn row(name: &str, line: i32, is_def: bool) -> SymbolRow {
+        SymbolRow::new(name, "function", line, is_def, line, "")
     }
 
-    fn import(name: &str, line: i32) -> (String, String, i32, bool, i32, String) {
-        (
-            name.into(),
-            "import".into(),
-            line,
-            false,
-            line,
-            String::new(),
-        )
+    fn import(name: &str, line: i32) -> SymbolRow {
+        SymbolRow::new(name, "import", line, false, line, "")
     }
 
     /// A reference row with an explicit enclosing `scope`, unlike `row`/`import` (always
     /// `scope: ""`) — needed to build the `symbol_impact` chains below.
-    fn reference(name: &str, line: i32, scope: &str) -> (String, String, i32, bool, i32, String) {
-        (
-            name.into(),
-            "function".into(),
-            line,
-            false,
-            line,
-            scope.into(),
-        )
+    fn reference(name: &str, line: i32, scope: &str) -> SymbolRow {
+        SymbolRow::new(name, "function", line, false, line, scope)
     }
 
     #[test]
@@ -1356,8 +1489,8 @@ mod tests {
         assert_eq!(got, vec![(1, "a.rs".into(), "".into())]);
     }
 
-    fn import_at(name: &str, line: i32, spec: &str) -> (String, String, i32, bool, i32, String) {
-        (name.into(), "import".into(), line, false, line, spec.into())
+    fn import_at(name: &str, line: i32, spec: &str) -> SymbolRow {
+        SymbolRow::new(name, "import", line, false, line, spec)
     }
 
     #[test]
@@ -1411,5 +1544,48 @@ mod tests {
         store.rebuild_symbol_idf("/r").unwrap();
         assert_eq!(store.symbol_name_freq("/r", "parse").unwrap(), (1, 3));
         assert_eq!(store.symbol_name_freq("/r", "missing").unwrap(), (0, 3));
+    }
+
+    fn documented(name: &str, line: i32, signature: &str, doc: &str) -> SymbolRow {
+        SymbolRow {
+            signature: signature.into(),
+            doc: doc.into(),
+            ..SymbolRow::new(name, "function", line, true, line, "")
+        }
+    }
+
+    /// T474: a name that contains a query token outranks a signature hit, which outranks a doc hit.
+    #[test]
+    fn symbol_fts_ranks_a_name_token_above_a_doc_hit() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .replace_symbols(
+                "/r",
+                "a.rs",
+                "s",
+                (0, 0),
+                &[
+                    documented(
+                        "body_lines",
+                        1,
+                        "fn body_lines() {}",
+                        "Source of one definition",
+                    ),
+                    documented("mid", 2, "fn mid(source: Lines)", ""),
+                    documented(
+                        "other",
+                        3,
+                        "fn other()",
+                        "truncated source lines in the comment",
+                    ),
+                ],
+            )
+            .unwrap();
+        assert!(store.symbol_fts("/r", "", 10).unwrap().is_empty());
+        let hits = store
+            .symbol_fts("/r", "truncated source lines", 10)
+            .unwrap();
+        let names: Vec<_> = hits.iter().map(|h| h.1.as_str()).collect();
+        assert_eq!(names, ["body_lines", "mid", "other"], "{names:?}");
     }
 }

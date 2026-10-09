@@ -15,7 +15,16 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const COVERED: &[&str] = &["archive", "cmd", "graph", "guard", "memory", "read", "toon"];
+const COVERED: &[&str] = &[
+    "archive",
+    "cmd",
+    "graph",
+    "guard",
+    "json_tree",
+    "memory",
+    "read",
+    "toon",
+];
 const NEVER: &[&str] = &["compress", "docs", "inject", "measure", "proxy"];
 
 /// The fixture body per case: 50 lines so a capping plugin has something to drop, carrying
@@ -137,6 +146,62 @@ fn guard(kind: &str, body: &[u8]) -> usize {
         Some(id) => round_trip(&cx, "guard", id, body),
         None => 0,
     };
+    let _ = fs::remove_dir_all(&dir);
+    n
+}
+
+/// `json_tree`: a nested tree is replaced by a pointer plus its fold; the archived
+/// original is the pretty JSON it replaced. Non-UTF-8 and empty fixtures cannot be a tree.
+fn json_tree(kind: &str, body: &[u8]) -> usize {
+    let Ok(text) = std::str::from_utf8(body) else {
+        return 0;
+    };
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.len() < 3 {
+        return 0;
+    }
+    let fill = json!({"type": "SOLID", "color": "#C0FFEE"});
+    let mut children = Vec::new();
+    for (i, line) in lines.iter().take(3).enumerate() {
+        children.push(json!({
+            "id": format!("n-{i}"),
+            "name": format!("Node {i}"),
+            "type": "FRAME",
+            "fills": fill,
+            "note": line,
+        }));
+    }
+    let mut root = json!({
+        "id": "root",
+        "name": "Tree",
+        "type": "FRAME",
+        "children": children,
+    });
+    let mut pad = String::new();
+    while serde_json::to_vec(&root).unwrap().len() < 256 {
+        pad.push_str("pad-");
+        root["pad"] = Value::String(pad.clone());
+    }
+    let original = serde_json::to_string_pretty(&root).unwrap();
+    let (mut cx, dir) = runtime(&format!("json-tree-{kind}"));
+    cx.config.plugins.json_tree.enabled = true;
+    let mut wire = json!({"messages": [{
+        "role": "user",
+        "content": [{
+            "type": "tool_result",
+            "tool_use_id": format!("t-{kind}"),
+            "content": original,
+        }],
+    }]});
+    let ms = rtok::plugins::json_tree::JsonTree.proxy_filter(
+        &mut WireRequest::new(&rtok::proxy::anthropic::ANTHROPIC, &mut wire),
+        &Ctx::new(&cx),
+    );
+    let id = ms
+        .first()
+        .and_then(|m| m.ref_id.clone())
+        .unwrap_or_else(|| panic!("json_tree left the {kind} tree whole"));
+    let n = round_trip(&cx, "json_tree", &id, original.as_bytes());
     let _ = fs::remove_dir_all(&dir);
     n
 }
@@ -294,6 +359,7 @@ const WALK: &[(&str, Driver)] = &[
     ("graph", graph),
     ("guard", guard),
     ("memory", memory),
+    ("json_tree", json_tree),
     ("read", read),
     ("toon", toon),
 ];

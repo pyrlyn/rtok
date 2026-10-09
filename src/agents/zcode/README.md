@@ -32,7 +32,7 @@ install there, which writes the absolute exe.
 Hooks carry `hook` and `cli`, MCP carries `mcp` and is served directly by this host's own
 `config.json` (T275/D33). Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, archive, inject, guard, memory, graph, toon, docs
+Reachable: measure, cmd, read, json_tree, archive, inject, guard, memory, graph, toon, docs
 Not reachable: proxy, compress
 
 ## Docs

@@ -131,6 +131,7 @@ plugins.inject.budget_tokens = 800
 plugins.inject.enabled = true
 plugins.inject.modes = []
 plugins.inject.modes_dir = ~/.rtok/modes
+plugins.json_tree.enabled = false
 plugins.measure.enabled = true
 plugins.memory.checkpoint_tokens = 400
 plugins.memory.embed.dimensions = 384

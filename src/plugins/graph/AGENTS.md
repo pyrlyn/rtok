@@ -20,6 +20,7 @@
 - T370 `rank.rs`: the file graph and its global PageRank are one `file_rank` document per root,
   rebuilt only when an index run changes the root. SessionStart reads that row and ranks in
   memory (no `symbols` scan, no process, D1/T428). A personalized rank is never stored.
+- T454 `review.rs`: `rtok graph review` ranks a git diff (untested def 0.30, tested 0.05, security token +0.20, callers min(n/20, 0.10)). CLI only — do not add a sixth MCP tool. No `Measurement` on an unshortened answer. Not a dependency on any external graph tool (D6).
 - T371 `cochange.rs`: git co-change pairs (last 300 commits, over 20 files skipped, count >= 2)
   are one `kv` document per root, recounted only when HEAD moves. `impact` prints the top 5
   partners of the defining file; `rank::build` adds them as edges at `COCHANGE_WEIGHT`. The map

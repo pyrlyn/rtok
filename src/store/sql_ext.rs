@@ -552,6 +552,96 @@ impl Query for SearchDocItems {
 
 impl RunQueryDsl<SqliteConnection> for SearchDocItems {}
 
+/// FTS5 `MATCH` and `bm25()` over `symbols_fts` — no form in Diesel 2.3's typed DSL (T474).
+#[derive(QueryId)]
+pub(crate) struct SearchSymbols {
+    pub root: String,
+    pub query: String,
+    pub limit: i32,
+}
+
+impl QueryFragment<Sqlite> for SearchSymbols {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql(
+            "SELECT s.path, s.name, s.kind, s.line, s.signature, s.doc, bm25(symbols_fts) \
+             FROM symbols_fts JOIN symbols s ON s.id = symbols_fts.rowid \
+             WHERE symbols_fts MATCH ",
+        );
+        out.push_bind_param::<Text, _>(&self.query)?;
+        out.push_sql(" AND s.root = ");
+        out.push_bind_param::<Text, _>(&self.root)?;
+        out.push_sql(" AND s.is_def = 1 LIMIT ");
+        out.push_bind_param::<Integer, _>(&self.limit)?;
+        Ok(())
+    }
+}
+
+impl Query for SearchSymbols {
+    type SqlType = (Text, Text, Text, Integer, Text, Text, Double);
+}
+
+impl RunQueryDsl<SqliteConnection> for SearchSymbols {}
+
+/// FTS5 over `observations`. Optional project: `NULL` matches every project.
+#[derive(QueryId)]
+pub(crate) struct SearchObservations {
+    pub query: String,
+    pub project: Option<String>,
+    pub limit: i32,
+}
+
+impl QueryFragment<Sqlite> for SearchObservations {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql(
+            "SELECT o.id, o.title, o.session_id, substr(o.narrative, 1, 120) \
+             FROM observations_fts f JOIN observations o ON o.id = f.rowid \
+             WHERE observations_fts MATCH ",
+        );
+        out.push_bind_param::<Text, _>(&self.query)?;
+        // Unbound rows (NULL project) recall in every project; a bound row only in its own.
+        out.push_sql(" AND (");
+        out.push_bind_param::<Nullable<Text>, _>(&self.project)?;
+        out.push_sql(" IS NULL OR o.project IS NULL OR o.project = ");
+        out.push_bind_param::<Nullable<Text>, _>(&self.project)?;
+        out.push_sql(") ORDER BY bm25(observations_fts) LIMIT ");
+        out.push_bind_param::<Integer, _>(&self.limit)?;
+        Ok(())
+    }
+}
+
+impl Query for SearchObservations {
+    type SqlType = (Integer, Text, Text, Text);
+}
+
+impl RunQueryDsl<SqliteConnection> for SearchObservations {}
+
+/// A duplicate observation in the last few seconds, by `(session_id, dedup)`.
+#[derive(QueryId)]
+pub(crate) struct RecentObservationDup {
+    pub session_id: String,
+    pub dedup: String,
+    pub since: i64,
+}
+
+impl QueryFragment<Sqlite> for RecentObservationDup {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql("SELECT id FROM observations WHERE session_id = ");
+        out.push_bind_param::<Text, _>(&self.session_id)?;
+        out.push_sql(" AND dedup = ");
+        out.push_bind_param::<Text, _>(&self.dedup)?;
+        out.push_sql(" AND ts >= ");
+        out.push_bind_param::<BigInt, _>(&self.since)?;
+        out.push_sql(" LIMIT 1");
+        Ok(())
+    }
+}
+
+impl Query for RecentObservationDup {
+    type SqlType = Integer;
+}
+
+impl RunQueryDsl<SqliteConnection> for RecentObservationDup {}
+
 /// `COUNT() OVER` and `ROW_NUMBER() OVER` — no window functions in Diesel 2.3's typed DSL.
 #[derive(QueryId)]
 pub(crate) struct UsageCtt;

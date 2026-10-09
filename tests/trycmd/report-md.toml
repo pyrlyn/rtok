@@ -178,6 +178,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.inject.enabled | true | default |
 | plugins.inject.modes | [] | default |
 | plugins.inject.modes_dir | ~/.rtok/modes | default |
+| plugins.json_tree.enabled | false | default |
 | plugins.measure.enabled | true | default |
 | plugins.memory.checkpoint_tokens | 400 | default |
 | plugins.memory.embed.dimensions | 384 | default |
@@ -414,7 +415,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-368 keys.
+369 keys.
 
 ## Doctor
 
@@ -426,7 +427,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (30 tools, ~808 desc tokens) [CWD]/target/[..]
+  rtok (36 tools, ~958 desc tokens) [CWD]/target/[..]
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)

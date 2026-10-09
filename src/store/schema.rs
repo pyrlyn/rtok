@@ -1,5 +1,5 @@
 //! Diesel `table!` macros for the six 0001 tables (plan T13.1).
-//! `notes_fts` is a VIRTUAL TABLE — FTS5 `MATCH` / `bm25` have no Diesel DSL form (T163.3).
+//! `notes_fts` and `symbols_fts` are VIRTUAL TABLEs — FTS5 `MATCH` / `bm25` have no Diesel DSL form (T163.3).
 
 #![allow(unused)]
 
@@ -90,7 +90,7 @@ diesel::table! {
     }
 }
 
-// 0034 (T455): cached rustdoc JSON items. FTS5 is virtual (sql_ext), not table!.
+// 0039 (T455): cached rustdoc JSON items. FTS5 is virtual (sql_ext), not table!.
 diesel::table! {
     doc_crates (name, version) {
         name -> Text,
@@ -111,6 +111,40 @@ diesel::table! {
         docs -> Text,
     }
 }
+
+// 0035 (T472): previous title and body when an upsert changes the body.
+diesel::table! {
+    note_versions (id) {
+        id -> Integer,
+        note_id -> Integer,
+        title -> Text,
+        body -> Text,
+        version -> Integer,
+        ts -> BigInt,
+    }
+}
+
+// 0036 (T454): mechanical tool-call observations. `observations_fts` is virtual.
+diesel::table! {
+    observations (id) {
+        id -> Integer,
+        ts -> BigInt,
+        session_id -> Text,
+        project -> Nullable<Text>,
+        obs_type -> Text,
+        title -> Text,
+        narrative -> Text,
+        dedup -> Text,
+    }
+}
+
+diesel::table! {
+    observation_files (observation_id, path) {
+        observation_id -> Integer,
+        path -> Text,
+    }
+}
+
 
 diesel::table! {
     notes (id) {
@@ -291,6 +325,11 @@ diesel::table! {
         size -> BigInt,
         end_line -> Integer,
         scope -> Text,
+        start_byte -> BigInt,
+        end_byte -> BigInt,
+        content_hash -> Text,
+        signature -> Text,
+        doc -> Text,
     }
 }
 
@@ -398,6 +437,17 @@ diesel::table! {
     }
 }
 
+// 0034 (T442): the claim SessionStart names. The file or the issue stays the source of truth.
+diesel::table! {
+    task_claims (project, task_id) {
+        project -> Text,
+        task_id -> Text,
+        agent_id -> Text,
+        title -> Text,
+        since -> BigInt,
+    }
+}
+
 diesel::joinable!(archive_decisions -> archive (archive_id));
 diesel::joinable!(models -> providers (provider_id));
 diesel::joinable!(sessions -> hosts (host_id));
@@ -415,6 +465,7 @@ diesel::joinable!(measurements -> calls (call_id));
 diesel::joinable!(usage -> calls (call_id));
 diesel::joinable!(note_embeddings -> notes (note_id));
 diesel::joinable!(note_files -> notes (note_id));
+diesel::joinable!(observation_files -> observations (observation_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     events,
@@ -427,6 +478,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     note_files,
     doc_crates,
     doc_items,
+    observations,
+    observation_files,
     usage,
     hosts,
     providers,
@@ -447,4 +500,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     projects,
     project_links,
     task_counters,
+    task_claims,
 );
