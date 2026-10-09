@@ -53,7 +53,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
-| T329.22 | todo | P2 | 4 | 0% | |
+| T329.22 | in progress | P2 | 4 | 5% | Claude Code / sonnet-5.5 |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.5 | todo | P2 | 4 | 30% | |
 | T330.5.3 | todo | P2 | 3 | 0% | |
@@ -889,6 +889,8 @@ The page half of T329.14 (split on 2026-10-09: the data path alone was over the 
 - "+N more" when `more > 0` raises `limit` by 500; a spinner while the frame is in flight; the "Index now" empty state for `not indexed`, a hollow notice for `missing`, a "partial" banner when `partial`, and a warning marker on `stale` nodes.
 - Live updates: the page asks again when the project's index numbers in the snapshot move (rows, files, pending, `indexed_at`), so edits under `watch` change nodes and edges in place without resetting the layout or the zoom.
 - Docs for the graph page in `docs/` (en, ru, uk); the text-mode banner waits for T329.9 (no backend other than tags answers yet).
+
+Execution plan (2026-10-10): `ws.ts` parses the `graph` frame and `query.tsx` gets a `drill` request matched to its frame by project (a `useDrill` hook keyed by the request and the project's index numbers, so a moved index re-asks and the previous frame stays on screen). The URL state (`p`, `x`, `f`, `d`) is validated in the `/graph` route's `validateSearch` (`web/src/pages/graph3d/drillState.ts`, with the breadcrumb). `drillScene.ts` maps the frame to the existing `Scene` (stable numeric ids per string id, directories as groups, shape per kind). The 2D/3D/list switch, the WebGL fallback and the tooltip move out of `ProjectsOverview` into a shared `SceneView` that the new `DrillView` reuses with `useLayout`. `Scene2D` and `stage3d` learn the shapes; the level-1 menu and double-click get Open. Side panel, search, "+N more", the state banners and the sample server answer follow. Verify: Vitest (mapping, URL state, breadcrumb, view), stories on the sample server, `just spa-stories`, `just spa-e2e`, `just check`. If the code passes 500 lines, the side panel and search split to the next free T329 sub-id.
 
 Depends on T329.14, T329.13.
 
