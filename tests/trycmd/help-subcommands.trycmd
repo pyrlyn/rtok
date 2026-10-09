@@ -796,6 +796,31 @@ Options:
       --body <BODY>    The replacement body
   -h, --help           Print help
 
+$ rtok docs --help
+Cached rustdoc for Cargo.lock dependencies (`rtok docs fetch`)
+
+Usage: rtok docs [OPTIONS] <COMMAND>
+
+Commands:
+  fetch  Download rustdoc JSON for a Cargo.lock dependency (the only network path)
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -h, --help           Print help
+
+$ rtok docs fetch --help
+Download rustdoc JSON for a Cargo.lock dependency (the only network path)
+
+Usage: rtok docs fetch [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -h, --help           Print help
+
 $ rtok graph --help
 Symbol index (`rtok graph index`)
 

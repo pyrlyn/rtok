@@ -50,6 +50,9 @@ mod wasm;
 #[cfg(feature = "compress")]
 pub mod compress;
 
+#[cfg(feature = "docs")]
+pub mod docs;
+
 /// Every compiled-in plugin, in dispatch order.
 #[allow(clippy::vec_init_then_push, unused_mut)] // each push is cfg-gated by a feature
 pub fn all() -> Vec<Box<dyn Plugin>> {
@@ -78,6 +81,8 @@ pub fn all() -> Vec<Box<dyn Plugin>> {
     v.push(Box::new(toon::Toon));
     #[cfg(feature = "compress")]
     v.push(Box::new(compress::Compress));
+    #[cfg(feature = "docs")]
+    v.push(Box::new(docs::Docs));
     v
 }
 

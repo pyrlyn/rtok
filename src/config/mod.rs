@@ -72,7 +72,7 @@ pub const TASK_ADAPTERS: [&str; 3] = ["disk", "github", "gitlab"];
 
 /// Plugin catalogue: `(id, default_on)`. The registry's manifests must match this list
 /// (asserted by a test in `plugins`), and [`Plugins`] has one field per id.
-pub const CATALOGUE: [(&str, bool); 12] = [
+pub const CATALOGUE: [(&str, bool); 13] = [
     ("measure", true),
     ("cmd", true),
     ("read", true),
@@ -85,6 +85,7 @@ pub const CATALOGUE: [(&str, bool); 12] = [
     ("graph", true),
     ("toon", true),
     ("compress", true),
+    ("docs", false),
 ];
 
 /// Shorthand for the section attributes every table repeats.
@@ -1029,6 +1030,7 @@ section! {
         graph: Graph = Graph::default(),
         toon: Toon = Toon::default(),
         compress: Compress = Compress::default(),
+        docs: Docs = Docs::default(),
         wasm: Wasm = Wasm::default(),
     }
 }
@@ -1183,6 +1185,16 @@ section! {
         /// Token budget for the spawn brief (T130).
         spawn_brief_tokens: u32 = 300,
         embed: MemoryEmbed = MemoryEmbed::default(),
+    }
+}
+
+section! {
+    /// `[plugins.docs]`
+    Docs {
+        enabled: bool = false,
+        query_limit: u32 = 5,
+        snippet_chars: u32 = 400,
+        max_tokens: u32 = 800,
     }
 }
 
@@ -1600,6 +1612,7 @@ impl Config {
             "graph" => p.graph.enabled,
             "toon" => p.toon.enabled,
             "compress" => p.compress.enabled,
+            "docs" => p.docs.enabled,
             _ => default_on,
         }
     }
@@ -1623,6 +1636,7 @@ impl Config {
             "graph" => p.graph.enabled = on,
             "toon" => p.toon.enabled = on,
             "compress" => p.compress.enabled = on,
+            "docs" => p.docs.enabled = on,
             _ => {}
         }
     }

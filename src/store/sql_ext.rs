@@ -517,6 +517,41 @@ impl Query for SearchNotes {
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}
 
+/// FTS5 `MATCH` / `bm25()` over cached rustdoc items (T455). Same quoting path as notes.
+#[derive(QueryId)]
+pub(crate) struct SearchDocItems {
+    pub query: String,
+    pub crate_name: String,
+    pub version: String,
+    pub snippet: i32,
+    pub limit: i32,
+}
+
+impl QueryFragment<Sqlite> for SearchDocItems {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
+        out.push_sql("SELECT i.id, i.path, i.kind, substr(i.docs, 1, ");
+        out.push_bind_param::<Integer, _>(&self.snippet)?;
+        out.push_sql(
+            ") FROM doc_items_fts f JOIN doc_items i ON i.id = f.rowid \
+             WHERE doc_items_fts MATCH ",
+        );
+        out.push_bind_param::<Text, _>(&self.query)?;
+        out.push_sql(" AND i.crate_name = ");
+        out.push_bind_param::<Text, _>(&self.crate_name)?;
+        out.push_sql(" AND i.version = ");
+        out.push_bind_param::<Text, _>(&self.version)?;
+        out.push_sql(" ORDER BY bm25(doc_items_fts) LIMIT ");
+        out.push_bind_param::<Integer, _>(&self.limit)?;
+        Ok(())
+    }
+}
+
+impl Query for SearchDocItems {
+    type SqlType = (Integer, Text, Text, Text);
+}
+
+impl RunQueryDsl<SqliteConnection> for SearchDocItems {}
+
 /// FTS5 `MATCH` and `bm25()` over `symbols_fts` — no form in Diesel 2.3's typed DSL (T474).
 #[derive(QueryId)]
 pub(crate) struct SearchSymbols {

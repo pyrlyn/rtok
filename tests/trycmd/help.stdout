@@ -26,6 +26,7 @@ Commands:
   plugins      List plugins: id, enabled, surfaces
   config       The one config file
   memory       Notes (`mem_save` / import / export)
+  docs         Cached rustdoc for Cargo.lock dependencies (`rtok docs fetch`)
   graph        Symbol index (`rtok graph index`)
   guard        Duplicate-call verdict (`rtok guard check` — pi / OpenCode plugin path)
   demon        Keep `rtok proxy` (or `mcp` / `web`) running in the background

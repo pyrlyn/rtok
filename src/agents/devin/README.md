@@ -25,7 +25,7 @@ and MCP entry back and leaves the plugin where Devin put it.
 
 Hooks carry `hook` and `cli`, MCP carries `mcp`. Nothing carries `proxy`.
 
-Reachable: measure, cmd, read, json_tree, archive, inject, guard, memory, graph, toon
+Reachable: measure, cmd, read, json_tree, archive, inject, guard, memory, graph, toon, docs
 Not reachable: proxy, compress
 
 ## Docs

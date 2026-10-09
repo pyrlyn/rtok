@@ -31,7 +31,7 @@ in-process and cannot register an MCP server, so no singleton clear applies. A m
 The proxy carries `proxy`, MCP carries `mcp`, and the linked plugin carries the bash call
 path (`cli`). Nothing carries `hook`.
 
-Reachable: measure, cmd, read, json_tree, archive, proxy, guard, memory, graph, toon, compress
+Reachable: measure, cmd, read, json_tree, archive, proxy, guard, memory, graph, toon, compress, docs
 Not reachable: inject
 
 ## Docs

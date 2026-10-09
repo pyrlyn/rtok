@@ -65,6 +65,32 @@ pub fn remember(store: Option<&Store>, path: &Path, agent: &str, task: &str) {
     }
 }
 
+/// Seed the new worktree's symbol rows from the main checkout so the next index
+/// skips identical blobs. A copy error is a warning: the worktree already exists.
+fn copy_symbol_index(store: Option<&Store>, cwd: &Path, dest: &Path) {
+    let Some(store) = store else {
+        return;
+    };
+    let listed = match super::git::list(cwd) {
+        Ok(listed) => listed,
+        Err(e) => {
+            eprintln!("warning: symbol index not copied: {e:#}");
+            return;
+        }
+    };
+    let Some(main) = listed.first() else {
+        return;
+    };
+    let from = crate::store::canon_root(&main.path);
+    let to = crate::store::canon_root(dest);
+    if from == to {
+        return;
+    }
+    if let Err(e) = store.copy_symbol_rows(&from, &to) {
+        eprintln!("warning: symbol index not copied: {e:#}");
+    }
+}
+
 /// T329.6: with `[plugins.graph] auto_add_projects`, the worktree becomes a project named by its
 /// branch. Best effort like [`remember`]: the lock and the claim already hold the worktree.
 fn register_project(store: Option<&Store>, auto_add: bool, path: &Path, branch: Option<&str>) {
@@ -91,6 +117,7 @@ pub fn add(
     let owner = owner(owner_flag, agent, store)?;
     let agent_id = agent.map(|a| a.id.as_str());
     let plan = super::add::run(cwd, root, id, (&owner, agent_id))?;
+    copy_symbol_index(store, cwd, &plan.path);
     if let Some(agent) = agent_id {
         remember(store, &plan.path, agent, &plan.task);
     }

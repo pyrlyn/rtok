@@ -5,6 +5,7 @@ index|calls_kind|calls|CREATE INDEX calls_kind ON calls (kind, ts)
 index|calls_parent|calls|CREATE INDEX calls_parent ON calls (parent_id)
 index|calls_plugin|calls|CREATE INDEX calls_plugin ON calls (plugin, ts)
 index|calls_session|calls|CREATE INDEX calls_session ON calls (session_id, ts)
+index|doc_items_crate|doc_items|CREATE INDEX doc_items_crate ON doc_items (crate_name, version)
 index|events_session|events|CREATE INDEX events_session ON events (session, ts)
 index|logs_session|logs|CREATE INDEX logs_session ON logs (session, ts)
 index|logs_source|logs|CREATE INDEX logs_source ON logs (source, name, ts)
@@ -26,6 +27,7 @@ index|sqlite_autoindex___diesel_schema_migrations_1|__diesel_schema_migrations|
 index|sqlite_autoindex_agents_1|agents|
 index|sqlite_autoindex_archive_1|archive|
 index|sqlite_autoindex_archive_decisions_1|archive_decisions|
+index|sqlite_autoindex_doc_crates_1|doc_crates|
 index|sqlite_autoindex_extractor_1|extractor|
 index|sqlite_autoindex_file_rank_1|file_rank|
 index|sqlite_autoindex_hook_sessions_1|hook_sessions|
@@ -57,6 +59,13 @@ table|archive|archive|CREATE TABLE archive ( id TEXT PRIMARY KEY, ts INTEGER NOT
 table|archive_decisions|archive_decisions|CREATE TABLE "archive_decisions" ( session TEXT NOT NULL, tool_use_id TEXT NOT NULL, archive_id TEXT NOT NULL REFERENCES archive(id), pointer TEXT NOT NULL, expanded_ts INTEGER, ts INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (session, tool_use_id) )
 table|call_io|call_io|CREATE TABLE call_io ( call_id INTEGER PRIMARY KEY REFERENCES calls(id), request_bytes INTEGER NOT NULL DEFAULT 0, response_bytes INTEGER NOT NULL DEFAULT 0, request_sha256 TEXT, response_sha256 TEXT, request_json TEXT, response_json TEXT, request_archive TEXT REFERENCES archive(id), response_archive TEXT REFERENCES archive(id) , request_raw BLOB NULL, response_raw BLOB NULL, hook_session_id INTEGER NULL REFERENCES hook_sessions(id))
 table|calls|calls|CREATE TABLE calls ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session_id TEXT NOT NULL REFERENCES sessions(id), host_id INTEGER REFERENCES hosts(id), provider_id INTEGER REFERENCES providers(id), model_id INTEGER REFERENCES models(id), plugin TEXT, surface TEXT NOT NULL, kind TEXT NOT NULL, parent_id INTEGER REFERENCES calls(id), name TEXT, ms REAL, ok INTEGER NOT NULL DEFAULT 1, error TEXT )
+table|doc_crates|doc_crates|CREATE TABLE doc_crates ( name TEXT NOT NULL, version TEXT NOT NULL, sha256 TEXT NOT NULL, format_version INTEGER NOT NULL, fetched_unix INTEGER NOT NULL, PRIMARY KEY (name, version) )
+table|doc_items|doc_items|CREATE TABLE doc_items ( id INTEGER PRIMARY KEY, crate_name TEXT NOT NULL, version TEXT NOT NULL, path TEXT NOT NULL, kind TEXT NOT NULL, docs TEXT NOT NULL )
+table|doc_items_fts|doc_items_fts|CREATE VIRTUAL TABLE doc_items_fts USING fts5 ( path, docs, content = 'doc_items', content_rowid = 'id' )
+table|doc_items_fts_config|doc_items_fts_config|CREATE TABLE 'doc_items_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID
+table|doc_items_fts_data|doc_items_fts_data|CREATE TABLE 'doc_items_fts_data'(id INTEGER PRIMARY KEY, block BLOB)
+table|doc_items_fts_docsize|doc_items_fts_docsize|CREATE TABLE 'doc_items_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
+table|doc_items_fts_idx|doc_items_fts_idx|CREATE TABLE 'doc_items_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
 table|events|events|CREATE TABLE events ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, event TEXT NOT NULL, tool TEXT, plugin TEXT, ms REAL )
 table|extractor|extractor|CREATE TABLE extractor ( root TEXT PRIMARY KEY NOT NULL, fingerprint TEXT NOT NULL , indexed_at INTEGER)
 table|file_rank|file_rank|CREATE TABLE file_rank ( root TEXT PRIMARY KEY NOT NULL, graph TEXT NOT NULL )
@@ -101,6 +110,9 @@ table|task_counters|task_counters|CREATE TABLE task_counters ( project TEXT NOT 
 table|tokens|tokens|CREATE TABLE tokens ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), call_id INTEGER NOT NULL REFERENCES calls(id), plugin TEXT, phase TEXT NOT NULL, source TEXT NOT NULL, tokens INTEGER NOT NULL, bytes INTEGER, input INTEGER, output INTEGER, cache_create INTEGER, cache_read INTEGER )
 table|usage|usage|CREATE TABLE usage ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, model TEXT, input INTEGER NOT NULL DEFAULT 0, cache_create INTEGER NOT NULL DEFAULT 0, cache_read INTEGER NOT NULL DEFAULT 0, output INTEGER NOT NULL DEFAULT 0 , call_id INTEGER REFERENCES calls(id), api TEXT NOT NULL DEFAULT 'anthropic')
 table|worktree_claims|worktree_claims|CREATE TABLE worktree_claims ( path TEXT PRIMARY KEY, agent_id TEXT NOT NULL REFERENCES agents(id), task TEXT NOT NULL, claimed_at INTEGER NOT NULL DEFAULT (unixepoch()), released_at INTEGER )
+trigger|doc_items_ad|doc_items|CREATE TRIGGER doc_items_ad AFTER DELETE ON doc_items BEGIN INSERT INTO doc_items_fts (doc_items_fts, rowid, path, docs) VALUES ('delete', old.id, old.path, old.docs); END
+trigger|doc_items_ai|doc_items|CREATE TRIGGER doc_items_ai AFTER INSERT ON doc_items BEGIN INSERT INTO doc_items_fts (rowid, path, docs) VALUES (new.id, new.path, new.docs); END
+trigger|doc_items_au|doc_items|CREATE TRIGGER doc_items_au AFTER UPDATE ON doc_items BEGIN INSERT INTO doc_items_fts (doc_items_fts, rowid, path, docs) VALUES ('delete', old.id, old.path, old.docs); INSERT INTO doc_items_fts (rowid, path, docs) VALUES (new.id, new.path, new.docs); END
 trigger|notes_ad|notes|CREATE TRIGGER notes_ad AFTER DELETE ON notes BEGIN INSERT INTO notes_fts (notes_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body); END
 trigger|notes_ai|notes|CREATE TRIGGER notes_ai AFTER INSERT ON notes BEGIN INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body); END
 trigger|notes_au|notes|CREATE TRIGGER notes_au AFTER UPDATE ON notes BEGIN INSERT INTO notes_fts (notes_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body); INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body); END

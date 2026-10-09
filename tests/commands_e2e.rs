@@ -247,6 +247,7 @@ fn plugins_lists_the_catalogue() {
         "graph",
         "toon",
         "compress",
+        "docs",
     ] {
         assert!(out.contains(id), "{id} missing:\n{out}");
     }

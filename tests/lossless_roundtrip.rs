@@ -25,7 +25,7 @@ const COVERED: &[&str] = &[
     "read",
     "toon",
 ];
-const NEVER: &[&str] = &["compress", "inject", "measure", "proxy"];
+const NEVER: &[&str] = &["compress", "docs", "inject", "measure", "proxy"];
 
 /// The fixture body per case: 50 lines so a capping plugin has something to drop, carrying
 /// the property under test. `empty` stays empty on purpose.

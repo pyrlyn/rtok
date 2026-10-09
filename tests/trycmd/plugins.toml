@@ -14,6 +14,7 @@ memory    on        mcp,hook
 graph     on        mcp,hook
 toon      on        proxy,mcp
 compress  on        proxy
+docs      off       mcp,cli
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

@@ -23,7 +23,7 @@ same JSON shape (T186) — no duplicated logic between the two forks.
 
 MCP carries `mcp`. Nothing carries `hook`, `cli`, or `proxy`.
 
-Reachable: read, json_tree, archive, memory, graph, toon
+Reachable: read, json_tree, archive, memory, graph, toon, docs
 Not reachable: measure, cmd, proxy, inject, guard, compress
 
 ## Docs

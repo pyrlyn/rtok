@@ -32,7 +32,7 @@ Antigravity IDE). The plugin is the only unit (D21, T90): `plugins/antigravity` 
 Only the plugin's MCP server (`rtok mcp`): the `mcp` surface. Hook, CLI and proxy surfaces have
 no path in.
 
-Reachable: read, json_tree, archive, memory, graph, toon
+Reachable: read, json_tree, archive, memory, graph, toon, docs
 Not reachable: measure, cmd, proxy, inject, guard, compress
 
 ## Docs

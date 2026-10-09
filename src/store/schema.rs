@@ -90,6 +90,28 @@ diesel::table! {
     }
 }
 
+// 0039 (T455): cached rustdoc JSON items. FTS5 is virtual (sql_ext), not table!.
+diesel::table! {
+    doc_crates (name, version) {
+        name -> Text,
+        version -> Text,
+        sha256 -> Text,
+        format_version -> Integer,
+        fetched_unix -> BigInt,
+    }
+}
+
+diesel::table! {
+    doc_items (id) {
+        id -> Integer,
+        crate_name -> Text,
+        version -> Text,
+        path -> Text,
+        kind -> Text,
+        docs -> Text,
+    }
+}
+
 // 0035 (T472): previous title and body when an upsert changes the body.
 diesel::table! {
     note_versions (id) {
@@ -453,6 +475,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     notes,
     note_embeddings,
     note_files,
+    doc_crates,
+    doc_items,
     observations,
     observation_files,
     usage,

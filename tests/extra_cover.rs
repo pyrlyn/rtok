@@ -90,10 +90,10 @@ fn expand_unknown_id_with_lines_flag_still_fails_as_unknown() {
     let _ = fs::remove_dir_all(&home);
 }
 
-/// `plugins` prints the header plus exactly the 12 catalogue rows, each with
+/// `plugins` prints the header plus exactly the 13 catalogue rows, each with
 /// an on/off state and a surface list.
 #[test]
-fn plugins_lists_twelve_catalogue_rows_with_header_and_surfaces() {
+fn plugins_lists_thirteen_catalogue_rows_with_header_and_surfaces() {
     let home = tmp("plugins-table");
     let out = cmd(&["plugins"], &home)
         .assert()
@@ -108,7 +108,7 @@ fn plugins_lists_twelve_catalogue_rows_with_header_and_surfaces() {
         "{text}"
     );
     let rows: Vec<&str> = lines.collect();
-    assert_eq!(rows.len(), 12, "{text}");
+    assert_eq!(rows.len(), 13, "{text}");
     for id in [
         "measure",
         "cmd",
@@ -122,6 +122,7 @@ fn plugins_lists_twelve_catalogue_rows_with_header_and_surfaces() {
         "graph",
         "toon",
         "compress",
+        "docs",
     ] {
         assert!(
             rows.iter().any(|r| r.starts_with(id)),

@@ -561,6 +561,12 @@ min_rows = 5
 [plugins.compress]
 enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
 
+[plugins.docs]
+enabled        = false                # local rustdoc from Cargo.lock + cached docs.rs JSON (T455)
+query_limit    = 5                    # потолок попаданий docs_query
+snippet_chars  = 400                  # символов на FTS-фрагмент
+max_tokens     = 800                  # потолок оценки всего ответа; лишние попадания отбрасываются
+
 [plugins.wasm]
 enabled = false                      # off by default; no .wasm loaded until T32.2 host + `wasm-host` feature
 dir     = "~/.rtok/plugins"          # scan one level for *.wasm; D6 — this repo never vendors third-party plugins

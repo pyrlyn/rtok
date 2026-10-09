@@ -29,7 +29,7 @@ does (T92.1).
 The extension carries `cli` (bash → `rtok run`, `tool_result` → `rtok filter`, `context` →
 `rtok archive rewrite`); `mcp.json` carries `mcp`. Hook and proxy surfaces have no path in.
 
-Reachable: measure, cmd, read, json_tree, archive, guard, memory, graph, toon
+Reachable: measure, cmd, read, json_tree, archive, guard, memory, graph, toon, docs
 Not reachable: proxy, inject, compress
 
 ## Docs

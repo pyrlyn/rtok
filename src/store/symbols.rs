@@ -93,6 +93,21 @@ fn fts_coverage(name: &str, signature: &str, doc: &str, tokens: &[&str]) -> usiz
 /// below that so a wide fan-out never blows the bind limit in one `eq_any`.
 const NAME_CHUNK: usize = 500;
 
+/// One copied symbol row, without `id` (SQLite assigns it) and without `root`
+/// (the destination root is written on insert).
+type CopiedSymbol = (
+    String,
+    String,
+    String,
+    i32,
+    i32,
+    String,
+    i64,
+    i64,
+    i32,
+    String,
+);
+
 /// One level of `symbol_impact`'s walk: references of any name in `frontier`, as
 /// `(matched name, path, enclosing scope)` — the direct-caller edge (T163.1 BFS, replaces
 /// the old `WITH RECURSIVE` base/step: `s.name = w.scope`). The matched name comes back
@@ -357,6 +372,101 @@ impl Store {
             .into_iter()
             .map(|(p, s, m, z)| (p, (s, m, z)))
             .collect())
+    }
+
+    /// Copy one root's symbol rows onto another, skipping paths `to` already has.
+    /// `id` is omitted so SQLite assigns it. The extractor fingerprint is copied when
+    /// `to` has none, so the next index does not treat the root as a new extractor and
+    /// delete the rows. One `BEGIN IMMEDIATE`.
+    pub fn copy_symbol_rows(&self, from: &str, to: &str) -> Result<usize> {
+        if from == to {
+            return Ok(0);
+        }
+        let mut conn = self.lock()?;
+        Ok(
+            conn.immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                let existing: Vec<String> = symbols::table
+                    .filter(symbols::root.eq(to))
+                    .select(symbols::path)
+                    .distinct()
+                    .load(conn)?;
+                let have: HashSet<String> = existing.into_iter().collect();
+                let rows: Vec<CopiedSymbol> = symbols::table
+                    .filter(symbols::root.eq(from))
+                    .select((
+                        symbols::path,
+                        symbols::name,
+                        symbols::kind,
+                        symbols::line,
+                        symbols::is_def,
+                        symbols::file_sha,
+                        symbols::mtime,
+                        symbols::size,
+                        symbols::end_line,
+                        symbols::scope,
+                    ))
+                    .load(conn)?;
+                let rows: Vec<_> = rows
+                    .into_iter()
+                    .filter(|row| !have.contains(&row.0))
+                    .collect();
+                let inserted = rows.len();
+                for chunk in rows.chunks(INSERT_CHUNK) {
+                    let values: Vec<_> = chunk
+                        .iter()
+                        .map(
+                            |(
+                                path,
+                                name,
+                                kind,
+                                line,
+                                is_def,
+                                sha,
+                                mtime,
+                                size,
+                                end_line,
+                                scope,
+                            )| {
+                                (
+                                    symbols::root.eq(to),
+                                    symbols::path.eq(path),
+                                    symbols::name.eq(name),
+                                    symbols::kind.eq(kind),
+                                    symbols::line.eq(line),
+                                    symbols::is_def.eq(is_def),
+                                    symbols::file_sha.eq(sha),
+                                    symbols::mtime.eq(mtime),
+                                    symbols::size.eq(size),
+                                    symbols::end_line.eq(end_line),
+                                    symbols::scope.eq(scope),
+                                )
+                            },
+                        )
+                        .collect();
+                    diesel::insert_into(symbols::table)
+                        .values(&values)
+                        .execute(conn)?;
+                }
+                let dest_fp: Option<String> = extractor::table
+                    .filter(extractor::root.eq(to))
+                    .select(extractor::fingerprint)
+                    .first(conn)
+                    .optional()?;
+                if dest_fp.is_none() {
+                    let src_fp: Option<String> = extractor::table
+                        .filter(extractor::root.eq(from))
+                        .select(extractor::fingerprint)
+                        .first(conn)
+                        .optional()?;
+                    if let Some(fp) = src_fp {
+                        diesel::insert_into(extractor::table)
+                            .values((extractor::root.eq(to), extractor::fingerprint.eq(fp)))
+                            .execute(conn)?;
+                    }
+                }
+                Ok(inserted)
+            })?,
+        )
     }
 
     /// Record a new stat for a file whose content hashed the same (T8.4): the rows stand,
