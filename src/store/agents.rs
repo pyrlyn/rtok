@@ -175,6 +175,20 @@ pub fn idle_secs(idle: &str) -> Result<i64> {
         .map_err(|_| anyhow::anyhow!("[agents] idle {idle:?} is out of range"))
 }
 
+fn main_agent_id(
+    conn: &mut SqliteConnection,
+    host_id: i32,
+    host_session: &str,
+) -> Result<Option<String>> {
+    Ok(agents::table
+        .filter(agents::host_id.eq(host_id))
+        .filter(agents::host_session_id.eq(host_session))
+        .filter(agents::parent_key.eq(""))
+        .select(agents::id)
+        .first(conn)
+        .optional()?)
+}
+
 impl Store {
     /// Ensure the row for this host session (or, when `parent_key` names one, its sub-agent)
     /// exists and is fresh; returns its rtok id (existing on repeat, else a freshly minted
@@ -197,13 +211,7 @@ impl Store {
         let parent_id: Option<String> = if key.is_empty() {
             None
         } else {
-            agents::table
-                .filter(agents::host_id.eq(host_id))
-                .filter(agents::host_session_id.eq(host_session))
-                .filter(agents::parent_key.eq(""))
-                .select(agents::id)
-                .first(&mut *conn)
-                .optional()?
+            main_agent_id(&mut conn, host_id, host_session)?
         };
         let id = uuid::Uuid::new_v4().to_string();
         let row_id: String = diesel::insert_into(agents::table)
@@ -231,6 +239,13 @@ impl Store {
             .returning(agents::id)
             .get_result(&mut *conn)?;
         Ok(row_id)
+    }
+
+    /// The main (non-sub-agent) row of one host session, without touching it — T473's lookup
+    /// for a caller that knows the host session id but must not create a row for it.
+    pub fn main_agent(&self, host_id: i32, host_session: &str) -> Result<Option<String>> {
+        let mut conn = self.lock()?;
+        main_agent_id(&mut conn, host_id, host_session)
     }
 
     /// Set `last_seen` to now and `activity` to exactly what is passed (unlike
