@@ -162,7 +162,7 @@ impl Plugin for Guard {
 
 /// `rtok guard check` — same allow/deny `pre_tool` returns, as a JSON line.
 pub fn check(tool: &str, raw_input: &str, cx: &crate::plugin::Runtime) -> String {
-    let tool = crate::hooks::types::canonical_tool_name(tool);
+    let tool = crate::names::canonical_tool_name(tool);
     let mut input: Value = serde_json::from_str(raw_input).unwrap_or(Value::Null);
     if let Some(obj) = input.as_object_mut()
         && let Some(fp) = obj.remove("filePath")

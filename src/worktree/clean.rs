@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use super::list::{Cache, orphans, usage};
 use super::{inventory, noted_table};
-use crate::info::human_bytes;
+use crate::bytes::human_bytes;
 use crate::render::{Col, duration};
 
 pub struct Policy {

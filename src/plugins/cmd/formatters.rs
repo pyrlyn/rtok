@@ -129,7 +129,7 @@ fn named(argv: &[String]) -> String {
 /// Basename of argv[0], splitting on `/` and `\` and dropping a trailing `.exe`
 /// (case-insensitive). Re-export of [`crate::agents::cmd_stem`] — one definition,
 /// shared with `measure::stats::bash_family` and `agents::is_rtok_bin` (T55.10).
-pub(crate) use crate::agents::cmd_stem;
+pub(crate) use crate::names::cmd_stem;
 
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[

@@ -11,7 +11,7 @@ use super::jsonl::{self, Parsed};
 use crate::config::Config;
 use crate::render::{Col, table};
 use crate::store::Store;
-use anyhow::{Result, bail};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -867,28 +867,7 @@ fn api_table(label: &str, rows: &BTreeMap<String, ApiRow>) -> String {
     table(&cols, &out)
 }
 
-/// `<n>`, `<n>d` or `<n>h` from the `--since` flag.
-pub fn parse_since(s: &str) -> Result<Duration> {
-    parse_since_from(s, "--since")
-}
-
-/// [`parse_since`] for a value read from `source` (`stats.since`, `report.since`): the error
-/// names where the bad value came from, so a config typo is not blamed on a flag nobody passed.
-pub fn parse_since_from(s: &str, source: &str) -> Result<Duration> {
-    let s = s.trim();
-    let (n, unit) = s.split_at(s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len()));
-    let n: u64 = n.parse().map_err(|_| anyhow::anyhow!("bad {source} {s}"))?;
-    let per_unit = match unit {
-        "" | "d" => 86_400u64,
-        "h" => 3_600,
-        _ => bail!("bad {source} unit in {s}"),
-    };
-    // `--since 99999999999999999d` used to panic in a debug build and wrap in a release one.
-    let secs = n
-        .checked_mul(per_unit)
-        .ok_or_else(|| anyhow::anyhow!("{source} {s} is out of range"))?;
-    Ok(Duration::from_secs(secs))
-}
+pub use crate::since::{parse_since, parse_since_from};
 
 /// The counters of one bucket with its prompt-cache hit rate: cache reads over every input
 /// token the provider billed (uncached, written and read).
@@ -927,7 +906,7 @@ pub fn attach_lanes(report: &mut Report, store: &Store) -> Result<()> {
         .usage_by_lane()?
         .into_iter()
         .map(|row| {
-            let lane = crate::proxy::lane::lane_of_kind(&row.kind).to_string();
+            let lane = crate::lane::lane_of_kind(&row.kind).to_string();
             (
                 lane,
                 api_row(row.input, row.cache_create, row.cache_read, row.output),
@@ -1851,10 +1830,10 @@ pub fn bash_family(cmd: &str) -> String {
         let words: Vec<String> = s.split_whitespace().map(str::to_string).collect();
         let vis = crate::plugins::cmd::formatters::visible_argv(&words);
         let stem = vis.first().map(String::as_str).unwrap_or(first);
-        crate::agents::cmd_stem(stem).to_string()
+        crate::names::cmd_stem(stem).to_string()
     }
     #[cfg(not(feature = "cmd"))]
-    crate::agents::cmd_stem(first).to_string()
+    crate::names::cmd_stem(first).to_string()
 }
 
 fn strip_prefix_env(s: &str) -> Option<&str> {

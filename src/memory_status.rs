@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! `rtok memory status` — renders [`crate::web::model::MemoryStatus`] (T69.4).
+//! `rtok memory status` — renders [`crate::model::MemoryStatus`] (T69.4).
 
 use anyhow::Result;
 use std::fmt::Write as _;
 
 use crate::config::Config;
-use crate::web::model::{self, MemoryStatus};
+use crate::model::{self, MemoryStatus};
 
 pub fn run(cfg: &Config, project: Option<&str>, since: Option<&str>, json: bool) -> Result<()> {
     let status = model::memory_status(cfg, project, since)?;

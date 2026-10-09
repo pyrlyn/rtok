@@ -90,20 +90,7 @@ pub struct Info {
     pub total_bytes: u64,
 }
 
-/// `1023 B`, `1.0 KB`, `1.5 MB` — one decimal past bytes, binary units.
-pub fn human_bytes(n: u64) -> String {
-    const KB: f64 = 1024.0;
-    let n = n as f64;
-    if n < KB {
-        return format!("{} B", n as u64);
-    }
-    for (unit, div) in [("KB", KB), ("MB", KB * KB), ("GB", KB * KB * KB)] {
-        if n < div * KB {
-            return format!("{:.1} {unit}", n / div);
-        }
-    }
-    format!("{:.1} TB", n / (KB * KB * KB * KB))
-}
+pub use crate::bytes::human_bytes;
 
 fn file_of(path: &Path) -> FileInfo {
     FileInfo {
@@ -276,7 +263,7 @@ pub fn collect(cfg: &Config, config_file: Option<&Path>) -> Info {
         + archive.bytes
         + log.bytes;
     Info {
-        version: crate::cli::VERSION.to_string(),
+        version: crate::VERSION.to_string(),
         binary,
         home: cfg.home.display().to_string(),
         config,

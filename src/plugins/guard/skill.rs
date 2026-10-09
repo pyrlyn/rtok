@@ -83,7 +83,7 @@ fn resolve(name: &str, cwd: Option<&Path>, home: &Path) -> Option<PathBuf> {
     let project = cwd.map(|c| c.join(".claude").join("skills").join(name).join("SKILL.md"));
     match project {
         Some(p) if p.is_file() => Some(p),
-        _ => Some(crate::doctor::skill_md_path(home, name)),
+        _ => Some(crate::skill_path::skill_md_path(home, name)),
     }
 }
 
@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(resolve("here", Some(&proj), &home), Some(p));
         assert_eq!(
             resolve("there", Some(&proj), &home),
-            Some(crate::doctor::skill_md_path(&home, "there"))
+            Some(crate::skill_path::skill_md_path(&home, "there"))
         );
         assert_eq!(
             resolve("pony:tail", None, &home),

@@ -28,8 +28,8 @@ use super::junk_map::{Role, Roots, specs};
 use super::junk_review;
 use super::junk_sessions;
 use super::{Agent, HOSTS, host, present};
+use crate::bytes::human_bytes;
 use crate::config::Config;
-use crate::info::human_bytes;
 use crate::store::Store;
 
 #[derive(Debug, Serialize)]

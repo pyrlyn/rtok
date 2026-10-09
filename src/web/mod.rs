@@ -8,7 +8,7 @@
 //! `web/dist` and embedded by [`spa`] (T310.9), so the hook binary links no UI toolkit.
 //! Every value served comes from [`model`], the operator model `rtok tui` renders too (D23).
 
-pub mod model;
+pub use crate::model;
 pub mod protocol;
 pub mod spa;
 

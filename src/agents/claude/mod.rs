@@ -933,7 +933,7 @@ impl Agent for Claude {
                 plugin(cfg, true)?,
                 run(cfg, true)?,
                 unregister_mcp(cfg)?,
-                crate::proxy::cli::unregister_proxy(cfg)?,
+                crate::agents::proxy_env::unregister_proxy(cfg)?,
                 super::skill::sync("claude", cfg, true)?,
             ]),
             Mode::Install | Mode::Update => {
@@ -956,7 +956,7 @@ impl Agent for Claude {
                     lines.push(register_mcp(cfg)?);
                 }
                 if cfg.setup.proxy {
-                    lines.push(crate::proxy::cli::register_proxy(cfg)?);
+                    lines.push(crate::agents::proxy_env::register_proxy(cfg)?);
                 }
                 lines.push(super::skill::sync("claude", cfg, false)?);
                 Ok(lines)

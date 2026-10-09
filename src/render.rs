@@ -13,56 +13,11 @@
 //! lookup: a tty, `NO_COLOR`, `CLICOLOR` / `CLICOLOR_FORCE`, and `TERM=dumb`. Piping any of
 //! these commands into a file or a CI log still yields plain text.
 
-use std::path::Path;
-
 use owo_colors::{OwoColorize, Stream};
 
-use crate::web::model::{AgentState, AgentView, SessionView};
+use crate::agent_view::{AgentState, AgentView, SessionView};
 
-/// Uncoloured unified diff of one file, three lines of context. Empty when nothing differs.
-pub fn unified_diff(path: &Path, before: &str, after: &str) -> String {
-    if before == after {
-        return String::new();
-    }
-    similar::TextDiff::from_lines(before, after)
-        .unified_diff()
-        .context_radius(3)
-        .header(
-            &format!("a/{}", path.display()),
-            &format!("b/{}", path.display()),
-        )
-        .to_string()
-}
-
-/// A `git diff` of one file, three lines of context, coloured. Empty when nothing differs.
-pub fn file_diff(path: &Path, before: &str, after: &str) -> String {
-    paint(&unified_diff(path, before, after))
-}
-
-/// Colour diff-shaped text: green additions, red removals, cyan hunk headers, bold file headers.
-/// Lines that carry no marker — the installers' own `7 additions`, `no changes` — pass through.
-pub fn paint(text: &str) -> String {
-    text.lines()
-        .map(|line| {
-            if line.starts_with("+++") || line.starts_with("---") {
-                line.if_supports_color(Stream::Stdout, |t| t.bold())
-                    .to_string()
-            } else if line.starts_with('@') {
-                line.if_supports_color(Stream::Stdout, |t| t.cyan())
-                    .to_string()
-            } else if line.starts_with('+') {
-                line.if_supports_color(Stream::Stdout, |t| t.green())
-                    .to_string()
-            } else if line.starts_with('-') {
-                line.if_supports_color(Stream::Stdout, |t| t.red())
-                    .to_string()
-            } else {
-                line.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+pub use crate::diff::{file_diff, paint, unified_diff};
 
 /// A spinner for a walk with no known length. indicatif draws to stderr and draws nothing at
 /// all when stderr is not a terminal, so a piped or redirected run stays byte-clean.
@@ -78,50 +33,11 @@ pub fn spinner(what: &str) -> indicatif::ProgressBar {
     pb
 }
 
-/// A spinner with no file counter. Same TTY rule as [`spinner`]: silent when stderr is not a terminal.
-pub fn loader(what: &str) -> indicatif::ProgressBar {
-    let pb = indicatif::ProgressBar::new_spinner();
-    if let Ok(style) = indicatif::ProgressStyle::with_template("{spinner:.cyan} {msg}") {
-        pb.set_style(style);
-    }
-    pb.set_message(what.to_string());
-    pb.enable_steady_tick(std::time::Duration::from_millis(120));
-    pb
-}
+pub use crate::progress::{loader, with_loader};
 
-/// Run `f` behind a [`loader`] and clear it before returning, so the finished line the caller
-/// prints next takes its place. Silent off a terminal, as [`loader`] is.
-pub fn with_loader<T>(msg: &str, f: impl FnOnce() -> T) -> T {
-    let pb = loader(msg);
-    let out = f();
-    pb.finish_and_clear();
-    out
-}
-
-/// Colour a stored log line's level (`<date> <time> <level> <source>/<name>: <message>`, T24.0's
-/// `log::line`): red error, yellow warn, dim debug, info plain. `rtok logs export` prints the same
-/// line through no such call, so piping stays byte-plain.
-pub fn log_line(text: &str) -> String {
-    let mut parts = text.splitn(4, ' ');
-    let (Some(date), Some(time), Some(level), Some(rest)) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
-    else {
-        return text.to_string();
-    };
-    let level = match level {
-        "error" => level
-            .if_supports_color(Stream::Stdout, |t| t.red())
-            .to_string(),
-        "warn" => level
-            .if_supports_color(Stream::Stdout, |t| t.yellow())
-            .to_string(),
-        "debug" => level
-            .if_supports_color(Stream::Stdout, |t| t.dimmed())
-            .to_string(),
-        _ => level.to_string(),
-    };
-    format!("{date} {time} {level} {rest}")
-}
+/// Colour a stored log line's level. The body lives in [`crate::log::log_line`] so the log
+/// screen does not depend on this module.
+pub use crate::log::log_line;
 
 /// A state word for a status table: green when the thing is up, red when it is not.
 pub fn state(word: &str, ok: bool) -> String {
@@ -482,6 +398,8 @@ pub fn agent_message_end(id: i32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
     use crate::store::SessionTotals;
 
     /// Off a terminal indicatif draws nothing, so the wait leaves no byte behind and the closure's
@@ -610,7 +528,7 @@ mod tests {
 
     /// The model's rows for `totals` with no agent registered, ended ones kept.
     fn views(rows: &[SessionTotals], now: i64) -> Vec<SessionView> {
-        crate::web::model::session_views(rows.to_vec(), &[], now, 1_800, true)
+        crate::model::session_views(rows.to_vec(), &[], now, 1_800, true)
     }
 
     fn host_is(line: &str, host: &str) -> bool {

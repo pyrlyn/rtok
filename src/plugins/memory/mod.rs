@@ -11,7 +11,6 @@ pub mod import;
 mod observe;
 pub mod pack;
 mod scrub;
-pub mod status;
 pub mod sync;
 
 pub use crate::project::project_name;

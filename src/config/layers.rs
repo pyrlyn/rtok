@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::Result;
 use figment::providers::{Env, Format, Serialized, Toml};
@@ -19,6 +19,26 @@ use figment::value::{Dict, Map as FMap, Num, Value};
 use figment::{Figment, Metadata, Profile, Provider};
 
 use super::Config;
+
+static ON_LOAD: Mutex<Option<fn(&Config)>> = Mutex::new(None);
+
+/// Run after every successful [`load`]. The CLI registers UI styling here so
+/// config does not depend on `ui`.
+pub fn on_load(hook: fn(&Config)) {
+    *ON_LOAD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hook);
+}
+
+/// `rtok hook <event> [--host]`: a figment `flag` layer that sets `hook.host`.
+pub fn hook_host_flag(host: Option<String>) -> Option<Dict> {
+    let host = host?;
+    let mut hook = Dict::new();
+    hook.insert("host".into(), Value::from(host));
+    let mut flags = Dict::new();
+    flags.insert("hook".into(), Value::from(hook));
+    Some(flags)
+}
 
 /// Wraps a provider so it reports under a different [`Metadata::name`] — used to rename the
 /// two `Toml` file providers to `user` and `project` for [`entries`]'s provenance column.
@@ -516,10 +536,23 @@ pub fn load(home: &Path, config_file: Option<&Path>, flags: Option<Dict>) -> Res
     .extract()?;
     cfg.finish(home);
     cfg.loaded_from = super::LoadedFrom(Some(super::Config::user_path(home, config_file)));
-    // Every command reaches its config through here, so this is where `[ui]` takes effect.
-    crate::ui::style::configure(&cfg.ui);
+    if let Some(hook) = *ON_LOAD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        hook(&cfg);
+    }
     for w in &warnings {
-        crate::log::append(&cfg, "warn", "config", "dotenv", w);
+        crate::logfile::append(
+            &cfg.log.path,
+            cfg.log.max_bytes,
+            cfg.log.files,
+            &cfg.log.level,
+            "warn",
+            "config",
+            "dotenv",
+            w,
+        );
     }
     Ok(cfg)
 }

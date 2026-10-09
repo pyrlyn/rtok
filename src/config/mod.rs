@@ -38,6 +38,38 @@ pub(crate) fn write_file(path: &Path, body: &str) -> Result<()> {
     rtok_agent_sdk::write(&rtok_agent_sdk::Apply::default(), path, body, "config")
 }
 
+/// Host ids `rtok agents` installs. Config validation checks `[agents.junk] extra`
+/// against this list; `agents` re-exports it.
+pub const HOSTS: &[&str] = &[
+    "claude",
+    "cursor",
+    "codex",
+    "opencode",
+    "kilo",
+    "pi",
+    "omp",
+    "zcode",
+    "kimi",
+    "grok",
+    "vscode",
+    "copilot",
+    "commandcode",
+    "aider",
+    "windsurf",
+    "zed",
+    "cline",
+    "gemini",
+    "codewhale",
+    "mimo",
+    "antigravity",
+    "devin",
+    "roo",
+    "qwen",
+];
+
+/// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
+pub const TASK_ADAPTERS: [&str; 3] = ["disk", "github", "gitlab"];
+
 /// Plugin catalogue: `(id, default_on)`. The registry's manifests must match this list
 /// (asserted by a test in `plugins`), and [`Plugins`] has one field per id.
 pub const CATALOGUE: [(&str, bool); 13] = [
@@ -130,15 +162,7 @@ section! {
     }
 }
 
-section! {
-    /// `[estimator]` — chars per token per class (plan T0.5), rewritten by `stats --calibrate`.
-    Estimator {
-        code: f32 = 3.5,
-        prose: f32 = 4.2,
-        json: f32 = 3.0,
-        cjk: f32 = 1.0,
-    }
-}
+pub use crate::tokens::Estimator;
 
 // ── surfaces ────────────────────────────────────────────────────────────────
 
@@ -1358,8 +1382,11 @@ impl Config {
                 let home = Self::home_dir();
                 let mut c = Self::default();
                 c.finish(&home);
-                crate::log::append(
-                    &c,
+                crate::logfile::append(
+                    &c.log.path,
+                    c.log.max_bytes,
+                    c.log.files,
+                    &c.log.level,
                     "warn",
                     "config",
                     "load",
@@ -1401,7 +1428,7 @@ impl Config {
             bail!("{} exists; pass --force to overwrite", path.display());
         }
         let before = std::fs::read_to_string(&path).unwrap_or_default();
-        let diff = crate::render::file_diff(&path, &before, DEFAULT_TOML);
+        let diff = crate::diff::file_diff(&path, &before, DEFAULT_TOML);
         if !dry_run {
             write_file(&path, DEFAULT_TOML)?;
         }
@@ -1449,7 +1476,16 @@ impl Config {
         self.expand_paths_with(home, user_home.as_deref());
         for note in &notes {
             eprintln!("rtok: {note}");
-            crate::log::append(self, "warn", "config", "legacy", note);
+            crate::logfile::append(
+                &self.log.path,
+                self.log.max_bytes,
+                self.log.files,
+                &self.log.level,
+                "warn",
+                "config",
+                "legacy",
+                note,
+            );
         }
     }
 

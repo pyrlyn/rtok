@@ -17,7 +17,7 @@ use super::schema::{note_embeddings, notes};
 use super::substr;
 
 use crate::config::MemoryEmbed;
-use crate::plugin::NoteHit;
+use rtok_plugin_sdk::NoteHit;
 
 use super::{Store, hex_sha256};
 

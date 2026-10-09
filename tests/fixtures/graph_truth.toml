@@ -27,12 +27,22 @@
 # ref-recall drop 0.318 -> 0.290 with the index unchanged;
 # `every_label_names_a_file_that_mentions_the_symbol` now names such a label instead. Its
 # first run also found `Registry` and `Replay` labelled in `src/cli.rs`, which T15.11 had
-# emptied of both (the calls moved to `src/web/model.rs`, where they are now labelled).
+# emptied of both (the calls moved to `src/model/mod.rs`, where they are now labelled).
 #
 # T66.1 (2026-09-18): `mem_save` became an upsert, so `src/plugins/memory/mod.rs` calls
 # `upsert_note` and no longer names `insert_note`. The call site did not disappear, it was
 # renamed: `insert_note` loses that one ref (`import.rs` and `checkpoint.rs` still call it)
 # and `upsert_note` enters with the same def/ref pair, so the sample keeps its size.
+#
+# #625 (2026-10-09): the operator model moved from `src/web/model.rs` to
+# `src/model/mod.rs`, and `src/web/model/agents.rs` to `src/model/agents.rs`.
+# Labels follow the files; the symbols did not change.
+#
+# The same change dropped `store`'s `use crate::plugin` (that edge cycles with
+# `plugin` → `store`). `session` and `replace_symbols` ranked only because the
+# import matched `src/plugin.rs`; without it they are a same-class tie, so they
+# are no longer rank labels. `symbol_defs` and `get_read_cache` stay
+# import-resolved and take those rank slots, keeping ten ambiguous names.
 #
 # T209 (2026-09-24): `notes_topic` (migration 0020) enforces "one row per (project, kind,
 # title)" at the database level, so `checkpoint.rs`'s repeat-PreCompact write moved from
@@ -63,7 +73,7 @@ refs = ["examples/hello_plugin.rs", "src/expand.rs", "src/plugins/archive/mod.rs
 name = "Registry"
 kind = "struct"
 defs = ["src/plugins/mod.rs"]
-refs = ["examples/mcp_tool.rs", "src/hooks/mod.rs", "src/mcp.rs", "src/proxy/mod.rs", "src/web/model.rs"]
+refs = ["examples/mcp_tool.rs", "src/hooks/mod.rs", "src/mcp.rs", "src/proxy/mod.rs", "src/model/mod.rs"]
 
 [[symbol]]
 name = "ToolDef"
@@ -95,7 +105,7 @@ refs = ["src/plugins/archive/mod.rs", "src/proxy/anthropic.rs", "src/proxy/opena
 name = "Replay"
 kind = "struct"
 defs = ["src/measure/stats.rs"]
-refs = ["src/measure/baseline.rs", "src/web/model.rs"]
+refs = ["src/measure/baseline.rs", "src/model/mod.rs"]
 
 [[symbol]]
 name = "Surface"
@@ -126,10 +136,13 @@ refs = ["src/plugins/graph/index.rs", "src/plugins/graph/mod.rs"]
 [[symbol]]
 name = "symbol_defs"
 kind = "fn"
+rank = true
 # T23.3: `Symbols` capability on the host; T23.5 `MemoryHost` for tests (T8.19 repair).
 # P39: `symbols_lbug.rs` removed — SQLite-only symbol store.
+# #625: rank refs are the import-resolved callers. `graph/index.rs` and
+# `graph/mod.rs` still call it; they are not this definition's ranked callers.
 defs = ["src/store/symbols.rs", "src/plugin.rs", "crates/rtok-plugin-sdk/src/testing.rs"]
-refs = ["src/plugins/graph/index.rs", "src/plugins/graph/mod.rs"]
+refs = ["src/plugin.rs", "src/plugins/graph/scope.rs"]
 
 [[symbol]]
 name = "insert_note"
@@ -158,10 +171,13 @@ refs = ["src/plugins/guard/mod.rs", "src/plugins/read/cache.rs"]
 [[symbol]]
 name = "get_read_cache"
 kind = "fn"
+rank = true
 # T23.3: the host's capability impl in `src/plugin.rs` defines it a second time; T23.5's
 # `MemoryHost` a third (T8.19 repair).
+# #625: rank refs are the import-resolved callers. `guard` and `read/cache.rs` still
+# call it; they are not this definition's ranked callers.
 defs = ["src/store/mod.rs", "src/plugin.rs", "crates/rtok-plugin-sdk/src/testing.rs"]
-refs = ["src/plugins/guard/mod.rs", "src/plugins/read/cache.rs"]
+refs = ["src/plugin.rs", "src/store/mod.rs"]
 
 [[symbol]]
 name = "upsert_session"
@@ -296,8 +312,10 @@ refs = ["src/proxy/mod.rs"]
 [[symbol]]
 name = "session"
 kind = "fn"
-rank = true
-defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/measure/usage/copilot.rs", "src/measure/usage/gemini.rs", "src/measure/usage/pi.rs", "src/plugin.rs", "src/tui/app.rs", "src/web/model/agents.rs", "tests/common/mcp.rs"]
+# #625: no longer rank. The class-0 edge was `store`'s `use crate::plugin`, removed
+# because it cycles. Nothing else imports or uniquely shares a directory with one
+# definition, so callers stay unresolved.
+defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/measure/usage/copilot.rs", "src/measure/usage/gemini.rs", "src/measure/usage/pi.rs", "src/plugin.rs", "src/tui/app.rs", "src/model/agents.rs", "tests/common/mcp.rs"]
 refs = ["src/store/mod.rs"]
 
 [[symbol]]
@@ -310,6 +328,7 @@ refs = ["src/plugins/graph/mod.rs"]
 [[symbol]]
 name = "replace_symbols"
 kind = "fn"
-rank = true
+# #625: no longer rank. `plugin.rs` and `src/store/` each have same-dir calls, and
+# the `use crate::plugin` import that used to break the tie is gone (module cycle).
 defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/plugin.rs", "src/store/symbols.rs"]
 refs = ["src/plugin.rs", "src/store/mod.rs"]

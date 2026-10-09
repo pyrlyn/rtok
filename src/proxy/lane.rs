@@ -102,27 +102,18 @@ impl Lane {
     /// still recognises.
     pub fn kind(self) -> &'static str {
         match self {
-            Lane::Agent => "api_request",
-            Lane::Bulk => "api_request:bulk",
-            Lane::Batch => "api_request:batch",
-            Lane::Files => "api_request:files",
-            Lane::Embeddings => "api_request:embeddings",
-            Lane::Meta => "api_request:meta",
-            Lane::Internal => "api_request:internal",
+            Lane::Agent => crate::lane::KIND_AGENT,
+            Lane::Bulk => crate::lane::KIND_BULK,
+            Lane::Batch => crate::lane::KIND_BATCH,
+            Lane::Files => crate::lane::KIND_FILES,
+            Lane::Embeddings => crate::lane::KIND_EMBEDDINGS,
+            Lane::Meta => crate::lane::KIND_META,
+            Lane::Internal => crate::lane::KIND_INTERNAL,
         }
     }
 }
 
-/// True for a proxied-request `calls.kind`, whichever lane tagged it.
-pub fn is_api_request(kind: &str) -> bool {
-    kind == "api_request" || kind.starts_with("api_request:")
-}
-
-/// The lane name a `calls.kind` was recorded under — the inverse of [`Lane::kind`]. The bare
-/// `api_request` is the agent lane, which is how rows written before lanes existed read back.
-pub fn lane_of_kind(kind: &str) -> &str {
-    kind.strip_prefix("api_request:").unwrap_or("agent")
-}
+pub use crate::lane::{is_api_request, lane_of_kind};
 
 /// The lane of one request and the path to forward (the `/lane/<name>` prefix removed).
 #[derive(Debug, PartialEq, Eq)]

@@ -1190,7 +1190,7 @@ Not only `src/report/`:
 
 | Surface | Path |
 |---------|------|
-| `rtok stats` | `src/cli.rs` → `crate::web::model::stats_report` (`src/web/model.rs`) + `src/measure/stats` |
+| `rtok stats` | `src/cli.rs` → `crate::web::model::stats_report` (`src/model/mod.rs`) + `src/measure/stats` |
 | `rtok report` | `src/report/mod.rs` `document`, renderers `markdown.rs` / `html.rs` / `pdf.rs` |
 | Prices | `[stats.prices]` / `ModelPrice` in `src/config/mod.rs`; `--price` via `stats_flags` in `cli.rs` |
 

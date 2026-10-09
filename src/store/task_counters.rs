@@ -11,7 +11,7 @@ use diesel::sqlite::SqliteConnection;
 
 use super::schema::task_counters;
 use super::{Store, is_locked};
-use crate::tasks::{TaskId, check_prefix};
+use crate::task_id::{TaskId, check_prefix};
 
 /// `''` for the top-level counter, else the parent's number path (`2` for `R2.1`).
 fn counter_key(parent: Option<&TaskId>) -> String {

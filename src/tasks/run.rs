@@ -25,7 +25,7 @@ use crate::config::layers::git_root;
 use crate::store::Store;
 
 /// The adapters `[tasks] adapter` accepts; the config validator checks the same set.
-pub const ADAPTERS: [&str; 3] = ["disk", "github", "gitlab"];
+pub use crate::config::TASK_ADAPTERS as ADAPTERS;
 
 /// Creates tried when the id keeps turning out taken, before the last error is the answer.
 const TAKEN_RETRIES: usize = 3;

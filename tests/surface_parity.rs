@@ -111,7 +111,7 @@ fn every_model_page_has_a_tui_body() {
 /// T60.3: the TUI renders session drill-down from the model's accessor (D23).
 #[test]
 fn session_detail_exists_on_both_surfaces() {
-    let model = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/model.rs"));
+    let model = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/model/mod.rs"));
     let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/view.rs"));
     assert!(
         model.contains("pub fn session_detail"),
@@ -131,7 +131,7 @@ struct Surfaces {
 }
 
 const SURFACES: Surfaces = Surfaces {
-    model: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/model.rs")),
+    model: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/model/mod.rs")),
     tui: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/view.rs")),
     app: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/app.rs")),
 };

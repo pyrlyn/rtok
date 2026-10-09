@@ -133,7 +133,15 @@ impl Runtime {
     /// Default config with every path under a fresh temp dir + in-memory store, for tests and
     /// examples.
     pub fn in_memory(session: impl Into<String>) -> Result<Self> {
-        let (config, _) = crate::testutil::config("mem");
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("rtok-mem-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir)?;
+        let mut config = Config::default();
+        config.rebase_paths(&dir);
+        config.log.path = dir.join("rtok.log");
         Self::with_store(config, Store::open_in_memory()?, session)
     }
 

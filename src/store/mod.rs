@@ -48,9 +48,9 @@ use diesel::sqlite::SqliteConnection;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::plugin::Measurement;
+use rtok_plugin_sdk::Measurement;
 // The two row shapes a plugin sees are the contract's (D25); the diesel rows below feed them.
-pub use crate::plugin::{ArchiveDecision, NoteHit};
+pub use rtok_plugin_sdk::{ArchiveDecision, NoteHit};
 
 // `models` (the schema::models table) is not imported bare: it collides with this file's
 // own `pub mod models` of Diesel row structs, so upsert_model qualifies it as `schema::models`.
@@ -320,7 +320,7 @@ impl Store {
         let applied = if self.wait.migrate < std::time::Duration::from_secs(1) {
             apply(&mut conn)
         } else {
-            crate::render::with_loader("migrating the store", || apply(&mut conn))
+            crate::progress::with_loader("migrating the store", || apply(&mut conn))
         };
         set_busy(&mut conn, self.wait.busy)?;
         applied
@@ -1506,7 +1506,7 @@ impl Store {
             q = q.filter(notes::project.eq(p));
         }
         let mut rows: Vec<(i32, String, i32, i32, i64, Option<i64>)> = q.load(&mut *conn)?;
-        let now = i64::try_from(crate::log::now()).unwrap_or(0);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(0);
         rows.sort_by(|a, b| {
             b.2.cmp(&a.2)
                 .then_with(|| {
@@ -1690,7 +1690,7 @@ impl Store {
     ) -> Result<()> {
         let mut conn = self.lock()?;
         // `unixepoch()` has no typed-DSL form; bind Rust's now.
-        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
         diesel::insert_into(read_cache::table)
             .values((
                 read_cache::session.eq(session),
@@ -2408,7 +2408,7 @@ impl Store {
             Option<i64>,
             Option<i64>,
         );
-        let batch = crate::proxy::lane::Lane::Batch.kind();
+        let batch = crate::lane::KIND_BATCH;
         let mut conn = self.lock()?;
         let rows: Vec<Row> = usage::table
             .left_join(calls::table)
@@ -2593,7 +2593,7 @@ impl Store {
         if days <= 0 {
             return Ok(Vec::new());
         }
-        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
         let cutoff = now.saturating_sub(days.saturating_mul(86_400));
         let mut conn = self.lock()?;
         Ok(doomed_archives(&mut conn, cutoff)?
@@ -2606,7 +2606,7 @@ impl Store {
         if days <= 0 {
             return Ok(0);
         }
-        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
         let cutoff = now.saturating_sub(days.saturating_mul(86_400));
         let mut conn = self.lock()?;
         // T75: every surface opens this one file, and a purge starting while another
@@ -2681,7 +2681,7 @@ impl Store {
         if days <= 0 {
             return Ok(0);
         }
-        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
         let cutoff = now.saturating_sub(days.saturating_mul(86_400));
         let mut total = 0;
         loop {
@@ -2715,7 +2715,16 @@ impl Store {
         let report = |what: &str, e: &anyhow::Error| {
             let msg = format!("{what} skipped until next start: {e:#}");
             eprintln!("rtok {surface}: {msg}");
-            crate::log::append(cfg, "warn", surface, "retention", &msg);
+            crate::logfile::append(
+                &cfg.log.path,
+                cfg.log.max_bytes,
+                cfg.log.files,
+                &cfg.log.level,
+                "warn",
+                surface,
+                "retention",
+                &msg,
+            );
         };
         let store = match Store::open(&cfg.core.db_path) {
             Ok(s) => s,
@@ -2897,7 +2906,7 @@ fn insert_archive_row_conn(
 /// [`Store::mark_expanded_recorded`].
 fn mark_expanded_conn(conn: &mut SqliteConnection, archive_id: &str) -> Result<usize> {
     // `unixepoch()` has no typed-DSL form; bind Rust's now.
-    let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+    let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
     Ok(diesel::update(
         archive_decisions::table
             .filter(archive_decisions::archive_id.eq(archive_id))
@@ -4966,7 +4975,7 @@ mod tests {
         );
 
         // Age s1's row out of the window.
-        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
         {
             let mut conn = store.lock().unwrap();
             diesel::update(measurements::table.filter(measurements::session.eq("s1")))
@@ -5341,7 +5350,7 @@ mod tests {
         store
             .insert_call_io(id, Some(body), Some(body), body.len() + 1, None)
             .unwrap();
-        let ts = i64::try_from(crate::log::now()).unwrap() - age_days * 86_400;
+        let ts = i64::try_from(rtok_log::now()).unwrap() - age_days * 86_400;
         store.set_call_ts(id, ts).unwrap();
         id
     }
@@ -5393,7 +5402,7 @@ mod tests {
             .map(|_| hook_call_with_body(&store, "hook", b"{}", 10))
             .collect();
         let fresh = hook_call_with_body(&store, "hook", b"{}", 1);
-        let cutoff = i64::try_from(crate::log::now()).unwrap() - 3 * 86_400;
+        let cutoff = i64::try_from(rtok_log::now()).unwrap() - 3 * 86_400;
         {
             let mut conn = store.lock().unwrap();
             let first = sql_ext::clear_hook_bodies(&mut conn, cutoff, 2).unwrap();
