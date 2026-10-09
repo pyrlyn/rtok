@@ -209,6 +209,87 @@ fn is_markdown(path: &Path) -> bool {
     )
 }
 
+/// One `llms.txt` list link. The URL is recorded, never fetched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlmsLink {
+    pub title: String,
+    pub url: String,
+    pub description: String,
+}
+
+/// `llms.txt` and `llms-full.txt` are markdown with a `.txt` name, so
+/// `is_markdown` does not see them.
+pub fn is_llms_txt(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some("llms.txt" | "llms-full.txt")
+    )
+}
+
+/// `- [title](url)` and `* [title](url): note`. Fenced blocks are skipped.
+pub fn llms_links(src: &str) -> Vec<LlmsLink> {
+    let mut out = Vec::new();
+    let mut fenced = false;
+    for line in src.lines() {
+        let t = line.trim();
+        if t.starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        if let Some(link) = parse_llms_link(t) {
+            out.push(link);
+        }
+    }
+    out
+}
+
+fn parse_llms_link(line: &str) -> Option<LlmsLink> {
+    let rest = line
+        .strip_prefix("- ")
+        .or_else(|| line.strip_prefix("* "))?
+        .trim();
+    let rest = rest.strip_prefix('[')?;
+    let (title, rest) = rest.split_once("](")?;
+    let title = title.trim();
+    if title.is_empty() {
+        return None;
+    }
+    let (url, tail) = rest.split_once(')')?;
+    let url = url.trim();
+    if url.is_empty() || url.contains(char::is_whitespace) {
+        return None;
+    }
+    let description = tail
+        .trim()
+        .strip_prefix(':')
+        .map(str::trim)
+        .unwrap_or("")
+        .to_string();
+    Some(LlmsLink {
+        title: title.to_string(),
+        url: url.to_string(),
+        description,
+    })
+}
+
+fn render_llms_links(links: &[LlmsLink]) -> String {
+    links
+        .iter()
+        .map(|link| {
+            let mut row = format!("link {} {}", link.title, link.url);
+            if !link.description.is_empty() {
+                row.push_str(" — ");
+                row.push_str(&link.description);
+            }
+            row
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn markdown_render(headings: &[MdHeading], mode: &str) -> String {
     if mode == "signatures" {
         return headings
@@ -324,13 +405,28 @@ fn import_last_segment(raw: &str) -> String {
 
 /// Definitions as `kind name line`, or verbatim definition lines.
 pub fn render(path: &Path, src: &str, mode: &str) -> Result<String> {
-    if is_markdown(path) {
+    if is_markdown(path) || is_llms_txt(path) {
         let hs = markdown_headings(src);
-        return Ok(if hs.is_empty() {
-            fallback(src)
+        let links = if is_llms_txt(path) {
+            llms_links(src)
+        } else {
+            Vec::new()
+        };
+        if hs.is_empty() && links.is_empty() {
+            return Ok(fallback(src));
+        }
+        let mut out = if hs.is_empty() {
+            String::new()
         } else {
             markdown_render(&hs, mode)
-        });
+        };
+        if !links.is_empty() {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(&render_llms_links(&links));
+        }
+        return Ok(out);
     }
     let hits = tags(path, src)?;
     let mut seen = std::collections::HashSet::new();
@@ -753,6 +849,32 @@ mod tests {
         let digest = markdown_digest(src);
         assert!(digest.contains("## Two\n  Second."));
         assert!(!digest.contains("not a heading"), "{digest}");
+    }
+
+    #[test]
+    fn llms_txt_map_lists_links_and_skips_fences() {
+        let src = "# Docs\nIntro.\n## Pages\n- [Real](https://example.com/a): a note\n```sh\n- [Fake](https://example.com/no)\n```\n- [Other](docs/b.md)\n";
+        let links = llms_links(src);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].title, "Real");
+        assert_eq!(links[0].url, "https://example.com/a");
+        assert_eq!(links[0].description, "a note");
+        assert_eq!(links[1].title, "Other");
+        assert_eq!(links[1].url, "docs/b.md");
+        assert!(links[1].description.is_empty());
+        let map = render(Path::new("docs/llms.txt"), src, "map").unwrap();
+        assert!(map.contains("h1 Docs 1"), "{map}");
+        assert!(
+            map.contains("link Real https://example.com/a — a note"),
+            "{map}"
+        );
+        assert!(map.contains("link Other docs/b.md"), "{map}");
+        assert!(!map.contains("Fake"), "{map}");
+        let full = render(Path::new("llms-full.txt"), src, "map").unwrap();
+        assert!(full.contains("link Other docs/b.md"), "{full}");
+        let md = render(Path::new("doc.md"), src, "map").unwrap();
+        assert!(!md.contains("link "), "{md}");
+        assert!(md.contains("h1 Docs 1"), "{md}");
     }
 
     #[test]
