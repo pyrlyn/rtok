@@ -14,6 +14,11 @@ use std::path::{Path, PathBuf};
 /// Largest body either end accepts: a PostToolUse payload carries the whole tool output.
 pub const MAX_FRAME: usize = 64 << 20;
 
+/// Default of `core.hook_max_input_bytes` (T201, T459). It lives here because the client cannot
+/// load a config: it reads at most this much stdin and leaves a longer body to `rtok hook`, which
+/// applies the cap the user configured.
+pub const HOOK_MAX_INPUT_BYTES: u32 = 8 << 20;
+
 /// Variables the hook reads per call instead of from its config. A client that has one runs
 /// `rtok hook` itself, and they are part of [`fingerprint`] so a resident started with one serves
 /// no call without it.
