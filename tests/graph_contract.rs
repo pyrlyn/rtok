@@ -159,8 +159,8 @@ fn four_tools_byte_exact() {
             "symbol",
             serde_json::json!({"names": ["b", "c"]})
         ),
-        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
-         = c\nchain.rs:7 function\nfn c() {}\n"
+        "= b\nchain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+         = c\nchain.rs::c#function@7 chain.rs:7 function\nfn c() {}\n"
     );
     assert_eq!(
         call(
@@ -169,7 +169,7 @@ fn four_tools_byte_exact() {
             "symbol",
             serde_json::json!({"names": ["b", "zzz"]})
         ),
-        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+        "= b\nchain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
          = zzz\nno definition of zzz\n"
     );
     let _ = std::fs::remove_dir_all(&home);
