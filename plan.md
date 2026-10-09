@@ -44,7 +44,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.9 | todo | P2 | 4 | 0% | |
+| T329.9 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.11 | todo | P2 | 3 | 0% | |
 | T329.14 | todo | P2 | 4 | 0% | |
@@ -829,6 +829,8 @@ Check: fixture repos under `tests/fixtures`, no network:
 T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, default `tags`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's behaviour (`tags` byte-identical, `lsp` = the T376 fallback to tags). Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 is decided: `tags` stays the default and `auto` is opt-in. Depends on T329.4.
 
 Check: under `backend = "auto"`, with the server on `PATH` the answer is tagged LSP, without it (MCP restarted) tree-sitter, a scope mixing both labels each project; the default `tags` answers stay byte-identical (`graph_contract.rs`); `backend = "lsp"` with no server falls back to tags with the `(tags; lsp: <reason>)` header; a crash mid-session falls back with a notice; `just check`.
+
+Execution plan: (1) `crates/rtok-config`: `lsp_timeout_ms` (10000), `backend_by_language` (map), `backend` accepts `auto`; `text` is refused by the graph door with "not available yet (T329.10)" and unknown values error; `default.toml`, `docs/config.md` (en, ru, uk) and the trycmd goldens follow. (2) `lsp.rs`: one language table (marker, language, server) feeds `pick`, `language_of`, `server_for`; the 40 s `READY` becomes the configured timeout. (3) `mod.rs`: `Mode` and `mode_of(cx, root)` (config plus the per-language override) replace `lsp_backend`; `lsp_or_tags` under `auto` heads the answer `(lsp)` or `(tags)` / `(tags; lsp: <reason>)`, records `tags.<tool>` rows, and a project with no server for its language goes straight to tags. (4) `scope.rs`: under `auto`, a scope with a project whose server is installed is answered per project, each part headed `[name] (mode)`; an all-tags scope keeps the linked tags traversal with one mode line per project. (5) Tests with closures as the LSP seam (no server needed); docs `lsp.md` en/ru/uk. Verify: `just check`.
 
 ### T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 
