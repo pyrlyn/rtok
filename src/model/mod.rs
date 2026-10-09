@@ -830,6 +830,16 @@ pub use crate::plugins::graph::projects::ProjectRow;
 #[derive(Debug, Serialize, JsonSchema)]
 pub enum ProjectRow {}
 
+/// The graph page's drill-down request and answer (T329.14); with `graph` off no request parses.
+#[cfg(feature = "graph")]
+pub use crate::plugins::graph::drill::{DrillGraph, DrillRequest};
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, Serialize, JsonSchema)]
+pub enum DrillGraph {}
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, serde::Deserialize, Serialize, JsonSchema)]
+pub enum DrillRequest {}
+
 #[cfg(feature = "graph")]
 fn project_rows(cfg: &Config) -> Option<Vec<ProjectRow>> {
     let rt = crate::plugin::Runtime::open(cfg.clone(), "web-projects").ok()?;

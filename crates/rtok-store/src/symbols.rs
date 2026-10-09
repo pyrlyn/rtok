@@ -1399,7 +1399,7 @@ fn distinct_files(conn: &mut SqliteConnection, root: &str) -> Result<i64> {
         .get_result(conn)?)
 }
 
-fn import_segs(spec: &str) -> Vec<String> {
+pub(crate) fn import_segs(spec: &str) -> Vec<String> {
     spec.split(['/', '\\', ':', '.'])
         .filter(|s| !s.is_empty())
         .filter(|s| !matches!(*s, "crate" | "self" | "super" | "package"))
@@ -1407,7 +1407,7 @@ fn import_segs(spec: &str) -> Vec<String> {
         .collect()
 }
 
-fn file_key(file: &str) -> Vec<String> {
+pub(crate) fn file_key(file: &str) -> Vec<String> {
     let mut parts: Vec<&str> = file.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
     if let Some(last) = parts.last_mut()
         && let Some((stem, _)) = last.rsplit_once('.')
