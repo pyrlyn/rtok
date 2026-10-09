@@ -49,6 +49,9 @@ Git worktrees of this repository: owner, state and disk cost
 rtok/-task(1)
 This project/*(Aqs tasks: numbered by rtok, stored by the `[tasks]` adapter
 .TP
+rtok/-batch(1)
+Provider Batch jobs (Anthropic, OpenAI) sent through `rtok proxy`
+.TP
 rtok/-info(1)
 Version, effective paths, disk usage, error count and proxy status
 .TP
@@ -112,6 +115,7 @@ v[..] ([..])
 /fBrtok-doctor/fR(1),
 /fBrtok-worktree/fR(1),
 /fBrtok-task/fR(1),
+/fBrtok-batch/fR(1),
 /fBrtok-info/fR(1),
 /fBrtok-agents/fR(1),
 /fBrtok-run/fR(1),

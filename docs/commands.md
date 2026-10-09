@@ -12,6 +12,7 @@ build never blocks the host.
 | `rtok hook <event>` | Claude Code hook entry point (stdin JSON → stdout JSON) |
 | `rtok mcp` | MCP server over stdio: `read`, `search`, `tree`, `expand`, `mem_*`, graph tools |
 | `rtok proxy` | `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` hop: usage capture, optional compress mode |
+| `rtok batch` | provider Batch jobs (`submit`, `status`, `fetch`) sent through `rtok proxy`; see [batch-flex.md](batch-flex.md) |
 | `rtok dashboard` | local React UI over a WebSocket API, reading the same store |
 | `rtok run -- <cmd>` | run a command, archive the raw output, print the filtered version |
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode `tool.execute.after`) |
@@ -23,11 +24,11 @@ build never blocks the host.
 | `rtok agents list` | every known app: kind and name, path and version, config files, rtok modules, installed plugin version |
 | `rtok agents junk list\|clear` | each agent's folders, junk kinds and sizes; `clear` is a dry run until `--yes`, clears only rtok's own logs and archives unless `--agent`, `--kind`, `--include review` or `--older-than` selects more, checks each item again right before removing it, `--trash` moves to the OS trash, exits 1 when a planned item stays |
 | `rtok graph index [path]` | build the tree-sitter symbol index for a tree |
-| `rtok graph impact <name> [--project <id\|dir>]` | what breaks if a symbol changes, over the project and the projects it links to; `dead` and `affected` run over that scope too (a symbol only a linked project calls is not dead; `git diff` is read in every project, tests are listed per project); `index` and `status` take `--project` too. One answer, one cap; with `watch` on, `rtok mcp` watches every project of the scope |
+| `rtok graph impact <name> [--all] [--project <id\|dir>]` | what breaks if a symbol changes (files grouped and cut at `plugins.graph.impact_tokens`; `--all` prints every row), over the project and the projects it links to; `dead` and `affected` run over that scope too (a symbol only a linked project calls is not dead; `git diff` is read in every project, tests are listed per project); `index` and `status` take `--project` too. One answer, one cap; with `watch` on, `rtok mcp` watches every project of the scope |
 | `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
 | `rtok memory import <file>` | import notes as JSONL, deduped by body hash |
 | `rtok otel flush\|status` | export the ledgers over OTLP/HTTP, or report the watermarks |
-| `rtok task create\|list\|show\|status\|next\|sync\|init` | the project's plan in its `[tasks]` adapter; `sync` raises the id counters to the highest ids the adapter holds and reports drift, never writing the adapter |
+| `rtok task create\|list\|show\|status\|next\|ready\|claim\|release\|dep\|priority\|sync\|init` | the project's plan in its `[tasks]` adapter; `claim` takes a ready task, `dep` records a blocker, `sync` raises the id counters and reports drift |
 | `rtok bench` | A/B two host configurations on fixed tasks |
 
 ## Every flag is a config key

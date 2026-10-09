@@ -397,6 +397,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("web", "the web surface itself"),
     ("dashboard", "deprecated spelling of `rtok web`"),
     ("proxy", "serves the proxy; `--dry-run` echoes its settings"),
+    // writing: each calls the provider's Batch API, not the operator model
+    ("batch submit", "creates a provider Batch job"),
+    ("batch status", "asks the provider, not the store"),
+    ("batch fetch", "downloads provider results to a new file"),
     (
         "tui",
         "the terminal surface; its tabs are model::pages() (T15.1)",
@@ -440,6 +444,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("memory pin", "flags a note row to lead recall (T69.1)"),
     ("memory unpin", "drops the recall lead flag (T69.1)"),
     ("memory revise", "replaces and retires note rows (T69.1)"),
+    (
+        "memory history",
+        "prints earlier bodies of one note; recall and mem_get stay on the current body (T472)",
+    ),
     (
         "memory sync",
         "writes a managed CLAUDE.md / AGENTS.md block (T69.6)",
@@ -488,6 +496,20 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "task sync",
         "raises the store's id counters to the adapter's highest ids; agents get that for free, since task_create seeds first (T441.12)",
+    ),
+    (
+        "task ready",
+        "reads the project's adapter, not the store snapshot (T442)",
+    ),
+    (
+        "task claim",
+        "claims a task through the adapter; the store only records it for the hook (T442)",
+    ),
+    ("task release", "clears a claim through the adapter (T442)"),
+    ("task dep", "writes a blocker through the adapter (T442)"),
+    (
+        "task priority",
+        "writes a priority through the adapter (T442)",
     ),
     (
         "worktree add",
@@ -679,6 +701,11 @@ const JSON_READERS: &[&str] = &[
     "task list",
     "task show",
     "task next",
+    "task ready",
+    "task claim",
+    "task release",
+    "task dep",
+    "task priority",
 ];
 
 fn command_at<'a>(root: &'a Command, path: &str) -> &'a Command {

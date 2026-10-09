@@ -90,23 +90,32 @@ Anthropic `Wire` adapter — no `proxy_filter`, no context-management injection.
   policy remains “never”, unless an explicit opt-in tool/CLI is designed later).
 - Not visible to hooks/MCP.
 
-### Planned CLI skeleton (opt-in, not implemented)
+### CLI (opt-in)
 
 A thin **opt-in** surface for humans/scripts that already speak provider Batch —
 outside the agent loop. It does **not** replace an agent's `ANTHROPIC_BASE_URL` /
 `OPENAI_BASE_URL` (those stay on sync chat wires). Commands talk to the same
-`rtok proxy` hop and **pass through** provider Batch paths (`/v1/batches`,
-`/v1/messages/batches`, …); no sync→Batch conversion.
-
-**Planned** (not in the binary yet):
+`rtok proxy` hop (`--url`, default `[proxy] bind` and `port`) and **pass through**
+provider Batch paths (`/v1/batches`, `/v1/messages/batches`, …); no sync→Batch
+conversion.
 
 | Command | Role |
 |---------|------|
-| `rtok batch submit <jsonl>` | upload/create a batch (JSONL → provider create) |
-| `rtok batch status <id>` | poll batch status |
-| `rtok batch fetch <id> <out>` | download results to `<out>` |
+| `rtok batch submit <jsonl>` | create a batch from one provider-shaped request per line |
+| `rtok batch status <id>` | the provider's batch object |
+| `rtok batch fetch <id> <out>` | results into a new file `<out>` (never overwritten) |
 
-See also `ideas.md` (I-100/I-101 token-saving backlog). Promote into `plan.md` before coding.
+- The key is read only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`; the provider is
+  `--provider`, else read from the id (`msgbatch_…` is Anthropic).
+- Anthropic: each line is `{custom_id, params}` and the lines are sent as `requests`,
+  byte for byte. OpenAI: each line is `{custom_id, method, url, body}`; the file is uploaded
+  as `purpose=batch`, then the batch is created for the one `url` the lines share
+  (`completion_window` `24h`); `fetch` follows `output_file_id`.
+- OpenAI's `/v1/batches*` and `/v1/files*` paths have no `Wire`; the proxy sends them to
+  `proxy.openai_upstream` (a request with `anthropic-version` is Anthropic's Files API and
+  keeps `proxy.upstream`).
+
+See also `ideas.md` (I-100/I-101 token-saving backlog).
 
 ## Flex API (sync, cheaper tier)
 
@@ -168,15 +177,16 @@ a sync chat call. Both are stripped before forwarding. See `[proxy.lanes]` in
 
 - ~~tag `calls.kind` so Batch create/poll/results are distinguishable from sync
   `api_request`~~ — done by the lane tag (T385.1)
-- when results are fetched, parse per-line usage into `usage` rows (or a
-  dedicated rollup) so `--price` can show Batch discounts
-- surface Batch vs sync vs Flex in `rtok report` / stats breakdowns
+- ~~when results are fetched, parse per-line usage into `usage` rows~~ — `[proxy.batch]
+  parse_results` (T385.4); `rtok stats --price` costs that usage at the `<model>@batch` row of
+  `[stats.prices]` (T385.12.1)
+- surface Batch vs sync vs Flex in `rtok report` / stats breakdowns (T385.12.2)
 
 **Planned for Flex:**
 
-- record the effective `service_tier` on the `calls` row
-- price Flex tokens with the Flex rate rows once `[stats.prices]` gains them
-  (**TODO**: dated Flex USD/MTok rows)
+- record the effective `service_tier` on the `calls` row (T385.12.2)
+- price Flex tokens with the `<model>@flex` rows, which ship in `[stats.prices]` (OpenAI
+  lists Flex at the Batch rates); nothing reads them until the tier is recorded
 
 Until those land, treat Batch/Flex savings as provider-console numbers, not
 rtok ledger numbers.

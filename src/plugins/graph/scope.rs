@@ -7,19 +7,19 @@
 //! its own index, so the scope is a loop over the per-root queries; the answer is one text under
 //! one cap. `Ctx` carries no project registry, so the scope is resolved by the caller (`mcp.rs`).
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 
-use rtok_plugin_sdk::Ctx;
+use rtok_plugin_sdk::{Class, Ctx};
 
 use super::{
     DeadRow, ExploreParts, Filter, Hits, Tag, TagsExplore, ambiguous_banner, assemble_explore,
-    callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous, format_affected,
-    git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots, index, index_for,
-    is_test_path, lsp, lsp_backend, outline_in, projects, rel_of, reverse_call_chain, stale_banner,
-    symbol_filtered, tests_json, via_of, with_stale,
+    blast, callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous,
+    format_affected, git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots,
+    index, index_for, is_test_path, lsp, lsp_backend, outline_in, projects, rel_of,
+    reverse_call_chain, stale_banner, symbol_filtered, tests_json, via_of, with_stale,
 };
 use crate::store::Store;
 
@@ -113,6 +113,29 @@ fn walkable(m: &Member) -> Result<()> {
     crate::plugins::read::walk_root_ok(&m.root)
 }
 
+pub fn symbol_id(cx: &Ctx, scope: &[Member], id: &str) -> Result<String> {
+    if let [one] = scope {
+        walkable(one)?;
+        return super::symbol_by_id(cx, &one.root, id);
+    }
+    let mut missed = true;
+    let mut out = String::new();
+    for m in scope {
+        walkable(m)?;
+        let text = super::symbol_by_id(cx, &m.root, id)?;
+        if text.starts_with("no definition of") {
+            continue;
+        }
+        missed = false;
+        out.push_str(&label(m));
+        out.push_str(&text);
+    }
+    if missed {
+        return Ok(format!("no definition of {id}"));
+    }
+    Ok(out)
+}
+
 pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
     let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {
@@ -162,7 +185,7 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
             prefix: &label(m),
             suffix: if many { " ?" } else { "" },
         };
-        body.push_str(&defs_text(cx, &m.root, rows, callees, &tag));
+        body.push_str(&defs_text(cx, &m.root, name, rows, callees, &tag));
     }
     capped(cx, &head, body)
 }
@@ -262,7 +285,12 @@ pub fn impact(
             let text = format!("nothing reaches {name}{}", filter.scope_note());
             return Ok(head + &flag_ambiguous(defs, text));
         }
-        impact_lines_text(&rows)
+        let budget = blast::Budget {
+            overhead: cx.estimate(&format!("{head}{}", ambiguous_banner(1)), Class::Code),
+            mark: defs > 1,
+            ..blast::Budget::new(cx, filter.all)
+        };
+        blast::render(cx, &rows, name, &budget, HashMap::new)?
     };
     capped(cx, &head, flag_ambiguous(defs, body))
 }
@@ -703,7 +731,7 @@ mod tests {
         assert_eq!(
             out,
             "1 names ambiguous (?): narrow with path or kind, or backend = \"lsp\"\n\
-             [a] lib.rs:1 function ?\nfn dup() {}\n[c] lib.rs:1 function ?\nfn dup() {}\n"
+             [a] lib.rs::dup#function@1 lib.rs:1 function ?\nfn dup() {}\n[c] lib.rs::dup#function@1 lib.rs:1 function ?\nfn dup() {}\n"
         );
         let out = callers(&ctx, &scope, "dup", &Filter::none()).unwrap();
         assert!(out.starts_with("1 names ambiguous (?)"), "{out}");
@@ -712,7 +740,7 @@ mod tests {
         let scope = scope_at(&cx, &dir, "b", None);
         assert_eq!(
             symbol(&ctx, &scope, "dup", &Filter::none()).unwrap(),
-            "[c] lib.rs:1 function\nfn dup() {}\n"
+            "[c] lib.rs::dup#function@1 lib.rs:1 function\nfn dup() {}\n"
         );
         let _ = fs::remove_dir_all(dir);
     }
@@ -818,8 +846,14 @@ mod tests {
         let ctx = Ctx::new(&cx);
         let scope = scope_at(&cx, &dir, "a", None);
         let out = explore(&ctx, &scope, "shared b_mid", &Filter::none()).unwrap();
-        assert!(out.contains("= shared\n[c] lib.rs:1 function\n"), "{out}");
-        assert!(out.contains("= b_mid\n[b] lib.rs:1 function\n"), "{out}");
+        assert!(
+            out.contains("= shared\n[c] lib.rs::shared#function@1 lib.rs:1 function\n"),
+            "{out}"
+        );
+        assert!(
+            out.contains("= b_mid\n[b] lib.rs::b_mid#function@1 lib.rs:1 function\n"),
+            "{out}"
+        );
         assert!(out.contains("shared \u{2190} 1\n"), "{out}");
         assert!(out.contains("b_mid \u{2190} 1\n"), "{out}");
         // One project asks the plain explore.

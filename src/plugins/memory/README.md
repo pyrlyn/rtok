@@ -24,6 +24,9 @@ progressive disclosure.
   pins/unpins. The same operations run as `rtok memory retire|pin|unpin` and
   `rtok memory revise <id> --title --body` (revise = save the replacement through the
   `mem_save` path, then retire the old id naming it).
+- `rtok memory history <id>` — the earlier title and body, oldest first, kept when an
+  upsert changed the note (T472). `checkpoint:*` and `session:*` are not kept. Recall
+  and `mem_get` stay on the current body. There is no MCP tool for history.
 
 ## Lifecycle
 

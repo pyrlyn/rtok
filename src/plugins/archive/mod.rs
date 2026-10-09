@@ -189,6 +189,9 @@ fn rewrite_block(
         // `archive_decisions` is shared with `toon` (same `tool_use_id` key); replaying its
         // block here measured the saving twice, once under each plugin.
         Ok(Some(d)) if d.pointer.starts_with(crate::plugins::toon::PREFIX) => return None,
+        // `json_tree` shares the same decision row and already measured the fold.
+        #[cfg(feature = "json_tree")]
+        Ok(Some(d)) if d.pointer.starts_with(crate::plugins::json_tree::PREFIX) => return None,
         Ok(Some(d)) => {
             let kind = if a.tiers {
                 tier_kind(&d.pointer)

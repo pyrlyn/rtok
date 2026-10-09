@@ -72,7 +72,7 @@ jobs:
       # so a host that caches a plugin by its manifest version sees a new build.
       - run: tools/plugin-versions.sh --check "$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
       - if: failure() && github.event_name == 'pull_request'
-        uses: ./.github/actions/cancel-run
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   check:
     # Draft PRs still emit synchronize; skip until ready_for_review.
@@ -129,7 +129,7 @@ jobs:
         run: just spa-browsers spa-e2e-run
       - run: just example
       - if: failure() && github.event_name == 'pull_request'
-        uses: ./.github/actions/cancel-run
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
   # T83.4: a gate like `check` — a Windows-only failure fails the run and reverts main.
@@ -171,7 +171,7 @@ jobs:
           mise exec -- cargo nextest run --workspace
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
-        uses: ./.github/actions/cancel-run
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   # T310.11: the admin SPA in web/ (the `just spa-*` recipes). oxlint and oxfmt already cover
   # web/ in `lint` (`just js` lints every tracked .ts/.tsx), so they are not run twice. The
@@ -214,7 +214,7 @@ jobs:
       - run: just spa-stories
       - run: just spa-build
       - if: failure() && github.event_name == 'pull_request'
-        uses: ./.github/actions/cancel-run
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   # Docs-only pull requests skip the jobs above; this one still runs the tests that validate the
   # Markdown (`just docs-check`: plan.md/todo.md ids and Check: lines, ideas.md, docs/ structure,
@@ -251,7 +251,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       - run: just docs-check
       - if: failure() && github.event_name == 'pull_request'
-        uses: ./.github/actions/cancel-run
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   revert-on-failure:
     name: revert-on-failure
@@ -269,4 +269,4 @@ jobs:
       # Revert, then a draft `revert-<branch>` PR that re-applies the work (T84, T253). The
       # shared action skips new branches, bot and auto-revert commits, and pushes touching
       # .github/ (GITHUB_TOKEN cannot push workflow files).
-      - uses: pyrlyn/ci/.github/actions/revert-on-failure@0603d0ae610af9f792c5caf925041292a857e480
+      - uses: pyrlyn/ci/.github/actions/revert-on-failure@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main

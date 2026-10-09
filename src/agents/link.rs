@@ -25,6 +25,11 @@
 //!    re-run on every call, never cached (see [`Rule::is_stable`]).
 //!
 //! A host without hooks never writes a row, so its MCP process registers its own.
+//!
+//! T455: a process none of whose ancestors any live session's hook had, and whose cwd no
+//! live session has, is [`Link::Outside`]: an app-level server that serves every session at
+//! once (Claude desktop's Code tab runs the `claude_desktop_config.json` entry this way) can
+//! never be linked, and says so instead of looking like hooks that have not fired yet.
 
 use anyhow::Result;
 
@@ -84,6 +89,11 @@ pub enum Link {
     },
     /// Several live agents of the host share this cwd; none is picked.
     Ambiguous(Vec<String>),
+    /// Live agents of the host recorded their hooks' parent chains since this process
+    /// started, and none of them is above this process or in its cwd. A new session whose
+    /// first hook has not landed yet looks the same for a moment, so, like `None`, it is
+    /// never remembered.
+    Outside,
     None,
 }
 
@@ -143,6 +153,9 @@ pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>
         .filter(|a| a.host_id == who.host_id && a.parent_key.is_empty())
         .filter(|a| a.last_seen >= who.since)
         .collect();
+    // A session whose hook wrote no chain (an old client) could still be ours, so only rows
+    // with a chain prove this process sits outside every live session's tree.
+    let chained = !who.ancestors.is_empty() && live.iter().any(|a| !a.ancestors.is_empty());
     // Index into this process's chain of the nearest ancestor an agent's hook also had.
     let depth = |a: &AgentRow| who.ancestors.iter().position(|p| a.ancestors.contains(p));
     if let Some(best) = live.iter().filter_map(depth).min() {
@@ -192,7 +205,7 @@ pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>
             rule: Rule::Own,
         });
     }
-    Ok(Link::None)
+    Ok(if chained { Link::Outside } else { Link::None })
 }
 
 /// T454: the agent an `rtok` command run from an agent's own shell acts for, as a raw id:
@@ -558,6 +571,64 @@ mod tests {
                 id: old,
                 rule: Rule::Cwd
             }
+        );
+    }
+
+    #[test]
+    fn a_process_under_no_live_session_and_in_no_ones_cwd_is_outside() {
+        let store = Store::open_in_memory().unwrap();
+        // The T455 shape: the desktop app (11149) started this server through a wrapper
+        // (11381) in an unrelated project; each session's hook ran under its own `claude`.
+        let mut who = caller("claude", &store, Some("/cox"));
+        hooked(&store, who.host_id, "a", "/rtok", &[30709, 25435, 25434]);
+        hooked(&store, who.host_id, "b", "/weft", &[26000, 13793, 13792]);
+        seen(
+            &store,
+            &caller("claude", &store, Some("/mail")),
+            "old-client",
+            0,
+        );
+        who.ancestors = &[11381, 11149];
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::Outside);
+        // Its own chain unreadable: nothing proves where it sits.
+        who.ancestors = &[];
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::None);
+    }
+
+    #[test]
+    fn without_a_chained_live_row_nothing_is_outside() {
+        let store = Store::open_in_memory().unwrap();
+        let mut who = caller("claude", &store, Some("/cox"));
+        who.ancestors = &[11381, 11149];
+        // No session has fired a hook yet.
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::None);
+        // Only old clients that record no chain: one of them could still be ours.
+        seen(
+            &store,
+            &caller("claude", &store, Some("/r")),
+            "old-client",
+            0,
+        );
+        assert_eq!(resolve(&store, &who, no_env).unwrap(), Link::None);
+    }
+
+    #[test]
+    fn a_hookless_host_registers_itself_even_beside_chained_rows_of_its_shared_host_row() {
+        let store = Store::open_in_memory().unwrap();
+        let mut who = caller("zed", &store, Some("/r"));
+        // Grok shares the `other` host row with Zed and its hooks record chains.
+        hooked(&store, who.host_id, "grok-1", "/g", &[700, 701]);
+        who.ancestors = &[11381, 11149];
+        let got = resolve(&store, &who, no_env).unwrap();
+        assert!(
+            matches!(
+                got,
+                Link::Linked {
+                    rule: Rule::Own,
+                    ..
+                }
+            ),
+            "{got:?}"
         );
     }
 }

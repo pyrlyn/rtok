@@ -292,6 +292,55 @@ input = 0.25
 cache_write = 0.25
 cache_read = 0.025
 output = 2.0
+# Уровни Batch и Flex, получено 2026-10-08: ключ — `<model>@batch` или `<model>@flex`, а `--price`
+# считает usage полосы Batch по строке `@batch`. Anthropic Batch — скидка 50 % на ввод и вывод,
+# множители кеша накладываются сверху (страница цен выше; уровня Flex нет). У OpenAI Batch и Flex
+# указаны одинаковые ставки (https://developers.openai.com/api/docs/pricing).
+[stats.prices."claude-fable-5-1@batch"]
+input = 5.0
+cache_write = 6.25
+cache_read = 0.125
+output = 25.0
+[stats.prices."claude-opus-5-5@batch"]
+input = 2.0
+cache_write = 2.5
+cache_read = 0.1
+output = 10.0
+[stats.prices."claude-sonnet-5-5@batch"]
+input = 1.0
+cache_write = 1.25
+cache_read = 0.05
+output = 5.0
+[stats.prices."claude-sonnet-5@batch"]
+input = 1.0
+cache_write = 1.25
+cache_read = 0.1
+output = 5.0
+[stats.prices."claude-haiku-4-5@batch"]
+input = 0.5
+cache_write = 0.625
+cache_read = 0.05
+output = 2.5
+[stats.prices."gpt-5@batch"]
+input = 0.625
+cache_write = 0.625
+cache_read = 0.0625
+output = 5.0
+[stats.prices."gpt-5@flex"]
+input = 0.625
+cache_write = 0.625
+cache_read = 0.0625
+output = 5.0
+[stats.prices."gpt-5-mini@batch"]
+input = 0.125
+cache_write = 0.125
+cache_read = 0.0125
+output = 1.0
+[stats.prices."gpt-5-mini@flex"]
+input = 0.125
+cache_write = 0.125
+cache_read = 0.0125
+output = 1.0
 
 [report]                              # rtok report (D24: renders the operator model, computes nothing)
 format = "md"                         # md; html (T22.2), pdf (T22.3), --ai (T22.4)
@@ -440,6 +489,9 @@ tree_depth       = 2
 delta            = true               # T58.1: changed re-read → unified diff vs last archive (7.3 % of Read bytes, 2026-09-18, `rtok stats --since 90d`)
 delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
 
+[plugins.json_tree]
+enabled = false                     # fold repeated nested JSON in old tool results; off until a measurement shows a saving
+
 [plugins.archive]
 enabled    = true
 keep_turns = 4                        # never touch the last N turns
@@ -490,6 +542,7 @@ hybrid     = true                     # when enabled: RRF(fts5, knn); false = kn
 [plugins.graph]
 enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
+impact_tokens = 1500                  # impact: files grouped and ranked up to this budget, then "+K files, M refs not shown"; --all or 0 = every row
 map_tokens = 0                        # SessionStart repo map cap (D5 share next to memory.recall_tokens); 0 = off until a P7 A/B passes
 map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 body_lines = 40                       # symbol(): source lines shown per definition
@@ -680,6 +733,10 @@ default_model = ""
 строки взяты со страниц цен провайдеров 2026-09-17 (источники в
 `config/default.toml`); перепроверьте их, если ваш счёт не сходится. `stats.price`
 включает отображение `--price` по умолчанию (`RTOK_STATS_PRICE=true` тоже работает).
+
+Строка с ключом `<model>@batch` (или `<model>@flex`) оценивает модель на уровне Batch (или Flex). `--price`
+выводит usage вызовов полосы Batch под `<model>@batch` и считает его по этой строке; без неё печатает `-`,
+а не берёт стандартную ставку. Строки `@flex` пока никто не читает: уровень Flex не записывается.
 
 ### Хост WASM-плагинов (`[plugins.wasm]`)
 

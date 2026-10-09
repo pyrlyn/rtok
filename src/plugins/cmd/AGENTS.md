@@ -22,7 +22,7 @@
   the family list in `research.md`.
 
 **Do not** parse shell syntax beyond the first argv word; do not add a shell parser dependency.
-One exception (T176): `bounded.rs` lexes quotes, `\`-newline continuation, and
+One exception (T176): `bounded.rs` lexes quotes, `\` escapes (T444; `\`-newline is a continuation), and
 `|`/`&&`/`||`/`;`/newline to spot a command the agent already bounded (`sed -n a,bp`,
 `head`/`tail -n`, `grep -A/-B/-C/-m` — a recursive `grep` (`-r`/`-R`) also needs
 `-m`/`--max-count`, or the hit list is unbounded; `rg` is recursive by default and has no such

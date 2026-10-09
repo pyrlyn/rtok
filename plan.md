@@ -4,6 +4,29 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Cloud review findings (2026-10-08)
+
+New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. None of these is in the task table yet: to take one, add its row and a card with a `Check:` line.
+
+| ID | Priority | Kind | Status | Where | Fix |
+| --- | --- | --- | --- | --- | --- |
+| T457 | P1 | bug | confirmed | `src/plugins/guard/mod.rs:432-433`, `:124-135`; wrap emitted at `src/plugins/cmd/hook.rs:153-157` | `strip_wrap` strips only `rtok run -- `, not `rtok run --agent <id> --`, so the stem looks like `rtok`, `cache_key` is `None`, and every sub-agent wrap clears all `bash` and `read` guard keys. Strip the `--agent <id>` form too and add a regression test. |
+| T458 | P2 | bug | confirmed | `src/mcp/wrap.rs:152-154` | The MCP wrap reads a declared `Content-Length` with no cap (`take(len).read_to_end`). Cap it like `rtok_hook::MAX_FRAME` (64 MiB) and fall back to `Framing::Raw` on overflow. |
+| T459 | P2 | bug | confirmed | `src/bin/rtok-hook.rs:41-42` | The `rtok-hook` client reads all of stdin before `Request::encode()`; only the resident caps later (T201). Bound the read to `hook_max_input_bytes + 1`. |
+| T460 | P2 | bug | suspected | `src/plugins/read/hook.rs:154-164` | `same_path` compares case-sensitively (`a == b`, then `Path::ends_with`). Case-fold or canonicalize on Windows. |
+| T461 | P2 | bug | suspected | `src/hooks/resident.rs:105` (Windows) vs `:80` (Unix) | The Windows resident exits only when `hook.lock` vanishes; Unix also exits when the socket vanishes. Mirror the Unix condition. |
+| T462 | P2 | dead code | confirmed | `src/plugins/guard/mod.rs:464` | `guard::check_json` has no callers; the CLI uses `guard::check` (`src/cli.rs:2393`). Remove it. |
+| T463 | P2 | dead code | confirmed | `crates/rtok-mcp/src/ops.rs:66-72` | `runs_rtok` is a weaker copy of `runs_bin` + `is_rtok_bin` (`crates/rtok-agent-sdk/src/lib.rs:519-525`, `src/agents/mod.rs:1693-1698`), which also accept `rtok.exe`, case folding and `current_exe()`. Delete it and call `runs_bin`. |
+| T464 | P2 | move | suspected | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates-packages `file-backup` | Depend on the published `file-backup` once its behaviour is confirmed to match (that crate has open hardlink and symlink bugs of its own). |
+| T465 | P2 | move | suspected | `tools/dist-generate.sh`, `tools/release.sh` → `pyrlyn/ci` | Fold the shared release steps into `pyrlyn/ci` if the copies in the other repos really match (not diffed). |
+| T466 | P2 | move | suspected | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Used four times in `ci.yml`; share it from `pyrlyn/ci` so other repos can reuse it. |
+| T467 | P2 | move | confirmed | `src/store/` (`mod.rs` is 5,275 lines) → `crates/rtok-store` | Issue #628 (P2 on GitHub): architecture work for incremental builds, not a bug. |
+| T468 | P3 | dead code | confirmed | `src/plugins/toon/mod.rs:212` | `toon::decode` is test-only. Put it under `cfg(test)` if release builds should not carry it. |
+| T469 | P3 | dead code | confirmed | `crates/rtok-agent-sdk/src/lib.rs:1086` | `copy_dir` is dead on Unix. Gate it with `cfg(not(unix))`. |
+| T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
+
+Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` (`src/agents/plugin_version.rs:84`, `:112`, `:268`) are open on T279.
+
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
@@ -55,14 +78,13 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T377 | todo | P3 | 2 | 0% | |
 | T378 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
-| T385.12 | todo | P3 | 3 | 20% | |
+| T385.12.2 | todo | P3 | 3 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -84,7 +106,6 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.6 | todo | P2 | 3 | 0% | |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
@@ -1320,16 +1341,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
-### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
-
-From the Empryo study (idea-only, clean-room; Empryo's blast-radius output groups dependents by file and fills a token budget). `impact_bfs` (`src/plugins/graph/mod.rs:836`) prints every reached reference up to `depth`; for a hub symbol the output runs to thousands of lines, which is the cost rtok exists to cut.
-
-Plan: group the BFS result by file, order files by (depth asc, T370 rank or ref count desc), print `path (N refs, depth d)` with the first 3 lines per file, stop at `plugins.graph.impact_tokens` (default 1500) with `+K files, M refs not shown — impact <name> --all`. `--all` keeps today's output.
-
-Done when: `impact` on a hub symbol fits the budget and ends with the cut line; a small impact is unchanged.
-
-Check: snapshot test on a fixture with a hub symbol; output tokens on the ambiguous set from T368 within budget; `tests/graph_truth.rs` impact recall unchanged with `--all`; `just check`.
-
 ### T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 
 From the Empryo study (idea-only, clean-room; Empryo `trigram.ts`: per-file trigram sets, candidate files = intersection of the query's literal trigrams). `search` (`src/plugins/read/search.rs:92`) walks and scans every file. Gate: I-95 (parallel walk) measures `search` p95 on a large repo first; if it is ≤ 200 ms, close this card with the number.
@@ -1387,11 +1398,11 @@ optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas an
 
 Check: per-wire tests and a dated bench row; `just check`.
 
-### T385.12. `rtok batch` CLI, Batch/Flex prices and the lane breakdown in `report`
+### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
 
-optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]`, and a per-lane, per-tier breakdown in `rtok stats` and `rtok report`.
+Split from T385.12; T385.6 and T385.12.1 are done (the price rows and `usage_by_model_tier` are in place). Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
 
-Check: trycmd for `rtok batch`; a report fixture with Batch/Flex rows; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+Check: a report fixture with Batch and Flex rows; `just check`.
 
 ### T394. Run the paid live benches and record them
 
@@ -1566,12 +1577,6 @@ Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pac
 Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
 
 Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
-
-As T414.4; the Graph 3D view keeps its renderer and takes its colours from the roles.
-
-Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page and state.
 
 ### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 

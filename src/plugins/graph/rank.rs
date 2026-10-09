@@ -258,6 +258,20 @@ pub fn refresh(cx: &Ctx, root: &str) -> Result<()> {
     cx.file_rank_put(root, &serde_json::to_string(&g)?)
 }
 
+/// T377: the stored global rank of each file, empty when no graph is stored or it is of an older
+/// shape. `impact` orders files at one depth by it.
+pub fn ranks(cx: &Ctx, root: &str) -> HashMap<String, f32> {
+    let g: Option<FileGraph> = cx
+        .file_rank_get(root)
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    match g {
+        Some(g) if g.v == VERSION => g.paths.into_iter().zip(g.rank).collect(),
+        _ => HashMap::new(),
+    }
+}
+
 /// Whether the root has no stored graph yet, as after an upgrade over an index that is current.
 pub fn missing(cx: &Ctx, root: &str) -> bool {
     cx.file_rank_get(root).ok().flatten().is_none()
@@ -450,26 +464,8 @@ mod tests {
     }
 
     fn seed_rows(rt: &crate::plugin::Runtime, root: &str) {
-        let def = |n: &str, l| {
-            (
-                n.to_string(),
-                "function".to_string(),
-                l,
-                true,
-                l,
-                String::new(),
-            )
-        };
-        let usage = |n: &str, l| {
-            (
-                n.to_string(),
-                "function".to_string(),
-                l,
-                false,
-                l,
-                String::new(),
-            )
-        };
+        let def = |n: &str, l| rtok_plugin_sdk::SymbolRow::new(n, "function", l, true, l, "");
+        let usage = |n: &str, l| rtok_plugin_sdk::SymbolRow::new(n, "function", l, false, l, "");
         let put = |path: &str, rows: &[_]| {
             rt.store
                 .replace_symbols(root, path, "s", (1, 1), rows)

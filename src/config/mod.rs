@@ -40,10 +40,11 @@ pub(crate) fn write_file(path: &Path, body: &str) -> Result<()> {
 
 /// Plugin catalogue: `(id, default_on)`. The registry's manifests must match this list
 /// (asserted by a test in `plugins`), and [`Plugins`] has one field per id.
-pub const CATALOGUE: [(&str, bool); 11] = [
+pub const CATALOGUE: [(&str, bool); 12] = [
     ("measure", true),
     ("cmd", true),
     ("read", true),
+    ("json_tree", false),
     ("archive", true),
     ("proxy", true),
     ("inject", true),
@@ -592,7 +593,38 @@ fn default_stats_prices() -> BTreeMap<String, ModelPrice> {
     ]
     .into_iter()
     .map(|(k, v)| (s(k), v))
+    .chain(tier_prices())
     .collect()
+}
+
+/// The shipped Batch and Flex rows (T385.12.1), keyed `<model>@batch` / `<model>@flex`; the
+/// suffix is what `rtok stats --price` appends to the model of usage that ran on that tier.
+/// Fetched 2026-10-08. Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
+/// (Batch is 50 % off input and output, and the cache multipliers stack on top, so the write
+/// and read columns are half the standard ones; Anthropic has no Flex tier). OpenAI:
+/// https://developers.openai.com/api/docs/pricing (Batch and Flex list the same rates; cached
+/// input, no separate write price).
+fn tier_prices() -> impl Iterator<Item = (String, ModelPrice)> {
+    let row = |input, cache_write, cache_read, output| ModelPrice {
+        input,
+        cache_write,
+        cache_read,
+        output,
+    };
+    let anthropic = [
+        ("claude-sonnet-5@batch", row(1.0, 1.25, 0.1, 5.0)),
+        ("claude-sonnet-5-5@batch", row(1.0, 1.25, 0.05, 5.0)),
+        ("claude-opus-5-5@batch", row(2.0, 2.5, 0.1, 10.0)),
+        ("claude-fable-5-1@batch", row(5.0, 6.25, 0.125, 25.0)),
+        ("claude-haiku-4-5@batch", row(0.5, 0.625, 0.05, 2.5)),
+    ];
+    let openai = [
+        ("gpt-5@batch", row(0.625, 0.625, 0.0625, 5.0)),
+        ("gpt-5@flex", row(0.625, 0.625, 0.0625, 5.0)),
+        ("gpt-5-mini@batch", row(0.125, 0.125, 0.0125, 1.0)),
+        ("gpt-5-mini@flex", row(0.125, 0.125, 0.0125, 1.0)),
+    ];
+    anthropic.into_iter().chain(openai).map(|(k, v)| (s(k), v))
 }
 
 section! {
@@ -964,6 +996,7 @@ section! {
         measure: Measure = Measure::default(),
         cmd: Cmd = Cmd::default(),
         read: Read = Read::default(),
+        json_tree: JsonTree = JsonTree::default(),
         archive: Archive = Archive::default(),
         proxy: ProxyPlugin = ProxyPlugin::default(),
         inject: Inject = Inject::default(),
@@ -1134,6 +1167,9 @@ section! {
     Graph {
         enabled: bool = true,
         max_tokens: u32 = 2000,
+        /// T377: `impact` token budget; a longer answer is grouped by file and cut with a count of
+        /// what was left. 0 = no budget.
+        impact_tokens: u32 = 1500,
         map_tokens: u32 = 0,
         /// T370: how the SessionStart map orders files: `refs` counts references per name,
         /// `pagerank` ranks files by personalized PageRank over the stored file graph.
@@ -1154,6 +1190,11 @@ section! {
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),
     }
+}
+
+section! {
+    /// `[plugins.json_tree]`
+    JsonTree { enabled: bool = false }
 }
 
 section! {
@@ -1514,6 +1555,7 @@ impl Config {
             "measure" => p.measure.enabled,
             "cmd" => p.cmd.enabled,
             "read" => p.read.enabled,
+            "json_tree" => p.json_tree.enabled,
             "archive" => p.archive.enabled,
             "proxy" => p.proxy.enabled,
             "inject" => p.inject.enabled,
@@ -1536,6 +1578,7 @@ impl Config {
             "measure" => p.measure.enabled = on,
             "cmd" => p.cmd.enabled = on,
             "read" => p.read.enabled = on,
+            "json_tree" => p.json_tree.enabled = on,
             "archive" => p.archive.enabled = on,
             "proxy" => p.proxy.enabled = on,
             "inject" => p.inject.enabled = on,

@@ -1,5 +1,42 @@
 # rtok — completed tasks
 
+### T454. Symbol byte spans, a recoverable cut body, and id lookup
+
+Ideas only from jCodeMunch (no code, schema, or comments copied; no MCP tool, embeddings, or second copy of source files). `symbols` keeps `start_byte`, `end_byte`, and `content_hash` (sha256 of that slice). A definition longer than `body_lines` archives the uncut span and ends with `expand <id>`. Every definition head prints `{path}::{name}#{kind}@{line}`. `symbol` takes optional `id` and, when set, returns that one row. `symbols_fts` indexes definition name, signature (`line_text`), and the contiguous `///`/`//!` doc above the line (512 bytes). `explore` falls through to that index when a name does not resolve, ranking a name-token hit above a signature hit above a doc hit.
+
+Check: a body over 40 lines round-trips through `expand`; a shorter body is unchanged aside from the id prefix; an unchanged mtime and size is still skipped; `symbol` with an id returns that row; `explore` of `truncated source lines` includes `body_lines`; `cargo test --test graph_contract --test graph_model` and the `outline` / `index` / `graph` unit tests pass; `just check`.
+
+Result: `symbol` prints the id on every definition head and reads a cut body back from the file span when the file sha matches. `rtok expand <id>` returns the uncut span. `explore` of `truncated source lines` on the graph plugin includes `body_lines`. `just check`: 2978 passed, 6 skipped.
+Status: done 2026-10-08
+
+### T454. Mechanical observations, retention rank, and PreCompact recall
+
+A tool call now stores one scrubbed observation (title, type, narrative ≤ 400 characters, existing root-relative files). The raw output stays in the archive. The same session, tool and narrative within 5 seconds does not insert again. `mem_*` tools are not observed. `mem_get` with `obs` returns the narrative.
+
+`notes.uses` and `last_used` move on a live `mem_get` and on a prompt-recall injection. Recall order is pinned, then retention score, then newest id. A low score is never a delete.
+
+`prompt_recall` fuses observation FTS with file-linked observations (RRF, k = 60), keeps at most 3 hits from one session, and appends at most two `obs <id> <title> (<session>)` lines inside `recall_tokens`. `PreCompact` adds the title index and this session's observations when either exists, and stays `{}` when both are empty.
+
+Check: `cargo test --lib plugins::memory`; `cargo test --lib schema_matches_the_migrated_tables_and_snapshot`.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
+
+### T442. Atomic task claim and a ready queue
+
+Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.
+
+A disk claim takes `<tasks>/.claim.lock` (`create_new`, a lock older than 10s is stolen). GitHub and GitLab labels are `rtok:owner:<agent>`, `rtok:needs:<id>` and `rtok:p:<n>` (omitted at the default 2). Those writes are last-write-wins, not compare-and-set. A claim whose agent row is missing, or whose `last_seen` is older than 30 minutes, can be taken. A store error does not steal a live claim. The same agent claiming again does not rewrite the file. A cycle, a self-edge or a missing blocker writes nothing. When the plan has no `blocked_by` edges, `next` is still the lowest open leaf.
+
+### T455. Fold nested JSON before archive replaces it with a pointer
+
+`archive` runs before any structural encoder and, past `plugins.archive.min_tokens`, replaces a large tool result with a head/tail pointer. `rtok mcp -- <server>` does the same by line count. A design or AST JSON therefore never reaches an encoder that can hoist repeated values and element bodies.
+
+Plan: plugin `json_tree` (Proxy, Mcp), `default_on` false, registered immediately before `archive`. `fold_json` returns `None` unless the value is an object or array of at least 256 bytes with a nested object, and `toon::tabular_keys(value, 1)` is `None` so tables stay with `toon`. Values used by two or more objects are hoisted into a `VARS:` block (sha1-8, lengthened on collision). An object body that repeats, ignoring identity keys `id` and `name`, becomes `EL-<sha1-8>`; a body that is only a type-like field is not templated. One line per node. The original is archived first; rewrite only when the folded form estimates fewer tokens. `archive` and `toon` leave a `[json-tree ` pointer alone. MCP `shorten_result` folds before the line cut when the fold fits `max_lines` and is smaller, and does not fold `read` or `search`.
+
+Check: `just check`; `cargo test -p rtok json_tree -- --test-threads=8`. `rtok expand <id>` returns the pre-fold bytes. A block `toon` encodes still has a `[toon ` prefix and no `[json-tree ` prefix. No saving without a `Measurement` row (`plugin: "json_tree"`, `kind: "fold"`).
+
+Result: `just check` 2981 passed, 6 skipped. `cargo test -p rtok json_tree -- --test-threads=8` 11 passed.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
@@ -54,6 +91,16 @@ Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend c
 
 Result: with `backend = "lsp"`, `symbol`, `callers`, `impact`, `outline` and `explore` go through one `lsp_or_tags` wrapper in `src/plugins/graph/mod.rs`; an `Err` or a none-answer for a name `tags_know` finds returns the tags answer headed `(tags; lsp: <reason>)` and records `graph` / `lsp_fallback`. Tests: `lsp_backend_falls_back_to_tags_for_every_tool`, `lsp_empty_answer_falls_back_only_for_a_known_name`.
 
+### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
+
+From the Empryo study (idea-only, clean-room). `impact` past `plugins.graph.impact_tokens` (default 1500) groups the BFS result by file, orders files by (depth asc, stored T370 file rank, ref count desc), prints `path (N refs, depth d)` with the first 3 lines per file and stops at the budget with `+K files, M refs not shown — impact <name> --all`. The budget covers the finished answer (ambiguity banner and marks, other-definitions and co-change lines come off it first). `--all` (CLI) / `all` (MCP) and `impact_tokens = 0` keep the flat listing; a listing that fits is unchanged; the LSP backend is unchanged; in a multi-project scope the order falls back to depth then ref count. A cut records a `Measurement` (kind `impact`).
+
+Check: unit tests on a synthetic hub (fits, cut line, ordering by depth/rank/refs, marks and overhead, `all`/0 flat) and on an indexed 60-file hub; trycmd goldens (completions, help, mcp, config-init/show, report-md); `just check`.
+Result: blast + graph + impact tests 122 passed; `just check` exit 0 (nextest 2765 passed, 8 skipped); on this repo `graph impact estimate --depth 2` is ≈1470 tokens ending in the cut line. #844.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T429. Find installed agents on Windows
 
 `rtok agents list` missed hosts whose Windows install is a `PATHEXT` shim or an `.exe` beside an extensionless app path, and `--version` never ran a `.cmd` (`CreateProcess` only appends `.exe`).
@@ -88,6 +135,16 @@ Plan (as executed):
 Result: `runs_git` and the early return in `pre_tool` (`src/plugins/cmd/hook.rs`); tests `sub_agent_git_commands_are_never_wrapped`, `sub_agent_non_git_commands_stay_wrapped`, `main_session_git_commands_stay_wrapped`. The shared dispatch in `src/hooks/mod.rs` builds the `Ctx` from the payload `agent_id` for every host, so any host that sends one gets the same behaviour. Reaches the plugin hook only with the next installed rtok binary.
 
 Status: done 2026-10-07
+
+### T444. `cmd` wrap skips `never_wrap`/interactive checks behind a `cd` hop
+
+`skip_wrap` in `src/plugins/cmd/hook.rs` took the stem from the first word of the whole command (`cd`), and after the `strip_cd_hop` loop in `pre_tool` nothing re-checked the remainder. `cd /tmp && rtok expand abc` was rewritten to `cd /tmp && rtok run -- 'rtok expand abc'`, so expand output was compressed again and broke the lossless contract; `cd /tmp && sudo ls` was wrapped although `never_wrap` lists `rtok` and `sudo`; `cd x && python -i` likewise. Second issue: `bounded::lex` ignored backslash escapes, so `echo it\'s && cd sub` hid the `cd` from `changes_shell_state` and the command was wrapped (the `cd` lost in the child shell). `changes_shell_state` also missed `set`, `shopt`, `umask`, `trap`, `declare`, `typeset`, `readonly` and a bare `NAME=value` stage.
+
+Done means: skip rules run on the post-hop remainder too; the lexer honours `\` outside quotes (next char literal, `\`+newline stays a line continuation) and inside double quotes (`\"`, `\\`, `\$`, `` \` `` escape; single quotes have no escapes); the builtin list grows; each fix has a unit test.
+
+Result: `pre_tool` calls `skip_wrap` on the remainder after the hop loop; `bounded::lex` gained the escape rules; `changes_shell_state` lists the new builtins and `is_bare_assignment` (`A=1` alone, not `A=1 cargo test`). Tests: `skip_rules_apply_behind_cd_hops`, `escaped_quote_does_not_hide_a_cd`, `more_state_builtins_and_bare_assignments_stay_unwrapped`, `lexer_backslash_escapes`.
+
+Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
 ### T448. `rtok run` buffers unbounded output in memory
@@ -1322,6 +1379,25 @@ Plan (approved mockup: the T414.2 shell and Overview, built on the Pyrlyn base c
 9. Stories for the states the base specs name, then `just js`, `spa-test`, `spa-stories`, `spa-e2e`.
 
 Result (2026-10-08, Claude Code / claude-sonnet-5-5): the components follow the Pyrlyn base component specs the T414.2 mockup is built on. `Chip`: `radius-md`, pressed border `accent`/50%, `size-control-sm`, 44px below 768px, colours over `duration-fast`. `Pill`: `fail` on the `danger` roles, washes at 10%. `Switch`: on track and border solid `accent`, knob and spinner `on-accent`, knob over `duration-base` with `ease-emphasized`, 44px hit area below 768px instead of only on coarse pointers. `Search`: `size-control`, `bg`/60%, 44px and `text-sm` below 768px. `DataTable`: row rule at 60%, selected row `accent`/10%, hover over `duration-fast`. `Kpi`: a linked card takes `border-strong` on hover. `Panel`: header rule at 60%. `BudgetGrid` cells use the `accent` and `delta` roles instead of `--rtok-brand-*` (same values). `Sparkline` already drew on the `accent` role and needed no change. `theme.ts` reads the `theme-color` from `--pyr-bg` and `stage3d.ts` reads `--pyr-fg-subtle`, so `web/src` holds no hex literal outside tests. New stories: `Chip` OnLight, `Switch` OnLight and PendingOnLight, `DataTable` SelectedRow and SelectedRowLight, `BudgetGrid` Budget and BudgetLight. `just js`, `spa-typecheck`, `spa-test`, `spa-stories` (168) and `spa-e2e` green.
+
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T414.6. Restyle Config, Doctor, Logs, Graph and the empty, error and offline states
+
+As T414.4; the Graph 3D view keeps its renderer and takes its colours from the roles.
+
+Check: `just spa-test`, `just spa-stories`, `just spa-e2e` green; dark and light screenshots of each page and state.
+
+Plan (shared components stay as T414.3 left them; T414.4 and T414.5 own the other pages):
+1. `states.tsx`: `Empty` becomes a dashed, centred block with no nested glass, `ErrorState` and `Missing` take the `danger` roles (border and wash at 50% and 10%, `danger-fg` text), `Offline` reuses `Button` (solid, 44px below 768px) instead of a hand-made one.
+2. Logs: the error row and message on the `danger` roles, row rules at 60%, a placeholder on the filter. Config: row rules at 60%. Doctor: removed diff lines on `danger-fg`, module cells on `bg`/60%, checkboxes on the `accent` colour.
+3. Graph: view and fit/reset controls become `Chip` and `Button`, the tooltip and menu take `tooltipBox`, the 3D fallback notice the `warn` roles; project colours come from the `accent`, `delta`, `success` and `fg-muted` roles (hash of the root picks one) instead of an HSL hue, resolved from the tokens in the 3D stage.
+4. Tests and stories for the new behaviour; stories in both themes for each state.
+5. Verify with `just spa-test`, `just spa-stories`, `just spa-e2e`, `just check`; dark and light screenshots of Config, Doctor, Logs, Graph from `?sample` and of the states from Storybook.
+
+Result (2026-10-08, Claude Code / claude-sonnet-5-5): `Empty` is a dashed, centred block with an icon and no second glass layer; `ErrorState` and the `Missing` alert of the text pages take the `danger` roles with the error icon; `Offline` sits on a glass card and reuses `Button` (solid, 44px below 768px) with its pending spinner instead of a hand-made button. Logs: error rows and messages on `danger`, row rules at 60%, a placeholder on the filter. Config rules at 60%. Doctor: removed diff lines on `danger-fg`, module cells on `bg`/60%, checkboxes on the `accent` colour. Graph: the 3D/2D/List switch is `Chip`, Fit all and Reset view are `Button`, the hover tooltip is the shared `tooltipBox`, the menu and the 3D-unavailable notice use the `surface`, `e3` and `warn` roles, and project colours come from four brand roles (`accent-fg`, `delta-fg`, `success-fg`, `fg-muted`) picked by the root hash instead of an HSL hue; the 3D stage resolves the `var()` with `resolveRole`, and its selection ring and in-scope edges take `accent-fg`. Shared files touched: `states.tsx` and `Missing` in `pages/parts.tsx`, because they are the shared states; no other shared component changed. New: `states.test.tsx`, a `resolveRole` test, and light, reconnecting and loading stories for the states. `just js`, `spa-typecheck`, `spa-test`, `spa-stories` (173) and `spa-e2e` (22) green.
 
 Status: done 2026-10-08
 
@@ -8048,6 +8124,16 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.12.1. `rtok batch` CLI and Batch/Flex price rows
+
+Split from T385.12 (2026-10-08): the whole card would pass the 500-line cap, and its last third reads T385.6's per-lane stats. optimization.md §2.2 L6 (roadmap S5). `rtok batch submit/status/fetch` through the proxy hop (no sync→Batch conversion), dated Batch/Flex rows under `[stats.prices]` (key `<model>@batch`, `<model>@flex`), and `stats --price` costing the Batch-lane usage rows at the `@batch` row.
+
+Check: trycmd for `rtok batch`; a mock-upstream round trip for both providers; a `stats --price` fixture with a Batch row; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
+Result: `src/batch.rs` is the client (`rtok batch submit <jsonl>`, `status <id>`, `fetch <id> <out>`; `--provider`, else read from the id prefix; `--url`, else `[proxy] bind`/`port`). The key comes only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. Every JSONL line is validated first (shape per provider, one endpoint per OpenAI file); Anthropic lines are joined into `requests` byte for byte, an OpenAI file is uploaded as `purpose=batch` and then created for its shared `url`; `fetch` follows `output_file_id`, refuses an existing target and removes a torn download. Ids are restricted to `[A-Za-z0-9_-]` before they reach a URL path. The proxy sent OpenAI's `/v1/batches*` and `/v1/files*` to the Anthropic upstream (no wire); `ProxyState::upstream_for` now sends them to `proxy.openai_upstream` unless the request carries `anthropic-version` (Anthropic's Files API). `[stats.prices]` ships `@batch` rows for the five Claude models and both GPT-5 models and `@flex` rows for the GPT-5 models, fetched 2026-10-08 from the Anthropic and OpenAI pricing pages (Anthropic Batch is half the standard input/output with the cache multipliers stacked; OpenAI Batch and Flex list the same rates). `Store::usage_by_model_tier` keys Batch-lane usage `<model>@batch` and `attach_costs` prices it there, so a model without a Batch row stays `-`. Nothing reads the `@flex` rows until T385.12.2 records the tier. Tests: `tests/batch_cli.rs` (both providers against mock upstreams through a real proxy, the wrong upstream never hit), unit tests in `src/batch.rs`, `src/proxy/mod.rs` and `src/measure/stats.rs`, trycmd `batch-no-key`/`batch-bad-file` plus the regenerated help, man, completions, config-show, config-init and report goldens; `docs/batch-flex.md`, `docs/commands.md`, `docs/config.md` (en, ru, uk) and the README command table updated.
+Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T385.13. Measure cross-session read duplication
 
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Measured 2026-10-08 (window 2026-10-05 to 2026-10-08, 38 sessions, 3,049 reads, 13.6 MB; same content = equal SHA-256 of the returned text, within a day = same UTC day): 38 cross-session duplicate reads, 56,561 B (about 14,140 tokens), 0.42 % of the bytes read, 0.00034 % of input counted once and 0.25 % to 0.60 % of input resident-weighted (input 4,139,214,544 tokens, main plus sub-agents). Cross-checks over 25 days (MCP read, 0.28 %) and via `read_cache` (0.84 % of bytes) agree; keyed on path plus content only 2 reads repeat, because worktrees give the same file different paths. Under the 1 % gate, so no build task; the optimization.md §5 row records the number.
@@ -9100,6 +9186,17 @@ Check: store unit tests (register is idempotent, sub-agent row, resolve prefix /
 Status: done 2026-09-27 (#439; hook bench p95 9.10 ms PreToolUse, 9.51 ms PostToolUse)
 Model: Claude Code / claude-opus-5-5
 
+### T455. MCP `whoami` says when this process sits under no live session
+
+Creator request 2026-10-08: find why `link::resolve` returned `Link::None` for a Claude Code desktop session whose agent row had matching `ancestors` and cwd. Finding: `resolve` is right. In the desktop app's Code tab every `mcp__rtok__*` call is served by the one `rtok mcp` Claude.app spawns from `claude_desktop_config.json` (`calls.session_id = mcp-<pid>` of that process; parent `disclaimer` → `Claude.app`, cwd of an unrelated project, no `CLAUDE_*` env), not by the session's child of `claude` (the `rtok@rtok` plugin's server), which never served a call in a day of the creator's store. Its parent chain and cwd match no session, so nothing can link it, and T454's `CLAUDE_CODE_SESSION_ID` rule does not reach it either. Replayed against a scratch `RTOK_HOME` (fresh store, then a `sqlite3 .backup` of the live store with the live config): a process inside the session's tree links by `ancestor`. The install-side fix is T456 (`roadmap.md`).
+
+Check: `resolve` returns `Link::Outside` instead of `Link::None` when live agents of the host recorded hook chains since this process started yet none shares a pid with this process or its cwd, and MCP `whoami`/`worktree_*`/`agent_*` answer with that reason and the CLI to use; `Link::None` keeps its exact text; `just check`.
+
+Result: `Link::Outside` in `src/agents/link.rs`, after the hookless rule (a hookless host sharing the `other` host row with a hooked one still registers its own row) and only when both this process and a live candidate have a chain (an old client without one could still be this session). Like `None` it is never cached, since a new session's MCP looks the same until its first hook lands. `src/mcp.rs` `agent()` maps it to "not linked to an agent session: this rtok mcp process is under no live <host> session and in none's cwd, …". `docs/agents-and-worktrees.md` (and `ru`/`uk`) gain a "Claude desktop app" section. Tests: three `link.rs` cases with fake pids in an in-memory store (outside; no chained row or no own chain stays `None`; hookless beside chained rows registers itself) and one RPC `whoami` case. Live: a debug build and the installed 0.15.1 against the scratch replay, with the session's chain swapped for fake pids and a foreign cwd: the new text vs the old one.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5
+
 ### T283.3. MCP link rule (b): the nearest common host ancestor pid
 
 PR 2 of T283, part 3. The hook wire request (`crates/rtok-hook`, `src/hooks/resident.rs`: `version, fingerprint, event, host, cwd, stdin`) carries no pid, and the resident hook process is not the host's child, so a hook cannot record its own ancestry today. Add the client's parent pid to the request (protocol version bump), store it on the agent row (migration), record it on registration, and let `link.rs` match it against the `rtok mcp` process's ancestor chain (nearest first; two agents behind one ancestor are ambiguous). Doc-derived like the rest of the rule order; the T281 probe confirms it per host.
@@ -10120,3 +10217,14 @@ Check result: `src/ui/style.rs` unit tests (emoji key × tty matrix, prefix shap
 
 Status: done 2026-09-30 (#532)
 Model: Grok Bot
+
+### T472. Keep the previous note body when an upsert changes it
+
+An upsert on `(project, kind, title)` replaces the body. The previous title and body go into `note_versions` before that write, in the same immediate transaction, with `version = COALESCE(MAX(version), 0) + 1`. Migration `0035_note_versions` (`0034` is already used by open pull requests). Kinds `checkpoint:*` and `session:*` write no version rows; a same-body upsert writes none. `rtok memory history <id>` prints the rows oldest first. SessionStart recall and `mem_get` stay on the current body. No MCP tool. Private-tag redaction is a separate change and is not part of this task.
+
+Check: `cargo test --lib plugins::memory::`; `cargo test --lib store::`; `cargo test --test memory_status`; `just check`.
+
+Result: `upsert_note` records the previous title and body in `note_versions` inside one immediate transaction. `rtok memory history <id>` prints those rows oldest first. Checkpoint and session kinds, and a same-body upsert, write no version row. Recall and `mem_get` stay on the current body. `just check`: 2972 passed, 6 skipped.
+
+Status: done 2026-10-08
+Model: Cursor / grok 4.7

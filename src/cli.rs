@@ -191,6 +191,12 @@ enum Cmd {
         #[command(subcommand)]
         action: TaskCmd,
     },
+    // T385.12.1
+    /// Provider Batch jobs (Anthropic, OpenAI) sent through `rtok proxy`
+    Batch {
+        #[command(subcommand)]
+        action: BatchCmd,
+    },
     /// Version, effective paths, disk usage, error count and proxy status
     Info {
         /// JSON instead of the text lines
@@ -483,6 +489,9 @@ enum MemoryCmd {
     // T69.1
     /// Drop a note back to newest-first recall order
     Unpin { id: i32 },
+    // T472
+    /// Print the earlier title and body kept when an upsert changed this note
+    History { id: i32 },
     // T69.1
     /// Save a replacement (title, body) for a note and retire the old row
     Revise {
@@ -525,6 +534,45 @@ enum MemoryCmd {
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
+    },
+}
+
+/// Where the commands send their requests and as whom; the key itself is only read from the
+/// environment (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
+#[derive(clap::Args)]
+struct BatchTarget {
+    /// Provider whose Batch API to call; default: from the id (`msgbatch_` is Anthropic)
+    #[arg(long, value_enum)]
+    provider: Option<crate::batch::Provider>,
+    /// Proxy base URL (default: `[proxy] bind` and `port`)
+    #[arg(long, value_name = "URL")]
+    url: Option<String>,
+}
+
+#[derive(Subcommand)]
+enum BatchCmd {
+    /// Create a batch from a JSONL file of provider-shaped requests; prints the batch object
+    Submit {
+        /// One request per line (Anthropic: `custom_id` + `params`; OpenAI: `custom_id`, `method`, `url`, `body`)
+        file: PathBuf,
+        #[command(flatten)]
+        target: BatchTarget,
+    },
+    /// Print the provider's current state of a batch
+    Status {
+        /// Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI)
+        id: String,
+        #[command(flatten)]
+        target: BatchTarget,
+    },
+    /// Write the results of a finished batch to a new file
+    Fetch {
+        /// Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI)
+        id: String,
+        /// File to create; an existing file is never overwritten
+        out: PathBuf,
+        #[command(flatten)]
+        target: BatchTarget,
     },
 }
 
@@ -583,9 +631,61 @@ enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
-    /// The task to work on next: the lowest open one with no open subtask
+    /// The first ready task: free or stale, not blocked; a leaf when nothing is blocked
     Next {
         /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Tasks that can be claimed, highest priority first
+    Ready {
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Claim a task for this agent, or the first ready task when no id is given.
+    /// On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set.
+    Claim {
+        /// Task id; omit to take the first ready task
+        id: Option<String>,
+        /// The rtok agent id; defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// Print the task as JSON, with `changed`
+        #[arg(long)]
+        json: bool,
+    },
+    /// Clear the assignee and set the task open. Only the holder, unless --force.
+    Release {
+        /// Task id, e.g. `R12`
+        id: String,
+        /// The rtok agent id; defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// Release a task held by someone else
+        #[arg(long)]
+        force: bool,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Record that this task waits on another. A cycle is refused and nothing is written.
+    Dep {
+        /// The task that waits
+        id: String,
+        /// The task that must finish first
+        blocker: String,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set priority from 0 (highest) to 4. 2 is the default and is not stored.
+    Priority {
+        /// Task id, e.g. `R12`
+        id: String,
+        /// 0 to 4
+        level: u8,
+        /// Print the task as JSON
         #[arg(long)]
         json: bool,
     },
@@ -767,6 +867,9 @@ enum GraphCmd {
         depth: u32,
         #[arg(long)]
         to: Option<String>,
+        /// Every reached row, not the file-grouped answer cut at `plugins.graph.impact_tokens`
+        #[arg(long)]
+        all: bool,
         path: Option<PathBuf>,
         #[command(flatten)]
         project: ProjectFlag,
@@ -1517,6 +1620,7 @@ pub fn run() -> Result<()> {
             }
         }
         Cmd::Task { action } => run_task(action, config_file.as_deref())?,
+        Cmd::Batch { action } => run_batch(action, config_file.as_deref())?,
         // One gate for every subcommand, `list` included (T410).
         Cmd::Worktree { .. }
             if !Config::load_with(config_file.as_deref(), None)?
@@ -2225,6 +2329,10 @@ pub fn run() -> Result<()> {
                         crate::plugins::memory::mem_update(&cx, id, false, None, Some(false))?
                     );
                 }
+                MemoryCmd::History { id } => {
+                    let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+                    println!("{}", crate::plugins::memory::mem_history(&cx, id)?);
+                }
                 MemoryCmd::Revise { id, title, body } => {
                     let cx = crate::plugin::Runtime::open(cfg, "memory")?;
                     let (new, retired) =
@@ -2356,6 +2464,7 @@ pub fn run() -> Result<()> {
                     name,
                     depth,
                     to,
+                    all,
                     path,
                     project,
                 } => {
@@ -2374,7 +2483,10 @@ pub fn run() -> Result<()> {
                             &scope,
                             &name,
                             depth,
-                            &crate::plugins::graph::Filter::none(),
+                            &crate::plugins::graph::Filter {
+                                all,
+                                ..crate::plugins::graph::Filter::none()
+                            },
                             to.as_deref(),
                         )?
                     );
@@ -3089,6 +3201,43 @@ fn print_json(value: &(impl serde::Serialize + ?Sized)) -> Result<()> {
     Ok(())
 }
 
+/// `rtok batch …` (T385.12.1): one blocking request chain against the proxy.
+fn run_batch(action: BatchCmd, config_file: Option<&std::path::Path>) -> Result<()> {
+    use crate::batch::{Api, Provider};
+
+    let (target, id) = match &action {
+        BatchCmd::Submit { target, .. } => (target, None),
+        BatchCmd::Status { id, target } | BatchCmd::Fetch { id, target, .. } => {
+            (target, Some(id.as_str()))
+        }
+    };
+    let provider = target
+        .provider
+        .or_else(|| id.map(Provider::of_id))
+        .unwrap_or(Provider::Anthropic);
+    let base = match &target.url {
+        Some(url) => url.clone(),
+        None => {
+            let cfg = Config::load_with(config_file, None)?;
+            crate::agents::anthropic_proxy_url(&cfg)
+        }
+    };
+    let key = std::env::var(provider.key_env()).unwrap_or_default();
+    let api = Api::new(&base, provider, &key)?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    match action {
+        BatchCmd::Submit { file, .. } => println!("{}", rt.block_on(api.submit(&file))?),
+        BatchCmd::Status { id, .. } => println!("{}", rt.block_on(api.status(&id))?),
+        BatchCmd::Fetch { id, out, .. } => {
+            let bytes = rt.block_on(api.fetch(&id, &out))?;
+            println!("wrote {bytes} bytes to {}", out.display());
+        }
+    }
+    Ok(())
+}
+
 /// `rtok task …` (T441.5): every subcommand but `init` opens the project's adapter.
 fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()> {
     use crate::tasks::run::{Project, details, filter, init, table};
@@ -3172,7 +3321,8 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
         } => {
             let id = id_of(&id)?;
             let status = status.as_deref().map(str::parse::<Status>).transpose()?;
-            let task = open()?.status(&id, status, force)?;
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let task = open()?.status(&store, &id, status, force)?;
             if json {
                 print_json(&task)?;
             } else {
@@ -3189,11 +3339,68 @@ fn run_task(action: TaskCmd, config_file: Option<&std::path::Path>) -> Result<()
             }
         }
         TaskCmd::Next { json } => {
-            let next = open()?.next()?;
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let next = open()?.next(&store)?;
             match (next, json) {
                 (next, true) => print_json(&next)?,
                 (Some(t), false) => println!("{}  {}", t.id, t.title),
-                (None, false) => println!("no open task"),
+                (None, false) => println!("no ready task"),
+            }
+        }
+        TaskCmd::Ready { json } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let ready = open()?.ready(&store)?;
+            if json {
+                print_json(&ready)?;
+            } else {
+                print!("{}", crate::tasks::run::ready_text(&ready));
+            }
+        }
+        TaskCmd::Claim { id, agent, json } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let agent = crate::tasks::run::require_agent(&store, agent.as_deref())?;
+            let id = id.as_deref().map(id_of).transpose()?;
+            let outcome = open()?.claim(&store, id.as_ref(), &agent)?;
+            if json {
+                print_json(&outcome)?;
+            } else if outcome.changed {
+                println!("{}  {}", outcome.task.id, outcome.task.title);
+            } else {
+                println!(
+                    "{}  {}  (already yours)",
+                    outcome.task.id, outcome.task.title
+                );
+            }
+        }
+        TaskCmd::Release {
+            id,
+            agent,
+            force,
+            json,
+        } => {
+            let store = crate::store::Store::open(&cfg.core.db_path)?;
+            let agent = crate::tasks::run::require_agent(&store, agent.as_deref())?;
+            let task = open()?.release(&store, &id_of(&id)?, &agent, force)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{}: {}", task.id, task.status);
+            }
+        }
+        TaskCmd::Dep { id, blocker, json } => {
+            let task = open()?.block(&id_of(&id)?, &id_of(&blocker)?)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{id}: blocked by {blocker}");
+            }
+        }
+        TaskCmd::Priority { id, level, json } => {
+            let task = open()?.set_priority(&id_of(&id)?, level)?;
+            if json {
+                print_json(&task)?;
+            } else {
+                println!("{}: priority {level}", task.id);
             }
         }
     }

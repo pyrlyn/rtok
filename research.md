@@ -895,6 +895,8 @@ Every alternative in `src/plugins/*/PLAN.md` with the survey date. Stars/version
 
 Checked 27 claims + 19 repos. Refuted: JetBrains rtk post (rtk did not save; +7.6 % on low effort), TOON numbers (42.6 %, 72.2 vs 71.4), "headroom is Rust" (82 % Python), "OpenViking is Rust" (78 % Python), "claude-mem is TypeScript" (JS per API), "37 hook events" (32). Partial/unverifiable: `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (undocumented; settings key exists), cache invalidation order and 20-block lookback (not in docs), `ENABLE_TOOL_SEARCH` value range and 10 % trigger (documented since; see §3, T388), offline Claude tokenizer (docs silent; `count_tokens` is the only official path). Confirmed: PostToolUse cannot modify results; PreToolUse `updatedInput`; caching multipliers incl. 0.025× Fable/Mythos; context-editing names; memory tool name; issue #81967; caveman #112; ponytail bench figures; codebase-memory-mcp and codegraph README figures; lean-ctx README figures. GitHub reports NOASSERTION for caveman and token-optimizer licenses; token-optimizer's local LICENSE file is PolyForm Noncommercial 1.0.0.
 
+2026-10-08. mcpproxy-go (github.com/smart-mcp-proxy/mcpproxy-go) `README.md:43` claims ~99 % token reduction and 43 % accuracy improvement. `bench/README.md:54-57` measures 17 % (`retrieve_tools`, 1730 → 1431) and 43 % (`code_execution`, 1730 → 986) on a 45-tool corpus of name+description only, LLM-free. `specs/103-token-bench/findings/honest-savings-design.md:405-410` says the 99 % line cannot stand once the proxy's own tools are counted. rtok will not port it.
+
 ## 8. Open questions
 
 - Does `ANTHROPIC_BASE_URL` really disable MCP tool search on your setup (deferred tools are visible in this session, so something enables it)? `rtok doctor` T1.4 answers it.

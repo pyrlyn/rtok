@@ -15,8 +15,12 @@ use super::adapter::{Filter, Taken, TaskAdapter, set_status};
 use super::disk::DiskAdapter;
 use super::github::{self, GithubAdapter};
 use super::gitlab::{self, GitlabAdapter};
+use super::ready::{self, active_blocker, find_cycles, holder_is_stale, select_ready};
 use super::remote;
-use super::{NewTask, Status, Task, TaskId, check_prefix, resolve_prefix};
+use super::{
+    ClaimConflict, ClaimOutcome, NewTask, PRIORITY_MAX, ReadyItem, Status, Task, TaskId,
+    check_prefix, resolve_prefix,
+};
 use crate::config::layers::git_root;
 use crate::store::Store;
 
@@ -154,10 +158,23 @@ impl Project {
             .with_context(|| format!("no task {id}"))
     }
 
-    /// `status <id> [<status>]`: set the status when given, else read it.
-    pub fn status(&self, id: &TaskId, status: Option<Status>, force: bool) -> Result<Task> {
+    /// `status <id> [<status>]`: set the status when given, else read it. Finishing a task
+    /// drops its claim row, so SessionStart stops naming it.
+    pub fn status(
+        &self,
+        store: &Store,
+        id: &TaskId,
+        status: Option<Status>,
+        force: bool,
+    ) -> Result<Task> {
         match status {
-            Some(s) => set_status(self.adapter(), id, s, force),
+            Some(s) => {
+                let task = set_status(self.adapter(), id, s, force)?;
+                if !s.is_active() {
+                    store.clear_task_claim(&self.key, &id.to_string())?;
+                }
+                Ok(task)
+            }
             None => self.get(id),
         }
     }
@@ -177,15 +194,185 @@ impl Project {
         Ok(Shown { task, subtasks })
     }
 
-    /// The lowest open task with no active subtask: work starts at the leaves, and an
-    /// in-progress task is already someone's.
-    pub fn next(&self) -> Result<Option<Task>> {
-        let active = self.adapter.list(&Filter::default())?;
-        Ok(active
-            .iter()
-            .filter(|t| t.status == Status::Open)
-            .find(|t| !active.iter().any(|c| c.parent.as_ref() == Some(&t.id)))
-            .cloned())
+    /// Tasks that can be claimed, highest priority first (`0` before `2`), then by id.
+    pub fn ready(&self, store: &Store) -> Result<Vec<ReadyItem>> {
+        let _guard = self.adapter.claim_guard()?;
+        self.ready_unlocked(store)
+    }
+
+    fn ready_unlocked(&self, store: &Store) -> Result<Vec<ReadyItem>> {
+        let tasks = self.list_all()?;
+        let now = ready::unix_now();
+        Ok(select_ready(&tasks, |agent| {
+            match store.agent_last_seen(agent) {
+                Ok(seen) => holder_is_stale(Ok(seen), now),
+                Err(_) => false,
+            }
+        }))
+    }
+
+    /// The first ready task. With no `blocked_by` edges anywhere, that is still the lowest
+    /// open task that has no active subtask.
+    pub fn next(&self, store: &Store) -> Result<Option<Task>> {
+        Ok(self.ready(store)?.into_iter().next().map(|item| item.task))
+    }
+
+    /// Claim `id`, or the first ready task when `id` is `None`. A task this agent already
+    /// holds comes back with `changed: false` and the file or issue is not rewritten.
+    pub fn claim(&self, store: &Store, id: Option<&TaskId>, agent: &str) -> Result<ClaimOutcome> {
+        let _guard = self.adapter.claim_guard()?;
+        match id {
+            Some(id) => self.claim_held(store, id, agent),
+            None => {
+                let ready = self.ready_unlocked(store)?;
+                let mut last = None;
+                for item in ready {
+                    match self.claim_held(store, &item.task.id, agent) {
+                        Err(e) if e.downcast_ref::<ClaimConflict>().is_some() => last = Some(e),
+                        other => return other,
+                    }
+                }
+                match last {
+                    Some(e) => Err(e),
+                    None => bail!("no ready task"),
+                }
+            }
+        }
+    }
+
+    fn claim_held(&self, store: &Store, id: &TaskId, agent: &str) -> Result<ClaimOutcome> {
+        let mut task = self.get(id)?;
+        if !task.status.is_active() {
+            return Err(ClaimConflict::NotClaimable {
+                id: id.clone(),
+                status: task.status,
+            }
+            .into());
+        }
+        if task.assignee.as_deref() == Some(agent) && task.status == Status::InProgress {
+            store.upsert_task_claim(&self.key, &id.to_string(), agent, &task.title)?;
+            return Ok(ClaimOutcome {
+                task,
+                changed: false,
+            });
+        }
+        let all = self.list_all()?;
+        if let Some(by) = active_blocker(&task, &all) {
+            return Err(ClaimConflict::Blocked {
+                id: id.clone(),
+                by: by.clone(),
+            }
+            .into());
+        }
+        if let Some(holder) = task.assignee.clone().filter(|s| !s.is_empty())
+            && holder != agent
+            && !self.holder_stale(store, &holder)
+        {
+            return Err(ClaimConflict::Already {
+                id: id.clone(),
+                assignee: holder,
+            }
+            .into());
+        }
+        task.assignee = Some(agent.to_string());
+        task.status = Status::InProgress;
+        let task = self.adapter.save(&task)?;
+        store.upsert_task_claim(&self.key, &task.id.to_string(), agent, &task.title)?;
+        Ok(ClaimOutcome {
+            task,
+            changed: true,
+        })
+    }
+
+    /// Clear the assignee and set an in-progress task back to open. Only the holder, unless
+    /// `force`.
+    pub fn release(&self, store: &Store, id: &TaskId, agent: &str, force: bool) -> Result<Task> {
+        let _guard = self.adapter.claim_guard()?;
+        let mut task = self.get(id)?;
+        if !task.status.is_active() {
+            bail!("{id} is {} and cannot be released", task.status);
+        }
+        if let Some(holder) = task.assignee.as_deref().filter(|s| !s.is_empty())
+            && holder != agent
+            && !force
+        {
+            bail!("{id} is claimed by {holder}; pass --force");
+        }
+        let changed = task.assignee.is_some() || task.status != Status::Open;
+        task.assignee = None;
+        if task.status == Status::InProgress {
+            task.status = Status::Open;
+        }
+        let task = if changed {
+            self.adapter.save(&task)?
+        } else {
+            task
+        };
+        store.clear_task_claim(&self.key, &id.to_string())?;
+        Ok(task)
+    }
+
+    /// `id` waits on `blocker`. A self-edge, a missing blocker or a cycle writes nothing.
+    /// An edge that is already there is left as it is.
+    pub fn block(&self, id: &TaskId, blocker: &TaskId) -> Result<Task> {
+        if id == blocker {
+            bail!("{id} cannot depend on itself");
+        }
+        let _guard = self.adapter.claim_guard()?;
+        let mut task = self.get(id)?;
+        if self.adapter.get(blocker)?.is_none() {
+            bail!("no task {blocker}");
+        }
+        if task.blocked_by.iter().any(|have| have == blocker) {
+            return Ok(task);
+        }
+        task.blocked_by.push(blocker.clone());
+        task.blocked_by.sort();
+        let mut graph = self.list_all()?;
+        if let Some(slot) = graph.iter_mut().find(|t| t.id == task.id) {
+            *slot = task.clone();
+        } else {
+            graph.push(task.clone());
+        }
+        if let Some(cycle) = find_cycles(&graph).into_iter().next() {
+            let shown = cycle
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" -> ");
+            bail!("{id} would cycle: {shown}");
+        }
+        self.adapter.save(&task)
+    }
+
+    /// `0` is highest, [`PRIORITY_MAX`] is lowest. The same level is not rewritten.
+    pub fn set_priority(&self, id: &TaskId, level: u8) -> Result<Task> {
+        if level > PRIORITY_MAX {
+            bail!("priority {level} is outside 0–{PRIORITY_MAX}");
+        }
+        let _guard = self.adapter.claim_guard()?;
+        let mut task = self.get(id)?;
+        if task.priority == level {
+            return Ok(task);
+        }
+        task.priority = level;
+        self.adapter.save(&task)
+    }
+
+    fn list_all(&self) -> Result<Vec<Task>> {
+        self.adapter.list(&Filter {
+            all: true,
+            ..Filter::default()
+        })
+    }
+
+    /// A store error counts as not stale, so a live claim is not taken because the lookup
+    /// failed.
+    fn holder_stale(&self, store: &Store, agent: &str) -> bool {
+        match store.agent_last_seen(agent) {
+            Ok(seen) => holder_is_stale(Ok(seen), ready::unix_now()),
+            Err(_) => false,
+        }
     }
 }
 
@@ -230,6 +417,31 @@ pub fn init(cwd: &Path, adapter: Option<&str>, prefix: Option<&str>) -> Result<P
     Ok(path)
 }
 
+/// The agent a claim binds to: `--agent`, else `RTOK_AGENT_ID`. Neither means the caller
+/// has to say who is claiming.
+pub fn require_agent(store: &Store, flag: Option<&str>) -> Result<String> {
+    match crate::worktree::claim::caller(Some(store), flag)? {
+        Some(agent) => Ok(agent.id),
+        None => bail!("no agent to bind: pass --agent or set RTOK_AGENT_ID"),
+    }
+}
+
+/// `rtok task ready`: one line per task, `(stale)` when the assignee can be replaced.
+pub fn ready_text(items: &[ReadyItem]) -> String {
+    if items.is_empty() {
+        return "no ready task\n".into();
+    }
+    let mut out = String::new();
+    for item in items {
+        if item.stale {
+            out.push_str(&format!("{}  {}  (stale)\n", item.task.id, item.task.title));
+        } else {
+            out.push_str(&format!("{}  {}\n", item.task.id, item.task.title));
+        }
+    }
+    out
+}
+
 /// `list`'s filter from what a caller passed: status names, `all`, a parent id.
 pub fn filter(statuses: &[String], all: bool, parent: Option<&str>) -> Result<Filter> {
     Ok(Filter {
@@ -267,6 +479,16 @@ pub fn details(shown: &Shown) -> String {
     let mut out = format!("{}  {}\nstatus: {}\n", t.id, t.title, t.status);
     if let Some(p) = &t.parent {
         out.push_str(&format!("parent: {p}\n"));
+    }
+    if t.priority != super::DEFAULT_PRIORITY {
+        out.push_str(&format!("priority: {}\n", t.priority));
+    }
+    if let Some(agent) = &t.assignee {
+        out.push_str(&format!("assignee: {agent}\n"));
+    }
+    if !t.blocked_by.is_empty() {
+        let ids: Vec<String> = t.blocked_by.iter().map(ToString::to_string).collect();
+        out.push_str(&format!("blocked by: {}\n", ids.join(", ")));
     }
     if !shown.subtasks.is_empty() {
         let ids: Vec<String> = shown.subtasks.iter().map(ToString::to_string).collect();
@@ -325,7 +547,10 @@ mod tests {
         assert_eq!(sub.id.to_string(), "A7.1");
         assert!(project.create(&store, &new("Orphan", Some("A99"))).is_err());
 
-        assert_eq!(project.next().unwrap().unwrap().id.to_string(), "A7.1");
+        assert_eq!(
+            project.next(&store).unwrap().unwrap().id.to_string(),
+            "A7.1"
+        );
         let shown = project.show(&pulled).unwrap();
         assert_eq!(shown.subtasks, vec![sub.id.clone()]);
         assert!(details(&shown).contains("subtasks: A7.1"));
@@ -374,5 +599,204 @@ mod tests {
         let err = Project::open(&cfg, &dir).err().unwrap();
         assert!(err.to_string().contains("https://"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod claim_tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::tasks::disk::DiskAdapter;
+
+    fn id(s: &str) -> TaskId {
+        s.parse().unwrap()
+    }
+
+    fn dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rtok-claim-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn project(path: &Path) -> Project {
+        Project::with_adapter(
+            "proj".into(),
+            path.to_path_buf(),
+            "R".into(),
+            Box::new(DiskAdapter::new(path.to_path_buf())),
+        )
+    }
+
+    fn agent(store: &Store, session: &str, seen: i64) -> String {
+        let host = store.host_id("claude").unwrap().unwrap();
+        let id = store
+            .register_agent(host, session, None, None, None)
+            .unwrap();
+        store.set_agent_last_seen(&id, seen).unwrap();
+        id
+    }
+
+    fn bytes(path: &Path) -> Vec<u8> {
+        std::fs::read(path).unwrap()
+    }
+
+    #[test]
+    fn two_claims_one_winner_until_the_holder_is_stale() {
+        let path = dir("race");
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let now = ready::unix_now();
+        let a = agent(&store, "a", now);
+        let b = agent(&store, "b", now);
+        project(&path)
+            .adapter()
+            .create(
+                &NewTask {
+                    title: "Ship".into(),
+                    description: String::new(),
+                    parent: None,
+                },
+                &id("R1"),
+            )
+            .unwrap();
+
+        let path_b = path.clone();
+        let store_b = Arc::clone(&store);
+        let b2 = b.clone();
+        let winner = std::thread::scope(|scope| {
+            let left = scope.spawn(|| project(&path).claim(&store, Some(&id("R1")), &a));
+            let right = scope.spawn(|| project(&path_b).claim(&store_b, Some(&id("R1")), &b2));
+            let left = left.join().unwrap();
+            let right = right.join().unwrap();
+            match (left, right) {
+                (Ok(ok), Err(err)) | (Err(err), Ok(ok)) => {
+                    assert!(ok.changed, "the winner rewrote the file");
+                    assert!(err.downcast_ref::<ClaimConflict>().is_some(), "{err:#}");
+                    ok
+                }
+                other => panic!("expected one claim and one conflict, got {other:?}"),
+            }
+        });
+        let holder = winner.task.assignee.clone().unwrap();
+        assert!(holder == a || holder == b, "{holder}");
+
+        let file = std::fs::read_dir(&path)
+            .unwrap()
+            .find_map(|e| {
+                let p = e.unwrap().path();
+                p.extension().is_some_and(|x| x == "md").then_some(p)
+            })
+            .unwrap();
+        let before = bytes(&file);
+        let again = project(&path)
+            .claim(&store, Some(&id("R1")), &holder)
+            .unwrap();
+        assert!(!again.changed);
+        assert_eq!(bytes(&file), before, "a re-claim does not rewrite the file");
+
+        store
+            .set_agent_last_seen(&holder, now - crate::tasks::STALE_SECS - 5)
+            .unwrap();
+        let other = if holder == a { b.as_str() } else { a.as_str() };
+        let taken = project(&path)
+            .claim(&store, Some(&id("R1")), other)
+            .unwrap();
+        assert!(taken.changed, "a stale claim can be taken");
+        assert_eq!(taken.task.assignee.as_deref(), Some(other));
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn a_missing_agent_row_can_be_taken_and_a_block_writes_nothing_on_a_cycle() {
+        let path = dir("block");
+        let store = Store::open_in_memory().unwrap();
+        let now = ready::unix_now();
+        let live = agent(&store, "live", now);
+        let p = project(&path);
+        for (task_id, title) in [("R1", "Parent"), ("R1.1", "Child"), ("R2", "Other")] {
+            p.adapter()
+                .create(
+                    &NewTask {
+                        title: title.into(),
+                        description: String::new(),
+                        parent: None,
+                    },
+                    &id(task_id),
+                )
+                .unwrap();
+        }
+        let first = p.claim(&store, Some(&id("R1")), "not-registered").unwrap();
+        assert!(first.changed);
+        let stolen = p.claim(&store, Some(&id("R1")), &live).unwrap();
+        assert!(stolen.changed, "no agents row is stale");
+
+        p.release(&store, &id("R1"), &live, false).unwrap();
+        let child = std::fs::read_dir(&path)
+            .unwrap()
+            .find_map(|e| {
+                let p = e.unwrap().path();
+                p.file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .starts_with("R1.1")
+                    .then_some(p)
+            })
+            .unwrap();
+        let before = bytes(&child);
+        let err = p.block(&id("R1.1"), &id("R1")).unwrap_err();
+        assert!(err.to_string().contains("cycle"), "{err}");
+        assert_eq!(bytes(&child), before, "a cycle writes nothing");
+        assert!(p.block(&id("R1"), &id("R1")).is_err());
+        assert!(p.block(&id("R1"), &id("R9")).is_err());
+
+        p.block(&id("R2"), &id("R1")).unwrap();
+        let again = bytes(
+            &std::fs::read_dir(&path)
+                .unwrap()
+                .find_map(|e| {
+                    let p = e.unwrap().path();
+                    p.file_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .starts_with("R2 ")
+                        .then_some(p)
+                })
+                .unwrap(),
+        );
+        p.block(&id("R2"), &id("R1")).unwrap();
+        let after = std::fs::read(
+            std::fs::read_dir(&path)
+                .unwrap()
+                .find_map(|e| {
+                    let p = e.unwrap().path();
+                    p.file_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .starts_with("R2 ")
+                        .then_some(p)
+                })
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(again, after, "a duplicate edge is not rewritten");
+
+        let err = p.claim(&store, Some(&id("R2")), &live).unwrap_err();
+        assert!(err.to_string().contains("R2 is blocked by R1"), "{err}");
+        let ready = p.ready(&store).unwrap();
+        assert!(ready.iter().all(|item| item.task.id != id("R2")));
+        let next = p.claim(&store, None, &live).unwrap();
+        assert_ne!(next.task.id, id("R2"));
+        p.status(&store, &id("R1"), Some(Status::Done), true)
+            .unwrap();
+        assert!(
+            store
+                .latest_task_claim("proj", &live)
+                .unwrap()
+                .is_none_or(|row| row.task_id != "R1")
+        );
+        let _ = std::fs::remove_dir_all(&path);
     }
 }

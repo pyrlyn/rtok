@@ -102,10 +102,38 @@ fn changes_shell_state(cmd: &str) -> bool {
         matches!(
             stage.first().map(String::as_str),
             Some(
-                "cd" | "pushd" | "popd" | "export" | "source" | "." | "unset" | "alias" | "unalias"
+                "cd" | "pushd"
+                    | "popd"
+                    | "export"
+                    | "source"
+                    | "."
+                    | "unset"
+                    | "alias"
+                    | "unalias"
+                    | "set"
+                    | "shopt"
+                    | "umask"
+                    | "trap"
+                    | "declare"
+                    | "typeset"
+                    | "readonly"
             )
-        )
+        ) || is_bare_assignment(stage)
     })
+}
+
+/// `A=1` (or `A=1 B=2`) with no command word sets a variable in the calling shell; with a
+/// command word (`A=1 cargo test`) the assignment is scoped to that command and wraps fine.
+fn is_bare_assignment(stage: &[String]) -> bool {
+    !stage.is_empty()
+        && stage.iter().all(|w| {
+            w.split_once('=').is_some_and(|(name, _)| {
+                name.chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+        })
 }
 
 /// T437: true when `git` is a word anywhere in the command text. Matches the raw text
@@ -142,6 +170,12 @@ pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
     let mut cmd = full;
     while let Some((_, rest)) = crate::plugins::guard::strip_cd_hop(cmd) {
         cmd = &full[full.len() - rest.len()..];
+    }
+    // T444: `skip_wrap` above only saw `cd` as the first word; the command that really
+    // runs behind the hops (`cd x && sudo ls`, `cd x && rtok expand id`) needs the same
+    // never_wrap / interactive checks.
+    if cmd.len() != full.len() && skip_wrap(cmd, &cfg) {
+        return None;
     }
     if changes_shell_state(cmd) {
         return None;
@@ -272,6 +306,52 @@ mod tests {
             assert!(decide(cmd).is_none(), "{cmd} must stay unwrapped");
         }
         assert!(decide("git checkout -b export").is_some());
+    }
+
+    /// T444: the skip rules also apply to the command behind `cd` hops.
+    #[test]
+    fn skip_rules_apply_behind_cd_hops() {
+        for cmd in [
+            "cd x && rtok expand abc",
+            "cd x && cd y && rtok expand abc",
+            "cd x && sudo ls",
+            "cd x && python -i",
+            "cd x && sleep 10 &",
+        ] {
+            assert!(decide(cmd).is_none(), "{cmd} must stay unwrapped");
+        }
+        let d = decide("cd x && cargo test").unwrap();
+        assert_eq!(wrapped(&d), "cd x && rtok run -- 'cargo test'");
+    }
+
+    /// T444: an escaped quote must not hide a later `cd` from the state check.
+    #[test]
+    fn escaped_quote_does_not_hide_a_cd() {
+        assert!(decide(r"echo it\'s && cd sub").is_none());
+        assert!(decide(r#"echo "a\" b" && cd sub"#).is_none());
+        // Windows leaves every apostrophe command whole (T55.12).
+        assert_eq!(decide(r"echo it\'s fine").is_some(), !cfg!(windows));
+    }
+
+    #[test]
+    fn more_state_builtins_and_bare_assignments_stay_unwrapped() {
+        for cmd in [
+            "set -e",
+            "shopt -s globstar",
+            "umask 022",
+            "trap 'rm x' EXIT",
+            "declare -x A=1",
+            "typeset A=1",
+            "readonly A=1",
+            "A=1",
+            "A=1 B=2 && cargo test",
+            "A='x y'",
+        ] {
+            assert!(decide(cmd).is_none(), "{cmd} must stay unwrapped");
+        }
+        let d = decide("A=1 cargo test").unwrap();
+        assert_eq!(wrapped(&d), "rtok run -- 'A=1 cargo test'");
+        assert!(decide("echo a=b").is_some());
     }
 
     #[test]
