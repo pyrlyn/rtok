@@ -1,5 +1,15 @@
 # rtok — completed tasks
 
+### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
+
+`strip_wrap` only removed `rtok run -- `, so a sub-agent rewrite (`rtok run --agent <id> -- '…'`) still had stem `rtok`. `cache_key` was `None`, and PostToolUse treated that read-only command as a mutation and cleared every `bash` and `read` guard key.
+
+`strip_run_wrap` also drops `rtok run --agent <id> -- ` when `<id>` is 1–64 bytes of ASCII alnum, `_` or `-` (the token `cmd` embeds). A lookalike is left intact. A writer behind the same wrap still clears.
+
+Check: `agent_wrap_matches_the_inner_command_and_keeps_other_keys` and the `--agent` asserts in `bash_key_keeps_every_absolute_cd_hop_and_the_cwd`; `just check`.
+Status: done 2026-10-09
+Model: Cursor / grok 4.7
+
 ### T454. Symbol byte spans, a recoverable cut body, and id lookup
 
 Ideas only from jCodeMunch (no code, schema, or comments copied; no MCP tool, embeddings, or second copy of source files). `symbols` keeps `start_byte`, `end_byte`, and `content_hash` (sha256 of that slice). A definition longer than `body_lines` archives the uncut span and ends with `expand <id>`. Every definition head prints `{path}::{name}#{kind}@{line}`. `symbol` takes optional `id` and, when set, returns that one row. `symbols_fts` indexes definition name, signature (`line_text`), and the contiguous `///`/`//!` doc above the line (512 bytes). `explore` falls through to that index when a name does not resolve, ranking a name-token hit above a signature hit above a doc hit.

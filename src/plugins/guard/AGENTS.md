@@ -8,7 +8,8 @@
 
 **Invariants**
 - Deny only when the prior result is retrievable (an `archive` row exists); otherwise stay silent.
-- Normalise before comparing (trim, collapse whitespace, strip the `rtok run` wrap) so
+- Normalise before comparing (trim, collapse whitespace, strip the `rtok run --` and
+  `rtok run --agent <id> --` wraps) so
   trivially different commands still match, but never match different file paths. A Bash
   key carries the hook's cwd and every leading `cd … &&` hop verbatim (hops are relative
   to the persistent shell, so they never fold, T445); a Bash behind a relative hop
