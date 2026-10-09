@@ -35,7 +35,6 @@
 - T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
 - T331.10. Doctor: rtok's own MCP entry in the duplicate check
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
-- T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 - T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
 - T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
 - T343. Investigate: T330 `--sort` takes two different value sets on `list`

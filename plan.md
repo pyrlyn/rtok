@@ -62,7 +62,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
 | T335 | todo | research | 1 | 0% | |
-| T337 | todo | research | 1 | 0% | |
 | T340 | todo | research | 1 | 0% | |
 | T341 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
@@ -511,7 +510,7 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open question T337 gates T329.11/T329.17; T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. T337, which gated T329.11/T329.17, is settled (requests never re-probe; the health check does); T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
@@ -622,15 +621,17 @@ Backends are chosen per project and per language, not once per process: in a sco
 
 **Config.** `[plugins.graph] backend = "auto" | "lsp" | "tags" | "text"` (default `tags`), `lsp_timeout_ms = 10000`, and per-language overrides (`[plugins.graph.backend_by_language] go = "tags"`), documented in `docs/config.md` and `docs/lsp.md` (whose "Without the server" section already describes the T376 fallback).
 
-#### 6b. Capability cache: check once, reuse until the MCP server restarts
+#### 6b. Capability cache: check once; requests never re-probe; the health check re-checks failed records
+
+Decision (2026-10-09, creator, T337): requests never probe; only the §8d background health check re-probes, so a backend-down or unreachable alert can clear without a restart while the request path keeps zero probes.
 
 - The first graph request for a project (and language) runs the capability check: find the LSP marker and server binary and try to start it; check for a tree-sitter grammar; check for `rg`/`grep` (and SSH reachability for remote roots). The result is a per-project record such as "LSP works", or "LSP: rust-analyzer not on PATH; tree-sitter works", or "LSP and tree-sitter unavailable; text works".
 - Later requests use that record directly: they go straight to the working mode and do not re-probe the modes that failed. No `PATH` lookup, no server spawn attempt and no grammar check runs again on each request.
-- The cache lives in memory in the rtok MCP server process (and in the `rtok web` process for the page). It is kept until that process restarts; restarting the MCP server is the way to re-check after installing a language server. It is not written to disk, so a new process always checks fresh.
-- A working mode that later breaks (server crash, repeated timeouts) is downgraded in the cache once, and the next mode becomes the cached choice for that project for the rest of the process; it is not re-probed per request.
-- Changing `[plugins.graph] backend` or the per-language overrides in config clears the cached record for the affected projects (the config watcher already reloads settings); nothing else invalidates it.
+- The record lives in memory for the hot path and is mirrored into the store (a per-project row, the same pattern as the co-change state), so separate processes (the MCP server, `rtok web`, the CLI, `rtok doctor`) see the same record. A new process reads the mirrored record instead of probing again. A request does not re-probe a failed record; the §8d health check does (below).
+- A working mode that later breaks (server crash, repeated timeouts) is downgraded in the record once, and the next mode becomes the chosen one for that project until the health check sees the failed mode work again (two consecutive good checks); it is not re-probed per request.
+- Changing `[plugins.graph] backend` or the per-language overrides in config clears the record for the affected projects (the config watcher already reloads settings); config changes and the §8d health check are the only things that update it.
 - Adding a new project (manually, by session or by reference) runs the check once for that project only; existing records are untouched.
-- `rtok graph projects --json` and the page show each project's cached capability record and when it was checked, so the user can see why a mode was chosen.
+- `rtok graph projects --json` and the page show each project's record from the store, with `checked_at` and `next_probe_at`, so the user can see why a mode was chosen and when it is checked next.
 - Concurrent first requests for the same project share one check (single-flight); they do not spawn several servers.
 
 #### 7. CLI and MCP
@@ -757,10 +758,10 @@ The graph page is split into two parts that show the same graph data side by sid
 #### 8d. Alerts: linked project down or unreachable
 
 - **What raises an alert:** a project in the current scope (including auto-linked references) becomes **missing** (root deleted or moved), **unreachable** (a network or SSH root stops answering, an external disk is unmounted), **backend down** (its working backend from 6b fails and no fallback works), **index failing** (re-index errors three times in a row), or **link broken** (a manifest reference now points to a path that does not exist).
-- **Detection:** the `watch` loop and every graph query update project state; a light background check runs every 60 s (`[plugins.graph] health_check_interval_s`) only for projects in an open scope, using the cached capability record (6b) rather than re-probing everything. A state must persist for two checks before it alerts, to avoid flapping on a brief unmount.
+- **Detection:** the `watch` loop and every graph query update project state; a light background check runs every 60 s (`[plugins.graph] health_check_interval_s`) in every process that hosts graph (the MCP server and `rtok web`), for projects in an open scope. It is the only code that re-probes (requests never do, 6b), and it reads the capability record (6b) from the store. The cheap tier runs every interval: the project root exists (missing, unmounted), the server binary has appeared on `PATH` (path and mtime), a running server is still alive (`try_wait`); an SSH reachability probe for remote roots follows T335's outcome. A failed or degraded record is restarted (server spawn plus `initialize`) only when the cheap tier sees a change (new binary, root back) or on a backoff that starts at 60 s, doubles, and is capped (the cap is fixed in T329.17). A state must persist for two checks before it alerts, to avoid flapping on a brief unmount.
 - **Where alerts show:** a red badge on the project node and link edges in both parts, a toast and an alerts list on the graph page, a line in `rtok doctor`, `rtok graph projects` output (`state` and `alert` fields in `--json`), and a short notice in graph MCP answers that touch an affected project ("project B unreachable since 14:02; results exclude B"). Agents therefore learn about it in the answer they are already reading.
 - **Optional push:** if T288 (push unread messages to hooked agents) is available, an alert is delivered once to agents whose current scope includes the project; repeated failures do not repeat the message.
-- **Recovery:** when the project comes back, the alert clears automatically, a "recovered" entry is logged, and the project is re-indexed if files changed while it was away.
+- **Recovery:** when the project comes back, the alert clears automatically after two consecutive good checks (the same two-check rule as raising), the capability record upgrades, a "recovered" entry is logged, and the project is re-indexed if files changed while it was away.
 - **Edge cases:** a project removed on purpose from the registry never alerts; unlinking a broken project clears its alert for that scope; an alert on a project that is only transitively linked names the chain ("A to B to C: C missing"); many simultaneous alerts (for example a whole disk unmounted) collapse into one grouped alert.
 - **Config:** `[plugins.graph] alerts = true`, `health_check_interval_s = 60`, documented in `docs/config.md`.
 
@@ -782,7 +783,7 @@ The graph page is split into two parts that show the same graph data side by sid
   - **Index freshness [40%]:** 1 when no files are pending and the last index is newer than the last file change; drops with the share of pending files and with age (0 when more than 20% of files are pending or the index is older than 24 hours with changes since).
   - **Backend alive [30%]:** 1 when the configured backend works (so the default `tags` working scores 1); under `auto` or `lsp`, 1 when LSP works, 0.6 when running on the tree-sitter fallback and 0.3 on the text fallback; 0 when no backend works. Reads the cached capability record (6b) plus recent query failures.
   - **Links not broken [30%]:** the share of the project's links whose target is present, reachable and indexed; a project with no links scores 1 here.
-- **Explained, not just a number:** each score comes with the reasons that lowered it ("12 files pending", "rust-analyzer not on PATH, using tree-sitter", "link to ../foo broken"), and a suggested fix for each (re-index, install the server and restart the MCP server, fix or remove the link).
+- **Explained, not just a number:** each score comes with the reasons that lowered it ("12 files pending", "rust-analyzer not on PATH, using tree-sitter", "link to ../foo broken"), and a suggested fix for each (re-index, install the server, which the health check picks up within one interval or on restart, fix or remove the link).
 - **Scope score:** the selected project's scope shows its lowest project score (the weakest link decides), not an average.
 - **Agents:** graph MCP answers include a one-line health note when the scope's score is below 80, so an agent knows when results may be incomplete; `rtok doctor` lists every project under 80 with its reasons.
 - **Edge cases:** a project being indexed for the first time shows "indexing" instead of a score; a missing project scores 0 and shows "missing"; text-only languages are not penalised beyond the backend component; scores update live as state changes and are recomputed at most once per second per project.
@@ -813,15 +814,15 @@ Check: fixture repos under `tests/fixtures`, no network:
 - MCP `callers` without `project` from A's directory crosses into B and C; with `project` set to D it does not.
 - Backends, with `backend = "auto"`: with rust-analyzer on `PATH`, A answers from LSP (result tagged LSP) and finds a type-position reference tags would miss; with it removed from `PATH` and the MCP server restarted, A answers from tree-sitter (tagged tree-sitter); a fixture project in a language with no grammar answers from text search (tagged text, `dead` reported as not available); a scope mixing all three labels each project with its own mode.
 - `backend = "lsp"` with no server answers from tags with the T376 `(tags; lsp: <reason>)` header and an `lsp_fallback` row; the default `tags` answers stay byte-identical (`graph_contract.rs`).
-- A server that crashes mid-session: the current request is answered from tree-sitter with a notice, and later requests go straight to tree-sitter without respawning the server.
-- Capability cache: a test counts probes; 100 requests to the same project after the first run zero further `PATH` lookups or spawn attempts; installing the server without restarting changes nothing; restarting the MCP server picks it up; changing `backend` in config re-checks only the affected projects; two concurrent first requests run one check.
+- A server that crashes mid-session: the current request is answered from tree-sitter with a notice, and later requests go straight to tree-sitter until the health check sees the server work again.
+- Capability cache: a test counts probes; 100 requests to the same project after the first run zero further `PATH` lookups or spawn attempts; installing the server is picked up by the health check within one interval (or by a restart), while requests still run zero probes; changing `backend` in config re-checks only the affected projects; two concurrent first requests run one check.
 - Remote text mode: a project registered as `ssh://localhost/<path>` (test runs only when passwordless SSH to localhost works, otherwise skipped) answers `symbol` over SSH; an unreachable host is reported as no backend available without hanging past the timeout.
 - Visual graph, level 1: with A, B, C, D the page shows 4 projects, 3 in A's scope and 3 linked pairs (A to B, B to C, A to D); the A-to-B edge is dashed with the Cargo reason on hover, A-to-D is solid; clicking B selects it; a missing project is drawn hollow and cannot be opened.
 - Visual graph, level 2: opening A shows its files with aggregated edges; expanding a file shows its functions; focusing the function that calls into C shows the edge ending at a C node, and clicking it opens the target symbol inside C; the breadcrumb and browser back return to the overview; a text-mode project shows the "call edges not available" banner; editing a file with `watch` on updates the node without resetting zoom; a fixture with more than 500 nodes shows "+N more" groups and the page stays responsive.
 - 3D: both levels render in Three.js (Playwright with SwiftShader sees a non-empty canvas and can select a node by click); disabling WebGL shows the 2D fallback with a notice; the 2D/3D toggle is remembered across reloads; orbiting the 500-node fixture stays smooth and the layout stops when settled; leaving the page releases the WebGL context.
 - Two-part UI: an MCP `callers` call from a separate process lights up the target node in the live graph within one second, animates the path into a linked project and adds a feed row whose symbols requested/returned, tokens and saving equal the matching `Measurement` row and `rtok stats`; part 1's camera and selection do not move; clicking, dragging, hovering and keyboard input on the live canvas change nothing (Playwright asserts no selection or camera change); drilling into a project in part 1 switches the live graph to it; freeze then unfreeze catches up without losing totals; a burst of 500 calls in 5 s keeps both parts responsive and the totals exact; a failing call shows red with its error; dropping and restoring `/ws` shows "reconnecting" and refreshes totals from the store; with the live part hidden, no live events are serialised; on a 375 px screen the live part stacks below as a metrics strip.
 - Export: PNG, SVG and JSON exports of A's scope open correctly; the JSON validates against the schema; absolute paths and the user name are redacted by default; a 2,000-node scope exports every node to JSON and the PNG footer notes hidden nodes; `rtok graph export` and MCP `graph_export` produce the same JSON; importing the JSON shows it read-only.
-- Alerts: unmounting (or renaming) B's directory raises "B missing" after two checks on the page, in `rtok doctor`, in `rtok graph projects --json` and as a notice in an MCP `callers` answer from A; restoring it clears the alert and re-indexes; a broken manifest path raises "link broken"; unmounting several projects at once shows one grouped alert; a removed project never alerts.
+- Alerts: unmounting (or renaming) B's directory raises "B missing" after two checks on the page, in `rtok doctor`, in `rtok graph projects --json` and as a notice in an MCP `callers` answer from A; restoring it clears the alert and re-indexes; a backend-down alert clears after the server is restored, without a restart; a broken manifest path raises "link broken"; unmounting several projects at once shows one grouped alert; a removed project never alerts.
 - Diff: changing a function signature in B and running `rtok graph diff --from HEAD` from A reports the change and lists A's affected call sites; the working tree is untouched by building the old side; a rename is reported as a rename; an unknown ref errors clearly; MCP `graph_diff` returns a capped summary with a paging id.
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
@@ -838,11 +839,11 @@ T329 §6a mode 3 and "when no mode works": word-boundary definition and mention 
 
 Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; `ssh://localhost/<path>` answers `symbol` when passwordless SSH works (skipped otherwise); an unreachable host reports no backend within the timeout; `just check`.
 
-### T329.11. Graph capability cache: one probe per project until the process restarts
+### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
 
-T329 §6b: an in-memory per-project (and language) record of which mode works, single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page. T337 (never re-probe vs alerts and health) must be answered first. Depends on T329.9.
+T329 §6b: a per-project (and language) record of which mode works, in memory for the hot path and mirrored into the store so the CLI, web and `rtok doctor` see it; single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page with `checked_at` and `next_probe_at`. Exposes a `reprobe(project)` entry point for the §8d health check (T329.17); requests never call it. T337 is decided: requests never re-probe. Depends on T329.9.
 
-Check: a test counts probes, 100 requests after the first run zero lookups or spawns; restarting picks up a newly installed server; a `backend` change re-checks only affected projects; concurrent first requests run one check; `just check`.
+Check: a test counts probes, 100 requests after the first run zero lookups or spawns; a `reprobe` after installing the server picks it up while 100 requests still run zero probes; a `backend` change re-checks only affected projects; concurrent first requests run one check; a second process reads the mirrored record; `just check`.
 
 ### T329.14. Graph page level 2: drill-down into one project
 
@@ -864,9 +865,9 @@ Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against t
 
 ### T329.17. Graph alerts: linked project down or unreachable
 
-T329 §8d: alert states, the two-check rule, the 60 s background check, the page badges and toasts, `rtok doctor`, notices in MCP answers, optional T288 push. Adds `alerts` and `health_check_interval_s`. T337 shapes the probing, so settle it first. Depends on T329.11, T329.12.
+T329 §8d: alert states, the two-check rule, the 60 s background check, the page badges and toasts, `rtok doctor`, notices in MCP answers, optional T288 push. Adds `alerts` and `health_check_interval_s`. Owns the tiered re-probe loop (cheap checks every interval; server restart only on change or on a capped backoff from 60 s) in every process that hosts graph, and the clearing of backend-down and unreachable alerts after two good checks (T337 decided). Depends on T329.11, T329.12.
 
-Check: renaming B's directory raises "B missing" after two checks on the page, in `rtok doctor`, in `--json` and in an MCP `callers` notice; restoring clears it and re-indexes; a broken manifest path raises "link broken"; several at once group into one alert; `just check`.
+Check: renaming B's directory raises "B missing" after two checks on the page, in `rtok doctor`, in `--json` and in an MCP `callers` notice; restoring clears it and re-indexes; backend-down clears on recovery without a restart; a broken manifest path raises "link broken"; several at once group into one alert; `just check`.
 
 ### T329.18. Graph diff: compare before and after a change
 
@@ -876,7 +877,7 @@ Check: a signature change in B shows in `rtok graph diff --from HEAD` from A wit
 
 ### T329.19. Graph health score per project
 
-T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes, the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
+T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes (the missing-server fix reads "install the server; it is picked up within one health-check interval, or restart"), the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
 
 Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback under `auto` reads 0.6 on the backend component, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; `just check`.
 
@@ -1220,14 +1221,6 @@ Goal: research both approaches, compare trade-offs, recommend one, then update t
 
 Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
-
-### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
-
-In the plan, T329 §6b (branch `docs/plan-graph-projects`, ~lines 787-791, from PR #540 (T329), not merged yet) says later requests "do not re-probe the modes that failed", the cache "is kept until that process restarts" and "nothing else invalidates it". T329 §8d (~lines 917-923) says a background check every 60 s detects **unreachable** (SSH root stops answering) and **backend down**, and "when the project comes back, the alert clears automatically"; §8f (~line 943) scores "Backend alive" from the same record. These contradict each other because detecting an unreachable SSH host or a recovered backend requires probing again, which §6b forbids; under §6b a backend-down alert can never clear without a restart.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it
 
