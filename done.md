@@ -1,5 +1,13 @@
 # rtok — completed tasks
 
+### T454. `read` map of `llms.txt` lists its links
+
+`llms.txt` is a markdown link index with a `.txt` name, so `read` mode `map` used to fall through to the unknown-language line scan and drop the `- [title](url)` rows. `outline::llms_links` parses those rows (fenced blocks skipped) and `render` appends `link <title> <url>` after the heading map for `llms.txt` and `llms-full.txt` only. URLs are not fetched. A normal `.md` file is unchanged.
+
+Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
+
+Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
+
 ### T460. Budgeted `mem_pack` for memory notes
 
 The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
