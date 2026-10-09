@@ -5027,6 +5027,11 @@ mod tests {
         "observations_fts_idx",
         "observations_fts_docsize",
         "observations_fts_config",
+        "symbols_fts",         // 0038: FTS5 virtual table, MATCH/bm25 in sql_ext (T454)
+        "symbols_fts_data",    // FTS5 shadow table for symbols_fts
+        "symbols_fts_idx",     // FTS5 shadow table for symbols_fts
+        "symbols_fts_docsize", // FTS5 shadow table for symbols_fts
+        "symbols_fts_config",  // FTS5 shadow table for symbols_fts
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 
@@ -5350,14 +5355,7 @@ mod tests {
         let live = crate::testutil::tmp_dir("t352-live");
         let live = live.to_str().unwrap();
         let gone = "/rtok-t352-no-such-root";
-        let row = (
-            "f".to_string(),
-            "function".to_string(),
-            1,
-            true,
-            1,
-            String::new(),
-        );
+        let row = rtok_plugin_sdk::SymbolRow::new("f", "function", 1, true, 1, "");
         for root in [live, gone, ""] {
             store
                 .replace_symbols(root, "a.rs", "s", (0, 0), std::slice::from_ref(&row))
@@ -5381,14 +5379,7 @@ mod tests {
         let home = crate::testutil::tmp_dir("t356-home");
         let project = crate::testutil::tmp_dir("t356-project");
         let (home, project) = (home.to_str().unwrap(), project.to_str().unwrap());
-        let row = (
-            "f".to_string(),
-            "function".to_string(),
-            1,
-            true,
-            1,
-            String::new(),
-        );
+        let row = rtok_plugin_sdk::SymbolRow::new("f", "function", 1, true, 1, "");
         for root in [home, project, "/"] {
             store
                 .replace_symbols(root, "a.rs", "s", (0, 0), std::slice::from_ref(&row))

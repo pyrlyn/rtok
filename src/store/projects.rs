@@ -299,14 +299,7 @@ mod tests {
     use super::*;
 
     fn index_row(store: &Store, root: &str) {
-        let row = (
-            "main".to_string(),
-            "function".to_string(),
-            1,
-            true,
-            1,
-            String::new(),
-        );
+        let row = rtok_plugin_sdk::SymbolRow::new("main", "function", 1, true, 1, "");
         for path in ["a.rs", "stale.rs"] {
             store
                 .replace_symbols(root, path, "sha", (0, 0), std::slice::from_ref(&row))
