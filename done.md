@@ -8679,6 +8679,21 @@ Updated in `plan.md`: T330 "Never touched", the cache bullet for index rows, the
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
 
+### T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
+
+In the plan, T330 (branch `docs/plan-agents-junk`, ~line 741, from PR #541 (T330), not merged yet) says stale-worktree removal "uses `git worktree remove` ..., then `git worktree prune`" and that an "orphaned" worktree is "removed only by deleting its folder with `--include review`". Done task T153 (done.md:5181-5187) says "per record, never a blanket `git worktree prune`, which would also drop the records of another session's worktrees on a volume that is merely unmounted", "Orphans are reported, never removed", and "`rtok worktree clean`/`gc` never delete a worktree directory themselves". T330's own edge case (~line 812) also says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". These contradict each other because T330 reintroduces the two removal actions T153 forbids and disagrees with itself about whether `agents junk clear` removes worktrees at all.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): junk delegates to `rtok worktree gc` (research option A, deleting the merged branch as gc does). The `stale-worktrees` kind lists exactly what `gc::decide` would remove (merged, clean, idle at least `stale_worktree_days`, lock absent or own, agent not live) and everything else with gc's reason. `clear --include review --yes` removes the listed worktrees through the same per-record `worktree::remove::detach`, one record at a time, and deletes the merged local branch as gc does. No blanket `git worktree prune`; orphans and stale records are reported, never removed. This keeps both T153 guarantees and one removal path, and unmerged or unpushed work can never be lost.
+
+Updated in `plan.md`: the T330 `stale-worktrees` row, its edge case, the unmerged-worktree edge case, the `stale_worktree_days` config note, the "New kinds" check, the T330.5 card (dropped the T341 dependency and the `git worktree remove` wording), and the T330.5.3 card (unblocked, question removed, scope rewritten to `stale-worktrees` only). Stale reference fixed: T153 is at `done.md` in this file, not at the old `done.md:5181-5187`.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5
+
 ### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 
 In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.

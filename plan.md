@@ -62,7 +62,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
 | T335 | todo | research | 1 | 0% | |
-| T341 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
 | T345 | todo | research | 1 | 0% | |
@@ -950,7 +949,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 | Kind | What | Class | Detection | Kept |
 | --- | --- | --- | --- | --- |
 | `sessions` | old sessions and their logs: transcripts (`*.jsonl`), per-session log files, per-session attachments, tool output dirs and per-session snapshots (for example Claude Code's `file-history/<session>/`) | explicit | only on hosts whose `research.md` §22.1 sessions cell documents the whole session unit and the index the host keeps beside it (T330.5 records the per-host verdict); never the host's memory, index or store files (Claude Code `projects/<project>/memory/`, Kimi `session_index.jsonl`, Copilot `session-store.db`, Codex state DB); never rtok's own session and agent rows in `rtok.db` (T284; the logs keyed by session id age out with their calls through store retention, T340) | anything touched within `stale_session_days` (default 30, creator 2026-10-03); never in a default or `--include review` run, only with `--kind sessions`; `list` shows the host's own retention next to rtok's (Claude Code `cleanupPeriodDays`, Gemini `general.sessionRetention`); see "Old sessions: time only" below |
-| `stale-worktrees` | temporary worktrees an agent created and did not finish: rtok-tagged worktrees (T285) or host-created ones (T289) whose agent session ended, idle longer than `stale_worktree_days` (default 14) | review | `worktree::inventory` (T150) plus agent attribution | worktrees with uncommitted changes or unpushed commits are listed but **never** removed here; locked worktrees are never removed |
+| `stale-worktrees` | temporary worktrees an agent created and did not finish: exactly the ones `rtok worktree gc` would remove (rtok-tagged worktrees, T285, or host-created ones, T289) | review | `rtok worktree gc`'s verdict (`gc::decide`, T153): merged, clean, idle at least `stale_worktree_days` (default 14), lock absent or own, agent not live | everything `gc` keeps, each listed with gc's reason (unmerged or unpushed work, uncommitted changes, a lock owned by another, a live agent, the main or current worktree) |
 | `crash-dumps` | dumps and tracebacks from crashed runs: `*.dmp`, `*.crash`, `*.ips` for the agent's binary, Crashpad/Breakpad `Crashpad/completed`, `pending` folders, panic logs, core files named for the agent | safe after 7 days, review before | §22 crash paths; macOS `~/Library/Logs/DiagnosticReports/<app>*`; Linux `$XDG_STATE_HOME`/app crash dirs (not system `/var/crash`, which needs root) | dumps newer than 7 days stay unless named with `--kind crash-dumps` |
 | `snapshots` | agent state snapshots not tied to one session: per-project checkpoint/undo stores and shadow git repos (Gemini `~/.gemini/history/<project_hash>`) | never | §22 snapshot paths per host; not scanned for hosts §22 marks "not documented" | always kept: size only, with the host's own restore command named; per-session snapshots go with their session (`sessions` row) |
 
@@ -959,7 +958,7 @@ Every kind in this table follows the same rules as the rest: listed per agent wi
 Extra edge cases for these kinds:
 
 - `sessions`: a session file still being appended to (modified in the last 10 minutes, or open by a process) is never removed; a session whose project folder is gone is still listed under "(project missing)" with its path.
-- `stale-worktrees`: removal uses `git worktree remove` (never `rm -rf` on a checkout), then `git worktree prune`; the branch is kept (branch deletion stays with `rtok worktree gc`, T153); a worktree whose main repo is missing is listed as "orphaned" and removed only by deleting its folder with `--include review`, after showing its path.
+- `stale-worktrees`: removal is gc's per-record `worktree::remove::detach` (T286), one record at a time (never `rm -rf` on a checkout); never a blanket `git worktree prune`; orphans (main repo missing) and stale records are listed and reported, never removed; the merged local branch goes too, as in `rtok worktree gc`, because merged means its content is in the base (T341).
 - `crash-dumps`: dumps can contain memory with secrets; they are never uploaded, copied or printed, only sized and deleted.
 - `sessions`: hosts that keep per-session snapshots for "undo" lose undo for cleared sessions; the row says so. `snapshots` are never cleared.
 
@@ -1018,7 +1017,7 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 
 #### Config
 
-`[agents.junk] stale_session_days = 30`, `keep_logs_days = 30`, `stale_worktree_days = 14`, `crash_dump_min_age_days = 7`, `temp_min_age_hours = 24`, `exclude = []` (glob paths never touched), `extra = []` (extra paths per host to treat as a kind, for example `{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }`), documented in `docs/config.md`.
+`[agents.junk] stale_session_days = 30`, `keep_logs_days = 30`, `stale_worktree_days = 14` (the idle window passed to `rtok worktree gc`'s policy for junk), `crash_dump_min_age_days = 7`, `temp_min_age_hours = 24`, `exclude = []` (glob paths never touched), `extra = []` (extra paths per host to treat as a kind, for example `{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }`), documented in `docs/config.md`.
 
 #### Edge cases and expected results
 
@@ -1029,7 +1028,7 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 - The same folder reached from two agents (shared cache): listed under each with a "shared with" note and counted once in the totals; `clear` removes it once.
 - Windows: paths use `%LOCALAPPDATA%`/`%APPDATA%`; files locked by a process are skipped with the reason.
 - macOS: `~/Library/Caches` entries are listed as `cache` and cleared only when §22 names them (D36); nothing under `~/Library/Application Support/<app>` is cleared unless §22 lists that subfolder as junk.
-- A worktree rtok created for an agent that still has unmerged commits: its `build` and `deps` can be cleared, the worktree itself is never removed here (that is `rtok worktree gc`, T153).
+- A worktree rtok created for an agent that still has unmerged commits: its `build` and `deps` can be cleared; the worktree itself is never removed (gc's merged rule).
 - `--yes` with nothing to clear: prints "Nothing to clear" and exits 0.
 
 #### Also
@@ -1051,7 +1050,7 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - A shared folder is counted once in totals and removed once.
 - A simulated running agent skips temp, locks, swap, index and its current session.
 - Cache: rtok's `.rtok-lsp-xdg/cache` in a fixture project, a `$XDG_CACHE_HOME/rtok` folder and a `CACHEDIR.TAG` dir appear under `rtok` with exact sizes; a documented host cache (Copilot's `~/Library/Caches/copilot` or `$XDG_CACHE_HOME/copilot`) appears under that agent and in "Freed by `clear`"; an undocumented `~/Library/Caches/<app>` folder and a Cursor Electron `Code Cache` appear under their agent marked "not documented: not cleared" and in no "Freed" total, and become clearable only after an `[agents.junk] extra` entry names them; `clear --kind cache` dry run lists the clearable ones, `--yes` empties them and keeps the top folders and `CACHEDIR.TAG`; a folder with a bad `CACHEDIR.TAG` signature is not treated as cache.
-- New kinds: a session last touched 31 days ago on a host whose §22.1 sessions cell is documented is listed with its last-used time, kept by `--include review` and removed with `--kind sessions` together with its per-session snapshots, while the host's memory and index files stay; one touched 29 days ago and one modified 5 minutes ago are kept; a finished-session worktree idle 20 days is removed with `git worktree remove` and its branch kept, while one with uncommitted changes and one with unpushed commits are listed and never removed; token and credential files are never read for expiry and never touched, even with `--kind`; a 10-day-old crash dump is cleared by default, a 2-day-old one only with `--kind crash-dumps`; a per-project snapshot store (Gemini shadow git) is listed with its size and never removed.
+- New kinds: a session last touched 31 days ago on a host whose §22.1 sessions cell is documented is listed with its last-used time, kept by `--include review` and removed with `--kind sessions` together with its per-session snapshots, while the host's memory and index files stay; one touched 29 days ago and one modified 5 minutes ago are kept; a finished-session worktree idle 20 days that `rtok worktree gc` would remove is removed per record by gc's rules and its merged branch deleted, while one with uncommitted changes and one with unpushed commits are listed and never removed, and no blanket `git worktree prune` runs and an orphan is only reported; token and credential files are never read for expiry and never touched, even with `--kind`; a 10-day-old crash dump is cleared by default, a 2-day-old one only with `--kind crash-dumps`; a per-project snapshot store (Gemini shadow git) is listed with its size and never removed.
 - Session threshold: `rtok config get agents.junk.stale_session_days` prints 30 by default; `.rtok.toml` and `RTOK_AGENTS_JUNK_STALE_SESSION_DAYS` override it; an invalid value (`-1`, `2.5`, `abc`) is rejected with an error naming the key and the run uses 30; a session exactly 720 h old is not old, at 720 h and 1 min it is; status, size and "newest in project" do not change the result; an open session with threshold 0 is skipped as in use.
 - Breakdown: every planned item appears in `list` with path link, size, last used and reason; `--items all` and `--json` list every item; the default shows 10 per kind plus "+N more"; `clear` dry run prints the same items; touching an item between the dry run and `--yes` makes `--yes` skip it with "changed since plan".
 - `rtok agents junk clear --agent rtok --yes` behaves exactly as T182's tests expect (existing tests stay green unchanged).
@@ -1061,21 +1060,17 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 
 ### T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
 
-Part of T330. The review-class kinds with their keeps (worktrees through `git worktree remove`), `sessions` as class `explicit` (`stale_session_days` default 30, time only; only with `--kind sessions`, only on hosts whose §22.1 sessions cell documents the whole session unit and its index, recorded per host here; never the host's memory, index or store files), `snapshots` as `never` (size only), no token kind (D36), the `[agents.junk]` table (`stale_session_days`, `keep_logs_days`, `stale_worktree_days`, `crash_dump_min_age_days`, `temp_min_age_hours`, `exclude`, `extra`), `--session-days`, docs in `docs/config.md` (en, ru, uk). Depends on T330.4 and the investigation T341 (T338 closed: D36).
+Part of T330. The review-class kinds with their keeps (worktrees through gc's verdict and `worktree::remove::detach`), `sessions` as class `explicit` (`stale_session_days` default 30, time only; only with `--kind sessions`, only on hosts whose §22.1 sessions cell documents the whole session unit and its index, recorded per host here; never the host's memory, index or store files), `snapshots` as `never` (size only), no token kind (D36), the `[agents.junk]` table (`stale_session_days`, `keep_logs_days`, `stale_worktree_days`, `crash_dump_min_age_days`, `temp_min_age_hours`, `exclude`, `extra`), `--session-days`, docs in `docs/config.md` (en, ru, uk). Depends on T330.4 (T338 closed: D36; T340 and T341 decided).
 
 Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rejected naming the key; `just check`.
 
 Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. T330.5.4 was split from T330.5.1 later the same day. It closes when all four are done.
 
-### T330.5.3. Junk: `stale-worktrees` (blocked on T341)
+### T330.5.3. Junk: `stale-worktrees` through `rtok worktree gc`'s verdict
 
-Part of T330.5. Blocked: do not claim before the creator decides T341. `stale_worktree_days` (default 14) and the `stale-worktrees` kind (review). T340 is decided (2026-10-09): no `rtok.db` rows in this task; the `rtok.db` part is already delivered by store retention and `remove_project`.
+Part of T330.5. Decided (T341 and T340, creator 2026-10-09), so it is no longer blocked. `stale_worktree_days` (default 14, the idle window passed to gc's policy for junk) and the `stale-worktrees` kind (review): `list` shows exactly what `rtok worktree gc` would remove (`gc::decide`, T153: merged, clean, idle at least `stale_worktree_days`, lock absent or own, agent not live) and everything else with gc's keep reason; `clear --include review --yes` removes those worktrees through the same per-record `worktree::remove::detach`, one record at a time, and deletes the merged local branch as gc does. No blanket `git worktree prune`; orphans and stale records are reported, never removed. The scope is `stale-worktrees` only: no `rtok.db` rows (T340, already delivered by store retention).
 
-Open questions for the creator:
-
-1. T341 (worktrees). (a) Does `agents junk clear` remove worktrees at all? The T330 "More junk kinds" table and its `stale-worktrees` edge case say yes, through `git worktree remove` with the branch kept; T330's own edge case "A worktree rtok created for an agent that still has unmerged commits" says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". (b) Blanket `git worktree prune` after removal (T330) or per record only (T153: a blanket prune drops the records of another session's worktrees on an unmounted volume)? (c) An orphaned worktree (main repo missing): delete its folder with `--include review` (T330) or report only (T153: "Orphans are reported, never removed"; `clean`/`gc` never delete a worktree directory themselves)? Options: A, junk removes only clean, finished worktrees with a per-record `git worktree remove`, no prune, orphans reported only; B, `stale-worktrees` is list-only in junk and points at `rtok worktree gc`; C, as T330 says, relaxing T153.
-
-Check: per the decisions above; `just check`.
+Check: a finished-session worktree idle 20 days that `rtok worktree gc` would remove is listed and removed per record with its merged branch deleted; the `stale-worktrees` list equals the gc dry-run set; worktrees with uncommitted changes, unpushed or unmerged commits, a lock owned by another, or a live agent are listed with the reason and never removed; no `git worktree prune` runs; an orphan is only reported; `just check`.
 
 ### T330.6. Junk: item breakdown, `doctor` line, web card
 
@@ -1214,15 +1209,6 @@ Open note (side findings of the T332 research, not decisions; settle in a separa
 ### T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 
 In the plan, T329 §6a Mode 3 (branch `docs/plan-graph-projects`, ~line 774, from PR #540 (T329), not merged yet) says the text backend "Runs plain text search through the shell: `rg` (ripgrep) when present, `grep -rn` otherwise", and runs "the same commands ... over `ssh host`" for `ssh://` roots. D6 (plan.md@966f067 line 684) says "A plugin never spawns, links, imports, or reads the data of another tool", D18 (plan.md@966f067 line 695) says "D6 holds: no spawned graph tool", and the Working agreement (plan.md@966f067 line 753) says "No plugin shells out to ... a third-party tool (D6)". These contradict each other because the graph plugin would shell out to third-party tools (and to a remote host), which D6/D18 forbid; the existing LSP spawn was justified separately in the P30 survey, text search was not.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-
-### T341. Investigate: T330 worktree removal vs T153 (prune, orphans) and its own edge case
-
-In the plan, T330 (branch `docs/plan-agents-junk`, ~line 741, from PR #541 (T330), not merged yet) says stale-worktree removal "uses `git worktree remove` ..., then `git worktree prune`" and that an "orphaned" worktree is "removed only by deleting its folder with `--include review`". Done task T153 (done.md:5181-5187) says "per record, never a blanket `git worktree prune`, which would also drop the records of another session's worktrees on a volume that is merely unmounted", "Orphans are reported, never removed", and "`rtok worktree clean`/`gc` never delete a worktree directory themselves". T330's own edge case (~line 812) also says "the worktree itself is never removed here (that is `rtok worktree gc`, T153)". These contradict each other because T330 reintroduces the two removal actions T153 forbids and disagrees with itself about whether `agents junk clear` removes worktrees at all.
 
 Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
 
