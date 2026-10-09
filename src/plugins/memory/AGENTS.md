@@ -49,6 +49,16 @@ if split out per T2.5.
   note is skipped too, whatever its body — import must never let an older export replace a
   newer local one (T209); `insert_note_if_absent` (`INSERT OR IGNORE`, no upsert).
 - Search returns the right note first for the T6.1 fixture (three notes, one obvious match).
+- A `PostToolUse` stores one mechanical observation (`observe.rs`): type, title, scrubbed
+  narrative ≤ 400 characters, and existing root-relative files. The raw tool output is not
+  copied. A repeat of the same session, tool and narrative within 5 seconds inserts nothing.
+  `mem_*` tools are not observed. `mem_get` with `obs` returns that narrative.
+- `notes.uses` / `last_used` move on `mem_get` and on a prompt-recall injection. Recall order
+  is pinned, then retention score, then newest id. A low score is never a delete.
+- `prompt_recall` appends at most two `obs <id> <title> (<session>)` lines inside
+  `recall_tokens`, after the note index, diversified to 3 hits per session before the cut.
+- `PreCompact` adds that same title index plus this session's observations when either exists.
+  The hook stays `{}` when both are empty.
 
 **Schema** lives in `migrations/0001_schema_v1/up.sql` (`notes`, `notes_fts` + triggers). Changing
 it means a new migration directory, never an edit to `0001_schema_v1/up.sql`.

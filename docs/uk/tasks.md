@@ -37,7 +37,7 @@ tasks/done/A7 - old-work.md
 ```
 
 - Ім'я файла — `<id> - <slug>.md`. Slug — рядкові латинські літери та цифри, з'єднані дефісами, не довший за 48 символів. Заголовок у імені не зберігається, він у front matter.
-- Front matter містить `id`, `title`, `status`, `parent` (лише для підзавдань), `created_at` і `updated_at` (Unix-секунди). Опис — тіло файла під front matter.
+- Front matter містить `id`, `title`, `status`, `parent` (лише для підзавдань), `created_at` і `updated_at` (Unix-секунди). Захоплення додає `assignee`, `blocked_by` і `priority` (0–4, поле опускається, коли воно дорівнює 2). Файли, записані до цих ключів, і далі читаються. Опис — тіло файла під front matter.
 - Файли належать тому checkout, у якому запущено команду. Номери спільні через сховище, але worktree читає й записує файли завдань на своїй гілці, тому вони потрапляють в інші checkout через git.
 - Завершені та закриті завдання переносяться до `tasks/done/`, тож план — це лістинг каталогу.
 - Запис іде у тимчасовий файл, який потім перейменовується на місце.
@@ -66,7 +66,12 @@ Why the task exists and what done means.
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` | активні завдання, підзавдання виводяться з відступом під батьком; `--status` приймає список через кому |
 | `rtok task show <id> [--json]` | одне завдання з підзавданнями, посиланням і описом |
 | `rtok task status <id> [<status>] [--force] [--json]` | читає статус або встановлює `open`, `in-progress`, `done` чи `closed` |
-| `rtok task next [--json]` | відкрите завдання з найменшим номером, яке не має активних (відкритих або в роботі) підзавдань |
+| `rtok task next [--json]` | перше готове завдання. Якщо блокерів немає, це й далі відкрите завдання з найменшим номером без активного підзавдання |
+| `rtok task ready [--json]` | усі завдання, які можна взяти, спочатку з вищим пріоритетом (`0` раніше за `2`) |
+| `rtok task claim [id] [--agent <id>] [--json]` | взяти `id` або перше готове завдання. Потрібен `--agent` або `RTOK_AGENT_ID`. У GitHub і GitLab запис виконавця — остання зміна перемагає, це не compare-and-set |
+| `rtok task release <id> [--agent <id>] [--force] [--json]` | зняти виконавця і повернути статус `open`. Лише власник, якщо не вказано `--force` |
+| `rtok task dep <id> <blocker> [--json]` | `id` чекає, доки `blocker` не стане `done` або `closed`. Цикл відхиляється, і нічого не записується |
+| `rtok task priority <id> <0-4> [--json]` | задати пріоритет. `0` — найвищий, `2` — типове значення, воно не зберігається |
 
 Без `--json` команди друкують текст. З `--json` друкують завдання як JSON.
 
@@ -81,6 +86,11 @@ Why the task exists and what done means.
 | `task_get` | `id` (обов'язковий) | `task show` |
 | `task_status` | `id` (обов'язковий), `status`, `force` | `task status` |
 | `task_next` | немає | `task next` |
+| `task_ready` | немає | `task ready` |
+| `task_claim` | `id`, `agent` | `task claim` |
+| `task_release` | `id` (обов'язковий), `agent`, `force` | `task release` |
+| `task_dep` | `id` (обов'язковий), `blocker` (обов'язковий) | `task dep` |
+| `task_priority` | `id` (обов'язковий), `level` (обов'язковий, 0–4) | `task priority` |
 
 ## Конфігурація
 

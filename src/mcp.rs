@@ -847,6 +847,11 @@ fn read_file(cx: &Runtime, args: &Value) -> Result<String> {
 
 #[cfg(feature = "memory")]
 fn mem_get(cx: &Runtime, args: &Value) -> Result<String> {
+    if let Some(n) = args.get("obs").and_then(Value::as_i64) {
+        let id = i32::try_from(n).map_err(|_| anyhow::anyhow!("invalid obs id: {n}"))?;
+        return crate::plugins::memory::obs_get(cx, id)?
+            .ok_or_else(|| anyhow::anyhow!("unknown observation id: {id}"));
+    }
     let id = args["id"]
         .as_i64()
         .and_then(|n| i32::try_from(n).ok())

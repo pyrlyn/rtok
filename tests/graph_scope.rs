@@ -155,7 +155,10 @@ fn symbol_finds_the_definition_in_a_linked_project() {
         "symbol",
         serde_json::json!({"name": "shared"}),
     );
-    assert_eq!(out, "[c] lib.rs:1 function\nfn shared() {}\n");
+    assert_eq!(
+        out,
+        "[c] lib.rs::shared#function@1 lib.rs:1 function\nfn shared() {}\n"
+    );
 }
 
 #[test]
@@ -203,7 +206,10 @@ fn explore_and_outline_take_project() {
     let home = world("explore");
     let a = home.join("a");
     let out = call(&home, &a, "explore", serde_json::json!({"query": "shared"}));
-    assert!(out.contains("= shared\n[c] lib.rs:1 function\n"), "{out}");
+    assert!(
+        out.contains("= shared\n[c] lib.rs::shared#function@1 lib.rs:1 function\n"),
+        "{out}"
+    );
     assert!(out.contains("shared \u{2190} 2\n"), "{out}");
     let d = call(
         &home,
@@ -211,7 +217,12 @@ fn explore_and_outline_take_project() {
         "explore",
         serde_json::json!({"query": "shared", "project": "4"}),
     );
-    assert!(d.starts_with("no symbols resolved"), "{d}");
+    // `shared` is not a definition in d. Search still finds `d_caller`: its signature
+    // line contains the query (T474).
+    assert_eq!(
+        d,
+        "= d_caller\nlib.rs::d_caller#function@1 lib.rs:1 function\nfn d_caller() { shared(); }\ncalls: shared\npaths:\nnone\nimpact:\nd_caller \u{2190} 0\n"
+    );
     assert!(!d.contains("[c]"), "{d}");
     let map = |project: &str| {
         call(

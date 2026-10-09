@@ -2,13 +2,68 @@
 
 ### T460. Budgeted `mem_pack` for memory notes
 
+The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
+
 MCP `mem_pack` packs FTS hits into one answer under a token budget. Each hit starts at abstract (title and snippet). Leftover budget deepens the best hits to the first paragraph, then the body. A tier that does not fit is skipped whole. `limit` is 1–20 (default 8) and `max_tokens` is 1–2000 (default 400); `search_limit` does not cap this tool. The hook index is unchanged. A `Measurement` row (`plugin: memory`, `kind: mem_pack`) records the placed bodies against the packed text. No model call.
 
 Check: `plugins::memory::pack` unit tests (abstracts fit, a huge body stays abstract, leftover budget deepens only the first hit, identical title and snippet collapse, an over-budget estimator returns nothing); `memory_pack_returns_a_tier_and_records`; `tests/trycmd/mcp.toml` lists `mem_pack` after `mem_search`.
 
 Result: pack tests 5 passed; `memory_pack_returns_a_tier_and_records` passed; `mcp_surface_stays_within_sixty_description_tokens` passed (the six descriptions sum to 60). `cli_trycmd` lists `mem_pack`; the report counts 31 tools, ~810 description tokens. `cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings` clean.
 
-### T455. Fold nested JSON before archive replaces it with a pointer
+### T458. Cap the MCP wrap `Content-Length` read at the hook frame limit
+
+`rtok mcp -- <server>` read an LSP-style body with `take(len).read_to_end` and no upper bound. A declared length over `rtok_hook::MAX_FRAME` (64 MiB) is now forwarded as `Framing::Raw` of the header only; the following bytes stay on the stream. A length at or under the cap still reads the body, including the short-body path.
+
+Check: a declared length above `rtok_hook::MAX_FRAME` is `Framing::Raw` of the header only and the next frame is still read; a length at the cap still reads a short body; `just check`.
+
+Result: `just check` against `6f8e4147`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 551 passed.
+Status: done 2026-10-09
+Model: Cursor / grok 4.7
+
+### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
+
+`strip_wrap` only removed `rtok run -- `, so a sub-agent rewrite (`rtok run --agent <id> -- '…'`) still had stem `rtok`. `cache_key` was `None`, and PostToolUse treated that read-only command as a mutation and cleared every `bash` and `read` guard key.
+
+`strip_run_wrap` also drops `rtok run --agent <id> -- ` when `<id>` is 1–64 bytes of ASCII alnum, `_` or `-` (the token `cmd` embeds). A lookalike is left intact. A writer behind the same wrap still clears.
+
+Check: `agent_wrap_matches_the_inner_command_and_keeps_other_keys` and the `--agent` asserts in `bash_key_keeps_every_absolute_cd_hop_and_the_cwd`; `just check`.
+
+Result: `just check` against `61d491aa`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 506 passed.
+Status: done 2026-10-09
+Model: Cursor / grok 4.7
+
+### T474. Symbol byte spans, a recoverable cut body, and id lookup
+
+Merged as T454 (pyrlyn/rtok#898); renumbered to T474 because #888, opened earlier, also took T454.
+
+Ideas only from jCodeMunch (no code, schema, or comments copied; no MCP tool, embeddings, or second copy of source files). `symbols` keeps `start_byte`, `end_byte`, and `content_hash` (sha256 of that slice). A definition longer than `body_lines` archives the uncut span and ends with `expand <id>`. Every definition head prints `{path}::{name}#{kind}@{line}`. `symbol` takes optional `id` and, when set, returns that one row. `symbols_fts` indexes definition name, signature (`line_text`), and the contiguous `///`/`//!` doc above the line (512 bytes). `explore` falls through to that index when a name does not resolve, ranking a name-token hit above a signature hit above a doc hit.
+
+Check: a body over 40 lines round-trips through `expand`; a shorter body is unchanged aside from the id prefix; an unchanged mtime and size is still skipped; `symbol` with an id returns that row; `explore` of `truncated source lines` includes `body_lines`; `cargo test --test graph_contract --test graph_model` and the `outline` / `index` / `graph` unit tests pass; `just check`.
+
+Result: `symbol` prints the id on every definition head and reads a cut body back from the file span when the file sha matches. `rtok expand <id>` returns the uncut span. `explore` of `truncated source lines` on the graph plugin includes `body_lines`. `just check`: 2978 passed, 6 skipped.
+Status: done 2026-10-08
+
+### T454. Mechanical observations, retention rank, and PreCompact recall
+
+A tool call now stores one scrubbed observation (title, type, narrative ≤ 400 characters, existing root-relative files). The raw output stays in the archive. The same session, tool and narrative within 5 seconds does not insert again. `mem_*` tools are not observed. `mem_get` with `obs` returns the narrative.
+
+`notes.uses` and `last_used` move on a live `mem_get` and on a prompt-recall injection. Recall order is pinned, then retention score, then newest id. A low score is never a delete.
+
+`prompt_recall` fuses observation FTS with file-linked observations (RRF, k = 60), keeps at most 3 hits from one session, and appends at most two `obs <id> <title> (<session>)` lines inside `recall_tokens`. `PreCompact` adds the title index and this session's observations when either exists, and stays `{}` when both are empty.
+
+Check: `cargo test --lib plugins::memory`; `cargo test --lib schema_matches_the_migrated_tables_and_snapshot`.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
+
+### T442. Atomic task claim and a ready queue
+
+Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.
+
+A disk claim takes `<tasks>/.claim.lock` (`create_new`, a lock older than 10s is stolen). GitHub and GitLab labels are `rtok:owner:<agent>`, `rtok:needs:<id>` and `rtok:p:<n>` (omitted at the default 2). Those writes are last-write-wins, not compare-and-set. A claim whose agent row is missing, or whose `last_seen` is older than 30 minutes, can be taken. A store error does not steal a live claim. The same agent claiming again does not rewrite the file. A cycle, a self-edge or a missing blocker writes nothing. When the plan has no `blocked_by` edges, `next` is still the lowest open leaf.
+
+### T475. Fold nested JSON before archive replaces it with a pointer
+
+Merged as T455 (pyrlyn/rtok#897); renumbered to T475 because #872, opened earlier, also took T455.
 
 `archive` runs before any structural encoder and, past `plugins.archive.min_tokens`, replaces a large tool result with a head/tail pointer. `rtok mcp -- <server>` does the same by line count. A design or AST JSON therefore never reaches an encoder that can hoist repeated values and element bodies.
 
@@ -17,6 +72,14 @@ Plan: plugin `json_tree` (Proxy, Mcp), `default_on` false, registered immediatel
 Check: `just check`; `cargo test -p rtok json_tree -- --test-threads=8`. `rtok expand <id>` returns the pre-fold bytes. A block `toon` encodes still has a `[toon ` prefix and no `[json-tree ` prefix. No saving without a `Measurement` row (`plugin: "json_tree"`, `kind: "fold"`).
 
 Result: `just check` 2981 passed, 6 skipped. `cargo test -p rtok json_tree -- --test-threads=8` 11 passed.
+
+### T454. Risk-ranked reading list for a git diff
+
+`rtok graph review` (CLI only, same flags as `affected`) scores each changed file from the symbol index: an untested definition is 0.30, a tested one is 0.05, a whole-token security keyword adds 0.20, and callers add at most 0.10. It prints the level, the untested names, and the hunk ranges that fit an 800-line budget. No sixth MCP tool. No new crate. No `Measurement` unless `cap` shortens the answer. The repo `.coderabbit.yaml` stub is removed so the central pyrlyn config applies. A pull request uploads the report from an unprivileged job; a `workflow_run` on the default branch posts the sticky comment and does not check out pull-request code. A high score does not fail CI.
+
+Check: `cargo test --lib plugins::graph::review`; `graph_surface_is_five_tools_under_150_tokens`; `just check`.
+
+Result: 8 review tests passed; the MCP surface stays five tools. `just check` ran the full gate (trycmd snapshots are a shared input): 2978 passed, 6 skipped.
 
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
@@ -9316,6 +9379,23 @@ Plan:
 Check: `cargo nextest run -E 'test(/worktree::gc::/) | binary(worktree)'`, `TRYCMD=overwrite` for `cli_trycmd` and `completions`, and `just check`; a dry-run `rtok worktree gc --idle 1h` on the live repository.
 
 Result (2026-10-08, Claude Code / claude-opus-5-5): `Entry::done` marks a merged, clean worktree whose branch has commits outside the base. `remove` opens a foreign or unknown lock on it and says so in the note; `gc` removes it past a live agent or a foreign lock once idle past `--idle` (`Verdict::Finished`), and keeps the old reason inside the window. A fresh branch under a foreign lock is still refused. On the live repository, `gc --idle 1h` now plans to remove 7 of the orchestrator's 8 merged worktrees (the eighth was touched within the hour) and keeps every open PR's. Not fixed here: the desktop app leaves `RTOK_AGENT_ID` unset and MCP unlinked, so an agent still cannot name itself.
+
+### T473. Agent identity in Claude desktop sessions through `CLAUDE_CODE_SESSION_ID`
+
+Desktop-app (Code tab) sessions often have no rtok agent identity: `~/.claude/session-env/<session>/` stays empty, so `RTOK_AGENT_ID` is unset in the agent's Bash tool, and MCP `whoami`/`worktree_*` answer "not linked to an agent session". `rtok worktree remove`, `agents whoami/status/inbox` from an agent's shell cannot name the caller. T453 only works around it for finished worktrees.
+
+Finding (2026-10-08, the creator's own store and `~/.claude/session-env`): across 28 recent desktop sessions the env file exists exactly when rtok recorded a `SessionStart` call for that session, and in most of those (16 of 19 checked) the first `SessionStart` came hours after the session's first hook (resume/compact). The plugin's `SessionStart` (and often the first `UserPromptSubmit`) never reaches rtok at desktop startup, while a user-settings `SessionStart` hook of the same session does run. `CLAUDE_ENV_FILE` is fine; the startup event is what is missing. Claude Code documents `CLAUDE_CODE_SESSION_ID` (https://code.claude.com/docs/en/env-vars, checked 2026-10-08) in Bash/PowerShell tool, hook and stdio MCP subprocesses, equal to the hooks' `session_id`; an MCP server keeps the id it was spawned with.
+
+Plan:
+1. `src/store/agents.rs`: `Store::main_agent(host_id, host_session)` (the lookup `register_agent` already does for a sub-agent's parent, shared).
+2. `src/agents/link.rs`: `SESSION_ENV` gains `claude` → `CLAUDE_CODE_SESSION_ID`, lookup-only (an MCP's spawn id can be stale after `/clear` or `--continue`, so it never registers a row; no row yet → the old rules run, nothing cached). New `shell_agent(store, env)`: `RTOK_AGENT_ID`, else the main agent of the host session named by a `SESSION_ENV` var.
+3. `src/cli.rs` (`agents whoami/status`, `caller_agent`) and `src/worktree/claim.rs::caller` read the caller through `shell_agent`.
+4. Tests: link rules (claude env links an existing row, does not register, falls through), `shell_agent`, a CLI test (`agents whoami` with only `CLAUDE_CODE_SESSION_ID`); trycmd strips the var.
+5. `research.md` §26: the Claude row and the desktop finding.
+
+Check: `just check`; built binary from this session's own shell: `rtok agents whoami` and MCP `whoami` name this session's agent with no `RTOK_AGENT_ID`.
+
+Result: `CLAUDE_CODE_SESSION_ID` names the caller in `rtok agents whoami/status/send/inbox` and `rtok worktree …` when `RTOK_AGENT_ID` is unset, and links `rtok mcp` to the session's existing agent row (lookup only, never registers). `research.md` §26 records the finding and sources; `docs/agents-and-worktrees.md` (+ ru/uk) says where the id comes from.
 
 ### T424. Fast `rtok worktree list` and `gc` on a hundred worktrees
 
