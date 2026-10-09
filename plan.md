@@ -46,13 +46,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.11 | todo | P2 | 3 | 0% | |
-| T329.14 | todo | P2 | 4 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.17 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
+| T329.22 | todo | P2 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T335 | todo | research | 1 | 0% | |
@@ -831,12 +831,6 @@ T329 §6b: a per-project (and language) record of which mode works, in memory fo
 
 Check: a test counts probes, 100 requests after the first run zero lookups or spawns; a `reprobe` after installing the server picks it up while 100 requests still run zero probes; a `backend` change re-checks only affected projects; concurrent first requests run one check; a second process reads the mirrored record; `just check`.
 
-### T329.14. Graph page level 2: drill-down into one project
-
-T329 §8a level 2: files, modules, types and functions with contains/calls/implements/imports edges, URL-carried drill-down state and breadcrumb, expand and focus, calls into linked projects ending at that project's node, side panel, search-to-focus, the 500-node cap with "+N more", live updates under `watch`. Depends on T329.13, T329.5.
-
-Check: opening A shows files with aggregated edges, expanding a file shows its functions, a call into C ends at a C node that opens the target symbol, breadcrumb and browser back return; the 500-node fixture shows "+N more"; `just check`.
-
 ### T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 
 T329 §8b: the explorer and the read-only live graph side by side with a splitter, the start/end/progress call events on `/ws` from every process through the store, the live canvas and its metric displays (values from the same `Measurement` rows as `rtok stats`), freeze, window selector and the call feed. Over the size budget on its own; split into data path and display when claimed. Depends on T329.13, T329.14.
@@ -872,6 +866,22 @@ Check: a fully indexed A with LSP and intact links scores 100; 30% of files pend
 The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a project badge on every row of the graph page lists (dead symbols, pending files), shown once those lists are scoped to the selected project and its linked projects, so a row says which project it came from. Depends on T329.4, T329.5, T329.20.
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
+
+### T329.22. Graph page level 2: the drill-down view (SPA)
+
+The page half of T329.14 (split on 2026-10-09: the data path alone was over the 500-line cap). T329 §8a level 2, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added (`src/plugins/graph/drill.rs`, schema in `web/src/api/ws.schema.json`):
+
+- "Open" on the level-1 node menu (and double-click) drills into a project. The drill-down state (project, expanded files, focus, depth) is carried in the URL, each step is a history entry, and a breadcrumb (`All projects / rtok / src/plugins/graph`) leads back up, so the browser back button returns.
+- The frame is mapped to the existing `Scene` so `useLayout` (positions kept across updates), `Scene2D`, `Scene3D` and the list view are reused, with a shape per node kind (file cube, type octahedron, function sphere) and the project colour; directories become layout groups. A node click selects, a second click on a file expands it, on a function focuses it (callers and callees to `depth`, 1 to 4).
+- A call into a linked project ends at an `external` node in that project's colour; clicking it opens that project with the target symbol focused.
+- Side panel: path and line, signature, callers and callees from the edges, an editor link (`vscode://file/<root>/<path>:<line>`). Search box: sends `query`, lists `hits` (the scope's projects named), and a hit focuses its symbol.
+- "+N more" when `more > 0` raises `limit` by 500; a spinner while the frame is in flight; the "Index now" empty state for `not indexed`, a hollow notice for `missing`, a "partial" banner when `partial`, and a warning marker on `stale` nodes.
+- Live updates: the page asks again when the project's index numbers in the snapshot move (rows, files, pending, `indexed_at`), so edits under `watch` change nodes and edges in place without resetting the layout or the zoom.
+- Docs for the graph page in `docs/` (en, ru, uk); the text-mode banner waits for T329.9 (no backend other than tags answers yet).
+
+Depends on T329.14, T329.13.
+
+Check: Vitest for the frame-to-scene mapping, the URL state and the breadcrumb; stories with the sample server (open A, expand a file, click the external node, "+N more" on a 600-node fixture, both themes, axe); `just spa-stories`, `just spa-e2e`; `just check`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 

@@ -593,3 +593,43 @@ async fn ws_project_select_link_and_unlink_reach_the_next_snapshot_and_a_bad_id_
     task.abort();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T329.14: the drill-down request answers with a `graph` frame; an unknown project and a request
+/// that names none are a `message`, and nothing is written.
+#[tokio::test]
+async fn ws_graph_answers_a_project_with_its_files_and_refuses_an_unknown_one() {
+    let (_addr, state, dir, task) = serve("drill").await;
+    let root = dir.join("a");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("a.rs"), "fn one() {\n    two();\n}\n").unwrap();
+    std::fs::write(root.join("b.rs"), "fn two() {}\n").unwrap();
+    let rt = rtok::plugin::Runtime::open(Config::load_from(&dir).unwrap(), "web-test").unwrap();
+    rtok::plugins::graph::index::run(&rtok_plugin_sdk::Ctx::new(&rt), &root, false).unwrap();
+    let id = rt
+        .store
+        .register_project(&root, rtok::store::Origin::Manual)
+        .unwrap()
+        .id;
+
+    let ask = |m: serde_json::Value| -> serde_json::Value {
+        serde_json::from_str(&state.inbound(&m.to_string()).expect("a reply")).unwrap()
+    };
+    let g = ask(serde_json::json!({"graph": {"project": id.to_string(), "expand": ["b.rs"]}}));
+    assert_eq!(g["type"], "graph");
+    assert_eq!(g["graph"]["state"], "ok");
+    let ids: Vec<_> = g["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&"f:a.rs".to_string()), "{ids:?}");
+    assert!(ids.iter().any(|i| i.starts_with("s:b.rs:1:two")), "{ids:?}");
+
+    let bad = ask(serde_json::json!({"graph": {"project": "9999"}}));
+    assert_eq!(bad["type"], "message");
+    let bad = ask(serde_json::json!({"graph": {}}));
+    assert_eq!(bad["type"], "message");
+    task.abort();
+    let _ = std::fs::remove_dir_all(&dir);
+}

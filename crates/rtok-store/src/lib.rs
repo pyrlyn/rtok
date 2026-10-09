@@ -49,6 +49,9 @@ mod sql_ext;
 // T163: shared Diesel extension for SQL the DSL cannot express (recursive CTEs, FTS5).
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
+// T329.14: whole-root scans the graph page's drill-down builds its nodes and edges from.
+mod symbol_graph;
+pub use symbol_graph::{DefRow, RefGroup};
 // T329.1: the graph project registry.
 mod docs;
 mod note_files;
