@@ -19,8 +19,8 @@ use super::junk_kinds::{PACKAGE_LOCKS, held_reason};
 use super::junk_review::EXTRA;
 use super::restart::{RealProcs, host_running};
 use super::{HOSTS, host};
+use crate::bytes::human_bytes;
 use crate::config::Config;
-use crate::info::human_bytes;
 use crate::store::Store;
 use crate::worktree::list::{is_cache_dir, usage_until};
 

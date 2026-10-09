@@ -1144,12 +1144,7 @@ fn find_skill(name: &str) -> Option<String> {
 
 /// `~/.claude/skills/<name>/SKILL.md`, joined by components so Windows never
 /// sees a single path segment with embedded slashes.
-pub(crate) fn skill_md_path(home: &Path, name: &str) -> std::path::PathBuf {
-    home.join(".claude")
-        .join("skills")
-        .join(name)
-        .join("SKILL.md")
-}
+pub(crate) use crate::skill_path::skill_md_path;
 
 fn duplicates(srcs: &[Source]) -> Vec<(String, Vec<String>)> {
     let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();

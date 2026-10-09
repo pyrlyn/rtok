@@ -2,7 +2,7 @@
 
 The rtok admin SPA: Vite + React + TypeScript, styled from the brand pack in `../brand/` (tokens, fonts, icons, logos;
 `just spa-install` installs its pinned `@pyrlyn/brand` base); `web/` keeps no copy of them. It talks to `rtok web` over `/ws`
-and `/health` (see `src/web/model.rs` for the snapshot contract).
+and `/health` (see `src/model/mod.rs` for the snapshot contract).
 
 `rtok web` serves it (T310.9): `build.rs` embeds `web/dist/` in the binary, so an installed
 `rtok web` needs no files on disk. `RTOK_WEB_DIST=<dir>` makes it read a built `dist/` at run

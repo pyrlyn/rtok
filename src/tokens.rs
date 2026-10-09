@@ -10,11 +10,30 @@
 //! savings and to gate budgets; never present it as a billed count.
 //! Rates come from `[estimator]` in config and can be refit by `rtok stats --calibrate` (T1.5).
 
-use crate::config::Estimator;
-
 /// The text classes, owned by the published contract (D25) so a plugin can name one without
 /// depending on `rtok`.
 pub use rtok_plugin_sdk::Class;
+
+/// `[estimator]` — chars per token per class (plan T0.5), rewritten by `stats --calibrate`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Estimator {
+    pub code: f32,
+    pub prose: f32,
+    pub json: f32,
+    pub cjk: f32,
+}
+
+impl Default for Estimator {
+    fn default() -> Self {
+        Self {
+            code: 3.5,
+            prose: 4.2,
+            json: 3.0,
+            cjk: 1.0,
+        }
+    }
+}
 
 /// Estimated tokens for `text`. Empty text → 0.
 pub fn estimate(text: &str, class: Class, rates: &Estimator) -> u32 {
@@ -87,7 +106,8 @@ mod tests {
 }
 
 /// T1.5: skip without a key. Full `count_tokens` fit lands when a key is present.
-pub fn calibrate_or_skip(_cfg: &crate::config::Config) -> &'static str {
+/// The rates argument is what a fit would rewrite; the stub ignores it.
+pub fn calibrate_or_skip(_rates: &Estimator) -> &'static str {
     "skipped"
 }
 
@@ -101,7 +121,7 @@ mod calibrate_tests {
         // must not panic; message is skipped when the key is absent.
         let cfg = Config::default();
         if std::env::var_os("ANTHROPIC_API_KEY").is_none() {
-            assert_eq!(calibrate_or_skip(&cfg), "skipped");
+            assert_eq!(calibrate_or_skip(&cfg.estimator), "skipped");
         }
     }
 }

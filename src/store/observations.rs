@@ -19,7 +19,7 @@ impl Store {
     /// stored this narrative in the last [`DEDUP_SECS`] seconds.
     pub fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
         let mut conn = self.lock()?;
-        let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
         let existing: Option<i32> = sql_ext::RecentObservationDup {
             session_id: obs.session_id.to_string(),
             dedup: obs.dedup.to_string(),

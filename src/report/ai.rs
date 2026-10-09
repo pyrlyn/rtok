@@ -334,7 +334,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     fn doc() -> Document {
-        use crate::web::model::*;
+        use crate::model::*;
         Document {
             ledgers: ReportLedgers {
                 window: ReportWindow {
@@ -399,7 +399,7 @@ mod tests {
                     cost_rows: 1,
                 },
             },
-            config: vec![crate::web::model::ConfigEntry {
+            config: vec![crate::model::ConfigEntry {
                 key: "report.since".into(),
                 value: "30d".into(),
                 source: "user".into(),

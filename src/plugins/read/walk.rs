@@ -34,6 +34,7 @@ pub struct WalkEntry {
     pub meta: EntryMeta,
 }
 
+#[cfg(test)]
 impl WalkFs for crate::testutil::Vfs {
     fn meta(&self, path: &str) -> Option<EntryMeta> {
         crate::testutil::Vfs::meta(self, path).map(|m| EntryMeta {

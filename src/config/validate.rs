@@ -9,6 +9,7 @@
 //! through `toml_edit` so comments survive. Figment does not write files.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use anyhow::{Context, Result, bail};
 use figment::value::{Dict, Value as FigValue};
@@ -123,7 +124,7 @@ pub fn set_all_with(
     if !errs.is_empty() {
         bail!("{}", errs.join("\n"));
     }
-    let diff = crate::render::file_diff(&path, &original, &after);
+    let diff = crate::diff::file_diff(&path, &original, &after);
     if !dry_run {
         super::write_file(&path, &after)?;
     }
@@ -443,18 +444,28 @@ fn toml_value(v: &FigValue) -> Option<TomlValue> {
     })
 }
 
+type RulesFn = fn(&Path, &Path) -> Vec<String>;
+
+static RULES: Mutex<Option<RulesFn>> = Mutex::new(None);
+
+/// `cli::run` registers the `cmd` rules checker. Config stays free of `plugins`.
+/// With nothing registered (the `cmd` feature off, or a library load) there is
+/// nothing to check — the same empty result the feature-off build returned.
+pub fn register_rules(check: RulesFn) {
+    *RULES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(check);
+}
+
 /// Malformed `cmd` filter rules for `rtok config validate` (T50.2): the single
-/// `rules` file when present, plus every `rules.d/*.toml`. Without the `cmd`
-/// feature there is nothing to check.
+/// `rules` file when present, plus every `rules.d/*.toml`.
 pub fn rules_issues(rules: &Path, rules_dir: &Path) -> Vec<String> {
-    #[cfg(feature = "cmd")]
+    match *RULES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
     {
-        crate::plugins::cmd::rules::issues_in(rules, rules_dir)
-    }
-    #[cfg(not(feature = "cmd"))]
-    {
-        let _ = (rules, rules_dir);
-        Vec::new()
+        Some(check) => check(rules, rules_dir),
+        None => Vec::new(),
     }
 }
 
@@ -688,20 +699,20 @@ fn check_leaf(
             "plugins.graph.watch" if !matches!(s, "off" | "notify") => {
                 errors.push(format!("{at}: {dotted} must be off or notify"));
             }
-            "tasks.adapter" if !crate::tasks::run::ADAPTERS.contains(&s) => {
-                let all = crate::tasks::run::ADAPTERS.join(", ");
+            "tasks.adapter" if !super::TASK_ADAPTERS.contains(&s) => {
+                let all = super::TASK_ADAPTERS.join(", ");
                 errors.push(format!("{at}: {dotted} must be one of {all}"));
             }
             // Empty means "the project name's first letter"; anything else must parse as ids.
             "tasks.prefix" if !s.is_empty() => {
-                if let Err(e) = crate::tasks::check_prefix(s) {
+                if let Err(e) = crate::task_id::check_prefix(s) {
                     errors.push(format!("{at}: {dotted}: {e}"));
                 }
             }
             // The one parser every reader of these windows uses, so `set` cannot store a value
             // that `rtok stats`, `rtok report`, `doctor` and the web model then refuse.
             "stats.since" | "report.since" => {
-                if let Err(e) = crate::measure::stats::parse_since_from(s, dotted) {
+                if let Err(e) = crate::since::parse_since_from(s, dotted) {
                     errors.push(format!("{at}: {e}"));
                 }
             }
@@ -757,7 +768,7 @@ fn check_junk_extra(at: &str, item: &Item, errors: &mut Vec<String>) {
         }
         let field = |k: &str| t.get(k).and_then(|v| v.as_str());
         match field("host") {
-            Some(h) if h == "rtok" || crate::agents::HOSTS.contains(&h) => {}
+            Some(h) if h == "rtok" || super::HOSTS.contains(&h) => {}
             _ => errors.push(format!(
                 "{at}: {key}.host must be rtok or a host id (see `rtok agents list`)"
             )),

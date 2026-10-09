@@ -147,7 +147,7 @@ impl State {
         let _turn = self.turn.lock().unwrap_or_else(PoisonError::into_inner);
         std::env::set_current_dir(PathBuf::from(&req.cwd)).ok()?;
         let host = (!req.host.is_empty()).then_some(req.host);
-        let mut cfg = Config::load_lenient(None, crate::cli::hook_host_flag(host));
+        let mut cfg = Config::load_lenient(None, crate::config::layers::hook_host_flag(host));
         // This process's env came from whichever call started it; the payload names the session.
         cfg.core.session_env.clear();
         cfg.hook_client_pid = req.pid;

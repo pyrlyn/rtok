@@ -38,15 +38,6 @@ pub fn line(secs: u64, level: &str, source: &str, name: &str, message: &str) -> 
     rtok_log::line(secs, level, source, name, message)
 }
 
-fn file_log(log: &crate::config::Log) -> rtok_log::FileLog<'_> {
-    rtok_log::FileLog {
-        path: &log.path,
-        max_bytes: log.max_bytes,
-        files: log.files,
-        level: &log.level,
-    }
-}
-
 /// The one path a log line takes (T24.1): [`append`] for the file, then the same line as a
 /// `logs` row unless `[log] to_db` is false — the file is then the only sink, which is the
 /// reason the key exists. One `[log] level` decision gates both; both writes fail open (D1).
@@ -61,12 +52,8 @@ pub fn record(
     name: &str,
     message: &str,
 ) {
-    mirror(level, source, name, message);
-    if !enabled(cfg, level) {
-        return;
-    }
-    append_line(cfg, level, source, name, message);
-    if cfg.log.to_db {
+    append(cfg, level, source, name, message);
+    if cfg.log.to_db && enabled(cfg, level) {
         let _ = store.insert_log(level, source, name, message, session, call_id, None);
     }
 }
@@ -74,17 +61,46 @@ pub fn record(
 /// Append one line, rotating first when it would take the file past `[log] max_bytes`.
 ///
 /// Never fails upward: a log that cannot be written is not something the caller can act on, and a
-/// hook must exit 0 in 10 ms whatever the disk is doing (D1).
+/// hook must exit 0 in 10 ms whatever the disk is doing (D1). The bytes and the stderr mirror
+/// are [`crate::logfile::append`].
 pub fn append(cfg: &Config, level: &str, source: &str, name: &str, message: &str) {
-    mirror(level, source, name, message);
-    if !enabled(cfg, level) {
-        return;
-    }
-    append_line(cfg, level, source, name, message);
+    crate::logfile::append(
+        &cfg.log.path,
+        cfg.log.max_bytes,
+        cfg.log.files,
+        &cfg.log.level,
+        level,
+        source,
+        name,
+        message,
+    );
 }
 
-/// Target of every mirrored line, so `RUST_LOG=rtok::log=info` selects the D26 stream alone.
-const STDERR_TARGET: &str = "rtok::log";
+/// Colour a stored log line's level (`<date> <time> <level> <source>/<name>: <message>`, T24.0's
+/// `log::line`): red error, yellow warn, dim debug, info plain. `rtok logs export` prints the same
+/// line through no such call, so piping stays byte-plain.
+pub fn log_line(text: &str) -> String {
+    use owo_colors::{OwoColorize, Stream};
+    let mut parts = text.splitn(4, ' ');
+    let (Some(date), Some(time), Some(level), Some(rest)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return text.to_string();
+    };
+    let level = match level {
+        "error" => level
+            .if_supports_color(Stream::Stdout, |t| t.red())
+            .to_string(),
+        "warn" => level
+            .if_supports_color(Stream::Stdout, |t| t.yellow())
+            .to_string(),
+        "debug" => level
+            .if_supports_color(Stream::Stdout, |t| t.dimmed())
+            .to_string(),
+        _ => level.to_string(),
+    };
+    format!("{date} {time} {level} {rest}")
+}
 
 /// The debug log on stderr (T225): the `log` facade behind `env_logger`, on only while
 /// `RUST_LOG` is set (`RUST_LOG=rtok=debug`; `RUST_LOG_STYLE=never` drops colour). Unset, the
@@ -96,36 +112,6 @@ const STDERR_TARGET: &str = "rtok::log";
 pub fn init_stderr() {
     let env = env_logger::Env::default().default_filter_or("off");
     let _ = env_logger::Builder::from_env(env).try_init();
-}
-
-/// Every D26 line also goes to the facade, *before* the `[log] level` gate: the file keeps its
-/// configured level, stderr shows what `RUST_LOG` asks for. `log!` checks the level first, so
-/// nothing is formatted while the stream is off.
-fn mirror(level: &str, source: &str, name: &str, message: &str) {
-    log::log!(target: STDERR_TARGET, facade_level(level), "{source}/{name}: {message}");
-}
-
-/// D26 level names onto the facade's; an unknown name ranks most severe, as in [`rank`].
-fn facade_level(level: &str) -> log::Level {
-    match level.to_ascii_lowercase().as_str() {
-        "warn" => log::Level::Warn,
-        "info" => log::Level::Info,
-        "debug" => log::Level::Debug,
-        _ => log::Level::Error,
-    }
-}
-
-/// [`append`] past the level check, for a caller that already made it.
-fn append_line(cfg: &Config, level: &str, source: &str, name: &str, message: &str) {
-    let errors = rtok_log::error_path(&cfg.log.path);
-    rtok_log::append_split(
-        &file_log(&cfg.log),
-        Some(&errors),
-        level,
-        source,
-        name,
-        message,
-    );
 }
 
 /// `rtok.log` → `rtok.log.<i>`. The suffix lives in `rtok-log`; tail still walks it.
@@ -160,10 +146,10 @@ fn tail_with(live: &[String], path: &Path, n: usize) -> Vec<String> {
 }
 
 /// `rtok logs`: the tail numbered (`1` newest) with the level coloured through
-/// [`crate::render::log_line`] — one colour table, not a second one here. Pure rendering:
+/// [`log_line`] — one colour table, not a second one here. Pure rendering:
 /// the lines come from the operator model (T15.11), which owns the selection.
 pub fn screen(lines: &[String]) -> Vec<String> {
-    let coloured: Vec<String> = lines.iter().map(|l| crate::render::log_line(l)).collect();
+    let coloured: Vec<String> = lines.iter().map(|l| log_line(l)).collect();
     numbered(&coloured)
 }
 
@@ -345,7 +331,7 @@ pub fn watch<W: Write>(
         let rows = fresh
             .iter()
             .enumerate()
-            .map(|(i, line)| format!("{} {}", shown + i + 1, crate::render::log_line(line)))
+            .map(|(i, line)| format!("{} {}", shown + i + 1, log_line(line)))
             .collect();
         shown += fresh.len();
         Some(WatchTick {

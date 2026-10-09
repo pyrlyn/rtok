@@ -45,6 +45,7 @@ pub mod pi;
 pub mod plugin;
 pub(crate) mod plugin_install;
 pub(crate) mod plugin_version;
+pub(crate) mod proxy_env;
 pub mod qwen;
 pub mod restart;
 pub mod roo;
@@ -67,32 +68,7 @@ use crate::config::Config;
 use crate::ui::style;
 
 /// Every host rtok installs into, in `agents list` order.
-pub const HOSTS: &[&str] = &[
-    "claude",
-    "cursor",
-    "codex",
-    "opencode",
-    "kilo",
-    "pi",
-    "omp",
-    "zcode",
-    "kimi",
-    "grok",
-    "vscode",
-    "copilot",
-    "commandcode",
-    "aider",
-    "windsurf",
-    "zed",
-    "cline",
-    "gemini",
-    "codewhale",
-    "mimo",
-    "antigravity",
-    "devin",
-    "roo",
-    "qwen",
-];
+pub use crate::config::HOSTS;
 
 /// Every module an rtok install can carry, in print order.
 pub const MODULES: &[&str] = &["hooks", "mcp", "proxy", "plugin"];
@@ -1699,23 +1675,9 @@ pub(crate) fn ensure_hook_client_link_here() {
 }
 
 /// Basename of a command path — split on `/` and `\`, drop a trailing `.exe`
-/// (case-insensitive). Lives in this feature-free module because `measure`
-/// builds without the `cmd` feature (`just build-min`), so the `formatters`
-/// copy cannot be shared; `formatters` re-exports this one (T55.10).
-pub(crate) fn cmd_stem(path: &str) -> &str {
-    let base = path.rsplit(['/', '\\']).next().unwrap_or(path);
-    // `get`, not `[..]`: the last 4 bytes of a non-ASCII name (`héllo`) can start mid-char.
-    let cut = base.len().saturating_sub(4);
-    if base.len() >= 4
-        && base
-            .get(cut..)
-            .is_some_and(|e| e.eq_ignore_ascii_case(".exe"))
-    {
-        &base[..cut]
-    } else {
-        base
-    }
-}
+/// (case-insensitive). One definition in [`crate::names`]; `measure` and the
+/// `cmd` formatters share it (T55.10).
+pub(crate) use crate::names::cmd_stem;
 
 /// True when `bin` names the rtok binary (bare, `.exe`, an absolute path, or the running
 /// executable itself whatever it is called — `cargo test` names it `rtok-<hash>`).

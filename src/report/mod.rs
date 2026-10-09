@@ -7,7 +7,7 @@
 //! [`Document`] is the format-neutral shape — T22.2 (html), T22.3 (pdf) and T22.4 (`--ai`)
 //! render these same sections, in this order; [`markdown`] is the first renderer because
 //! it needs none, which is what proves the *content* before any layout work starts. The
-//! document is assembled from the D23 model (`crate::web::model`) and nothing else: a
+//! document is assembled from the D23 model (`crate::model`) and nothing else: a
 //! number that is not in a model struct cannot appear here, and every figure carries the
 //! rows it came from and the window it covers.
 
@@ -23,7 +23,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::config::Config;
-use crate::web::model;
+use crate::model;
 
 /// One recommendation: a rule over the ledgers that prints what triggered it and the rows
 /// it read ([`advice`], T22.5; never a language-model call). Empty when no rule fires —
@@ -115,7 +115,7 @@ mod tests {
 pub(crate) mod fixtures {
     use super::*;
     use crate::doctor::report_fixture;
-    use crate::web::model;
+    use crate::model;
 
     fn base() -> Document {
         Document {

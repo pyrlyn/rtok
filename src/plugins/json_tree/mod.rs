@@ -20,7 +20,7 @@ pub struct JsonTree;
 
 /// How a json_tree pointer starts. `archive` and `toon` share `archive_decisions` and
 /// use it to leave this plugin's blocks alone.
-pub(crate) const PREFIX: &str = "[json-tree ";
+pub(crate) use crate::expand::JSON_TREE_PREFIX as PREFIX;
 
 const MIN_BYTES: usize = 256;
 const CHILDREN: &str = "children";

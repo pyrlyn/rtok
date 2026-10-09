@@ -21,14 +21,10 @@ use crate::web::model;
 use anyhow::{Result, bail};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 
-/// `0.1.0 (1a2b3c4d5)` — the sha comes from `build.rs` (T10.4).
-pub(crate) const VERSION: &str =
-    concat!(env!("CARGO_PKG_VERSION"), " (", env!("RTOK_GIT_SHA"), ")");
-
 /// Token-reduction CLI for AI coding agents. See plan.md for the task list.
 #[derive(Parser)]
 // `bin_name`: clap would print argv[0]'s file name, `rtok.exe` on Windows (T83.7).
-#[command(name = "rtok", bin_name = "rtok", version = VERSION, about)]
+#[command(name = "rtok", bin_name = "rtok", version = crate::VERSION, about)]
 #[command(styles = crate::ui::style::CLAP)]
 pub struct Cli {
     /// User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
@@ -1384,6 +1380,11 @@ enum ConfigCmd {
 pub fn run() -> Result<()> {
     // T225: `RUST_LOG` debug log on stderr, before clap so a parse failure is logged too.
     crate::log::init_stderr();
+    // `[ui]` takes effect for every command. Config load calls this hook instead of
+    // naming `ui` itself. The error path in `main` still loads config after this.
+    crate::config::layers::on_load(|cfg| crate::ui::style::configure(&cfg.ui));
+    #[cfg(feature = "cmd")]
+    crate::config::validate::register_rules(crate::plugins::cmd::rules::issues_in);
     log::debug!(target: "rtok::cli", "argv {:?}", std::env::args_os().collect::<Vec<_>>());
     let cli = Cli::parse();
     let config_file = cli.config.clone();
@@ -1497,7 +1498,8 @@ pub fn run() -> Result<()> {
             }
         }
         Cmd::Hook { event, host, .. } => {
-            let mut cfg = Config::load_lenient(config_file.as_deref(), hook_host_flag(host));
+            let mut cfg =
+                Config::load_lenient(config_file.as_deref(), layers::hook_host_flag(host));
             cfg.hook_client_pid = Some(std::process::id());
             crate::hooks::run(&event.unwrap_or_default(), io::stdin(), io::stdout(), &cfg);
             let _ = io::stdout().flush();
@@ -1522,7 +1524,7 @@ pub fn run() -> Result<()> {
                 stats_flags(since, json, plugin.clone(), compare.clone(), price),
             )?;
             if calibrate {
-                println!("{}", crate::tokens::calibrate_or_skip(&cfg));
+                println!("{}", crate::tokens::calibrate_or_skip(&cfg.estimator));
                 return Ok(());
             }
             // Everything `stats` prints below is a rendering of the operator model (T15.11):
@@ -2182,7 +2184,7 @@ pub fn run() -> Result<()> {
             http,
             wrap,
         } => {
-            let cfg = Config::load_with(config_file.as_deref(), hook_host_flag(host))?;
+            let cfg = Config::load_with(config_file.as_deref(), layers::hook_host_flag(host))?;
             if let Some(addr) = http {
                 if action.is_some() || !wrap.is_empty() {
                     bail!(
@@ -2375,12 +2377,7 @@ pub fn run() -> Result<()> {
                     project,
                     since,
                     json,
-                } => crate::plugins::memory::status::run(
-                    &cfg,
-                    project.as_deref(),
-                    since.as_deref(),
-                    json,
-                )?,
+                } => crate::memory_status::run(&cfg, project.as_deref(), since.as_deref(), json)?,
             }
         }
         #[cfg(feature = "graph")]
@@ -2562,7 +2559,7 @@ pub fn run() -> Result<()> {
                 session,
                 host,
             } = action;
-            let cfg = Config::load_with(config_file.as_deref(), hook_host_flag(host))?;
+            let cfg = Config::load_with(config_file.as_deref(), layers::hook_host_flag(host))?;
             let sid = session.unwrap_or_else(|| "guard-check".into());
             let cx = crate::plugin::Runtime::open(cfg, sid)?;
             println!("{}", crate::plugins::guard::check(&tool, &json, &cx));
@@ -3044,16 +3041,6 @@ fn doctor_host(agent: Option<&str>) -> Result<Option<&'static str>> {
         .map(crate::doctor::hooks::host_id)
         .transpose()
         .map_err(anyhow::Error::msg)
-}
-
-pub(crate) fn hook_host_flag(host: Option<String>) -> Option<figment::value::Dict> {
-    let host = host?;
-    use figment::value::{Dict, Value};
-    let mut hook = Dict::new();
-    hook.insert("host".into(), Value::from(host));
-    let mut flags = Dict::new();
-    flags.insert("hook".into(), Value::from(hook));
-    Some(flags)
 }
 
 fn doctor_flags(instructions: bool) -> Option<figment::value::Dict> {

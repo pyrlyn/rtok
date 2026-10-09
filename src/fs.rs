@@ -158,10 +158,12 @@ fn components_eq_ci(a: &Path, b: &Path) -> bool {
 }
 
 /// Forward-slash Vfs key from a [`Path`] (Windows separators normalized).
+#[cfg(test)]
 pub(crate) fn path_key(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+#[cfg(test)]
 impl ReadFs for crate::testutil::Vfs {
     fn read_to_string(&self, path: &Path) -> std::io::Result<String> {
         let key = self.resolve_key(&path_key(path));

@@ -9,7 +9,7 @@
 
 use super::Recommendation;
 use crate::config::Config;
-use crate::web::model::ReportLedgers;
+use crate::model::ReportLedgers;
 
 /// "Fires often": in-window `calls` rows at or above this with no `Measurement` kind on
 /// the event's path get a finding.
@@ -119,8 +119,8 @@ const BUST_TURNS_NAMED: usize = 5;
 /// (3) Cache busts the host caused: a rewritten tool list or system prompt, naming turn.
 /// One finding per (session, cause): a session that busts on every turn used to produce
 /// one finding per turn, and `--ai` dropped the whole section over budget.
-fn cache_busts(c: &crate::web::model::ReportCache, push: Push<'_>) {
-    let mut groups: Vec<(&str, &str, Vec<&crate::web::model::ReportBust>)> = Vec::new();
+fn cache_busts(c: &crate::model::ReportCache, push: Push<'_>) {
+    let mut groups: Vec<(&str, &str, Vec<&crate::model::ReportBust>)> = Vec::new();
     for b in &c.detail {
         if b.cause != "tools" && b.cause != "system" {
             continue;
@@ -284,14 +284,12 @@ fn top_sinks(ledgers: &ReportLedgers, cfg: &Config, push: Push<'_>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::web::model::{
-        ReportBust, ReportCache, ReportLedgers, ReportSink, ReportSinksSection,
-    };
+    use crate::model::{ReportBust, ReportCache, ReportLedgers, ReportSink, ReportSinksSection};
 
     #[test]
     fn top_sinks_ranks_largest_sink_first() {
         let ledgers = ReportLedgers {
-            window: crate::web::model::ReportWindow {
+            window: crate::model::ReportWindow {
                 since: "30d".into(),
                 from_unix: 0,
                 to_unix: 1,
@@ -303,7 +301,7 @@ mod tests {
                 measurements: 2,
                 usage: 0,
             },
-            savings: crate::web::model::ReportSavingsSection {
+            savings: crate::model::ReportSavingsSection {
                 rows: vec![],
                 total_rows: 0,
                 total_saved: 0,
@@ -327,7 +325,7 @@ mod tests {
                     },
                 ],
             },
-            calls: crate::web::model::ReportCallsSection {
+            calls: crate::model::ReportCallsSection {
                 rows: vec![],
                 in_window: 0,
                 total: 0,
@@ -340,7 +338,7 @@ mod tests {
                 by_cause: vec![],
                 detail: vec![],
             },
-            expand: crate::web::model::ReportExpand {
+            expand: crate::model::ReportExpand {
                 decisions: 0,
                 expanded: 0,
                 rate: 0.0,
@@ -368,7 +366,7 @@ mod tests {
     #[test]
     fn top_sinks_ranks_by_estimated_tokens_not_raw_bytes() {
         let ledgers = ReportLedgers {
-            window: crate::web::model::ReportWindow {
+            window: crate::model::ReportWindow {
                 since: "30d".into(),
                 from_unix: 0,
                 to_unix: 1,
@@ -380,7 +378,7 @@ mod tests {
                 measurements: 1,
                 usage: 0,
             },
-            savings: crate::web::model::ReportSavingsSection {
+            savings: crate::model::ReportSavingsSection {
                 rows: vec![],
                 total_rows: 0,
                 total_saved: 0,
@@ -395,7 +393,7 @@ mod tests {
                     switch: "[grep] rule".into(),
                 }],
             },
-            calls: crate::web::model::ReportCallsSection {
+            calls: crate::model::ReportCallsSection {
                 rows: vec![],
                 in_window: 0,
                 total: 0,
@@ -408,7 +406,7 @@ mod tests {
                 by_cause: vec![],
                 detail: vec![],
             },
-            expand: crate::web::model::ReportExpand {
+            expand: crate::model::ReportExpand {
                 decisions: 0,
                 expanded: 0,
                 rate: 0.0,

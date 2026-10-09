@@ -13,7 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use super::{Entry, inventory_with, par_map};
-use crate::info::human_bytes;
+use crate::bytes::human_bytes;
 use crate::render::{Col, duration, table};
 
 /// First line of a valid `CACHEDIR.TAG` (<https://bford.info/cachedir/>); cargo writes one

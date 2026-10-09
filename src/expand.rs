@@ -10,17 +10,14 @@ use crate::tokens::Class;
 use anyhow::{Result, bail};
 use regex::Regex;
 
+/// How a json_tree pointer starts. The plugin re-exports this so expand does not
+/// depend on it, and a build that left the feature off still recognises the prefix.
+pub(crate) const JSON_TREE_PREFIX: &str = "[json-tree ";
+
 /// A `[json-tree ` pointer belongs to that plugin even in a build that left the
 /// feature off, so expand cost is not counted under `archive`.
 fn json_tree_pointer(pointer: &str) -> bool {
-    #[cfg(feature = "json_tree")]
-    {
-        pointer.starts_with(crate::plugins::json_tree::PREFIX)
-    }
-    #[cfg(not(feature = "json_tree"))]
-    {
-        pointer.starts_with("[json-tree ")
-    }
+    pointer.starts_with(JSON_TREE_PREFIX)
 }
 
 /// Read an archived payload. When the id is a live-zone pointer (T5.3) this freezes it:

@@ -23,36 +23,36 @@ This document describes the shape; `plan.md` holds the decisions (D1–D14) and 
 
 ## 2. Layers
 
+Production modules form a DAG. `tests/module_graph.rs` fails the build on a cycle
+or on an edge that points up.
+
 ```
-┌────────────────────────────── surfaces ───────────────────────────────┐
-│  rtok hook <event>        rtok mcp              rtok proxy            │
-│  rtok tui                ratatui operator dashboard (D17, P15)       │
-│  (stdin JSON → stdout)    (stdio JSON-RPC)      (ANTHROPIC_BASE_URL,  │
-│                                                  OPENAI_BASE_URL)      │
-│  src/hooks/               src/mcp.rs            src/proxy/            │
-└──────────────┬───────────────────┬───────────────────────┬────────────┘
-               │ HookInput         │ tools/list, call      │ MessagesRequest
-               ▼                   ▼                       ▼
-┌──────────────────────────── plugins::Registry ────────────────────────┐
-│  enabled plugins in dispatch order, from Cargo features ∩ config      │
-│  measure  cmd  read  archive  proxy  inject  guard  memory  graph toon│
-│  each: src/plugins/<id>/{mod.rs, README.md, AGENTS.md}                │
-└──────────────┬────────────────────────────────────────────────────────┘
-               │ &Ctx
-               ▼
-┌──────────────────────────────── core ─────────────────────────────────┐
-│  plugin.rs   trait Plugin, Manifest, Ctx, Measurement, event views    │
-│  config.rs   ~/.rtok/config.toml, RTOK_HOME, CATALOGUE                │
-│  store/      Diesel ORM + bundled SQLite (WAL, FTS5), migrations/     │
-│  tokens.rs   chars-per-token estimator per class (±15 %)              │
-└───────────────────────────────────────────────────────────────────────┘
-               │
-               ▼
-        ~/.rtok/rtok.db            ~/.rtok/archive/<id>
+surfaces     cli  hooks  mcp  proxy  web  tui  demon
+                │
+                ▼
+app          plugins  agents  measure  report  doctor
+                │
+                ▼
+core         plugin (host Runtime)  config  store  log  tokens
+                │
+                ▼
+foundation   fs  sanitize  proc  tls  names  lane  diff  since
+             task_id  logfile  progress  bytes  project
+                │
+                ▼
+             crates/rtok-plugin-sdk     (the published contract, D25)
 ```
 
-Dependencies point downward only. Surfaces know about the registry; plugins know about
-`Ctx`; core knows about nothing above it. A surface never calls another surface.
+A module may use another module of the same rank when that does not close a cycle.
+Surfaces may call one another on the same condition (`cli` reaches `hooks`; `web`
+reaches `demon`). Modules that sit beside this stack (`render`, `model`, `expand`,
+`info`, `otel`, `worktree`, and the rest) must not name `cli`, `web`, or `tui`.
+
+`config`, `store`, `log`, and `tokens` reference only core and foundation.
+`plugin` is the host runtime: it may use `project` and the other core modules,
+and it does not use a surface or an app module. The operator model lives in
+`src/model` (D23). `src/web` re-exports it for the dashboard; the TUI and the
+reading commands render the same values.
 
 ## 3. Module map
 
@@ -65,7 +65,7 @@ Dependencies point downward only. Surfaces know about the registry; plugins know
 | `src/store/` + `migrations/` | Diesel models; `Store::open`; `insert_call`/`tokens`/`log`; `insert_measurement` | T0.3, P13 |
 | `src/store/symbols.rs` | The `graph` symbol index over SQLite (Ladybug/Grafeo backends removed, P39) | T8.10; P39 |
 | `src/testutil.rs`, `tests/common/` | test-only: a fresh temp dir and a `Config`/`Runtime` confined to it; the nearest-rank p95 the latency gates share; `agents::real_config` seeds the invoking user's own host configs into a throwaway home and answers `None` under `CI`, so the checks that read them are local-only and skip everywhere else | T34.2, T34.3, T78 |
-| `src/plugin.rs` | the contract (§4) | T0.4 |
+| `src/plugin.rs` | host `Runtime`: opens the store, estimates tokens, records measurements. The contract types are in `crates/rtok-plugin-sdk` (§4) | T0.4, D25 |
 | `src/plugins/mod.rs` | feature-gated module list, `all()`, `Registry` | T0.4 |
 | `src/plugins/<id>/` | one plugin: `mod.rs` + `README.md` (what/why) + `AGENTS.md` (how to work on it) | per plugin |
 | `src/tokens.rs` | `estimate(text, Class, &Estimator)`, `tokens_saved` | T0.5 |
@@ -83,6 +83,13 @@ Dependencies point downward only. Surfaces know about the registry; plugins know
 | `tests/fixtures/hooks/*.json` | one real payload per hook event | T0.6 |
 
 ## 4. The plugin contract
+
+The trait and the types a plugin names (`Plugin`, `Manifest`, `Ctx`, `Measurement`,
+`Class`, the event views) live in `crates/rtok-plugin-sdk` (decision D25).
+`src/plugin.rs` is the host `Runtime`: it opens the store, estimates tokens, and
+records measurements. It is not the contract an out-of-tree plugin implements.
+
+The sketch below is the shape of that contract.
 
 ```rust
 pub trait Plugin: Send + Sync {

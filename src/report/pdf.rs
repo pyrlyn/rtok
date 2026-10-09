@@ -550,8 +550,8 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::model::*;
     use crate::report::Document;
-    use crate::web::model::*;
 
     /// A label longer than 26 chars, all multi-byte, must not panic when
     /// `bars` truncates it (regression: byte slicing used to land mid-char).

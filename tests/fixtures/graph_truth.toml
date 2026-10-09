@@ -27,12 +27,16 @@
 # ref-recall drop 0.318 -> 0.290 with the index unchanged;
 # `every_label_names_a_file_that_mentions_the_symbol` now names such a label instead. Its
 # first run also found `Registry` and `Replay` labelled in `src/cli.rs`, which T15.11 had
-# emptied of both (the calls moved to `src/web/model.rs`, where they are now labelled).
+# emptied of both (the calls moved to `src/model/mod.rs`, where they are now labelled).
 #
 # T66.1 (2026-09-18): `mem_save` became an upsert, so `src/plugins/memory/mod.rs` calls
 # `upsert_note` and no longer names `insert_note`. The call site did not disappear, it was
 # renamed: `insert_note` loses that one ref (`import.rs` and `checkpoint.rs` still call it)
 # and `upsert_note` enters with the same def/ref pair, so the sample keeps its size.
+#
+# #625 (2026-10-09): the operator model moved from `src/model/mod.rs` to
+# `src/model/mod.rs`, and `src/web/model/agents.rs` to `src/model/agents.rs`.
+# Labels follow the files; the symbols did not change.
 #
 # T209 (2026-09-24): `notes_topic` (migration 0020) enforces "one row per (project, kind,
 # title)" at the database level, so `checkpoint.rs`'s repeat-PreCompact write moved from
@@ -63,7 +67,7 @@ refs = ["examples/hello_plugin.rs", "src/expand.rs", "src/plugins/archive/mod.rs
 name = "Registry"
 kind = "struct"
 defs = ["src/plugins/mod.rs"]
-refs = ["examples/mcp_tool.rs", "src/hooks/mod.rs", "src/mcp.rs", "src/proxy/mod.rs", "src/web/model.rs"]
+refs = ["examples/mcp_tool.rs", "src/hooks/mod.rs", "src/mcp.rs", "src/proxy/mod.rs", "src/model/mod.rs"]
 
 [[symbol]]
 name = "ToolDef"
@@ -95,7 +99,7 @@ refs = ["src/plugins/archive/mod.rs", "src/proxy/anthropic.rs", "src/proxy/opena
 name = "Replay"
 kind = "struct"
 defs = ["src/measure/stats.rs"]
-refs = ["src/measure/baseline.rs", "src/web/model.rs"]
+refs = ["src/measure/baseline.rs", "src/model/mod.rs"]
 
 [[symbol]]
 name = "Surface"
@@ -297,7 +301,7 @@ refs = ["src/proxy/mod.rs"]
 name = "session"
 kind = "fn"
 rank = true
-defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/measure/usage/copilot.rs", "src/measure/usage/gemini.rs", "src/measure/usage/pi.rs", "src/plugin.rs", "src/tui/app.rs", "src/web/model/agents.rs", "tests/common/mcp.rs"]
+defs = ["crates/rtok-plugin-sdk/src/testing.rs", "src/measure/usage/copilot.rs", "src/measure/usage/gemini.rs", "src/measure/usage/pi.rs", "src/plugin.rs", "src/tui/app.rs", "src/model/agents.rs", "tests/common/mcp.rs"]
 refs = ["src/store/mod.rs"]
 
 [[symbol]]
