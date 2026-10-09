@@ -10,6 +10,8 @@
 //! shipped no scorer. Never cite graymatter's 83 %. Re-run:
 //! `cargo test --test memory_bench -- --nocapture`.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::path::PathBuf;
 
 use rtok::plugin::{Ctx, Plugin, Runtime, SessionStart};

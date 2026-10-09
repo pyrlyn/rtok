@@ -618,8 +618,10 @@ mod tests {
         let mean = |rows: &[[f64; 3]], col: usize| {
             100.0 * rows.iter().map(|r| r[col]).sum::<f64>() / rows.len() as f64
         };
+        use std::io::Write;
         let summary = |label: &str, rows: &[[f64; 3]]| {
-            println!(
+            let _ = writeln!(
+                std::io::stderr(),
                 "recall@{CAP} tokens, {label} ({} commits): refs {:.1} %, pagerank {:.1} %, pagerank seeded {:.1} %",
                 rows.len(),
                 mean(rows, 0),
@@ -627,7 +629,8 @@ mod tests {
                 mean(rows, 2),
             );
         };
-        println!(
+        let _ = writeln!(
+            std::io::stderr(),
             "backtest: index {indexed:?}, {} files, {} edges; map files refs {} pagerank {}",
             g.paths.len(),
             g.src.len(),

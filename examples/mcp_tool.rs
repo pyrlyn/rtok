@@ -11,6 +11,8 @@
 //! not exist (D3). Echo moves no bytes, so before and after are equal; a real tool reports
 //! what it saved here.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use anyhow::Result;
 use rtok::config::Config;
 use rtok::plugin::{Ctx, Measurement, Runtime};

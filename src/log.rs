@@ -14,8 +14,54 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+
+static STDOUT: Mutex<Option<fn(&str)>> = Mutex::new(None);
+static STDERR: Mutex<Option<fn(&str)>> = Mutex::new(None);
+
+fn hook_slot(slot: &Mutex<Option<fn(&str)>>) -> std::sync::MutexGuard<'_, Option<fn(&str)>> {
+    slot.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The process surface (`cli::run`) registers these. Library code hands it text; it does not
+/// touch the terminal itself, so a hook or MCP stdio stream stays quiet unless that surface
+/// asked to print.
+pub fn on_stdout(hook: fn(&str)) {
+    *hook_slot(&STDOUT) = Some(hook);
+}
+
+pub fn on_stderr(hook: fn(&str)) {
+    *hook_slot(&STDERR) = Some(hook);
+}
+
+fn emit(slot: &Mutex<Option<fn(&str)>>, text: &str) {
+    if let Some(hook) = *hook_slot(slot) {
+        hook(text);
+    }
+}
+
+/// Bytes for stdout, exactly as the caller built them (no added newline).
+pub fn stdout(text: &str) {
+    emit(&STDOUT, text);
+}
+
+/// One stdout line, the `println!` shape.
+pub fn stdout_ln(text: &str) {
+    stdout(&format!("{text}\n"));
+}
+
+/// Bytes for stderr, exactly as the caller built them.
+pub fn stderr(text: &str) {
+    emit(&STDERR, text);
+}
+
+/// One stderr line, the `eprintln!` shape.
+pub fn stderr_ln(text: &str) {
+    stderr(&format!("{text}\n"));
+}
 
 /// Whether `[log] level` lets this line through — checked before any I/O.
 pub fn enabled(cfg: &Config, level: &str) -> bool {
@@ -58,11 +104,11 @@ pub fn record(
     }
 }
 
-/// Print and log the warnings a config load returned. Config itself does neither; `cli::run`
-/// calls this from the load hook.
+/// Log the warnings a config load returned, and hand the same line to the stderr surface.
+/// Config itself does neither; `cli::run` calls this from the load hook.
 pub fn emit_config_notes(cfg: &Config) {
     for note in &cfg.notes.0 {
-        eprintln!("rtok: {}", note.message);
+        stderr_ln(&format!("rtok: {}", note.message));
         crate::logfile::append(
             &cfg.log.path,
             cfg.log.max_bytes,

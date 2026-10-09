@@ -18,6 +18,8 @@
 //! of rtok. Re-run: `cargo test --test mode_bench -- --nocapture`.
 //! Published write-up: `research.md` (modes subsection), `docs/comparison.md` § Prompt-level.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use rtok::config::Estimator;
 use rtok::modes::{
     CaveIntensity, LadderContext, LadderDecision, compress_prose, evaluate_ladder,

@@ -6,6 +6,8 @@
 //! Threads would share one connection behind the store's mutex and prove nothing, so the test
 //! binary re-runs itself as separate processes.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

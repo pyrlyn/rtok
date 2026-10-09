@@ -10,6 +10,8 @@
 //! shape itself is pinned beside the renderer (`src/report/ai.rs`), where hand-built
 //! recommendations do not depend on T22.5's rules.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

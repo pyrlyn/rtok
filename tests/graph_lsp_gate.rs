@@ -10,6 +10,8 @@
 //! is confined under the temp crate by `lsp::Session::spawn` (`target/rtok-lsp-xdg` or
 //! `.dart_tool/rtok-lsp-xdg`); this file asserts that after each LSP run.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};

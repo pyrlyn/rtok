@@ -680,7 +680,11 @@ mod tests {
         let baseline = ctt(&values, false);
         let treatment = ctt(&values, true);
         let pct = 100.0 * treatment as f64 / baseline as f64;
-        eprintln!("Gate P33 CTT: baseline={baseline} treatment={treatment} ratio={pct:.1}%");
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr(),
+            "Gate P33 CTT: baseline={baseline} treatment={treatment} ratio={pct:.1}%"
+        );
         assert!(
             treatment < baseline,
             "L0 line-only cold blocks beat v0.1 CTT"

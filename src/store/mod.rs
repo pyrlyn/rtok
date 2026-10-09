@@ -4,8 +4,8 @@
 
 //! The SQLite store, re-exported from `rtok-store`. Call sites keep `crate::store`.
 //!
-//! Housekeeping warnings are printed here. The store crate returns them and writes nothing
-//! to the terminal.
+//! Housekeeping warnings are handed to the stderr surface (`log::stderr`). The store crate
+//! returns them and writes nothing to the terminal.
 
 pub use rtok_store::*;
 
@@ -42,7 +42,7 @@ pub fn spawn_retention(cfg: &crate::config::Config, surface: &'static str) {
         .name("rtok-retention".into())
         .spawn(move || {
             for warning in rtok_store::Store::housekeeping(&job) {
-                eprintln!("rtok {surface}: {}", warning.message);
+                crate::log::stderr_ln(&format!("rtok {surface}: {}", warning.message));
                 crate::logfile::append(
                     &log_path,
                     max_bytes,
@@ -56,7 +56,9 @@ pub fn spawn_retention(cfg: &crate::config::Config, surface: &'static str) {
             }
         });
     if let Err(e) = spawned {
-        eprintln!("rtok {surface}: retention thread not started: {e}");
+        crate::log::stderr_ln(&format!(
+            "rtok {surface}: retention thread not started: {e}"
+        ));
     }
 }
 

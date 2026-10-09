@@ -6,6 +6,8 @@
 //! `RTOK_WEB_DIST` override and a real WebSocket client on `/ws`. `tests/web.rs` drives the
 //! router in-process; this is what a user's browser sees.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

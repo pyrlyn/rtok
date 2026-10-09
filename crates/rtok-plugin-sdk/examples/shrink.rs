@@ -13,6 +13,8 @@
 //! The host here is [`MemoryHost`], which keeps those rows in memory. Inside `rtok` the same
 //! plugin gets the real host and writes to the real store; nothing in the plugin changes.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use rtok_plugin_sdk::testing::MemoryHost;
 use rtok_plugin_sdk::{
     Class, Ctx, DashboardPage, Manifest, Measurement, Plugin, PreToolDecision, PreToolUse, Surface,

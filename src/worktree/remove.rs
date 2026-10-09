@@ -63,7 +63,9 @@ pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<
     let from = if named { as_path.as_path() } else { cwd };
     let base = git::default_base(from);
     if let Err(e) = git::fetch(from, &base) {
-        eprintln!("warning: {e:#}; merged is judged against the local {base}");
+        crate::log::stderr_ln(&format!(
+            "warning: {e:#}; merged is judged against the local {base}"
+        ));
     }
     let entries = inventory(from)?;
     let main = &entries
@@ -151,7 +153,7 @@ pub fn for_agent(
     };
     let done = run(cwd, target, &who, keep_branch)?;
     if let Some(Err(e)) = store.map(|s| s.release_worktree_claim(&done.path)) {
-        eprintln!("warning: claim not released: {e:#}");
+        crate::log::stderr_ln(&format!("warning: claim not released: {e:#}"));
     }
     Ok(done)
 }

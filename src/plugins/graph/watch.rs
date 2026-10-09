@@ -40,7 +40,7 @@ pub fn run_scope(rt: &crate::plugin::Runtime, start: &Path, stop: &AtomicBool) {
                 // T263: never watch `/` or the home directory.
                 if let Err(e) = crate::plugins::read::walk_root_ok(&m.root) {
                     let msg = format!("watcher skipped for {}: {e:#}", m.root.display());
-                    eprintln!("watch: {msg}");
+                    crate::log::stderr_ln(&format!("watch: {msg}"));
                     cx.log("warn", "graph", "watch", &msg);
                     continue;
                 }
@@ -75,14 +75,14 @@ where
         Ok(w) => w,
         Err(e) => {
             let msg = format!("notify watcher: {e}");
-            eprintln!("watch: {msg}");
+            crate::log::stderr_ln(&format!("watch: {msg}"));
             cx.log("error", "graph", "watch", &msg);
             return;
         }
     };
     if let Err(e) = watcher.watch(root, RecursiveMode::Recursive) {
         let msg = format!("watch {}: {e}", root.display());
-        eprintln!("watch: {msg}");
+        crate::log::stderr_ln(&format!("watch: {msg}"));
         cx.log("error", "graph", "watch", &msg);
         return;
     }

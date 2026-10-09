@@ -10,6 +10,8 @@
 //! lossless `archive` pointer keeps of it, which is the bar Gate P28 compares a compressor
 //! against. They run no model.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};

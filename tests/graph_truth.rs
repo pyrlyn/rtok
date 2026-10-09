@@ -9,6 +9,8 @@
 //! accuracy number. `defs` is complete per symbol, so precision is real; `refs` is a
 //! must-appear subset, so recall is a lower bound and the file survives ordinary edits.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;

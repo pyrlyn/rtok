@@ -7,6 +7,8 @@
 //! embed guard, a hand-edited `release.yml` or a SPA build that stops feeding `build.rs` is
 //! caught here.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::path::{Path, PathBuf};
 
 fn repo(rel: &str) -> PathBuf {

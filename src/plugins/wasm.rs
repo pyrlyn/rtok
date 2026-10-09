@@ -42,7 +42,7 @@ pub fn append(
             }
             Err(e) => {
                 let msg = format!("{}: {e:#}", path.display());
-                eprintln!("wasm plugin {msg}");
+                crate::log::stderr_ln(&format!("wasm plugin {msg}"));
                 crate::log::append(config, "error", "wasm", "load", &msg);
             }
         }
@@ -192,7 +192,7 @@ impl WasmPlugin {
                 };
                 let errors = rtok_log::error_path(&path);
                 rtok_log::append_split(&file, Some(&errors), &level, "wasm", &name, &msg);
-                eprintln!("wasm {name} {level}: {msg}");
+                crate::log::stderr_ln(&format!("wasm {name} {level}: {msg}"));
                 Ok(())
             },
         )?;

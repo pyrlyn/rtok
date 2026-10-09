@@ -46,9 +46,9 @@ pub fn run(cfg: &Config, path: Option<PathBuf>, json: bool) -> Result<()> {
     let root = super::cli_root(path)?;
     let status = collect(&Ctx::new(&cx), &root)?;
     if json {
-        println!("{}", serde_json::to_string_pretty(&status)?);
+        crate::log::stdout_ln(&serde_json::to_string_pretty(&status)?);
     } else {
-        print!("{}", format_table(&status));
+        crate::log::stdout(&format_table(&status));
     }
     Ok(())
 }

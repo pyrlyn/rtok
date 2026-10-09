@@ -28,13 +28,14 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
         context,
     } = args;
     let cfg = Config::load_with(config_file.as_deref(), None)?;
-    crate::expand::run(
+    let bytes = crate::expand::run(
         &cfg,
         &id,
         lines.as_deref(),
         grep.as_deref(),
         context.map_or(0, |n| n as usize),
     )?;
+    std::io::Write::write_all(&mut std::io::stdout(), &bytes)?;
 
     Ok(())
 }

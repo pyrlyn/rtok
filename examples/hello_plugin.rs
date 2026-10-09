@@ -8,6 +8,8 @@
 //! and records a `Measurement` — because a saving that is not a row does not exist.
 //! Everything a real plugin does is one of these three moves.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use anyhow::Result;
 use rtok::hooks::types::{HookInput, HookOutput, HookSpecificOutput};
 use rtok::plugin::{

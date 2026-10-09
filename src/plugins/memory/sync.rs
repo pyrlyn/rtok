@@ -133,7 +133,7 @@ pub fn run(
     };
     let after = guarded_splice(&before, new_block.as_deref(), stored.as_deref(), force)?;
     if dry_run {
-        print!("{}", crate::render::file_diff(&path, &before, &after));
+        crate::log::stdout(&crate::render::file_diff(&path, &before, &after));
     } else {
         if after != before {
             rtok_agent_sdk::backup(&path, cfg.setup.backup_files as usize)?;
@@ -153,7 +153,7 @@ pub fn run(
     }
     let recall_on = cfg.plugin_enabled("memory", true) && cfg.plugins.memory.recall_tokens > 0;
     if !remove && recall_on {
-        println!("{}", overlap_line());
+        crate::log::stdout_ln(overlap_line());
     }
     Ok(())
 }

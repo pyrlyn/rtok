@@ -8,6 +8,7 @@
 //! `rtok hook` itself. A resident that takes longer than [`TIMEOUT`] gets `{}` printed for it:
 //! fail open, never a hung hook.
 #![forbid(unsafe_code)]
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::ffi::OsString;
 use std::io::{self, Read, Write};

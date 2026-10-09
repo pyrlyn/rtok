@@ -326,7 +326,9 @@ mod tests {
         let start = std::time::Instant::now();
         let n = pairs(&cx, repo).len();
         let took = start.elapsed();
-        eprintln!(
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr(),
             "cochange backtest: {total} commits, hit@5 {:.3} ({hits}), first file had any partner in {covered}; cold build {took:?} for {n} pairs",
             hits as f64 / total as f64
         );

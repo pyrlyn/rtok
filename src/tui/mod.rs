@@ -9,6 +9,8 @@
 //! to let drift. This module owns the event loop (T15.1), [`app`] the pure state,
 //! [`view`] the screen (T15.2; pages T15.3+). The TTY guard is T15.9.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod app;
 mod theme;
 mod view;

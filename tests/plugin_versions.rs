@@ -15,6 +15,8 @@
 //! bare Windows box may not; once `--files` runs, a file it lists but that is missing on disk
 //! still fails the test.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod common;
 
 use std::fs;
