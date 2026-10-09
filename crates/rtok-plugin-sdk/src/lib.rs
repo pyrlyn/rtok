@@ -96,8 +96,11 @@
 #![forbid(unsafe_code)]
 
 pub mod host;
+pub mod task_prefix;
 pub mod testing;
 pub mod wire;
+
+pub use task_prefix::{TASK_PREFIX_MAX, check_task_prefix};
 
 pub use host::{
     Archive, ArchiveDecision, ArchiveHit, Capabilities, Class, Ctx, Host, Ledger, NewObservation,

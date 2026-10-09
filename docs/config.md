@@ -4,8 +4,8 @@ One file, `~/.rtok/config.toml`, holds every setting rtok has. **Every CLI flag 
 key**, so anything you can pass on the command line you can also make permanent, and
 `rtok config show --sources` always tells you where a value came from.
 
-Status: T12.1–T12.2 are done — every table below is a typed section in `config/mod.rs` (unknown
-key = error), `config/default.toml` is embedded and written by `rtok config init` with each
+Status: T12.1–T12.2 are done — every table below is a typed section in `crates/rtok-config/src/lib.rs` (unknown
+key = error), `crates/rtok-config/default.toml` is embedded and written by `rtok config init` with each
 assignment commented out, so an untouched key follows the current default;
 `core.inject_budget_tokens` has moved to `plugins.inject.budget_tokens`, and layering
 (user < project < env < flags, `figment`-based) plus `config show [--sources] [--json]` and
@@ -15,7 +15,7 @@ assignment commented out, so an untouched key follows the current default;
 
 Lowest to highest. Later layers override earlier ones key by key.
 
-1. **Built-in defaults** — the values in the reference file below (`config/default.toml`,
+1. **Built-in defaults** — the values in the reference file below (`crates/rtok-config/default.toml`,
    embedded in the binary).
 2. **User file** — `~/.rtok/config.toml` (directory overridable with `RTOK_HOME`; file
    overridable with `RTOK_CONFIG=<path>` or `--config <path>`).
@@ -736,7 +736,7 @@ uncached input price — the only saving computable from the `usage` rows alone.
 A model without a row prints `-` for both dollar columns (its token counts
 still print); add a dated row of your own rather than guessing. The shipped
 rows were read off the providers' pricing pages on 2026-09-17 (sources in
-`config/default.toml`); re-check them when your bill disagrees. `stats.price`
+`crates/rtok-config/default.toml`); re-check them when your bill disagrees. `stats.price`
 defaults the `--price` display on (`RTOK_STATS_PRICE=true` works too).
 
 A row keyed `<model>@batch` (or `<model>@flex`) prices that model on the Batch (or Flex) tier. `--price` lists
@@ -828,7 +828,7 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 | `memory export` | `--project` | per call (no key): narrows one dump to a project's notes |
 
 The coverage test (T12.4) walks the clap command tree and fails if a non-positional flag
-appears without a key in `config/default.toml`, so this table cannot silently drift.
+appears without a key in `crates/rtok-config/default.toml`, so this table cannot silently drift.
 
 ## Env var examples
 

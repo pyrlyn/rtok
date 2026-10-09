@@ -1,7 +1,7 @@
 # The binary crate is the workspace root (T23.1, D25). `rtok-plugin-sdk` is the published
 # plugin contract; `fuzz` is the nightly-only cargo-fuzz crate and stays out of `cargo test`.
 [workspace]
-members = ["crates/rtok-agent-sdk", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest"]
+members = ["crates/rtok-agent-sdk", "crates/rtok-config", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest"]
 exclude = ["fuzz"]
 
 [workspace.package]
@@ -28,6 +28,11 @@ regex = "1" # request-body noise (store) and search/bench patterns (binary)
 schemars = "1.2.2" # JSON Schema: store project rows and the /ws protocol
 humantime = "2.4" # idle duration: the store and `rtok agents`
 uuid = { version = "1.26", features = ["v4"] } # agent ids in the store; already transitive elsewhere
+thiserror = "2.0" # public error enums: rtok-store and rtok-config
+figment = { version = "0.10", features = ["toml", "env"] } # config layering; the CLI builds flag dicts
+similar = "3.2" # unified diffs: config dry-run and the binary's file diff
+globset = "0.4" # junk globs and config validation of agents.junk.exclude
+url = "2.5" # file:// MCP roots and http(s) checks in config
 
 [workspace.lints.rust]
 # Hand-written `unsafe` is rejected. `deny`, not `forbid`: a member cannot mix
@@ -126,12 +131,13 @@ workspace = true
 anyhow = { workspace = true }
 rtok-plugin-sdk = { version = "0.0.1", path = "crates/rtok-plugin-sdk" } # the plugin contract (D25)
 rtok-store = { version = "0.0.1", path = "crates/rtok-store" } # SQLite store (Diesel stays in that crate)
+rtok-config = { version = "0.0.1", path = "crates/rtok-config" } # figment layers, toml edits, the reference file
 rtok-agent-sdk = { version = "0.0.1", path = "crates/rtok-agent-sdk" }   # the agent-host contract (D28)
 rtok-mcp = { version = "0.0.1", path = "crates/rtok-mcp" } # per-surface MCP status (T278) from the one lookup T277 owns
 clap = { version = "4.5", features = ["derive", "wrap_help"] }
 clap_complete = "4.6" # `rtok completions` (T53.2)
 clap_mangen = "0.3" # `rtok man` (T53.2)
-figment = { version = "0.10", features = ["toml", "env"] } # config layering + per-key provenance (D14)
+figment = { workspace = true } # config layering + per-key provenance (D14)
 rtok-log = { version = "0.0.1", path = "crates/rtok-log" } # rotating text log, reusable outside this binary
 rtok-sys = { version = "0.0.1", path = "crates/rtok-sys" } # demon kill/setsid + flock (Windows-safe shims; rustix stays inside rtok-sys on Unix)
 rtok-hook = { version = "0.0.1", path = "crates/rtok-hook" } # T178/D31: wire format shared with the std-only hook client
@@ -140,19 +146,18 @@ serde_json = { workspace = true }
 schemars = { workspace = true } # JSON Schema of the /ws protocol, TS types generated from it (T310.2)
 shlex = "2.0.1" # POSIX word splitting of a hook command, to find the file it runs (T331.1)
 sha2 = { workspace = true } # call_io archive checksums (T13.3); the store crate owns the writer
-similar = "3.2" # unified diff for `--dry-run` output (T12.6); already in the lock via dev-deps
+similar = { workspace = true } # unified diff for `--dry-run` output (T12.6)
 wasmi = { version = "2.0", optional = true } # pure-Rust WASM interpreter for optional out-of-tree plugin host (P32)
 toml_edit = { workspace = true } # `config set` (T12.3) edits in place, preserving comments
 toml = "0.8" # Cargo.lock [[package]] parse for docs_resolve (already in the lock via figment)
 zstd = "0.13" # decode docs.rs crate rustdoc JSON (.json.zst) for `rtok docs fetch`
-dotenvy = "0.15" # `.env` files as a config layer, parse only (T12.5)
 dunce = { workspace = true } # canonicalize without Windows UNC prefixes (graph index keys + file:// URIs)
 pathdiff = "0.2" # relative path of a file under a repo root (graph LSP + index)
 rmcp = { version = "3.2", features = ["transport-streamable-http-server"] } # stdio MCP types + JSON-RPC (T4.1); the SDK's Streamable HTTP server for `rtok mcp --http` (T401)
 subtle = "2.6" # constant-time bearer-token compare for `rtok mcp --http` (T401); already in the tree via rustls
-url = "2.5" # file:// MCP roots → path (T263)
+url = { workspace = true } # file:// MCP roots → path (T263)
 ignore = "0.4" # gitignore-aware walk for search/tree (T4.5)
-globset = "0.4" # workspace member globs of project references (T329.7); already in the tree through `ignore`
+globset = { workspace = true } # workspace member globs of project references (T329.7)
 serde-saphyr = "1.3.0" # `pnpm-workspace.yaml` of project references (T329.7); maintained, serde_yaml is deprecated
 notify = "9.0.0-rc.5" # recursive file watching for the graph background indexer (T8.16); 9 drops windows-sys 0.60 (T223)
 indicatif = "0.18" # progress for `graph index` (T21.2); `ProgressBar::hidden()` keeps it off the MCP path

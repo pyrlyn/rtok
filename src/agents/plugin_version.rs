@@ -112,7 +112,7 @@ impl VersionFile {
     #[allow(dead_code)]
     pub fn write(&self, path: &Path) -> Result<()> {
         let body = format!("{}\n", serde_json::to_string(self)?);
-        crate::config::write_file(path, &body)
+        crate::config::write_file(path, &body).map_err(Into::into)
     }
 }
 
@@ -149,7 +149,7 @@ impl Receipt {
 
     pub fn write(&self, path: &Path) -> Result<()> {
         let body = format!("{}\n", serde_json::to_string_pretty(&self.0)?);
-        crate::config::write_file(path, &body)
+        crate::config::write_file(path, &body).map_err(Into::into)
     }
 
     pub fn get(&self, host: &str) -> Option<&ReceiptEntry> {

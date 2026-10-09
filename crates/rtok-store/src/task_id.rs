@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub const MAX_DEPTH: usize = 2;
 
 /// Longest prefix accepted. A short project tag (`R`, `AT`) keeps ids readable in titles.
-pub const MAX_PREFIX: usize = 8;
+pub const MAX_PREFIX: usize = rtok_plugin_sdk::TASK_PREFIX_MAX;
 
 /// A task id such as `R12` or `R2.1`: an ASCII-letter prefix and a dotted number path.
 ///
@@ -130,11 +130,5 @@ impl<'de> Deserialize<'de> for TaskId {
 /// `[tasks] prefix`: 1 to [`MAX_PREFIX`] ASCII letters. The config validator and the id
 /// parser both call this, so `config set` cannot store a prefix ids then refuse.
 pub fn check_prefix(prefix: &str) -> Result<()> {
-    if prefix.is_empty()
-        || prefix.len() > MAX_PREFIX
-        || !prefix.bytes().all(|b| b.is_ascii_alphabetic())
-    {
-        anyhow::bail!("task prefix {prefix:?} must be 1 to {MAX_PREFIX} ASCII letters");
-    }
-    Ok(())
+    rtok_plugin_sdk::check_task_prefix(prefix)
 }

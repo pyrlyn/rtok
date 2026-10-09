@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 const MANIFESTS: &[&str] = &[
     "Cargo.toml",
     "crates/rtok-agent-sdk/Cargo.toml",
+    "crates/rtok-config/Cargo.toml",
     "crates/rtok-plugin-sdk/Cargo.toml",
     "crates/rtok-store/Cargo.toml",
     "crates/rtok-sys/Cargo.toml",

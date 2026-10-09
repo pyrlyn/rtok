@@ -94,7 +94,7 @@ Why the task exists and what done means.
 
 ## Конфигурация
 
-Задайте `[tasks]` для каждого проекта в `.rtok.toml`; `rtok task init` записывает его туда. Ключи и значения по умолчанию взяты из `config/default.toml`:
+Задайте `[tasks]` для каждого проекта в `.rtok.toml`; `rtok task init` записывает его туда. Ключи и значения по умолчанию взяты из `crates/rtok-config/default.toml`:
 
 ```toml
 [tasks]                               # task adapters; usually set per project in .rtok.toml

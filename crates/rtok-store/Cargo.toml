@@ -27,7 +27,7 @@ regex = { workspace = true } # request-body noise the store strips before saving
 schemars = { workspace = true } # JSON Schema on project Origin and LinkKind
 humantime = { workspace = true } # [agents] idle parsing
 uuid = { workspace = true } # agent ids
-thiserror = "2.0" # the store's public error enum
+thiserror = { workspace = true } # the store's public error enum
 
 [dev-dependencies]
 proptest = "1" # property test that request-body cleaning is idempotent

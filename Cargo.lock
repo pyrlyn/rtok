@@ -3880,7 +3880,6 @@ dependencies = [
  "clap_mangen",
  "crossterm",
  "divan",
- "dotenvy",
  "dunce",
  "env_logger",
  "figment",
@@ -3909,6 +3908,7 @@ dependencies = [
  "rmcp",
  "rstest",
  "rtok-agent-sdk",
+ "rtok-config",
  "rtok-hook",
  "rtok-log",
  "rtok-mcp",
@@ -3963,6 +3963,25 @@ dependencies = [
  "anyhow",
  "rstest",
  "serde_json",
+]
+
+[[package]]
+name = "rtok-config"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "dotenvy",
+ "figment",
+ "globset",
+ "rstest",
+ "rtok-agent-sdk",
+ "rtok-hook",
+ "rtok-plugin-sdk",
+ "serde",
+ "similar 3.2.0",
+ "thiserror 2.0.20",
+ "toml_edit 0.25.15+spec-1.1.0",
+ "url",
 ]
 
 [[package]]

@@ -15,25 +15,8 @@
 pub use rtok_plugin_sdk::Class;
 
 /// `[estimator]` — chars per token per class (plan T0.5), rewritten by `stats --calibrate`.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Estimator {
-    pub code: f32,
-    pub prose: f32,
-    pub json: f32,
-    pub cjk: f32,
-}
-
-impl Default for Estimator {
-    fn default() -> Self {
-        Self {
-            code: 3.5,
-            prose: 4.2,
-            json: 3.0,
-            cjk: 1.0,
-        }
-    }
-}
+/// The struct lives in `rtok-config` beside the `[estimator]` table.
+pub use rtok_config::Estimator;
 
 /// Estimated tokens for `text`. Empty text → 0.
 pub fn estimate(text: &str, class: Class, rates: &Estimator) -> u32 {

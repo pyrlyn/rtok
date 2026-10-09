@@ -90,7 +90,7 @@ Without `--json` the commands print text. With `--json` they print the task as J
 
 ## Config
 
-Set `[tasks]` per project in `.rtok.toml`; `rtok task init` writes it there. The keys and defaults come from `config/default.toml`:
+Set `[tasks]` per project in `.rtok.toml`; `rtok task init` writes it there. The keys and defaults come from `crates/rtok-config/default.toml`:
 
 ```toml
 [tasks]                               # task adapters; usually set per project in .rtok.toml
