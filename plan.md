@@ -48,7 +48,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.11 | todo | P2 | 3 | 0% | |
-| T329.14 | todo | P2 | 4 | 0% | |
+| T329.14 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.17 | todo | P3 | 3 | 0% | |
@@ -851,6 +851,14 @@ Check: a test counts probes, 100 requests after the first run zero lookups or sp
 T329 §8a level 2: files, modules, types and functions with contains/calls/implements/imports edges, URL-carried drill-down state and breadcrumb, expand and focus, calls into linked projects ending at that project's node, side panel, search-to-focus, the 500-node cap with "+N more", live updates under `watch`. Depends on T329.13, T329.5.
 
 Check: opening A shows files with aggregated edges, expanding a file shows its functions, a call into C ends at a C node that opens the target symbol, breadcrumb and browser back return; the 500-node fixture shows "+N more"; `just check`.
+
+Execution plan:
+
+1. Store (`crates/rtok-store/src/symbols.rs`): four Diesel reads for one root, each a single scan: all definitions, references grouped by file/scope/name/kind, import edges between files (spec to file with the existing `import_matches_file` rules), definitions by a batch of names (for the linked projects).
+2. Server (`src/plugins/graph/drill.rs`): `Request {project, expand, focus, depth, limit, query}` to `Graph {nodes, edges, more, hits, ...}`; file level with aggregated calls/imports/implements edges, expanded files show their definitions with `contains` edges, focus walks callers and callees to `depth`, calls into linked projects end at a node of that project, the node cap keeps expanded/focused nodes first and reports `more`, search hits over the scope.
+3. Wire (`src/web/protocol.rs`, `src/web/mod.rs`): `ClientMessage::Graph` and `ServerFrame::Graph`, answered off the executor like the project writes; schema and `snapshot.gen.ts` regenerated.
+4. SPA (`web/src/pages/graph3d/`): a pure `drill.ts` (URL state, breadcrumb, drill graph to the existing `Scene`, so `useLayout`, `Scene2D` and `Scene3D` are reused, shapes per node kind), `Drill.tsx` (breadcrumb, search, side panel, "+N more", list view, re-request when the snapshot's index state moves so `watch` updates in place), "Open" on the level-1 node menu, history entries for each drill step.
+5. Verify: Rust unit tests on a temp store (files with aggregated edges, expand, focus, cross-project node, cap with 600 files, search), `ws` test in `tests/web.rs`, Vitest for `drill.ts` and `Drill.tsx`, Storybook stories with the sample server, `just check`, `just spa-stories`, `just spa-e2e`; `docs/` (en, ru, uk) for the graph page.
 
 ### T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 
