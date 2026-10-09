@@ -37,6 +37,7 @@ pub mod lsp;
 pub mod projects;
 pub mod rank;
 pub mod resolve;
+pub mod review;
 pub mod scope;
 pub mod status;
 pub mod walk;
@@ -1194,24 +1195,48 @@ fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<Strin
     Ok(names)
 }
 
-/// Stdout of `git -C root <args>`; `None` when git is missing, `root` is not a repo or git failed.
-pub(crate) fn git_stdout(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+/// Stdout of `git -C root <args>`. Failure text starts with `git diff failed`
+/// so a review can tell a broken git from an empty diff.
+pub(crate) fn git_stdout_result(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
         .output()
-        .ok()?;
-    out.status.success().then_some(out.stdout)
+        .map_err(|e| anyhow::anyhow!("git diff failed: {e}"))?;
+    if out.status.success() {
+        return Ok(out.stdout);
+    }
+    let err = String::from_utf8_lossy(&out.stderr);
+    let err = err.trim();
+    let detail = if err.is_empty() { "git failed" } else { err };
+    anyhow::bail!("git diff failed: {detail}")
+}
+
+/// Stdout of `git -C root <args>`; `None` when git is missing, `root` is not a repo or git failed.
+pub(crate) fn git_stdout(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+    git_stdout_result(root, args).ok()
+}
+
+/// `git diff` argv: `diff`, then `extra`, then `--cached` and the ref. Shared by `affected`
+/// (errors swallowed) and `review` (errors returned).
+pub(crate) fn git_diff_args(since: Option<&str>, staged: bool, extra: &[&str]) -> Vec<String> {
+    let mut args = Vec::with_capacity(extra.len() + 3);
+    args.push("diff".to_string());
+    args.extend(extra.iter().map(|s| (*s).to_string()));
+    if staged {
+        args.push("--cached".to_string());
+    }
+    if let Some(since) = since {
+        args.push(since.to_string());
+    }
+    args
 }
 
 fn git_changed_files(root: &Path, since: Option<&str>, staged: bool) -> Vec<String> {
-    let mut args = vec!["diff", "--name-only", "--relative", "-z"];
-    if staged {
-        args.push("--cached");
-    }
-    args.extend(since);
-    git_stdout(root, &args)
+    let args = git_diff_args(since, staged, &["--name-only", "--relative", "-z"]);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    git_stdout(root, &refs)
         .unwrap_or_default()
         .split(|b| *b == 0)
         .filter(|s| !s.is_empty())

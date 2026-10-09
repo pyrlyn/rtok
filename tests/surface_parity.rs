@@ -583,6 +583,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     ("graph impact", "need a target; CLI/MCP only"),
     ("graph affected", "need a target; CLI/MCP only"),
+    ("graph review", "need a diff; CLI only"),
     (
         "graph projects",
         "the registry's list and actions; the Graph page gets the selector in T329.12",

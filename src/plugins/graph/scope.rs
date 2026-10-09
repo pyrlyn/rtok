@@ -581,6 +581,36 @@ pub fn affected(
     capped(cx, &notes, body)
 }
 
+/// `review` from `git diff` in every project of the scope. One project keeps the plain answer.
+/// A project that is not a git repo adds nothing; a git failure inside a repo is returned.
+pub fn review_git(
+    cx: &Ctx,
+    scope: &[Member],
+    since: Option<&str>,
+    staged: bool,
+    json: bool,
+) -> Result<String> {
+    if let [one] = scope {
+        return super::review::review(cx, &one.root, since, staged, json);
+    }
+    let mut parts = Vec::new();
+    for m in scope {
+        if super::git_stdout(m.root.as_path(), &["rev-parse", "--is-inside-work-tree"]).is_none() {
+            continue;
+        }
+        let text = super::review::review(cx, &m.root, since, staged, json)?;
+        if text.starts_with("no changes") {
+            continue;
+        }
+        parts.push(format!("[{}]\n{text}", m.name));
+    }
+    if parts.is_empty() {
+        Ok("no changes\n".to_string())
+    } else {
+        Ok(parts.concat())
+    }
+}
+
 /// `affected` from `git diff` in every project of the scope; one that is not a git repo has no
 /// changes and adds nothing.
 pub fn affected_git(

@@ -807,6 +807,7 @@ Commands:
   status    Index health for the current or given root
   impact    Symbol impact or call paths to a target
   projects  The project registry: list, add, remove, select
+  review    Risk-ranked reading list for a git diff (files, untested defs, line ranges)
   affected  Tests that reach files changed in git (`git diff --name-only`)
   help      Print this message or the help of the given subcommand(s)
 
@@ -872,6 +873,19 @@ Options:
       --all                Every reached row, not the file-grouped answer cut at
                            `plugins.graph.impact_tokens`
       --project <PROJECT>  Project id or directory (see `rtok graph projects`)
+  -h, --help               Print help
+
+$ rtok graph review --help
+Risk-ranked reading list for a git diff (files, untested defs, line ranges)
+
+Usage: rtok graph review [OPTIONS]
+
+Options:
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --since <SINCE>      Diff against this ref
+      --staged             Staged files only (`git diff --cached --name-only`)
+      --json               JSON instead of the text list
+      --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
   -h, --help               Print help
 
 $ rtok graph affected --help

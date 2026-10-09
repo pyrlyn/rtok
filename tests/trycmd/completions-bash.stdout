@@ -388,6 +388,9 @@ _rtok() {
             rtok__subcmd__graph,projects)
                 cmd="rtok__subcmd__graph__subcmd__projects"
                 ;;
+            rtok__subcmd__graph,review)
+                cmd="rtok__subcmd__graph__subcmd__review"
+                ;;
             rtok__subcmd__graph,status)
                 cmd="rtok__subcmd__graph__subcmd__status"
                 ;;
@@ -408,6 +411,9 @@ _rtok() {
                 ;;
             rtok__subcmd__graph__subcmd__help,projects)
                 cmd="rtok__subcmd__graph__subcmd__help__subcmd__projects"
+                ;;
+            rtok__subcmd__graph__subcmd__help,review)
+                cmd="rtok__subcmd__graph__subcmd__help__subcmd__review"
                 ;;
             rtok__subcmd__graph__subcmd__help,status)
                 cmd="rtok__subcmd__graph__subcmd__help__subcmd__status"
@@ -684,6 +690,9 @@ _rtok() {
                 ;;
             rtok__subcmd__help__subcmd__graph,projects)
                 cmd="rtok__subcmd__help__subcmd__graph__subcmd__projects"
+                ;;
+            rtok__subcmd__help__subcmd__graph,review)
+                cmd="rtok__subcmd__help__subcmd__graph__subcmd__review"
                 ;;
             rtok__subcmd__help__subcmd__graph,status)
                 cmd="rtok__subcmd__help__subcmd__graph__subcmd__status"
@@ -2725,7 +2734,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph)
-            opts="-h --config --help index dead status impact projects affected help"
+            opts="-h --config --help index dead status impact projects review affected help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2791,7 +2800,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__help)
-            opts="index dead status impact projects affected help"
+            opts="index dead status impact projects review affected help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2947,6 +2956,20 @@ _rtok() {
         rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__unlink)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__graph__subcmd__help__subcmd__review)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -3228,6 +3251,32 @@ _rtok() {
             fi
             case "${prev}" in
                 --from)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__graph__subcmd__review)
+            opts="-h --since --staged --json --project --config --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --since)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --project)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -4003,7 +4052,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__help__subcmd__graph)
-            opts="index dead status impact projects affected"
+            opts="index dead status impact projects review affected"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4145,6 +4194,20 @@ _rtok() {
         rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__unlink)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__help__subcmd__graph__subcmd__review)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
