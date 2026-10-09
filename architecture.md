@@ -51,8 +51,9 @@ reaches `demon`). Modules that sit beside this stack (`render`, `model`, `expand
 `config`, `store`, `log`, and `tokens` reference only core and foundation.
 `plugin` is the host runtime: it may use `project` and the other core modules,
 and it does not use a surface or an app module. The operator model lives in
-`src/model` (D23). `src/web` re-exports it for the dashboard; the TUI and the
-reading commands render the same values.
+`src/model` (D23), split by page. `src/web` re-exports it for the dashboard; the
+TUI and the reading commands render the same values and do not name `crate::web`
+for them. The `rtok web` command is the one caller of the server.
 
 ## 3. Module map
 

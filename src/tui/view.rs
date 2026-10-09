@@ -21,8 +21,8 @@ use ratatui::widgets::{Cell, Clear, Paragraph, Row, Sparkline, Table, Tabs, Wrap
 
 use super::app::{App, keys_for};
 use super::theme::{self, ACCENT, ERR, OK, WARN};
+use crate::model::{self, PluginPage};
 use crate::store::CallRow;
-use crate::web::model::{self, PluginPage};
 
 /// One screen: header · [alert] · framed body with the tabs in its top border · footer,
 /// with the `?` overlay on top when it is open (T60.8). The alert row stays up for the
@@ -1093,7 +1093,7 @@ mod tests {
         while app.page() != "usage" {
             app.key(KeyCode::Right, KeyModifiers::NONE);
         }
-        let mut snap = crate::web::model::snapshot(&cfg);
+        let mut snap = crate::model::snapshot(&cfg);
         snap.agent_usage.text = "rtok agents usage: logs from 2 agents\n  1.2M tokens\n".into();
         app.refresh(snap);
         let screen = screen(&app);

@@ -4,7 +4,7 @@
 
 //! `rtok tui` — the terminal rendering of the one operator model (D23, P15).
 //!
-//! The TUI renders [`crate::web::model`]; it never queries the [`crate::store::Store`]
+//! The TUI renders [`crate::model`]; it never queries the [`crate::store::Store`]
 //! itself, and its tabs are [`model::pages`] verbatim, so there is no second page list
 //! to let drift. This module owns the event loop (T15.1), [`app`] the pure state,
 //! [`view`] the screen (T15.2; pages T15.3+). The TTY guard is T15.9.

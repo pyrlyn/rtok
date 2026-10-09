@@ -462,7 +462,7 @@ mod tests {
             .collect();
         assert_eq!(files.len(), 1);
         assert_eq!(fs::read(&files[0]).unwrap(), body.as_bytes());
-        let v = crate::web::model::plugin_stats(&c, "cmd").unwrap();
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
         let rows = v["rows"].as_array().unwrap();
         assert_eq!(rows.len(), 1, "{v}");
         let _ = fs::remove_dir_all(&dir);
@@ -482,7 +482,7 @@ mod tests {
             0,
             None,
         );
-        let v = crate::web::model::plugin_stats(&c, "cmd").unwrap();
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
         let rows = v["rows"].as_array().unwrap();
         assert_eq!(rows[0]["kind"], "skill", "{v}");
         assert_eq!(v["plugin"], "cmd", "{v}");
@@ -514,7 +514,7 @@ mod tests {
             .map(|rd| rd.map(|e| e.unwrap().path()).collect())
             .unwrap_or_default();
         assert!(files.is_empty(), "nothing references an id: {files:?}");
-        let v = crate::web::model::plugin_stats(&c, "cmd").unwrap();
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
         let rows = v["rows"].as_array().unwrap();
         assert_eq!(rows.len(), 1, "{v}");
         assert!(
@@ -639,7 +639,7 @@ mod tests {
         for _ in 0..3 {
             assert_eq!(run(&c, &argv, None).unwrap(), 0);
         }
-        let v = crate::web::model::plugin_stats(&c, "cmd").unwrap();
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
         let rows = v["rows"].as_array().unwrap();
         assert_eq!(rows.len(), 3, "{v}");
         for r in rows {
@@ -681,7 +681,7 @@ mod tests {
         let code = run(&c, &[snippet], None).unwrap();
         assert_eq!(code, 0);
         // "ab" lost nothing, so T160 stores no archive — but the run is still measured.
-        let v = crate::web::model::plugin_stats(&c, "cmd").unwrap();
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
         let rows = v["rows"].as_array().unwrap();
         assert_eq!(rows[0]["before"], 2, "{v}");
         let _ = fs::remove_dir_all(&dir);

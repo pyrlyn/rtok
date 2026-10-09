@@ -93,7 +93,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     // Everything `stats` prints below is a rendering of the operator model (T15.11):
     // the command owns no store of its own.
     if cache {
-        let report = crate::web::model::cache_health(&cfg)?;
+        let report = crate::model::cache_health(&cfg)?;
         print!(
             "{}",
             if cfg.stats.format == "json" {
@@ -110,14 +110,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     {
         print!(
             "{}",
-            serde_json::to_string_pretty(&crate::web::model::plugin_stats(
-                &cfg,
-                &cfg.stats.plugin
-            )?)?
+            serde_json::to_string_pretty(&crate::model::plugin_stats(&cfg, &cfg.stats.plugin)?)?
         );
         return Ok(());
     }
-    let report = crate::web::model::stats_report(&cfg)?;
+    let report = crate::model::stats_report(&cfg)?;
     if let Some(name) = save_baseline {
         let p = crate::measure::baseline::save(&cfg.home, &name, &report)?;
         println!("{}", p.display());

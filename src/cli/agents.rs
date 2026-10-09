@@ -4,8 +4,8 @@
 
 use super::util::print_json;
 use crate::config::Config;
+use crate::model;
 use crate::render::with_loader;
-use crate::web::model;
 use anyhow::{Result, bail};
 use clap::Subcommand;
 use std::io::{self, IsTerminal};

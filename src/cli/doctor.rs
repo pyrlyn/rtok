@@ -4,7 +4,7 @@
 
 use super::util::print_json;
 use crate::config::Config;
-use crate::web::model;
+use crate::model;
 use anyhow::Result;
 use clap::ValueEnum;
 use std::io::{self, IsTerminal};

@@ -1865,7 +1865,7 @@ fn mcp_group(name: &str) -> Option<&str> {
 }
 
 // SQLite measurements for a catalogue plugin (`rtok stats --plugin cmd --json`) live in the
-// operator model (`crate::web::model::plugin_stats`, T15.11): the command renders the page,
+// operator model (`crate::model::plugin_stats`, T15.11): the command renders the page,
 // it does not query the store.
 
 #[cfg(test)]

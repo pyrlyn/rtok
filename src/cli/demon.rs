@@ -5,7 +5,7 @@
 use super::util::print_json;
 use crate::config::Config;
 use crate::demon::Service;
-use crate::web::model;
+use crate::model;
 use anyhow::Result;
 use clap::Subcommand;
 use std::path::PathBuf;

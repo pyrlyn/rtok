@@ -4,15 +4,15 @@
 
 //! T284 (D34): MCP `agents_list`, `agent_show` and `agent_status_set`, the agent-facing side
 //! of `rtok agents sessions` / `show` / `status`. The first two return the CLI's `--json`
-//! (one model function, [`crate::web::model::agents`]); only the status writer needs the
+//! (one model function, [`crate::model::agents`]); only the status writer needs the
 //! session's linked agent, and it can only set its own.
 
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
+use crate::model;
 use crate::plugin::{Runtime, ToolDef};
 use crate::store::AgentDetail;
-use crate::web::model;
 
 pub fn list_def() -> ToolDef {
     ToolDef {
