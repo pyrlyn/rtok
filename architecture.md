@@ -211,7 +211,7 @@ under 5 %.
 ## 10. Testing strategy
 
 - Unit tests next to the code (`cargo test`); every task in `plan.md` has one machine Check.
-- `tests/deps.rs` asserts heavy-dep ownership. Today: only `rtok-store` depends on `diesel`.
+- `tests/deps.rs` asserts heavy-dep ownership. `diesel` is only `rtok-store` (nothing under `src/` names it). `ratatui` and `crossterm` are only `src/tui/` on the `rtok` package. `printpdf` is only `src/report/`. `wasmi` is only `src/plugins/wasm.rs`. `tree-sitter*` is only `src/plugins/`. `rmcp` is only `src/mcp`. `axum` is `src/proxy/`, `src/web/`, and `src/mcp/` (HTTP). `dotenvy` is only `rtok-config`. `rtok-plugin-sdk` depends on no workspace crate. `rtok-hook` is std-only.
 - Fixture-driven: hook payloads in `tests/fixtures/hooks/`, golden filter cases in
   `tests/cmd_golden/`, per-language outline fixtures for `read`.
 - Latency harness (`tests/latency.rs`, T2.2) asserts p95 < 10 ms for a hook round trip.
