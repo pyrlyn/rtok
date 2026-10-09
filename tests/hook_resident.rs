@@ -305,3 +305,39 @@ fn the_client_prints_the_answer_runs_rtok_hook_on_refusal_and_fails_open_when_sl
     );
     let _ = std::fs::remove_dir_all(&home.0);
 }
+
+/// T459: the client has no config, so a body over the default cap is `rtok hook`'s to judge: the
+/// resident is never sent it, and the client answers `{}` the way `rtok hook` does.
+#[cfg(unix)]
+#[test]
+fn the_client_does_not_send_a_body_over_the_cap_to_the_resident() {
+    let home = Home::new("o");
+    let listener =
+        std::os::unix::net::UnixListener::bind(rtok_hook::endpoint(&home.0).unwrap()).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().unwrap();
+        let sent = rtok_hook::read_frame(&mut s)
+            .ok()
+            .and_then(|b| Request::decode(&b))
+            .map(|r| r.stdin.len());
+        let _ = s.write_all(&rtok_hook::encode_response(Some(b"served")));
+        tx.send(sent).unwrap();
+    });
+    let mut child = home
+        .cmd(CLIENT, &["PreToolUse"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut pipe = child.stdin.take().unwrap();
+    // The client may stop reading once `rtok hook` has answered.
+    let _ = pipe.write_all(&vec![
+        b' ';
+        rtok_hook::HOOK_MAX_INPUT_BYTES as usize + (1 << 20)
+    ]);
+    drop(pipe);
+    assert_eq!(child.wait_with_output().unwrap().stdout, b"{}");
+    assert_eq!(rx.recv().unwrap(), None, "the resident was sent the body");
+    let _ = std::fs::remove_dir_all(&home.0);
+}

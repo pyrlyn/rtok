@@ -91,11 +91,12 @@ pub(super) fn render(problems: &[Problem]) -> String {
     render_kinds(problems, &["duplicate-hook"], "duplicate hooks")
 }
 
-/// The same for MCP servers (T331.4); a version conflict is listed with the duplicates.
+/// The same for MCP servers (T331.4); a version conflict and the information about rtok's own
+/// entry (T331.10) are listed with the duplicates.
 pub(super) fn render_mcp(problems: &[Problem]) -> String {
     render_kinds(
         problems,
-        &["duplicate-mcp", "conflicting-mcp"],
+        &["duplicate-mcp", "conflicting-mcp", "own-mcp"],
         "duplicate mcp servers",
     )
 }
@@ -132,6 +133,7 @@ fn render_kinds(problems: &[Problem], kinds: &[&str], title: &str) -> String {
         }
         let role = match (p.kind, p.keep) {
             ("conflicting-mcp", _) => "other",
+            ("own-mcp", false) => "info ",
             (_, true) => "keep ",
             _ => "extra",
         };

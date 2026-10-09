@@ -14,15 +14,13 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use super::HOSTS;
 use super::junk_cache::{
     Ctx, Item, Owned, RTOK_OWN, SCAN_STOPPED, SECTION_22, TAG, is_symlink, make_item, real,
 };
 use super::plugin_install::PLUGIN_CACHE;
 use crate::config::Config;
-use crate::store::Store;
 use crate::worktree::clean::{Policy, kept_because};
-use crate::worktree::list::{self, Cache, usage_until};
+use crate::worktree::list::{Cache, usage_until};
 
 /// Why a find with no D36 evidence is not cleared.
 pub const NOT_DOCUMENTED: &str =
@@ -350,20 +348,15 @@ pub fn build_items(worktrees: &[PathBuf], cx: &Ctx, limit: Duration) -> Vec<Item
 /// bound to an agent (T285), seen by a session (T154) or made in a host's own pool (T289).
 /// Without a repository or a store the list is short, never an error.
 pub fn agent_worktrees(cfg: &Config, cwd: &Path) -> Vec<(&'static str, PathBuf)> {
-    let Ok(mut rows) = list::rows(cwd) else {
-        return Vec::new();
-    };
-    let store = Store::open(&cfg.core.db_path).ok();
-    list::attribute_with_store(&mut rows, store.as_ref(), &cfg.agents.idle);
-    rows.into_iter()
-        .filter(|r| !matches!(r.state, "main" | "orphan" | "stale"))
-        .filter_map(|r| {
-            let named = r.agent.and_then(|a| a.host);
-            let named = named.or(r.session.and_then(|s| s.host));
-            let host = named.unwrap_or_else(|| r.origin.to_string());
-            Some((*HOSTS.iter().find(|h| **h == host)?, r.path))
-        })
-        .collect()
+    in_hosts(super::junk_worktrees::worktrees(cfg, cwd))
+}
+
+/// The worktrees [`agent_worktrees`] keeps: a host is known and git lists the directory.
+pub fn in_hosts(worktrees: Vec<super::junk_worktrees::Worktree>) -> Vec<(&'static str, PathBuf)> {
+    let present = worktrees
+        .into_iter()
+        .filter(|w| !matches!(w.state, "stale" | "orphan"));
+    present.filter_map(|w| Some((w.host?, w.path))).collect()
 }
 
 /// Version directories of the rtok plugin that Claude Code unpacked and no longer uses: every

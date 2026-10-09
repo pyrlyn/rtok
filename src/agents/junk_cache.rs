@@ -24,6 +24,8 @@ pub const DEFAULT_IDLE: Duration = Duration::from_secs(24 * 3600);
 pub const SECTION_22: &str = "research.md §22";
 pub const TAG: &str = "CACHEDIR.TAG";
 pub const RTOK_OWN: &str = "rtok-owned";
+/// `rtok worktree gc` would remove it (T330.5.3): its verdict is the evidence.
+pub const GC_VERDICT: &str = "gc verdict";
 
 /// A walk that hit its deadline. Its newest mtime is a lower bound, so the cache is not idle
 /// just because every file visited so far is old.

@@ -163,7 +163,7 @@ section! {
         /// body over this many bytes fails the hook open to `{}` (unmodified, one stderr
         /// line) instead of paying a JSON-parse-plus-hashing cost that grows with the
         /// payload (D1: ≤ 10 ms). 8 MiB default.
-        hook_max_input_bytes: u32 = 8_388_608,
+        hook_max_input_bytes: u32 = rtok_hook::HOOK_MAX_INPUT_BYTES,
         retain_calls_days: u32 = 30,
         /// T352: hook stdin bodies in `call_io` are cleared after this many days; the call row,
         /// sizes and shas stay. 0 keeps bodies as long as `calls`.
@@ -237,6 +237,9 @@ section! {
         /// is the only criterion (D36, T330 "Old sessions: time only"). `--session-days` is
         /// the one-run override.
         stale_session_days: u32 = 30,
+        /// A worktree `rtok worktree gc` would remove is the `stale-worktrees` kind once it
+        /// has been idle this many days (gc's `--idle`, T330.5.3).
+        stale_worktree_days: u32 = 14,
         /// A crash dump in an `extra` crash folder older than this many days is `safe`; a
         /// younger one is `review`.
         crash_dump_min_age_days: u32 = 7,
