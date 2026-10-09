@@ -3376,6 +3376,66 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn upsert_same_title_with_a_new_body_keeps_the_old_body_in_history() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, created) = store
+            .upsert_note(Some("p"), "decision", "auth", "sessions")
+            .unwrap();
+        assert!(!created);
+        assert!(store.note_versions(id).unwrap().is_empty());
+        let (again, updated) = store
+            .upsert_note(Some("p"), "decision", "auth", "jwt")
+            .unwrap();
+        assert!(updated);
+        assert_eq!(again, id);
+        assert_eq!(
+            store.note_versions(id).unwrap(),
+            vec![(1, "auth".to_string(), "sessions".to_string())]
+        );
+        assert_eq!(store.get_note_body(id).unwrap().as_deref(), Some("jwt"));
+        let (third, _) = store
+            .upsert_note(Some("p"), "decision", "auth", "opaque tokens")
+            .unwrap();
+        assert_eq!(third, id);
+        assert_eq!(
+            store.note_versions(id).unwrap(),
+            vec![
+                (1, "auth".to_string(), "sessions".to_string()),
+                (2, "auth".to_string(), "jwt".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn checkpoint_upsert_writes_zero_version_rows() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, _) = store
+            .upsert_note(Some("p"), "checkpoint:s", "compact", "first")
+            .unwrap();
+        store
+            .upsert_note(Some("p"), "checkpoint:s", "compact", "second")
+            .unwrap();
+        assert!(store.note_versions(id).unwrap().is_empty());
+        let (sid, _) = store
+            .upsert_note(Some("p"), "session:s", "handoff", "one")
+            .unwrap();
+        store
+            .upsert_note(Some("p"), "session:s", "handoff", "two")
+            .unwrap();
+        assert!(store.note_versions(sid).unwrap().is_empty());
+    }
+
+    #[test]
+    fn same_body_upsert_writes_zero_version_rows() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, _) = store.upsert_note(None, "note", "topic", "same").unwrap();
+        let (_, updated) = store.upsert_note(None, "note", "topic", "same").unwrap();
+        assert!(updated);
+        assert!(store.note_versions(id).unwrap().is_empty());
+        assert!(store.note_versions(id + 1).unwrap().is_empty());
+    }
+
     /// T209: a `rtok.db` already holding duplicate `(project, kind, title)` notes — the
     /// select-then-insert race migration 0020 closes — migrates by keeping only the
     /// newest row per topic key, the same "highest id" tie-break `upsert_note` used
