@@ -44,6 +44,9 @@
 # are no longer rank labels. `symbol_defs` and `get_read_cache` stay
 # import-resolved and take those rank slots, keeping ten ambiguous names.
 #
+# #626 (2026-10-09): `calibrate_or_skip`'s only call moved with the CLI split
+# from `src/cli.rs` to `src/cli/stats.rs`. The symbol is unchanged.
+#
 # T209 (2026-09-24): `notes_topic` (migration 0020) enforces "one row per (project, kind,
 # title)" at the database level, so `checkpoint.rs`'s repeat-PreCompact write moved from
 # `insert_note` to `upsert_note` the same way T66.1 moved `mem_save`. `insert_note` loses
@@ -253,7 +256,7 @@ refs = ["examples/hello_plugin.rs", "src/plugins/graph/mod.rs", "src/plugins/gua
 name = "calibrate_or_skip"
 kind = "fn"
 defs = ["src/tokens.rs"]
-refs = ["src/cli.rs"]
+refs = ["src/cli/stats.rs"]
 
 # T368: each name below is defined in two crates. `defs` is still every defining
 # file. `refs` is the caller files of the import-resolved definition, the set
