@@ -114,6 +114,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
+| T459 | in progress | P2 | 2 | 0% | Claude Code / sonnet-5.5 |
 
 
 
@@ -1647,6 +1648,14 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
+
+### T459. Bound the `rtok-hook` client's stdin read to the resident's input cap
+
+Cloud review finding (`src/bin/rtok-hook.rs`): the client reads all of stdin with `read_to_end` before `Request::encode()`, so a multi-hundred-MB payload is allocated in full and then copied into the frame; only the resident caps it later (T201, `core.hook_max_input_bytes`). Done means the client never holds more than the cap plus one byte, and an oversized body still reaches `rtok hook` complete so its own cap decides (exit 0, `{}`, one stderr line).
+
+Plan: put the 8 MiB default in `rtok-hook` as `HOOK_MAX_INPUT_BYTES` (std-only crate both sides already link) and make `core.hook_max_input_bytes` default to it. The client reads `take(cap + 1)`; over the cap it skips the resident and runs `rtok hook`, writing the bytes already read and then the rest of stdin to its pipe. Files: `crates/rtok-hook/src/lib.rs`, `crates/rtok-config/src/lib.rs`, `src/bin/rtok-hook.rs`, a test in `tests/`.
+
+Check: a test feeding `cap + 1` bytes through the `rtok-hook` binary with a fake resident asserts the resident is never sent the body and `rtok hook` receives every byte; it fails on the unfixed client; `just check`.
 
 ## Reference
 
