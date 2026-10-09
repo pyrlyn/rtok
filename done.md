@@ -13,6 +13,15 @@ From the repowise comparison (2026-10-08). Five algorithms, no new plugin.
 Check: `cargo nextest run -p rtok -E 'test(host_visible) | test(emit_filtered) | test(family_names) | test(copy_symbol_rows) | test(stale_head) | binary(graph_contract) | binary(graph_scope)'` — 23 passed. Formatter, bounded, surface, and worktree tests — 94 passed. `cargo clippy -p rtok --all-targets -- -D warnings` clean. `cargo fmt --check` clean. `tests/trycmd/mcp.toml` and `report-md.toml` re-blessed for the shorter `symbol` description (`~798` desc tokens) and the `names` schema.
 
 Result: 2026-10-08. No new dependency. No saving claim beyond the corrected `Measurement` rows.
+### T460. Budgeted `mem_pack` for memory notes
+
+The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
+
+MCP `mem_pack` packs FTS hits into one answer under a token budget. Each hit starts at abstract (title and snippet). Leftover budget deepens the best hits to the first paragraph, then the body. A tier that does not fit is skipped whole. `limit` is 1–20 (default 8) and `max_tokens` is 1–2000 (default 400); `search_limit` does not cap this tool. The hook index is unchanged. A `Measurement` row (`plugin: memory`, `kind: mem_pack`) records the placed bodies against the packed text. No model call.
+
+Check: `plugins::memory::pack` unit tests (abstracts fit, a huge body stays abstract, leftover budget deepens only the first hit, identical title and snippet collapse, an over-budget estimator returns nothing); `memory_pack_returns_a_tier_and_records`; `tests/trycmd/mcp.toml` lists `mem_pack` after `mem_search`.
+
+Result: pack tests 5 passed; `memory_pack_returns_a_tier_and_records` passed; `mcp_surface_stays_within_sixty_description_tokens` passed (the six descriptions sum to 60). `cli_trycmd` lists `mem_pack`; the report counts 31 tools, ~810 description tokens. `cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings` clean.
 
 ### T458. Cap the MCP wrap `Content-Length` read at the hook frame limit
 
@@ -7685,6 +7694,16 @@ Result: a linked note ranks above an equally text-matching unlinked note once it
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
+
+### T454. Hook recall uses the stored hybrid leg when embeddings are on
+
+`prompt_recall` ranked with FTS only while `mem_search` used `search_notes_hybrid` when `embed.enabled && embed.hybrid`. The hook now uses that same RRF over FTS and vectors already stored (`Store::search_notes_hybrid_stored`, on `Notes` / `Ctx` with an FTS default). It does not call `embed_stale`: a missing or stale row is not rewritten. An empty embedding table returns the FTS list, so the title index matches the flag-off path. `files::recall_hits` still wraps that list. Titles and ids only. One `Measurement` row, kind `prompt_recall`. Embeddings stay off by default. No change to `src/plugins/graph/`, `src/hooks/`, `src/proxy/`, or the `Plugin` trait. Amends D35: a stored-vector read is allowed on the hook only when embeddings are already on.
+
+Check: `mise exec rust -- cargo test --lib -- plugins::memory store::embed` (66 passed). `mise exec rust -- cargo clippy --all-targets -- -D warnings` clean. `mise exec rust -- cargo test --test latency --release` missed 10 ms on this host for every event, including PreToolUse (p95 13.8 ms, min 6.7 ms, `--test-threads=1`), which this change does not touch — the same spawn-floor miss T428 records on a loaded host.
+
+Result: lib tests 66 passed; clippy clean; `tests/trycmd/config-init.toml` matches the new `hybrid` comment. #894.
+Status: done 2026-10-08
+Model: Cursor / grok 4.7
 
 ### T452. Recall notes linked to a file the prompt names, without a text match
 

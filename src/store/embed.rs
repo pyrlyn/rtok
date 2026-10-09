@@ -154,11 +154,17 @@ impl Store {
         cfg: &MemoryEmbed,
     ) -> Result<Vec<NoteHit>> {
         self.embed_stale(cfg)?;
+        self.search_notes_knn(query, limit, cfg)
+    }
+
+    /// Cosine KNN over vectors already in `note_embeddings`. Does not call [`Store::embed_stale`].
+    fn search_notes_knn(&self, query: &str, limit: u32, cfg: &MemoryEmbed) -> Result<Vec<NoteHit>> {
         let qv = hash_embed(query, cfg.dimensions);
         let mut conn = self.lock()?;
         // Only vectors of the query's own model, scheme and `dimensions` are scored: `cosine`
         // zips to the shorter vector, so a stale 384-dim row against an 8-dim query ranked on
-        // noise. `embed_stale` has just brought every row up to date.
+        // noise. `search_notes_embed` has just rewritten those rows; the stored hybrid leg
+        // leaves them unread.
         let rows: Vec<(i32, String, String, Vec<u8>, i32)> = note_embeddings::table
             .inner_join(notes::table)
             .filter(note_embeddings::model.eq(model_key(cfg)))
@@ -195,6 +201,34 @@ impl Store {
     ) -> Result<Vec<NoteHit>> {
         let fts = self.search_notes(query, limit.saturating_mul(2).max(limit))?;
         let knn = self.search_notes_embed(query, limit.saturating_mul(2).max(limit), cfg)?;
+        Ok(rrf_merge(&fts, &knn, limit))
+    }
+
+    /// How many rows `note_embeddings` holds. The hook uses this to skip KNN when nothing is stored.
+    pub(crate) fn note_embedding_count(&self) -> Result<i64> {
+        use diesel::dsl::count_star;
+        note_embeddings::table
+            .select(count_star())
+            .first(&mut *self.lock()?)
+            .map_err(Into::into)
+    }
+
+    /// Same RRF as [`Store::search_notes_hybrid`], over vectors already on disk.
+    ///
+    /// Does not call `embed_stale`: a missing or stale row is absent from the KNN leg, never
+    /// rewritten. An empty embedding table returns the FTS list at `limit`.
+    pub fn search_notes_hybrid_stored(
+        &self,
+        query: &str,
+        limit: u32,
+        cfg: &MemoryEmbed,
+    ) -> Result<Vec<NoteHit>> {
+        if self.note_embedding_count()? == 0 {
+            return self.search_notes(query, limit);
+        }
+        let pool = limit.saturating_mul(2).max(limit);
+        let fts = self.search_notes(query, pool)?;
+        let knn = self.search_notes_knn(query, pool, cfg)?;
         Ok(rrf_merge(&fts, &knn, limit))
     }
 }
@@ -360,5 +394,100 @@ mod tests {
             fts_phrase_query("Diesel sync"),
             Some("\"Diesel\" \"sync\"".into())
         );
+    }
+
+    fn embedding_rows(s: &Store) -> Vec<(i32, i32, String)> {
+        note_embeddings::table
+            .select((
+                note_embeddings::note_id,
+                note_embeddings::dims,
+                note_embeddings::text_hash,
+            ))
+            .order(note_embeddings::note_id)
+            .load(&mut *s.lock().unwrap())
+            .unwrap()
+    }
+
+    fn hit_ids(hits: &[NoteHit]) -> Vec<i32> {
+        hits.iter().map(|h| h.id).collect()
+    }
+
+    /// An empty embedding table is the FTS list, and the search does not write a vector.
+    #[test]
+    fn stored_hybrid_returns_the_fts_list_when_the_table_is_empty() {
+        let s = Store::open_in_memory().unwrap();
+        let cfg = MemoryEmbed {
+            enabled: true,
+            hybrid: true,
+            ..MemoryEmbed::default()
+        };
+        s.insert_note(None, "note", "walrus", "the walrus journal lives here")
+            .unwrap();
+        assert_eq!(s.note_embedding_count().unwrap(), 0);
+        let fts = s.search_notes("walrus journal", 5).unwrap();
+        let hybrid = s
+            .search_notes_hybrid_stored("walrus journal", 5, &cfg)
+            .unwrap();
+        assert_eq!(hit_ids(&hybrid), hit_ids(&fts));
+        assert_eq!(
+            hybrid.iter().map(|h| &h.snippet).collect::<Vec<_>>(),
+            fts.iter().map(|h| &h.snippet).collect::<Vec<_>>()
+        );
+        assert_eq!(s.note_embedding_count().unwrap(), 0);
+    }
+
+    /// A stored vector that FTS misses stays eligible, and a stale or missing row is not rewritten.
+    #[test]
+    fn stored_hybrid_hits_a_stored_vector_and_does_not_write() {
+        let s = Store::open_in_memory().unwrap();
+        let cfg = MemoryEmbed {
+            enabled: true,
+            dimensions: 384,
+            hybrid: true,
+            ..MemoryEmbed::default()
+        };
+        let planted_title = "p29-gate-arctic-tern";
+        let planted_body = "Hooks must exit in ≤10 ms fail-open; async ORM rejected — Diesel stays sync on the hook path (D13).";
+        let planted = s
+            .insert_note(None, "decision", planted_title, planted_body)
+            .unwrap();
+        s.upsert_note_embedding(planted, planted_title, planted_body, &cfg)
+            .unwrap();
+        let decoy_title = "p29-decoy-etl-batch";
+        let decoy_body = "Storage indexing and schema migration patterns for batch ETL pipelines in data warehouses.";
+        let decoy = s
+            .insert_note(None, "decision", decoy_title, decoy_body)
+            .unwrap();
+        s.upsert_note_embedding(decoy, decoy_title, decoy_body, &cfg)
+            .unwrap();
+        // Saved with embeddings off: no row, and the hook must not create one.
+        let missing = s
+            .insert_note(None, "note", "unembedded", "alpha gamma extra")
+            .unwrap();
+        let query = "why not use an async database library for hooks";
+        let fts = s.search_notes(query, 10).unwrap();
+        assert!(
+            fts.iter().all(|h| h.id != planted),
+            "FTS must miss the planted note: {fts:?}"
+        );
+        let before = embedding_rows(&s);
+        let narrow = MemoryEmbed {
+            dimensions: 8,
+            ..cfg.clone()
+        };
+        // Wrong dimensions: the stored 384-dim rows are stale. Scoring them would be noise,
+        // and rewriting them is `embed_stale`, which this path must not call.
+        let _ = s.search_notes_hybrid_stored(query, 10, &narrow).unwrap();
+        assert_eq!(embedding_rows(&s), before, "stale vectors stay as stored");
+        assert!(before.iter().all(|(id, _, _)| *id != missing));
+
+        let hybrid = s.search_notes_hybrid_stored(query, 10, &cfg).unwrap();
+        assert!(
+            hybrid.iter().any(|h| h.id == planted),
+            "stored vector is eligible: {hybrid:?}"
+        );
+        let again = s.search_notes_hybrid_stored(query, 10, &cfg).unwrap();
+        assert_eq!(hit_ids(&hybrid), hit_ids(&again));
+        assert_eq!(embedding_rows(&s), before);
     }
 }

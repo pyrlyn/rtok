@@ -9,6 +9,7 @@ mod files;
 pub mod handoff;
 pub mod import;
 mod observe;
+pub mod pack;
 mod scrub;
 pub mod status;
 pub mod sync;
@@ -16,8 +17,8 @@ pub mod sync;
 pub use crate::project::project_name;
 
 use rtok_plugin_sdk::{
-    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PostToolUse, PromptSubmit,
-    SessionStart, SubagentStart, Surface, ToolDef,
+    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, NoteHit, Plugin, PostToolUse,
+    PromptSubmit, SessionStart, SubagentStart, Surface, ToolDef,
 };
 use serde_json::json;
 
@@ -60,13 +61,18 @@ impl Plugin for Memory {
                 input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}),
             },
             ToolDef {
+                name: "mem_pack",
+                description: "Ranked notes in a token budget.",
+                input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"max_tokens":{"type":"integer"}},"required":["query"]}),
+            },
+            ToolDef {
                 name: "mem_get",
                 description: "Body by note id; see hook index.",
                 input_schema: json!({"type":"object","properties":{"id":{"type":"integer"},"obs":{"type":"integer"}},"required":[]}),
             },
             ToolDef {
                 name: "mem_update",
-                description: "Retire (tombstone, never delete) or pin a note by id.",
+                description: "Retire or pin a note by id.",
                 input_schema: json!({"type":"object","properties":{"id":{"type":"integer"},"retire":{"type":"boolean"},"superseded_by":{"type":"integer"},"pinned":{"type":"boolean"}},"required":["id"]}),
             },
             handoff::handoff_tool(),
@@ -197,6 +203,18 @@ fn remember_save(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     })
 }
 
+/// Text hits for `prompt_recall`: FTS, or the stored hybrid leg when embeddings are on.
+fn recall_query_hits(cx: &Ctx, query: &str, n: u32) -> anyhow::Result<Vec<NoteHit>> {
+    let cfg = cx.plugin_config::<crate::config::Memory>("memory");
+    if cfg.embed.enabled && cfg.embed.hybrid {
+        // Vectors already on disk only. Do not call `embed_stale` here:
+        // `Store::search_notes_embed` rewrites every stale row and will blow the 10 ms hook
+        // (`tests/latency.rs`).
+        return cx.search_notes_hybrid_stored(query, n.saturating_mul(2));
+    }
+    cx.search_notes(query, n.saturating_mul(2))
+}
+
 fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     let cfg = cx.plugin_config::<crate::config::Memory>("memory");
     let n = cfg.prompt_recall;
@@ -215,9 +233,8 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     }
     // T374: twice as many text hits as shown, so a note ranked just below the cut can still be
     // lifted by its file link; with no linked note the first `n` come back unchanged.
-    let text_hits = cx
-        .search_notes(&query, n.saturating_mul(2))
-        .unwrap_or_default();
+    // T454: that list is the stored hybrid leg when embeddings are on (`recall_query_hits`).
+    let text_hits = recall_query_hits(cx, &query, n).ok()?;
     let hits = files::recall_hits(cx, ev.prompt, text_hits, n as usize);
     let obs = obs_for_prompt(cx, &query, ev.prompt);
     if hits.is_empty() && obs.is_empty() {
@@ -395,6 +412,47 @@ pub fn mem_save(
     rt.store
         .upsert_note_embedding(id, title, body, &rt.config.plugins.memory.embed)?;
     Ok((id, updated))
+}
+
+pub fn mem_pack(
+    rt: &crate::plugin::Runtime,
+    query: &str,
+    limit: u32,
+    max_tokens: u32,
+) -> anyhow::Result<String> {
+    let limit = limit.clamp(1, 20);
+    let max_tokens = max_tokens.clamp(1, 2000);
+    let hits = mem_search(rt, query, limit)?;
+    let rows: Vec<(i32, String, String)> = hits
+        .into_iter()
+        .map(|h| (h.id, h.title, h.snippet))
+        .collect();
+    let pack = pack::pack_notes(
+        &rows,
+        |id| rt.store.get_note_body(id).ok().flatten(),
+        max_tokens,
+        |text| rt.estimate(text, Class::Prose),
+    );
+    let text = pack::render(&pack);
+    let mut before_bytes = 0u64;
+    let mut est_before = 0u32;
+    for entry in &pack.entries {
+        if let Some(body) = rt.store.get_note_body(entry.id).ok().flatten() {
+            before_bytes += body.len() as u64;
+            est_before = est_before.saturating_add(rt.estimate(&body, Class::Prose));
+        }
+    }
+    let _ = rt.record(&Measurement {
+        plugin: "memory",
+        kind: "mem_pack",
+        before_bytes,
+        after_bytes: text.len() as u64,
+        est_before,
+        est_after: rt.estimate(&text, Class::Prose),
+        ref_id: None,
+        call_id: rt.call_id,
+    });
+    Ok(text)
 }
 
 pub fn mem_search(
@@ -614,6 +672,76 @@ mod tests {
             prompt: "tell me about hooks fail open",
         };
         assert!(Memory.prompt_submit(&ev, &ctx).is_none());
+    }
+
+    const PLANTED_TITLE: &str = "p29-gate-arctic-tern";
+    const PLANTED_BODY: &str = "Hooks must exit in ≤10 ms fail-open; async ORM rejected — Diesel stays sync on the hook path (D13).";
+    const PARAPHRASE: &str = "why not use an async database library for hooks";
+
+    /// Embeddings off, and embeddings on with an empty vector table, render the same titles.
+    #[test]
+    fn prompt_recall_with_no_stored_vectors_matches_embed_off() {
+        fn text(enabled: bool) -> String {
+            let mut cx =
+                crate::plugin::Runtime::in_memory(format!("t454-bytes-{enabled}")).unwrap();
+            cx.config.plugins.memory.embed.enabled = false;
+            mem_save(&cx, "note", "walrus", "the walrus journal lives here", None).unwrap();
+            cx.config.plugins.memory.embed.enabled = enabled;
+            cx.config.plugins.memory.embed.hybrid = true;
+            let text = recall_text(&cx, "walrus journal");
+            assert!(!text.is_empty(), "recall");
+            if enabled {
+                assert_eq!(cx.store.note_embedding_count().unwrap(), 0);
+            }
+            text
+        }
+        assert_eq!(text(false), text(true));
+    }
+
+    /// A note FTS misses is still a title when its hash vector is already stored. No extra write.
+    #[test]
+    fn prompt_recall_hybrid_titles_a_stored_vector_fts_missed() {
+        let mut cx = crate::plugin::Runtime::in_memory("t454-hybrid").unwrap();
+        cx.config.plugins.memory.embed.enabled = true;
+        cx.config.plugins.memory.embed.hybrid = true;
+        mem_save(&cx, "decision", PLANTED_TITLE, PLANTED_BODY, Some("rtok")).unwrap();
+        mem_save(
+            &cx,
+            "decision",
+            "p29-decoy-etl-batch",
+            "Storage indexing and schema migration patterns for batch ETL pipelines in data warehouses.",
+            Some("rtok"),
+        )
+        .unwrap();
+        assert!(
+            cx.store
+                .search_notes(PARAPHRASE, 10)
+                .unwrap()
+                .iter()
+                .all(|h| h.title != PLANTED_TITLE),
+            "FTS misses the planted note"
+        );
+        let before = cx.store.note_embedding_count().unwrap();
+        assert_eq!(before, 2);
+        let text = recall_text(&cx, PARAPHRASE);
+        assert!(text.contains(PLANTED_TITLE), "{text}");
+        assert!(!text.contains("async ORM"), "titles only: {text}");
+        assert_eq!(cx.store.note_embedding_count().unwrap(), before);
+        let rows = cx.store.list_measurements("memory").unwrap();
+        assert_eq!(rows.iter().filter(|r| r.kind == "prompt_recall").count(), 1);
+    }
+
+    /// Turning embeddings on does not embed a note that has no stored vector during recall.
+    #[test]
+    fn prompt_recall_hybrid_does_not_embed_a_note_without_a_vector() {
+        let mut cx = crate::plugin::Runtime::in_memory("t454-nowrite").unwrap();
+        cx.config.plugins.memory.embed.enabled = false;
+        mem_save(&cx, "decision", PLANTED_TITLE, PLANTED_BODY, Some("rtok")).unwrap();
+        assert_eq!(cx.store.note_embedding_count().unwrap(), 0);
+        cx.config.plugins.memory.embed.enabled = true;
+        cx.config.plugins.memory.embed.hybrid = true;
+        assert!(recall_text(&cx, PARAPHRASE).is_empty());
+        assert_eq!(cx.store.note_embedding_count().unwrap(), 0);
     }
 
     #[test]
@@ -849,7 +977,9 @@ mod tests {
 
     /// T69.1: the memory tools stay within the 60-description-token surface budget
     /// (`rtok doctor` prices the same strings). T71.2 added `mem_handoff` as the fifth,
-    /// so `mem_save` drops the field list the input schema already carries.
+    /// so `mem_save` drops the field list the input schema already carries. T460
+    /// shortened `mem_update` the same way so `mem_pack` fits; never-delete stays
+    /// in the plugin README.
     #[test]
     fn mcp_surface_stays_within_sixty_description_tokens() {
         let cx = crate::plugin::Runtime::in_memory("t691-surface").unwrap();

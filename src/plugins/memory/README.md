@@ -5,7 +5,7 @@ progressive disclosure.
 
 | | |
 |---|---|
-| Surfaces | MCP `mem_save`, `mem_search`, `mem_get`, `mem_update`; PreCompact checkpoint; SessionStart recall |
+| Surfaces | MCP `mem_save`, `mem_search`, `mem_pack`, `mem_get`, `mem_update`; PreCompact checkpoint; SessionStart recall |
 | Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
 | Default | on |
 
@@ -17,6 +17,11 @@ progressive disclosure.
   An explicit re-save of a retired topic revives it (clears the tombstone).
 - `mem_search(query, limit=5)` — ids, titles, 120-char snippets ranked by FTS5 `bm25`.
   Retired notes never appear.
+- `mem_pack(query, limit=8, max_tokens=400)` — the same ranking, packed into one
+  answer. Each hit starts at its abstract (title and snippet). Leftover budget
+  deepens the best hits to the first paragraph, then the body. A tier that does
+  not fit is skipped whole. `limit` is 1–20, `max_tokens` is 1–2000. The hook
+  index is unchanged; this tool does not replace `mem_get`.
 - `mem_get(id)` — full body. A retired note still returns its body, prefixed by one line
   `retired <ts>[, superseded by <id>]`.
 - `mem_update(id, retire?, superseded_by?, pinned?)` — the lifecycle (T69.1): `retire`
