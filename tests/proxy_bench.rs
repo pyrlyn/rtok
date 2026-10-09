@@ -17,6 +17,8 @@
 //! − 5. Known gap: an `archive` row's `after_bytes` is the intermediate pointer once
 //! `compress` shrinks it further; `assert_terminal_bytes` skips those (floor unaffected).
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;

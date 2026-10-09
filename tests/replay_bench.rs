@@ -12,6 +12,8 @@
 //! `[rtok <id> · N lines · expand …]` trailer is not counted in `after_bytes`, so the `cmd`
 //! row (and this bench's `cmd` share) is an upper bound until that fix lands.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::Write;

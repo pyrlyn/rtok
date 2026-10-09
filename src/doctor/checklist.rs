@@ -9,27 +9,15 @@
 //! reaches teammates. All input goes through [`Prompt`], so tests script the answers.
 
 use std::collections::BTreeSet;
-use std::io::{self, Write};
 use std::path::Path;
 
 use super::fix::removable;
 use super::hooks::Problem;
 
-/// One question to the user: print `screen`, then read a line. `None` at the end of the input.
+/// One question to the user: show `screen`, then read a line. `None` at the end of the input.
+/// The CLI's terminal writes `screen` and reads stdin; tests pass a scripted prompt.
 pub trait Prompt {
     fn ask(&mut self, screen: &str) -> Option<String>;
-}
-
-/// The terminal: the screen on stdout, the answer from stdin.
-pub struct Terminal;
-
-impl Prompt for Terminal {
-    fn ask(&mut self, screen: &str) -> Option<String> {
-        print!("{screen}");
-        io::stdout().flush().ok()?;
-        let mut line = String::new();
-        (io::stdin().read_line(&mut line).ok()? > 0).then_some(line)
-    }
 }
 
 /// How the checklist ended.

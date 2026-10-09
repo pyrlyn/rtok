@@ -5,6 +5,8 @@
 //! T2.2: spawn `rtok hook PreToolUse` 200×; p95 < 10 ms (release).
 //! Gate P17 asks the same of `PostToolUse`, T288 of `UserPromptSubmit`; each prints p50/p95/max under `--nocapture`.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;

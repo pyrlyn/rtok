@@ -2379,7 +2379,10 @@ mod tests {
         assert_eq!(tools.len(), 5);
         let est = |d: &str| crate::tokens::estimate(d, Class::Prose, &cx.config.estimator);
         let n: u32 = tools.iter().map(|t| est(t.description)).sum();
-        println!(
+        // stderr, not `println!`: the library denies print macros, and this gate is a count.
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr(),
             "graph surface: {} tools, {n} description tokens",
             tools.len()
         );

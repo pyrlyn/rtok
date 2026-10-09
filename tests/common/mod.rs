@@ -4,7 +4,7 @@
 
 //! Helpers shared by the integration tests (`mod common;` in each file that uses one).
 // Every test binary that includes this module compiles all of it; none uses every helper.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::print_stdout, clippy::print_stderr)]
 
 pub mod agents;
 #[cfg(unix)]

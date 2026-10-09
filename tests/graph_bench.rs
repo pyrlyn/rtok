@@ -6,6 +6,8 @@
 //! `mise exec -- cargo test --release --test graph_bench -- --ignored --nocapture --test-threads=1`
 //! Ladybug (`graph-lbug`) and Grafeo (`graph-grafeo`) backends were removed (P39); SQLite only.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;

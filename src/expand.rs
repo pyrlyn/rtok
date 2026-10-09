@@ -186,15 +186,17 @@ pub(crate) fn render_lines(
     Ok(rendered)
 }
 
-/// Print the archived payload. `--lines a-b` is 1-based inclusive; `--grep` is a regex whose
+/// The bytes `rtok expand` writes. `--lines a-b` is 1-based inclusive; `--grep` is a regex whose
 /// hits come back `N:`-numbered (see [`filter_lines`]); `--context N` widens those hits.
+/// Raw archive bytes when no filter applies; otherwise the rendered text plus a trailing
+/// newline. Empty when a filter matches nothing.
 pub fn run(
     cfg: &Config,
     id: &str,
     lines: Option<&str>,
     grep: Option<&str>,
     context: usize,
-) -> Result<()> {
+) -> Result<Vec<u8>> {
     // Validate before fetch: fetching a live-zone pointer freezes it. A malformed
     // range must not mutate archive state even though no payload can be printed.
     if let Some(spec) = lines {
@@ -206,15 +208,16 @@ pub fn run(
     };
     let max_lines = cfg.expand.max_lines;
     if lines.is_none() && grep.is_none() && max_lines == 0 {
-        std::io::Write::write_all(&mut std::io::stdout(), &bytes)?;
-        return Ok(());
+        return Ok(bytes);
     }
     let text = String::from_utf8_lossy(&bytes);
     let rendered = render_lines(&text, id, lines, grep, context, max_lines)?;
-    if !rendered.is_empty() {
-        println!("{rendered}");
+    if rendered.is_empty() {
+        return Ok(Vec::new());
     }
-    Ok(())
+    let mut out = rendered.into_bytes();
+    out.push(b'\n');
+    Ok(out)
 }
 
 /// Strips one matching pair of surrounding quotes (`"a-b"` or `'a-b'`). A model that

@@ -8,6 +8,8 @@
 //! into help, man pages and completion scripts, and users never see plan ids (T409,
 //! `tests/no_plan_ids.rs`).
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod agents;
 mod agents_host;
 #[cfg(feature = "archive")]
@@ -213,6 +215,9 @@ enum Cmd {
 }
 
 pub fn run() -> Result<()> {
+    // Library code never writes the terminal. These hooks are the one stdout/stderr path.
+    crate::log::on_stdout(|text| print!("{text}"));
+    crate::log::on_stderr(|text| eprint!("{text}"));
     crate::store::install_migrate_spinner();
     // T225: `RUST_LOG` debug log on stderr, before clap so a parse failure is logged too.
     crate::log::init_stderr();

@@ -10,6 +10,8 @@
 //! whether a supervisor is up or not (D1); the `hook` service only keeps the optional resident
 //! `rtok hook --serve` up, which `rtok-hook` uses when it answers and bypasses when not (D32).
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};

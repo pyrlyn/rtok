@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 #![forbid(unsafe_code)]
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::process::ExitCode;
 

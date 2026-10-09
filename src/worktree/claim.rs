@@ -28,7 +28,9 @@ pub fn caller(store: Option<&Store>, flag: Option<&str>) -> Result<Option<AgentD
         Ok(Some(detail)) => Ok(Some(detail)),
         Ok(None) if !explicit => Ok(None),
         Err(_) if !explicit => {
-            eprintln!("warning: RTOK_AGENT_ID {raw} is not in the store; no agent bound");
+            crate::log::stderr_ln(&format!(
+                "warning: RTOK_AGENT_ID {raw} is not in the store; no agent bound"
+            ));
             Ok(None)
         }
         Ok(None) => bail!("--agent {raw}: unknown"),
@@ -61,7 +63,7 @@ pub fn remember(store: Option<&Store>, path: &Path, agent: &str, task: &str) {
     let path = crate::fs::canon(path);
     let saved = store.map(|s| s.claim_worktree(&path.to_string_lossy(), agent, task));
     if let Some(Err(e)) = saved {
-        eprintln!("warning: claim not stored: {e:#}");
+        crate::log::stderr_ln(&format!("warning: claim not stored: {e:#}"));
     }
 }
 
@@ -74,7 +76,7 @@ fn copy_symbol_index(store: Option<&Store>, cwd: &Path, dest: &Path) {
     let listed = match super::git::list(cwd) {
         Ok(listed) => listed,
         Err(e) => {
-            eprintln!("warning: symbol index not copied: {e:#}");
+            crate::log::stderr_ln(&format!("warning: symbol index not copied: {e:#}"));
             return;
         }
     };
@@ -87,7 +89,7 @@ fn copy_symbol_index(store: Option<&Store>, cwd: &Path, dest: &Path) {
         return;
     }
     if let Err(e) = store.copy_symbol_rows(&from, &to) {
-        eprintln!("warning: symbol index not copied: {e:#}");
+        crate::log::stderr_ln(&format!("warning: symbol index not copied: {e:#}"));
     }
 }
 
@@ -98,7 +100,7 @@ fn register_project(store: Option<&Store>, auto_add: bool, path: &Path, branch: 
         return;
     };
     if let Err(e) = store.auto_add_project(path, Origin::Worktree, branch) {
-        eprintln!("warning: project not registered: {e:#}");
+        crate::log::stderr_ln(&format!("warning: project not registered: {e:#}"));
     }
 }
 

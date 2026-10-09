@@ -17,6 +17,8 @@
 //! Live model spend (`RTOK_BENCH_LIVE` / `claude -p`) is separate — see `rtok bench`
 //! suite `graph` in `src/bench.rs`; this file is offline tool-output measurement.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

@@ -265,7 +265,7 @@ fn wait_until_not_running(procs: &dyn Procs, name: &str, timeout: Duration) -> b
 
 /// Print a restart warning and log it; restart problems never fail the command.
 fn warn(cfg: &Config, msg: &str) {
-    eprintln!("{}", crate::ui::style::warn(&format!("warning: {msg}")));
+    crate::log::stderr_ln(&crate::ui::style::warn(&format!("warning: {msg}")));
     crate::log::append(cfg, "warn", "agents", "restart", msg);
 }
 

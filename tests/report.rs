@@ -9,6 +9,8 @@
 //! (one tools-cause cache bust), 3 archive decisions (1 expanded). The empty-store case
 //! asserts the report says so rather than printing zeros.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

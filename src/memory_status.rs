@@ -13,9 +13,9 @@ use crate::model::{self, MemoryStatus};
 pub fn run(cfg: &Config, project: Option<&str>, since: Option<&str>, json: bool) -> Result<()> {
     let status = model::memory_status(cfg, project, since)?;
     if json {
-        println!("{}", serde_json::to_string_pretty(&status)?);
+        crate::log::stdout_ln(&serde_json::to_string_pretty(&status)?);
     } else {
-        print!("{}", format_table(&status));
+        crate::log::stdout(&format_table(&status));
     }
     Ok(())
 }

@@ -7,6 +7,8 @@
 //!
 //! A one-shot `tools/list` (the Check) is accepted without `initialize`.
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::io::{BufRead, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

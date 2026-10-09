@@ -7,8 +7,20 @@ use crate::config::Config;
 use crate::model;
 use anyhow::Result;
 use clap::ValueEnum;
-use std::io::{self, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
+
+/// The checklist terminal: the screen on stdout, the answer from stdin.
+struct Terminal;
+
+impl crate::doctor::checklist::Prompt for Terminal {
+    fn ask(&mut self, screen: &str) -> Option<String> {
+        print!("{screen}");
+        io::stdout().flush().ok()?;
+        let mut line = String::new();
+        (io::stdin().read_line(&mut line).ok()? > 0).then_some(line)
+    }
+}
 
 /// `--only` for `rtok doctor --fix` (D14: a `ValueEnum`); each is a `Problem::kind` of the check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -89,7 +101,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
                 only.iter().map(|c| c.kind()).collect()
             };
             // A terminal and no `--yes`: the user picks what goes. Pipes and CI keep the dry run.
-            let mut terminal = crate::doctor::checklist::Terminal;
+            let mut terminal = Terminal;
             let ask = (!yes && io::stdin().is_terminal() && io::stdout().is_terminal())
                 .then_some(&mut terminal as &mut dyn crate::doctor::checklist::Prompt);
             let (text, code) = crate::doctor::fix::run(&cfg, yes && !dry_run, agent, &kinds, ask);

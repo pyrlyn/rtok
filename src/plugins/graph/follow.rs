@@ -185,9 +185,9 @@ pub fn report(rt: &Runtime, root: &Path) {
         f.linked,
         f.dropped
     );
-    println!("{}", style::success_op("link", &line));
+    crate::log::stdout_ln(&style::success_op("link", &line));
     for stop in &f.stops {
-        println!("{}", style::warn(&stop.to_string()));
+        crate::log::stdout_ln(&style::warn(&stop.to_string()));
     }
 }
 

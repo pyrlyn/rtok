@@ -63,7 +63,7 @@ pub fn run(event: &str, stdin: impl Read, cfg: &Config) -> Result<Option<String>
         return Ok(Some(path.display().to_string()));
     }
     let note = remove(&payload, store.as_ref())?;
-    eprintln!("rtok: {}: {note}", payload.worktree_path);
+    crate::log::stderr_ln(&format!("rtok: {}: {note}", payload.worktree_path));
     Ok(None)
 }
 
@@ -163,7 +163,7 @@ fn remove(p: &Payload, store: Option<&Store>) -> Result<String> {
         Ok(removed) => {
             let released = store.map(|s| s.release_worktree_claim(&removed.path));
             if let Some(Err(e)) = released {
-                eprintln!("warning: claim not released: {e:#}");
+                crate::log::stderr_ln(&format!("warning: claim not released: {e:#}"));
             }
         }
         Err(_) => forget_caches(main, path),
@@ -194,6 +194,6 @@ fn forget_caches(main: &Path, worktree: &Path) {
     };
     let swept = clean::run(main, &[worktree.to_path_buf()], &policy, true);
     if let Err(e) = swept {
-        eprintln!("warning: caches not cleaned: {e:#}");
+        crate::log::stderr_ln(&format!("warning: caches not cleaned: {e:#}"));
     }
 }

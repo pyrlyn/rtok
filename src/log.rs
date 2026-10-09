@@ -17,6 +17,8 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
+pub use crate::stdio::{on_stderr, on_stdout, stderr, stderr_ln, stdout, stdout_ln};
+
 /// Whether `[log] level` lets this line through — checked before any I/O.
 pub fn enabled(cfg: &Config, level: &str) -> bool {
     rtok_log::enabled(&cfg.log.level, level)
@@ -58,11 +60,11 @@ pub fn record(
     }
 }
 
-/// Print and log the warnings a config load returned. Config itself does neither; `cli::run`
-/// calls this from the load hook.
+/// Log the warnings a config load returned, and hand the same line to the stderr surface.
+/// Config itself does neither; `cli::run` calls this from the load hook.
 pub fn emit_config_notes(cfg: &Config) {
     for note in &cfg.notes.0 {
-        eprintln!("rtok: {}", note.message);
+        stderr_ln(&format!("rtok: {}", note.message));
         crate::logfile::append(
             &cfg.log.path,
             cfg.log.max_bytes,

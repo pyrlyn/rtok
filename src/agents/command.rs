@@ -93,9 +93,9 @@ pub fn outdated(config_file: Option<&Path>, args: Outdated) -> Result<()> {
     };
     let rep = report(&cfg, &selection)?;
     if args.json {
-        println!("{}", serde_json::to_string(&rep)?);
+        crate::log::stdout_ln(&serde_json::to_string(&rep)?);
     } else {
-        print!("{}", print_human(&rep));
+        crate::log::stdout(&print_human(&rep));
     }
     if args.exit_code && !rep.outdated.is_empty() {
         std::process::exit(super::EXIT_OUTDATED);
@@ -123,12 +123,9 @@ pub fn update(
         None => installed_hosts(&cfg),
     };
     if hosts.is_empty() {
-        println!(
-            "{}",
-            style::info(
-                "nothing to update: rtok is not installed in any host (rtok agents install <host>)"
-            )
-        );
+        crate::log::stdout_ln(&style::info(
+            "nothing to update: rtok is not installed in any host (rtok agents install <host>)",
+        ));
         return Ok(());
     }
     let req = Request {
@@ -157,7 +154,7 @@ fn apply_hosts(cfg: &mut Config, req: &Request, no_restart: bool) -> Result<()> 
             super::restart::run(cfg, req, no_restart)
         })?
     };
-    print!("{out}");
+    crate::log::stdout(&out);
     // T279 step 3/6 "Failure": a Claude reinstall that removed the old plugin and then failed
     // to install the new one must not exit 0 like every other `claude` degrade — the host is
     // left with nothing. Printed first, same as `worktree gc`/`clean`'s own "print the table,
@@ -250,7 +247,10 @@ pub fn send(cfg: &Config, to: Option<String>, text: Option<String>, all_live: bo
     };
     for id in targets {
         let msg = store.send_message(from.as_deref(), &id, &text)?;
-        println!("sent #{msg} to {}", crate::store::short_agent_id(&id));
+        crate::log::stdout_ln(&format!(
+            "sent #{msg} to {}",
+            crate::store::short_agent_id(&id)
+        ));
     }
     Ok(())
 }
@@ -281,17 +281,17 @@ pub fn inbox(cfg: &Config, id: Option<String>, unread: bool, json: bool) -> Resu
                 v
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&framed)?);
+        crate::log::stdout_ln(&serde_json::to_string_pretty(&framed)?);
         return Ok(());
     }
     if rows.is_empty() {
-        println!("no messages");
+        crate::log::stdout_ln("no messages");
     }
     for (i, m) in rows.iter().enumerate() {
         if i > 0 {
-            println!();
+            crate::log::stdout_ln("");
         }
-        print!("{}", crate::render::agent_message_frame(m));
+        crate::log::stdout(&crate::render::agent_message_frame(m));
     }
     Ok(())
 }
