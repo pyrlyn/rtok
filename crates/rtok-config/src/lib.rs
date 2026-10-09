@@ -1236,7 +1236,7 @@ section! {
         backend: String = s("tags"),
         /// T329.9: how long one language-server wait (an initializing or still-indexing server)
         /// may take before the request falls back to tags.
-        lsp_timeout_ms: u32 = 10_000,
+        lsp_timeout_ms: u32 = 40_000,
         /// T329.9: `backend` for one language, keyed by language name (`go = "tags"`).
         backend_by_language: std::collections::HashMap<String, String> =
             std::collections::HashMap::new(),
@@ -2143,7 +2143,7 @@ bogus = true
     #[test]
     fn graph_auto_backend_keys() {
         let g = Config::default().plugins.graph;
-        assert_eq!((g.lsp_timeout_ms, g.backend_by_language.len()), (10_000, 0));
+        assert_eq!((g.lsp_timeout_ms, g.backend_by_language.len()), (40_000, 0));
         let toml = "[plugins.graph]\nbackend = \"auto\"\nlsp_timeout_ms = 500\n\
                     [plugins.graph.backend_by_language]\ngo = \"tags\"\n";
         let cfg = parse(toml).unwrap();

@@ -22,7 +22,7 @@ use super::cap;
 
 /// Wait cap for one server step, set from `[plugins.graph] lsp_timeout_ms` by the door in
 /// `graph::lsp_or_tags` (T329.9). A process-wide cell because the cached session outlives a call.
-static TIMEOUT_MS: AtomicU64 = AtomicU64::new(10_000);
+static TIMEOUT_MS: AtomicU64 = AtomicU64::new(40_000);
 
 pub(crate) fn set_timeout_ms(ms: u64) {
     TIMEOUT_MS.store(ms, Ordering::Relaxed);

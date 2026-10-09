@@ -92,7 +92,7 @@ skip otherwise.
 `backend = "auto"` (T329.9) is opt-in; the default stays `tags`. It chooses per project and language
 instead of once for the process. A project whose language has a server (the table above) is asked
 first and the answer is headed `(lsp)`. A language with no server gives the tags answer headed
-`(tags)`; a server that is missing, not ready, slower than `lsp_timeout_ms` (default 10000) or dead
+`(tags)`; a server that is missing, not ready, slower than `lsp_timeout_ms` (default 40000) or dead
 mid-session gives the tags answer headed `(tags; lsp: <reason>)`, so a crash is a notice, not an
 error. Every tags answer records a `tags.symbol | tags.callers | tags.impact | tags.outline |
 tags.explore` measurement row beside the `lsp.*` ones, so `rtok stats` shows how often each mode

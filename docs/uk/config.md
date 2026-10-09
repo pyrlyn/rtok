@@ -550,7 +550,7 @@ body_lines = 40                       # symbol(): скільки рядків к
 auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
 auto_add_projects = true               # T329.6: реєструвати каталог у реєстрі проєктів, коли там стартує сесія з хуками, створюється або приєднується worktree через `rtok worktree` (під назвою його гілки) або виконується виклик graph MCP; false = реєстр змінюється лише через сторінку й CLI
 backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
-lsp_timeout_ms = 10000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
+lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
 backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 watch      = "off"                    # off | notify: фонове переіндексування всередині `rtok mcp` (P8d)
 auto_link_references = true           # T329.8: йти за посиланнями в маніфестах (Cargo path, npm file:/link:, go replace, Python path, submodules) в інші каталоги, реєструвати й автоматично зв'язувати їх
@@ -766,7 +766,7 @@ default_model = ""
 
 `backend_by_language` перевизначає `backend` для однієї мови, яку визначає файл-маркер проєкту: `rust`,
 `c`, `typescript`, `dart`, `go`, `python`, `javascript` (`go = "tags"` лишає Go на індексі, поки решта
-працює в `auto`). `lsp_timeout_ms` (типово 10000) — скільки може тривати одне очікування сервера, перш ніж
+працює в `auto`). `lsp_timeout_ms` (типово 40000) — скільки може тривати одне очікування сервера, перш ніж
 запит відкотиться на tags. Покрокове налаштування для Rust (rust-analyzer) і Dart (Dart SDK) та формат
 відповіді `auto`: `docs/lsp.md`.
 
