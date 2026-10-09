@@ -33,8 +33,10 @@ to `bounded::MAX_BYTES`. `formatters::compress` reuses the same lexer
 programs to `[script]` in `rules/default.toml` — `cargo build && cargo test` or
 `cd x && cargo test` keep using `cargo`'s own formatter/rule.
 T386 peels `mise exec`/`mise x` when the command is after `--` (or `-c`), and
-`just -c`/`--command`. `mise run` / `just <recipe>` use an echoed line (`[task] $ …`,
-a recipe line) with that same peel. No visible inner command stays on argv[0].
+`just -c`/`--command`. T454 peels the same way, at most four times: a leading
+`FOO=1`, `uv run`/`uvx`/`npx`/`pnpm exec|dlx`/`yarn dlx`/`poetry|pipenv|hatch run`,
+`python|python3|py -m`, and `cmd /c`. `mise run` / `just <recipe>` use an echoed line
+(`[task] $ …`, a recipe line) with that same peel. No visible inner command stays on argv[0].
 
 **Checks**: `plan.md` T3.1–T3.6. Golden tests live in `tests/cmd_golden/*.{in,out}`. Each `.in`
 carries an `argv:` / `exit:` / `min_saving: <percent>` header before `---` (T238); the golden
