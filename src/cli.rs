@@ -3078,7 +3078,7 @@ fn env_var(k: &str) -> Option<String> {
     std::env::var(k).ok()
 }
 
-/// T287: the caller's own rtok agent id — `RTOK_AGENT_ID` resolved, else (T454) the host
+/// T287: the caller's own rtok agent id — `RTOK_AGENT_ID` resolved, else (T473) the host
 /// session's agent, `None` when neither names one (the user at a terminal). A set but
 /// unresolvable `RTOK_AGENT_ID` is an error, never a silent "user".
 fn caller_agent(store: &crate::store::Store) -> Result<Option<String>> {

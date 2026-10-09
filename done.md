@@ -9336,7 +9336,7 @@ Check: `cargo nextest run -E 'test(/worktree::gc::/) | binary(worktree)'`, `TRYC
 
 Result (2026-10-08, Claude Code / claude-opus-5-5): `Entry::done` marks a merged, clean worktree whose branch has commits outside the base. `remove` opens a foreign or unknown lock on it and says so in the note; `gc` removes it past a live agent or a foreign lock once idle past `--idle` (`Verdict::Finished`), and keeps the old reason inside the window. A fresh branch under a foreign lock is still refused. On the live repository, `gc --idle 1h` now plans to remove 7 of the orchestrator's 8 merged worktrees (the eighth was touched within the hour) and keeps every open PR's. Not fixed here: the desktop app leaves `RTOK_AGENT_ID` unset and MCP unlinked, so an agent still cannot name itself.
 
-### T454. Agent identity in Claude desktop sessions through `CLAUDE_CODE_SESSION_ID`
+### T473. Agent identity in Claude desktop sessions through `CLAUDE_CODE_SESSION_ID`
 
 Desktop-app (Code tab) sessions often have no rtok agent identity: `~/.claude/session-env/<session>/` stays empty, so `RTOK_AGENT_ID` is unset in the agent's Bash tool, and MCP `whoami`/`worktree_*` answer "not linked to an agent session". `rtok worktree remove`, `agents whoami/status/inbox` from an agent's shell cannot name the caller. T453 only works around it for finished worktrees.
 

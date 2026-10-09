@@ -22,7 +22,7 @@ use std::path::Path;
 /// What an rtok agent session puts into its own shell: `RTOK_AGENT_ID` arrives through
 /// `CLAUDE_ENV_FILE` (T283). Inherited by the binary under test, it turns the "not inside an
 /// agent session" cases into the caller's own inbox, and a `hook` case could append to the
-/// live session's env file (T406). `CLAUDE_CODE_SESSION_ID` names the caller too (T454).
+/// live session's env file (T406). `CLAUDE_CODE_SESSION_ID` names the caller too (T473).
 const SESSION_ENV: [&str; 4] = [
     "RTOK_AGENT_ID",
     "RTOK_CONFIG",

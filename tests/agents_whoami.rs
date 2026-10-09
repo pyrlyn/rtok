@@ -66,7 +66,7 @@ fn whoami(home: &Path, agent_id: Option<&str>, json: bool) -> std::process::Outp
     whoami_in(home, agent_id, None, json)
 }
 
-/// [`whoami`] from a shell that may carry Claude Code's `CLAUDE_CODE_SESSION_ID` (T454); the
+/// [`whoami`] from a shell that may carry Claude Code's `CLAUDE_CODE_SESSION_ID` (T473); the
 /// developer's own session's value is always cleared first.
 fn whoami_in(
     home: &Path,
@@ -168,7 +168,7 @@ fn session_start_writes_claude_env_file_once_across_two_runs() {
     let _ = fs::remove_dir_all(&home);
 }
 
-/// T454: Claude's desktop app often never delivers the startup `SessionStart`, so no
+/// T473: Claude's desktop app often never delivers the startup `SessionStart`, so no
 /// `RTOK_AGENT_ID` reaches the shell; the first tool call's hook still registers the agent, and
 /// the session id Claude Code puts into every Bash command names it.
 #[test]
@@ -176,7 +176,7 @@ fn whoami_finds_the_agent_by_claude_code_session_id_without_session_start() {
     let home = tmp("session-id");
     let payload = serde_json::json!({
         "hook_event_name": "PostToolUse",
-        "session_id": "t454-desktop",
+        "session_id": "t473-desktop",
         "cwd": home,
         "tool_name": "Bash",
         "tool_input": {"command": "true"},
@@ -192,7 +192,7 @@ fn whoami_finds_the_agent_by_claude_code_session_id_without_session_start() {
         .assert()
         .success();
 
-    let out = whoami_in(&home, None, Some("t454-desktop"), true);
+    let out = whoami_in(&home, None, Some("t473-desktop"), true);
     assert!(
         out.status.success(),
         "{}",
@@ -200,9 +200,9 @@ fn whoami_finds_the_agent_by_claude_code_session_id_without_session_start() {
     );
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["host"], "claude");
-    assert_eq!(v["host_session_id"], "t454-desktop");
+    assert_eq!(v["host_session_id"], "t473-desktop");
 
-    let out = whoami_in(&home, None, Some("t454-no-such-session"), false);
+    let out = whoami_in(&home, None, Some("t473-no-such-session"), false);
     assert_eq!(out.status.code(), Some(1));
     let _ = fs::remove_dir_all(&home);
 }

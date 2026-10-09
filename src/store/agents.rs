@@ -241,7 +241,7 @@ impl Store {
         Ok(row_id)
     }
 
-    /// The main (non-sub-agent) row of one host session, without touching it — T454's lookup
+    /// The main (non-sub-agent) row of one host session, without touching it — T473's lookup
     /// for a caller that knows the host session id but must not create a row for it.
     pub fn main_agent(&self, host_id: i32, host_session: &str) -> Result<Option<String>> {
         let mut conn = self.lock()?;

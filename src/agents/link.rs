@@ -10,7 +10,7 @@
 //! confirms it per host:
 //!
 //! 1. the host's own session-id env var in this process ([`SESSION_ENV`]); for Claude Code
-//!    only a row its hooks already wrote, and nothing cached until one exists (T454);
+//!    only a row its hooks already wrote, and nothing cached until one exists (T473);
 //! 2. the nearest common host ancestor pid: a hook records the pids above its own process on
 //!    the agent row (T283.3), and this process's own parent chain is matched against them.
 //!    Hooks and MCP children both descend from the host, usually the hook through a shell
@@ -41,7 +41,7 @@ use crate::store::{AgentRow, Store};
 /// Grok Build sets it at MCP spawn by first-party code (`research.md` §26). Claude Code
 /// documents `CLAUDE_CODE_SESSION_ID` for Bash, hook and stdio MCP subprocesses, but an MCP
 /// server keeps the id it was spawned with, which goes stale on `/clear` and may be the startup
-/// id on `--continue` (T454), so a Claude MCP only links a row its hooks already wrote.
+/// id on `--continue` (T473), so a Claude MCP only links a row its hooks already wrote.
 const SESSION_ENV: &[(&str, &str, bool)] = &[
     ("grok", "GROK_SESSION_ID", true),
     ("claude", "CLAUDE_CODE_SESSION_ID", false),
@@ -208,7 +208,7 @@ pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>
     Ok(if chained { Link::Outside } else { Link::None })
 }
 
-/// T454: the agent an `rtok` command run from an agent's own shell acts for, as a raw id:
+/// T473: the agent an `rtok` command run from an agent's own shell acts for, as a raw id:
 /// `RTOK_AGENT_ID` (T283's env file), else the main agent of the host session a
 /// [`SESSION_ENV`] var names. Claude Code's desktop app often never delivers the plugin's
 /// startup `SessionStart` that writes `RTOK_AGENT_ID` (`research.md` §26), while
