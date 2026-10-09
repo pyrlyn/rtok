@@ -55,8 +55,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.5 | todo | P2 | 4 | 30% | |
-| T330.5.3 | todo | P2 | 3 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T335 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
@@ -1054,20 +1052,6 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - Permission-denied and timeout folders are reported, not fatal; exit code 1 when anything planned was not removed.
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
-
-### T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
-
-Part of T330. The review-class kinds with their keeps (worktrees through gc's verdict and `worktree::remove::detach`), `sessions` as class `explicit` (`stale_session_days` default 30, time only; only with `--kind sessions`, only on hosts whose §22.1 sessions cell documents the whole session unit and its index, recorded per host here; never the host's memory, index or store files), `snapshots` as `never` (size only), no token kind (D36), the `[agents.junk]` table (`stale_session_days`, `keep_logs_days`, `stale_worktree_days`, `crash_dump_min_age_days`, `temp_min_age_hours`, `exclude`, `extra`), `--session-days`, docs in `docs/config.md` (en, ru, uk). Depends on T330.4 (T338 closed: D36; T340 and T341 decided).
-
-Check: the T330 "New kinds" and "Session threshold" fixtures; invalid values rejected naming the key; `just check`.
-
-Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card stays the spec. T330.5.4 was split from T330.5.1 later the same day. It closes when all four are done.
-
-### T330.5.3. Junk: `stale-worktrees` through `rtok worktree gc`'s verdict
-
-Part of T330.5. Decided (T341 and T340, creator 2026-10-09), so it is no longer blocked. `stale_worktree_days` (default 14, the idle window passed to gc's policy for junk) and the `stale-worktrees` kind (review): `list` shows exactly what `rtok worktree gc` would remove (`gc::decide`, T153: merged, clean, idle at least `stale_worktree_days`, lock absent or own, agent not live) and everything else with gc's keep reason; `clear --include review --yes` removes those worktrees through the same per-record `worktree::remove::detach`, one record at a time, and deletes the merged local branch as gc does. No blanket `git worktree prune`; orphans and stale records are reported, never removed. The scope is `stale-worktrees` only: no `rtok.db` rows (T340, already delivered by store retention).
-
-Check: a finished-session worktree idle 20 days that `rtok worktree gc` would remove is listed and removed per record with its merged branch deleted; the `stale-worktrees` list equals the gc dry-run set; worktrees with uncommitted changes, unpushed or unmerged commits, a lock owned by another, or a live agent are listed with the reason and never removed; no `git worktree prune` runs; an orphan is only reported; `just check`.
 
 ### T330.6. Junk: item breakdown, `doctor` line, web card
 

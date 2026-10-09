@@ -27,6 +27,7 @@ use super::junk_kinds;
 use super::junk_map::{Role, Roots, specs};
 use super::junk_review;
 use super::junk_sessions;
+use super::junk_worktrees;
 use super::{Agent, HOSTS, host, present};
 use crate::bytes::human_bytes;
 use crate::config::Config;
@@ -370,7 +371,7 @@ fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// The junk kinds in the order the T330 tables list them.
-const KINDS: [&str; 12] = [
+const KINDS: [&str; 13] = [
     "cache",
     "temp",
     "logs",
@@ -383,7 +384,19 @@ const KINDS: [&str; 12] = [
     "index",
     "crash-dumps",
     "sessions",
+    "stale-worktrees",
 ];
+
+/// The `stale-worktrees` items that belong to agent row `name`.
+fn stale_for<'a>(
+    stale: &'a [(&'static str, Item)],
+    name: &'a str,
+) -> impl Iterator<Item = Item> + 'a {
+    stale
+        .iter()
+        .filter(move |(n, _)| *n == name)
+        .map(|(_, i)| i.clone())
+}
 
 /// What `list` says about the session threshold in use (T330 "Old sessions: time only").
 fn session_note(days: u32) -> String {
@@ -500,10 +513,9 @@ fn symlink_target(path: &Path) -> Option<PathBuf> {
 fn host_rows(
     cfg: &Config,
     roots: &Roots,
-    all: bool,
+    opts: &Options,
     limit: Duration,
     cx: &Ctx,
-    worktrees: &[(&'static str, PathBuf)],
 ) -> (Vec<AgentJunk>, BTreeMap<PathBuf, u64>) {
     let mut rows: Vec<AgentJunk> = Vec::new();
     let mut sized: HashMap<PathBuf, Usage> = HashMap::new();
@@ -513,7 +525,7 @@ fn host_rows(
     for &id in HOSTS {
         let Some(a) = host(id) else { continue };
         let installed = a.variants().iter().any(present);
-        if !installed && !all {
+        if !installed && !opts.all {
             continue;
         }
         let deadline = Instant::now() + limit;
@@ -603,12 +615,14 @@ fn host_rows(
         if !folders.is_empty() {
             notes.extend(junk_sessions::retention(roots, a.id()));
         }
-        let own: Vec<PathBuf> = worktrees
+        let own: Vec<PathBuf> = opts
+            .worktrees
             .iter()
             .filter(|(h, _)| *h == a.id())
             .map(|(_, p)| p.clone())
             .collect();
         items.extend(junk_kinds::build_items(&own, cx, limit));
+        items.extend(stale_for(&opts.stale_worktrees, a.id()));
         junk_review::exclude(&mut items, &junk.exclude, &cfg.home, roots.home(), limit);
         let items = junk_cache::drop_nested(items);
         let kinds = kind_rows(&items);
@@ -668,6 +682,9 @@ pub struct Options {
     /// The agent worktrees `build` looks in, as `(host, path)` ([`junk_kinds::agent_worktrees`]).
     /// Empty unless the caller lists them: finding them runs git.
     pub worktrees: Vec<(&'static str, PathBuf)>,
+    /// The `stale-worktrees` items (T330.5.3) with the agent row each belongs to; `rtok` for a
+    /// worktree no host is known to have made. Empty unless the caller judges them: it runs git.
+    pub stale_worktrees: Vec<(&'static str, Item)>,
 }
 
 impl Default for Options {
@@ -678,6 +695,7 @@ impl Default for Options {
             cwd: std::env::current_dir().unwrap_or_default(),
             now: SystemTime::now(),
             worktrees: Vec::new(),
+            stale_worktrees: Vec::new(),
         }
     }
 }
@@ -686,14 +704,24 @@ impl Default for Options {
 /// host's folders (T330.2) and the cache each may clear (T330.3.1). `clear` with filters
 /// plans from this report (`junk_clear`, T330.4).
 pub fn report(cfg: &Config) -> Report {
-    let opts = Options::default();
-    let worktrees = junk_kinds::agent_worktrees(cfg, &opts.cwd);
-    report_with(
-        cfg,
-        &Roots::from_env(),
-        Options { worktrees, ..opts },
-        AGENT_SCAN_LIMIT,
-    )
+    report_in_repo(cfg, false)
+}
+
+/// [`report`] over the repository the command runs in, for `all` hosts or only the installed
+/// ones: the agent worktrees `build` looks in and the `stale-worktrees` gc would remove.
+pub fn report_in_repo(cfg: &Config, all: bool) -> Report {
+    let opts = Options {
+        all,
+        ..Options::default()
+    };
+    let found = junk_worktrees::worktrees(cfg, &opts.cwd);
+    let stale = junk_worktrees::items(cfg, &opts.cwd, &found, opts.now, AGENT_SCAN_LIMIT);
+    let options = Options {
+        worktrees: junk_kinds::in_hosts(found),
+        stale_worktrees: stale,
+        ..opts
+    };
+    report_with(cfg, &Roots::from_env(), options, AGENT_SCAN_LIMIT)
 }
 
 pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) -> Report {
@@ -734,6 +762,7 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         class: "review",
         ..i
     }));
+    cache.extend(stale_for(&opts.stale_worktrees, "rtok"));
     junk_review::exclude(&mut cache, &junk.exclude, &cfg.home, roots.home(), limit);
     let cache = junk_cache::drop_nested(cache);
     kinds.extend(kind_rows(&cache));
@@ -750,7 +779,7 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         items: cache,
         notes: Vec::new(),
     }];
-    let (hosts, mut by_key) = host_rows(cfg, roots, opts.all, limit, &cx, &opts.worktrees);
+    let (hosts, mut by_key) = host_rows(cfg, roots, &opts, limit, &cx);
     agents.extend(hosts);
     for f in &agents[0].folders {
         by_key.insert(PathBuf::from(&f.path), f.size_bytes);
