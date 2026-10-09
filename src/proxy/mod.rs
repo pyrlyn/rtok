@@ -275,7 +275,7 @@ pub async fn serve(cfg: &Config) -> Result<()> {
     let state = Arc::new(ProxyState::new(cfg)?);
     // Background, own connection: housekeeping must neither delay the listener nor die on a
     // contended store (T75, T352).
-    Store::spawn_retention(cfg, "proxy");
+    crate::store::spawn_retention(cfg, "proxy");
     // A plain thread, not a task: a flush is blocking SQLite plus a blocking `flock`, and on
     // this runtime it stalled whichever worker also served live requests.
     crate::otel::export::spawn_ticker(cfg);
@@ -1033,7 +1033,7 @@ fn finish(
         );
     };
     if let Err(e) = state.store.set_call_ms(r.call_id, elapsed_ms(start)) {
-        log_err("set_call_ms", e);
+        log_err("set_call_ms", e.into());
     }
     if response_total_bytes > response_body.len() {
         // The true size, since call_io's recorded response_bytes reflects only what was
@@ -1058,7 +1058,7 @@ fn finish(
         state.inline_cap,
         state.archive_dir.as_deref(),
     ) {
-        log_err("call_io", e);
+        log_err("call_io", e.into());
     }
     // Fill the cache before the usage rows: a visible usage row then implies a warm cache.
     let sc = &state.cfg.plugins.proxy.semantic_cache;

@@ -5,7 +5,7 @@
 //! T285: `worktree_claims` — the agent (T282) each worktree is bound to. The git lock reason
 //! is the source of truth; these rows are the fast join `rtok worktree list` falls back on.
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 
 use super::Store;
@@ -36,7 +36,7 @@ impl Store {
     }
 
     /// `rtok worktree remove` (T286): the open claim on `path`, if any, is released.
-    /// SQL equality misses a `\\?\` prefix and Windows case, so the match is [`crate::fs::same_path`].
+    /// SQL equality misses a `\\?\` prefix and Windows case, so the match is [`crate::same_path`].
     pub fn release_worktree_claim(&self, path: &str) -> Result<()> {
         let mut conn = self.lock()?;
         let open: Vec<String> = worktree_claims::table
@@ -46,7 +46,7 @@ impl Store {
         let want = std::path::Path::new(path);
         let hit: Vec<String> = open
             .into_iter()
-            .filter(|stored| crate::fs::same_path(std::path::Path::new(stored), want))
+            .filter(|stored| crate::same_path(std::path::Path::new(stored), want))
             .collect();
         if hit.is_empty() {
             return Ok(());

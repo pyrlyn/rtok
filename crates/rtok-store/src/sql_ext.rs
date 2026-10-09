@@ -215,7 +215,7 @@ impl Query for AutoVacuumMode {
 
 impl RunQueryDsl<SqliteConnection> for AutoVacuumMode {}
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 pub(crate) fn pragma_query_only_on(conn: &mut SqliteConnection) -> QueryResult<()> {
     exec_pragma(conn, "PRAGMA query_only = ON")
 }

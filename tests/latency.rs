@@ -179,8 +179,6 @@ fn hook_dispatches_a_5mb_post_tool_body_under_50ms() {
 #[test]
 fn hook_returns_despite_exclusive_lock() {
     const HOLD: Duration = Duration::from_millis(2000);
-    use diesel::Connection;
-    use diesel::connection::SimpleConnection;
 
     let tmp = std::env::temp_dir().join(format!("rtok-latency-locked-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
@@ -203,18 +201,7 @@ fn hook_returns_despite_exclusive_lock() {
     let before = calls();
     assert!(before > 0, "the warm hook must record its call");
 
-    let (held, held_ack) = std::sync::mpsc::channel();
-    let url = db.to_str().unwrap().to_string();
-    let holder = std::thread::spawn(move || {
-        let mut conn = diesel::sqlite::SqliteConnection::establish(&url).unwrap();
-        conn.batch_execute("PRAGMA busy_timeout = 1000; PRAGMA journal_mode = WAL;")
-            .unwrap();
-        conn.batch_execute("BEGIN EXCLUSIVE;").unwrap();
-        held.send(()).unwrap();
-        std::thread::sleep(HOLD);
-        conn.batch_execute("COMMIT;").unwrap();
-    });
-    held_ack.recv().unwrap();
+    let holder = rtok::store::hold_write_lock(&db, rtok::store::HeldWrite::Exclusive, HOLD);
 
     let start = std::time::Instant::now();
     let mut out = Vec::new();

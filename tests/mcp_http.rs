@@ -11,8 +11,6 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use diesel::prelude::*;
-use rtok::store::schema::{calls, tokens};
 use serde_json::{Value, json};
 
 const TOKEN: &str = "t401-test-token-0123456789";
@@ -66,24 +64,8 @@ impl Sandbox {
         String,
         i64,
     )> {
-        let mut conn = SqliteConnection::establish(self.db().to_str().unwrap()).unwrap();
-        calls::table
-            .inner_join(tokens::table)
-            .filter(calls::kind.eq("mcp_call"))
-            .select((
-                calls::plugin,
-                calls::surface,
-                calls::kind,
-                calls::name,
-                calls::ok,
-                tokens::plugin,
-                tokens::phase,
-                tokens::source,
-                tokens::n_tokens,
-            ))
-            .order((calls::name, tokens::phase, tokens::plugin))
-            .load(&mut conn)
-            .unwrap()
+        let store = rtok::store::Store::open(&self.db()).unwrap();
+        store.mcp_call_token_rows().unwrap()
     }
 }
 

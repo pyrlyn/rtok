@@ -185,6 +185,7 @@ impl Runtime {
         }
         self.store
             .insert_measurement_once(&self.session, m, self.once.as_deref())
+            .map_err(Into::into)
     }
 
     /// Queue every later [`Runtime::record`] instead of writing it. Each write is a lock
@@ -265,6 +266,7 @@ impl Runtime {
     ) -> Result<()> {
         self.store
             .insert_tokens(call_id, plugin, phase, source, tokens)
+            .map_err(Into::into)
     }
 
     /// Never returns `Err` to a plugin (fail open): [`crate::log::record`] is the funnel —
@@ -319,11 +321,15 @@ impl Host for Runtime {
     }
 
     fn plugin_state_set(&self, plugin: &str, key: &str, value: &str) -> Result<()> {
-        self.store.kv_set(&plugin_state_key(plugin, key), value)
+        self.store
+            .kv_set(&plugin_state_key(plugin, key), value)
+            .map_err(Into::into)
     }
 
     fn plugin_state_get(&self, plugin: &str, key: &str) -> Result<Option<String>> {
-        self.store.kv_get(&plugin_state_key(plugin, key))
+        self.store
+            .kv_get(&plugin_state_key(plugin, key))
+            .map_err(Into::into)
     }
 
     fn record_call(&self, surface: &str, kind: &str, name: Option<&str>) -> Result<i32> {
@@ -394,15 +400,19 @@ impl Archive for Runtime {
     fn put_archive(&self, body: &[u8]) -> Result<String> {
         self.store
             .put_archive(&self.session, body, &self.config.core.archive_dir)
+            .map_err(Into::into)
     }
 
     fn get_archive(&self, id: &str) -> Result<Option<Vec<u8>>> {
         self.store
             .get_archive(id, Some(&self.config.core.archive_dir))
+            .map_err(Into::into)
     }
 
     fn archive_decision(&self, tool_use_id: &str) -> Result<Option<ArchiveDecision>> {
-        self.store.archive_decision(&self.session, tool_use_id)
+        self.store
+            .archive_decision(&self.session, tool_use_id)
+            .map_err(Into::into)
     }
 
     fn put_archive_decision(
@@ -413,15 +423,17 @@ impl Archive for Runtime {
     ) -> Result<()> {
         self.store
             .put_archive_decision(tool_use_id, archive_id, &self.session, pointer)
+            .map_err(Into::into)
     }
 
     fn mark_expanded(&self, archive_id: &str) -> Result<usize> {
-        self.store.mark_expanded(archive_id)
+        self.store.mark_expanded(archive_id).map_err(Into::into)
     }
 
     fn archive_size(&self, id: &str) -> Result<Option<u64>> {
         self.store
             .archive_size(id, Some(&self.config.core.archive_dir))
+            .map_err(Into::into)
     }
 
     fn archive_in_session(
@@ -440,12 +452,15 @@ impl Archive for Runtime {
     }
 
     fn session_live_archives(&self, session: &str) -> Result<Vec<(String, String, i64)>> {
-        self.store.session_live_archives(session)
+        self.store
+            .session_live_archives(session)
+            .map_err(Into::into)
     }
 
     fn put_archive_for(&self, body: &[u8], context: Option<&str>) -> Result<String> {
         self.store
             .put_archive_for(&self.session, body, &self.config.core.archive_dir, context)
+            .map_err(Into::into)
     }
 }
 
@@ -458,8 +473,8 @@ impl Notes for Runtime {
         body: &str,
     ) -> Result<i32> {
         let (id, _) = self.store.upsert_note(project, kind, title, body)?;
-        self.store
-            .upsert_note_embedding(id, title, body, &self.config.plugins.memory.embed)?;
+        let embed = crate::store::embed_settings(&self.config.plugins.memory.embed);
+        self.store.upsert_note_embedding(id, title, body, &embed)?;
         Ok(id)
     }
 
@@ -477,7 +492,7 @@ impl Notes for Runtime {
     }
 
     fn latest_note(&self, kind: &str) -> Result<Option<String>> {
-        self.store.latest_note(kind)
+        self.store.latest_note(kind).map_err(Into::into)
     }
 
     fn latest_note_for_project(
@@ -485,32 +500,38 @@ impl Notes for Runtime {
         project: Option<&str>,
         kind_prefix: &str,
     ) -> Result<Option<String>> {
-        self.store.latest_note_for_project(project, kind_prefix)
+        self.store
+            .latest_note_for_project(project, kind_prefix)
+            .map_err(Into::into)
     }
 
     fn latest_session_note(&self, project: Option<&str>) -> Result<Option<String>> {
-        self.store.latest_session_note(project)
+        self.store.latest_session_note(project).map_err(Into::into)
     }
 
     fn list_note_titles(&self, project: Option<&str>, limit: u32) -> Result<Vec<(i32, String)>> {
-        self.store.list_note_titles(project, limit)
+        self.store
+            .list_note_titles(project, limit)
+            .map_err(Into::into)
     }
 
     fn get_note_body(&self, id: i32) -> Result<Option<String>> {
-        self.store.get_note_body(id)
+        self.store.get_note_body(id).map_err(Into::into)
     }
 
     fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
-        self.store.search_notes(query, limit)
+        self.store.search_notes(query, limit).map_err(Into::into)
     }
 
     fn search_notes_hybrid_stored(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        let embed = crate::store::embed_settings(&self.config.plugins.memory.embed);
         self.store
-            .search_notes_hybrid_stored(query, limit, &self.config.plugins.memory.embed)
+            .search_notes_hybrid_stored(query, limit, &embed)
+            .map_err(Into::into)
     }
 
     fn set_note_files(&self, id: i32, paths: &[String]) -> Result<()> {
-        self.store.set_note_files(id, paths)
+        self.store.set_note_files(id, paths).map_err(Into::into)
     }
 
     fn notes_for_files(
@@ -519,15 +540,17 @@ impl Notes for Runtime {
         paths: &[String],
         limit: u32,
     ) -> Result<Vec<NoteHit>> {
-        self.store.notes_for_files(project, paths, limit)
+        self.store
+            .notes_for_files(project, paths, limit)
+            .map_err(Into::into)
     }
 
     fn touch_note(&self, id: i32) -> Result<()> {
-        self.store.touch_note(id)
+        self.store.touch_note(id).map_err(Into::into)
     }
 
     fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
-        self.store.insert_observation(obs)
+        self.store.insert_observation(obs).map_err(Into::into)
     }
 
     fn search_observations(
@@ -536,7 +559,9 @@ impl Notes for Runtime {
         query: &str,
         limit: u32,
     ) -> Result<Vec<ObsHit>> {
-        self.store.search_observations(project, query, limit)
+        self.store
+            .search_observations(project, query, limit)
+            .map_err(Into::into)
     }
 
     fn observations_for_files(
@@ -545,15 +570,19 @@ impl Notes for Runtime {
         paths: &[String],
         limit: u32,
     ) -> Result<Vec<ObsHit>> {
-        self.store.observations_for_files(project, paths, limit)
+        self.store
+            .observations_for_files(project, paths, limit)
+            .map_err(Into::into)
     }
 
     fn recent_observations(&self, session_id: &str, limit: u32) -> Result<Vec<ObsHit>> {
-        self.store.recent_observations(session_id, limit)
+        self.store
+            .recent_observations(session_id, limit)
+            .map_err(Into::into)
     }
 
     fn observation_narrative(&self, id: i32) -> Result<Option<String>> {
-        self.store.observation_narrative(id)
+        self.store.observation_narrative(id).map_err(Into::into)
     }
 }
 
@@ -561,58 +590,74 @@ impl ReadCache for Runtime {
     fn put_read_cache(&self, path: &str, sha256: &str, archive_id: Option<&str>) -> Result<()> {
         self.store
             .put_read_cache(&self.session, path, sha256, archive_id)
+            .map_err(Into::into)
     }
 
     fn get_read_cache(&self, path: &str) -> Result<Option<(Option<String>, i64)>> {
-        self.store.get_read_cache(&self.session, path)
+        self.store
+            .get_read_cache(&self.session, path)
+            .map_err(Into::into)
     }
 
     fn clear_read_cache(&self, path: &str) -> Result<()> {
-        self.store.clear_read_cache(&self.session, path)
+        self.store
+            .clear_read_cache(&self.session, path)
+            .map_err(Into::into)
     }
 
     fn read_cache_keys(&self) -> Result<Vec<String>> {
-        self.store.read_cache_keys(&self.session)
+        self.store
+            .read_cache_keys(&self.session)
+            .map_err(Into::into)
     }
 }
 
 impl Ledger for Runtime {
     fn last_measurement_ref(&self, plugin: &str, kind: &str) -> Result<Option<String>> {
-        self.store.last_measurement_ref(&self.session, plugin, kind)
+        self.store
+            .last_measurement_ref(&self.session, plugin, kind)
+            .map_err(Into::into)
     }
 
     fn recent_hook_inputs(&self, limit: i64) -> Result<Vec<String>> {
-        self.store.recent_hook_inputs(&self.session, limit)
+        self.store
+            .recent_hook_inputs(&self.session, limit)
+            .map_err(Into::into)
     }
 
     fn recent_hook_inputs_for_event(&self, event: &str, limit: i64) -> Result<Vec<String>> {
         self.store
             .recent_hook_inputs_for_event(&self.session, event, limit)
+            .map_err(Into::into)
     }
 
     fn calls_since(&self, ts: i64) -> Result<i64> {
-        self.store.calls_since(&self.session, ts)
+        self.store
+            .calls_since(&self.session, ts)
+            .map_err(Into::into)
     }
 }
 
 impl Symbols for Runtime {
     fn symbol_count(&self, root: &str) -> Result<i64> {
-        self.store.symbol_count(root)
+        self.store.symbol_count(root).map_err(Into::into)
     }
 
     fn symbol_stat(&self, root: &str, path: &str) -> Result<Option<(String, i64, i64)>> {
-        self.store.symbol_stat(root, path)
+        self.store.symbol_stat(root, path).map_err(Into::into)
     }
 
     fn symbol_stats(
         &self,
         root: &str,
     ) -> Result<std::collections::HashMap<String, (String, i64, i64)>> {
-        self.store.symbol_stats(root)
+        self.store.symbol_stats(root).map_err(Into::into)
     }
 
     fn touch_symbols(&self, root: &str, path: &str, mtime: i64, size: i64) -> Result<()> {
-        self.store.touch_symbols(root, path, mtime, size)
+        self.store
+            .touch_symbols(root, path, mtime, size)
+            .map_err(Into::into)
     }
 
     fn replace_symbols(
@@ -623,7 +668,9 @@ impl Symbols for Runtime {
         stat: (i64, i64),
         rows: &[rtok_plugin_sdk::SymbolRow],
     ) -> Result<usize> {
-        self.store.replace_symbols(root, path, file_sha, stat, rows)
+        self.store
+            .replace_symbols(root, path, file_sha, stat, rows)
+            .map_err(Into::into)
     }
 
     fn replace_symbol_files(
@@ -631,39 +678,45 @@ impl Symbols for Runtime {
         root: &str,
         files: &rtok_plugin_sdk::SymbolFileBatch,
     ) -> Result<usize> {
-        self.store.replace_symbol_files(root, files)
+        self.store
+            .replace_symbol_files(root, files)
+            .map_err(Into::into)
     }
 
     fn delete_symbols_missing(&self, root: &str, keep: &HashSet<String>) -> Result<usize> {
-        self.store.delete_symbols_missing(root, keep)
+        self.store
+            .delete_symbols_missing(root, keep)
+            .map_err(Into::into)
     }
 
     fn mark_symbols_stale(&self, abs_path: &str) -> Result<()> {
-        self.store.mark_symbols_stale(abs_path)
+        self.store.mark_symbols_stale(abs_path).map_err(Into::into)
     }
 
     fn extractor_fingerprint(&self, root: &str) -> Result<Option<String>> {
-        self.store.extractor_fingerprint(root)
+        self.store.extractor_fingerprint(root).map_err(Into::into)
     }
 
     fn set_extractor_fingerprint(&self, root: &str, fp: &str) -> Result<()> {
-        self.store.set_extractor_fingerprint(root, fp)
+        self.store
+            .set_extractor_fingerprint(root, fp)
+            .map_err(Into::into)
     }
 
     fn symbol_defs(&self, root: &str, name: &str) -> Result<Vec<(String, String, i32, i32)>> {
-        self.store.symbol_defs(root, name)
+        self.store.symbol_defs(root, name).map_err(Into::into)
     }
 
     fn symbol_file_defs(&self, root: &str, path: &str) -> Result<Vec<(String, String, i32, i32)>> {
-        self.store.symbol_file_defs(root, path)
+        self.store.symbol_file_defs(root, path).map_err(Into::into)
     }
 
     fn symbol_ref_groups(&self, root: &str, name: &str) -> Result<Vec<(String, String, i64, i32)>> {
-        self.store.symbol_ref_groups(root, name)
+        self.store.symbol_ref_groups(root, name).map_err(Into::into)
     }
 
     fn symbol_callees(&self, root: &str, name: &str) -> Result<Vec<(String, i32, String, i32)>> {
-        self.store.symbol_callees(root, name)
+        self.store.symbol_callees(root, name).map_err(Into::into)
     }
 
     fn symbol_impact(
@@ -672,79 +725,97 @@ impl Symbols for Runtime {
         name: &str,
         depth: u32,
     ) -> Result<Vec<(u32, String, String)>> {
-        self.store.symbol_impact(root, name, depth)
+        self.store
+            .symbol_impact(root, name, depth)
+            .map_err(Into::into)
     }
 
     fn symbol_dead_candidates(&self, root: &str) -> Result<Vec<(String, String, String, i32)>> {
-        self.store.symbol_dead_candidates(root)
+        self.store.symbol_dead_candidates(root).map_err(Into::into)
     }
 
     fn symbol_referenced_names(&self, root: &str, names: &[String]) -> Result<HashSet<String>> {
-        self.store.symbol_referenced_names(root, names)
+        self.store
+            .symbol_referenced_names(root, names)
+            .map_err(Into::into)
     }
 
     fn symbol_name_prefix(&self, root: &str, prefix: &str, limit: i64) -> Result<Vec<String>> {
-        self.store.symbol_name_prefix(root, prefix, limit)
+        self.store
+            .symbol_name_prefix(root, prefix, limit)
+            .map_err(Into::into)
     }
 
     fn symbol_paths(&self, root: &str, from: &str, to: &str, depth: u32) -> Result<Vec<String>> {
-        self.store.symbol_paths(root, from, to, depth)
+        self.store
+            .symbol_paths(root, from, to, depth)
+            .map_err(Into::into)
     }
 
     fn symbol_file_count(&self, root: &str) -> Result<i64> {
-        self.store.symbol_file_count(root)
+        self.store.symbol_file_count(root).map_err(Into::into)
     }
 
     fn symbol_pending(&self, root: &str, root_path: &std::path::Path) -> Result<Vec<String>> {
-        self.store.symbol_pending(root, root_path)
+        self.store
+            .symbol_pending(root, root_path)
+            .map_err(Into::into)
     }
 
     fn symbol_indexed_at(&self, root: &str) -> Result<Option<i64>> {
-        self.store.symbol_indexed_at(root)
+        self.store.symbol_indexed_at(root).map_err(Into::into)
     }
 
     fn touch_symbol_indexed_at(&self, root: &str, ts: i64) -> Result<()> {
-        self.store.touch_symbol_indexed_at(root, ts)
+        self.store
+            .touch_symbol_indexed_at(root, ts)
+            .map_err(Into::into)
     }
 
     fn symbol_imports(&self, root: &str, path: &str) -> Result<Vec<(String, i32)>> {
-        self.store.symbol_imports(root, path)
+        self.store.symbol_imports(root, path).map_err(Into::into)
     }
 
     fn symbol_imported_defs(&self, root: &str, name: &str) -> Result<Vec<(String, String)>> {
-        self.store.symbol_imported_defs(root, name)
+        self.store
+            .symbol_imported_defs(root, name)
+            .map_err(Into::into)
     }
 
     fn symbol_name_freq(&self, root: &str, name: &str) -> Result<(i64, i64)> {
-        self.store.symbol_name_freq(root, name)
+        self.store.symbol_name_freq(root, name).map_err(Into::into)
     }
 
     fn rebuild_symbol_idf(&self, root: &str) -> Result<()> {
-        self.store.rebuild_symbol_idf(root)
+        self.store.rebuild_symbol_idf(root).map_err(Into::into)
     }
 
     fn symbol_importers(&self, root: &str, module: &str) -> Result<Vec<(String, i32)>> {
-        self.store.symbol_importers(root, module)
+        self.store
+            .symbol_importers(root, module)
+            .map_err(Into::into)
     }
 
     fn symbol_import_follow(&self, root: &str, name: &str) -> Result<Vec<(String, String)>> {
-        self.store.symbol_import_follow(root, name)
+        self.store
+            .symbol_import_follow(root, name)
+            .map_err(Into::into)
     }
 
     fn symbol_top_refs(&self, root: &str, limit: i64) -> Result<Vec<(String, i64, String, i32)>> {
-        self.store.symbol_top_refs(root, limit)
+        self.store.symbol_top_refs(root, limit).map_err(Into::into)
     }
 
     fn symbol_file_scan(&self, root: &str) -> Result<Vec<(String, String, bool, i64)>> {
-        self.store.symbol_file_scan(root)
+        self.store.symbol_file_scan(root).map_err(Into::into)
     }
 
     fn file_rank_get(&self, root: &str) -> Result<Option<String>> {
-        self.store.file_rank_get(root)
+        self.store.file_rank_get(root).map_err(Into::into)
     }
 
     fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
-        self.store.file_rank_put(root, graph)
+        self.store.file_rank_put(root, graph).map_err(Into::into)
     }
 
     fn symbol_span(
@@ -755,7 +826,9 @@ impl Symbols for Runtime {
         kind: &str,
         line: i32,
     ) -> Result<Option<rtok_plugin_sdk::SymbolSpan>> {
-        self.store.symbol_span(root, path, name, kind, line)
+        self.store
+            .symbol_span(root, path, name, kind, line)
+            .map_err(Into::into)
     }
 
     fn symbol_fts(
@@ -764,7 +837,9 @@ impl Symbols for Runtime {
         query: &str,
         limit: i64,
     ) -> Result<Vec<(String, String, String, i32)>> {
-        self.store.symbol_fts(root, query, limit)
+        self.store
+            .symbol_fts(root, query, limit)
+            .map_err(Into::into)
     }
 }
 

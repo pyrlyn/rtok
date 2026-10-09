@@ -1,0 +1,37 @@
+[package]
+name = "rtok-store"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "rtok's SQLite store: Diesel models, migrations, and Store"
+
+[features]
+# Methods and the open counter the rtok test suite calls. `cfg(test)` items in this
+# crate are not visible to a dependent crate's tests.
+test-util = []
+
+[dependencies]
+anyhow = { workspace = true } # query context and bail!; StoreError wraps it
+rtok-plugin-sdk = { version = "0.0.1", path = "../rtok-plugin-sdk" } # Measurement, NoteHit, ArchiveDecision
+diesel = { workspace = true } # D13 typed models
+diesel_migrations = { version = "2.2", features = ["sqlite"] } # embedded migrations + version table
+libsqlite3-sys = { version = "0.38", features = ["bundled"] } # FTS5 in the SQLite bundle
+serde = { workspace = true }
+serde_json = { workspace = true } # hook session fields and the idf cache
+sha2 = { workspace = true } # call_io archive checksums
+dunce = { workspace = true } # canonicalize without Windows UNC prefixes
+regex = { workspace = true } # request-body noise the store strips before saving
+schemars = { workspace = true } # JSON Schema on project Origin and LinkKind
+humantime = { workspace = true } # [agents] idle parsing
+uuid = { workspace = true } # agent ids
+thiserror = "2.0" # the store's public error enum
+
+[dev-dependencies]
+proptest = "1" # property test that request-body cleaning is idempotent
+rstest = { workspace = true }
+
+[lints]
+workspace = true

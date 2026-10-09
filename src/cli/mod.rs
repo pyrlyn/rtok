@@ -213,6 +213,7 @@ enum Cmd {
 }
 
 pub fn run() -> Result<()> {
+    crate::store::install_migrate_spinner();
     // T225: `RUST_LOG` debug log on stderr, before clap so a parse failure is logged too.
     crate::log::init_stderr();
     // `[ui]` takes effect for every command. Config load calls this hook instead of

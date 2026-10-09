@@ -117,7 +117,7 @@ pub fn serve_blocking(cfg: &Config, addr: &str) -> Result<()> {
     // The HTTP surface gets its own allow-list through the same filter as stdio's `tools`.
     cfg.mcp.tools = cfg.mcp.http_tools.clone();
     let server = Arc::new(http_server(&cfg)?);
-    crate::store::Store::spawn_retention(&cfg, "mcp");
+    crate::store::spawn_retention(&cfg, "mcp");
     crate::otel::export::spawn_ticker(&cfg);
     let app = router(server, token, transport_config(addr, public.as_ref()));
     let rt = tokio::runtime::Builder::new_multi_thread()

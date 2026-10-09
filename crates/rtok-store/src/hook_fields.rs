@@ -6,7 +6,7 @@
 //! `hook_sessions`; `call_io.request_json` keeps only the event's own fields. Readers splice
 //! the two objects back together as text, so a read never reparses either side.
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use serde_json::{Map, Value};

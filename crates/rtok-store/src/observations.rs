@@ -4,11 +4,11 @@
 
 //! T454: mechanical observations. FTS5 `MATCH` stays in `sql_ext`; the row writes are Diesel.
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 
 use super::schema::{observation_files, observations};
-use super::{Store, sql_ext, substr};
+use super::{Store, sql_ext, substr, unix_now};
 use rtok_plugin_sdk::{NewObservation, ObsHit};
 
 /// A repeated hook inside this many seconds does not insert a second row.
@@ -19,7 +19,7 @@ impl Store {
     /// stored this narrative in the last [`DEDUP_SECS`] seconds.
     pub fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
         let mut conn = self.lock()?;
-        let now = i64::try_from(rtok_log::now()).unwrap_or(i64::MAX);
+        let now = i64::try_from(unix_now()).unwrap_or(i64::MAX);
         let existing: Option<i32> = sql_ext::RecentObservationDup {
             session_id: obs.session_id.to_string(),
             dedup: obs.dedup.to_string(),

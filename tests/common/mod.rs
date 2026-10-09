@@ -153,21 +153,7 @@ impl Drop for HookShell {
 /// T75/T178: another process's writer on the store at `db` — `BEGIN IMMEDIATE` held for `hold`.
 /// Returns once the lock is taken; join the handle to wait for its release.
 pub fn hold_store_writer(db: &Path, hold: Duration) -> std::thread::JoinHandle<()> {
-    use diesel::Connection;
-    use diesel::connection::SimpleConnection;
-    let (held, held_ack) = std::sync::mpsc::channel();
-    let url = db.to_str().unwrap().to_string();
-    let holder = std::thread::spawn(move || {
-        let mut conn = diesel::sqlite::SqliteConnection::establish(&url).unwrap();
-        conn.batch_execute("PRAGMA busy_timeout = 1000; PRAGMA journal_mode = WAL;")
-            .unwrap();
-        conn.batch_execute("BEGIN IMMEDIATE;").unwrap();
-        held.send(()).unwrap();
-        std::thread::sleep(hold);
-        conn.batch_execute("COMMIT;").unwrap();
-    });
-    held_ack.recv().unwrap();
-    holder
+    rtok::store::hold_write_lock(db, rtok::store::HeldWrite::Immediate, hold)
 }
 
 /// `README.md` plus every `docs/**/*.md`, relative to `root`. One walk for the docs lints

@@ -377,9 +377,21 @@ fn assert_rank_gates(cx: &Runtime, root: &Path, key: &str) {
     let (mut base_rec, mut new_rec, mut label_n) = (0usize, 0usize, 0usize);
     let (mut impact_new, mut impact_base) = (0usize, 0usize);
     for t in &labels {
-        let cross = t.defs.iter().any(|p| p.starts_with("crates/"))
-            && t.defs.iter().any(|p| !p.starts_with("crates/"));
-        assert!(cross, "{} is not defined in two crates", t.name);
+        // `src/` is the rtok package. `crates/<name>/` is another package. A name
+        // the ranker should disambiguate is defined in at least two of those.
+        let crates: HashSet<&str> = t
+            .defs
+            .iter()
+            .map(|p| match p.strip_prefix("crates/") {
+                Some(rest) => rest.split('/').next().unwrap_or(rest),
+                None => "rtok",
+            })
+            .collect();
+        assert!(
+            crates.len() >= 2,
+            "{} is not defined in two crates ({crates:?})",
+            t.name
+        );
         let all: HashSet<String> = cx
             .store
             .symbol_ref_groups(key, &t.name)

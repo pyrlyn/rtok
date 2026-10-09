@@ -9,17 +9,39 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 use sha2::{Digest, Sha256};
 
 use super::schema::{note_embeddings, notes};
 use super::substr;
 
-use crate::config::MemoryEmbed;
 use rtok_plugin_sdk::NoteHit;
 
 use super::{Store, hex_sha256};
+
+/// `[plugins.memory.embed]` as plain values. The host config converts into this; the store
+/// does not read the config crate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EmbedSettings {
+    pub enabled: bool,
+    pub provider: String,
+    pub model: String,
+    pub dimensions: u32,
+    pub hybrid: bool,
+}
+
+impl Default for EmbedSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: "local".into(),
+            model: "all-MiniLM-L6-v2".into(),
+            dimensions: 384,
+            hybrid: true,
+        }
+    }
+}
 
 const RRF_K: f32 = 60.0;
 
@@ -31,11 +53,11 @@ pub(crate) fn note_embed_text(title: &str, body: &str) -> String {
 /// changes: every older vector then reads as stale and [`Store::embed_stale`] redoes it.
 const SCHEME: &str = "hash2";
 
-fn model_key(cfg: &MemoryEmbed) -> String {
+fn model_key(cfg: &EmbedSettings) -> String {
     format!("{}+{SCHEME}", cfg.model)
 }
 
-fn dims(cfg: &MemoryEmbed) -> i32 {
+fn dims(cfg: &EmbedSettings) -> i32 {
     i32::try_from(cfg.dimensions).unwrap_or(384)
 }
 
@@ -96,7 +118,7 @@ impl Store {
         note_id: i32,
         title: &str,
         body: &str,
-        cfg: &MemoryEmbed,
+        cfg: &EmbedSettings,
     ) -> Result<()> {
         if !cfg.enabled {
             return Ok(());
@@ -125,7 +147,7 @@ impl Store {
     /// Embed every note whose vector is missing or was made under another model, [`SCHEME`]
     /// or `dimensions`. Only `mem_save` with `[embed]` on wrote vectors, so notes saved before
     /// the flag was turned on, or before `dimensions` changed, never reached the KNN leg.
-    fn embed_stale(&self, cfg: &MemoryEmbed) -> Result<()> {
+    fn embed_stale(&self, cfg: &EmbedSettings) -> Result<()> {
         if !cfg.enabled {
             return Ok(());
         }
@@ -151,14 +173,19 @@ impl Store {
         &self,
         query: &str,
         limit: u32,
-        cfg: &MemoryEmbed,
+        cfg: &EmbedSettings,
     ) -> Result<Vec<NoteHit>> {
         self.embed_stale(cfg)?;
         self.search_notes_knn(query, limit, cfg)
     }
 
     /// Cosine KNN over vectors already in `note_embeddings`. Does not call [`Store::embed_stale`].
-    fn search_notes_knn(&self, query: &str, limit: u32, cfg: &MemoryEmbed) -> Result<Vec<NoteHit>> {
+    fn search_notes_knn(
+        &self,
+        query: &str,
+        limit: u32,
+        cfg: &EmbedSettings,
+    ) -> Result<Vec<NoteHit>> {
         let qv = hash_embed(query, cfg.dimensions);
         let mut conn = self.lock()?;
         // Only vectors of the query's own model, scheme and `dimensions` are scored: `cosine`
@@ -197,7 +224,7 @@ impl Store {
         &self,
         query: &str,
         limit: u32,
-        cfg: &MemoryEmbed,
+        cfg: &EmbedSettings,
     ) -> Result<Vec<NoteHit>> {
         let fts = self.search_notes(query, limit.saturating_mul(2).max(limit))?;
         let knn = self.search_notes_embed(query, limit.saturating_mul(2).max(limit), cfg)?;
@@ -205,7 +232,7 @@ impl Store {
     }
 
     /// How many rows `note_embeddings` holds. The hook uses this to skip KNN when nothing is stored.
-    pub(crate) fn note_embedding_count(&self) -> Result<i64> {
+    pub fn note_embedding_count(&self) -> Result<i64> {
         use diesel::dsl::count_star;
         note_embeddings::table
             .select(count_star())
@@ -221,7 +248,7 @@ impl Store {
         &self,
         query: &str,
         limit: u32,
-        cfg: &MemoryEmbed,
+        cfg: &EmbedSettings,
     ) -> Result<Vec<NoteHit>> {
         if self.note_embedding_count()? == 0 {
             return self.search_notes(query, limit);
@@ -265,7 +292,6 @@ pub fn rrf_merge_lists(lists: &[&[NoteHit]], limit: u32) -> Vec<NoteHit> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::MemoryEmbed;
 
     /// T373: equal RRF scores sort by note id ascending, identical across runs.
     #[test]
@@ -316,10 +342,10 @@ mod tests {
 
     #[test]
     fn hook_async_text_is_closer_than_unrelated() {
-        let cfg = MemoryEmbed {
+        let cfg = EmbedSettings {
             enabled: true,
             dimensions: 384,
-            ..MemoryEmbed::default()
+            ..EmbedSettings::default()
         };
         let query = "why not use an async database library for hooks";
         let qv = hash_embed(query, cfg.dimensions);
@@ -350,12 +376,12 @@ mod tests {
     #[test]
     fn stale_and_missing_vectors_are_embedded_before_knn() {
         let s = Store::open_in_memory().unwrap();
-        let wide = MemoryEmbed {
+        let wide = EmbedSettings {
             enabled: true,
             dimensions: 384,
-            ..MemoryEmbed::default()
+            ..EmbedSettings::default()
         };
-        let narrow = MemoryEmbed {
+        let narrow = EmbedSettings {
             dimensions: 8,
             ..wide.clone()
         };
@@ -371,10 +397,10 @@ mod tests {
     #[test]
     fn a_passing_mention_of_hook_is_not_boosted() {
         let s = Store::open_in_memory().unwrap();
-        let cfg = MemoryEmbed {
+        let cfg = EmbedSettings {
             enabled: true,
             dimensions: 384,
-            ..MemoryEmbed::default()
+            ..EmbedSettings::default()
         };
         for (title, body) in [
             ("aa", "hook"),
@@ -416,10 +442,10 @@ mod tests {
     #[test]
     fn stored_hybrid_returns_the_fts_list_when_the_table_is_empty() {
         let s = Store::open_in_memory().unwrap();
-        let cfg = MemoryEmbed {
+        let cfg = EmbedSettings {
             enabled: true,
             hybrid: true,
-            ..MemoryEmbed::default()
+            ..EmbedSettings::default()
         };
         s.insert_note(None, "note", "walrus", "the walrus journal lives here")
             .unwrap();
@@ -440,11 +466,11 @@ mod tests {
     #[test]
     fn stored_hybrid_hits_a_stored_vector_and_does_not_write() {
         let s = Store::open_in_memory().unwrap();
-        let cfg = MemoryEmbed {
+        let cfg = EmbedSettings {
             enabled: true,
             dimensions: 384,
             hybrid: true,
-            ..MemoryEmbed::default()
+            ..EmbedSettings::default()
         };
         let planted_title = "p29-gate-arctic-tern";
         let planted_body = "Hooks must exit in ≤10 ms fail-open; async ORM rejected — Diesel stays sync on the hook path (D13).";
@@ -471,7 +497,7 @@ mod tests {
             "FTS must miss the planted note: {fts:?}"
         );
         let before = embedding_rows(&s);
-        let narrow = MemoryEmbed {
+        let narrow = EmbedSettings {
             dimensions: 8,
             ..cfg.clone()
         };

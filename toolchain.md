@@ -139,6 +139,7 @@ Project programs and direct packages from the manifests.
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
 | similar | local | https://crates.io/crates/similar | Rust dependency |
 | subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
+| thiserror | local | https://crates.io/crates/thiserror | `rtok-store`'s public error enum |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |
 | toml_edit | local | https://crates.io/crates/toml_edit | Rust dependency |
 | trash | local | https://crates.io/crates/trash | T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin |

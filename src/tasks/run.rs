@@ -148,7 +148,9 @@ impl Project {
             .filter_map(|t| t.id.path().get(depth).copied())
             .max()
             .unwrap_or(0);
-        store.seed_task_counter(&self.key, parent, max)
+        store
+            .seed_task_counter(&self.key, parent, max)
+            .map_err(Into::into)
     }
 
     /// The task, or an error naming the id.

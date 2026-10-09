@@ -62,8 +62,8 @@ reading commands render the same values.
 | `src/lib.rs` | crate root; declares the modules below | — |
 | `src/config.rs` | `Config::load()`, defaults, `[plugins.<id>]`, `CATALOGUE` | T0.2 |
 | `src/config/layers.rs`, `validate.rs`, `config/default.toml` | figment providers (D14); `rtok config show/validate/set` (see `docs/config.md`) | P12 |
-| `src/store/` + `migrations/` | Diesel models; `Store::open`; `insert_call`/`tokens`/`log`; `insert_measurement` | T0.3, P13 |
-| `src/store/symbols.rs` | The `graph` symbol index over SQLite (Ladybug/Grafeo backends removed, P39) | T8.10; P39 |
+| `crates/rtok-store/` + `crates/rtok-store/migrations/` | Diesel models; `Store::open`; `insert_call`/`tokens`/`log`; `insert_measurement`. `src/store` re-exports the crate | T0.3, P13 |
+| `crates/rtok-store/src/symbols.rs` | The `graph` symbol index over SQLite (Ladybug/Grafeo backends removed, P39) | T8.10; P39 |
 | `src/testutil.rs`, `tests/common/` | test-only: a fresh temp dir and a `Config`/`Runtime` confined to it; the nearest-rank p95 the latency gates share; `agents::real_config` seeds the invoking user's own host configs into a throwaway home and answers `None` under `CI`, so the checks that read them are local-only and skip everywhere else | T34.2, T34.3, T78 |
 | `src/plugin.rs` | host `Runtime`: opens the store, estimates tokens, records measurements. The contract types are in `crates/rtok-plugin-sdk` (§4) | T0.4, D25 |
 | `src/plugins/mod.rs` | feature-gated module list, `all()`, `Registry` | T0.4 |
@@ -156,9 +156,9 @@ third-party plugins.
 ## 7. Data
 
 One SQLite file, WAL mode, opened per invocation (hooks are short-lived processes; SQLite
-handles the concurrency). Migrations are `migrations/NNNN_<slug>/up.sql`, embedded with
-`include_str!`, applied once each and recorded in `schema_migrations`. Editing an applied
-migration is forbidden; add the next directory.
+handles the concurrency). Migrations are `crates/rtok-store/migrations/NNNN_<slug>/up.sql`,
+embedded by the store crate, applied once each and recorded in `schema_migrations`. Editing
+an applied migration is forbidden; add the next directory.
 
 | Table | Written by | Read by |
 |-------|-----------|---------|
@@ -207,6 +207,7 @@ under 5 %.
 ## 10. Testing strategy
 
 - Unit tests next to the code (`cargo test`); every task in `plan.md` has one machine Check.
+- `tests/deps.rs` asserts heavy-dep ownership. Today: only `rtok-store` depends on `diesel`.
 - Fixture-driven: hook payloads in `tests/fixtures/hooks/`, golden filter cases in
   `tests/cmd_golden/`, per-language outline fixtures for `read`.
 - Latency harness (`tests/latency.rs`, T2.2) asserts p95 < 10 ms for a hook round trip.

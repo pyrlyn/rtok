@@ -5,7 +5,7 @@
 //! T16.2 (D19): what the OpenTelemetry exporter reads — per-stream watermarks and the rows
 //! past them. A second `impl Store`; `src/otel/` never sees SQL.
 
-use anyhow::Result;
+use crate::Result;
 use diesel::dsl::{count_star, min};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
@@ -365,7 +365,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin::Measurement;
+    use rtok_plugin_sdk::Measurement;
 
     #[test]
     fn marks_start_at_zero_and_upsert() {

@@ -8,7 +8,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
+use crate::Result;
 use diesel::prelude::*;
 
 use super::Store;

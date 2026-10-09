@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::store::Store;
 
 fn store(cfg: &Config) -> Result<Store> {
-    Store::open(&cfg.core.db_path)
+    Store::open(&cfg.core.db_path).map_err(Into::into)
 }
 
 pub fn seed(cfg: &Config, project: &Project) -> Result<u32> {
