@@ -447,6 +447,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     ("memory pin", "flags a note row to lead recall (T69.1)"),
     ("memory unpin", "drops the recall lead flag (T69.1)"),
+    (
+        "memory history",
+        "prints previous title and body of one note; recall and mem_get stay on the current body",
+    ),
     ("memory revise", "replaces and retires note rows (T69.1)"),
     (
         "memory history",
