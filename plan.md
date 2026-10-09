@@ -44,7 +44,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.9 | todo | P2 | 4 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.11 | todo | P2 | 3 | 0% | |
 | T329.14 | todo | P2 | 4 | 0% | |
@@ -612,7 +611,7 @@ Backends are chosen per project and per language, not once per process: in a sco
 
 **Which mode answered.** Every result says which mode answered for each project (page: a small LSP / tree-sitter / text tag next to the project badge; JSON: `backend` per project; text output: one header line). `Measurement` rows keep `kind = "lsp.*"` for LSP and gain `tags.*` and `text.*` kinds, so `rtok stats` shows how often each mode is used.
 
-**Config.** `[plugins.graph] backend = "auto" | "lsp" | "tags" | "text"` (default `tags`), `lsp_timeout_ms = 10000`, and per-language overrides (`[plugins.graph.backend_by_language] go = "tags"`), documented in `docs/config.md` and `docs/lsp.md` (whose "Without the server" section already describes the T376 fallback).
+**Config.** `[plugins.graph] backend = "auto" | "lsp" | "tags" | "text"` (default `tags`), `lsp_timeout_ms = 40000`, and per-language overrides (`[plugins.graph.backend_by_language] go = "tags"`), documented in `docs/config.md` and `docs/lsp.md` (whose "Without the server" section already describes the T376 fallback).
 
 #### 6b. Capability cache: check once; requests never re-probe; the health check re-checks failed records
 
@@ -819,12 +818,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Diff: changing a function signature in B and running `rtok graph diff --from HEAD` from A reports the change and lists A's affected call sites; the working tree is untouched by building the old side; a rename is reported as a rename; an unknown ref errors clearly; MCP `graph_diff` returns a capped summary with a paging id.
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
-
-### T329.9. Graph backend `auto` (opt-in): LSP first, tree-sitter second, chosen per project and language
-
-T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, default `tags`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's behaviour (`tags` byte-identical, `lsp` = the T376 fallback to tags). Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 is decided: `tags` stays the default and `auto` is opt-in. Depends on T329.4.
-
-Check: under `backend = "auto"`, with the server on `PATH` the answer is tagged LSP, without it (MCP restarted) tree-sitter, a scope mixing both labels each project; the default `tags` answers stay byte-identical (`graph_contract.rs`); `backend = "lsp"` with no server falls back to tags with the `(tags; lsp: <reason>)` header; a crash mid-session falls back with a notice; `just check`.
 
 ### T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 

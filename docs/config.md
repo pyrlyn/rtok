@@ -549,7 +549,9 @@ map_rank   = "refs"                   # SessionStart map order: refs = reference
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI
-backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
+backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
+lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
+backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 watch      = "off"                    # off | notify: background re-index inside `rtok mcp` (P8d)
 auto_link_references = true           # T329.8: follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 reference_depth = 3                   # T329.8: reference levels followed from the project (A -> B is 1); reaching it is shown and logged
@@ -754,9 +756,17 @@ the flag is visible in `rtok config show --sources` but has no loader.
 
 ### Graph backends (`[plugins.graph]`)
 
-`backend = "lsp"` routes `symbol` / `callers` / `impact` / `outline` / `explore` through a
-language server from `PATH` instead of the tags index. Setup walkthrough for
-Rust (rust-analyzer) and Dart (Dart SDK): `docs/lsp.md`.
+`backend = "tags"` (default) answers from the tree-sitter index. `"lsp"` routes `symbol` / `callers` /
+`impact` / `outline` / `explore` through a language server from `PATH` and gives the tags answer when
+the server cannot answer. `"auto"` chooses per project and language: the server when the project's
+language has one installed, tags otherwise, and every answer says which mode spoke. `text` arrives
+with T329.10 and is refused until then.
+
+`backend_by_language` overrides `backend` for one language, named by the project's marker file:
+`rust`, `c`, `typescript`, `dart`, `go`, `python`, `javascript` (`go = "tags"` keeps Go on the index
+while the rest use `auto`). `lsp_timeout_ms` (default 40000) is how long one server wait may take
+before the request falls back to tags. Setup walkthrough for Rust (rust-analyzer) and Dart (Dart SDK),
+and the `auto` answer format: `docs/lsp.md`.
 
 ### Terminal output (`[ui]`)
 

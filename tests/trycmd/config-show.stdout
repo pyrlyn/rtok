@@ -116,6 +116,7 @@ plugins.graph.enabled = true
 plugins.graph.exclude = []
 plugins.graph.impact_tokens = 1500
 plugins.graph.include = []
+plugins.graph.lsp_timeout_ms = 40000
 plugins.graph.map_rank = refs
 plugins.graph.map_tokens = 0
 plugins.graph.max_auto_projects = 20

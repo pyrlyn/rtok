@@ -14,12 +14,14 @@ use anyhow::{Result, bail};
 
 use rtok_plugin_sdk::{Class, Ctx};
 
+use super::Mode;
 use super::{
     DeadRow, ExploreParts, Filter, Hits, Tag, TagsExplore, ambiguous_banner, assemble_explore,
     blast, callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous,
     format_affected, git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots,
-    index, index_for, is_test_path, lsp, lsp_backend, outline_in, projects, rel_of,
+    index, index_for, is_test_path, lsp, lsp_none_answer, mode_of, outline_in, projects, rel_of,
     reverse_call_chain, stale_banner, symbol_filtered, tests_json, via_of, with_stale,
+    without_mode_line,
 };
 use crate::store::Store;
 
@@ -99,6 +101,68 @@ fn lsp_note(scope: &[Member]) -> String {
     )
 }
 
+/// How a scope of several projects is answered (T329.9).
+enum Plan {
+    Tags,
+    /// `backend = "lsp"`: the server answers the first project only (T376).
+    LspFirst,
+    /// `auto` with a server installed for some project: each project asks for itself.
+    PerProject,
+}
+
+fn plan(cx: &Ctx, scope: &[Member]) -> Plan {
+    if scope
+        .iter()
+        .any(|m| mode_of(cx, &m.root) == Mode::Auto && lsp::usable(&m.root))
+    {
+        Plan::PerProject
+    } else if mode_of(cx, &scope[0].root) == Mode::Lsp {
+        Plan::LspFirst
+    } else {
+        Plan::Tags
+    }
+}
+
+/// `auto` over a scope the tags index answers whole keeps the linked traversal, so its mode is
+/// a line per project instead of a header on each part.
+fn tags_modes(cx: &Ctx, scope: &[Member]) -> String {
+    scope
+        .iter()
+        .filter(|m| mode_of(cx, &m.root) == Mode::Auto)
+        .map(|m| format!("[{}] (tags)\n", m.name))
+        .collect()
+}
+
+/// Each project answers through its own door, so one project's server and another's tags index
+/// speak in the same answer, each part labelled and headed with the mode that gave it. A project
+/// with nothing to say is left out unless nobody has anything. Links are not walked: a server
+/// sees its own workspace, so a caller in a linked project is that project's own answer.
+fn per_project(
+    cx: &Ctx,
+    scope: &[Member],
+    ask: impl Fn(&Member) -> Result<String>,
+) -> Result<String> {
+    let (done, notes) = fan_out(scope, |m| {
+        walkable(m)?;
+        ask(m)
+    })?;
+    let mut said: Vec<_> = done
+        .iter()
+        .filter(|(_, text)| !lsp_none_answer(without_mode_line(text)))
+        .collect();
+    if said.is_empty() {
+        said = done.iter().take(1).collect();
+    }
+    let mut body = String::new();
+    for (m, text) in said {
+        body.push_str(&format!("{}{text}", label(m)));
+        if !text.ends_with('\n') {
+            body.push('\n');
+        }
+    }
+    capped(cx, &notes, body)
+}
+
 /// The notes and banners that head an answer count against its one cap, so linking projects
 /// never grows a reply past `max_tokens` (T329.5).
 fn capped(cx: &Ctx, head: &str, body: String) -> Result<String> {
@@ -162,15 +226,20 @@ pub fn symbol_id(cx: &Ctx, scope: &[Member], id: &str) -> Result<String> {
 }
 
 pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
-    let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {
         walkable(one)?;
         return symbol_filtered(cx, &one.root, name, filter);
     }
-    if lsp_pinned {
-        walkable(&scope[0])?;
-        let text = lsp::symbol(cx, &scope[0].root, name, filter)?;
-        return Ok(text + &lsp_note(scope));
+    match plan(cx, scope) {
+        Plan::PerProject => {
+            return per_project(cx, scope, |m| symbol_filtered(cx, &m.root, name, filter));
+        }
+        Plan::LspFirst => {
+            walkable(&scope[0])?;
+            let text = lsp::symbol(cx, &scope[0].root, name, filter)?;
+            return Ok(text + &lsp_note(scope));
+        }
+        Plan::Tags => {}
     }
     let (done, notes) = fan_out(scope, |m| {
         walkable(m)?;
@@ -188,7 +257,7 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
         };
         Ok((rows, callees))
     })?;
-    let head = banners(cx, &done, notes)?;
+    let head = tags_modes(cx, scope) + &banners(cx, &done, notes)?;
     let found: Vec<_> = done
         .iter()
         .filter(|(_, (rows, _))| !rows.is_empty())
@@ -216,15 +285,20 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
 }
 
 pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result<String> {
-    let lsp_pinned = lsp_backend(cx);
     if let [one] = scope {
         walkable(one)?;
         return callers_filtered(cx, &one.root, name, filter);
     }
-    if lsp_pinned {
-        walkable(&scope[0])?;
-        let text = lsp::callers(cx, &scope[0].root, name, filter)?;
-        return Ok(text + &lsp_note(scope));
+    match plan(cx, scope) {
+        Plan::PerProject => {
+            return per_project(cx, scope, |m| callers_filtered(cx, &m.root, name, filter));
+        }
+        Plan::LspFirst => {
+            walkable(&scope[0])?;
+            let text = lsp::callers(cx, &scope[0].root, name, filter)?;
+            return Ok(text + &lsp_note(scope));
+        }
+        Plan::Tags => {}
     }
     let (done, notes) = fan_out(scope, |m| {
         walkable(m)?;
@@ -237,7 +311,7 @@ pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Resul
             .collect();
         Ok((rows, cx.symbol_defs(&key, name)?.len()))
     })?;
-    let head = banners(cx, &done, notes)?;
+    let head = tags_modes(cx, scope) + &banners(cx, &done, notes)?;
     let defs: usize = done.iter().map(|(_, (_, n))| n).sum();
     let mut body = String::new();
     for (m, (rows, _)) in &done {
@@ -271,11 +345,19 @@ pub fn impact(
         walkable(one)?;
         return impact_filtered(cx, &one.root, name, depth, filter, to);
     }
-    if lsp_backend(cx) {
-        walkable(&scope[0])?;
-        let root = &scope[0].root;
-        let text = with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?)?;
-        return Ok(text + &lsp_note(scope));
+    match plan(cx, scope) {
+        Plan::PerProject => {
+            return per_project(cx, scope, |m| {
+                impact_filtered(cx, &m.root, name, depth, filter, to)
+            });
+        }
+        Plan::LspFirst => {
+            walkable(&scope[0])?;
+            let root = &scope[0].root;
+            let text = with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?)?;
+            return Ok(text + &lsp_note(scope));
+        }
+        Plan::Tags => {}
     }
     let (done, notes) = fan_out(scope, |m| {
         walkable(m)?;
@@ -287,7 +369,7 @@ pub fn impact(
         };
         Ok((key.clone(), chains, cx.symbol_defs(&key, name)?.len()))
     })?;
-    let head = banners(cx, &done, notes)?;
+    let head = tags_modes(cx, scope) + &banners(cx, &done, notes)?;
     let defs: usize = done.iter().map(|(_, (.., n))| n).sum();
     let body = if let Some(target) = to.filter(|t| !t.is_empty()) {
         let mut body = String::new();
@@ -346,16 +428,22 @@ pub fn explore(cx: &Ctx, scope: &[Member], query: &str, filter: &Filter) -> Resu
         walkable(one)?;
         return super::explore(cx, &one.root, query, filter);
     }
-    if lsp_backend(cx) {
-        walkable(&scope[0])?;
-        let text = lsp::explore(cx, &scope[0].root, query, filter)?;
-        return Ok(text + &lsp_note(scope));
+    match plan(cx, scope) {
+        Plan::PerProject => {
+            return per_project(cx, scope, |m| super::explore(cx, &m.root, query, filter));
+        }
+        Plan::LspFirst => {
+            walkable(&scope[0])?;
+            let text = lsp::explore(cx, &scope[0].root, query, filter)?;
+            return Ok(text + &lsp_note(scope));
+        }
+        Plan::Tags => {}
     }
     let (done, notes) = fan_out(scope, |m| {
         walkable(m)?;
         index_for(cx, &m.root)
     })?;
-    let head = banners(cx, &done, notes)?;
+    let head = tags_modes(cx, scope) + &banners(cx, &done, notes)?;
     let labels: Vec<String> = done.iter().map(|(m, _)| label(m)).collect();
     let mut all = Scoped {
         parts: done
@@ -1148,6 +1236,77 @@ mod tests {
                 "{out}"
             );
         }
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.9: no project of the scope has a server, so `auto` keeps the linked tags traversal
+    /// and only names the mode of each project.
+    #[test]
+    fn auto_without_servers_answers_from_tags_and_names_each_project_mode() {
+        let (mut cx, dir) = fixture("t3299-auto-tags");
+        cx.config.plugins.graph.backend = "auto".into();
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        assert!(matches!(plan(&ctx, &scope), Plan::Tags));
+        assert_eq!(
+            callers(&ctx, &scope, "shared", &Filter::none()).unwrap(),
+            "[a] (tags)\n[b] (tags)\n[c] (tags)\n\
+             [a] lib.rs  a_caller \u{d7}1 (L1)\n[b] lib.rs  b_caller \u{d7}1 (L1)\n"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.9: a pinned language keeps its own mode inside an `auto` scope.
+    #[test]
+    fn plan_follows_the_mode_of_each_project() {
+        let (mut cx, dir) = fixture("t3299-plan");
+        cx.config.plugins.graph.backend = "lsp".into();
+        let scope = scope_at(&cx, &dir, "a", None);
+        assert!(matches!(plan(&Ctx::new(&cx), &scope), Plan::LspFirst));
+        cx.config.plugins.graph.backend = "tags".into();
+        assert!(matches!(plan(&Ctx::new(&cx), &scope), Plan::Tags));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.9: each project answers through its own door; the part carries the mode line, a
+    /// project with nothing to say is left out, and one that cannot answer is skipped.
+    #[test]
+    fn per_project_labels_each_part_and_drops_the_silent_ones() {
+        let (cx, dir) = fixture("t3299-per");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let said = |text: &'static str| {
+            move |m: &Member| -> Result<String> {
+                Ok(match m.name.as_str() {
+                    "a" => "(lsp)\nlib.rs  a_caller \u{d7}1 (L1)\n".to_string(),
+                    "b" => "(tags; lsp: rust-analyzer not on PATH)\nlib.rs  b_caller \u{d7}1 (L1)"
+                        .to_string(),
+                    _ => text.to_string(),
+                })
+            }
+        };
+        assert_eq!(
+            per_project(&ctx, &scope, said("(tags)\nno references to shared")).unwrap(),
+            "[a] (lsp)\nlib.rs  a_caller \u{d7}1 (L1)\n\
+             [b] (tags; lsp: rust-analyzer not on PATH)\nlib.rs  b_caller \u{d7}1 (L1)\n"
+        );
+        // Nobody has anything: the first project's sentence stands for the scope.
+        let nothing = |_: &Member| Ok("(tags)\nno references to shared".to_string());
+        assert_eq!(
+            per_project(&ctx, &scope, nothing).unwrap(),
+            "[a] (tags)\nno references to shared\n"
+        );
+        // A linked project that fails is a note; the first one failing is the caller's error.
+        let broken = |m: &Member| -> Result<String> {
+            if m.name == "c" {
+                bail!("server gone");
+            }
+            Ok("(lsp)\nlib.rs  x \u{d7}1 (L1)\n".to_string())
+        };
+        let out = per_project(&ctx, &scope, broken).unwrap();
+        assert!(out.contains("[c] skipped: server gone"), "{out}");
+        let first = |_: &Member| -> Result<String> { bail!("no root") };
+        assert!(per_project(&ctx, &scope, first).is_err());
         let _ = fs::remove_dir_all(dir);
     }
 }
