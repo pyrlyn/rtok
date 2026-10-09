@@ -5,8 +5,8 @@
 use super::util::{print_diff, print_json};
 use crate::config::Config;
 use crate::config::validate;
+use crate::model;
 use crate::ui::style;
-use crate::web::model;
 use anyhow::{Result, bail};
 use clap::Subcommand;
 use std::path::PathBuf;

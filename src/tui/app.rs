@@ -13,7 +13,7 @@ use std::sync::mpsc;
 use crossterm::event::{KeyCode, KeyModifiers};
 
 use crate::config::{Config, validate};
-use crate::web::model::{self, Snapshot};
+use crate::model::{self, Snapshot};
 
 /// The one key table (T60.8): the footer and the `?` overlay render from it, so the
 /// key hints are never hand-written twice. `(page, key, description)`; page `""` is

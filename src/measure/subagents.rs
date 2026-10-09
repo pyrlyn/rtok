@@ -86,7 +86,7 @@ pub struct BriefSplitRow {
 }
 
 /// T131: substring of `memory::handoff::INSTRUCTIONS` that marks a `SubagentStart` spawn
-/// brief. `measure` and `memory` live in the same crate (`web::model` already uses
+/// brief. `measure` and `memory` live in the same crate (`model` already uses
 /// `measure::stats` unconditionally, so `measure` is always compiled), so this is a real
 /// constant, not a mirrored literal — but it still must stay a substring of `INSTRUCTIONS`;
 /// `handoff.rs`'s own test pins that so a reworded brief fails loud instead of silently

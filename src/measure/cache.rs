@@ -120,7 +120,7 @@ pub fn report(store: &Store) -> Result<Vec<SessionHealth>> {
     Ok(out)
 }
 
-/// `rtok stats --cache` is a page of the operator model (`crate::web::model::cache_health`,
+/// `rtok stats --cache` is a page of the operator model (`crate::model::cache_health`,
 /// T15.11): the model runs this report over the store; the command renders it as a table,
 /// or as JSON when `stats.format = "json"`. The old fixed widths are the column floors
 /// now (`render::table`, T25.2), so the bytes a golden pinned do not move.
