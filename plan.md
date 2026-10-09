@@ -55,7 +55,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.6 | todo | P3 | 3 | 0% | |
+| T330.6 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T335 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
@@ -1058,6 +1058,8 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5 and the investigation T343 (the two `--sort` value sets).
 
 Check: the T330 "Breakdown" fixtures; `just check`.
+
+Execution plan (Claude Code / sonnet-5.5): (1) new `src/agents/junk_items.rs` holds the one item row (`path`, `size_bytes`, `last_used`, `reason`, `will_clear`, `skip_reason`), the `--items`/`--sort`/`--min-size` view and the shared text lines; `list` and the `clear` dry run both print through it, `--json` carries every item. `--sort size|last-used|path` orders the items inside each kind (T343 is still open: agents keep their fixed order). (2) `rtok doctor` text gets a reclaimable-space line from the same report (hint above 1 GB), computed in the CLI path only so the dashboard tick never walks disks. (3) Docs: `docs/agents.md` Junk section and `docs/config.md` flags, en/ru/uk. (4) The web card and its "clear safe junk" button (a `/ws` plan/apply pair like the doctor one) do not fit the size cap together with the above: they move to a new card T330.7.
 
 ### T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 
