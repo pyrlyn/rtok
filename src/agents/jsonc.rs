@@ -27,6 +27,10 @@ pub fn parse(raw: &str) -> Result<Value> {
         allow_single_quoted_strings: false,
         allow_hexadecimal_numbers: false,
         allow_unary_plus_numbers: false,
+        // 0.34 adds JSON5. Stay on comments and trailing commas only.
+        allow_bare_decimal_point_numbers: false,
+        allow_non_finite_numbers: false,
+        allow_extended_string_escapes: false,
     };
     jsonc_parser::parse_to_serde_value::<Value>(raw, &opts).map_err(|e| anyhow::anyhow!("{e}"))
 }
@@ -500,6 +504,16 @@ mod tests {
 
     fn entry() -> Value {
         json!({"command": "rtok", "args": ["mcp"]})
+    }
+
+    /// jsonc-parser 0.34 can parse JSON5. Those flags stay off: comments and trailing
+    /// commas are the only looseness Zed and VS Code settings get.
+    #[test]
+    fn parse_rejects_json5_numbers_quotes_and_escapes() {
+        assert!(parse("{ /* c */ \"a\": 1, }").is_ok());
+        for raw in [".5", "Infinity", "NaN", "+1", "{'a': 1}", "\"\\x41\""] {
+            assert!(parse(raw).is_err(), "{raw} must stay rejected");
+        }
     }
 
     /// A block comment holding non-ASCII text (`/* café */`) used to panic: the comment
