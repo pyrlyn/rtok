@@ -18,8 +18,8 @@ type EdgeSet = BTreeMap<String, BTreeSet<String>>;
 type EdgeLocs = BTreeMap<(String, String), Vec<String>>;
 
 const FOUNDATION: &[&str] = &[
-    "fs", "sanitize", "proc", "tls", "names", "lane", "diff", "since", "task_id", "logfile",
-    "progress", "bytes", "project",
+    "fs", "sanitize", "proc", "tls", "names", "lane", "diff", "since", "stdio", "task_id",
+    "logfile", "progress", "bytes", "project",
 ];
 
 #[test]

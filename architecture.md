@@ -37,7 +37,7 @@ core         plugin (host Runtime)  config  store  log  tokens
                 │
                 ▼
 foundation   fs  sanitize  proc  tls  names  lane  diff  since
-             task_id  logfile  progress  bytes  project
+             stdio  task_id  logfile  progress  bytes  project
                 │
                 ▼
              crates/rtok-plugin-sdk     (the published contract, D25)
@@ -47,9 +47,9 @@ A module may use another module of the same rank when that does not close a cycl
 Surfaces may call one another on the same condition (`cli` reaches `hooks`; `web`
 reaches `demon`). Modules that sit beside this stack (`render`, `model`, `expand`,
 `info`, `otel`, `worktree`, and the rest) must not name `cli`, `web`, or `tui`.
-They also do not write the terminal: text goes to `log::stdout` / `log::stderr`,
-and `cli::run` prints it. `clippy::print_stdout` and `print_stderr` are denied
-outside the surface modules.
+They also do not write the terminal: text goes to `stdio::stdout` / `stdio::stderr`
+(`log` re-exports them), and `cli::run` prints it. `clippy::print_stdout` and
+`print_stderr` are denied outside the surface modules.
 
 `config`, `store`, `log`, and `tokens` reference only core and foundation.
 `plugin` is the host runtime: it may use `project` and the other core modules,
