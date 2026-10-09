@@ -23,7 +23,9 @@ mod sql_ext;
 // Symbol index (graph plugin) — SQLite only (D18 loser deleted; P39: Ladybug/Grafeo removed).
 mod symbols;
 // T329.1: the graph project registry.
+mod docs;
 mod note_files;
+pub use docs::{DocHit, DocItem};
 mod observations;
 mod project_links;
 mod projects;
@@ -5092,6 +5094,11 @@ mod tests {
         "symbols_fts_idx",     // FTS5 shadow table for symbols_fts
         "symbols_fts_docsize", // FTS5 shadow table for symbols_fts
         "symbols_fts_config",  // FTS5 shadow table for symbols_fts
+        "doc_items_fts",       // 0039: FTS5 virtual table for cached rustdoc (T455)
+        "doc_items_fts_data",  // FTS5 shadow table for doc_items_fts
+        "doc_items_fts_idx",   // FTS5 shadow table for doc_items_fts
+        "doc_items_fts_docsize", // FTS5 shadow table for doc_items_fts
+        "doc_items_fts_config", // FTS5 shadow table for doc_items_fts
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 

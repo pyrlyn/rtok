@@ -42,10 +42,10 @@ Each plugin declares its surfaces (hook, mcp, proxy, cli); hooks carry `hook` an
 carries `mcp`, the proxy carries `proxy`. `rtok agents install claude` prints the split as
 installed / not installed / not supported.
 
-Reachable (cli): measure, cmd, read, json_tree, archive, proxy, inject, guard, memory, graph, toon, compress
+Reachable (cli): measure, cmd, read, json_tree, archive, proxy, inject, guard, memory, graph, toon, compress, docs
 Not reachable (cli): -
 
-Reachable (desktop): read, json_tree, archive, memory, graph, toon
+Reachable (desktop): read, json_tree, archive, memory, graph, toon, docs
 Not reachable (desktop): measure, cmd, proxy, inject, guard, compress
 
 ## Docs

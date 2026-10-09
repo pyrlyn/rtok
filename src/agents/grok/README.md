@@ -46,7 +46,7 @@ imports Claude's hooks, see above).
 
 The plugin carries `hook`; the MCP table carries `mcp`. Nothing carries `proxy`.
 
-Reachable: cmd, read, json_tree, archive, inject, guard, memory, graph, toon
+Reachable: cmd, read, json_tree, archive, inject, guard, memory, graph, toon, docs
 Not reachable: measure, proxy, compress
 
 ## Docs

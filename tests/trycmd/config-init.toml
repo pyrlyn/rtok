@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,519 @@
+@@ -0,0 +1,525 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -520,6 +520,12 @@ target/tmp/t60-2-config-init.toml
 +
 +[plugins.compress]
 +# enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
++
++[plugins.docs]
++# enabled        = false                # local rustdoc from Cargo.lock + cached docs.rs JSON
++# query_limit    = 5                    # docs_query hit ceiling
++# snippet_chars  = 400                  # chars per FTS snippet
++# max_tokens     = 800                  # whole-reply estimate cap
 +
 +[plugins.wasm]
 +# enabled = false

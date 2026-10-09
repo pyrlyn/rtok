@@ -85,6 +85,9 @@ The one config file
 rtok/-memory(1)
 Notes (`mem_save` / import / export)
 .TP
+rtok/-docs(1)
+Cached rustdoc for Cargo.lock dependencies (`rtok docs fetch`)
+.TP
 rtok/-graph(1)
 Symbol index (`rtok graph index`)
 .TP
@@ -127,6 +130,7 @@ v[..] ([..])
 /fBrtok-plugins/fR(1),
 /fBrtok-config/fR(1),
 /fBrtok-memory/fR(1),
+/fBrtok-docs/fR(1),
 /fBrtok-graph/fR(1),
 /fBrtok-guard/fR(1),
 /fBrtok-demon/fR(1),

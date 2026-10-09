@@ -562,6 +562,12 @@ min_rows = 5
 [plugins.compress]
 enabled = true                        # екстрактивні зведення заархівованого виводу інструментів; працює лише в proxy.mode = "compress"
 
+[plugins.docs]
+enabled        = false                # локальний rustdoc з Cargo.lock + кешований JSON docs.rs (T455)
+query_limit    = 5                    # стеля влучань docs_query
+snippet_chars  = 400                  # символів на FTS-фрагмент
+max_tokens     = 800                  # стеля оцінки всієї відповіді; зайві влучання відкидаються
+
 [plugins.wasm]
 enabled = false                      # типово вимкнено; жоден .wasm не завантажується до хоста T32.2 + feature `wasm-host`
 dir     = "~/.rtok/plugins"          # шукати *.wasm на один рівень углиб; D6 — цей репозиторій ніколи не вендорить сторонніх плагінів

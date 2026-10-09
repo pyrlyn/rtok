@@ -296,6 +296,12 @@ enum Cmd {
         #[command(subcommand)]
         action: MemoryCmd,
     },
+    /// Cached rustdoc for Cargo.lock dependencies (`rtok docs fetch`)
+    #[cfg(feature = "docs")]
+    Docs {
+        #[command(subcommand)]
+        action: DocsCmd,
+    },
     /// Symbol index (`rtok graph index`)
     #[cfg(feature = "graph")]
     Graph {
@@ -457,6 +463,13 @@ impl ReportFormat {
             Self::Pdf => "pdf",
         }
     }
+}
+
+#[cfg(feature = "docs")]
+#[derive(Subcommand)]
+enum DocsCmd {
+    /// Download rustdoc JSON for a Cargo.lock dependency (the only network path)
+    Fetch { name: String },
 }
 
 #[cfg(feature = "memory")]
@@ -2309,6 +2322,15 @@ pub fn run() -> Result<()> {
             }
             None => crate::man::print(Cli::command(), &mut io::stdout())?,
         },
+        #[cfg(feature = "docs")]
+        Cmd::Docs { action } => {
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            match action {
+                DocsCmd::Fetch { name } => {
+                    println!("{}", crate::plugins::docs::run_fetch(&cfg, &name)?);
+                }
+            }
+        }
         #[cfg(feature = "memory")]
         Cmd::Memory { action } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
