@@ -8,13 +8,15 @@ pub mod export;
 mod files;
 pub mod handoff;
 pub mod import;
+mod observe;
+mod scrub;
 pub mod status;
 pub mod sync;
 
 pub use crate::project::project_name;
 
 use rtok_plugin_sdk::{
-    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PromptSubmit,
+    Class, Ctx, DashboardPage, Injection, Manifest, Measurement, Plugin, PostToolUse, PromptSubmit,
     SessionStart, SubagentStart, Surface, ToolDef,
 };
 use serde_json::json;
@@ -60,7 +62,7 @@ impl Plugin for Memory {
             ToolDef {
                 name: "mem_get",
                 description: "Body by note id; see hook index.",
-                input_schema: json!({"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}),
+                input_schema: json!({"type":"object","properties":{"id":{"type":"integer"},"obs":{"type":"integer"}},"required":[]}),
             },
             ToolDef {
                 name: "mem_update",
@@ -80,6 +82,11 @@ impl Plugin for Memory {
             return Some(inj);
         }
         prompt_recall(ev, cx)
+    }
+
+    fn post_tool(&self, ev: &PostToolUse, cx: &Ctx) -> Option<String> {
+        let _ = observe::capture(cx, ev);
+        None
     }
 
     fn subagent_start(&self, ev: &SubagentStart, cx: &Ctx) -> Option<Injection> {
@@ -208,9 +215,12 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
     }
     // T374: twice as many text hits as shown, so a note ranked just below the cut can still be
     // lifted by its file link; with no linked note the first `n` come back unchanged.
-    let text_hits = cx.search_notes(&query, n.saturating_mul(2)).ok()?;
+    let text_hits = cx
+        .search_notes(&query, n.saturating_mul(2))
+        .unwrap_or_default();
     let hits = files::recall_hits(cx, ev.prompt, text_hits, n as usize);
-    if hits.is_empty() {
+    let obs = obs_for_prompt(cx, &query, ev.prompt);
+    if hits.is_empty() && obs.is_empty() {
         return None;
     }
     let sizes = body_sizes(cx, hits.iter().map(|h| h.id));
@@ -218,10 +228,21 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
         .iter()
         .map(|h| (h.id, h.title.clone(), body_tokens(&sizes, h.id)))
         .collect();
-    let text = render_title_index(cx, &mut entries, cap);
+    let mut text = if entries.is_empty() {
+        String::new()
+    } else {
+        render_title_index(cx, &mut entries, cap)
+    };
+    text = append_obs(cx, &text, &obs, cap);
+    if text.is_empty() {
+        return None;
+    }
     let sha = crate::store::hex_sha256(text.as_bytes());
     if cx.last_measurement_ref("memory", "prompt_recall").ok()? == Some(sha.clone()) {
         return None;
+    }
+    for (id, _, _) in &entries {
+        let _ = cx.touch_note(*id);
     }
     let (before_bytes, est_before) = bodies_before(&sizes, &entries);
     let after_bytes = text.len() as u64;
@@ -240,6 +261,78 @@ fn prompt_recall(ev: &PromptSubmit, cx: &Ctx) -> Option<Injection> {
         plugin: "memory",
         text,
         priority: 11,
+    })
+}
+
+fn obs_for_prompt(cx: &Ctx, query: &str, prompt: &str) -> Vec<rtok_plugin_sdk::ObsHit> {
+    let project = resolved_project(cx);
+    let fts = cx
+        .search_observations(project.as_deref(), query, 10)
+        .unwrap_or_default();
+    let linked = cx
+        .observations_for_files(project.as_deref(), &files::prompt_paths(cx, prompt), 10)
+        .unwrap_or_default();
+    let fused = observe::rrf_obs(&[&fts, &linked], 10);
+    observe::diversify_by_session(fused, 10, observe::MAX_PER_SESSION)
+}
+
+/// Append at most two `obs` lines while `cap` still holds. Notes already in `text` win.
+fn append_obs(cx: &Ctx, text: &str, hits: &[rtok_plugin_sdk::ObsHit], cap: u32) -> String {
+    let mut out = text.trim_end().to_string();
+    for line in observe::index_lines(hits, 2) {
+        let next = if out.is_empty() {
+            line
+        } else {
+            format!("{out}\n{line}")
+        };
+        if cx.estimate(&next, Class::Prose) > cap {
+            break;
+        }
+        out = next;
+    }
+    out
+}
+
+/// Title index plus up to two observations from this session, for PreCompact.
+/// Empty when the project has no notes and this session has no observations.
+pub fn compact_context(cx: &Ctx) -> Option<Injection> {
+    let cfg = cx.plugin_config::<crate::config::Memory>("memory");
+    let cap = cfg.recall_tokens.max(1);
+    let project = resolved_project(cx);
+    let rows = cx
+        .list_note_titles(project.as_deref(), cfg.recall_titles.max(1))
+        .unwrap_or_default();
+    let sizes = body_sizes(cx, rows.iter().map(|r| r.0));
+    let mut kept: Vec<(i32, String, u32)> = rows
+        .into_iter()
+        .map(|(id, title)| (id, title, body_tokens(&sizes, id)))
+        .collect();
+    let notes = if kept.is_empty() {
+        String::new()
+    } else {
+        render_title_index(cx, &mut kept, cap)
+    };
+    let recent = cx.recent_observations(cx.session(), 8).unwrap_or_default();
+    let recent = observe::diversify_by_session(recent, 8, observe::MAX_PER_SESSION);
+    let text = append_obs(cx, &notes, &recent, cap);
+    if text.is_empty() {
+        return None;
+    }
+    let (before_bytes, est_before) = bodies_before(&sizes, &kept);
+    let _ = cx.record(&Measurement {
+        plugin: "memory",
+        kind: "pre_compact",
+        before_bytes,
+        after_bytes: text.len() as u64,
+        est_before,
+        est_after: cx.estimate(&text, Class::Prose),
+        ref_id: Some(cx.session().to_string()),
+        call_id: None,
+    });
+    Some(Injection {
+        plugin: "memory",
+        text,
+        priority: 10,
     })
 }
 
@@ -321,10 +414,31 @@ pub fn mem_search(
     }
 }
 
+/// Narrative of one observation. Records `kind: "obs_get"`.
+pub fn obs_get(rt: &crate::plugin::Runtime, id: i32) -> anyhow::Result<Option<String>> {
+    let Some(body) = rt.store.observation_narrative(id)? else {
+        return Ok(None);
+    };
+    let _ = rt.record(&Measurement {
+        plugin: "memory",
+        kind: "obs_get",
+        before_bytes: 0,
+        after_bytes: body.len() as u64,
+        est_before: 0,
+        est_after: rt.estimate(&body, Class::Prose),
+        ref_id: Some(id.to_string()),
+        call_id: rt.call_id,
+    });
+    Ok(Some(body))
+}
+
 pub fn mem_get(rt: &crate::plugin::Runtime, id: i32) -> anyhow::Result<Option<String>> {
     let Some(row) = rt.store.note_row(id)? else {
         return Ok(None);
     };
+    if row.retired.is_none() {
+        let _ = rt.store.touch_note(id);
+    }
     let body = match row.retired {
         None => row.body,
         Some(ts) => {
@@ -1120,5 +1234,115 @@ mod tests {
         let (a, b) = (run("stable"), run("stable"));
         assert!(a.contains(" lone"), "{a}");
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn a_read_note_leads_an_unread_twin() {
+        let cx = crate::plugin::Runtime::in_memory("t454-rank").unwrap();
+        let old = mem_save(&cx, "note", "alpha-rank", "body alpha", None)
+            .unwrap()
+            .0;
+        let fresh = mem_save(&cx, "note", "beta-rank", "body beta", None)
+            .unwrap()
+            .0;
+        cx.store.touch_note(old).unwrap();
+        cx.store.touch_note(old).unwrap();
+        cx.store.touch_note(old).unwrap();
+        cx.store.touch_note(old).unwrap();
+        cx.store.touch_note(old).unwrap();
+        let titles = cx.store.list_note_titles(None, 1).unwrap();
+        assert_eq!(
+            titles[0].0, old,
+            "touched {old} should lead {fresh}, got {titles:?}"
+        );
+    }
+
+    #[test]
+    fn post_tool_stores_a_scrubbed_observation_once() {
+        use rtok_plugin_sdk::PostToolUse;
+        let cx = crate::plugin::Runtime::in_memory("t454-obs").unwrap();
+        let ctx = Ctx::new(&cx);
+        let ev = PostToolUse {
+            tool_name: "Bash",
+            tool_input: &json!({"command": "cargo test"}),
+            tool_response: &json!("sk-ant-abcdefghijklmnopqrstuvwxyz"),
+        };
+        assert!(Memory.post_tool(&ev, &ctx).is_none());
+        assert!(Memory.post_tool(&ev, &ctx).is_none());
+        let hits = cx.store.search_observations(None, "cargo", 5).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        let body = obs_get(&cx, hits[0].id).unwrap().unwrap();
+        assert!(body.contains("cargo test"), "{body}");
+        assert!(!body.contains("sk-ant-"), "{body}");
+        assert!(body.len() <= 400, "{}", body.len());
+        let rows = cx.store.list_measurements("memory").unwrap();
+        assert_eq!(rows.iter().filter(|r| r.kind == "observe").count(), 1);
+        assert_eq!(rows.iter().filter(|r| r.kind == "obs_get").count(), 1);
+    }
+
+    #[test]
+    fn pre_compact_names_a_note_and_stays_empty_without_one() {
+        let empty = crate::plugin::Runtime::in_memory("t454-compact-empty").unwrap();
+        assert!(compact_context(&Ctx::new(&empty)).is_none());
+        let cx = crate::plugin::Runtime::in_memory("t454-compact").unwrap();
+        mem_save(&cx, "note", "keep-compact", "body", None).unwrap();
+        let inj = compact_context(&Ctx::new(&cx)).unwrap();
+        assert!(inj.text.contains("keep-compact"), "{}", inj.text);
+        assert!(cx.estimate(&inj.text, Class::Prose) <= 200, "{}", inj.text);
+    }
+
+    #[test]
+    fn five_observations_in_one_session_yield_the_other_session_first() {
+        let cx = crate::plugin::Runtime::in_memory("t454-div").unwrap();
+        for i in 0..5 {
+            let title = format!("busy-{i}");
+            let dedup = format!("dedup-a-{i}");
+            cx.store
+                .insert_observation(&rtok_plugin_sdk::NewObservation {
+                    session_id: "session-aaa",
+                    project: None,
+                    obs_type: "command_run",
+                    title: &title,
+                    narrative: "walrus cargo test output",
+                    dedup: &dedup,
+                    files: &[],
+                })
+                .unwrap();
+        }
+        cx.store
+            .insert_observation(&rtok_plugin_sdk::NewObservation {
+                session_id: "session-bbb",
+                project: None,
+                obs_type: "command_run",
+                title: "other-session",
+                narrative: "walrus cargo test output",
+                dedup: "dedup-b",
+                files: &[],
+            })
+            .unwrap();
+        let ctx = Ctx::new(&cx);
+        let ev = rtok_plugin_sdk::PromptSubmit {
+            prompt: "walrus cargo",
+        };
+        let inj = Memory.prompt_submit(&ev, &ctx).unwrap();
+        let obs_lines: Vec<_> = inj.text.lines().filter(|l| l.starts_with("obs ")).collect();
+        assert!(
+            !obs_lines.is_empty() && obs_lines.len() <= 2,
+            "{obs_lines:?}"
+        );
+        let hits = cx.store.search_observations(None, "walrus", 10).unwrap();
+        let mixed = observe::diversify_by_session(hits, 4, observe::MAX_PER_SESSION);
+        assert!(
+            mixed.iter().any(|h| h.session_id == "session-bbb"),
+            "the other session stays inside the diversified window: {mixed:?}"
+        );
+        assert!(
+            mixed
+                .iter()
+                .filter(|h| h.session_id == "session-aaa")
+                .count()
+                <= observe::MAX_PER_SESSION
+        );
+        assert!(ctx.estimate(&inj.text, Class::Prose) <= 200, "{}", inj.text);
     }
 }

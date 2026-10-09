@@ -31,8 +31,9 @@ use crate::plugins::cmd::rules::{self, Settings};
 enum Framing {
     Line,
     Header,
-    /// A malformed header block (unparseable `Content-Length`, or a body shorter than the
-    /// one declared): the exact bytes consumed so far, forwarded with no framing added.
+    /// A malformed header block (unparseable `Content-Length`, a declared length over
+    /// [`rtok_hook::MAX_FRAME`], or a body shorter than the one declared): the exact
+    /// bytes consumed so far, forwarded with no framing added.
     Raw,
 }
 
@@ -149,8 +150,16 @@ fn read_frame(r: &mut impl BufRead, buf: &mut Vec<u8>) -> Option<Framing> {
         *buf = header;
         return Some(Framing::Raw);
     };
+    if len > rtok_hook::MAX_FRAME {
+        // Over the same 64 MiB cap `rtok_hook` refuses. Do not buffer the declared
+        // body and do not block a live pipe until that many bytes arrive. The header
+        // is forwarded raw; the following bytes stay on the stream.
+        *buf = header;
+        return Some(Framing::Raw);
+    }
     // Grow with the bytes that actually arrive: the length is the peer's claim, and
-    // allocating it up front let one bogus header abort the wrapper.
+    // allocating it up front let one bogus header abort the wrapper. The claim is
+    // already at or under `MAX_FRAME`.
     let _ = r.by_ref().take(len as u64).read_to_end(buf);
     if buf.len() < len {
         // Body shorter than declared: forward the header plus whatever body bytes
@@ -353,12 +362,38 @@ mod tests {
         assert!(read_frame(&mut r, &mut buf).is_none());
     }
 
-    /// A peer-declared `Content-Length` far past what it sends must not be allocated up
-    /// front: `usize::MAX` used to panic with `capacity overflow` (and a merely huge value
-    /// aborted on OOM), killing the wrapper. The bytes that did arrive pass through raw.
+    /// A declared length over [`rtok_hook::MAX_FRAME`] is not read. The header goes out
+    /// raw and the next frame stays readable, so a live pipe is not asked to buffer or
+    /// block on the peer's claim. `usize::MAX` used to be allocated up front.
     #[test]
-    fn huge_declared_content_length_is_not_preallocated() {
-        let head = format!("Content-Length: {}\r\n\r\n", usize::MAX);
+    fn oversized_content_length_is_raw_and_does_not_swallow_the_next_frame() {
+        let next = br#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+        for len in [rtok_hook::MAX_FRAME as u128 + 1, usize::MAX as u128] {
+            let head = format!("Content-Length: {len}\r\n\r\n");
+            let mut stream = head.clone().into_bytes();
+            stream.extend_from_slice(next);
+            stream.push(b'\n');
+            let mut r = Cursor::new(stream);
+            let mut buf = Vec::new();
+            assert!(
+                matches!(read_frame(&mut r, &mut buf), Some(Framing::Raw)),
+                "len {len}"
+            );
+            assert_eq!(buf, head.as_bytes(), "len {len}");
+            assert!(
+                matches!(read_frame(&mut r, &mut buf), Some(Framing::Line)),
+                "len {len}"
+            );
+            assert_eq!(buf, next, "len {len}");
+            assert!(read_frame(&mut r, &mut buf).is_none(), "len {len}");
+        }
+    }
+
+    /// At the cap the short-body path still reads what arrived. Only a claim past the
+    /// cap skips the body.
+    #[test]
+    fn content_length_at_the_cap_still_reads_a_short_body() {
+        let head = format!("Content-Length: {}\r\n\r\n", rtok_hook::MAX_FRAME);
         let mut stream = head.clone().into_bytes();
         stream.extend_from_slice(b"{}");
         let mut r = Cursor::new(stream);

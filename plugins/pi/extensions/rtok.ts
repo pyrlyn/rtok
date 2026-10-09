@@ -288,11 +288,15 @@ const PI_TOOLS = [
     name: "symbol",
     label: "Symbol",
     description:
-      "Definitions of a symbol with their source: path:line kind, then the body. Optional path substring and kind narrow the match.",
+      "Definitions of a symbol — id, path:line kind, then the body — optional id selects one row and path or kind narrows a name.",
     parameters: {
       type: "object",
-      properties: { name: { type: "string" }, path: { type: "string" }, kind: { type: "string" } },
-      required: ["name"],
+      properties: {
+        name: { type: "string" },
+        id: { type: "string" },
+        path: { type: "string" },
+        kind: { type: "string" },
+      },
     },
   },
   {

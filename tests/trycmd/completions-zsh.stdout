@@ -391,6 +391,55 @@ _arguments "${_arguments_options[@]}" : /
 '--help[Print help]' /
 && ret=0
 ;;
+(ready)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the text]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
+(claim)
+_arguments "${_arguments_options[@]}" : /
+'--agent=[The rtok agent id; defaults to /`RTOK_AGENT_ID/`]:AGENT:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[Print the task as JSON, with /`changed/`]' /
+'-h[Print help]' /
+'--help[Print help]' /
+'::id -- Task id; omit to take the first ready task:_default' /
+&& ret=0
+;;
+(release)
+_arguments "${_arguments_options[@]}" : /
+'--agent=[The rtok agent id; defaults to /`RTOK_AGENT_ID/`]:AGENT:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--force[Release a task held by someone else]' /
+'--json[Print the task as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Task id, e.g. `R12`:_default' /
+&& ret=0
+;;
+(dep)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[Print the task as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- The task that waits:_default' /
+':blocker -- The task that must finish first:_default' /
+&& ret=0
+;;
+(priority)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[Print the task as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Task id, e.g. `R12`:_default' /
+':level -- 0 to 4:_default' /
+&& ret=0
+;;
 (sync)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -437,6 +486,26 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (next)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(ready)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(claim)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(release)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(dep)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(priority)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -1929,6 +1998,17 @@ esac
     ;;
 esac
 ;;
+(review)
+_arguments "${_arguments_options[@]}" : /
+'(--staged)--since=[Diff against this ref]:SINCE:_default' /
+'--project=[Project id or directory instead of the cwd (see /`rtok graph projects/`)]:PROJECT:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--staged[Staged files only (/`git diff --cached --name-only/`)]' /
+'--json[JSON instead of the text list]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (affected)
 _arguments "${_arguments_options[@]}" : /
 '(--staged)--since=[Diff against this ref]:SINCE:_default' /
@@ -2003,6 +2083,10 @@ _arguments "${_arguments_options[@]}" : /
         esac
     ;;
 esac
+;;
+(review)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
 ;;
 (affected)
 _arguments "${_arguments_options[@]}" : /
@@ -2485,6 +2569,26 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(ready)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(claim)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(release)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(dep)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(priority)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (sync)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -2840,6 +2944,10 @@ _arguments "${_arguments_options[@]}" : /
         esac
     ;;
 esac
+;;
+(review)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
 ;;
 (affected)
 _arguments "${_arguments_options[@]}" : /
@@ -3610,6 +3718,7 @@ _rtok__subcmd__graph_commands() {
 'status:Index health for the current or given root' /
 'impact:Symbol impact or call paths to a target' /
 'projects:The project registry/: list, add, remove, select' /
+'review:Risk-ranked reading list for a git diff (files, untested defs, line ranges)' /
 'affected:Tests that reach files changed in git (/`git diff --name-only/`)' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -3633,6 +3742,7 @@ _rtok__subcmd__graph__subcmd__help_commands() {
 'status:Index health for the current or given root' /
 'impact:Symbol impact or call paths to a target' /
 'projects:The project registry/: list, add, remove, select' /
+'review:Risk-ranked reading list for a git diff (files, untested defs, line ranges)' /
 'affected:Tests that reach files changed in git (/`git diff --name-only/`)' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -3698,6 +3808,11 @@ _rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__select_commands() 
 _rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__unlink_commands() {
     local commands; commands=()
     _describe -t commands 'rtok graph help projects unlink commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__review_commands] )) ||
+_rtok__subcmd__graph__subcmd__help__subcmd__review_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph help review commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__graph__subcmd__help__subcmd__status_commands] )) ||
 _rtok__subcmd__graph__subcmd__help__subcmd__status_commands() {
@@ -3792,6 +3907,11 @@ _rtok__subcmd__graph__subcmd__projects__subcmd__select_commands() {
 _rtok__subcmd__graph__subcmd__projects__subcmd__unlink_commands() {
     local commands; commands=()
     _describe -t commands 'rtok graph projects unlink commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__graph__subcmd__review_commands] )) ||
+_rtok__subcmd__graph__subcmd__review_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok graph review commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__graph__subcmd__status_commands] )) ||
 _rtok__subcmd__graph__subcmd__status_commands() {
@@ -4140,6 +4260,7 @@ _rtok__subcmd__help__subcmd__graph_commands() {
 'status:Index health for the current or given root' /
 'impact:Symbol impact or call paths to a target' /
 'projects:The project registry/: list, add, remove, select' /
+'review:Risk-ranked reading list for a git diff (files, untested defs, line ranges)' /
 'affected:Tests that reach files changed in git (/`git diff --name-only/`)' /
     )
     _describe -t commands 'rtok help graph commands' commands "$@"
@@ -4199,6 +4320,11 @@ _rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__select_commands() 
 _rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__unlink_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help graph projects unlink commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__review_commands] )) ||
+_rtok__subcmd__help__subcmd__graph__subcmd__review_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help graph review commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__graph__subcmd__status_commands] )) ||
 _rtok__subcmd__help__subcmd__graph__subcmd__status_commands() {
@@ -4382,16 +4508,31 @@ _rtok__subcmd__help__subcmd__task_commands() {
 'list:The plan/: open and in-progress tasks, subtasks under their parent' /
 'show:One task/: title, status, parent, subtasks, link and description' /
 'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
-'next:The task to work on next/: the lowest open one with no open subtask' /
+'next:The first ready task/: free or stale, not blocked; a leaf when nothing is blocked' /
+'ready:Tasks that can be claimed, highest priority first' /
+'claim:Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set' /
+'release:Clear the assignee and set the task open. Only the holder, unless --force' /
+'dep:Record that this task waits on another. A cycle is refused and nothing is written' /
+'priority:Set priority from 0 (highest) to 4. 2 is the default and is not stored' /
 'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
     )
     _describe -t commands 'rtok help task commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__claim_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__claim_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task claim commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__create_commands] )) ||
 _rtok__subcmd__help__subcmd__task__subcmd__create_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help task create commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__dep_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__dep_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task dep commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__init_commands] )) ||
 _rtok__subcmd__help__subcmd__task__subcmd__init_commands() {
@@ -4407,6 +4548,21 @@ _rtok__subcmd__help__subcmd__task__subcmd__list_commands() {
 _rtok__subcmd__help__subcmd__task__subcmd__next_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help task next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__priority_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__priority_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task priority commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__ready_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__ready_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task ready commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__release_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__release_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task release commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__show_commands] )) ||
 _rtok__subcmd__help__subcmd__task__subcmd__show_commands() {
@@ -4783,17 +4939,32 @@ _rtok__subcmd__task_commands() {
 'list:The plan/: open and in-progress tasks, subtasks under their parent' /
 'show:One task/: title, status, parent, subtasks, link and description' /
 'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
-'next:The task to work on next/: the lowest open one with no open subtask' /
+'next:The first ready task/: free or stale, not blocked; a leaf when nothing is blocked' /
+'ready:Tasks that can be claimed, highest priority first' /
+'claim:Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set' /
+'release:Clear the assignee and set the task open. Only the holder, unless --force' /
+'dep:Record that this task waits on another. A cycle is refused and nothing is written' /
+'priority:Set priority from 0 (highest) to 4. 2 is the default and is not stored' /
 'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
     _describe -t commands 'rtok task commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__task__subcmd__claim_commands] )) ||
+_rtok__subcmd__task__subcmd__claim_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task claim commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__task__subcmd__create_commands] )) ||
 _rtok__subcmd__task__subcmd__create_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task create commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__dep_commands] )) ||
+_rtok__subcmd__task__subcmd__dep_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task dep commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__help_commands] )) ||
 _rtok__subcmd__task__subcmd__help_commands() {
@@ -4802,17 +4973,32 @@ _rtok__subcmd__task__subcmd__help_commands() {
 'list:The plan/: open and in-progress tasks, subtasks under their parent' /
 'show:One task/: title, status, parent, subtasks, link and description' /
 'status:Print a task'/''s status, or set it; done and closed move it out of the plan' /
-'next:The task to work on next/: the lowest open one with no open subtask' /
+'next:The first ready task/: free or stale, not blocked; a leaf when nothing is blocked' /
+'ready:Tasks that can be claimed, highest priority first' /
+'claim:Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set' /
+'release:Clear the assignee and set the task open. Only the holder, unless --force' /
+'dep:Record that this task waits on another. A cycle is refused and nothing is written' /
+'priority:Set priority from 0 (highest) to 4. 2 is the default and is not stored' /
 'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
     _describe -t commands 'rtok task help commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__claim_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__claim_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help claim commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__create_commands] )) ||
 _rtok__subcmd__task__subcmd__help__subcmd__create_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task help create commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__dep_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__dep_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help dep commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__help_commands] )) ||
 _rtok__subcmd__task__subcmd__help__subcmd__help_commands() {
@@ -4833,6 +5019,21 @@ _rtok__subcmd__task__subcmd__help__subcmd__list_commands() {
 _rtok__subcmd__task__subcmd__help__subcmd__next_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task help next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__priority_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__priority_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help priority commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__ready_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__ready_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help ready commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__release_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__release_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help release commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__show_commands] )) ||
 _rtok__subcmd__task__subcmd__help__subcmd__show_commands() {
@@ -4863,6 +5064,21 @@ _rtok__subcmd__task__subcmd__list_commands() {
 _rtok__subcmd__task__subcmd__next_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__priority_commands] )) ||
+_rtok__subcmd__task__subcmd__priority_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task priority commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__ready_commands] )) ||
+_rtok__subcmd__task__subcmd__ready_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task ready commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__release_commands] )) ||
+_rtok__subcmd__task__subcmd__release_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task release commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__show_commands] )) ||
 _rtok__subcmd__task__subcmd__show_commands() {

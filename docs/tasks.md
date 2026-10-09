@@ -33,7 +33,7 @@ tasks/done/A7 - old-work.md
 ```
 
 - The file name is `<id> - <slug>.md`. The slug is lower-case letters and digits joined by dashes, at most 48 characters. The title is not in the name; it is in the front matter.
-- The front matter holds `id`, `title`, `status`, `parent` (subtasks only), `created_at` and `updated_at` (Unix seconds). The description is the body, below the front matter.
+- The front matter holds `id`, `title`, `status`, `parent` (subtasks only), `created_at` and `updated_at` (Unix seconds). A claim adds `assignee`, `blocked_by` and `priority` (0–4, omitted when it is 2). Files written before those keys still parse. The description is the body, below the front matter.
 - The files belong to the checkout a command runs in. The numbers are shared through the store, but a worktree reads and writes the task files on its own branch, so they reach other checkouts through git.
 - Done and closed tasks move to `tasks/done/`, so the plan is the directory listing.
 - Writes go to a temporary file that is renamed into place.
@@ -62,7 +62,12 @@ Why the task exists and what done means.
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` | active tasks, with subtasks indented under their parent; `--status` takes a comma-separated list |
 | `rtok task show <id> [--json]` | one task with its subtasks, link and description |
 | `rtok task status <id> [<status>] [--force] [--json]` | reads the status, or sets it to `open`, `in-progress`, `done` or `closed` |
-| `rtok task next [--json]` | the lowest open task with no active (open or in-progress) subtask |
+| `rtok task next [--json]` | the first ready task. With no blockers, that is still the lowest open task with no active subtask |
+| `rtok task ready [--json]` | every task that can be claimed, highest priority first (`0` before `2`) |
+| `rtok task claim [id] [--agent <id>] [--json]` | claim `id`, or the first ready task. Pass `--agent` or set `RTOK_AGENT_ID`. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set |
+| `rtok task release <id> [--agent <id>] [--force] [--json]` | clear the assignee and set the task open. Only the holder, unless `--force` |
+| `rtok task dep <id> <blocker> [--json]` | `id` waits until `blocker` is done or closed. A cycle is refused and nothing is written |
+| `rtok task priority <id> <0-4> [--json]` | set priority. `0` is highest, `2` is the default and is not stored |
 
 Without `--json` the commands print text. With `--json` they print the task as JSON.
 
@@ -77,6 +82,11 @@ Without `--json` the commands print text. With `--json` they print the task as J
 | `task_get` | `id` (required) | `task show` |
 | `task_status` | `id` (required), `status`, `force` | `task status` |
 | `task_next` | none | `task next` |
+| `task_ready` | none | `task ready` |
+| `task_claim` | `id`, `agent` | `task claim` |
+| `task_release` | `id` (required), `agent`, `force` | `task release` |
+| `task_dep` | `id` (required), `blocker` (required) | `task dep` |
+| `task_priority` | `id` (required), `level` (required, 0–4) | `task priority` |
 
 ## Config
 

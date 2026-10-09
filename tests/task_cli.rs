@@ -33,25 +33,32 @@ impl Sandbox {
 
     /// `rtok task <args>` in the checkout: (exited 0, stdout, stderr).
     fn task(&self, args: &[&str]) -> (bool, String, String) {
-        self.rtok(&[&["task"], args].concat())
+        self.rtok(None, &[&["task"], args].concat())
+    }
+
+    fn task_as(&self, agent: &str, args: &[&str]) -> (bool, String, String) {
+        self.rtok(Some(agent), &[&["task"], args].concat())
     }
 
     /// The MCP tool `name` through `rtok mcp --call`: (exited 0, the tool's text).
     fn mcp(&self, name: &str, args: &str) -> (bool, String) {
-        let (ok, out, _) = self.rtok(&["mcp", "--call", name, "--json", args]);
+        let (ok, out, _) = self.rtok(None, &["mcp", "--call", name, "--json", args]);
         (ok, out)
     }
 
-    fn rtok(&self, args: &[&str]) -> (bool, String, String) {
-        let out = Command::new(env!("CARGO_BIN_EXE_rtok"))
-            .args(args)
+    fn rtok(&self, agent: Option<&str>, args: &[&str]) -> (bool, String, String) {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_rtok"));
+        cmd.args(args)
             .current_dir(&self.repo)
             .env("HOME", &self.home)
             .env("USERPROFILE", &self.home)
             .env("RTOK_HOME", self.home.join(".rtok"))
             .env_remove("RTOK_CONFIG")
-            .output()
-            .unwrap();
+            .env_remove("RTOK_AGENT_ID");
+        if let Some(agent) = agent {
+            cmd.env("RTOK_AGENT_ID", agent);
+        }
+        let out = cmd.output().unwrap();
         (
             out.status.success(),
             String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -145,7 +152,7 @@ fn refusals_name_the_problem() {
     assert!(!ok && err.contains("unknown task status"), "{err}");
     let (ok, _, err) = sb.task(&["init", "--adapter", "jira"]);
     assert!(!ok && err.contains("--adapter must be one of"), "{err}");
-    assert_eq!(sb.ok(&["next"]), "no open task\n");
+    assert_eq!(sb.ok(&["next"]), "no ready task\n");
     assert_eq!(sb.ok(&["next", "--json"]), "null\n");
 }
 
@@ -215,4 +222,44 @@ fn sync_raises_a_lost_counter_and_reports_the_drift() {
     assert_eq!(json["raised"], serde_json::json!([]));
     assert_eq!(sb.ok(&["sync"]), "disk: next id S3, counters in step\n");
     assert_eq!(sb.ok(&["create", "Three"]), "S3\n");
+}
+
+/// T442: claim, a blocker and a stale-free second agent, through the CLI.
+#[test]
+fn claim_ready_and_a_blocker() {
+    let sb = Sandbox::new("claim");
+    sb.ok(&["init", "--prefix", "C"]);
+    let db = sb.home.join(".rtok").join("rtok.db");
+    let store = rtok::store::Store::open(&db).unwrap();
+    let host = store.host_id("claude").unwrap().unwrap();
+    let agent = store
+        .register_agent(host, "cli-claim", None, None, None)
+        .unwrap();
+    let other = store
+        .register_agent(host, "cli-other", None, None, None)
+        .unwrap();
+
+    assert_eq!(sb.ok(&["create", "First"]), "C1\n");
+    assert_eq!(sb.ok(&["create", "Second"]), "C2\n");
+    let (ok, _, err) = sb.task(&["claim", "C1"]);
+    assert!(!ok && err.contains("no agent to bind"), "{err}");
+
+    let claimed = sb.task_as(&agent, &["claim"]);
+    assert!(claimed.0, "{}", claimed.2);
+    assert_eq!(claimed.1, "C1  First\n");
+    let again = sb.task_as(&agent, &["claim", "C1"]);
+    assert!(again.0, "{}", again.2);
+    assert_eq!(again.1, "C1  First  (already yours)\n");
+
+    let (ok, out, err) = sb.task_as(&agent, &["dep", "C2", "C1"]);
+    assert!(ok, "{err}");
+    assert_eq!(out, "C2: blocked by C1\n");
+    let ready = sb.ok(&["ready"]);
+    assert!(!ready.contains("C2"), "{ready}");
+    let (ok, _, err) = sb.task_as(&other, &["claim", "C1"]);
+    assert!(!ok && err.contains("claimed by"), "{err}");
+    let (ok, out, err) = sb.task_as(&agent, &["release", "C1"]);
+    assert!(ok, "{err}");
+    assert_eq!(out, "C1: open\n");
+    assert!(sb.ok(&["ready"]).contains("C1"));
 }

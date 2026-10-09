@@ -19,6 +19,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::adapter::{Filter, Taken, TaskAdapter};
+use super::meta;
 use super::remote::{
     Http, LABEL, id_label, issue_title, label_id, max_with_prefix, secs, task_title,
 };
@@ -68,6 +69,7 @@ impl Issue {
             _ if self.has(IN_PROGRESS) => Status::InProgress,
             _ => Status::Open,
         };
+        let (priority, assignee, blocked_by) = meta::read_meta(&self.labels);
         Some(Task {
             title: task_title(&id, &self.title),
             description: self.description.unwrap_or_default().trim().to_string(),
@@ -81,6 +83,9 @@ impl Issue {
                 url: self.web_url,
                 node_id: None,
             }),
+            priority,
+            assignee,
+            blocked_by,
             id,
         })
     }
@@ -195,6 +200,12 @@ impl GitlabAdapter {
     }
 }
 
+fn is_status(label: &str) -> bool {
+    label.eq_ignore_ascii_case(IN_PROGRESS)
+        || label.eq_ignore_ascii_case(DONE)
+        || label.eq_ignore_ascii_case(WONT_DO)
+}
+
 impl TaskAdapter for GitlabAdapter {
     fn name(&self) -> &'static str {
         "gitlab"
@@ -292,6 +303,63 @@ impl TaskAdapter for GitlabAdapter {
         updated
             .into_task()
             .with_context(|| format!("gitlab tasks: {id} lost its label"))
+    }
+
+    /// Assignee, blockers and priority, plus the status labels. Not compare-and-set: two
+    /// callers can both PUT, and the last write wins. `claim` refuses a live foreign
+    /// assignee before this runs.
+    fn save(&self, task: &Task) -> Result<Task> {
+        let issue = self
+            .find(&task.id)?
+            .with_context(|| format!("gitlab tasks: no task {} in {}", task.id, self.shown()))?;
+        let status_label = match task.status {
+            Status::Open => None,
+            Status::InProgress => Some(IN_PROGRESS),
+            Status::Done => Some(DONE),
+            Status::Closed => Some(WONT_DO),
+        };
+        let mut desired: Vec<String> = issue
+            .labels
+            .iter()
+            .filter(|label| !meta::is_managed(label) && !is_status(label))
+            .cloned()
+            .collect();
+        if let Some(label) = status_label {
+            desired.push(label.to_string());
+        }
+        desired.extend(meta::managed_for(task));
+        let remove: Vec<&str> = issue
+            .labels
+            .iter()
+            .filter(|label| !desired.iter().any(|want| want == *label))
+            .map(String::as_str)
+            .collect();
+        let add: Vec<&str> = desired
+            .iter()
+            .filter(|label| !issue.labels.iter().any(|have| have == *label))
+            .map(String::as_str)
+            .collect();
+        let mut body = json!({});
+        if !remove.is_empty() {
+            body["remove_labels"] = json!(remove.join(","));
+        }
+        if !add.is_empty() {
+            body["add_labels"] = json!(add.join(","));
+        }
+        match (task.status.is_active(), issue.state == "closed") {
+            (true, true) => body["state_event"] = json!("reopen"),
+            (false, false) => body["state_event"] = json!("close"),
+            _ => {}
+        }
+        let path = format!("{}/{}", self.issues_path(), issue.iid);
+        let updated: Issue = if body.as_object().is_some_and(|o| o.is_empty()) {
+            issue
+        } else {
+            self.http.send(Method::PUT, &path, &body)?
+        };
+        updated
+            .into_task()
+            .with_context(|| format!("gitlab tasks: {} lost its label", task.id))
     }
 
     fn max_id(&self, prefix: &str) -> Result<Option<TaskId>> {
@@ -684,5 +752,37 @@ mod tests {
         ] {
             assert!(project(bad, &gl, "").is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn save_adds_the_owner_and_keeps_a_user_label() {
+        let server = MockServer::start();
+        let gl = adapter(&server);
+        by_label(
+            &server,
+            "rtok:A1",
+            "all",
+            json!([issue(1, "A1", "opened", &["bug"])]),
+        );
+        let put = server.mock(|when, then| {
+            when.method("PUT")
+                .path(format!("{ISSUES}/1"))
+                .json_body(json!({
+                    "add_labels": "status::in-progress,rtok:owner:agent-1",
+                }));
+            then.status(200).json_body(issue(
+                1,
+                "A1",
+                "opened",
+                &["bug", IN_PROGRESS, "rtok:owner:agent-1"],
+            ));
+        });
+        let mut task = gl.get(&id("A1")).unwrap().unwrap();
+        task.assignee = Some("agent-1".into());
+        task.status = Status::InProgress;
+        let saved = gl.save(&task).unwrap();
+        put.assert();
+        assert_eq!(saved.assignee.as_deref(), Some("agent-1"));
+        assert_eq!(saved.status, Status::InProgress);
     }
 }

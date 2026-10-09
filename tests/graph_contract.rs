@@ -78,8 +78,8 @@ fn explore_two_symbol_question_byte_exact() {
             "explore",
             serde_json::json!({"query": "how do b and c interact"})
         ),
-        "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
-         = c\nchain.rs:7 function\nfn c() {}\n\
+        "= b\nchain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+         = c\nchain.rs::c#function@7 chain.rs:7 function\nfn c() {}\n\
          paths:\nc → b\n\
          impact:\nb ← 1\nc ← 2\n"
     );
@@ -113,7 +113,7 @@ fn four_tools_byte_exact() {
     let name = |n: &str| serde_json::json!({"name": n});
     assert_eq!(
         call(&home, &a, "symbol", name("b")),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(&home, &a, "callers", name("c")),
@@ -238,7 +238,7 @@ fn second_repo_leaves_the_first_intact() {
     let first = call(&home, &a, "symbol", name.clone());
     assert_eq!(
         first,
-        "chain.rs:1 function\nfn a() {\n    b();\n}\ncalls: b\n"
+        "chain.rs::a#function@1 chain.rs:1 function\nfn a() {\n    b();\n}\ncalls: b\n"
     );
     assert_eq!(
         call(&home, &b, "symbol", name.clone()),
@@ -293,7 +293,7 @@ fn filters_narrow_to_one_subtree() {
             "symbol",
             serde_json::json!({"name": "b", "path": "chain"})
         ),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(
@@ -302,7 +302,7 @@ fn filters_narrow_to_one_subtree() {
             "symbol",
             serde_json::json!({"name": "b", "kind": "function"})
         ),
-        "chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
+        "chain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n"
     );
     assert_eq!(
         call(
@@ -330,6 +330,64 @@ fn filters_narrow_to_one_subtree() {
             serde_json::json!({"name": "c", "depth": 2, "path": "other"})
         ),
         "1  other.rs  d\n"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// T474: a definition longer than 40 lines archives the uncut span, and `rtok expand`
+/// returns it. `id` selects that one row even when `name` names something else.
+#[test]
+fn long_body_expands_and_symbol_id_selects_one_row() {
+    let home = tmp("long");
+    let a = home.join("repo");
+    std::fs::create_dir_all(&a).unwrap();
+    let mut src = String::from("fn long() {\n");
+    for i in 0..50 {
+        src.push_str(&format!("    let v{i} = {i};\n"));
+    }
+    src.push_str("}\nfn short() {}\n");
+    std::fs::write(a.join("long.rs"), &src).unwrap();
+    let out = call(&home, &a, "symbol", serde_json::json!({"name": "long"}));
+    assert!(out.contains("long.rs::long#function@1"), "{out}");
+    assert!(out.contains("expand "), "{out}");
+    assert!(
+        !out.contains("let v49"),
+        "the printed head must stay cut: {out}"
+    );
+    let id = out
+        .lines()
+        .find_map(|l| l.split("expand ").nth(1))
+        .expect(&out)
+        .trim();
+    let expanded = std::process::Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .args(["expand", id])
+        .env("RTOK_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        expanded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&expanded.stderr)
+    );
+    let full = String::from_utf8(expanded.stdout).unwrap();
+    assert!(full.contains("fn long()"), "{full}");
+    assert!(full.contains("let v49 = 49;"), "{full}");
+    let by_id = call(
+        &home,
+        &a,
+        "symbol",
+        serde_json::json!({"id": "long.rs::short#function@53", "name": "long"}),
+    );
+    assert!(by_id.contains("fn short()"), "{by_id}");
+    assert!(!by_id.contains("fn long()"), "{by_id}");
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "symbol",
+            serde_json::json!({"id": "long.rs::missing#function@1"})
+        ),
+        "no definition of long.rs::missing#function@1"
     );
     let _ = std::fs::remove_dir_all(&home);
 }

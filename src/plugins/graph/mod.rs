@@ -37,6 +37,7 @@ pub mod lsp;
 pub mod projects;
 pub mod rank;
 pub mod resolve;
+pub mod review;
 pub mod scope;
 pub mod status;
 pub mod walk;
@@ -84,8 +85,8 @@ impl Plugin for Graph {
         vec![
             ToolDef {
                 name: "symbol",
-                description: "Definitions and bodies. Pass name, or names for several. Optional path and kind.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"names":{"type":"array","items":{"type":"string"}},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}}}),
+                description: "Definitions of a symbol — id, path:line kind, then the body — optional id or names; path or kind narrows a name.",
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"names":{"type":"array","items":{"type":"string"}},"id":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "callers",
@@ -316,7 +317,18 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
         all: args["all"].as_bool().unwrap_or(false),
     };
     let text = match name {
-        "symbol" => scope::symbols(cx, scope, &symbol_arg_names(args), &filter)?,
+        "symbol" => {
+            let id = arg("id");
+            if !id.is_empty() {
+                scope::symbol_id(cx, scope, id)?
+            } else {
+                let names = symbol_arg_names(args);
+                if names.iter().all(|n| n.is_empty()) {
+                    anyhow::bail!("missing `name` or `id`");
+                }
+                scope::symbols(cx, scope, &names, &filter)?
+            }
+        }
         "callers" => scope::callers(cx, scope, arg("name"), &filter)?,
         "impact" => {
             let name = arg("name");
@@ -459,7 +471,10 @@ fn symbol_tags(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<Str
     with_stale(
         cx,
         root,
-        cap(cx, defs_text(cx, root, &rows, &callees, &Tag::default()))?,
+        cap(
+            cx,
+            defs_text(cx, root, name, &rows, &callees, &Tag::default()),
+        )?,
     )
 }
 
@@ -522,12 +537,14 @@ fn flag_ambiguous(defs: usize, out: String) -> String {
 fn defs_text(
     cx: &Ctx,
     root: &Path,
+    name: &str,
     rows: &[(String, String, i32, i32)],
     callees: &[(String, i32, String, i32)],
     tag: &Tag,
 ) -> String {
     let budget = cx.plugin_config::<crate::config::Graph>("graph").body_lines as usize;
     let cap = budget / 2;
+    let key = index::canon(root);
     let mut by_def: HashMap<(String, i32), Vec<String>> = HashMap::new();
     for (path, line, callee, _) in callees {
         by_def
@@ -536,21 +553,55 @@ fn defs_text(
             .push(callee.clone());
     }
     let mut out = String::new();
-    let mut cached: Option<(String, String)> = None;
+    let mut sha_of: HashMap<String, Option<String>> = HashMap::new();
+    let mut full_of: HashMap<String, String> = HashMap::new();
+    let mut stale_said: HashSet<String> = HashSet::new();
     for (path, kind, line, end_line) in rows {
-        if !cached.as_ref().is_some_and(|(p, _)| p == path) {
-            symbol_src_reads_add(1);
-            cached = Some((
-                path.clone(),
-                std::fs::read_to_string(root.join(path)).unwrap_or_default(),
-            ));
-        }
-        let def = def_text(
-            &cached.as_ref().unwrap().1,
-            (path, kind, *line, *end_line),
-            budget,
-        );
-        let (head, body) = def.split_once('\n').unwrap_or((&def, ""));
+        let span = cx
+            .symbol_span(&key, path, name, kind, *line)
+            .ok()
+            .flatten()
+            .filter(|s| !s.content_hash.is_empty());
+        let body = if let Some(span) = span {
+            let current = sha_of.entry(path.clone()).or_insert_with(|| {
+                symbol_src_reads_add(1);
+                std::fs::read(root.join(path))
+                    .ok()
+                    .map(|b| crate::store::hex_sha256(&b))
+            });
+            if current.as_deref() != Some(span.file_sha.as_str()) {
+                if stale_said.insert(path.clone()) {
+                    out.push_str(&format!("stale {path}\n"));
+                }
+                String::new()
+            } else {
+                match read_span(&root.join(path), span.start_byte, span.end_byte) {
+                    Ok(text) => {
+                        let n = text.lines().count() as i32;
+                        if n == 0 {
+                            String::new()
+                        } else {
+                            body_lines(&text, 1, n, budget, &mut |bytes| cx.put_archive(bytes).ok())
+                        }
+                    }
+                    Err(_) => {
+                        if stale_said.insert(path.clone()) {
+                            out.push_str(&format!("stale {path}\n"));
+                        }
+                        String::new()
+                    }
+                }
+            }
+        } else {
+            let src = full_of.entry(path.clone()).or_insert_with(|| {
+                symbol_src_reads_add(1);
+                std::fs::read_to_string(root.join(path)).unwrap_or_default()
+            });
+            body_lines(src, *line, *end_line, budget, &mut |bytes| {
+                cx.put_archive(bytes).ok()
+            })
+        };
+        let head = def_head(path, name, kind, *line);
         out.push_str(&format!("{}{head}{}\n{body}", tag.prefix, tag.suffix));
         if let Some(names) = by_def.get(&(path.clone(), *line)) {
             out.push_str(&calls_line(names, cap));
@@ -559,22 +610,102 @@ fn defs_text(
     out
 }
 
-/// One definition as `symbol` prints it: the `{path}:{line} {kind}` head, then its source.
-/// Also the text a symbol-shaped `Grep` is answered with (T369), so both read the same.
-pub(crate) fn def_text(
-    src: &str,
-    (path, kind, line, end_line): (&str, &str, i32, i32),
-    budget: usize,
-) -> String {
-    format!(
-        "{path}:{line} {kind}\n{}",
-        body_lines(src, line, end_line, budget)
+/// `{path}::{name}#{kind}@{line}` — the id printed on every definition head (T474).
+pub(crate) fn def_id(path: &str, name: &str, kind: &str, line: i32) -> String {
+    format!("{path}::{name}#{kind}@{line}")
+}
+
+/// The id, then the historical `{path}:{line} {kind}` head.
+pub(crate) fn def_head(path: &str, name: &str, kind: &str, line: i32) -> String {
+    format!("{} {path}:{line} {kind}", def_id(path, name, kind, line))
+}
+
+/// `path::name#kind@line` → `(path, name, kind, line)`.
+pub(crate) fn parse_symbol_id(id: &str) -> Option<(String, String, String, i32)> {
+    let (rest, line) = id.rsplit_once('@')?;
+    let line = line.parse().ok()?;
+    let (rest, kind) = rest.rsplit_once('#')?;
+    let (path, name) = rest.split_once("::")?;
+    if path.is_empty() || name.is_empty() || kind.is_empty() {
+        return None;
+    }
+    Some((path.to_string(), name.to_string(), kind.to_string(), line))
+}
+
+/// One definition selected by id. `name` on the call is ignored by the caller.
+pub fn symbol_by_id(cx: &Ctx, root: &Path, id: &str) -> Result<String> {
+    let Some((path, name, kind, line)) = parse_symbol_id(id) else {
+        return Ok(format!("no definition of {id}"));
+    };
+    index_for(cx, root)?;
+    let key = index::canon(root);
+    let rows: Vec<_> = cx
+        .symbol_defs(&key, &name)?
+        .into_iter()
+        .filter(|(p, k, l, _)| p == &path && k == &kind && *l == line)
+        .collect();
+    if rows.is_empty() {
+        return with_stale(cx, root, format!("no definition of {id}"));
+    }
+    let callees = cx.symbol_callees(&key, &name)?;
+    with_stale(
+        cx,
+        root,
+        cap(
+            cx,
+            defs_text(cx, root, &name, &rows, &callees, &Tag::default()),
+        )?,
     )
 }
 
-/// Source of one definition, `line..=end_line`, at most `budget` lines then `N more lines`.
+fn read_span(path: &Path, start: u64, end: u64) -> std::io::Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path)?;
+    f.seek(SeekFrom::Start(start))?;
+    let mut buf = vec![0u8; end.saturating_sub(start) as usize];
+    f.read_exact(&mut buf)?;
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// One definition as `symbol` prints it: the id and `{path}:{line} {kind}` head, then its source.
+/// Also the text a symbol-shaped `Grep` is answered with (T369), so both read the same.
+pub(crate) fn def_text(
+    src: &str,
+    name: &str,
+    (path, kind, line, end_line): (&str, &str, i32, i32),
+    budget: usize,
+    archive: &mut dyn FnMut(&[u8]) -> Option<String>,
+) -> String {
+    format!(
+        "{}\n{}",
+        def_head(path, name, kind, line),
+        body_lines(src, line, end_line, budget, archive)
+    )
+}
+
+/// Byte offsets of source lines `[first, last)` (0-based, `last` exclusive).
+fn line_byte_span(src: &str, first: usize, last: usize) -> (usize, usize) {
+    let mut starts = vec![0usize];
+    for (i, b) in src.bytes().enumerate() {
+        if b == b'\n' {
+            starts.push(i + 1);
+        }
+    }
+    let start = starts.get(first).copied().unwrap_or(src.len());
+    let end = starts.get(last).copied().unwrap_or(src.len());
+    (start.min(end), end)
+}
+
+/// Source of one definition, `line..=end_line`, at most `budget` lines.
+/// Past the budget the uncut span is archived and the line ends `… N more lines, expand <id>`.
 /// Shared with the LSP backend so both print a body the same way.
-pub(crate) fn body_lines(src: &str, line: i32, end_line: i32, budget: usize) -> String {
+pub(crate) fn body_lines(
+    src: &str,
+    line: i32,
+    end_line: i32,
+    budget: usize,
+    archive: &mut dyn FnMut(&[u8]) -> Option<String>,
+) -> String {
     let first = line.max(1) as usize - 1;
     let last = end_line.max(line) as usize;
     let body: Vec<&str> = src.lines().skip(first).take(last - first).collect();
@@ -584,7 +715,14 @@ pub(crate) fn body_lines(src: &str, line: i32, end_line: i32, budget: usize) -> 
         out.push('\n');
     }
     if body.len() > budget {
-        out.push_str(&format!("  … {} more lines\n", body.len() - budget));
+        let (start, end) = line_byte_span(src, first, last);
+        let uncut = src.as_bytes().get(start..end).unwrap_or(b"");
+        let extra = body.len() - budget;
+        if let Some(id) = archive(uncut) {
+            out.push_str(&format!("  … {extra} more lines, expand {id}\n"));
+        } else {
+            out.push_str(&format!("  … {extra} more lines\n"));
+        }
     }
     out
 }
@@ -1141,24 +1279,48 @@ fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<Strin
     Ok(names)
 }
 
-/// Stdout of `git -C root <args>`; `None` when git is missing, `root` is not a repo or git failed.
-pub(crate) fn git_stdout(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+/// Stdout of `git -C root <args>`. Failure text starts with `git diff failed`
+/// so a review can tell a broken git from an empty diff.
+pub(crate) fn git_stdout_result(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
         .output()
-        .ok()?;
-    out.status.success().then_some(out.stdout)
+        .map_err(|e| anyhow::anyhow!("git diff failed: {e}"))?;
+    if out.status.success() {
+        return Ok(out.stdout);
+    }
+    let err = String::from_utf8_lossy(&out.stderr);
+    let err = err.trim();
+    let detail = if err.is_empty() { "git failed" } else { err };
+    anyhow::bail!("git diff failed: {detail}")
+}
+
+/// Stdout of `git -C root <args>`; `None` when git is missing, `root` is not a repo or git failed.
+pub(crate) fn git_stdout(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+    git_stdout_result(root, args).ok()
+}
+
+/// `git diff` argv: `diff`, then `extra`, then `--cached` and the ref. Shared by `affected`
+/// (errors swallowed) and `review` (errors returned).
+pub(crate) fn git_diff_args(since: Option<&str>, staged: bool, extra: &[&str]) -> Vec<String> {
+    let mut args = Vec::with_capacity(extra.len() + 3);
+    args.push("diff".to_string());
+    args.extend(extra.iter().map(|s| (*s).to_string()));
+    if staged {
+        args.push("--cached".to_string());
+    }
+    if let Some(since) = since {
+        args.push(since.to_string());
+    }
+    args
 }
 
 fn git_changed_files(root: &Path, since: Option<&str>, staged: bool) -> Vec<String> {
-    let mut args = vec!["diff", "--name-only", "--relative", "-z"];
-    if staged {
-        args.push("--cached");
-    }
-    args.extend(since);
-    git_stdout(root, &args)
+    let args = git_diff_args(since, staged, &["--name-only", "--relative", "-z"]);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    git_stdout(root, &refs)
         .unwrap_or_default()
         .split(|b| *b == 0)
         .filter(|s| !s.is_empty())
@@ -1389,6 +1551,16 @@ pub(crate) fn assemble_explore(
             break;
         }
     }
+    assemble_named(query, filter, parts, &names)
+}
+
+/// The answer `assemble_explore` prints once the names are known.
+pub(crate) fn assemble_named(
+    query: &str,
+    filter: &Filter,
+    parts: &mut dyn ExploreParts,
+    names: &[String],
+) -> Result<(String, u64)> {
     if names.is_empty() {
         return Ok((
             format!("no symbols resolved for \"{query}\"{}", filter.scope_note()),
@@ -1396,7 +1568,7 @@ pub(crate) fn assemble_explore(
         ));
     }
     let mut counts = HashMap::new();
-    for name in &names {
+    for name in names {
         counts.insert(name.clone(), parts.def_count(name)?);
     }
     let ambiguous = counts.values().filter(|c| **c > 1).count();
@@ -1406,7 +1578,7 @@ pub(crate) fn assemble_explore(
     }
     let mut before = 0u64;
     let mut impact = Vec::new();
-    for name in &names {
+    for name in names {
         let defs = parts.defs(name)?;
         before += defs.len() as u64;
         out.push_str(&format!("= {name}\n{defs}"));
@@ -1417,8 +1589,8 @@ pub(crate) fn assemble_explore(
     }
     out.push_str("paths:\n");
     let mut any = false;
-    for a in &names {
-        for b in &names {
+    for a in names {
+        for b in names {
             if a != b {
                 for chain in parts.paths(a, b)? {
                     out.push_str(&chain);
@@ -1466,7 +1638,32 @@ fn explore_tags(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<S
         key: index::canon(root),
         label: "",
     };
-    let (text, before) = assemble_explore(query, filter, &mut parts)?;
+    let mut names: Vec<String> = Vec::new();
+    for token in explore_tokens(query) {
+        for name in parts.resolve(&token)? {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        if names.len() >= EXPLORE_MAX_NAMES {
+            break;
+        }
+    }
+    // No name resolved: search signature and doc too (T474). An FTS error keeps
+    // the "no symbols resolved" line. A resolved name stays byte-stable aside from the id.
+    if names.is_empty()
+        && let Ok(hits) = cx.symbol_fts(&parts.key, query, EXPLORE_MAX_NAMES as i64)
+    {
+        for (_, name, _, _) in hits {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            if names.len() >= EXPLORE_MAX_NAMES {
+                break;
+            }
+        }
+    }
+    let (text, before) = assemble_named(query, filter, &mut parts, &names)?;
     with_stale(cx, root, cap_kind(cx, text, before, "explore")?)
 }
 
@@ -1514,7 +1711,7 @@ impl ExploreParts for TagsExplore<'_> {
             prefix: self.label,
             suffix: "",
         };
-        let mut text = defs_text(self.cx, self.root, &rows, &callees, &tag);
+        let mut text = defs_text(self.cx, self.root, name, &rows, &callees, &tag);
         if ranked.others > 0 {
             text.push_str(&other_defs_line(name, ranked.others));
         }
@@ -2449,6 +2646,95 @@ mod tests {
         );
     }
 
+    /// T474: `truncated source lines` is not a symbol name. After the graph plugin is
+    /// indexed, `explore` still includes `body_lines` from its name and doc comment.
+    #[test]
+    fn explore_truncated_source_lines_includes_body_lines() {
+        let (cx, dir) = cx("explore-fts");
+        let root = crate_root().join("src/plugins/graph");
+        let out = explore(
+            &Ctx::new(&cx),
+            &root,
+            "truncated source lines",
+            &Filter::none(),
+        )
+        .unwrap();
+        assert!(out.contains("body_lines"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T474: `id` selects one definition and ignores a different `name`.
+    #[test]
+    fn symbol_by_id_returns_one_definition() {
+        let (cx, dir) = cx("symid");
+        fs::write(dir.join("a.rs"), "fn dup() {}\n").unwrap();
+        fs::write(dir.join("b.rs"), "fn dup() { let x = 1; }\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        let out = symbol_by_id(&ctx, &dir, "b.rs::dup#function@1").unwrap();
+        assert!(
+            out.contains("b.rs::dup#function@1 b.rs:1 function"),
+            "{out}"
+        );
+        assert!(out.contains("let x = 1"), "{out}");
+        assert!(!out.contains("a.rs"), "{out}");
+        assert_eq!(
+            symbol_by_id(&ctx, &dir, "nope").unwrap(),
+            "no definition of nope"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T474: a body past the line budget archives the uncut span and points at it.
+    #[test]
+    fn long_body_archives_the_uncut_span() {
+        let (cx, dir) = cx("longbody");
+        let mut src = String::from("fn long() {\n");
+        for i in 0..50 {
+            src.push_str(&format!("    let v{i} = {i};\n"));
+        }
+        src.push_str("}\n");
+        fs::write(dir.join("long.rs"), &src).unwrap();
+        let ctx = Ctx::new(&cx);
+        let out = symbol(&ctx, &dir, "long").unwrap();
+        assert!(out.contains("expand "), "{out}");
+        assert!(!out.contains("let v49"), "the head must stay cut: {out}");
+        let id = out
+            .lines()
+            .find_map(|l| l.split("expand ").nth(1))
+            .unwrap()
+            .trim();
+        let archived = cx.store.get_archive(id, None).unwrap().unwrap();
+        let span = ctx
+            .symbol_span(&index::canon(&dir), "long.rs", "long", "function", 1)
+            .unwrap()
+            .unwrap();
+        let file = fs::read(dir.join("long.rs")).unwrap();
+        let expect = &file[span.start_byte as usize..span.end_byte as usize];
+        assert_eq!(archived, expect);
+        assert!(String::from_utf8_lossy(&archived).contains("let v49"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T474: a file whose sha no longer matches is not sliced.
+    #[test]
+    fn a_changed_file_prints_stale_and_is_not_sliced() {
+        let (mut cx, dir) = cx("stale-span");
+        fs::write(dir.join("a.rs"), "fn alpha() { let n = 1; }\n").unwrap();
+        let first = symbol(&Ctx::new(&cx), &dir, "alpha").unwrap();
+        assert!(first.contains("fn alpha()"), "{first}");
+        cx.config.plugins.graph.auto_index = false;
+        fs::write(
+            dir.join("a.rs"),
+            "/* shifted */\nfn alpha() { let n = 1; }\n",
+        )
+        .unwrap();
+        let out = symbol(&Ctx::new(&cx), &dir, "alpha").unwrap();
+        assert!(out.contains("stale a.rs\n"), "{out}");
+        assert!(!out.contains("shifted"), "{out}");
+        assert!(out.contains("a.rs:1 function"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
     /// End to end over the tags index: one question about `b` and `c` answers with
     /// both definition bodies, the only caller chain between them and both impact
     /// counts — byte for byte.
@@ -2470,8 +2756,8 @@ mod tests {
         .unwrap();
         assert_eq!(
             out,
-            "= b\nchain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
-             = c\nchain.rs:7 function\nfn c() {}\n\
+            "= b\nchain.rs::b#function@4 chain.rs:4 function\nfn b() {\n    c();\n}\ncalls: c\n\
+             = c\nchain.rs::c#function@7 chain.rs:7 function\nfn c() {}\n\
              paths:\nc → b\n\
              impact:\nb ← 1\nc ← 2\n"
         );
@@ -2811,33 +3097,12 @@ fn c() {}
                 "s",
                 (0, 0),
                 &[
-                    ("hot".into(), "function".into(), 1, true, 1, String::new()),
-                    ("mid".into(), "function".into(), 2, true, 2, String::new()),
-                    ("cold".into(), "function".into(), 3, true, 3, String::new()),
-                    (
-                        "hot".into(),
-                        "function".into(),
-                        10,
-                        false,
-                        10,
-                        String::new(),
-                    ),
-                    (
-                        "hot".into(),
-                        "function".into(),
-                        11,
-                        false,
-                        11,
-                        String::new(),
-                    ),
-                    (
-                        "mid".into(),
-                        "function".into(),
-                        12,
-                        false,
-                        12,
-                        String::new(),
-                    ),
+                    rtok_plugin_sdk::SymbolRow::new("hot", "function", 1, true, 1, ""),
+                    rtok_plugin_sdk::SymbolRow::new("mid", "function", 2, true, 2, ""),
+                    rtok_plugin_sdk::SymbolRow::new("cold", "function", 3, true, 3, ""),
+                    rtok_plugin_sdk::SymbolRow::new("hot", "function", 10, false, 10, ""),
+                    rtok_plugin_sdk::SymbolRow::new("hot", "function", 11, false, 11, ""),
+                    rtok_plugin_sdk::SymbolRow::new("mid", "function", 12, false, 12, ""),
                 ],
             )
             .unwrap();
