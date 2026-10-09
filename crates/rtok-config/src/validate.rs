@@ -41,30 +41,36 @@ pub fn issues_in(path: &Path, text: &str) -> Vec<String> {
         .expect("Config is a table");
     let mut errors = Vec::new();
     check_table(path, text, "", doc.as_table(), &schema, &mut errors);
-    check_graph_extensions(path, text, doc.as_table(), &mut errors);
+    check_graph_maps(path, text, doc.as_table(), &mut errors);
     errors
 }
 
-fn check_graph_extensions(path: &Path, src: &str, doc: &dyn TableLike, errors: &mut Vec<String>) {
+fn check_graph_maps(path: &Path, src: &str, doc: &dyn TableLike, errors: &mut Vec<String>) {
     let Some(plugins) = doc.get("plugins").and_then(|i| i.as_table_like()) else {
         return;
     };
     let Some(graph) = plugins.get("graph").and_then(|i| i.as_table_like()) else {
         return;
     };
-    let Some(ext) = graph.get("extensions").and_then(|i| i.as_table_like()) else {
-        return;
-    };
-    for (k, item) in TableLike::iter(ext) {
-        let dotted = format!("plugins.graph.extensions.{k}");
-        let at = loc(path, src, item);
-        match item.as_str() {
-            Some(s) if GRAPH_GRAMMARS.contains(&s) => {}
-            Some(s) => errors.push(format!(
-                "{at}: {dotted} must be one of {} (got {s})",
-                GRAPH_GRAMMARS.join(", ")
-            )),
-            _ => errors.push(format!("{at}: {dotted}: expected string")),
+    // Both maps are keyed by free names (a suffix, a language), so only their values can be checked.
+    for (map, allowed) in [
+        ("extensions", GRAPH_GRAMMARS),
+        ("backend_by_language", GRAPH_BACKENDS),
+    ] {
+        let Some(table) = graph.get(map).and_then(|i| i.as_table_like()) else {
+            continue;
+        };
+        for (k, item) in TableLike::iter(table) {
+            let dotted = format!("plugins.graph.{map}.{k}");
+            let at = loc(path, src, item);
+            match item.as_str() {
+                Some(s) if allowed.contains(&s) => {}
+                Some(s) => errors.push(format!(
+                    "{at}: {dotted} must be one of {} (got {s})",
+                    allowed.join(", ")
+                )),
+                _ => errors.push(format!("{at}: {dotted}: expected string")),
+            }
         }
     }
 }
@@ -512,8 +518,13 @@ fn is_open(dotted: &str) -> bool {
     dotted == "bench.configs"
         || dotted == "stats.prices"
         || dotted == "plugins.graph.extensions"
+        || dotted == "plugins.graph.backend_by_language"
+        || dotted.starts_with("plugins.graph.backend_by_language.")
         || dotted.starts_with("plugins.graph.extensions.")
 }
+
+/// `text` is left out until T329.10 ships it: a value the graph cannot honour is refused here.
+const GRAPH_BACKENDS: &[&str] = &["tags", "lsp", "auto"];
 
 const GRAPH_GRAMMARS: &[&str] = &[
     "rust", "ts", "tsx", "js", "mjs", "cjs", "py", "dart", "c", "h", "go",
@@ -571,6 +582,7 @@ fn check_table(
 const CHOICES: &[(&str, &[&str])] = &[
     ("log.tspin", &["auto", "always", "off"]),
     ("plugins.graph.map_rank", &["refs", "pagerank"]),
+    ("plugins.graph.backend", GRAPH_BACKENDS),
     ("proxy.flex.on_429", &["none", "backoff", "default"]),
     // Any other value turns the semantic tier on with the placeholder hash embedding
     // (`proxy::semantic_cache`); `"hash"` is the only backend until P29 ships real ones.
@@ -698,6 +710,7 @@ fn check_leaf(
             // Ten years: a larger floor is a typo, and it would keep junk forever.
             "agents.junk.keep_logs_days"
             | "agents.junk.stale_session_days"
+            | "agents.junk.stale_worktree_days"
             | "agents.junk.crash_dump_min_age_days"
                 if n > 3650 =>
             {
@@ -902,6 +915,10 @@ mod tests {
             (
                 "stale_session_days = 2.5",
                 "agents.junk.stale_session_days: expected number",
+            ),
+            (
+                "stale_worktree_days = 3651",
+                "agents.junk.stale_worktree_days must be ≤ 3650",
             ),
             (
                 "crash_dump_min_age_days = 3651",

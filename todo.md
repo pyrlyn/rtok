@@ -18,7 +18,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
-- T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
 - T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 - T329.11. Graph capability cache: one probe per project until the process restarts
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
@@ -29,11 +28,7 @@
 - T329.21. Project badges in the graph page lists
 - T329.23. Graph drill-down: side panel and search
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
-- T330.5. Junk: review and explicit kinds (`sessions`, `stale-worktrees`, `crash-dumps`, `snapshots`, `logs`, `deps`, `backups`, `index`) and `[agents.junk]` config
-- T330.5.3. Junk: `stale-worktrees` through `rtok worktree gc`'s verdict
 - T330.6. Junk: item breakdown, `doctor` line, web card
-- T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
-- T331.10. Doctor: rtok's own MCP entry in the duplicate check
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 - T343. Investigate: T330 `--sort` takes two different value sets on `list`
 - T344. Investigate: T330 "backwards compatible" vs new default deletions

@@ -66,6 +66,7 @@
 # keep_logs_days          = 30          # `logs` entries modified within this many days stay (0-3650)
 # temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay (0-87600)
 # stale_session_days      = 30          # `--kind sessions` only: sessions not touched for more than this many days are junk (0-3650); `--session-days N` for one run
+# stale_worktree_days     = 14          # a merged, clean worktree `rtok worktree gc` would remove is junk (`stale-worktrees`, review) once idle this many days (0-3650)
 # crash_dump_min_age_days = 7           # a crash dump in an `extra` crash-dumps folder older than this is safe to clear, a younger one is review (0-3650)
 # exclude                 = []          # globs never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]
 # extra                   = []          # paths you vouch for as junk, e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs | crash-dumps; host = a host id or rtok
@@ -498,7 +499,9 @@
 # map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 # body_lines = 40                       # symbol(): source lines shown per definition
 # auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
-# backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
+# backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
+# lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
+# backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 # watch      = "off"                    # off | notify (P8d): background re-index inside `rtok mcp`
 # auto_link_references = true           # follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 # reference_depth = 3                   # reference levels followed from the project (A -> B is 1); reaching it is shown and logged

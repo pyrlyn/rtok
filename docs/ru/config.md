@@ -134,6 +134,7 @@ antigravity = ["~/.gemini/antigravity"] # listed as unsupported when present: Go
 keep_logs_days          = 30          # `logs` entries (the agents' documented log folders) modified within this many days stay; 0-3650
 temp_min_age_hours      = 24          # `temp` entries touched within this many hours stay; 0-87600
 stale_session_days      = 30          # `--kind sessions` only: sessions not touched for more than this many days are junk, time is the only criterion; 0-3650; `--session-days N` for one run
+stale_worktree_days     = 14          # a merged, clean worktree `rtok worktree gc` would remove is junk (`stale-worktrees`, review) once idle this many days; 0-3650
 crash_dump_min_age_days = 7           # a crash dump in an `extra` crash-dumps folder older than this many days is safe to clear, a younger one is review; 0-3650
 exclude                 = []          # globs (~ = home) never touched, nor any folder holding a match, e.g. ["~/.claude/debug/keep-*"]; a bad glob keeps everything
 extra                   = []          # paths you vouch for as junk (D36), e.g. [{ host = "cursor", kind = "cache", path = "~/Library/Application Support/Cursor/CachedData" }]; kind = cache | temp | logs | crash-dumps; host = a host id or rtok
@@ -548,7 +549,9 @@ map_rank   = "refs"                   # SessionStart map order: refs = reference
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI
-backend    = "tags"                   # tags | lsp: index backend; default tags; lsp spawns rust-analyzer/clangd/tsserver from PATH (P30)
+backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
+lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
+backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 watch      = "off"                    # off | notify: background re-index inside `rtok mcp` (P8d)
 auto_link_references = true           # T329.8: follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 reference_depth = 3                   # T329.8: reference levels followed from the project (A -> B is 1); reaching it is shown and logged
@@ -754,9 +757,17 @@ default_model = ""
 
 ### Бэкенды графа (`[plugins.graph]`)
 
-`backend = "lsp"` направляет `symbol` / `callers` / `impact` / `outline` / `explore` через
-языковой сервер из `PATH` вместо индекса tags. Пошаговая настройка для
-Rust (rust-analyzer) и Dart (Dart SDK): `docs/lsp.md`.
+`backend = "tags"` (по умолчанию) отвечает из индекса tree-sitter. `"lsp"` направляет `symbol` / `callers` /
+`impact` / `outline` / `explore` через языковой сервер из `PATH` и отдаёт ответ tags, когда сервер
+ответить не может. `"auto"` выбирает режим для каждого проекта и языка: сервер, если для языка проекта
+он установлен, иначе tags, и каждый ответ сообщает, какой режим ответил. `text` появится в T329.10 и до
+тех пор отклоняется.
+
+`backend_by_language` переопределяет `backend` для одного языка, который определяется по файлу-маркеру
+проекта: `rust`, `c`, `typescript`, `dart`, `go`, `python`, `javascript` (`go = "tags"` оставляет Go на
+индексе, пока остальные работают в `auto`). `lsp_timeout_ms` (по умолчанию 40000) — сколько может длиться
+одно ожидание сервера, прежде чем запрос откатится на tags. Пошаговая настройка для Rust (rust-analyzer) и
+Dart (Dart SDK) и формат ответа `auto`: `docs/lsp.md`.
 
 ### Вывод в терминал (`[ui]`)
 
@@ -816,7 +827,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
-| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `--session-days` это `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.exclude`, `.extra` без флага |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `--session-days` это `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` без флага |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |
 | `agents sessions` | `--all` | (действие: также перечисляет завершённые сессии; live или idle — по `agents.idle`) |
 | `agents show` | — | разрешает префикс id через хранилище (T284); live или idle — по `agents.idle` (`--json` — строка «чтение») |

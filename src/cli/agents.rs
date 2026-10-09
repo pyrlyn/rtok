@@ -367,15 +367,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
                 },
         } => {
             let cfg = Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
-            let report = crate::agents::junk::report_with(
-                &cfg,
-                &crate::agents::junk_map::Roots::from_env(),
-                crate::agents::junk::Options {
-                    all,
-                    ..Default::default()
-                },
-                crate::agents::junk::AGENT_SCAN_LIMIT,
-            );
+            let report = crate::agents::junk::report_in_repo(&cfg, all);
             if json {
                 print_json(&report)?;
             } else {

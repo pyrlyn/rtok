@@ -10,6 +10,7 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -19,7 +20,17 @@ use serde_json::{Value, json};
 
 use super::cap;
 
-const READY: Duration = Duration::from_secs(40);
+/// Wait cap for one server step, set from `[plugins.graph] lsp_timeout_ms` by the door in
+/// `graph::lsp_or_tags` (T329.9). A process-wide cell because the cached session outlives a call.
+static TIMEOUT_MS: AtomicU64 = AtomicU64::new(40_000);
+
+pub(crate) fn set_timeout_ms(ms: u64) {
+    TIMEOUT_MS.store(ms, Ordering::Relaxed);
+}
+
+fn ready() -> Duration {
+    Duration::from_millis(TIMEOUT_MS.load(Ordering::Relaxed))
+}
 
 /// True when `bin` is installed. A mise shim and rustup's component proxy do not count;
 /// `rust-analyzer` counts when `rustup which` names the toolchain binary. File presence
@@ -122,18 +133,49 @@ fn resolve_bin(name: &str) -> PathBuf {
     first_real_bin(name).unwrap_or_else(|| PathBuf::from(name))
 }
 
-fn pick(root: &Path) -> Result<(&'static str, &'static [&'static str])> {
-    if root.join("Cargo.toml").is_file() {
-        return Ok(("rust-analyzer", &[]));
-    }
-    if root.join("compile_commands.json").is_file() {
-        return Ok(("clangd", &[]));
-    }
-    if root.join("tsconfig.json").is_file() {
-        return Ok(("typescript-language-server", &["--stdio"]));
-    }
-    if root.join("pubspec.yaml").is_file() {
-        return Ok(("dart", &["language-server"]));
+/// A server command: binary and arguments.
+type Server = (&'static str, &'static [&'static str]);
+
+/// Project kinds by marker file, in the order they are tried: the language name that
+/// `[plugins.graph.backend_by_language]` is keyed by, and the server that speaks it (`None`:
+/// tags only).
+const LANGS: &[(&str, &str, Option<Server>)] = &[
+    ("Cargo.toml", "rust", Some(("rust-analyzer", &[]))),
+    ("compile_commands.json", "c", Some(("clangd", &[]))),
+    (
+        "tsconfig.json",
+        "typescript",
+        Some(("typescript-language-server", &["--stdio"])),
+    ),
+    ("pubspec.yaml", "dart", Some(("dart", &["language-server"]))),
+    ("go.mod", "go", None),
+    ("pyproject.toml", "python", None),
+    ("package.json", "javascript", None),
+];
+
+pub(crate) fn language_of(root: &Path) -> Option<&'static str> {
+    LANGS
+        .iter()
+        .find(|(marker, ..)| root.join(marker).is_file())
+        .map(|(_, lang, _)| *lang)
+}
+
+/// The project's language has a server at all (marker file), installed or not.
+pub(crate) fn has_server(root: &Path) -> bool {
+    pick(root).is_ok()
+}
+
+/// The project's language has a server and its binary is installed. File presence only, no
+/// spawn, so `auto` can choose a mode before it asks anything.
+pub(crate) fn usable(root: &Path) -> bool {
+    pick(root).is_ok_and(|(bin, _)| on_path(bin))
+}
+
+fn pick(root: &Path) -> Result<Server> {
+    for (marker, _, server) in LANGS {
+        if let (true, Some(server)) = (root.join(marker).is_file(), server) {
+            return Ok(*server);
+        }
     }
     bail!(
         "lsp: no Cargo.toml / compile_commands.json / tsconfig.json / pubspec.yaml in {}",
@@ -394,7 +436,7 @@ impl Session {
             &mut self.stdin,
             &json!({"jsonrpc":"2.0","id": id, "method": method, "params": params}),
         )?;
-        let deadline = Instant::now() + READY;
+        let deadline = Instant::now() + ready();
         loop {
             if Instant::now() > deadline {
                 bail!("lsp: timeout waiting for {method}");
@@ -526,7 +568,7 @@ fn pick_def(r: &Value, name: &str, root: &Path) -> Option<Def> {
 }
 
 fn wait_def(s: &mut Session, name: &str) -> Result<Option<Def>> {
-    let deadline = Instant::now() + READY;
+    let deadline = Instant::now() + ready();
     loop {
         let r = s.request("workspace/symbol", json!({"query": name}))?;
         if let Some(d) = pick_def(&r, name, &s.root) {
@@ -971,10 +1013,9 @@ fn flatten(syms: &[Value], out: &mut String) {
 
 fn workspace_of(file: &Path) -> PathBuf {
     for d in file.ancestors().skip(1) {
-        if d.join("Cargo.toml").is_file()
-            || d.join("compile_commands.json").is_file()
-            || d.join("tsconfig.json").is_file()
-            || d.join("pubspec.yaml").is_file()
+        if LANGS
+            .iter()
+            .any(|(marker, _, server)| server.is_some() && d.join(marker).is_file())
         {
             return d.to_path_buf();
         }
@@ -1002,7 +1043,7 @@ pub(crate) fn outline(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
     with_session(&ws, |s| {
         let uri = file_uri(&abs);
         s.did_open(&uri)?;
-        let deadline = Instant::now() + READY;
+        let deadline = Instant::now() + ready();
         loop {
             let raw = s.request(
                 "textDocument/documentSymbol",

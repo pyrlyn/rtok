@@ -14,9 +14,10 @@ use anyhow::Result;
 use serde::Serialize;
 
 use super::junk::{self, AGENT_SCAN_LIMIT, Report};
-use super::junk_cache::{RTOK_OWN, SECTION_22, TAG, real};
+use super::junk_cache::{GC_VERDICT, RTOK_OWN, SECTION_22, TAG, real};
 use super::junk_kinds::{PACKAGE_LOCKS, held_reason};
 use super::junk_review::EXTRA;
+use super::junk_worktrees::{self, Remover};
 use super::restart::{RealProcs, host_running};
 use super::{HOSTS, host};
 use crate::bytes::human_bytes;
@@ -26,7 +27,7 @@ use crate::worktree::list::{is_cache_dir, usage_until};
 
 /// What `--kind` takes today: rtok's own T182 junk, then the T330.3, T330.5.1, T330.5.2 and
 /// T330.5.4 kinds. `snapshots` is accepted and never clears anything: its class is `never`.
-pub const KINDS: [&str; 14] = [
+pub const KINDS: [&str; 15] = [
     "log",
     "archive",
     "cache",
@@ -41,6 +42,7 @@ pub const KINDS: [&str; 14] = [
     "index",
     "crash-dumps",
     "sessions",
+    "stale-worktrees",
 ];
 
 /// Kinds a running agent may be writing right now. A §22 cache joins them; a tagged cache is
@@ -207,7 +209,7 @@ pub fn plan(
         let mut live: Option<bool> = None;
         for i in a.items.iter().filter(|i| i.counted()) {
             // D36 evidence only, whatever else marked the item counted.
-            let documented = matches!(i.evidence, SECTION_22 | TAG | RTOK_OWN | EXTRA);
+            let documented = matches!(i.evidence, SECTION_22 | TAG | RTOK_OWN | EXTRA | GC_VERDICT);
             if !documented || !f.wants_kind(i.kind, i.class) || !old(Path::new(&i.path)) {
                 continue;
             }
@@ -324,6 +326,7 @@ pub fn apply(cfg: &Config, items: &mut [Planned], f: &Filter, now: SystemTime) {
     let keep = protected(cfg);
     let todo = items.iter_mut().filter(|p| p.action == "clear");
     let mut archives = Vec::new();
+    let mut worktrees = Remover::default();
     for p in todo {
         if p.kind == "archive" {
             archives.push(p);
@@ -331,10 +334,23 @@ pub fn apply(cfg: &Config, items: &mut [Planned], f: &Filter, now: SystemTime) {
         }
         let res = match recheck(p, &keep, now) {
             Some((why, failed)) => Err((why, failed)),
-            None => remove(p, f.trash).map_err(|e| (format!("failed, kept: {e}"), true)),
+            // git unregisters a worktree, so there is no folder to move to the trash.
+            None if p.kind == junk_worktrees::KIND && f.trash => {
+                Err(("git removes a worktree: not moved to trash".into(), true))
+            }
+            None if p.kind == junk_worktrees::KIND => worktrees
+                .remove(cfg, now, Path::new(&p.path))
+                .map(Some)
+                .map_err(|e| (e, true)),
+            None => remove(p, f.trash)
+                .map(|()| None)
+                .map_err(|e| (format!("failed, kept: {e}"), true)),
         };
         match res {
-            Ok(()) => p.note = if f.trash { "moved to trash" } else { "removed" }.into(),
+            Ok(note) => {
+                let done = if f.trash { "moved to trash" } else { "removed" };
+                p.note = note.unwrap_or_else(|| done.into());
+            }
             Err((why, failed)) => (p.action, p.note, p.failed) = ("skip", why, failed),
         }
     }

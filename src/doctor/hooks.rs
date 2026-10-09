@@ -24,7 +24,7 @@ use crate::config::Config;
 #[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct Problem {
     /// `broken-hook`, `suspect-hook`, `unverified-hook`, `duplicate-hook`, `duplicate-mcp`,
-    /// `conflicting-mcp`, `stale-plugin` or `unreadable-config`.
+    /// `conflicting-mcp`, `own-mcp`, `stale-plugin` or `unreadable-config`.
     pub kind: &'static str,
     pub agent: &'static str,
     /// The config file the entry lives in.

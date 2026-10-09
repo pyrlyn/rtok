@@ -11,17 +11,28 @@
 //! not a duplicate. The same name in two scopes is resolved by the host (local over project over
 //! user, research.md section 25): the overridden entry is reported as unused. A server a file
 //! marks disabled is not running and not compared. Env values take part in the comparison and are
-//! never printed. rtok's own entry waits for T332/T333 and is neither compared nor reported.
-//! Every copy is fixable (T331.6): `--fix` removes the ones that are not kept or used.
+//! never printed. Every copy is fixable (T331.6): `--fix` removes the ones that are not kept or
+//! used.
 //!
 //! A server of an enabled Claude plugin (T331.11) is read from the plugin's `.mcp.json`, with
 //! `${CLAUDE_PLUGIN_ROOT}` resolved, under the name `plugin:<plugin>:<server>` that Claude Code
 //! gives it; the plugin's copy is the one kept, and a plugin's file is never fixable.
+//!
+//! rtok's own entries (T331.10, D33/T332) are not compared by launch; an entry that runs the rtok
+//! binary is rtok's, and install and update own the one named `rtok` in the host's own config
+//! file. That entry is the kept copy and is never fixable, because the next update writes it
+//! again. A second `rtok` under the same name in another scope, or a plugin's copy (Gemini's
+//! extension manifest), is the host's to merge or shadow: it is `own-mcp` information, not in
+//! the `--fix` kinds, and the plugin copy points at `rtok agents update <host>`. Only a
+//! hand-written copy under another name (`rtok-mcp` running `rtok mcp`) starts a second process:
+//! it is a `duplicate-mcp` extra and removable. Devin's plugin store is undocumented and
+//! Antigravity has no config entry beside its plugin, so neither is read.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rtok_mcp::config::{self, Fs as McpFs};
+use rtok_mcp::registry::RTOK;
 use rtok_mcp::spec::McpSpec;
 use serde_json::Value;
 
@@ -90,6 +101,8 @@ struct Srv {
     version: Option<String>,
     scope: Scope,
     spec: McpSpec,
+    /// Runs the rtok binary: rtok's own, judged by the D33 rules instead of by launch.
+    own: bool,
 }
 
 /// Where an entry sits in its file, for `--fix` to remove it (T331.6): the table and the name.
@@ -152,6 +165,13 @@ fn sources(cfg: &crate::config::Config, p: &Probes, plugins: &[(String, PathBuf)
                         });
                     }
                 };
+                if agent.id() == "gemini" {
+                    let manifest = McpSpec {
+                        config_path: crate::agents::gemini::plugin_manifest(cfg),
+                        ..s.spec.clone()
+                    };
+                    add(manifest, Scope::Plugin, None);
+                }
                 if let (true, Some(cwd)) = (agent.id() == "claude" && s.label == "cli", &cwd) {
                     let project = McpSpec {
                         config_path: cwd.join(".mcp.json"),
@@ -182,12 +202,12 @@ fn sources(cfg: &crate::config::Config, p: &Probes, plugins: &[(String, PathBuf)
     out
 }
 
-/// A server entry as `(shown, launch key, version)`; `None` for what is not compared.
+/// A server entry as `(shown, launch key, version)`; `None` for what is not running.
 fn launch(entry: &Value, p: &Probes) -> Option<(String, String, Option<String>)> {
     let get = |k: &str| entry.get(k).and_then(Value::as_str);
     let disabled = entry.get("disabled") == Some(&Value::Bool(true))
         || entry.get("enabled") == Some(&Value::Bool(false));
-    if disabled || rtok_agent_sdk::runs_bin(entry, crate::agents::is_rtok_bin) {
+    if disabled {
         return None;
     }
     let env: BTreeMap<&str, &Value> = entry
@@ -289,6 +309,7 @@ fn entries(cfg: &crate::config::Config, p: &Probes, plugins: &[(String, PathBuf)
                     version,
                     scope: s.scope,
                     spec: s.spec.clone(),
+                    own: rtok_agent_sdk::runs_bin(&entry, crate::agents::is_rtok_bin),
                 });
             }
         }
@@ -319,7 +340,8 @@ pub fn check(
     p: &Probes,
     plugins: &[(String, PathBuf)],
 ) -> Vec<Problem> {
-    let all = entries(cfg, p, plugins);
+    let (own, all): (Vec<Srv>, Vec<Srv>) =
+        entries(cfg, p, plugins).into_iter().partition(|s| s.own);
     let mut out = Vec::new();
     let mut group = 0u32;
     let mut next = || {
@@ -411,6 +433,83 @@ pub fn check(
             }
         }
     }
+    out.extend(own_findings(&own, &mut next));
+    out
+}
+
+/// rtok's own entries per host surface (T331.10). The kept copy is the entry `rtok` in the file
+/// install writes, else the best-ranked one named `rtok`, else the best-ranked: never fixable.
+fn own_findings(own: &[Srv], next: &mut dyn FnMut() -> u32) -> Vec<Problem> {
+    let mut sets: BTreeMap<&str, Vec<&Srv>> = BTreeMap::new();
+    for s in own {
+        sets.entry(&s.set).or_default().push(s);
+    }
+    let mut out = Vec::new();
+    for copies in sets.values().filter(|c| c.len() > 1) {
+        let rank = |s: &&Srv| (s.name != RTOK.name, s.scope != Scope::User, s.scope.keep());
+        let Some(kept) = copies.iter().copied().min_by_key(rank) else {
+            continue;
+        };
+        let host = kept.agent;
+        let (extra, info): (Vec<&Srv>, Vec<&Srv>) = copies
+            .iter()
+            .copied()
+            .filter(|s| !std::ptr::eq(*s, kept))
+            .partition(|s| s.name != RTOK.name && s.scope != Scope::Plugin);
+        // The host starts one process per name; a plugin copy or a same-name one is merged.
+        let used = copies
+            .iter()
+            .filter(|s| s.name == RTOK.name && s.scope != Scope::Plugin)
+            .max_by_key(|s| s.scope.wins())
+            .map_or("the config", |s| s.scope.why());
+        // The kept copy is what install writes again, so removing it would only be undone.
+        let own_problem = |s: &Srv, kind: &'static str, g: u32, keep: bool, detail: String| {
+            let found = problem(s, kind, g, keep, detail);
+            Problem {
+                fixable: found.fixable && !keep,
+                ..found
+            }
+        };
+        if !extra.is_empty() {
+            let (g, n) = (next(), extra.len() + 1);
+            out.push(own_problem(
+                kept,
+                "duplicate-mcp",
+                g,
+                true,
+                format!("runs {n} times; keep this copy (rtok's own entry, install writes it)"),
+            ));
+            for s in &extra {
+                let detail = format!("runs {n} times; an extra copy that also launches rtok");
+                out.push(own_problem(s, "duplicate-mcp", g, false, detail));
+            }
+        }
+        if !info.is_empty() {
+            let (g, n) = (next(), info.len() + 1);
+            let said = format!("rtok is configured {n} times; information only");
+            if extra.is_empty() {
+                let detail = format!("{said}; this is the entry install writes, kept");
+                out.push(own_problem(kept, "own-mcp", g, true, detail));
+            }
+            for s in &info {
+                let why = if s.scope == Scope::Plugin {
+                    format!(
+                        "the host shadows or merges the plugin copy; `rtok agents update {host}` \
+                         brings it up to date"
+                    )
+                } else {
+                    format!("the host uses the {used} entry named `rtok` and merges the rest")
+                };
+                out.push(own_problem(
+                    s,
+                    "own-mcp",
+                    g,
+                    false,
+                    format!("{said}: {why}"),
+                ));
+            }
+        }
+    }
     out
 }
 
@@ -464,6 +563,7 @@ mod tests {
         let mut c = Config::default();
         c.doctor.claude_json = "/h/.claude.json".into();
         c.setup.codex.config_path = "/h/.codex/config.toml".into();
+        c.setup.gemini.dir = "/h/.gemini".into();
         c
     }
 
@@ -589,16 +689,188 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn disabled_servers_and_rtoks_own_entry_are_not_compared() {
+    fn disabled_servers_are_not_compared_and_a_lone_rtok_entry_is_silent() {
         let mut m = Mock::default();
         user(
             &mut m,
             r#""a": {"command": "/bin/t", "disabled": true}, "b": {"command": "/bin/t"},
                "c": {"command": "/bin/u", "enabled": false}, "d": {"command": "/bin/u"},
                "rtok": {"command": "rtok", "args": ["mcp"]},
-               "rtok-mcp": {"type": "stdio", "command": "/opt/bin/rtok", "args": ["mcp"]}"#,
+               "rtok-mcp": {"command": "rtok", "args": ["mcp"], "disabled": true}"#,
         );
         assert!(run(&m).is_empty());
+    }
+
+    const OWN: &str = r#"{"command": "rtok", "args": ["mcp", "--host", "claude"]}"#;
+    const HAND: &str = r#"{"type": "stdio", "command": "/opt/bin/rtok", "args": ["mcp"]}"#;
+
+    /// `(kind, name, keep, fixable)` of every finding.
+    fn own(found: &[Problem]) -> Vec<(&'static str, String, bool, bool)> {
+        shape(found)
+            .into_iter()
+            .zip(found)
+            .map(|((kind, name, keep), p)| (kind, name, keep, p.fixable))
+            .collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rtok_mcp_under_another_name_is_a_removable_double_launch_next_to_the_kept_rtok() {
+        let mut m = Mock::default();
+        user(&mut m, &format!(r#""rtok": {OWN}, "rtok-mcp": {HAND}"#));
+        let found = run(&m);
+        assert_eq!(
+            own(&found),
+            [
+                ("duplicate-mcp", "rtok".into(), true, false),
+                ("duplicate-mcp", "rtok-mcp".into(), false, true)
+            ]
+        );
+        assert!(found[0].detail.starts_with("runs 2 times; keep this copy"));
+        assert_eq!(found[1].command, "/opt/bin/rtok mcp");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_rtok_config_entry_is_kept_even_when_a_wider_scope_names_it_too() {
+        let mut m = Mock::default();
+        user(&mut m, &format!(r#""rtok": {OWN}"#));
+        m.files.insert(
+            "/proj/.mcp.json".into(),
+            format!(r#"{{"mcpServers": {{"rtok": {OWN}, "rtok-mcp": {HAND}}}}}"#),
+        );
+        let found = run(&m);
+        let kept: Vec<&str> = found
+            .iter()
+            .filter(|p| p.keep)
+            .map(|p| p.source.as_str())
+            .collect();
+        assert_eq!(kept, ["/h/.claude.json"]);
+        // The project copy of `rtok` is the host's to merge; the other name is removable.
+        let by: Vec<_> = found.iter().map(|p| (p.kind, p.fixable)).collect();
+        assert!(by.contains(&("own-mcp", false)) && by.contains(&("duplicate-mcp", true)));
+        assert_eq!(found.len(), 3, "{found:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_same_rtok_name_in_two_scopes_is_information_only_and_names_the_scope_the_host_uses() {
+        let mut m = Mock::default();
+        m.files.insert(
+            "/h/.claude.json".into(),
+            format!(
+                r#"{{"mcpServers": {{"rtok": {OWN}}},
+                    "projects": {{"/proj": {{"mcpServers": {{"rtok": {OWN}}}}}}}}}"#
+            ),
+        );
+        m.files.insert(
+            "/proj/.mcp.json".into(),
+            format!(r#"{{"mcpServers": {{"rtok": {OWN}}}}}"#),
+        );
+        let found = run(&m);
+        assert_eq!(found.len(), 3);
+        assert!(found.iter().all(|p| p.kind == "own-mcp" && !p.fixable));
+        assert_eq!(found.iter().filter(|p| p.keep).count(), 1);
+        assert!(
+            found[1].detail.contains("information only")
+                && found[1]
+                    .detail
+                    .contains("the host uses the local scope entry"),
+            "{}",
+            found[1].detail
+        );
+        let text = crate::doctor::dupes::render_mcp(&found);
+        assert!(text.contains("rtok is configured 3 times"), "{text}");
+        assert!(text.contains("info  /proj/.mcp.json"), "{text}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_gemini_extension_copy_is_information_with_the_update_hint() {
+        let mut m = Mock::default();
+        let entry = r#"{"mcpServers": {"rtok": {"command": "rtok", "args": ["mcp"]}}}"#;
+        m.files
+            .insert("/h/.gemini/settings.json".into(), entry.into());
+        m.files.insert(
+            "/h/.gemini/extensions/rtok/gemini-extension.json".into(),
+            format!(r#"{{"name": "rtok", "version": "1", {}"#, &entry[1..]),
+        );
+        let found = run(&m);
+        assert_eq!(
+            own(&found),
+            [
+                ("own-mcp", "rtok".into(), true, false),
+                ("own-mcp", "rtok".into(), false, false)
+            ]
+        );
+        assert!(found.iter().all(|p| p.agent == "gemini"));
+        assert_eq!(found[0].source, "/h/.gemini/settings.json");
+        assert!(found[1].source.ends_with("gemini-extension.json"));
+        assert!(
+            found[1].detail.contains("`rtok agents update gemini`"),
+            "{}",
+            found[1].detail
+        );
+        // Without the extension on disk there is one entry and nothing to say.
+        m.files.remove(Path::new(
+            "/h/.gemini/extensions/rtok/gemini-extension.json",
+        ));
+        assert!(run(&m).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_enabled_claude_plugin_copy_of_rtok_is_information_and_a_toml_host_follows_the_rules() {
+        let mut m = Mock::default();
+        user(&mut m, &format!(r#""rtok": {OWN}"#));
+        let plugins = plugin(
+            &mut m,
+            "rtok@mkt",
+            &format!(r#"{{"mcpServers": {{"rtok": {OWN}}}}}"#),
+        );
+        let found = run_with(&m, &plugins);
+        assert_eq!(
+            own(&found),
+            [
+                ("own-mcp", "rtok".into(), true, false),
+                ("own-mcp", "plugin:rtok:rtok".into(), false, false)
+            ]
+        );
+        assert!(found[1].detail.contains("`rtok agents update claude`"));
+        m.files.insert(
+            "/h/.codex/config.toml".into(),
+            "[mcp_servers.rtok]\ncommand = \"rtok\"\nargs = [\"mcp\"]\n[mcp_servers.rtok-mcp]\ncommand = \"rtok\"\nargs = [\"mcp\"]\n".into(),
+        );
+        let codex: Vec<_> = run(&m).into_iter().filter(|p| p.agent == "codex").collect();
+        assert_eq!(
+            own(&codex),
+            [
+                ("duplicate-mcp", "rtok".into(), true, false),
+                ("duplicate-mcp", "rtok-mcp".into(), false, true)
+            ]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hand_written_double_launch_and_a_plugin_copy_make_two_groups_with_the_entry_listed_once() {
+        let mut m = Mock::default();
+        let both = format!(r#"{{"mcpServers": {{"rtok": {OWN}, "rtok-mcp": {HAND}}}}}"#);
+        m.files.insert("/h/.gemini/settings.json".into(), both);
+        m.files.insert(
+            "/h/.gemini/extensions/rtok/gemini-extension.json".into(),
+            format!(r#"{{"mcpServers": {{"rtok": {OWN}}}}}"#),
+        );
+        let found = run(&m);
+        assert_eq!(
+            own(&found),
+            [
+                ("duplicate-mcp", "rtok".into(), true, false),
+                ("duplicate-mcp", "rtok-mcp".into(), false, true),
+                ("own-mcp", "rtok".into(), false, false)
+            ]
+        );
+        assert_ne!(found[0].group, found[2].group);
     }
 
     #[cfg(unix)]
