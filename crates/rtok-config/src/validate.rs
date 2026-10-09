@@ -710,6 +710,7 @@ fn check_leaf(
             // Ten years: a larger floor is a typo, and it would keep junk forever.
             "agents.junk.keep_logs_days"
             | "agents.junk.stale_session_days"
+            | "agents.junk.stale_worktree_days"
             | "agents.junk.crash_dump_min_age_days"
                 if n > 3650 =>
             {
@@ -914,6 +915,10 @@ mod tests {
             (
                 "stale_session_days = 2.5",
                 "agents.junk.stale_session_days: expected number",
+            ),
+            (
+                "stale_worktree_days = 3651",
+                "agents.junk.stale_worktree_days must be ≤ 3650",
             ),
             (
                 "crash_dump_min_age_days = 3651",

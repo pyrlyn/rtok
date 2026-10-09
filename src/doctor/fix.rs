@@ -72,6 +72,15 @@ fn is_rtok_own(command: &str) -> bool {
     })
 }
 
+/// What install writes again: a hook that runs rtok, or the MCP entry named `rtok`. A copy of
+/// the server under another name (`rtok-mcp`) is a hand-written extra and may go (T331.10).
+fn is_own(x: &Problem) -> bool {
+    if x.kind == "duplicate-mcp" {
+        return x.path.rsplit('.').next() == Some(rtok_mcp::registry::RTOK.name);
+    }
+    is_rtok_own(&x.command)
+}
+
 /// `(event, group, hook)` of a `hooks.<event>[g]` or `hooks.<event>[g].hooks[h]` key path.
 fn parse_path(path: &str) -> Option<(&str, usize, Option<usize>)> {
     let rest = path.strip_prefix("hooks.")?;
@@ -219,7 +228,7 @@ pub struct Opts<'a> {
 
 /// A finding that `--fix` removes unless the user's selection says otherwise.
 pub fn removable(x: &Problem, kinds: &[&str]) -> bool {
-    wanted(x, kinds) && x.fixable && !is_rtok_own(&x.command)
+    wanted(x, kinds) && x.fixable && !is_own(x)
 }
 
 /// [`fix_broken`] for the `kinds` selected and one host's entries (`--agent`); `None` is every
@@ -284,7 +293,7 @@ pub fn fix_found(
                 "not a file of yours to edit"
             };
             report.refused.push((problem, why));
-        } else if is_rtok_own(&problem.command) {
+        } else if is_own(&problem) {
             report.refused.push((
                 problem,
                 "rtok's own entry: `rtok agents install` rewrites it",
@@ -956,15 +965,70 @@ pub(in crate::doctor) mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn rtok_own_mcp_entries_are_neither_compared_nor_removed() {
+    fn the_rtok_entry_stays_and_only_a_copy_under_another_name_goes() {
         let m = Machine::default();
-        let both = r#"{"mcpServers": {"rtok": {"command": "rtok", "args": ["mcp"]}, "rtok2": {"command": "rtok", "args": ["mcp"]}}}"#;
-        put(&m, "/h/.claude.json", both);
+        let own = r#"{"command": "rtok", "args": ["mcp"]}"#;
+        put(
+            &m,
+            "/h/.claude.json",
+            &format!(r#"{{"mcpServers": {{"rtok": {own}, "rtok-mcp": {own}}}}}"#),
+        );
+        let r = fix_all(&m, true, &KINDS);
+        assert_eq!((r.files.len(), r.left), (1, 0), "{r:?}");
+        assert!(render(&r, true).ends_with("1 entry removed, 0 left\n"));
+        assert_eq!(
+            text(&m, "/h/.claude.json"),
+            format!(r#"{{"mcpServers": {{"rtok": {own}}}}}"#)
+        );
+        // Nothing fixable is left, so a second run has nothing to do.
         assert_eq!(
             render(&fix_all(&m, true, &KINDS), true),
             "nothing to remove\n"
         );
-        assert_eq!(text(&m, "/h/.claude.json"), both);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn same_name_and_plugin_copies_of_rtok_are_information_that_fix_never_touches() {
+        let m = Machine::default();
+        let own = r#"{"command": "rtok", "args": ["mcp"]}"#;
+        let files = [
+            (
+                "/h/.claude.json",
+                format!(r#"{{"mcpServers": {{"rtok": {own}}}}}"#),
+            ),
+            (
+                "/proj/.mcp.json",
+                format!(r#"{{"mcpServers": {{"rtok": {own}}}}}"#),
+            ),
+            (
+                "/h/.gemini/settings.json",
+                format!(r#"{{"mcpServers": {{"rtok": {own}}}}}"#),
+            ),
+            (
+                "/h/.gemini/extensions/rtok/gemini-extension.json",
+                format!(r#"{{"mcpServers": {{"rtok": {own}}}}}"#),
+            ),
+        ];
+        for (path, body) in &files {
+            put(&m, path, body);
+        }
+        let probes = Probes {
+            fs: &m,
+            env: &m,
+            which: &m,
+        };
+        let info = candidates(&cfg(), &probes, None);
+        assert_eq!(info.iter().filter(|x| x.kind == "own-mcp").count(), 4);
+        assert!(info.iter().all(|x| !removable(x, &KINDS)));
+        let r = fix_all(&m, true, &KINDS);
+        assert_eq!(
+            (render(&r, true).as_str(), r.left),
+            ("nothing to remove\n", 0)
+        );
+        for (path, body) in &files {
+            assert_eq!(&text(&m, path), body);
+        }
     }
 
     const TWO_HOOKS: &str = r#"{

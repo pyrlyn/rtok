@@ -625,7 +625,7 @@ export interface Problem {
   keep?: boolean;
   /**
    * `broken-hook`, `suspect-hook`, `unverified-hook`, `duplicate-hook`, `duplicate-mcp`,
-   * `conflicting-mcp`, `stale-plugin` or `unreadable-config`.
+   * `conflicting-mcp`, `own-mcp`, `stale-plugin` or `unreadable-config`.
    */
   kind: string;
   matcher?: string | null;

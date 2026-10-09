@@ -205,6 +205,13 @@ fn extensions_dir(cfg: &Config) -> PathBuf {
     cfg.setup.gemini.dir.join("extensions")
 }
 
+/// The manifest of rtok's extension, whose `mcpServers` carries a second `rtok` entry next to
+/// the one in `settings.json` (`rtok doctor` reads it, T331.10). Only the folder named after
+/// the extension, where `gemini extensions link` puts it; a link under another name is not read.
+pub(crate) fn plugin_manifest(cfg: &Config) -> PathBuf {
+    extensions_dir(cfg).join(NAME).join("gemini-extension.json")
+}
+
 /// True while `gemini extensions` has rtok's extension linked or installed: some
 /// `extensions/*/gemini-extension.json` names it — robust to whatever folder name the CLI
 /// actually gives the link, since that is not pinned by the docs.

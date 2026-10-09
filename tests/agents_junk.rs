@@ -28,6 +28,8 @@ fn home(name: &str) -> PathBuf {
 fn rtok(args: &[&str], home: &Path) -> String {
     let out = Command::new(bin())
         .args(args)
+        // `list` also judges the worktrees of the repository it runs in (T330.5.3): never ours.
+        .current_dir(home)
         .env("RTOK_HOME", home)
         .env("HOME", home)
         // Whatever hosts the test faked with `fake_hosts` (T426); none when it faked none.
@@ -220,10 +222,18 @@ impl Clear {
     }
 
     fn run(&self, args: &[&str]) -> std::process::Output {
+        self.run_in(&self.home, args)
+    }
+
+    fn run_in(&self, cwd: &Path, args: &[&str]) -> std::process::Output {
         let base = ["agents", "junk", "clear"];
+        self.rtok_in(cwd, &[&base[..], args].concat())
+    }
+
+    fn rtok_in(&self, cwd: &Path, args: &[&str]) -> std::process::Output {
         Command::new(bin())
-            .args(base.iter().chain(args))
-            .current_dir(&self.home)
+            .args(args)
+            .current_dir(cwd)
             .env("RTOK_HOME", &self.home)
             .env("HOME", &self.home)
             .env("USERPROFILE", &self.home)
@@ -237,7 +247,11 @@ impl Clear {
     }
 
     fn json(&self, args: &[&str]) -> (i32, serde_json::Value) {
-        let out = self.run(args);
+        self.json_in(&self.home, args)
+    }
+
+    fn json_in(&self, cwd: &Path, args: &[&str]) -> (i32, serde_json::Value) {
+        let out = self.run_in(cwd, args);
         let json = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
             panic!("{e}: {}", String::from_utf8_lossy(&out.stderr));
         });
@@ -489,4 +503,231 @@ fn an_extra_crash_folder_clears_only_old_dumps_unless_named() {
     assert_eq!(planned(&["--agent", "cursor", "--json"]), ["old.dmp"]);
     let named = ["--agent", "cursor", "--kind", "crash-dumps", "--json"];
     assert_eq!(planned(&named), ["old.dmp", "young.dmp"]);
+}
+
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .current_dir(dir)
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// Every file under `dir`, the worktree's `.git` pointer included, last modified `secs` ago.
+fn age_all(dir: &Path, secs: u64) {
+    for e in fs::read_dir(dir).unwrap().flatten() {
+        let kind = e.file_type().unwrap();
+        if kind.is_dir() && e.file_name() != ".git" {
+            age_all(&e.path(), secs);
+        } else if kind.is_file() {
+            age(&e.path(), secs);
+        }
+    }
+}
+
+fn names(items: &serde_json::Value, keep: impl Fn(&serde_json::Value) -> bool) -> Vec<String> {
+    let mut out: Vec<String> = (items.as_array().unwrap().iter())
+        .filter(|i| keep(i))
+        .map(|i| {
+            let path = i["path"].as_str().unwrap();
+            Path::new(path)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into()
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// T330.5.3: `stale-worktrees` is `rtok worktree gc`'s verdict. `list` shows the one it would
+/// remove and every other worktree with gc's reason, `--include review --yes` removes the first
+/// through `remove::detach` with its merged branch, and nothing else is touched: not a dirty,
+/// unmerged, locked or fresh worktree, not a record whose directory is gone (no `prune`), not an
+/// orphan, and not through `--trash` or a plain `clear --yes`.
+#[cfg(unix)]
+#[test]
+fn stale_worktrees_are_what_gc_removes_and_clear_removes_only_those() {
+    let c = Clear::new("clear-stale-wt");
+    let hosts = common::agents::fake_hosts(&c.home);
+    // The fixture PATH holds only the fake hosts; rtok needs git, and no real agent.
+    let path = std::env::var_os("PATH").unwrap();
+    let real = std::env::split_paths(&path)
+        .map(|d| d.join("git"))
+        .find(|g| g.is_file());
+    std::os::unix::fs::symlink(real.unwrap(), hosts.join("git")).unwrap();
+    let repo = c.home.join("repo");
+    fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "base"]);
+    // gc judges "merged" against `origin/HEAD`, so the repository needs an origin.
+    let origin = c.home.join("origin.git");
+    git(
+        &c.home,
+        &[
+            "init",
+            "-q",
+            "--bare",
+            "-b",
+            "main",
+            origin.to_str().unwrap(),
+        ],
+    );
+    git(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(&repo, &["push", "-q", "origin", "main"]);
+    git(&repo, &["remote", "set-head", "origin", "main"]);
+    let pool = c.home.join("pool");
+    let add = |dir: &Path, branch: &str| {
+        git(
+            &repo,
+            &["worktree", "add", "-q", "-b", branch, dir.to_str().unwrap()],
+        );
+        dir.to_path_buf()
+    };
+    let days = |n: u64| n * 86_400;
+    let old = add(&pool.join("old"), "old");
+    age_all(&old, days(20));
+    // Claude Code's own pool, so the item sits under that host's row.
+    let claude = add(&repo.join(".claude/worktrees/c1"), "c1");
+    age_all(&claude, days(20));
+    add(&pool.join("fresh"), "fresh");
+    let dirty = add(&pool.join("dirty"), "dirty");
+    write(&dirty.join("wip.txt"), 5);
+    age_all(&dirty, days(20));
+    let unmerged = add(&pool.join("unmerged"), "unmerged");
+    write(&unmerged.join("work.txt"), 5);
+    git(&unmerged, &["add", "."]);
+    git(&unmerged, &["commit", "-q", "-m", "work"]);
+    age_all(&unmerged, days(20));
+    let locked = add(&pool.join("locked"), "locked");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "Cursor / grok | t9 | 2026-09-01",
+            locked.to_str().unwrap(),
+        ],
+    );
+    age_all(&locked, days(20));
+    let gone = add(&pool.join("gone"), "gone");
+    fs::remove_dir_all(&gone).unwrap();
+    let orphan = pool.join("orphan");
+    write(&orphan.join("f"), 5);
+    let admin = repo.join(".git/worktrees/orphan");
+    fs::write(
+        orphan.join(".git"),
+        format!("gitdir: {}\n", admin.display()),
+    )
+    .unwrap();
+
+    // `list`: the removable ones are counted; each other worktree says why gc keeps it.
+    let out = c.rtok_in(&repo, &["agents", "junk", "list", "--json"]);
+    let list: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let mut rows = Vec::new();
+    for a in list["agents"].as_array().unwrap() {
+        for i in a["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["kind"] == "stale-worktrees")
+        {
+            let name = Path::new(i["path"].as_str().unwrap()).file_name().unwrap();
+            let reason = i["kept"].as_str().unwrap_or("");
+            rows.push((
+                a["name"].as_str().unwrap().to_string(),
+                name.to_string_lossy().into_owned(),
+                reason.to_string(),
+            ));
+        }
+    }
+    rows.sort();
+    let row = |name: &str| {
+        rows.iter()
+            .find(|r| r.1 == name)
+            .unwrap_or_else(|| panic!("{name}: {rows:?}"))
+    };
+    assert_eq!((row("old").0.as_str(), row("old").2.as_str()), ("rtok", ""));
+    assert_eq!((row("c1").0.as_str(), row("c1").2.as_str()), ("claude", ""));
+    assert!(row("fresh").2.contains("idle window"), "{rows:?}");
+    assert!(row("dirty").2.contains("uncommitted"), "{rows:?}");
+    assert!(row("unmerged").2.contains("not merged"), "{rows:?}");
+    assert!(
+        row("locked").2.contains("lock by Cursor / grok"),
+        "{rows:?}"
+    );
+    assert!(row("gone").2.contains("directory is gone"), "{rows:?}");
+    assert!(row("orphan").2.contains("orphan"), "{rows:?}");
+    assert_eq!(rows.len(), 8, "the main checkout is no item: {rows:?}");
+
+    // The plan is gc's dry run (its lock override switched off, which junk never takes).
+    let (code, plan) = c.json_in(&repo, &["--include", "review", "--json"]);
+    assert_eq!(code, 0, "{plan}");
+    let planned = names(&plan["items"], |i| {
+        i["kind"] == "stale-worktrees" && i["action"] == "clear"
+    });
+    let out = c.rtok_in(
+        &repo,
+        &[
+            "worktree",
+            "gc",
+            "--json",
+            "--idle",
+            "14d",
+            "--stale-lock",
+            "3650d",
+        ],
+    );
+    let gc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let gc_removes = names(&gc, |o| o["action"] == "remove");
+    assert_eq!(planned, ["c1", "old"]);
+    assert_eq!(planned, gc_removes);
+
+    // No flag, or `--trash`, removes no worktree.
+    let (code, done) = c.json_in(&repo, &["--yes", "--json"]);
+    assert_eq!(code, 0, "{done}");
+    let (code, done) = c.json_in(
+        &repo,
+        &["--include", "review", "--trash", "--yes", "--json"],
+    );
+    assert_eq!(code, 1, "{done}");
+    assert!(old.is_dir() && claude.is_dir());
+
+    let (code, done) = c.json_in(&repo, &["--include", "review", "--yes", "--json"]);
+    assert_eq!(code, 0, "{done}");
+    assert!(!old.exists() && !claude.exists());
+    let branches = git(&repo, &["branch", "--format=%(refname:short)"]);
+    for gone_branch in ["old", "c1"] {
+        assert!(!branches.lines().any(|b| b == gone_branch), "{branches}");
+    }
+    for kept_branch in ["fresh", "dirty", "unmerged", "locked", "gone"] {
+        assert!(
+            branches.lines().any(|b| b == kept_branch),
+            "{kept_branch}: {branches}"
+        );
+    }
+    for stays in ["fresh", "dirty", "unmerged", "locked", "orphan"] {
+        assert!(pool.join(stays).is_dir(), "{stays}");
+    }
+    let listed = git(&repo, &["worktree", "list", "--porcelain"]);
+    assert!(listed.contains("pool/gone"), "no blanket prune: {listed}");
+
+    let (code, again) = c.json_in(&repo, &["--include", "review", "--yes", "--json"]);
+    assert_eq!(code, 0, "{again}");
+    assert!(names(&again["items"], |i| i["kind"] == "stale-worktrees").is_empty());
 }
