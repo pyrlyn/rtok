@@ -45,7 +45,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
-| T329.11 | in progress | P2 | 3 | 10% | Claude Code / sonnet-5.5 |
 | T329.14 | todo | P2 | 4 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
@@ -53,6 +52,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
+| T329.24 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T335 | todo | research | 1 | 0% | |
@@ -825,15 +825,6 @@ T329 §6a mode 3 and "when no mode works": word-boundary definition and mention 
 
 Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; `ssh://localhost/<path>` answers `symbol` when passwordless SSH works (skipped otherwise); an unreachable host reports no backend within the timeout; `just check`.
 
-### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
-
-T329 §6b: a per-project (and language) record of which mode works, in memory for the hot path and mirrored into the store so the CLI, web and `rtok doctor` see it; single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page with `checked_at` and `next_probe_at`. Exposes a `reprobe(project)` entry point for the §8d health check (T329.17); requests never call it. T337 is decided: requests never re-probe. Depends on T329.9.
-
-Check: a test counts probes, 100 requests after the first run zero lookups or spawns; a `reprobe` after installing the server picks it up while 100 requests still run zero probes; a `backend` change re-checks only affected projects; concurrent first requests run one check; a second process reads the mirrored record; `just check`.
-
-Execution plan: new `src/plugins/graph/capability.rs` holds the in-memory map (canonical root to a slot behind its own lock, which gives the single-flight) and the store mirror (`plugin_state` key `capability:<root>`, JSON). The `lsp_or_tags` door asks it first: a missing record runs the injected probe (marker plus binary on `PATH`) and, for a server that probes well, the first server call under the same lock; a failure downgrades the record to tags once and later requests skip the server. A record remembers the `backend` value it was made under, so a config change re-checks only the projects whose mode value changed. `reprobe(cx, root, probe)` clears and re-runs one record; only T329.17 will call it. `scope::plan` reads the record instead of `lsp::usable`. `projects::row` adds the mirrored record to `rtok graph projects --json` and `/ws`; schema blessed. Tests use the probe and server closures and a counter. Docs: `docs/lsp.md` (en, ru, uk).
-
-
 ### T329.14. Graph page level 2: drill-down into one project
 
 T329 §8a level 2: files, modules, types and functions with contains/calls/implements/imports edges, URL-carried drill-down state and breadcrumb, expand and focus, calls into linked projects ending at that project's node, side panel, search-to-focus, the 500-node cap with "+N more", live updates under `watch`. Depends on T329.13, T329.5.
@@ -875,6 +866,12 @@ Check: a fully indexed A with LSP and intact links scores 100; 30% of files pend
 The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a project badge on every row of the graph page lists (dead symbols, pending files), shown once those lists are scoped to the selected project and its linked projects, so a row says which project it came from. Depends on T329.4, T329.5, T329.20.
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
+
+### T329.24. Graph page: show each project's capability record
+
+Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
+
+Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 

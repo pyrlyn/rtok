@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use rtok_plugin_sdk::Ctx;
 
+use super::capability::{self, Capability};
 use super::{index, status};
 use crate::plugin::Runtime;
 use crate::render::{Col, table};
@@ -51,6 +52,10 @@ pub struct ProjectRow {
     created_at: i64,
     last_used_at: i64,
     index: Option<ProjectIndex>,
+    /// Which graph mode works here, as the last process to answer for it recorded (T329.11);
+    /// absent until a request under `lsp` or `auto` has checked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    backend: Option<Capability>,
     links: Vec<ProjectLink>,
 }
 
@@ -95,6 +100,9 @@ fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
         Some(i) if i.pending > 0 => "stale",
         Some(_) => "ok",
     };
+    let backend = (!missing)
+        .then(|| capability::mirrored(cx, Path::new(&p.root)))
+        .flatten();
     Ok(ProjectRow {
         id: p.id,
         name: p.display_name().to_string(),
@@ -106,6 +114,7 @@ fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
         created_at: p.created_at,
         last_used_at: p.last_used_at,
         index,
+        backend,
         links: link_rows(&rt.store, p.id)?,
     })
 }
@@ -342,5 +351,39 @@ mod tests {
         assert_eq!(resolve(&store, dir.to_str().unwrap()).unwrap().id, p.id);
         assert!(resolve(&store, "9999").is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T329.11: a process that never asked the server still shows what another decided.
+    #[test]
+    fn rows_carry_the_mirrored_capability_record() {
+        let (mut c, dir) = crate::testutil::config("t32911-rows");
+        c.plugins.graph.backend = "auto".into();
+        let rt = Runtime::open(c, "t32911-rows").unwrap();
+        let root = dir.join("proj");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("go.mod"), "module x\n").unwrap();
+        rt.store.register_project(&root, Origin::Manual).unwrap();
+        let none = serde_json::to_value(rows(&rt).unwrap()).unwrap();
+        assert!(none[0].get("backend").is_none(), "{none}");
+
+        let cx = Ctx::new(&rt);
+        let out = super::super::lsp_or_tags(
+            &cx,
+            &root,
+            "symbol",
+            &[],
+            || panic!("no server for go"),
+            || Ok("tags answer".into()),
+        );
+        assert_eq!(out.unwrap(), "(tags)\ntags answer");
+        let shown = serde_json::to_value(rows(&rt).unwrap()).unwrap();
+        let rec = &shown[0]["backend"];
+        assert_eq!(rec["backend"], "tags");
+        assert_eq!(rec["language"], "go");
+        assert_eq!(rec["server"], false);
+        assert_eq!(rec["config"], "auto");
+        assert!(rec["checked_at"].as_i64().unwrap() > 0, "{rec}");
+        assert!(rec["next_probe_at"].as_i64().unwrap() > rec["checked_at"].as_i64().unwrap());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
