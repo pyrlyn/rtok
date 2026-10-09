@@ -9,6 +9,7 @@ mod files;
 pub mod handoff;
 pub mod import;
 mod observe;
+pub mod pack;
 mod scrub;
 pub mod status;
 pub mod sync;
@@ -60,13 +61,18 @@ impl Plugin for Memory {
                 input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}),
             },
             ToolDef {
+                name: "mem_pack",
+                description: "Ranked notes in a token budget.",
+                input_schema: json!({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"max_tokens":{"type":"integer"}},"required":["query"]}),
+            },
+            ToolDef {
                 name: "mem_get",
                 description: "Body by note id; see hook index.",
                 input_schema: json!({"type":"object","properties":{"id":{"type":"integer"},"obs":{"type":"integer"}},"required":[]}),
             },
             ToolDef {
                 name: "mem_update",
-                description: "Retire (tombstone, never delete) or pin a note by id.",
+                description: "Retire or pin a note by id.",
                 input_schema: json!({"type":"object","properties":{"id":{"type":"integer"},"retire":{"type":"boolean"},"superseded_by":{"type":"integer"},"pinned":{"type":"boolean"}},"required":["id"]}),
             },
             handoff::handoff_tool(),
@@ -406,6 +412,47 @@ pub fn mem_save(
     rt.store
         .upsert_note_embedding(id, title, body, &rt.config.plugins.memory.embed)?;
     Ok((id, updated))
+}
+
+pub fn mem_pack(
+    rt: &crate::plugin::Runtime,
+    query: &str,
+    limit: u32,
+    max_tokens: u32,
+) -> anyhow::Result<String> {
+    let limit = limit.clamp(1, 20);
+    let max_tokens = max_tokens.clamp(1, 2000);
+    let hits = mem_search(rt, query, limit)?;
+    let rows: Vec<(i32, String, String)> = hits
+        .into_iter()
+        .map(|h| (h.id, h.title, h.snippet))
+        .collect();
+    let pack = pack::pack_notes(
+        &rows,
+        |id| rt.store.get_note_body(id).ok().flatten(),
+        max_tokens,
+        |text| rt.estimate(text, Class::Prose),
+    );
+    let text = pack::render(&pack);
+    let mut before_bytes = 0u64;
+    let mut est_before = 0u32;
+    for entry in &pack.entries {
+        if let Some(body) = rt.store.get_note_body(entry.id).ok().flatten() {
+            before_bytes += body.len() as u64;
+            est_before = est_before.saturating_add(rt.estimate(&body, Class::Prose));
+        }
+    }
+    let _ = rt.record(&Measurement {
+        plugin: "memory",
+        kind: "mem_pack",
+        before_bytes,
+        after_bytes: text.len() as u64,
+        est_before,
+        est_after: rt.estimate(&text, Class::Prose),
+        ref_id: None,
+        call_id: rt.call_id,
+    });
+    Ok(text)
 }
 
 pub fn mem_search(
@@ -930,7 +977,9 @@ mod tests {
 
     /// T69.1: the memory tools stay within the 60-description-token surface budget
     /// (`rtok doctor` prices the same strings). T71.2 added `mem_handoff` as the fifth,
-    /// so `mem_save` drops the field list the input schema already carries.
+    /// so `mem_save` drops the field list the input schema already carries. T460
+    /// shortened `mem_update` the same way so `mem_pack` fits; never-delete stays
+    /// in the plugin README.
     #[test]
     fn mcp_surface_stays_within_sixty_description_tokens() {
         let cx = crate::plugin::Runtime::in_memory("t691-surface").unwrap();

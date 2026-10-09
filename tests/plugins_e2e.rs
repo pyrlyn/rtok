@@ -153,6 +153,35 @@ fn memory_save_then_search() {
     assert!(found.contains("t382 milk"), "{found}");
 }
 #[test]
+fn memory_pack_returns_a_tier_and_records() {
+    let home = tmp("memory-pack");
+    let saved = tool(
+        &home,
+        &home.0,
+        "mem_save",
+        r#"{"kind":"decision","title":"hooks","body":"fail open in 10 ms"}"#,
+    );
+    assert!(saved.contains("id"), "{saved}");
+    let packed = tool(
+        &home,
+        &home.0,
+        "mem_pack",
+        r#"{"query":"hooks","max_tokens":400}"#,
+    );
+    assert!(packed.contains("hooks"), "{packed}");
+    assert!(
+        packed.contains("\tabstract\n")
+            || packed.contains("\tfull\n")
+            || packed.contains("\toverview\n"),
+        "{packed}"
+    );
+    assert!(
+        kinds(&home, "memory").iter().any(|k| k == "mem_pack"),
+        "{:?}",
+        kinds(&home, "memory")
+    );
+}
+#[test]
 fn graph_outline_caps_with_measurement() {
     let home = tmp("graph");
     // T181: an answer under the cap is unchanged and owes no row; only a capped one does.
