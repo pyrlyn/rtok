@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use anyhow::Result;
+use crate::Result;
 use figment::providers::{Env, Format, Serialized, Toml};
 use figment::value::{Dict, Map as FMap, Num, Value};
 use figment::{Figment, Metadata, Profile, Provider};
@@ -21,13 +21,40 @@ use figment::{Figment, Metadata, Profile, Provider};
 use super::Config;
 
 static ON_LOAD: Mutex<Option<fn(&Config)>> = Mutex::new(None);
+static ON_EARLY: Mutex<Option<fn(&str)>> = Mutex::new(None);
 
-/// Run after every successful [`load`]. The CLI registers UI styling here so
-/// config does not depend on `ui`.
+/// Run after every successful [`load`] and after [`Config::load_lenient`] falls back to
+/// defaults. The CLI registers UI styling and note printing here so this crate does neither.
 pub fn on_load(hook: fn(&Config)) {
     *ON_LOAD
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hook);
+}
+
+/// A malformed `.env` discovered before the file fails to parse. The surface prints it;
+/// a successful load also records the same text on [`Config::notes`].
+pub fn on_early_warning(hook: fn(&str)) {
+    *ON_EARLY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hook);
+}
+
+pub(crate) fn notify(cfg: &Config) {
+    if let Some(hook) = *ON_LOAD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        hook(cfg);
+    }
+}
+
+fn early_warning(msg: &str) {
+    if let Some(hook) = *ON_EARLY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        hook(msg);
+    }
 }
 
 /// `rtok hook <event> [--host]`: a figment `flag` layer that sets `hook.host`.
@@ -148,7 +175,7 @@ fn leaf_value(root: &Dict, dotted: &str) -> Option<Value> {
 }
 
 /// Walk up from `start` looking for a `.git` entry (no subprocess). `None` outside a repo.
-pub(crate) fn git_root(start: &Path) -> Option<PathBuf> {
+pub fn git_root(start: &Path) -> Option<PathBuf> {
     find_up(start, ".git", Path::exists)
 }
 
@@ -192,7 +219,6 @@ fn read_dotenv(home: &Path, cwd: Option<&Path>) -> DotenvFile {
             Err(dotenvy::Error::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => continue,
             Err(e) => {
                 let msg = format!("{}: {e}", path.display());
-                eprintln!("rtok: {msg}");
                 out.warnings.push(msg);
                 continue;
             }
@@ -210,7 +236,6 @@ fn read_dotenv(home: &Path, cwd: Option<&Path>) -> DotenvFile {
                 }
                 Err(e) => {
                     let msg = format!("{}: {e}", path.display());
-                    eprintln!("rtok: {msg}");
                     out.warnings.push(msg);
                     break;
                 }
@@ -444,7 +469,7 @@ fn assemble(
 /// `crate::fuzzing`: [`assemble`] with `text` as the only file layer and no env, `.env` or
 /// project file, then the [`load`] finish minus its log write; returns the `config show` rows.
 #[cfg(fuzzing)]
-pub(crate) fn extract_str(text: &str) -> Result<Vec<(String, String, String)>> {
+pub fn extract_str(text: &str) -> Result<Vec<(String, String, String)>> {
     let fig = Figment::from(Named(Serialized::defaults(Config::default()), "default"))
         .merge(Named(Toml::string(text), "user"));
     let legacy_base = fig.clone();
@@ -525,7 +550,7 @@ pub fn load(home: &Path, config_file: Option<&Path>, flags: Option<Dict>) -> Res
     let cwd = std::env::current_dir().ok();
     let dotenv = RtokEnv::from_dotenv(home, cwd.as_deref());
     let warnings = dotenv.warnings.clone();
-    let mut cfg: Config = assemble(
+    let extracted = assemble(
         home,
         config_file,
         flags,
@@ -533,27 +558,26 @@ pub fn load(home: &Path, config_file: Option<&Path>, flags: Option<Dict>) -> Res
         cwd.as_deref(),
         dotenv,
     )
-    .extract()?;
+    .extract();
+    let mut cfg: Config = match extracted {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            for w in &warnings {
+                early_warning(w);
+            }
+            return Err(e.into());
+        }
+    };
     cfg.finish(home);
     cfg.loaded_from = super::LoadedFrom(Some(super::Config::user_path(home, config_file)));
-    if let Some(hook) = *ON_LOAD
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-    {
-        hook(&cfg);
+    for w in warnings {
+        cfg.notes.0.push(super::LoadNote {
+            event: "dotenv",
+            message: w.clone(),
+            log: w,
+        });
     }
-    for w in &warnings {
-        crate::logfile::append(
-            &cfg.log.path,
-            cfg.log.max_bytes,
-            cfg.log.files,
-            &cfg.log.level,
-            "warn",
-            "config",
-            "dotenv",
-            w,
-        );
-    }
+    notify(&cfg);
     Ok(cfg)
 }
 
@@ -592,7 +616,7 @@ fn legacy_source_for(fig: &Figment, key: &str) -> Option<String> {
 
 /// Every effective leaf as `(dotted key, value, source layer)`, sorted: the typed data behind
 /// [`entries`], which only renders it. `config validate` runs the value rules over it.
-pub(crate) fn sourced(fig: &Figment) -> Vec<(String, Value, String)> {
+pub fn sourced(fig: &Figment) -> Vec<(String, Value, String)> {
     let table = env_leaf_table();
     let mut keys: Vec<&String> = table.values().map(|(dotted, _)| dotted).collect();
     keys.sort();
@@ -672,7 +696,17 @@ mod tests {
     use rstest::rstest;
 
     fn tmp(name: &str) -> PathBuf {
-        crate::testutil::tmp_dir(&format!("layers-{name}"))
+        let dir = std::env::temp_dir().join(format!(
+            "rtok-layers-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     /// Isolated figment: no process env, no cwd (so no project file), user file at `home`.
@@ -885,15 +919,12 @@ mod tests {
         let toml = format!("[log]\npath = '{}'\n", log.display());
         std::fs::write(Config::path_for(&home), toml).unwrap();
         let cfg = load(&home, Some(&Config::path_for(&home)), None).unwrap();
-        let text = std::fs::read_to_string(&cfg.log.path).unwrap();
         assert!(
-            text.contains("warn config/dotenv") && text.contains(".env"),
-            "{text}"
-        );
-        let errors = rtok_log::error_path(&cfg.log.path);
-        assert!(
-            !errors.exists() || !std::fs::read_to_string(&errors).unwrap().contains("dotenv"),
-            "a warning stays out of errors.log"
+            cfg.notes.0.iter().any(|n| {
+                n.event == "dotenv" && n.message.contains(".env") && n.log.contains(".env")
+            }),
+            "{:?}",
+            cfg.notes.0.iter().map(|n| &n.message).collect::<Vec<_>>()
         );
         let _ = std::fs::remove_dir_all(&home);
     }

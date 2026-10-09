@@ -11,8 +11,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
 use figment::value::{Dict, Value as FigValue};
+
+use crate::Result;
 use toml_edit::{DocumentMut, Item, TableLike, Value as TomlValue};
 
 use super::Config;
@@ -28,7 +30,7 @@ pub fn issues(path: &Path) -> Result<Vec<String>> {
 /// Parsed as a [`toml_edit::Document`], not a `DocumentMut`: only the immutable document
 /// keeps item spans, and the spans are what make `file:line` name the offending line rather
 /// than the first line that happens to start with the same key.
-pub(crate) fn issues_in(path: &Path, text: &str) -> Vec<String> {
+pub fn issues_in(path: &Path, text: &str) -> Vec<String> {
     let doc: toml_edit::Document<String> = match text.to_owned().parse() {
         Ok(d) => d,
         Err(e) => return vec![format!("{}:{e}", path.display())],
@@ -124,7 +126,7 @@ pub fn set_all_with(
     if !errs.is_empty() {
         bail!("{}", errs.join("\n"));
     }
-    let diff = crate::diff::file_diff(&path, &original, &after);
+    let diff = file_diff(&path, &original, &after);
     if !dry_run {
         super::write_file(&path, &after)?;
     }
@@ -269,7 +271,7 @@ fn reveal_line(raw: &str, leaf: &str) -> Option<String> {
 /// Explicit keys whose value is not the current default. A note, not an error: rtok cannot
 /// tell a stale init from a deliberate pin, so nothing here is rewritten. Unreadable or
 /// unparsable files yield nothing — [`issues`] is the error path, and doctor stays up.
-pub(crate) fn pinned_notes(path: &Path) -> Vec<String> {
+pub fn pinned_notes(path: &Path) -> Vec<String> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -445,8 +447,43 @@ fn toml_value(v: &FigValue) -> Option<TomlValue> {
 }
 
 type RulesFn = fn(&Path, &Path) -> Vec<String>;
+type DiffFn = fn(&Path, &str, &str) -> String;
 
 static RULES: Mutex<Option<RulesFn>> = Mutex::new(None);
+static DIFF: Mutex<Option<DiffFn>> = Mutex::new(None);
+
+/// The CLI registers the coloured diff so a tty paints it. With nothing registered (library
+/// tests) the diff is the same text, uncoloured.
+pub fn register_file_diff(paint: DiffFn) {
+    *DIFF
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(paint);
+}
+
+pub(crate) fn file_diff(path: &Path, before: &str, after: &str) -> String {
+    let paint = *DIFF
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match paint {
+        Some(paint) => paint(path, before, after),
+        None => unified_diff(path, before, after),
+    }
+}
+
+/// Uncoloured unified diff, three lines of context. Empty when nothing differs.
+fn unified_diff(path: &Path, before: &str, after: &str) -> String {
+    if before == after {
+        return String::new();
+    }
+    similar::TextDiff::from_lines(before, after)
+        .unified_diff()
+        .context_radius(3)
+        .header(
+            &format!("a/{}", path.display()),
+            &format!("b/{}", path.display()),
+        )
+        .to_string()
+}
 
 /// `cli::run` registers the `cmd` rules checker. Config stays free of `plugins`.
 /// With nothing registered (the `cmd` feature off, or a library load) there is
@@ -705,14 +742,14 @@ fn check_leaf(
             }
             // Empty means "the project name's first letter"; anything else must parse as ids.
             "tasks.prefix" if !s.is_empty() => {
-                if let Err(e) = crate::task_id::check_prefix(s) {
+                if let Err(e) = rtok_plugin_sdk::check_task_prefix(s) {
                     errors.push(format!("{at}: {dotted}: {e}"));
                 }
             }
             // The one parser every reader of these windows uses, so `set` cannot store a value
             // that `rtok stats`, `rtok report`, `doctor` and the web model then refuse.
             "stats.since" | "report.since" => {
-                if let Err(e) = crate::since::parse_since_from(s, dotted) {
+                if let Err(e) = crate::parse_since_from(s, dotted) {
                     errors.push(format!("{at}: {e}"));
                 }
             }
@@ -732,7 +769,7 @@ fn check_leaf(
             lane if lane.starts_with("proxy.lanes.")
                 && lane.ends_with(".upstream")
                 && !s.trim().is_empty()
-                && !reqwest::Url::parse(s.trim())
+                && !url::Url::parse(s.trim())
                     .is_ok_and(|u| matches!(u.scheme(), "http" | "https")) =>
             {
                 errors.push(format!("{at}: {dotted} must be empty or an http(s) URL"));

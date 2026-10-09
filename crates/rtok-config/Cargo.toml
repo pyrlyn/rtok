@@ -1,0 +1,29 @@
+[package]
+name = "rtok-config"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "rtok's config owner: figment layers, toml_edit edits, and the reference file"
+
+[dependencies]
+anyhow = { workspace = true } # context on load errors; ConfigError wraps it
+rtok-plugin-sdk = { version = "0.0.1", path = "../rtok-plugin-sdk" } # task-prefix rule shared with the store
+rtok-hook = { version = "0.0.1", path = "../rtok-hook" } # the same ~/ home expansion the hook client uses
+rtok-agent-sdk = { version = "0.0.1", path = "../rtok-agent-sdk" } # atomic config file swap
+figment = { workspace = true } # layering and per-key provenance (D14)
+toml_edit = { workspace = true } # `config set` keeps comments
+dotenvy = "0.15" # `.env` as a config layer, parse only (T12.5)
+serde = { workspace = true }
+thiserror = { workspace = true } # the config crate's public error enum
+similar = { workspace = true } # uncoloured unified diff until a surface registers paint
+globset = { workspace = true } # `agents.junk.exclude` must compile
+url = { workspace = true } # `proxy.lanes.*.upstream` is an http(s) URL or empty
+
+[dev-dependencies]
+rstest = { workspace = true }
+
+[lints]
+workspace = true

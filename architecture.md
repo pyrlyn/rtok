@@ -60,8 +60,8 @@ reading commands render the same values.
 |------|------|-----------|
 | `src/main.rs` | clap CLI; each subcommand is a thin call into the library | T0.1 |
 | `src/lib.rs` | crate root; declares the modules below | — |
-| `src/config.rs` | `Config::load()`, defaults, `[plugins.<id>]`, `CATALOGUE` | T0.2 |
-| `src/config/layers.rs`, `validate.rs`, `config/default.toml` | figment providers (D14); `rtok config show/validate/set` (see `docs/config.md`) | P12 |
+| `crates/rtok-config/` + `src/config/` | `Config::load()`, defaults, `[plugins.<id>]`, `CATALOGUE`. `src/config` re-exports the crate | T0.2 |
+| `crates/rtok-config/src/layers.rs`, `validate.rs`, `default.toml` | figment providers (D14); `rtok config show/validate/set` (see `docs/config.md`). Load warnings stay on `Config::notes`; the CLI prints and logs them | P12 |
 | `crates/rtok-store/` + `crates/rtok-store/migrations/` | Diesel models; `Store::open`; `insert_call`/`tokens`/`log`; `insert_measurement`. `src/store` re-exports the crate | T0.3, P13 |
 | `crates/rtok-store/src/symbols.rs` | The `graph` symbol index over SQLite (Ladybug/Grafeo backends removed, P39) | T8.10; P39 |
 | `src/testutil.rs`, `tests/common/` | test-only: a fresh temp dir and a `Config`/`Runtime` confined to it; the nearest-rank p95 the latency gates share; `agents::real_config` seeds the invoking user's own host configs into a throwaway home and answers `None` under `CI`, so the checks that read them are local-only and skip everywhere else | T34.2, T34.3, T78 |

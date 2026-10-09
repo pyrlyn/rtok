@@ -58,6 +58,24 @@ pub fn record(
     }
 }
 
+/// Print and log the warnings a config load returned. Config itself does neither; `cli::run`
+/// calls this from the load hook.
+pub fn emit_config_notes(cfg: &Config) {
+    for note in &cfg.notes.0 {
+        eprintln!("rtok: {}", note.message);
+        crate::logfile::append(
+            &cfg.log.path,
+            cfg.log.max_bytes,
+            cfg.log.files,
+            &cfg.log.level,
+            "warn",
+            "config",
+            note.event,
+            &note.log,
+        );
+    }
+}
+
 /// Append one line, rotating first when it would take the file past `[log] max_bytes`.
 ///
 /// Never fails upward: a log that cannot be written is not something the caller can act on, and a

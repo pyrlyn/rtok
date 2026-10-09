@@ -218,7 +218,12 @@ pub fn run() -> Result<()> {
     crate::log::init_stderr();
     // `[ui]` takes effect for every command. Config load calls this hook instead of
     // naming `ui` itself. The error path in `main` still loads config after this.
-    crate::config::layers::on_load(|cfg| crate::ui::style::configure(&cfg.ui));
+    crate::config::layers::on_early_warning(|msg| eprintln!("rtok: {msg}"));
+    crate::config::layers::on_load(|cfg| {
+        crate::log::emit_config_notes(cfg);
+        crate::ui::style::configure(&cfg.ui);
+    });
+    crate::config::validate::register_file_diff(crate::diff::file_diff);
     #[cfg(feature = "cmd")]
     crate::config::validate::register_rules(crate::plugins::cmd::rules::issues_in);
     log::debug!(target: "rtok::cli", "argv {:?}", std::env::args_os().collect::<Vec<_>>());

@@ -5,7 +5,7 @@
 //! Flag ↔ key coverage (plan T12.4, decision D12).
 //!
 //! Every clap long flag that is not in the allow-list must exist as a dotted key in
-//! `config/default.toml`. Every leaf key's last segment must appear in `src/`.
+//! `config/default.toml`. Every leaf key's last segment must appear in `src/` or `rtok-config`.
 
 use clap::{ArgAction, Command, CommandFactory};
 use rtok::cli::Cli;
@@ -192,7 +192,7 @@ fn config_coverage() {
         }
         assert!(
             src.contains(leaf),
-            "config key `{key}` (leaf `{leaf}`) is never read in src/"
+            "config key `{key}` (leaf `{leaf}`) is never read in src/ or rtok-config"
         );
     }
 }
@@ -266,7 +266,7 @@ fn config_key(path: &[&str], long: &str) -> String {
 
 fn src_blob() -> String {
     let mut out = String::new();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     fn walk_rs(dir: &Path, out: &mut String) {
         for e in std::fs::read_dir(dir).unwrap() {
             let e = e.unwrap();
@@ -278,6 +278,7 @@ fn src_blob() -> String {
             }
         }
     }
-    walk_rs(&root, &mut out);
+    walk_rs(&root.join("src"), &mut out);
+    walk_rs(&root.join("crates/rtok-config/src"), &mut out);
     out
 }
