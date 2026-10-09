@@ -58,7 +58,7 @@ export type TableState<S extends TableSpec> = {
 
 // The hash router's default parser turns "123" and "true" into numbers and booleans, so a value
 // that looks like one arrives as one; anything else that is not a string is junk.
-const asString = (v: unknown): string | undefined =>
+export const asString = (v: unknown): string | undefined =>
   typeof v === "string"
     ? v
     : typeof v === "number" || typeof v === "boolean"

@@ -4,6 +4,7 @@
 
 import {
   AmbientLight,
+  BoxGeometry,
   BufferGeometry,
   CanvasTexture,
   Color,
@@ -16,6 +17,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  OctahedronGeometry,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
@@ -29,7 +31,14 @@ import {
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { disposeObject } from "./dispose";
-import { resolveRole, type Scene, type SceneEdge, type SceneNode } from "./scene";
+import {
+  edgeHow,
+  resolveRole,
+  type Scene,
+  type SceneEdge,
+  type SceneNode,
+  type Shape,
+} from "./scene";
 import type { Positions } from "./useLayout";
 import type { ViewApi, ViewEvents } from "./webgl";
 
@@ -62,6 +71,11 @@ export class Stage implements ViewApi {
   private three = new ThreeScene();
   private group = new Group();
   private sphere = new SphereGeometry(1, 24, 16);
+  private shapes: Record<Shape, BufferGeometry> = {
+    sphere: this.sphere,
+    cube: new BoxGeometry(1.6, 1.6, 1.6),
+    octahedron: new OctahedronGeometry(1.3),
+  };
   private cone = new ConeGeometry(1, 1, 12);
   private cylinder = new CylinderGeometry(1, 1, 1, 6, 1, true);
   private nodes = new Map<number, NodeObj>();
@@ -98,7 +112,8 @@ export class Stage implements ViewApi {
     const canvas = this.renderer.domElement;
     canvas.style.cssText = "display:block;width:100%;height:100%;touch-action:none";
     canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", "3D graph of the registered projects");
+    // `setScene` names the picture; this covers the frame before the first scene.
+    canvas.setAttribute("aria-label", "3D graph");
     host.appendChild(canvas);
     this.camera.position.copy(DEFAULT_DIR).multiplyScalar(260);
     const sun = new DirectionalLight(0xffffff, 2.2);
@@ -125,6 +140,7 @@ export class Stage implements ViewApi {
 
   setScene(scene: Scene): void {
     this.clear();
+    this.renderer.domElement.setAttribute("aria-label", `3D graph of the ${scene.label}`);
     const style = getComputedStyle(this.host);
     // Named fallback only for hosts without the brand stylesheet (unit tests).
     const fg = style.color || "gray";
@@ -140,7 +156,7 @@ export class Stage implements ViewApi {
         transparent: node.dim || node.hollow,
         opacity: node.dim ? 0.3 : node.hollow ? 0.7 : 1,
       });
-      const mesh = new Mesh(this.sphere, material);
+      const mesh = new Mesh(this.shapes[node.shape], material);
       mesh.scale.setScalar(node.radius);
       mesh.userData.id = node.id;
       const label = labelSprite(node.label, fg, node.dim);
@@ -179,7 +195,10 @@ export class Stage implements ViewApi {
   private clear() {
     for (const c of this.group.children.slice()) {
       this.group.remove(c);
-      disposeObject(c, new Set<BufferGeometry>([this.sphere, this.cone, this.cylinder]));
+      disposeObject(
+        c,
+        new Set<BufferGeometry>([...Object.values(this.shapes), this.cone, this.cylinder]),
+      );
     }
     this.nodes.clear();
     this.lines = this.heads = undefined;
@@ -360,7 +379,9 @@ export class Stage implements ViewApi {
 
   private onDouble = (e: MouseEvent) => {
     const hit = this.pick(e);
-    if (hit.node !== undefined) this.focus(hit.node);
+    if (hit.node === undefined) return;
+    if (this.events.open) this.events.open(hit.node);
+    else this.focus(hit.node);
   };
 
   private onMenu = (e: MouseEvent) => {
@@ -380,12 +401,8 @@ export class Stage implements ViewApi {
       this.events.hover({ text: `${n.label} · ${n.state}`, x: h.x, y: h.y });
     } else if (hit.edge) {
       const names = (id: number) => this.nodes.get(id)?.node.label ?? String(id);
-      const how =
-        hit.edge.kind === "auto"
-          ? `auto${hit.edge.reason ? `: ${hit.edge.reason}` : ""}`
-          : "manual";
       this.events.hover({
-        text: `${names(hit.edge.from)} → ${names(hit.edge.to)} (${how})`,
+        text: `${names(hit.edge.from)} → ${names(hit.edge.to)} (${edgeHow(hit.edge)})`,
         x: h.x,
         y: h.y,
       });
@@ -461,7 +478,7 @@ export class Stage implements ViewApi {
     canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.controls.dispose();
     this.clear();
-    this.sphere.dispose();
+    for (const g of Object.values(this.shapes)) g.dispose();
     this.cone.dispose();
     this.cylinder.dispose();
     this.renderer.dispose();

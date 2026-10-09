@@ -8,6 +8,7 @@ import { expect, userEvent, waitFor, within } from "storybook/test";
 import { connectSample } from "../api/sample";
 import { project } from "../api/sampleRows";
 import type { ProjectRow } from "../api/snapshot.gen";
+import { drawn } from "./canvasPixels";
 import { richSnapshot } from "./fixtures";
 import { VIEW_KEY, ProjectsOverview } from "./graph3d/ProjectsOverview";
 import type { ViewApi } from "./graph3d/webgl";
@@ -70,19 +71,6 @@ const noWebgl: Decorator = (Story) => (
 
 /** The lazy scene chunks and the layout worker outlast the default 1 s wait on a busy host; a scene that never renders still fails. */
 const READY = { timeout: 10_000 };
-
-/** Pixels the stage drew: the canvas is transparent where nothing is. */
-function drawn(canvas: HTMLCanvasElement): number {
-    const copy = document.createElement("canvas");
-    copy.width = canvas.width;
-    copy.height = canvas.height;
-    const ctx = copy.getContext("2d")!;
-    ctx.drawImage(canvas, 0, 0);
-    const px = ctx.getImageData(0, 0, copy.width, copy.height).data;
-    let n = 0;
-    for (let i = 3; i < px.length; i += 4) if (px[i]! > 0) n++;
-    return n;
-}
 
 export const List: Story = { args: { rows: registry }, decorators: [viewing("list")] };
 export const TwoD: Story = { args: { rows: registry }, decorators: [viewing("2d")] };
