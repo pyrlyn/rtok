@@ -46,6 +46,38 @@ pub struct NoteHit {
     pub snippet: String,
 }
 
+/// One mechanical observation to store (T454). One value so the host method
+/// stays under the argument cap.
+pub struct NewObservation<'a> {
+    /// Host session that produced it.
+    pub session_id: &'a str,
+    /// Project key, when the session has one.
+    pub project: Option<&'a str>,
+    /// `file_read`, `command_run`, `error`, …
+    pub obs_type: &'a str,
+    /// Tool name, capped.
+    pub title: &'a str,
+    /// Scrubbed narrative, capped.
+    pub narrative: &'a str,
+    /// sha256 of session, tool and narrative.
+    pub dedup: &'a str,
+    /// Existing root-relative files the call named.
+    pub files: &'a [String],
+}
+
+/// One mechanical observation (T454): a scrubbed tool-call summary, not the raw output.
+#[derive(Clone, Debug)]
+pub struct ObsHit {
+    /// Observation id; pass it to [`Notes::observation_narrative`].
+    pub id: i32,
+    /// Tool name, capped.
+    pub title: String,
+    /// Host session that produced it.
+    pub session_id: String,
+    /// A short excerpt of the narrative.
+    pub snippet: String,
+}
+
 /// The frozen decision for one archived tool result, from [`Archive::archive_decision`].
 ///
 /// A tool result is shortened once. Every later turn replays the same pointer text, because
@@ -357,6 +389,47 @@ pub trait Notes {
     ) -> Result<Vec<NoteHit>> {
         Ok(Vec::new())
     }
+
+    /// Count one read of note `id` (`uses`, `last_used`). Default no-op.
+    fn touch_note(&self, _id: i32) -> Result<()> {
+        Ok(())
+    }
+
+    /// Insert a mechanical observation. `Ok(None)` means a recent duplicate was skipped.
+    /// Default `Ok(None)` for a host that does not store observations.
+    fn insert_observation(&self, _obs: &NewObservation<'_>) -> Result<Option<i32>> {
+        Ok(None)
+    }
+
+    /// FTS over observation narratives. An empty query returns no hits.
+    fn search_observations(
+        &self,
+        _project: Option<&str>,
+        _query: &str,
+        _limit: u32,
+    ) -> Result<Vec<ObsHit>> {
+        Ok(Vec::new())
+    }
+
+    /// Observations linked to any of `paths`, newest first.
+    fn observations_for_files(
+        &self,
+        _project: Option<&str>,
+        _paths: &[String],
+        _limit: u32,
+    ) -> Result<Vec<ObsHit>> {
+        Ok(Vec::new())
+    }
+
+    /// Newest observations in one session.
+    fn recent_observations(&self, _session_id: &str, _limit: u32) -> Result<Vec<ObsHit>> {
+        Ok(Vec::new())
+    }
+
+    /// The scrubbed narrative of observation `id`.
+    fn observation_narrative(&self, _id: i32) -> Result<Option<String>> {
+        Ok(None)
+    }
 }
 
 /// Per-session memory of what has already been read, so the same file is not sent twice.
@@ -416,8 +489,77 @@ pub trait Ledger {
     fn last_measurement_ref(&self, plugin: &str, kind: &str) -> Result<Option<String>>;
 }
 
+/// One indexed symbol.
+///
+/// The first six fields are the graph edge. The rest is the byte span and the text
+/// the definition search index stores.
+#[derive(Debug, Clone)]
+pub struct SymbolRow {
+    /// Identifier as the tags query captured it.
+    pub name: String,
+    /// Tags syntax type (`function`, `struct`, `import`, …).
+    pub kind: String,
+    /// 1-based line of the hit.
+    pub line: i32,
+    /// True when the hit is a definition.
+    pub is_def: bool,
+    /// 1-based last line of the tagged node.
+    pub end_line: i32,
+    /// Enclosing definition, or the full import specifier on an import row.
+    pub scope: String,
+    /// First byte of the hit in the file.
+    pub start_byte: i64,
+    /// One past the last byte of the hit.
+    pub end_byte: i64,
+    /// Sha256 of `file[start_byte..end_byte]`. Empty when the span was not captured.
+    pub content_hash: String,
+    /// The definition's source line. Empty on a reference.
+    pub signature: String,
+    /// Contiguous `///` or `//!` lines directly above a definition, at most 512 bytes.
+    pub doc: String,
+}
+
+impl SymbolRow {
+    /// A graph edge with no byte span. Tests and hand-built rows use this.
+    pub fn new(
+        name: impl Into<String>,
+        kind: impl Into<String>,
+        line: i32,
+        is_def: bool,
+        end_line: i32,
+        scope: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            kind: kind.into(),
+            line,
+            is_def,
+            end_line,
+            scope: scope.into(),
+            start_byte: 0,
+            end_byte: 0,
+            content_hash: String::new(),
+            signature: String::new(),
+            doc: String::new(),
+        }
+    }
+}
+
+/// Byte range of one indexed definition, and the hashes that say the file still matches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolSpan {
+    /// First byte of the definition in the file.
+    pub start_byte: u64,
+    /// One past the last byte of the definition.
+    pub end_byte: u64,
+    /// Sha256 of `file[start_byte..end_byte]`.
+    pub content_hash: String,
+    /// Sha256 of the whole file at index time.
+    pub file_sha: String,
+}
+
 /// Symbol rows for one indexed file.
-pub type SymbolFileRows = Vec<(String, String, i32, bool, i32, String)>;
+pub type SymbolFileRows = Vec<SymbolRow>;
 /// Batched cold-index writes: `(path, sha, stat, rows)` per file.
 pub type SymbolFileBatch = Vec<(String, String, (i64, i64), SymbolFileRows)>;
 
@@ -442,15 +584,14 @@ pub trait Symbols {
     /// Update a file's mtime and size without re-parsing it — the content is unchanged.
     fn touch_symbols(&self, root: &str, path: &str, mtime: i64, size: i64) -> Result<()>;
 
-    /// Replace every symbol of one file in a single transaction. `rows` are
-    /// `(name, kind, line, is_def, end_line, text)`; returns how many were written.
+    /// Replace every symbol of one file in a single transaction. Returns how many were written.
     fn replace_symbols(
         &self,
         root: &str,
         path: &str,
         file_sha: &str,
         stat: (i64, i64),
-        rows: &[(String, String, i32, bool, i32, String)],
+        rows: &[SymbolRow],
     ) -> Result<usize>;
 
     /// Replace many files in one transaction (T35.3 cold index).
@@ -613,6 +754,33 @@ pub trait Symbols {
     fn file_rank_put(&self, root: &str, graph: &str) -> Result<()> {
         let _ = (root, graph);
         Ok(())
+    }
+
+    /// Byte span of one definition (T474). `None` when that row is not indexed.
+    fn symbol_span(
+        &self,
+        root: &str,
+        path: &str,
+        name: &str,
+        kind: &str,
+        line: i32,
+    ) -> Result<Option<SymbolSpan>> {
+        let _ = (root, path, name, kind, line);
+        Ok(None)
+    }
+
+    /// Definitions whose name, signature, or doc matches `query` (T474).
+    ///
+    /// A hit whose name contains a query token ranks above a signature hit, which
+    /// ranks above a doc hit. At most `limit` rows. Empty when nothing matches.
+    fn symbol_fts(
+        &self,
+        root: &str,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, String, String, i32)>> {
+        let _ = (root, query, limit);
+        Ok(Vec::new())
     }
 }
 

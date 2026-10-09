@@ -24,11 +24,13 @@ mod sql_ext;
 mod symbols;
 // T329.1: the graph project registry.
 mod note_files;
+mod observations;
 mod project_links;
 mod projects;
 pub use project_links::{Link, LinkKind};
 pub use projects::{Origin, Project, Resolved, canon_root};
 // T285: which agent a worktree is bound to (the git lock stays the source of truth).
+mod task_claims;
 mod task_counters;
 mod worktree_claims;
 
@@ -52,7 +54,7 @@ pub use crate::plugin::{ArchiveDecision, NoteHit};
 // own `pub mod models` of Diesel row structs, so upsert_model qualifies it as `schema::models`.
 use schema::{
     archive, archive_decisions, call_io, calls, hook_sessions, hosts, kv, logs, measurements,
-    notes, providers, read_cache, sessions, tokens, usage,
+    note_versions, notes, providers, read_cache, sessions, tokens, usage,
 };
 
 pub(crate) use sql_ext::{coalesce, length, substr, sum_bigint, unixepoch};
@@ -62,6 +64,36 @@ diesel::allow_columns_to_appear_in_same_group_by_clause!(usage::model, calls::ki
 
 /// Pause between `open` attempts while another connection holds the lock.
 const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// `checkpoint:*` and `session:*` are rewritten often and are not user notes (T472).
+fn keeps_note_versions(kind: &str) -> bool {
+    !kind.starts_with("checkpoint:") && !kind.starts_with("session:")
+}
+
+/// Insert the previous title and body. `version = COALESCE(MAX(version), 0) + 1`.
+fn record_note_version(
+    conn: &mut SqliteConnection,
+    note_id: i32,
+    title: &str,
+    body: &str,
+) -> Result<()> {
+    use diesel::dsl::max;
+    let next = note_versions::table
+        .filter(note_versions::note_id.eq(note_id))
+        .select(max(note_versions::version))
+        .first::<Option<i32>>(conn)?
+        .unwrap_or(0)
+        + 1;
+    diesel::insert_into(note_versions::table)
+        .values((
+            note_versions::note_id.eq(note_id),
+            note_versions::title.eq(title),
+            note_versions::body.eq(body),
+            note_versions::version.eq(next),
+        ))
+        .execute(conn)?;
+    Ok(())
+}
 
 pub struct Store {
     conn: Mutex<SqliteConnection>,
@@ -156,6 +188,36 @@ thread_local! {
 
 /// Rows per write transaction when clearing hook bodies (T352).
 const HOOK_BODY_BATCH: i64 = 5_000;
+
+fn age_days(now: i64, ts: i64) -> f64 {
+    (now.saturating_sub(ts) as f64 / 86_400.0).max(0.0)
+}
+
+fn days_since(now: i64, last_used: Option<i64>) -> Option<f64> {
+    last_used.map(|t| age_days(now, t))
+}
+
+/// Retention used only as a rank (T454). Adapted from agentmemory
+/// `src/functions/retention.ts` `computeRetention`: a pin is 1, otherwise
+/// `min(1, salience * exp(-0.01 * ageDays) + 0.3 / daysSinceUsed)`.
+/// Never deletes a row.
+pub fn retention_score(
+    pinned: bool,
+    uses: i32,
+    age_days: f64,
+    days_since_used: Option<f64>,
+) -> f64 {
+    if pinned {
+        return 1.0;
+    }
+    let salience = 0.5 + (f64::from(uses) * 0.02).min(0.2);
+    let temporal = (-0.01 * age_days).exp();
+    let boost = match days_since_used {
+        Some(d) if d > 0.0 => 0.3 / d,
+        _ => 0.0,
+    };
+    (salience * temporal + boost).min(1.0)
+}
 
 impl Store {
     /// Open (creating directories and the file as needed) and migrate.
@@ -1225,6 +1287,12 @@ impl Store {
     /// index would not stop two NULL-project ("no project") notes from duplicating. Diesel's
     /// `on_conflict` can only target a column tuple, not an expression index, so this one
     /// statement is raw SQL — the DSL cannot express an expression conflict target.
+    ///
+    /// T472: when a row already exists and the new body differs, the previous title and
+    /// body are inserted into `note_versions` first, in this same immediate transaction,
+    /// with `version = COALESCE(MAX(version), 0) + 1`. Kinds `checkpoint:*` and
+    /// `session:*` are skipped so checkpoints do not fill the table. A same-body upsert
+    /// writes no version row. Recall and `mem_get` keep reading the current body.
     pub fn upsert_note(
         &self,
         project: Option<&str>,
@@ -1233,28 +1301,50 @@ impl Store {
         body: &str,
     ) -> Result<(i32, bool)> {
         let mut conn = self.lock()?;
-        // Informational only (callers report "created" vs "updated"): read before the
-        // atomic write below, so a true concurrent race can make it stale without ever
-        // producing a duplicate row — the UNIQUE index and the single statement own that.
-        let mut existed_q = notes::table
-            .filter(notes::kind.eq(kind))
-            .filter(notes::title.eq(title))
-            .select(notes::id)
-            .into_boxed();
-        existed_q = match project {
-            Some(p) => existed_q.filter(notes::project.eq(p)),
-            None => existed_q.filter(notes::project.is_null()),
-        };
-        let updated = existed_q.first::<i32>(&mut *conn).optional()?.is_some();
+        // BEGIN IMMEDIATE: the version insert and the upsert must see one snapshot, and a
+        // second process (hooks, MCP, proxy) must wait instead of picking the same version.
+        conn.immediate_transaction(|conn| -> Result<(i32, bool)> {
+            let mut existed_q = notes::table
+                .filter(notes::kind.eq(kind))
+                .filter(notes::title.eq(title))
+                .select((notes::id, notes::title, notes::body))
+                .into_boxed();
+            existed_q = match project {
+                Some(p) => existed_q.filter(notes::project.eq(p)),
+                None => existed_q.filter(notes::project.is_null()),
+            };
+            let existing = existed_q.first::<(i32, String, String)>(conn).optional()?;
+            if let Some((note_id, old_title, old_body)) = &existing
+                && old_body.as_str() != body
+                && keeps_note_versions(kind)
+            {
+                record_note_version(conn, *note_id, old_title, old_body)?;
+            }
+            let id = sql_ext::UpsertNote {
+                project: project.map(str::to_string),
+                kind: kind.to_string(),
+                title: title.to_string(),
+                body: body.to_string(),
+            }
+            .get_result(conn)?;
+            Ok((id, existing.is_some()))
+        })
+    }
 
-        let id = sql_ext::UpsertNote {
-            project: project.map(str::to_string),
-            kind: kind.to_string(),
-            title: title.to_string(),
-            body: body.to_string(),
-        }
-        .get_result(&mut *conn)?;
-        Ok((id, updated))
+    /// Earlier title and body for `id`, oldest version first (T472). Empty when the note
+    /// was never rewritten, or when its kind is `checkpoint:*` / `session:*`.
+    pub fn note_versions(&self, id: i32) -> Result<Vec<(i32, String, String)>> {
+        let mut conn = self.lock()?;
+        note_versions::table
+            .filter(note_versions::note_id.eq(id))
+            .order(note_versions::version.asc())
+            .select((
+                note_versions::version,
+                note_versions::title,
+                note_versions::body,
+            ))
+            .load(&mut *conn)
+            .map_err(Into::into)
     }
 
     /// Every note but the session-local `checkpoint:*` / `session:*` rows, id order
@@ -1384,7 +1474,8 @@ impl Store {
 
     /// Remember a Read/Bash result so `guard` can deny the duplicate (T2.6).
     /// Newest note titles for SessionStart recall (T6.2). Never bodies. Retired notes
-    /// never recall; pinned ones lead (then newest-first) and both orders are id-stable.
+    /// never recall; pinned ones lead. Among the rest, [`retention_score`] leads, and
+    /// equal scores stay newest-first so the title cap still drops the oldest.
     pub fn list_note_titles(
         &self,
         project: Option<&str>,
@@ -1392,18 +1483,60 @@ impl Store {
     ) -> Result<Vec<(i32, String)>> {
         let mut conn = self.lock()?;
         let lim = i64::from(limit.max(1));
+        // A wider window so a note just below the cut can still lead once `uses` lifts it.
+        // Pinned rows sort first in SQL, so an old pin stays inside the window.
         let mut q = notes::table
             .filter(notes::retired.is_null())
             .filter(notes::kind.not_like("checkpoint:%"))
             .filter(notes::kind.not_like("session:%"))
             .order((notes::pinned.desc(), notes::id.desc()))
-            .limit(lim)
-            .select((notes::id, notes::title))
+            .limit(lim.saturating_mul(4))
+            .select((
+                notes::id,
+                notes::title,
+                notes::pinned,
+                notes::uses,
+                notes::ts,
+                notes::last_used,
+            ))
             .into_boxed();
         if let Some(p) = project {
             q = q.filter(notes::project.eq(p));
         }
-        q.load(&mut *conn).map_err(Into::into)
+        let mut rows: Vec<(i32, String, i32, i32, i64, Option<i64>)> = q.load(&mut *conn)?;
+        let now = i64::try_from(crate::log::now()).unwrap_or(0);
+        rows.sort_by(|a, b| {
+            b.2.cmp(&a.2)
+                .then_with(|| {
+                    retention_score(b.2 != 0, b.3, age_days(now, b.4), days_since(now, b.5))
+                        .partial_cmp(&retention_score(
+                            a.2 != 0,
+                            a.3,
+                            age_days(now, a.4),
+                            days_since(now, a.5),
+                        ))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                // Equal scores keep newest-first, which is what the title cap drops last.
+                .then_with(|| b.0.cmp(&a.0))
+        });
+        rows.truncate(limit.max(1) as usize);
+        Ok(rows
+            .into_iter()
+            .map(|(id, title, ..)| (id, title))
+            .collect())
+    }
+
+    /// Count one read of `id` toward retention ranking (T454). Unknown ids change nothing.
+    pub fn touch_note(&self, id: i32) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(notes::table.find(id))
+            .set((
+                notes::uses.eq(notes::uses + 1),
+                notes::last_used.eq(unixepoch()),
+            ))
+            .execute(&mut *conn)?;
+        Ok(())
     }
 
     /// One note's lifecycle row (T69.1): kind/project for a revise, the retired line and
@@ -3348,6 +3481,70 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// T472: a new body keeps the previous one; a checkpoint and a same-body upsert do not.
+    #[test]
+    fn upsert_keeps_the_previous_body_and_skips_checkpoints_and_same_body() {
+        let store = Store::open_in_memory().unwrap();
+        let (id, created) = store
+            .upsert_note(Some("rtok"), "decision", "topic", "first body")
+            .unwrap();
+        assert!(!created);
+        assert!(store.note_versions(id).unwrap().is_empty());
+
+        let (same, updated) = store
+            .upsert_note(Some("rtok"), "decision", "topic", "second body")
+            .unwrap();
+        assert!(updated);
+        assert_eq!(same, id);
+        assert_eq!(
+            store.note_versions(id).unwrap(),
+            vec![(1, "topic".to_string(), "first body".to_string())]
+        );
+        assert_eq!(store.note_row(id).unwrap().unwrap().body, "second body");
+
+        store
+            .upsert_note(Some("rtok"), "decision", "topic", "second body")
+            .unwrap();
+        assert_eq!(
+            store.note_versions(id).unwrap().len(),
+            1,
+            "a same-body upsert writes no version row"
+        );
+
+        store
+            .upsert_note(Some("rtok"), "decision", "topic", "third body")
+            .unwrap();
+        assert_eq!(
+            store.note_versions(id).unwrap(),
+            vec![
+                (1, "topic".to_string(), "first body".to_string()),
+                (2, "topic".to_string(), "second body".to_string()),
+            ]
+        );
+
+        let (cid, _) = store
+            .upsert_note(None, "checkpoint:s", "compact", "checkpoint a")
+            .unwrap();
+        store
+            .upsert_note(None, "checkpoint:s", "compact", "checkpoint b")
+            .unwrap();
+        assert!(
+            store.note_versions(cid).unwrap().is_empty(),
+            "checkpoint:* writes no version rows"
+        );
+
+        let (sid, _) = store
+            .upsert_note(None, "session:s", "handoff", "session a")
+            .unwrap();
+        store
+            .upsert_note(None, "session:s", "handoff", "session b")
+            .unwrap();
+        assert!(
+            store.note_versions(sid).unwrap().is_empty(),
+            "session:* writes no version rows"
+        );
+    }
+
     #[test]
     fn fts5_match_finds_inserted_note() {
         let store = Store::open_in_memory().unwrap();
@@ -4820,11 +5017,21 @@ mod tests {
     // `table!` models neither) defaults/indexes/triggers via a golden `sqlite_master` dump.
     /// A migrated table with no `table!` macro, and why.
     const RAW_SQL_TABLES: &[&str] = &[
-        "notes_fts",                  // 0001: FTS5 virtual table, MATCH/bm25 in sql_ext (T163.3)
-        "notes_fts_data",             // FTS5 shadow table for notes_fts
-        "notes_fts_idx",              // FTS5 shadow table for notes_fts
-        "notes_fts_docsize",          // FTS5 shadow table for notes_fts
-        "notes_fts_config",           // FTS5 shadow table for notes_fts
+        "notes_fts",         // 0001: FTS5 virtual table, MATCH/bm25 in sql_ext (T163.3)
+        "notes_fts_data",    // FTS5 shadow table for notes_fts
+        "notes_fts_idx",     // FTS5 shadow table for notes_fts
+        "notes_fts_docsize", // FTS5 shadow table for notes_fts
+        "notes_fts_config",  // FTS5 shadow table for notes_fts
+        "observations_fts",  // 0036: FTS5 virtual table
+        "observations_fts_data",
+        "observations_fts_idx",
+        "observations_fts_docsize",
+        "observations_fts_config",
+        "symbols_fts",         // 0038: FTS5 virtual table, MATCH/bm25 in sql_ext (T474)
+        "symbols_fts_data",    // FTS5 shadow table for symbols_fts
+        "symbols_fts_idx",     // FTS5 shadow table for symbols_fts
+        "symbols_fts_docsize", // FTS5 shadow table for symbols_fts
+        "symbols_fts_config",  // FTS5 shadow table for symbols_fts
         "__diesel_schema_migrations", // diesel_migrations version table, not a migrations/*.sql file (T163.4)
     ];
 
@@ -5148,14 +5355,7 @@ mod tests {
         let live = crate::testutil::tmp_dir("t352-live");
         let live = live.to_str().unwrap();
         let gone = "/rtok-t352-no-such-root";
-        let row = (
-            "f".to_string(),
-            "function".to_string(),
-            1,
-            true,
-            1,
-            String::new(),
-        );
+        let row = rtok_plugin_sdk::SymbolRow::new("f", "function", 1, true, 1, "");
         for root in [live, gone, ""] {
             store
                 .replace_symbols(root, "a.rs", "s", (0, 0), std::slice::from_ref(&row))
@@ -5179,14 +5379,7 @@ mod tests {
         let home = crate::testutil::tmp_dir("t356-home");
         let project = crate::testutil::tmp_dir("t356-project");
         let (home, project) = (home.to_str().unwrap(), project.to_str().unwrap());
-        let row = (
-            "f".to_string(),
-            "function".to_string(),
-            1,
-            true,
-            1,
-            String::new(),
-        );
+        let row = rtok_plugin_sdk::SymbolRow::new("f", "function", 1, true, 1, "");
         for root in [home, project, "/"] {
             store
                 .replace_symbols(root, "a.rs", "s", (0, 0), std::slice::from_ref(&row))

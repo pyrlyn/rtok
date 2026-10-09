@@ -9,6 +9,14 @@ use anyhow::{Result, bail};
 
 use super::{NewTask, Status, Task, TaskId};
 
+/// Held across a claim, release or save so two disk writers cannot interleave. Remote
+/// adapters return an empty guard: GitHub and GitLab have no compare-and-set for labels.
+pub trait ClaimLock: Send {}
+
+/// No lock. Remote adapters use this; the assignee write is last-write-wins.
+struct NoLock;
+impl ClaimLock for NoLock {}
+
 /// What `list` returns. The default is the plan: every active task, top level and subtasks.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Filter {
@@ -68,7 +76,7 @@ pub struct Stray {
 
 /// A task storage backend: plain files on disk, GitHub Issues or GitLab Issues. Ids come from
 /// the store's allocator; an adapter only stores them.
-pub trait TaskAdapter {
+pub trait TaskAdapter: Send {
     /// `disk`, `github` or `gitlab`, for error messages.
     fn name(&self) -> &'static str;
     /// Store a new task under `id`; fails when `id` is already taken.
@@ -85,6 +93,16 @@ pub trait TaskAdapter {
     /// disk are the ids, so only remote adapters have any.
     fn unlabelled(&self) -> Result<Vec<Stray>> {
         Ok(Vec::new())
+    }
+    /// Held for the whole claim. The default does not lock.
+    fn claim_guard(&self) -> Result<Box<dyn ClaimLock>> {
+        Ok(Box::new(NoLock))
+    }
+    /// Write `task` back, including assignee, blockers and priority. `claim` already holds
+    /// [`claim_guard`], so this must not take the lock again. The default refuses: an adapter
+    /// that cannot store a claim says so instead of pretending it did.
+    fn save(&self, _task: &Task) -> Result<Task> {
+        bail!("{} tasks: saving a claim is not supported", self.name())
     }
 }
 

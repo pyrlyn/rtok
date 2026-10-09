@@ -4,6 +4,27 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Cloud review findings (2026-10-08)
+
+New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457 and T458 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
+
+| ID | Priority | Kind | Status | Where | Fix |
+| --- | --- | --- | --- | --- | --- |
+| T459 | P2 | bug | confirmed | `src/bin/rtok-hook.rs:41-42` | The `rtok-hook` client reads all of stdin before `Request::encode()`; only the resident caps later (T201). Bound the read to `hook_max_input_bytes + 1`. |
+| T460 | P2 | bug | suspected | `src/plugins/read/hook.rs:154-164` | `same_path` compares case-sensitively (`a == b`, then `Path::ends_with`). Case-fold or canonicalize on Windows. |
+| T461 | P2 | bug | suspected | `src/hooks/resident.rs:105` (Windows) vs `:80` (Unix) | The Windows resident exits only when `hook.lock` vanishes; Unix also exits when the socket vanishes. Mirror the Unix condition. |
+| T462 | P2 | dead code | confirmed | `src/plugins/guard/mod.rs:464` | `guard::check_json` has no callers; the CLI uses `guard::check` (`src/cli.rs:2393`). Remove it. |
+| T463 | P2 | dead code | confirmed | `crates/rtok-mcp/src/ops.rs:66-72` | `runs_rtok` is a weaker copy of `runs_bin` + `is_rtok_bin` (`crates/rtok-agent-sdk/src/lib.rs:519-525`, `src/agents/mod.rs:1693-1698`), which also accept `rtok.exe`, case folding and `current_exe()`. Delete it and call `runs_bin`. |
+| T464 | P2 | move | suspected | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates-packages `file-backup` | Depend on the published `file-backup` once its behaviour is confirmed to match (that crate has open hardlink and symlink bugs of its own). |
+| T465 | P2 | move | suspected | `tools/dist-generate.sh`, `tools/release.sh` → `pyrlyn/ci` | Fold the shared release steps into `pyrlyn/ci` if the copies in the other repos really match (not diffed). |
+| T466 | P2 | move | suspected | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Used four times in `ci.yml`; share it from `pyrlyn/ci` so other repos can reuse it. |
+| T467 | P2 | move | confirmed | `src/store/` (`mod.rs` is 5,275 lines) → `crates/rtok-store` | Issue #628 (P2 on GitHub): architecture work for incremental builds, not a bug. |
+| T468 | P3 | dead code | confirmed | `src/plugins/toon/mod.rs:212` | `toon::decode` is test-only. Put it under `cfg(test)` if release builds should not carry it. |
+| T469 | P3 | dead code | confirmed | `crates/rtok-agent-sdk/src/lib.rs:1086` | `copy_dir` is dead on Unix. Gate it with `cfg(not(unix))`. |
+| T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
+
+Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` (`src/agents/plugin_version.rs:84`, `:112`, `:268`) are open on T279.
+
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |

@@ -489,6 +489,9 @@ tree_depth       = 2
 delta            = true               # T58.1: changed re-read → unified diff vs last archive (7.3 % of Read bytes, 2026-09-18, `rtok stats --since 90d`)
 delta_max_ratio  = 0.6                # full file when the diff is not below this fraction
 
+[plugins.json_tree]
+enabled = false                     # fold repeated nested JSON in old tool results; off until a measurement shows a saving
+
 [plugins.archive]
 enabled    = true
 keep_turns = 4                        # never touch the last N turns

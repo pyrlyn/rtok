@@ -36,7 +36,7 @@ jobs:
       docs-only: ${{ steps.config.outputs.docs-only }}
     steps:
       - id: config
-        uses: pyrlyn/ci/.github/actions/config@f880dee803f157cd4268a503418b4ecaf4da7078 # main
+        uses: pyrlyn/ci/.github/actions/config@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   ci:
     needs: changes
@@ -52,13 +52,14 @@ jobs:
 
   pipeline:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    uses: pyrlyn/ci/.github/workflows/ci.yml@f880dee803f157cd4268a503418b4ecaf4da7078 # main
+    uses: pyrlyn/ci/.github/workflows/ci.yml@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
     # The union every nested job asks for, validated up front even for disabled checks.
     permissions:
       contents: read
       security-events: write
       pull-requests: read
       actions: write
+      issues: write # pyrlyn/ci main-failure job (pyrlyn/ci#56)
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -74,6 +75,6 @@ jobs:
       && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     steps:
-      - uses: pyrlyn/ci/.github/actions/gate@f880dee803f157cd4268a503418b4ecaf4da7078 # main
+      - uses: pyrlyn/ci/.github/actions/gate@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
         with:
           needs: ${{ toJSON(needs) }}

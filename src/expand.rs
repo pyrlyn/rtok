@@ -10,6 +10,19 @@ use crate::tokens::Class;
 use anyhow::{Result, bail};
 use regex::Regex;
 
+/// A `[json-tree ` pointer belongs to that plugin even in a build that left the
+/// feature off, so expand cost is not counted under `archive`.
+fn json_tree_pointer(pointer: &str) -> bool {
+    #[cfg(feature = "json_tree")]
+    {
+        pointer.starts_with(crate::plugins::json_tree::PREFIX)
+    }
+    #[cfg(not(feature = "json_tree"))]
+    {
+        pointer.starts_with("[json-tree ")
+    }
+}
+
 /// Read an archived payload. When the id is a live-zone pointer (T5.3) this freezes it:
 /// the owning plugin sends the original from the next request on, and one `expand`
 /// measurement records the cost — `rtok stats --plugin <id>` derives the expand rate.
@@ -26,6 +39,7 @@ pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
     let n = bytes.len() as u64;
     let plugin = match cx.store.live_zone_pointer(id)? {
         Some(p) if p.starts_with("[toon ") => "toon",
+        Some(p) if json_tree_pointer(&p) => "json_tree",
         Some(_) => "archive",
         None => "archive",
     };
