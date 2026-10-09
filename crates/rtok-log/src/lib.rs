@@ -3,6 +3,8 @@
 //! One file, a level floor, and a rename that is safe when two processes append at once.
 //! See the crate README for the line shape and what this crate refuses to own.
 
+#![deny(missing_docs)]
+
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

@@ -1,7 +1,9 @@
 [package]
 name = "rtok-sys"
 version = "0.0.1"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
 publish = false
 description = "OS shims that need unsafe on Windows (process + flock)"
 license = "MIT"
@@ -22,6 +24,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_Threading",
 ] }
 
-[lints.rust]
-# Windows process and LockFileEx APIs have no safe std equivalent.
-unsafe_code = "allow"
+# Windows process and LockFileEx have no safe std equivalent. Cargo cannot
+# override one inherited lint, so `src/lib.rs` allows `unsafe_code`.
+[lints]
+workspace = true

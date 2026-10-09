@@ -1,10 +1,10 @@
 [package]
 name = "rtok-plugin-sdk"
 version = "0.0.1"
-edition = "2024"
-rust-version = "1.98.1" # the pin in mise.toml; a plugin author needs no newer toolchain
+edition.workspace = true
+rust-version.workspace = true # a plugin author needs no newer toolchain than mise.toml
 readme = "README.md"
-repository = "https://github.com/pyrlyn/rtok"
+repository.workspace = true
 homepage = "https://pyrlyn.github.io/landing/rtok/"
 description = "The rtok plugin contract: the trait, its events, and the values a plugin returns"
 # Apache-2.0, chosen by the repository owner for this crate (T23.6). The full text ships in
@@ -17,15 +17,10 @@ keywords = ["rtok", "plugin", "tokens", "llm", "agents"]
 
 [dependencies]
 # Three, none of them C (T23.0). Anything heavier belongs on the host side of the line.
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde = { workspace = true }
+serde_json = { workspace = true }
 # anyhow: the capability traits return `Result` and a plugin author already has it in tree
-anyhow = "1.0.104"
+anyhow = { workspace = true }
 
-[lints.rust]
-unsafe_code = "forbid"
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-dbg_macro = "warn"
-todo = "warn"
+[lints]
+workspace = true
