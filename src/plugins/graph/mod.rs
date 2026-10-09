@@ -525,7 +525,7 @@ fn defs_text(
     out
 }
 
-/// `{path}::{name}#{kind}@{line}` — the id printed on every definition head (T454).
+/// `{path}::{name}#{kind}@{line}` — the id printed on every definition head (T474).
 pub(crate) fn def_id(path: &str, name: &str, kind: &str, line: i32) -> String {
     format!("{path}::{name}#{kind}@{line}")
 }
@@ -1540,7 +1540,7 @@ fn explore_tags(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<S
             break;
         }
     }
-    // No name resolved: search signature and doc too (T454). An FTS error keeps
+    // No name resolved: search signature and doc too (T474). An FTS error keeps
     // the "no symbols resolved" line. A resolved name stays byte-stable aside from the id.
     if names.is_empty()
         && let Ok(hits) = cx.symbol_fts(&parts.key, query, EXPLORE_MAX_NAMES as i64)
@@ -2485,7 +2485,7 @@ mod tests {
         );
     }
 
-    /// T454: `truncated source lines` is not a symbol name. After the graph plugin is
+    /// T474: `truncated source lines` is not a symbol name. After the graph plugin is
     /// indexed, `explore` still includes `body_lines` from its name and doc comment.
     #[test]
     fn explore_truncated_source_lines_includes_body_lines() {
@@ -2502,7 +2502,7 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T454: `id` selects one definition and ignores a different `name`.
+    /// T474: `id` selects one definition and ignores a different `name`.
     #[test]
     fn symbol_by_id_returns_one_definition() {
         let (cx, dir) = cx("symid");
@@ -2523,7 +2523,7 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T454: a body past the line budget archives the uncut span and points at it.
+    /// T474: a body past the line budget archives the uncut span and points at it.
     #[test]
     fn long_body_archives_the_uncut_span() {
         let (cx, dir) = cx("longbody");
@@ -2554,7 +2554,7 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T454: a file whose sha no longer matches is not sliced.
+    /// T474: a file whose sha no longer matches is not sliced.
     #[test]
     fn a_changed_file_prints_stale_and_is_not_sliced() {
         let (mut cx, dir) = cx("stale-span");

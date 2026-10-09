@@ -517,7 +517,7 @@ impl Query for SearchNotes {
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}
 
-/// FTS5 `MATCH` and `bm25()` over `symbols_fts` — no form in Diesel 2.3's typed DSL (T454).
+/// FTS5 `MATCH` and `bm25()` over `symbols_fts` — no form in Diesel 2.3's typed DSL (T474).
 #[derive(QueryId)]
 pub(crate) struct SearchSymbols {
     pub root: String,

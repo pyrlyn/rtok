@@ -879,7 +879,7 @@ mod tests {
         );
     }
 
-    /// T454: the tag keeps the node's byte range, so a later read can seek to it.
+    /// T474: the tag keeps the node's byte range, so a later read can seek to it.
     #[test]
     fn tag_hit_keeps_the_byte_range() {
         let src = "fn keep() {\n    1\n}\n";

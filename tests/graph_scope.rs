@@ -218,7 +218,7 @@ fn explore_and_outline_take_project() {
         serde_json::json!({"query": "shared", "project": "4"}),
     );
     // `shared` is not a definition in d. Search still finds `d_caller`: its signature
-    // line contains the query (T454).
+    // line contains the query (T474).
     assert_eq!(
         d,
         "= d_caller\nlib.rs::d_caller#function@1 lib.rs:1 function\nfn d_caller() { shared(); }\ncalls: shared\npaths:\nnone\nimpact:\nd_caller \u{2190} 0\n"

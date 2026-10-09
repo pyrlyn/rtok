@@ -1,4 +1,4 @@
--- T454: full-text search over a definition's name, signature, and doc comment.
+-- T474: full-text search over a definition's name, signature, and doc comment.
 -- External-content FTS5, same trigger shape as notes_fts. Only definition rows are indexed.
 ALTER TABLE symbols ADD COLUMN signature TEXT NOT NULL DEFAULT '';
 ALTER TABLE symbols ADD COLUMN doc TEXT NOT NULL DEFAULT '';

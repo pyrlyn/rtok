@@ -14,4 +14,4 @@
 - MCP folds only when the plugin is enabled, the tool is not `read` or `search`, and the fold fits `max_lines` and is smaller.
 - No new crate dependency, no Figma client, no image download, no telemetry. The TypeScript sources are not copied.
 
-**Checks**: `plan.md` T455. Order: `roadmap.md` § `json_tree`.
+**Checks**: `plan.md` T475. Order: `roadmap.md` § `json_tree`.

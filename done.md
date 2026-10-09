@@ -1,6 +1,8 @@
 # rtok — completed tasks
 
-### T454. Symbol byte spans, a recoverable cut body, and id lookup
+### T474. Symbol byte spans, a recoverable cut body, and id lookup
+
+Merged as T454 (pyrlyn/rtok#898); renumbered to T474 because #888, opened earlier, also took T454.
 
 Ideas only from jCodeMunch (no code, schema, or comments copied; no MCP tool, embeddings, or second copy of source files). `symbols` keeps `start_byte`, `end_byte`, and `content_hash` (sha256 of that slice). A definition longer than `body_lines` archives the uncut span and ends with `expand <id>`. Every definition head prints `{path}::{name}#{kind}@{line}`. `symbol` takes optional `id` and, when set, returns that one row. `symbols_fts` indexes definition name, signature (`line_text`), and the contiguous `///`/`//!` doc above the line (512 bytes). `explore` falls through to that index when a name does not resolve, ranking a name-token hit above a signature hit above a doc hit.
 
@@ -27,7 +29,9 @@ Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, G
 
 A disk claim takes `<tasks>/.claim.lock` (`create_new`, a lock older than 10s is stolen). GitHub and GitLab labels are `rtok:owner:<agent>`, `rtok:needs:<id>` and `rtok:p:<n>` (omitted at the default 2). Those writes are last-write-wins, not compare-and-set. A claim whose agent row is missing, or whose `last_seen` is older than 30 minutes, can be taken. A store error does not steal a live claim. The same agent claiming again does not rewrite the file. A cycle, a self-edge or a missing blocker writes nothing. When the plan has no `blocked_by` edges, `next` is still the lowest open leaf.
 
-### T455. Fold nested JSON before archive replaces it with a pointer
+### T475. Fold nested JSON before archive replaces it with a pointer
+
+Merged as T455 (pyrlyn/rtok#897); renumbered to T475 because #872, opened earlier, also took T455.
 
 `archive` runs before any structural encoder and, past `plugins.archive.min_tokens`, replaces a large tool result with a head/tail pointer. `rtok mcp -- <server>` does the same by line count. A design or AST JSON therefore never reaches an encoder that can hoist repeated values and element bodies.
 

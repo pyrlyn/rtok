@@ -17,7 +17,7 @@ use super::Store;
 use super::schema::{extractor, file_rank, symbol_stale, symbols};
 use rtok_plugin_sdk::{SymbolRow, SymbolSpan};
 
-/// The span [`Store::symbol_span`] returns (T454).
+/// The span [`Store::symbol_span`] returns (T474).
 pub type Span = SymbolSpan;
 
 /// Columns bound per inserted symbol row. SQLite's default variable limit is 999.
@@ -570,7 +570,7 @@ impl Store {
             .load(&mut *conn)?)
     }
 
-    /// Byte span of one definition (T454).
+    /// Byte span of one definition (T474).
     pub fn symbol_span(
         &self,
         root: &str,
@@ -605,7 +605,7 @@ impl Store {
         )
     }
 
-    /// Definitions matching `query` in name, signature, or doc (T454).
+    /// Definitions matching `query` in name, signature, or doc (T474).
     ///
     /// A name that contains a query token outranks a signature hit, which outranks a doc hit.
     pub fn symbol_fts(
@@ -1554,7 +1554,7 @@ mod tests {
         }
     }
 
-    /// T454: a name that contains a query token outranks a signature hit, which outranks a doc hit.
+    /// T474: a name that contains a query token outranks a signature hit, which outranks a doc hit.
     #[test]
     fn symbol_fts_ranks_a_name_token_above_a_doc_hit() {
         let store = Store::open_in_memory().unwrap();
