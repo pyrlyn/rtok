@@ -34,7 +34,6 @@
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T331. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
 - T331.10. Doctor: rtok's own MCP entry in the duplicate check
-- T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 - T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 - T340. Investigate: T330 "never touch rtok.db" vs clearing rows inside it

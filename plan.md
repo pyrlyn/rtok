@@ -61,7 +61,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
 | T331.10 | todo | P2 | 2 | 0% | |
-| T334 | todo | research | 1 | 0% | |
 | T335 | todo | research | 1 | 0% | |
 | T337 | todo | research | 1 | 0% | |
 | T340 | todo | research | 1 | 0% | |
@@ -512,7 +511,7 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open questions T334 and T337 gate T329.9 and T329.11/T329.17; T336, which gated T329.4, is settled (the cwd, not the web selection).
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. Open question T337 gates T329.11/T329.17; T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
@@ -588,13 +587,13 @@ Rules for 4b:
 - Output caps and token budgets apply to the whole scoped answer, not per project, so linking projects does not multiply the size of an MCP reply.
 - Watching: when `watch` is on, file changes in any project in the scope update its index and refresh the page over `/ws`.
 
-#### 6a. Backends: LSP by default, then tree-sitter, then plain text search
+#### 6a. Backends: `tags` by default; `auto` (LSP, then tree-sitter, then text) opt-in
 
-Today `[plugins.graph] backend` defaults to `tags` (tree-sitter tags index), and `backend = "lsp"` errors out when the server is missing (`docs/lsp.md`, "Without the server"). T329 changes the default to an ordered fallback chain, `backend = "auto"`: LSP first, tree-sitter second, plain text search last. Setting `backend = "lsp"`, `"tags"` or `"text"` pins one mode with no fallback (today's strict behaviour, kept for tests and for users who want it).
+Decision (2026-10-09, creator, T334): `[plugins.graph] backend` keeps `tags` (tree-sitter tags index) as the default, so the default answers stay byte-identical (Gate P30, `graph_contract.rs`). `backend = "lsp"` already falls back to tags since T376: when the server is missing, not ready, dead or answers "nothing", the answer is the tags one headed `(tags; lsp: <reason>)` with an `lsp_fallback` `Measurement` row (`docs/lsp.md`, "Without the server"). T329 adds `backend = "auto"` as an opt-in value: LSP first, tree-sitter second, plain text search last. `"tags"` and `"text"` pin one mode with no fallback; `"lsp"` keeps the T376 fallback to tags. Changing the default later needs a new gate with recorded `lsp.*` cold and warm latency rows, the `lsp_fallback` rate, and a creator decision that supersedes P30.
 
 Backends are chosen per project and per language, not once per process: in a scope where A is Rust with rust-analyzer installed and B is Go with no server, A's rows come from LSP and B's from tree-sitter, in the same answer.
 
-**Mode 1: LSP (default).**
+**Mode 1: LSP (first under `auto` and `lsp`).**
 
 - Used when a server for the project's language is configured and works: the marker file is found (`Cargo.toml`, `compile_commands.json`, `tsconfig.json`, `pubspec.yaml`, plus any added later) and the server binary is on `PATH` (or resolved through `rustup which rust-analyzer`, as today), spawns over stdio, and answers `initialize`.
 - Gives the most precise answers: type-position references, trait/interface implementations, re-exports and macro-expanded calls that tags miss.
@@ -621,7 +620,7 @@ Backends are chosen per project and per language, not once per process: in a sco
 
 **Which mode answered.** Every result says which mode answered for each project (page: a small LSP / tree-sitter / text tag next to the project badge; JSON: `backend` per project; text output: one header line). `Measurement` rows keep `kind = "lsp.*"` for LSP and gain `tags.*` and `text.*` kinds, so `rtok stats` shows how often each mode is used.
 
-**Config.** `[plugins.graph] backend = "auto" | "lsp" | "tags" | "text"` (default `auto`), `lsp_timeout_ms = 10000`, and per-language overrides (`[plugins.graph.backend_by_language] go = "tags"`), documented in `docs/config.md` and `docs/lsp.md` (whose "Without the server" section changes to describe the fallback).
+**Config.** `[plugins.graph] backend = "auto" | "lsp" | "tags" | "text"` (default `tags`), `lsp_timeout_ms = 10000`, and per-language overrides (`[plugins.graph.backend_by_language] go = "tags"`), documented in `docs/config.md` and `docs/lsp.md` (whose "Without the server" section already describes the T376 fallback).
 
 #### 6b. Capability cache: check once, reuse until the MCP server restarts
 
@@ -781,7 +780,7 @@ The graph page is split into two parts that show the same graph data side by sid
 - **Score:** 0 to 100 per project, shown as a coloured ring on the project node (green 80+, amber 50 to 79, red below 50) with the breakdown on hover in part 1 and in the project list, and as `health` in `rtok graph projects --json` and MCP answers.
 - **Components (weights in brackets, each 0 to 1):**
   - **Index freshness [40%]:** 1 when no files are pending and the last index is newer than the last file change; drops with the share of pending files and with age (0 when more than 20% of files are pending or the index is older than 24 hours with changes since).
-  - **Backend alive [30%]:** 1 when the preferred backend (LSP under `auto`) works; 0.6 when running on tree-sitter fallback; 0.3 on text fallback; 0 when no backend works. Reads the cached capability record (6b) plus recent query failures.
+  - **Backend alive [30%]:** 1 when the configured backend works (so the default `tags` working scores 1); under `auto` or `lsp`, 1 when LSP works, 0.6 when running on the tree-sitter fallback and 0.3 on the text fallback; 0 when no backend works. Reads the cached capability record (6b) plus recent query failures.
   - **Links not broken [30%]:** the share of the project's links whose target is present, reachable and indexed; a project with no links scores 1 here.
 - **Explained, not just a number:** each score comes with the reasons that lowered it ("12 files pending", "rust-analyzer not on PATH, using tree-sitter", "link to ../foo broken"), and a suggested fix for each (re-index, install the server and restart the MCP server, fix or remove the link).
 - **Scope score:** the selected project's scope shows its lowest project score (the weakest link decides), not an average.
@@ -813,7 +812,7 @@ Check: fixture repos under `tests/fixtures`, no network:
 - The selection survives an `rtok web` restart and syncs between two browser tabs.
 - MCP `callers` without `project` from A's directory crosses into B and C; with `project` set to D it does not.
 - Backends, with `backend = "auto"`: with rust-analyzer on `PATH`, A answers from LSP (result tagged LSP) and finds a type-position reference tags would miss; with it removed from `PATH` and the MCP server restarted, A answers from tree-sitter (tagged tree-sitter); a fixture project in a language with no grammar answers from text search (tagged text, `dead` reported as not available); a scope mixing all three labels each project with its own mode.
-- `backend = "lsp"` with no server still errors as today (no fallback when pinned).
+- `backend = "lsp"` with no server answers from tags with the T376 `(tags; lsp: <reason>)` header and an `lsp_fallback` row; the default `tags` answers stay byte-identical (`graph_contract.rs`).
 - A server that crashes mid-session: the current request is answered from tree-sitter with a notice, and later requests go straight to tree-sitter without respawning the server.
 - Capability cache: a test counts probes; 100 requests to the same project after the first run zero further `PATH` lookups or spawn attempts; installing the server without restarting changes nothing; restarting the MCP server picks it up; changing `backend` in config re-checks only the affected projects; two concurrent first requests run one check.
 - Remote text mode: a project registered as `ssh://localhost/<path>` (test runs only when passwordless SSH to localhost works, otherwise skipped) answers `symbol` over SSH; an unreachable host is reported as no backend available without hanging past the timeout.
@@ -824,14 +823,14 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Export: PNG, SVG and JSON exports of A's scope open correctly; the JSON validates against the schema; absolute paths and the user name are redacted by default; a 2,000-node scope exports every node to JSON and the PNG footer notes hidden nodes; `rtok graph export` and MCP `graph_export` produce the same JSON; importing the JSON shows it read-only.
 - Alerts: unmounting (or renaming) B's directory raises "B missing" after two checks on the page, in `rtok doctor`, in `rtok graph projects --json` and as a notice in an MCP `callers` answer from A; restoring it clears the alert and re-indexes; a broken manifest path raises "link broken"; unmounting several projects at once shows one grouped alert; a removed project never alerts.
 - Diff: changing a function signature in B and running `rtok graph diff --from HEAD` from A reports the change and lists A's affected call sites; the working tree is untouched by building the old side; a rename is reported as a rename; an unknown ref errors clearly; MCP `graph_diff` returns a capped summary with a paging id.
-- Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback the backend component reads 0.6; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
+- Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.9. Graph backend `auto`: LSP first, tree-sitter second, chosen per project and language
+### T329.9. Graph backend `auto` (opt-in): LSP first, tree-sitter second, chosen per project and language
 
-T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's strict behaviour. Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 (default backend decision) must be answered first. Depends on T329.4.
+T329 §6a modes 1 and 2 and the config (`backend = "auto"|"lsp"|"tags"|"text"`, default `tags`, `lsp_timeout_ms`, `backend_by_language`); pinned values keep today's behaviour (`tags` byte-identical, `lsp` = the T376 fallback to tags). Each answer says which mode answered per project (`Measurement` kinds `lsp.*`/`tags.*`). T334 is decided: `tags` stays the default and `auto` is opt-in. Depends on T329.4.
 
-Check: with the server on `PATH` the answer is tagged LSP, without it (MCP restarted) tree-sitter, a scope mixing both labels each project; `backend = "lsp"` with no server still errors; a crash mid-session falls back with a notice; `just check`.
+Check: under `backend = "auto"`, with the server on `PATH` the answer is tagged LSP, without it (MCP restarted) tree-sitter, a scope mixing both labels each project; the default `tags` answers stay byte-identical (`graph_contract.rs`); `backend = "lsp"` with no server falls back to tags with the `(tags; lsp: <reason>)` header; a crash mid-session falls back with a notice; `just check`.
 
 ### T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 
@@ -879,7 +878,7 @@ Check: a signature change in B shows in `rtok graph diff --from HEAD` from A wit
 
 T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes, the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
 
-Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback reads 0.6 on the backend component; a broken link lowers the links component; the scope shows the lowest score; `just check`.
+Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback under `auto` reads 0.6 on the backend component, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; `just check`.
 
 ### T329.21. Project badges in the graph page lists
 
@@ -1212,14 +1211,6 @@ The comment at the top of `src/doctor/mcp_dupes.rs` changes with this task. Depe
 Check: the four rules above as scenarios per host (the config entry never offered for removal, same-name and plugin copies shown as information, `rtok-mcp` removable, `--fix --yes` leaves the `rtok` entry and then reports zero fixable problems); `just check`.
 
 Open note (side findings of the T332 research, not decisions; settle in a separate task): (a) Claude Code's docs now say plugin MCP servers are matched "by endpoint" against user, project and local servers and the higher-ranked hand-written entry wins (https://code.claude.com/docs/en/mcp, checked 2026-10-09). That contradicts `research.md` §25 ("two servers", Claude Code 2.1.267) and the "plugin copy is kept first" default of T331.11; the version where it started is unverified for the installed one, so re-check §25 against it. (b) Devin: install writes `mcp_config.json` (`src/agents/devin/mod.rs`) and the plugin also ships `.mcp.json`; `research.md` §25 does not cover Devin, so it is unknown whether Devin runs two servers.
-
-### T334. Investigate: graph default backend: T329 `auto` (LSP first, fallback) vs graph PLAN.md P30 decisions
-
-In the plan, T329 §6a (plan.md on branch `docs/plan-graph-projects`, ~line 752, from PR #540 (T329), not merged yet) says "T329 changes the default to an ordered fallback chain, `backend = "auto"`: LSP first, tree-sitter second, plain text search last", with per-request fallback on timeout. `src/plugins/graph/PLAN.md` (P30 survey) says "**C** rejected for gate honesty" (line 229, alternative C = tags-first with LSP fallback), lists under Rejected "**Default-on LSP** — tags stay default" (line 278) and "Hybrid tags+LSP per call without a mode flag (alternative C)" (line 279), and requires that the default answers stay byte-identical to tags (lines 246, 272); `roadmap.md:407` says "tags index remains default". These contradict each other because T329 makes the rejected design the default without revisiting the measured reasons (cold LSP start vs 23-26 ms warm tags, Gate P30 byte identity).
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 ### T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 
