@@ -59,7 +59,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T330.5.3 | todo | P2 | 3 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T331 | todo | P1 | 4 | 0% | |
-| T331.10 | todo | P2 | 2 | 0% | |
+| T331.10 | in progress | P2 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T335 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
@@ -1202,6 +1202,8 @@ Part of T331. T331.4 leaves rtok's own MCP server out of the duplicate check. In
 The comment at the top of `src/doctor/mcp_dupes.rs` changes with this task. Depends on T331.4.
 
 Check: the four rules above as scenarios per host (the config entry never offered for removal, same-name and plugin copies shown as information, `rtok-mcp` removable, `--fix --yes` leaves the `rtok` entry and then reports zero fixable problems); `just check`.
+
+Execution plan: (1) `src/doctor/mcp_dupes.rs`: `launch` no longer drops entries that run the rtok binary (`runs_bin` + `is_rtok_bin`); they are collected as rtok's own and handled apart from the generic grouping. Per host surface the kept copy is the entry `rtok` in the file install writes (`surfaces()` spec), else the best `rtok`-named one; it is never fixable. A same-name `rtok` in another scope, and a plugin copy (Gemini: `<dir>/extensions/rtok/gemini-extension.json`, read through the same `Fs`), become `own-mcp` findings (information only, not in `fix::KINDS`, so `--fix` never lists or counts them); the plugin copy carries the hint `rtok agents update <host>`. A hand-written copy under another name (`rtok-mcp`) is a `duplicate-mcp` extra, fixable. (2) `dupes::render_mcp` prints the new kind; the `kind` doc strings (`hooks.rs`, `ws.schema.json`, `snapshot.gen.ts`) name it. (3) Devin (plugin store undocumented, `src/agents/devin/mod.rs`) and Antigravity (no config entry beside the plugin, `surfaces()` is empty) get no reader. (4) Tests in `mcp_dupes.rs` and `fix.rs` with the mock `Fs`: every rule per host shape (Claude JSON, Codex TOML, Gemini plugin), `--fix --yes` leaves `rtok` and leaves zero fixable. (5) `docs/agents.md` plus the `ru` and `uk` mirrors. Verify: `mise exec -- just check`.
 
 Open note (side findings of the T332 research, not decisions; settle in a separate task): (a) Claude Code's docs now say plugin MCP servers are matched "by endpoint" against user, project and local servers and the higher-ranked hand-written entry wins (https://code.claude.com/docs/en/mcp, checked 2026-10-09). That contradicts `research.md` §25 ("two servers", Claude Code 2.1.267) and the "plugin copy is kept first" default of T331.11; the version where it started is unverified for the installed one, so re-check §25 against it. (b) Devin: install writes `mcp_config.json` (`src/agents/devin/mod.rs`) and the plugin also ships `.mcp.json`; `research.md` §25 does not cover Devin, so it is unknown whether Devin runs two servers.
 
