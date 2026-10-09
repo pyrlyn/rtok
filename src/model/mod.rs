@@ -1600,6 +1600,17 @@ impl<'a> Model<'a> {
         out
     }
 
+    /// `rtok plugins`: the Plugins page. A missing database is an empty store, same as the
+    /// command used to open one itself.
+    pub fn plugin_pages(cfg: &Config) -> Vec<PluginPage> {
+        let store = Store::open(&cfg.core.db_path).ok();
+        // Both borrows are parameters so the store's short lifetime can shorten `cfg`'s.
+        fn pages(cfg: &Config, store: Option<&Store>) -> Vec<PluginPage> {
+            Model::new(cfg, store).plugins()
+        }
+        pages(cfg, store.as_ref())
+    }
+
     /// Plugins: the catalogue, each with its page and — when it saves tokens — its stats.
     pub fn plugins(&self) -> Vec<PluginPage> {
         // T207: one grouped read for the whole page instead of a `list_measurements`

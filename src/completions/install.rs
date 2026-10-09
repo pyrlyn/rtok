@@ -225,7 +225,6 @@ fn write_if_changed(path: &Path, body: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
 
     fn places() -> Places {
         Places {
@@ -235,7 +234,8 @@ mod tests {
     }
 
     fn cmd() -> Command {
-        crate::cli::Cli::command()
+        // Path tests only need the command name the scripts are written under.
+        Command::new("rtok")
     }
 
     /// The path in a report line. Compared as a `Path`, so `/` and `\` match on Windows.

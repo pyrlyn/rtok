@@ -18,6 +18,7 @@ pub mod claude;
 pub mod cline;
 pub mod codewhale;
 pub mod codex;
+pub mod command;
 pub mod commandcode;
 pub mod copilot;
 pub mod cursor;

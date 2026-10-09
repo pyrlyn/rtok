@@ -118,7 +118,6 @@ pub fn ask_terminal(rows: &[Status]) -> Result<Option<Vec<Shell>>> {
 mod tests {
     use super::*;
     use Shell::{Bash, Fish, Zsh};
-    use clap::CommandFactory;
 
     fn places() -> Places {
         Places {
@@ -128,7 +127,8 @@ mod tests {
     }
 
     fn cmd() -> Command {
-        crate::cli::Cli::command()
+        // Path tests only need the command name the scripts are written under.
+        Command::new("rtok")
     }
 
     #[test]

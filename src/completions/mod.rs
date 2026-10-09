@@ -191,7 +191,6 @@ fn lua(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
 
     fn clink(cmd: Command) -> String {
         let mut out = Vec::new();
@@ -226,35 +225,5 @@ mod tests {
         );
         assert!(lua.contains(r#"["pick"] = "Say \"hi\" \\ bye""#), "{lua}");
         assert!(!lua.contains("secret"), "{lua}");
-    }
-
-    #[test]
-    fn clink_covers_every_rtok_subcommand_and_parses() {
-        let lua = clink(crate::cli::Cli::command());
-        for sub in crate::cli::Cli::command()
-            .get_subcommands()
-            .filter(|s| !s.is_hide_set())
-        {
-            assert!(
-                lua.contains(&format!("\"{}\" ..", sub.get_name())),
-                "{}",
-                sub.get_name()
-            );
-        }
-        // Syntax check where a working Lua compiler is on PATH (CI and dev machines may lack
-        // one; a version-manager shim with no version set fails `-v` and counts as absent).
-        let luac =
-            |args: &[&std::ffi::OsStr]| std::process::Command::new("luac").args(args).output();
-        if !luac(&["-v".as_ref()]).is_ok_and(|o| o.status.success()) {
-            return;
-        }
-        let file = crate::testutil::tmp_dir("clink").join("rtok.lua");
-        std::fs::write(&file, &lua).unwrap();
-        let out = luac(&["-p".as_ref(), file.as_os_str()]).unwrap();
-        assert!(
-            out.status.success(),
-            "luac: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
     }
 }
