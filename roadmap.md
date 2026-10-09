@@ -1190,9 +1190,9 @@ Not only `src/report/`:
 
 | Surface | Path |
 |---------|------|
-| `rtok stats` | `src/cli.rs` → `crate::web::model::stats_report` (`src/model/mod.rs`) + `src/measure/stats` |
+| `rtok stats` | `src/cli/stats.rs` → `crate::web::model::stats_report` (`src/model/mod.rs`) + `src/measure/stats` |
 | `rtok report` | `src/report/mod.rs` `document`, renderers `markdown.rs` / `html.rs` / `pdf.rs` |
-| Prices | `[stats.prices]` / `ModelPrice` in `src/config/mod.rs`; `--price` via `stats_flags` in `cli.rs` |
+| Prices | `[stats.prices]` / `ModelPrice` in `src/config/mod.rs`; `--price` via `stats_flags` in `src/cli/stats.rs` |
 
 T255 should extend `stats_report` grouping and, if the markdown report’s Calls section is
 the operator-facing breakdown, add a sync/Flex/Batch subsection in `src/report/markdown.rs`

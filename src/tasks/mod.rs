@@ -21,6 +21,7 @@ pub mod github;
 mod github_project;
 pub mod gitlab;
 mod meta;
+pub mod ops;
 mod ready;
 pub mod remote;
 pub mod run;

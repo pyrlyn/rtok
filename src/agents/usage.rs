@@ -134,6 +134,12 @@ pub struct Report {
 
 /// The report `[agents.usage]` describes, over the store's `usage` rows. `now` anchors a
 /// `since = "30d"` window.
+/// `rtok agents usage`: open the store and build the report as of now.
+pub fn open_report(cfg: &Config) -> Result<Report> {
+    let store = Store::open(&cfg.core.db_path)?;
+    report(cfg, &store, crate::log::now() as i64)
+}
+
 pub fn report(cfg: &Config, store: &Store, now: i64) -> Result<Report> {
     let o = &cfg.agents.usage;
     let source = match o.source.as_str() {
