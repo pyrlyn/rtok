@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-use super::*;
 use super::report::pct;
+use super::*;
 use crate::plugin::{Measurement, Runtime};
 use rstest::rstest;
 
