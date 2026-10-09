@@ -1,4 +1,5 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
+- T458. Cap the MCP wrap `Content-Length` read at the hook frame limit
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
 - T132. Ship a Haiku scout agent definition with the Claude Code plugin
