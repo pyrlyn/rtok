@@ -90,6 +90,14 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
+| T510 | todo | P1 | 2 | 0% | |
+| T511 | todo | P2 | 3 | 0% | |
+| T512 | todo | P3 | 1 | 0% | |
+| T513 | todo | P2 | 2 | 0% | |
+| T514 | todo | P2 | 2 | 0% | |
+| T515 | todo | P3 | 1 | 0% | |
+| T516 | todo | P2 | 3 | 0% | |
+| T517 | todo | P3 | 2 | 0% | |
 
 
 
@@ -1171,6 +1179,54 @@ Check: `agents install` and `agents update` show one spinner per host on a TTY a
 T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
 
 Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
+
+### T510. `rtok-mcp` ownership check will refuse to remove rtok's own re-saved entry
+
+`crates/rtok-mcp/src/ops.rs:58-63`: `not_removable` compares `have != ours` byte-exact, without the `without_default_type` normalization `rtok_agent_sdk` applies for exactly this case (`crates/rtok-agent-sdk/src/lib.rs` `judge_owned`/`without_default_type`, T265: hosts re-save entries without `"type": "stdio"`). Once hosts move onto `ops::apply` (T277 PR2+), `Mode::Remove` on such an entry reports "changed by you; remove by hand" and never uninstalls.
+
+Check: the comparison folds in `without_default_type` (and the `--host` argv skip of `rtok_as_one`) before any host lands on `ops`, with a test.
+
+### T511. The Windows named-pipe resident has no access control
+
+`src/hooks/resident.rs:89-101` creates `\\.\pipe\rtok-hook-<fnv(home)>` with tokio's default `ServerOptions` (no DACL): any local user can connect and drive hook logic in the victim's context (chdir via `req.cwd`, store writes) and read the JSON answer. The Unix socket is chmod `0600`; the only gate on Windows is a guessable FNV fingerprint.
+
+Check: the pipe is created with an owner-only `SECURITY_ATTRIBUTES` DACL (raw `CreateNamedPipeW`) or the connecting client's pid/user is verified.
+
+### T512. `hop_by_hop` ignores headers named in `Connection`
+
+`src/proxy/mod.rs:1240-1254` drops only the fixed list; RFC 7230 §6.1 also requires dropping every header the `Connection` value names, so a client can smuggle a header past the filter with `Connection: X-Foo`. Low impact (reqwest manages framing), still a spec violation.
+
+Check: `Connection` values are parsed and those names dropped too, with a test.
+
+### T513. Wire the shared `file-backup` crate into agent-sdk
+
+`crates/rtok-agent-sdk/src/lib.rs:84-197` re-implements the `.bak-<unix-seconds>` scheme (`backup`, `prune_backups`, `backup_at`, …) instead of using `packages/crates/file-backup`; `rust.md` admits rtok is "not wired yet". The rtok copy has drifted (a `_backup/` subfolder, `-<n>` slot suffixes, generation pruning), so this is a deliberate migration, not silent drift: decide the shared crate's options (the retention generations and directory belong there) and switch.
+
+Check: rtok depends on the shared crate and `rust.md`/`toolchain.md` reflect it.
+
+### T514. Consolidate the three MCP ownership/staleness comparators
+
+`rtok_agent_sdk::judge_owned`/`runs_bin` (`crates/rtok-agent-sdk/src/lib.rs:518-600`), `rtok_mcp::ops::not_removable`/`runs_rtok` (T510, T463), and `src/agents/mcp.rs` `status`/`stale_diff` (`:283`, `:391`; `status` re-judges `Entry::Stale` by argv alone because strict equality flags absolute paths and extra keys as stale) coexist.
+
+Check: one comparator with the normalization rules, used everywhere (T277's stated goal), done before more hosts land.
+
+### T515. Small hardening: `expand` cut() clamp and rotate lock files
+
+`src/expand.rs:143`: `cut()` head/tail overlap is unguarded (unreachable today via `cap_result` and the `max_chars >= 100` config check); add the clamp or a `debug_assert!` to pin the invariant. `crates/rtok-log/src/lib.rs:165`: one `rtok-log-rotate-<hash>.lock` per distinct log path accumulates in `$TMPDIR` and is never removed; unlink it after the last rotation, or document it.
+
+Check: a test pins `cut()` for a budget smaller than the marker, and a rotation test finds no `rtok-log-rotate-*.lock` left in its temp dir (or the README documents the files).
+
+### T516. `guard` cache invalidation misses writer tools, writer flags and stderr
+
+`src/plugins/guard/mod.rs:135`: only Bash/Edit/Write invalidate; `NotebookEdit` (`notebook_path`), `MultiEdit` and host write tools that `canonical_tool_name` does not map leave a stale `read\t{path}` key. `writer_marker` (`mod.rs:357`) keys writer forms as read-only: `sed` `w`/`W`/`e`, `find -fprint*/-fls/-ok/-okdir`, `git … --output`, `tree -o`, `rg --pre`, `<(…)`. `payload` (`mod.rs:532`) archives `stdout` only, so a denial's `expand` loses `stderr` when the command ran unwrapped.
+
+Check: name-pattern writer tools invalidate (fail-safe), the writer markers are detected (over-detecting is safe), the archived Bash body keeps stderr, each with a test.
+
+### T517. `filter --archive` duplicates the `run` emit path
+
+`src/plugins/cmd/filter.rs:22-70` re-implements `run::emit_filtered_to` (`src/plugins/cmd/run.rs:315`: archive decision, trailer, Measurement) and has drifted (no `identical_result`, no tiny-body bypass). The `guard::check_json` half of the original finding is T462.
+
+Check: `filter --archive` goes through one shared emit path, with any visible behaviour change stated in the PR and covered by the trycmd snapshots.
 
 ## Reference
 

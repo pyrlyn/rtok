@@ -68,3 +68,11 @@
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
+- T510. `rtok-mcp` ownership check will refuse to remove rtok's own re-saved entry
+- T511. The Windows named-pipe resident has no access control
+- T512. `hop_by_hop` ignores headers named in `Connection`
+- T513. Wire the shared `file-backup` crate into agent-sdk
+- T514. Consolidate the three MCP ownership/staleness comparators
+- T515. Small hardening: `expand` cut() clamp and rotate lock files
+- T516. `guard` cache invalidation misses writer tools, writer flags and stderr
+- T517. `filter --archive` duplicates the `run` emit path
