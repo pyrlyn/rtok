@@ -3036,6 +3036,22 @@ Check: unit tests in `src/plugins/graph/diff.rs` (a signature change in a linked
 
 Deviations: the old side is held in memory instead of a temporary index, so there is no temp store to clean up. The MCP surface is now six tools and the description budget went from 150 to 160 tokens (`graph_diff` does not fit in fewer); `README.md`, `docs/comparison.md`, `docs/lsp.md` and `skills/rtok/SKILL.md` still say five tools. The task is over the 500-line cap (about 690 non-test lines in `diff.rs`, plus wiring); `--from-export`, project links, a per-project `--from`, the "changed, not analysed" listing and the page's Compare mode are T329.29.
 
+## T329.29 — Graph diff: `--from` per project, `--from-export`, link changes and unread files (page split to T329.35)
+
+T329 §8e, the rest of the backend after T329.18 (the page's Compare mode did not fit the 500-line cap together with it and is T329.35; its TUI counterpart is T485). `rtok graph diff` and MCP `graph_diff` gained:
+
+- `--from PROJECT:REF` (repeatable; a project name, id or directory, the colon is safe because a git ref holds none): that project is compared from its own ref and the others from the plain `--from` (default `HEAD`). A text whose left side names no project of the scope stays one ref, so `@{yesterday 10:00}` works and a typo is named by the unknown-ref error. MCP `from` takes a string or a list.
+- `--from-export FILE` (CLI only; MCP never takes a path a model chose): the old side is a saved `rtok graph export --level symbols` read by `export::read`. It lists symbols added and removed by `(path, name, kind)` and, through `export::collect` at the overview level, the registry links added and removed by project names. It does not list changes or edges, because an export keeps no signatures and its edges drop ambiguous calls (`Src::Names` makes `diff_sides` skip them), and it says so in a note. An overview export compares links only, a focus export is refused, a project the export lacks is skipped with a note, and `--from`/`--to` with it is an error. Links cannot be compared with a git ref: the registry keeps no history.
+- `changed, not analysed`: a file git reports as different that the project does not exclude and that no grammar read (no grammar for its extension, not UTF-8, or the grammar failed on the old side or a second revision) is listed with the reason; excluded files are not. A parse failure of a file on the working side is not seen, because that side is the index.
+
+Reused: `export::read` and `export::collect`, `projects::resolve`, `fan_out`, the `Matcher` ignore rules (`is_excluded`, `has_supported_ext` made `pub(super)`), `working_side`/`diff_sides`/`cap`. Docs in en, ru, uk (`docs/commands.md`), the graph plugin README and AGENTS.
+
+Check: unit tests in `src/plugins/graph/diff.rs` (a ref for one project by name and by id leaves the others on the shared ref, a second shared ref is refused, no-grammar/not-parsed/excluded files, an export lists added and removed symbols and a removed link and not a signature change, an overview export compares links only, `--from` with an export and a missing file are errors); trycmd snapshots (`graph diff --help`, completions, `mcp.toml`), `config_coverage`, `surface_parity`, `graph_lsp_gate`; `just check`.
+
+Result: `just check` passed (fmt, clippy `-D warnings`, jscpd, `cargo nextest run --workspace`: 3204 passed, 8 skipped). Two load flakes on earlier runs (`agents_install the_agent_alias_prints_what_agents_prints`, `mcp mcp_with_watcher_exits_on_stdin_eof`) passed alone and on the rerun. No web/src change, so the SPA gates were not needed.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:
