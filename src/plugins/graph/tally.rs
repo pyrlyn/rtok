@@ -77,6 +77,19 @@ pub fn rewind(mark: usize) {
     });
 }
 
+/// Credits the rows recorded since `mark` to `name`: `explore` finds a definition by a resolved
+/// name but is asked by a query token, and symbols returned must never exceed symbols asked. An
+/// empty `name` keeps the rows (files, project) without crediting a symbol.
+pub fn rename(mark: usize, name: &str) {
+    HITS.with(|h| {
+        if let Some(hits) = h.borrow_mut().as_mut() {
+            for hit in hits.iter_mut().skip(mark) {
+                hit.name = name.to_string();
+            }
+        }
+    });
+}
+
 /// `name` has rows in `root`, in `files` (none for a call chain, which names no file).
 pub fn hit<S: AsRef<str>>(root: &Path, name: &str, files: impl IntoIterator<Item = S>) {
     HITS.with(|h| {
@@ -134,6 +147,28 @@ mod tests {
                 projects: 1
             }
         );
+    }
+
+    #[test]
+    fn rename_credits_the_rows_since_the_mark_to_one_symbol() {
+        arm();
+        hit(Path::new("/a"), "kept", ["x.rs"]);
+        let m = mark();
+        hit(Path::new("/a"), "foo_a", ["y.rs"]);
+        hit(Path::new("/b"), "foo_b", ["z.rs"]);
+        rename(m, "foo");
+        assert_eq!(
+            take(),
+            Counts {
+                symbols: 2,
+                files: 3,
+                projects: 2
+            }
+        );
+        arm();
+        hit(Path::new("/a"), "n", ["x.rs"]);
+        rename(0, "");
+        assert_eq!(take().symbols, 0, "an empty name keeps the rows only");
     }
 
     #[test]

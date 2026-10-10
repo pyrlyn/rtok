@@ -45,7 +45,10 @@
 - `tally.rs` (T329.36) is the thread-local record the backends fill with `tally::hit(root, name, files)` where they
   hold structured rows (tags, LSP, text, scope); `events::Call` arms it and drains it into the end event's
   `symbols_returned` / `files_touched` / `projects_hit`. Never count from answer text. `door` rewinds it when
-  the tags answer replaces the server's. A new backend path for `symbol`, `callers` or `impact` must call `hit`.
+  the tags answer replaces the server's. A new backend path for `symbol`, `callers`, `impact`, `outline`,
+  `explore` or `graph_diff` must call `hit` (T329.43); `events::COUNTED` lists the tools that are counted, and a
+  tool outside it stays NULL. `explore` credits each definition's rows to the query token that resolved it
+  (`tally::rename`) and rewinds what `impact1` recorded, so symbols returned never exceeds the tokens asked.
 - `health/score.rs` (T329.19) scores a project 0 to 100 (freshness 40, backend 30, links 30) from the
   index status, the mirrored capability record and the mirrored alerts only: it never probes, spawns or
   walks files, and recomputes at most once a second per project. The missing-server fix text is fixed by

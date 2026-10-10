@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
-| T329.43 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
 | T329.40 | todo | P3 | 4 | 0% | |
 | T329.41 | todo | P3 | 3 | 0% | |
@@ -93,7 +92,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
-| T485 | todo | P3 | 3 | 0% | |
 
 
 
@@ -827,12 +825,6 @@ What is left of T329 §8b after T329.28 that needs the store or the config: a ca
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
 
-### T329.43. Graph page: returned counts for explore, outline, impact by path and graph_diff
-
-What is left of T329.36. It counts what `symbol`, `callers` and `impact` by name return; `explore`, `outline`, `impact` by `path` (the affected files) and `graph_diff` leave `symbols_returned`, `files_touched` and `projects_hit` NULL because their backends (`TagsExplore`, `scope::outline`, `scope::affected_path`, `diff.rs`) do not call `tally::hit` yet. Done means: each of them records the files and projects of the rows it lists (and the resolved query tokens as symbols for `explore`), `events::Call::end` stops gating the counts on symbols asked, and the numbers equal the answer's listing.
-
-Check: Rust tests on the T329.36 two-project fixture assert the counts against the answer text of `explore`, `outline`, `impact` by path and `graph_diff`; the folds agree; `just check`.
-
 ### T329.40. Graph page: Export menu and read-only import view
 
 The page half of T329 §8c, left over from T329.31: the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; an image of the live frame only for part 2; the dialog says that file and symbol names are included) that downloads the same JSON, SVG and PNG the CLI writes (one function behind both, no second drawing code), and the page opening an exported JSON read-only with the banner "viewing export from ..." (the importer is `export::read`; nothing is written to the registry or the index). Depends on T329.31 and T329.14.
@@ -1200,12 +1192,6 @@ Check: a TUI test on a fixture project: re-index brings a stale project to index
 T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
 
 Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
-
-### T485. TUI: graph diff and compare view
-
-T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 (done) puts the same report on the web graph page as Compare mode, through `diff::report` (the typed `DiffReport` that `--json` and the `/ws` frame share). D27 (amended 2026-10-10, T346) requires the TUI to show it too. Done means: the TUI graph page has a compare view that calls `diff::report` (no second diff path; the page's `diff::page` only adds the registry scope and the row cap) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
-
-Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed, a removed, an added and a moved symbol; `tests/surface_parity.rs` lists the compare view on both surfaces; `just check`.
 
 ## Reference
 

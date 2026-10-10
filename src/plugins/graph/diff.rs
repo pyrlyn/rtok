@@ -87,6 +87,27 @@ impl Diff {
             && self.not_analysed.is_empty()
     }
 
+    /// T329.43: the files of the rows `render_part` lists. The caller sites quoted under a
+    /// changed symbol are context, cut at `CALLERS_SHOWN`, and are not rows of the diff.
+    fn tally(&self, root: &Path) {
+        if self.is_empty() {
+            return;
+        }
+        let moved = self.moved.iter().flat_map(|(a, b)| [&a.path, &b.path]);
+        let paths = self
+            .changed
+            .iter()
+            .map(|c| &c.new.path)
+            .chain(self.added.iter().map(|d| &d.path))
+            .chain(self.removed.iter().map(|d| &d.path))
+            .chain(self.renamed.iter().map(|(_, b)| &b.path))
+            .chain(moved)
+            .chain(self.edges_added.iter().map(|e| &e.0))
+            .chain(self.edges_removed.iter().map(|e| &e.0))
+            .chain(self.not_analysed.iter().map(|(path, _)| path));
+        super::tally::hit(root, "", paths);
+    }
+
     /// Symbols whose callers matter to a reviewer: what changed, vanished or changed name.
     fn touched(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self.changed.iter().map(|c| c.new.name.as_str()).collect();
@@ -976,6 +997,17 @@ pub struct Saved {
     pub label: String,
 }
 
+impl Saved {
+    /// A file the user named (`--export`, the TUI's compare view); `export::read` checks its size
+    /// and schema before anything is compared.
+    pub fn read(path: &Path) -> Result<Self> {
+        Ok(Self {
+            export: export::read(path)?,
+            label: path.display().to_string(),
+        })
+    }
+}
+
 /// Everything `run` prints and `report` returns, before either shapes it.
 struct Gathered {
     parts: Vec<Part>,
@@ -1040,6 +1072,7 @@ fn gather(
     let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
     let mut parts = Vec::new();
     for (m, diff) in done {
+        diff.tally(&m.root);
         let mut found = HashMap::new();
         for name in diff.touched() {
             if !found.contains_key(name) {
@@ -1092,15 +1125,7 @@ pub fn report(
 /// changed (most callers first), removed, renamed, moved, added, edges, and goes through the graph
 /// cap, so a long one ends in `N more, expand <id>` with the rest archived; `--json` is whole.
 pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
-    let saved = q
-        .export
-        .map(|path| {
-            Ok::<_, anyhow::Error>(Saved {
-                export: export::read(path)?,
-                label: path.display().to_string(),
-            })
-        })
-        .transpose()?;
+    let saved = q.export.map(Saved::read).transpose()?;
     if q.json {
         let r = report(rt, scope, q.from, q.to, saved.as_ref())?;
         return Ok(format!("{}\n", serde_json::to_string(&r)?));
@@ -1162,10 +1187,6 @@ const PAGE_ROWS: usize = 500;
 
 /// The page's answer: the same report `--json` prints, capped.
 pub fn page(rt: &Runtime, req: &DiffRequest) -> Result<DiffReport> {
-    if req.project.is_empty() {
-        bail!("diff needs a project");
-    }
-    let scope = super::scope::resolve(&rt.store, Some(&req.project), Path::new("."))?;
     let saved = req
         .export
         .as_ref()
@@ -1180,7 +1201,23 @@ pub fn page(rt: &Runtime, req: &DiffRequest) -> Result<DiffReport> {
         .to
         .as_deref()
         .filter(|t| !t.is_empty() && *t != "working");
-    Ok(report(rt, &scope, &req.from, to, saved.as_ref())?.capped(PAGE_ROWS))
+    page_of(rt, &req.project, &req.from, to, saved.as_ref())
+}
+
+/// What `page` does once the old side is known, so the TUI's compare view (T485), whose export
+/// comes from a path the user typed, resolves the scope and caps the rows exactly as the page does.
+pub fn page_of(
+    rt: &Runtime,
+    project: &str,
+    from: &[String],
+    to: Option<&str>,
+    saved: Option<&Saved>,
+) -> Result<DiffReport> {
+    if project.is_empty() {
+        bail!("diff needs a project");
+    }
+    let scope = super::scope::resolve(&rt.store, Some(project), Path::new("."))?;
+    Ok(report(rt, &scope, from, to, saved)?.capped(PAGE_ROWS))
 }
 
 /// MCP `graph_diff`: `from` (a ref, or a list mixing refs and `project:ref`; default `HEAD`), `to` (default the working tree).
@@ -1421,6 +1458,31 @@ mod tests {
         assert!(out.contains("1 moved"), "{out}");
         assert!(out.contains("function helper  a.rs -> b.rs"), "{out}");
         assert!(out.contains("0 added · 0 removed"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.43: the counts are the files of the diff's own rows. The caller site `[a] lib.rs` under
+    /// the changed symbol is context and not counted; a clean tree leaves zeros, not NULL.
+    #[test]
+    fn the_diff_counts_the_files_of_the_rows_it_lists() {
+        let (rt, dir, scope) = linked("t32943-diff");
+        let counted = || {
+            crate::plugins::graph::tally::arm();
+            let answer = call(&rt, &json!({}), &scope).unwrap();
+            let got = crate::plugins::graph::tally::take();
+            (answer, (got.symbols, got.files, got.projects))
+        };
+        let (answer, got) = counted();
+        assert!(answer.contains("no graph changes"), "{answer}");
+        assert_eq!(got, (0, 0, 0));
+
+        fs::write(dir.join("b/lib.rs"), "fn shared(x: i32) {}\n").unwrap();
+        fs::write(dir.join("a/new.rs"), "fn fresh() {}\n").unwrap();
+        let (answer, got) = counted();
+        assert!(answer.contains("[signature] 1 callers"), "{answer}");
+        assert!(answer.contains("function fresh  new.rs:1"), "{answer}");
+        assert!(answer.contains("[a] lib.rs a_caller d1"), "{answer}");
+        assert_eq!(got, (0, 2, 2), "b/lib.rs and a/new.rs");
         let _ = fs::remove_dir_all(dir);
     }
 

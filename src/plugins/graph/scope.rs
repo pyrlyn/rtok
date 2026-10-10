@@ -20,8 +20,8 @@ use super::{
     backend_name, blast, callers_filtered, cap, cap_kind, capability, changed_starts, defs_text,
     flag_ambiguous, format_affected, git_changed_files, impact_filtered, impact_lines_text,
     impact_walk_roots, index, index_for, is_test_path, lsp, lsp_none_answer, mode_of, outline_in,
-    projects, rel_of, reverse_call_chain, stale_banner, symbol_filtered, tally, tests_json, text,
-    via_of, with_stale, without_mode_line,
+    projects, rel_of, reverse_call_chain, stale_banner, symbol_filtered, tally, tally_tests,
+    tests_json, text, via_of, with_stale, without_mode_line,
 };
 use crate::store::Store;
 
@@ -728,6 +728,9 @@ pub fn affected(
                 hits[i].insert((path, via_of(name, via)));
             }
         }
+    }
+    for ((m, _), h) in done.iter().zip(&hits) {
+        tally_tests(&m.root, h);
     }
     if json {
         let projects: Vec<_> = done
@@ -1453,6 +1456,87 @@ mod tests {
 
         let (answer, got) = counted("callers", serde_json::json!({"name": "ghost"}));
         assert!(answer.starts_with("no references to ghost"), "{answer}");
+        assert_eq!(got, counts(0, 0, 0));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.43: `explore`, `outline` and `impact` by path count what their backends list. The
+    /// two defined query tokens are the symbols returned, a token nothing defines is not, and
+    /// the callers' files behind the `impact:` lines are not listed so they are not counted.
+    #[test]
+    fn explore_outline_and_path_impact_count_what_they_list() {
+        let (cx, dir) = world(
+            "t32943-counts",
+            [
+                "fn a_caller() { shared(); }\n",
+                "fn b_caller() { shared(); }\nfn b_other() { shared(); }\n",
+                CALL,
+                "",
+            ],
+        );
+        for (project, file, src) in [
+            ("a", "tests/a_test.rs", "fn a_test() { a_caller(); }\n"),
+            ("b", "tests/b_test.rs", "fn b_test() { b_caller(); }\n"),
+        ] {
+            fs::create_dir_all(dir.join(project).join("tests")).unwrap();
+            fs::write(dir.join(project).join(file), src).unwrap();
+        }
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let counted = |tool: &str, args: serde_json::Value| {
+            super::tally::arm();
+            let answer = super::super::call(&ctx, tool, &args, &scope).unwrap();
+            (answer, super::tally::take())
+        };
+        let counts = |symbols, files, projects| super::tally::Counts {
+            symbols,
+            files,
+            projects,
+        };
+
+        let (answer, got) = counted(
+            "explore",
+            serde_json::json!({"query": "shared b_caller ghost"}),
+        );
+        assert!(answer.contains("= shared\n"), "{answer}");
+        assert!(answer.contains("= b_caller\n"), "{answer}");
+        assert!(!answer.contains("= ghost"), "{answer}");
+        assert!(answer.contains("[c] lib.rs"), "{answer}");
+        assert!(answer.contains("[b] lib.rs"), "{answer}");
+        assert!(!answer.contains("[a] lib.rs"), "{answer}");
+        assert_eq!(got, counts(2, 2, 2), "two of three tokens, c and b");
+
+        let (answer, got) = counted("explore", serde_json::json!({"query": "ghost"}));
+        assert!(answer.starts_with("no symbols resolved"), "{answer}");
+        assert_eq!(got, counts(0, 0, 0));
+
+        let (answer, got) = counted("outline", serde_json::json!({"path": "lib.rs"}));
+        assert!(answer.contains("a_caller"), "{answer}");
+        assert_eq!(
+            got,
+            counts(0, 1, 1),
+            "the first project that holds the path"
+        );
+
+        let c_lib = dir.join("c").join("lib.rs");
+        let (answer, got) = counted("outline", serde_json::json!({"path": c_lib}));
+        assert!(answer.contains("shared"), "{answer}");
+        assert_eq!(got, counts(0, 1, 1));
+
+        let c_lib = c_lib.to_string_lossy().into_owned();
+        let (answer, got) = counted("impact", serde_json::json!({"path": c_lib}));
+        let reached = answer
+            .lines()
+            .filter(|l| l.contains(" \u{2190} via "))
+            .count();
+        assert_eq!(reached, 2, "{answer}");
+        assert!(answer.contains("[a]\ntests/a_test.rs"), "{answer}");
+        assert!(answer.contains("[b]\ntests/b_test.rs"), "{answer}");
+        assert_eq!(got, counts(0, 2, 2));
+
+        let unknown = dir.join("a").join("none.rs");
+        let (answer, got) = counted("impact", serde_json::json!({"path": unknown}));
+        assert_eq!(answer, super::super::EMPTY_AFFECTED, "{answer}");
         assert_eq!(got, counts(0, 0, 0));
         let _ = fs::remove_dir_all(dir);
     }

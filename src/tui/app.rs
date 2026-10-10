@@ -12,6 +12,7 @@ use std::sync::mpsc;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
+use super::compare::Compare;
 use super::doctor_fix::{DoctorFix, Engine, Keyed};
 use super::junk_clear::{self, JunkClear};
 use super::live_calls::LiveCalls;
@@ -61,6 +62,12 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("graph", "Enter", "pick target"),
     ("graph", "y", "confirm plan"),
     ("graph", "n/Esc", "decline"),
+    ("graph", "c", "compare"),
+    ("compare", "type", "ref, PROJECT:REF or export path"),
+    ("compare", "Enter", "run compare"),
+    ("compare", "↑/↓ PgUp/PgDn", "scroll"),
+    ("compare", "c", "compare again"),
+    ("compare", "Esc", "close"),
 ];
 
 /// The key rows for one page: globals first, then the page's own.
@@ -103,6 +110,8 @@ pub struct App {
     config: ConfigState,
     /// The Graph page's registry cursor and the plan being made (T476).
     projects: projects::ProjectsState,
+    /// The Graph page's compare view (T485).
+    compare: Compare,
     /// Whether the `?` help overlay is up (T60.8).
     help: bool,
     /// The running TUI's model reader: a snapshot parses transcripts and probes the
@@ -230,6 +239,7 @@ impl App {
             live: LiveCalls::new(cfg.core.db_path.clone()),
             config: ConfigState::default(),
             projects: projects::ProjectsState::default(),
+            compare: Compare::default(),
             help: false,
             worker: None,
             requested: 0,
@@ -332,6 +342,7 @@ impl App {
     /// Take the worker's newest finished read, if any. Called by the loop between keys.
     pub fn poll(&mut self) {
         self.live.poll(self.page() == "graph");
+        self.compare.poll();
         let Some(latest) = self.worker.as_ref().and_then(|w| w.rx.try_iter().last()) else {
             return;
         };
@@ -494,6 +505,20 @@ impl App {
             }
         }
         true
+    }
+
+    /// The Graph page's compare view on the registry row under the cursor (T485). Typing is
+    /// routed before the global keys, so a `?` or an `r` in a ref reaches the input.
+    fn compare_key(&mut self, code: KeyCode) -> bool {
+        let rows = projects::entries(&self.snapshot);
+        let cursor = self.projects.cursor(&rows);
+        let target = rows.get(cursor).map(|e| (e.id, e.name.as_str()));
+        self.compare
+            .key(code, target, &self.cfg, self.worker.is_some())
+    }
+
+    pub(super) fn compare(&self) -> &Compare {
+        &self.compare
     }
 
     /// The Graph page's registry rows and the state its keys keep (T476).
@@ -661,6 +686,9 @@ impl App {
         if mods.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {
             return true;
         }
+        if self.page() == "graph" && self.compare.typing() && self.compare_key(code) {
+            return false;
+        }
         // T60.8: `?` toggles the help overlay and `r` re-reads the model before the
         // next tick; both are global.
         if code == KeyCode::Char('?') {
@@ -681,6 +709,9 @@ impl App {
             return false;
         }
         if self.page() == "config" && self.config_key(code) {
+            return false;
+        }
+        if self.page() == "graph" && self.compare_key(code) {
             return false;
         }
         if self.page() == "graph" && self.graph_key(code) {

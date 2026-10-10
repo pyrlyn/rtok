@@ -12,6 +12,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod app;
+mod compare;
 mod doctor_fix;
 mod health;
 mod junk_clear;
