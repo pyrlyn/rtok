@@ -103,6 +103,31 @@ pub(super) enum GraphCmd {
         #[arg(long)]
         project: Option<String>,
     },
+    // T329.16
+    /// The graph as `rtok.graph.v1` JSON, with home, user name and absolute paths redacted
+    Export {
+        /// `overview` is projects and links; `symbols` adds every symbol and call
+        #[arg(long, value_enum, default_value = "overview")]
+        level: crate::plugins::graph::export::Level,
+        /// Only the symbols within `--depth` calls of this one, callers and callees
+        #[arg(long)]
+        focus: Option<String>,
+        /// Calls to follow from `--focus`
+        #[arg(long, default_value_t = 2, requires = "focus")]
+        depth: u32,
+        /// Keep absolute paths, the home directory and the user name
+        #[arg(long)]
+        no_redact: bool,
+        /// Show a saved export instead of the live graph (read-only)
+        #[arg(long, conflicts_with_all = ["project", "focus"])]
+        from: Option<PathBuf>,
+        /// Write to this file instead of stdout
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Project id or directory instead of the cwd (see `rtok graph projects`)
+        #[arg(long)]
+        project: Option<String>,
+    },
     /// Tests that reach files changed in git (`git diff --name-only`)
     Affected {
         /// Diff against this ref
@@ -323,6 +348,41 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                     },
                 )?
             );
+        }
+        GraphCmd::Export {
+            level,
+            focus,
+            depth,
+            no_redact,
+            from,
+            output,
+            project,
+        } => {
+            let root = crate::plugins::graph::cli_root(None)?;
+            let scope = if from.is_some() {
+                Vec::new()
+            } else {
+                crate::plugins::graph::scope::resolve(&cx.store, project.as_deref(), &root)?
+            };
+            let text = crate::plugins::graph::export::run(
+                &cx,
+                &scope,
+                &crate::plugins::graph::export::Query {
+                    level,
+                    focus: focus.as_deref(),
+                    depth,
+                    redact: !no_redact,
+                    pretty: true,
+                    from: from.as_deref(),
+                },
+            )?;
+            match output {
+                Some(file) => {
+                    std::fs::write(&file, &text)?;
+                    println!("wrote {} bytes to {}", text.len(), file.display());
+                }
+                None => print!("{text}"),
+            }
         }
         GraphCmd::Affected {
             since,

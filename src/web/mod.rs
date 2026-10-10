@@ -494,7 +494,7 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
 }
 
 #[cfg(feature = "graph")]
-fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<()> {
+pub(crate) fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<String> {
     use crate::plugins::graph::projects::{Action, run};
     use protocol::ProjectRequest as R;
     let rt = crate::plugin::Runtime::open(cfg.clone(), "web-projects")?;
@@ -512,11 +512,11 @@ fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<()> {
             both,
         },
     };
-    run(&rt, action, false).map(|_| ())
+    run(&rt, action, false)
 }
 
 #[cfg(not(feature = "graph"))]
-fn project_write(_cfg: &Config, _req: protocol::ProjectRequest) -> Result<()> {
+pub(crate) fn project_write(_cfg: &Config, _req: protocol::ProjectRequest) -> Result<String> {
     anyhow::bail!("the graph feature is not built in")
 }
 
@@ -545,23 +545,15 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
-    let kinds = crate::doctor::fix::KINDS;
-    crate::doctor::fix::on_this_machine(|probes, w| {
-        let o = crate::doctor::fix::Opts {
-            keep: cfg.setup.backup_files as usize,
-            agent: None,
-            kinds: &kinds,
-        };
-        match r.action {
-            DoctorAction::Plan => ServerFrame::DoctorPlan {
-                plan: crate::doctor::web::plan(&cfg, probes, w, &o, &r.selection),
-            },
-            DoctorAction::Apply => ServerFrame::DoctorFixed {
-                fixed: crate::doctor::web::apply(&cfg, probes, w, &o, &r.selection),
-            },
-        }
-        .to_json()
-    })
+    match r.action {
+        DoctorAction::Plan => ServerFrame::DoctorPlan {
+            plan: crate::doctor::web::plan_here(&cfg, &r.selection),
+        },
+        DoctorAction::Apply => ServerFrame::DoctorFixed {
+            fixed: crate::doctor::web::apply_here(&cfg, &r.selection),
+        },
+    }
+    .to_json()
 }
 
 /// T330.7: "clear safe junk" for the Hosts page. The upgrade's origin guard covers it like `set`;

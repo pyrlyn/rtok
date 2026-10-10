@@ -28,7 +28,7 @@ describe("graph page projects", () => {
                 .getAllByRole("button")
                 .slice(0, 2)
                 .map((b) => b.textContent),
-        ).toEqual(["rtokoklspmanual", "ketchstaletagsmanual"]);
+        ).toEqual(["rtok100oklspmanual", "ketch100staletagsmanual"]);
         expect(current().getByText("rtok")).toBeTruthy();
         expect(screen.queryByLabelText("find a project")).toBeNull();
     });

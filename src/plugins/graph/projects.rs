@@ -28,35 +28,35 @@ pub struct ProjectIndex {
     files: i64,
     pending: usize,
     watch: String,
-    indexed_at: Option<i64>,
+    pub(super) indexed_at: Option<i64>,
 }
 
 /// One outgoing link of a project.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ProjectLink {
-    to: i32,
-    name: String,
-    kind: LinkKind,
-    reason: Option<String>,
+    pub to: i32,
+    pub name: String,
+    pub(super) kind: LinkKind,
+    pub(super) reason: Option<String>,
 }
 
 /// One registry row as `graph projects` prints it and the `/ws` snapshot carries it.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ProjectRow {
-    id: i32,
-    name: String,
-    root: String,
-    origin: Origin,
-    selected: bool,
-    missing: bool,
-    state: &'static str,
+    pub id: i32,
+    pub name: String,
+    pub(super) root: String,
+    pub(super) origin: Origin,
+    pub selected: bool,
+    pub missing: bool,
+    pub state: &'static str,
     created_at: i64,
     last_used_at: i64,
-    index: Option<ProjectIndex>,
+    pub(super) index: Option<ProjectIndex>,
     /// Which graph mode works here, as the last process to answer for it recorded (T329.11);
     /// absent until a request under `lsp` or `auto` has checked.
     #[serde(skip_serializing_if = "Option::is_none")]
-    backend: Option<Capability>,
+    pub(super) backend: Option<Capability>,
     /// What the health check raised for this project (T329.17); absent while nothing is wrong.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     alerts: Vec<health::Alert>,
@@ -66,7 +66,7 @@ pub struct ProjectRow {
     /// every member is still on its first index.
     #[serde(skip_serializing_if = "Option::is_none")]
     scope_health: Option<u8>,
-    links: Vec<ProjectLink>,
+    pub links: Vec<ProjectLink>,
 }
 
 fn link_rows(store: &Store, from: i32) -> Result<Vec<ProjectLink>> {
@@ -89,7 +89,7 @@ fn link_rows(store: &Store, from: i32) -> Result<Vec<ProjectLink>> {
     Ok(out)
 }
 
-fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
+pub(super) fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
     let cx = &Ctx::new(rt);
     let missing = p.missing();
     let status = if missing {

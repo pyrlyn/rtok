@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import type { DrillEdgeKind, LinkKind, Origin, ProjectRow } from "../../api/snapshot.gen";
+import type { DrillEdgeKind, LinkKind, Origin, ProjectRow, Score } from "../../api/snapshot.gen";
 import { alertedIds } from "./alerts";
+import { healthLines } from "./health";
 
 /** Above this many projects the layout groups them by origin (T329 §8a). */
 export const CLUSTER_ABOVE = 50;
@@ -39,6 +40,8 @@ export interface SceneNode {
   group: number;
   /** The health check raised an alert for this project (T329.17): drawn with a red badge. */
   alert?: boolean;
+  /** The health score (T329.19): drawn as a ring in the level's colour. Registry projects only. */
+  health?: Score;
 }
 
 export interface SceneEdge {
@@ -76,9 +79,10 @@ export interface Scene {
 /** The red of an alert (T329.25): a brand role, so both themes and the 3D stage (`resolveRole`) get their own value. */
 export const ALERT_ROLE = "var(--pyr-danger-fg)";
 
-/** What a node says on hover; the alert is spelled out because the badge alone is colour. */
+/** What a node says on hover; the alert is spelled out because the badge alone is colour, and the health breakdown follows on its own lines. */
 export function nodeTip(n: SceneNode): string {
-  return `${n.label} · ${n.state}${n.alert ? " · alert" : ""}`;
+  const head = `${n.label} · ${n.state}${n.alert ? " · alert" : ""}`;
+  return n.health ? [head, ...healthLines(n.health)].join("\n") : head;
 }
 
 /** What an edge says on hover: how it was made for a link, the kind and the call count for a drill edge. */
@@ -170,6 +174,7 @@ export function buildScene(rows: ProjectRow[], opts: SceneOptions): Scene {
     inScope: scope.has(p.id),
     dim: hasScope && !scope.has(p.id),
     group: clustered ? groups.indexOf(p.origin) : 0,
+    health: p.health,
     ...(alerted.has(p.id) && { alert: true }),
   }));
   const edges: SceneEdge[] = [];

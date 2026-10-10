@@ -189,6 +189,33 @@ fn sessions_live_filter_exists_on_both_surfaces() {
     );
 }
 
+/// T478 (D27): the doctor `--fix` checklist is a write action on both surfaces, and both reach
+/// the engine through the same `doctor::web` pair, so neither has a second code path.
+#[test]
+fn doctor_fix_exists_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/doctor_fix.rs"
+    ));
+    assert!(
+        web.contains("ClientMessage::Doctor")
+            && web.contains("web::plan_here")
+            && web.contains("web::apply_here"),
+        "the web page plans and applies through doctor::web"
+    );
+    assert!(
+        tui.contains("web::plan_here") && tui.contains("web::apply_here"),
+        "the TUI plans and applies through the same pair"
+    );
+    assert!(
+        app.contains("(\"doctor\", \"f\", \"fix checklist\")")
+            && app.contains("(\"doctor\", \"Enter/y\", \"apply selected (confirm)\")"),
+        "the TUI's KEYS table lists the doctor fix keys"
+    );
+}
+
 /// T227: both surfaces render the Stats page from the same model accessor — `rtok
 /// stats --price`'s table plus `rtok stats --cache`'s table, D27's one page for two
 /// commands.
@@ -274,6 +301,39 @@ fn live_calls_view_exists_on_both_surfaces() {
     assert!(
         app.contains("(\"graph\", \"f\", \"freeze/unfreeze calls\")"),
         "the TUI's KEYS table documents the freeze key"
+    );
+}
+
+/// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page
+/// of both surfaces, each through the one `graph projects` function — the web by
+/// `ClientMessage::Project`, the TUI by keys over the same `ProjectRequest` and
+/// `web::project_write`. A write added to one without the other fails here by name.
+#[test]
+fn project_writes_exist_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/projects.rs"));
+    for (verb, key, desc) in [
+        ("Select", "s", "select project"),
+        ("Link", "l", "link to…"),
+        ("Unlink", "u", "unlink from…"),
+    ] {
+        assert!(
+            web.contains(&format!("R::{verb}")),
+            "the web page does not write project {verb}"
+        );
+        assert!(
+            tui.contains(&format!("ProjectRequest::{verb}")),
+            "the TUI graph page does not write project {verb}"
+        );
+        assert!(
+            app.contains(&format!("(\"graph\", \"{key}\", \"{desc}\")")),
+            "the TUI's KEYS table has no graph key for project {verb}"
+        );
+    }
+    assert!(
+        app.contains("crate::web::project_write"),
+        "the TUI writes through the web page's function, not a second one"
     );
 }
 
@@ -643,6 +703,10 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "graph diff",
         "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
+    ),
+    (
+        "graph export",
+        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.31",
     ),
     (
         "graph projects",
