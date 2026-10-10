@@ -18,7 +18,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T289.5. Pending claim for `rtok worktree adopt` from a post-create script when no single agent matches
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
-- T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.50. Graph page: running labels with elapsed counters on the live canvas
 - T329.51. Graph page: maximise buttons for the two parts
 - T329.52. Graph page: metrics collapsed to a strip under 900 px
