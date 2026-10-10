@@ -60,6 +60,10 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
   is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
   updates in place without moving the scene.
+- **Graph backend.** Each project in the list carries `lsp` or `tags`, and the selected project's
+  header says why: the language whose server answers, or the reason the project fell back to tags,
+  when it was last checked and when the health check retries. A project nobody has asked yet says
+  it has no record.
 
 ## Every flag is a config key
 
