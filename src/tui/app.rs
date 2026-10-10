@@ -12,6 +12,7 @@ use std::sync::mpsc;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
+use super::doctor_fix::{DoctorFix, Engine, Keyed};
 use crate::config::{Config, validate};
 use crate::model::{self, Snapshot};
 
@@ -36,6 +37,10 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("sessions", "l", "live-only filter"),
     ("skills", "↑/↓", "move selection"),
     ("skills", "n", "never-invoked only"),
+    ("doctor", "f", "fix checklist"),
+    ("doctor", "Space", "select entry"),
+    ("doctor", "k", "keep this copy"),
+    ("doctor", "Enter/y", "apply selected (confirm)"),
     ("config", "/", "filter entries"),
 ];
 
@@ -69,6 +74,8 @@ pub struct App {
     /// live-only filter is on.
     sessions: SessionsState,
     skills: SkillsState,
+    /// The Doctor tab's `doctor --fix` checklist (T478).
+    doctor_fix: DoctorFix,
     /// The Config page's own state (T228): `/` filter text and whether it is capturing.
     config: ConfigState,
     /// Whether the `?` help overlay is up (T60.8).
@@ -193,6 +200,7 @@ impl App {
             calls: CallsState::default(),
             sessions: SessionsState::default(),
             skills: SkillsState::default(),
+            doctor_fix: DoctorFix::new(Engine::machine()),
             config: ConfigState::default(),
             help: false,
             worker: None,
@@ -428,9 +436,18 @@ impl App {
         false
     }
 
+    pub(super) fn doctor_fix(&self) -> &DoctorFix {
+        &self.doctor_fix
+    }
+
     /// The Config page's filter state: whether `/` is capturing keys, and the filter text.
     pub fn config_filter(&self) -> (bool, &str) {
         (self.config.filtering, self.config.filter.as_str())
+    }
+
+    #[cfg(test)]
+    pub(in crate::tui) fn set_doctor_engine(&mut self, engine: Engine) {
+        self.doctor_fix = DoctorFix::new(engine);
     }
 
     #[cfg(test)]
@@ -587,6 +604,16 @@ impl App {
         }
         if self.page() == "config" && self.config_key(code) {
             return false;
+        }
+        if self.page() == "doctor" {
+            match self.doctor_fix.key(code, &self.cfg) {
+                Keyed::Pass => {}
+                Keyed::Taken => return false,
+                Keyed::Wrote => {
+                    self.request();
+                    return false;
+                }
+            }
         }
         match code {
             KeyCode::Char('q') | KeyCode::Esc => true,
