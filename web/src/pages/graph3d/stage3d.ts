@@ -594,6 +594,8 @@ export class Stage implements ViewApi {
     }
     this.updateHover();
     this.renderer.render(this.three, this.camera);
+    // A canvas has no DOM to inspect: a test aims at a node only once the drawn picture stops moving.
+    this.renderer.domElement.toggleAttribute("data-settled", this.positions.settled && !this.fly);
   };
 
   // --- end -----------------------------------------------------------------------------
