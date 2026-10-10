@@ -8940,6 +8940,19 @@ Deviations: The card says `ProjectRow.alert`; the field is `alerts` (an array of
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
 
+### T476. TUI: select, link and unlink projects on the graph page
+
+The web graph page already selects, links and unlinks projects (`ClientMessage::Project`, `project_write` in `src/web/mod.rs`, which calls `plugins::graph::projects::run`), and the TUI graph page cannot. D27 (amended 2026-10-10, T346) requires every write action on one UI surface to have its counterpart on the other. Done means: the TUI graph page selects a project and links or unlinks a pair with keys listed in `KEYS` (`src/tui/app.rs`), calling the same `plugins::graph::projects::run` actions as the web and the `rtok graph projects` commands; it shows the plan first and writes only after a confirm key; the outcome shows on the status line like the plugin toggle's (T15.4).
+
+Check: a TUI test with a `TestBackend` drives the keys on a fixture registry and the registry equals what the CLI commands write; declining the confirm writes nothing; the key hints render from `KEYS`; `tests/surface_parity.rs` lists project select/link/unlink on both surfaces; `just check`.
+
+Done: `src/tui/projects.rs` holds the graph page's registry state (cursor, a target picker for link and unlink, and a confirm stage). Keys: `↑/↓` move, `s` select, `l` link, `u` unlink, `b` both ways, `Enter` picks the target, `y` confirms, any other key (`n`, `Esc`) declines; while a target is picked or a plan awaits `y` the page swallows every key, so a stray `q` cannot leave a half-made plan. The write is `web::project_write` (now `pub(crate)`, returning the command's text), the one function behind `ClientMessage::Project` and so behind `graph projects`; the outcome goes on the page's status line and the model is re-read. The plan names the arrows and says when the link will index a never-indexed target. `view.rs` renders the registry table above the existing graph text, with the hints from the `graph` rows of `KEYS`. `ProjectRow`/`ProjectLink` fields the page reads are `pub`. `tests/surface_parity.rs` gained `project_writes_exist_on_both_surfaces`.
+
+Deviations: The write runs on the key loop, so linking a never-indexed project freezes the screen while it indexes; a worker for slow writes belongs with T477's re-index progress.
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
 In the plan, T329 §6b (branch `docs/plan-graph-projects`, ~lines 787-791, from PR #540 (T329), not merged yet) says later requests "do not re-probe the modes that failed", the cache "is kept until that process restarts" and "nothing else invalidates it". T329 §8d (~lines 917-923) says a background check every 60 s detects **unreachable** (SSH root stops answering) and **backend down**, and "when the project comes back, the alert clears automatically"; §8f (~line 943) scores "Backend alive" from the same record. These contradict each other because detecting an unreachable SSH host or a recovered backend requires probing again, which §6b forbids; under §6b a backend-down alert can never clear without a restart.

@@ -12,6 +12,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod app;
+mod projects;
 mod theme;
 mod view;
 
