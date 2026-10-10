@@ -1252,6 +1252,12 @@ section! {
         reference_depth: u32 = 3,
         /// T329.8: the most projects references may add to the registry.
         max_auto_projects: u32 = 20,
+        /// T329.17: raise an alert when a project in the scope goes missing, unreachable, loses its
+        /// working backend or has a manifest reference that points nowhere.
+        alerts: bool = true,
+        /// T329.17: seconds between the health checks of a process that hosts graph (`rtok mcp`,
+        /// `rtok web`); 0 turns the check off.
+        health_check_interval_s: u32 = 60,
         exclude: Vec<String> = vec![],
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),

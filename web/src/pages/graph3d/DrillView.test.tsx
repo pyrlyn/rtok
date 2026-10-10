@@ -202,6 +202,136 @@ describe("drill-down page", () => {
     });
 });
 
+const DRILL_RS = "/graph?p=1&x=%5B%22src%2Fplugins%2Fgraph%2Fdrill.rs%22%5D";
+const panel = () => within(screen.getByRole("complementary", { name: "node details" }));
+const searchBox = () => screen.getByRole("searchbox", { name: "search symbols" });
+const submit = (text: string) => {
+    fireEvent.change(searchBox(), { target: { value: text } });
+    fireEvent.keyDown(searchBox(), { key: "Enter" });
+};
+
+describe("side panel", () => {
+    test("a selected function shows its place, signature, callers, callees and editor link", async () => {
+        const { connect } = serve();
+        mountRouted(connect, DRILL_RS);
+        expect(await screen.findByText("Select a node to see its details.")).toBeTruthy();
+        fireEvent.click(await screen.findByRole("button", { name: /^run/ }));
+
+        const p = panel();
+        expect(p.getByText("run")).toBeTruthy();
+        expect(p.getByText("src/plugins/graph/drill.rs", { selector: "p" })).toBeTruthy();
+        expect(p.getByText(":40")).toBeTruthy();
+        expect(p.getByText("fn run()")).toBeTruthy();
+        expect(p.getByRole("link", { name: "Open in editor" }).getAttribute("href")).toBe(
+            "vscode://file/work/rtok/src/plugins/graph/drill.rs:40",
+        );
+        const callees = within(p.getByRole("region", { name: "callees" }));
+        expect(
+            callees.getAllByRole("button").map((b) => b.querySelector("b")!.textContent),
+        ).toEqual(["load", "resolve"]);
+        expect(p.getByRole("region", { name: "callers" }).textContent).toMatch(
+            /none in this picture/,
+        );
+
+        // A callee is one click away, and its callers name the function we came from.
+        fireEvent.click(callees.getByRole("button", { name: /^load/ }));
+        const callers = within(panel().getByRole("region", { name: "callers" }));
+        expect(callers.getByRole("button", { name: /^run/ })).toBeTruthy();
+    });
+
+    test("a node of a linked project is linked under that project's root and can be opened", async () => {
+        const { connect } = serve();
+        const { router } = mountRouted(connect, "/graph?p=1&x=%5B%22src%2Fstore.rs%22%5D");
+        fireEvent.click(await screen.findByRole("button", { name: /^open_store/ }));
+        const callees = within(panel().getByRole("region", { name: "callees" }));
+        fireEvent.click(callees.getByRole("button", { name: /^open_index/ }));
+
+        expect(panel().getByText("ketch:")).toBeTruthy();
+        expect(panel().getByRole("link", { name: "Open in editor" }).getAttribute("href")).toBe(
+            "vscode://file/work/ketch/src/lib.rs:7",
+        );
+        fireEvent.click(panel().getByRole("button", { name: "Open in ketch" }));
+        await waitFor(() => expect(search(router)).toMatchObject({ p: "2", fn: "open_index" }));
+    });
+
+    test("a file has an editor link without a line", async () => {
+        const { connect } = serve();
+        mountRouted(connect, "/graph?p=1");
+        fireEvent.click(await screen.findByRole("button", { name: /^main\.rs/ }));
+        expect(panel().getByRole("link", { name: "Open in editor" }).getAttribute("href")).toBe(
+            "vscode://file/work/rtok/src/main.rs",
+        );
+    });
+});
+
+describe("search", () => {
+    test("Enter sends the text as the request's query; typing alone sends nothing", async () => {
+        const { connect, asked } = serve();
+        mountRouted(connect, DRILL_RS);
+        await items();
+        fireEvent.change(searchBox(), { target: { value: "open" } });
+        expect(asked).toHaveLength(1);
+        expect(asked[0]!.query).toBe("");
+        fireEvent.keyDown(searchBox(), { key: "Enter" });
+        await waitFor(() => expect(asked.at(-1)!.query).toBe("open"));
+    });
+
+    test("hits name their projects, and one in another project opens it with the symbol focused", async () => {
+        const { connect, asked } = serve();
+        const { router } = mountRouted(connect, DRILL_RS);
+        await items();
+        submit("open");
+        const hits = within(await screen.findByRole("list", { name: "search hits" }));
+        expect(hits.getAllByRole("button").map((b) => b.querySelector("b")!.textContent)).toEqual([
+            "open_store",
+            "open_index",
+        ]);
+        expect(hits.getByText("ketch")).toBeTruthy();
+        expect(hits.getByText("rtok")).toBeTruthy();
+
+        fireEvent.click(hits.getByRole("button", { name: /^open_index/ }));
+        await waitFor(() =>
+            expect(search(router)).toMatchObject({ p: "2", fp: "src/lib.rs", fn: "open_index" }),
+        );
+        await waitFor(() => expect(asked.at(-1)).toMatchObject({ project: "2", query: "" }));
+        // The new project's panel follows the focus without a click.
+        expect(
+            await within(
+                await screen.findByRole("complementary", { name: "node details" }),
+            ).findByText("fn open_index()"),
+        ).toBeTruthy();
+    });
+
+    test("a hit in this project focuses its symbol and keeps the results", async () => {
+        const { connect } = serve();
+        const { router } = mountRouted(connect, "/graph?p=1");
+        await items();
+        submit("load");
+        const hits = within(await screen.findByRole("list", { name: "search hits" }));
+        fireEvent.click(hits.getByRole("button", { name: /^load/ }));
+        await waitFor(() =>
+            expect(search(router)).toMatchObject({
+                p: "1",
+                fp: "src/plugins/graph/drill.rs",
+                fn: "load",
+            }),
+        );
+        expect(await panel().findByText("fn load()")).toBeTruthy();
+        expect(panel().getByRole("list", { name: "search hits" })).toBeTruthy();
+        expect(panel().getByRole("button", { name: /^run/ })).toBeTruthy();
+    });
+
+    test("a search with no match says so, and an empty one clears the results", async () => {
+        const { connect } = serve();
+        mountRouted(connect, "/graph?p=1");
+        await items();
+        submit("zzz");
+        expect(await panel().findByText("No symbol matches.")).toBeTruthy();
+        submit("");
+        await waitFor(() => expect(screen.queryByText("No symbol matches.")).toBeNull());
+    });
+});
+
 describe("opening a project from the overview", () => {
     test("the node menu has Open, and it lands in the drill-down", async () => {
         localStorage.setItem(VIEW_KEY, "2d");

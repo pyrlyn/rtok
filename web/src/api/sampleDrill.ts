@@ -43,6 +43,8 @@ const generated = (): Record<string, Def[]> =>
     ]),
   );
 
+const HITS = 8;
+
 interface Def2 {
   path: string;
   name: string;
@@ -74,14 +76,16 @@ export function sampleDrill(req: DrillRequest, rows: ProjectRow[]): DrillGraph {
   if (row.missing) return { ...g, state: "missing" };
   if (!row.index) return { ...g, state: "not indexed" };
 
-  const own = row.name.startsWith(BIG) ? generated() : (FILES[row.name] ?? {});
-  const defs = flat(own);
+  const filesOf = (name: string) => (name.startsWith(BIG) ? generated() : (FILES[name] ?? {}));
+  const defs = flat(filesOf(row.name));
   const other = (name: string) => rows.find((r) => r.name === name);
   const q = req.query.trim().toLowerCase();
+  // Like the server: the project and its scope, at most HITS per project.
   g.hits = q
     ? [row, ...row.links.flatMap((l) => rows.filter((r) => r.id === l.to))].flatMap((r) =>
-        flat(FILES[r.name] ?? {})
+        flat(filesOf(r.name))
           .filter((d) => d.name.toLowerCase().includes(q))
+          .slice(0, HITS)
           .map<DrillHit>((d) => ({
             project: r.id,
             name: d.name,
