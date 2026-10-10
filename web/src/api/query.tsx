@@ -17,6 +17,7 @@ import {
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import type {
     CallBatch,
+    Cleared,
     ClientMessage,
     DrillGraph,
     DrillRequest,
@@ -36,6 +37,8 @@ export const pausedKey = ["paused"] as const;
 export const EXPAND_TIMEOUT_MS = 10_000;
 // A fix writes files and backs each one up first, so it gets longer than a read.
 export const DOCTOR_TIMEOUT_MS = 30_000;
+// Planning junk walks every installed agent's folders (up to 10 s each) before it answers.
+export const JUNK_TIMEOUT_MS = 120_000;
 // A project select can index the project before the server answers.
 export const WRITE_TIMEOUT_MS = 30_000;
 
@@ -50,6 +53,8 @@ export interface Api {
     project(request: ProjectRequest): Promise<void>;
     doctorPlan(selection: Selection): Promise<Plan>;
     doctorApply(selection: Selection): Promise<Fixed>;
+    junkPlan(): Promise<Cleared>;
+    junkApply(paths: string[]): Promise<Cleared>;
     drill(request: DrillRequest): Promise<DrillGraph>;
     /** Starts the graph call stream (T329.26) for as long as a listener is registered; returns the stop. */
     calls(listener: (batch: CallBatch) => void): () => void;
@@ -73,9 +78,9 @@ interface PendingExpand {
 // not the request, and the server answers those off the executor, so `key` (the project)
 // is what ties it back; within one project the order holds.
 interface PendingDoctor {
-    kind: "doctorplan" | "doctorfixed" | "graph";
+    kind: "doctorplan" | "doctorfixed" | "junkplan" | "junkcleared" | "graph";
     key?: string;
-    resolve(frame: Plan | Fixed | DrillGraph): void;
+    resolve(frame: Plan | Fixed | Cleared | DrillGraph): void;
     reject(error: Error): void;
 }
 
@@ -146,7 +151,7 @@ export function createApi(
 
     const settleDoctor = (
         kind: PendingDoctor["kind"],
-        frame: Plan | Fixed | DrillGraph,
+        frame: Plan | Fixed | Cleared | DrillGraph,
         key?: string,
     ) => {
         const i = pendingDoctor.findIndex((p) => p.kind === kind && p.key === key);
@@ -155,10 +160,11 @@ export function createApi(
         entry?.resolve(frame);
     };
 
-    const askDoctor = <T extends Plan | Fixed | DrillGraph>(
+    const askDoctor = <T extends Plan | Fixed | Cleared | DrillGraph>(
         kind: PendingDoctor["kind"],
         message: ClientMessage,
         key?: string,
+        timeoutMs = DOCTOR_TIMEOUT_MS,
     ) =>
         new Promise<T>((resolve, reject) => {
             const entry: PendingDoctor = {
@@ -176,7 +182,7 @@ export function createApi(
             const timer = setTimeout(() => {
                 pendingDoctor = pendingDoctor.filter((p) => p !== entry);
                 reject(new Error(`${kind} timed out`));
-            }, DOCTOR_TIMEOUT_MS);
+            }, timeoutMs);
             pendingDoctor.push(entry);
             if (!connection?.send(message)) {
                 pendingDoctor = pendingDoctor.filter((p) => p !== entry);
@@ -207,6 +213,12 @@ export function createApi(
                 return;
             case "doctorfixed":
                 settleDoctor("doctorfixed", frame.fixed);
+                return;
+            case "junkplan":
+                settleDoctor("junkplan", frame.plan);
+                return;
+            case "junkcleared":
+                settleDoctor("junkcleared", frame.cleared);
                 return;
             case "graph":
                 settleDoctor("graph", frame.graph, String(frame.graph.project));
@@ -282,6 +294,20 @@ export function createApi(
             askDoctor<Plan>("doctorplan", { doctor: { action: "plan", selection } }),
         doctorApply: (selection) =>
             askDoctor<Fixed>("doctorfixed", { doctor: { action: "apply", selection } }),
+        junkPlan: () =>
+            askDoctor<Cleared>(
+                "junkplan",
+                { junk: { action: "plan", paths: [] } },
+                undefined,
+                JUNK_TIMEOUT_MS,
+            ),
+        junkApply: (paths) =>
+            askDoctor<Cleared>(
+                "junkcleared",
+                { junk: { action: "apply", paths } },
+                undefined,
+                JUNK_TIMEOUT_MS,
+            ),
         // `request.project` is the registry id as text, which is what the frame carries back.
         drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
         calls(listener) {
@@ -361,6 +387,10 @@ export function useProjectMutation() {
 }
 
 export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {
+    return useApi();
+}
+
+export function useJunkApi(): Pick<Api, "junkPlan" | "junkApply"> {
     return useApi();
 }
 

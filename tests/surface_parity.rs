@@ -42,9 +42,9 @@ fn web_pages(cfg: &Config) -> Vec<String> {
         .as_object()
         .expect("frame is an object")
         .keys()
-        // Envelope, the T60.4 expand map and the T329.12 registry rows (data of the graph page,
-        // not a page of their own), not pages.
-        .filter(|key| !["type", "ref_ids", "projects"].contains(&key.as_str()))
+        // Envelope, the T60.4 expand map, the T329.12 registry rows (data of the graph page) and
+        // the T330.7 junk card (data of the hosts page), not pages of their own.
+        .filter(|key| !["type", "ref_ids", "projects", "junk"].contains(&key.as_str()))
         .map(|key| {
             model::pages()
                 .iter()

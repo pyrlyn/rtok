@@ -26,8 +26,6 @@
 - T329.27. Graph page: read-only live canvas and splitter
 - T329.28. Graph page: live camera, 3D live view and the remaining live displays
 - T329.29. Graph page: Compare mode and the remaining diff reports
-- T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
-- T330.7. Junk: web card with a "clear safe junk" button
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
