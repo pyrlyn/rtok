@@ -259,3 +259,38 @@ fn a_dry_run_writes_nothing_and_another_host_is_refused() {
     let (ok, text) = p.rtok("install", "claude", &[]);
     assert!(!ok && text.contains("no post-create script"), "{text}");
 }
+
+/// Fail open: a refused `adopt` (no single live agent) must not fail the host's worktree setup.
+#[cfg(unix)]
+#[test]
+fn the_written_command_exits_zero_when_adopt_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = project("pc-fail-open");
+    p.install("devin");
+    let hooks = json(&p.read(".devin/hooks.json"));
+    let cmd = hooks["hooks"]["post_setup_worktree"][0]["command"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let fake = p.home.join("fakebin");
+    fs::create_dir_all(&fake).unwrap();
+    let marker = p.home.join("adopt-ran");
+    let rtok = fake.join("rtok");
+    fs::write(
+        &rtok,
+        format!("#!/bin/sh\necho \"$@\" > '{}'\nexit 3\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&rtok, fs::Permissions::from_mode(0o755)).unwrap();
+    let out = Command::new("sh")
+        .args(["-c", &cmd])
+        .env("PATH", format!("{}:/usr/bin:/bin", fake.display()))
+        .env("HOME", &p.home)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{cmd}: {out:?}");
+    assert_eq!(
+        fs::read_to_string(&marker).unwrap().trim(),
+        "worktree adopt"
+    );
+}

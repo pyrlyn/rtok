@@ -37,15 +37,23 @@ const KILO_BEGIN: &str = "# >>> rtok worktree adopt (rtok agents install kilo --
 const KILO_END: &str = "# <<< rtok worktree adopt <<<";
 const SHEBANG: &str = "#!/bin/sh\n";
 
-/// The line a host runs after it created a worktree. Fail open: the POSIX form ends in `true`,
-/// because Kilo keeps a worktree whose setup failed and Cursor's handling of a failure is not
-/// documented.
+/// The line a host runs after it created a worktree. Fail open: the resolver `exec`s rtok, so
+/// a refused `adopt` (no single live agent) would be the script's exit code; the subshell and
+/// `|| true` keep it 0, because Kilo keeps a worktree whose setup failed and Cursor's handling
+/// of a failure is not documented.
 fn command() -> String {
     if cfg!(windows) {
         format!("{} worktree adopt", super::rtok_hook_bin())
     } else {
-        super::hook_resolver("worktree adopt", None)
+        posix()
     }
+}
+
+fn posix() -> String {
+    format!(
+        "( {} ) || true",
+        super::hook_resolver("worktree adopt", None)
+    )
 }
 
 /// Whether `cmd` is a command [`command`] wrote, under any rtok path.
@@ -53,6 +61,7 @@ fn ours(cmd: &str) -> bool {
     let Some((head, _)) = cmd.split_once(" worktree adopt") else {
         return false;
     };
+    let head = head.trim_start_matches("( ");
     head.starts_with("command -v rtok") || super::is_rtok_bin(super::unquote_bin(head))
 }
 
@@ -234,10 +243,7 @@ fn hooks_json(apply: &Apply, root: &Path, remove: bool) -> Result<(PathBuf, Stri
 /// The block that runs `rtok worktree adopt` in a subshell: Kilo runs the file as one script,
 /// and the resolver ends in `exec`, which would otherwise replace the script.
 fn kilo_block() -> String {
-    format!(
-        "{KILO_BEGIN}\n( {} )\n{KILO_END}\n",
-        super::hook_resolver("worktree adopt", None)
-    )
+    format!("{KILO_BEGIN}\n{}\n{KILO_END}\n", posix())
 }
 
 /// `.kilo/setup-script`: a marked block right after the shebang, so the claim exists even when a
