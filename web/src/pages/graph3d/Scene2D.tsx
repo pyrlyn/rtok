@@ -10,6 +10,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { HEALTH_ROLE, healthLabel } from "./health";
 import { accentOf, type Lit, type LiveState } from "./live/lit";
 import { ALERT_ROLE, edgeHow, nodeTip, type Scene, type SceneNode } from "./scene";
 import type { Positions, Vec3 } from "./useLayout";
@@ -72,6 +73,26 @@ function AlertBadge({ n, testId }: { n: SceneNode; testId: string }) {
                 style={{ stroke: "var(--pyr-bg)" }}
                 strokeWidth={r * 0.35}
                 strokeLinecap="round"
+            />
+        </g>
+    );
+}
+
+/** A ring round the node: the arc is the score, the colour the level; dashed grey while the first index runs. */
+function HealthArc({ n }: { n: SceneNode }) {
+    const h = n.health;
+    if (!h) return null;
+    const r = n.radius * 1.25;
+    const c = 2 * Math.PI * r;
+    const arc = h.level === "indexing" ? "2 2" : `${((h.score ?? 0) / 100) * c} ${c}`;
+    return (
+        <g data-testid="health-2d" data-level={h.level} fill="none" strokeWidth={1.6}>
+            <circle r={r} stroke="currentColor" opacity={0.2} />
+            <circle
+                r={r}
+                style={{ stroke: HEALTH_ROLE[h.level] }}
+                strokeDasharray={arc}
+                transform="rotate(-90)"
             />
         </g>
     );
@@ -272,7 +293,7 @@ export default function Scene2D({
                     : {
                           role: "button",
                           tabIndex: 0,
-                          "aria-label": `${n.label}, ${n.state}${n.alert ? ", alert" : ""}${n.selected ? ", selected" : ""}`,
+                          "aria-label": `${n.label}, ${n.state}${n.alert ? ", alert" : ""}${n.health ? `, health ${healthLabel(n.health)}` : ""}${n.selected ? ", selected" : ""}`,
                           "aria-pressed": n.selected,
                           className:
                               "cursor-pointer outline-none focus-visible:[&>:first-child]:stroke-accent",
@@ -303,6 +324,7 @@ export default function Scene2D({
                     >
                         {lit && <Glow n={n} lit={lit} />}
                         <Mark n={n} />
+                        <HealthArc n={n} />
                         {n.selected && (
                             <circle
                                 r={n.radius * 1.5}
