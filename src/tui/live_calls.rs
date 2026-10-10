@@ -305,12 +305,22 @@ impl LiveCalls {
         let metrics = Line::from(vec![
             Span::styled("latency p50 ", theme::muted()),
             latency,
-            Span::styled("symbols asked ", theme::muted()),
-            Span::raw(format!("{} ({} across projects)  ", t.symbols, t.crossed)),
+            Span::styled("symbols returned ", theme::muted()),
+            Span::raw(format!(
+                "{} of {} ({} across projects)  ",
+                t.symbols_returned, t.symbols, t.crossed
+            )),
             Span::styled("fallbacks ", theme::muted()),
             Span::styled(format!("{} ({} capped)", t.fallbacks, t.caps), fallbacks),
         ]);
-        let mut lines = vec![Line::from(windows), kpi, metrics];
+        // T487: a line of its own, because the counts above already fill a 128-column pane.
+        let answer = Line::from(vec![
+            Span::styled("files touched ", theme::muted()),
+            Span::raw(format!("{}  ", t.files_touched)),
+            Span::styled("projects with hits ", theme::muted()),
+            Span::raw(t.projects_hit.to_string()),
+        ]);
+        let mut lines = vec![Line::from(windows), kpi, metrics, answer];
         let mut tools: Vec<_> = t.tools.iter().collect();
         tools.sort_by(|a, b| b.1.calls.cmp(&a.1.calls).then(a.0.cmp(b.0)));
         let top = tools.first().map_or(1, |(_, v)| v.calls).max(1);
@@ -343,7 +353,7 @@ impl LiveCalls {
     pub(super) fn render(&self, frame: &mut Frame, area: Rect) {
         let t = self.shown().window_totals(self.window, self.shown_now());
         // The Graph page gives the pane 13 rows at 24; the bars yield so the feed keeps its rows.
-        let bars = MAX_BARS.min(usize::from(area.height).saturating_sub(10));
+        let bars = MAX_BARS.min(usize::from(area.height).saturating_sub(11));
         let mut lines = self.metric_lines(&t, bars);
         let mut filters = Vec::new();
         for (name, value) in [
@@ -500,9 +510,11 @@ mod tests {
         a.symbols = Some(2);
         a.total = Some(3);
         a.samples = vec![sample("lsp_fallback", None)];
+        (a.symbols_returned, a.files_touched, a.projects_hit) = (Some(1), Some(4), Some(2));
         let mut b = timed("b", 20.0);
         b.symbols = Some(1);
         b.total = Some(1);
+        (b.symbols_returned, b.files_touched, b.projects_hit) = (Some(1), Some(2), Some(1));
         b.samples = vec![sample("cap", Some("ab")), sample("explore", None)];
         let events = vec![a, b, timed("c", 30.0), timed("d", 40.0), timed("e", 100.0)];
         let mut app = graph_app();
@@ -510,8 +522,9 @@ mod tests {
         let s = screen(&app);
         for want in [
             "latency p50 30 ms (p95 100 ms)",
-            "symbols asked 3 (1 across projects)",
+            "symbols returned 2 of 3 (1 across projects)",
             "fallbacks 1 (1 capped)",
+            "files touched 6  projects with hits 3",
         ] {
             assert!(s.contains(want), "missing `{want}` in\n{s}");
         }
@@ -535,7 +548,10 @@ mod tests {
         let app = graph_app();
         let t = app.live().latest.window_totals(1, T);
         let line = app.live().metric_lines(&t, 0)[2].to_string();
-        assert!(line.starts_with("latency p50 -  symbols asked 0"), "{line}");
+        assert!(
+            line.starts_with("latency p50 -  symbols returned 0 of 0"),
+            "{line}"
+        );
     }
 
     #[test]

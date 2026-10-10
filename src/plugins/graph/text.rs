@@ -205,6 +205,7 @@ pub(crate) fn symbol(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Resu
     if found.defs.is_empty() {
         return Ok(format!("no definition of {name}{}", filter.scope_note()));
     }
+    super::tally::hit(root, name, found.defs.iter().map(|d| d.path.as_str()));
     Ok(with_caveat(defs_text(&found.defs)))
 }
 
@@ -222,6 +223,7 @@ pub(crate) fn callers(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Res
     if found.mentions.is_empty() {
         return Ok(format!("no references to {name}{}", filter.scope_note()));
     }
+    super::tally::hit(root, name, found.mentions.keys());
     Ok(with_caveat(mention_rows(&found)))
 }
 
@@ -242,6 +244,7 @@ pub(crate) fn impact(
     if found.mentions.is_empty() {
         return Ok(format!("nothing reaches {name}{}", filter.scope_note()));
     }
+    super::tally::hit(root, name, found.mentions.keys());
     let mut out = impact_rows(&found);
     if depth > 1 {
         out.push_str("one level only in text mode\n");
@@ -363,6 +366,30 @@ mod tests {
             "fn gamma() void { alpha(); alphabet(); }\n",
         )
         .unwrap();
+    }
+
+    /// T329.36: the text backend counts the definition files and the mentioning files it lists.
+    #[test]
+    fn the_text_backend_counts_what_it_lists() {
+        let (cx, dir) = pinned("t32936-text");
+        seed(&dir);
+        let ctx = Ctx::new(&cx);
+        let counted = |f: &dyn Fn() -> String| {
+            super::super::tally::arm();
+            let answer = f();
+            let got = super::super::tally::take();
+            (answer, (got.symbols, got.files, got.projects))
+        };
+        let (_, got) = counted(&|| symbol(&ctx, &dir, "alpha", &Filter::none()).unwrap());
+        assert_eq!(got, (1, 1, 1), "defined in a.zig");
+        let (answer, got) = counted(&|| callers(&ctx, &dir, "alpha", &Filter::none()).unwrap());
+        assert!(answer.starts_with("b.zig"), "{answer}");
+        assert_eq!(got, (1, 1, 1), "mentioned in b.zig only");
+        let (_, got) = counted(&|| impact(&ctx, &dir, "beta", 1, &Filter::none(), None).unwrap());
+        assert_eq!(got, (1, 1, 1), "mentioned in a.zig");
+        let (_, got) = counted(&|| symbol(&ctx, &dir, "alp", &Filter::none()).unwrap());
+        assert_eq!(got, (0, 0, 0));
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

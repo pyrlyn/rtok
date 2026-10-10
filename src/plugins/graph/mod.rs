@@ -46,6 +46,7 @@ pub mod resolve;
 pub mod review;
 pub mod scope;
 pub mod status;
+pub mod tally;
 pub mod text;
 pub mod walk;
 pub mod watch;
@@ -392,6 +393,7 @@ fn door(
     }
     let auto = mode == Mode::Auto;
     let t0 = std::time::Instant::now();
+    let counted = tally::mark();
     lsp::set_timeout_ms(u64::from(
         cx.plugin_config::<crate::config::Graph>("graph")
             .lsp_timeout_ms,
@@ -415,6 +417,9 @@ fn door(
         }
         capability::Asked::Lsp(Err(e)) => capability::reason_of(&e),
     };
+    // The tags answer replaces the server's, so what the server counted before it failed or
+    // came back empty is not part of the answer.
+    tally::rewind(counted);
     // Every server error already starts with "lsp: "; the header says it once under `auto`.
     let shown = match (auto, reason.strip_prefix("lsp: ")) {
         (true, Some(rest)) => rest,
@@ -620,6 +625,7 @@ fn symbol_tags(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<Str
             format!("no definition of {name}{}", filter.scope_note()),
         );
     }
+    tally::hit(root, name, rows.iter().map(|r| r.0.as_str()));
     let key = index::canon(root);
     let callees = cx.symbol_callees(&key, name)?;
     with_stale(
@@ -801,6 +807,7 @@ pub fn symbol_by_id(cx: &Ctx, root: &Path, id: &str) -> Result<String> {
     if rows.is_empty() {
         return with_stale(cx, root, format!("no definition of {id}"));
     }
+    tally::hit(root, &name, [path.as_str()]);
     let callees = cx.symbol_callees(&key, &name)?;
     with_stale(
         cx,
@@ -930,6 +937,7 @@ fn callers_tags(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<St
             )?,
         );
     }
+    tally::hit(root, name, rows.iter().map(|r| r.0.as_str()));
     let mut out = String::new();
     for (path, scope, n, line) in rows {
         let scope = if scope.is_empty() {
@@ -1012,6 +1020,7 @@ fn impact_tags(
 ",
         ) + "
 ";
+        tally::hit(root, name, std::iter::empty::<&str>());
         return with_stale(
             cx,
             root,
@@ -1042,6 +1051,7 @@ fn impact_tags(
         )?;
         return with_stale(cx, root, with_cochange(cx, root, &file, text));
     }
+    tally::hit(root, name, rows.iter().map(|r| r.1.as_str()));
     let mut text = String::new();
     if ranked.others > 0 {
         // Cap keeps the head, so this line has to lead or a long walk hides it.
@@ -2436,6 +2446,64 @@ mod tests {
             .unwrap(),
             "no definition of dup in zzz"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.36: one project, the tags index. The counts are the files and projects the answer
+    /// lists, and a name with no listing adds nothing.
+    #[test]
+    fn single_project_counts_equal_the_listing() {
+        let (cx, dir) = cx("t32936-single");
+        fs::write(dir.join("a.rs"), "fn dup() {}\nfn go() { dup(); }\n").unwrap();
+        fs::write(dir.join("b.rs"), "fn dup() {}\nfn also() { dup(); }\n").unwrap();
+        let ctx = Ctx::new(&cx);
+        let counted = |f: &dyn Fn() -> String| {
+            tally::arm();
+            let answer = f();
+            (answer, tally::take())
+        };
+        let none = Filter::none();
+        let (answer, got) = counted(&|| symbol_filtered(&ctx, &dir, "dup", &none).unwrap());
+        assert_eq!(answer.matches("::dup#function@1").count(), 2, "{answer}");
+        assert_eq!((got.symbols, got.files, got.projects), (1, 2, 1));
+        let (answer, got) = counted(&|| callers_filtered(&ctx, &dir, "dup", &none).unwrap());
+        assert_eq!(answer.matches("\u{d7}1").count(), 2, "{answer}");
+        assert_eq!((got.symbols, got.files, got.projects), (1, 2, 1));
+        let (_, got) = counted(&|| impact_filtered(&ctx, &dir, "dup", 1, &none, None).unwrap());
+        assert_eq!((got.symbols, got.files, got.projects), (1, 2, 1));
+        let (answer, got) = counted(&|| symbol_filtered(&ctx, &dir, "zzz", &none).unwrap());
+        assert_eq!(answer, "no definition of zzz");
+        assert_eq!((got.symbols, got.files, got.projects), (0, 0, 0));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.36: what the server counted before it failed is not part of the tags answer that
+    /// replaces it.
+    #[test]
+    fn a_failed_server_leaves_no_count_behind() {
+        let (mut c, dir) = crate::testutil::config("t32936-door");
+        c.plugins.graph.backend = "lsp".into();
+        let cx = crate::plugin::Runtime::open(c, "t32936-door").unwrap();
+        let ctx = Ctx::new(&cx);
+        tally::arm();
+        let out = served(
+            &ctx,
+            &dir,
+            "symbol",
+            &["alpha"],
+            || {
+                tally::hit(&dir, "alpha", ["lost.rs"]);
+                anyhow::bail!("lsp: server died")
+            },
+            || {
+                tally::hit(&dir, "alpha", ["a.rs"]);
+                Ok("tags answer".to_string())
+            },
+        )
+        .unwrap();
+        assert!(out.starts_with("(tags; lsp:"), "{out}");
+        let got = tally::take();
+        assert_eq!((got.symbols, got.files, got.projects), (1, 1, 1));
         let _ = fs::remove_dir_all(dir);
     }
 

@@ -85,10 +85,12 @@ export function LiveMetrics({
                     sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
                 />
                 <Kpi
-                    label="symbols asked"
-                    value={fmt(t.symbols)}
+                    label="symbols returned"
+                    value={`${fmt(t.symbolsReturned)} of ${fmt(t.symbols)}`}
                     sub={`${fmt(t.crossed)} across projects`}
                 />
+                <Kpi label="files touched" value={fmt(t.filesTouched)} />
+                <Kpi label="projects with hits" value={fmt(t.projectsHit)} />
                 <Kpi
                     label="fallbacks"
                     value={fmt(t.fallbacks)}
