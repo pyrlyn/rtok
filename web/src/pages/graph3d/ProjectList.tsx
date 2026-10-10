@@ -7,6 +7,7 @@ import { focusRing } from "../../ui/cx";
 import { Pill } from "../../ui/Pill";
 import { Spinner } from "../../ui/Spinner";
 import { stateOf } from "../projectLogic";
+import { HealthBreakdown, HealthRing } from "./HealthRing";
 import type { Scene } from "./scene";
 
 /**
@@ -48,6 +49,7 @@ export function ProjectList({
                                 style={{ background: n.color }}
                             />
                             <b className="truncate">{n.label}</b>
+                            {n.health && <HealthRing health={n.health} />}
                             <Pill tone={s.tone}>{s.label}</Pill>
                             {n.alert && (
                                 <Pill tone="fail" dot>
@@ -63,6 +65,11 @@ export function ProjectList({
                                 </span>
                             )}
                         </button>
+                        {n.health && (
+                            <div className="px-2.5 pt-0.5 pb-1">
+                                <HealthBreakdown health={n.health} />
+                            </div>
+                        )}
                     </li>
                 );
             })}

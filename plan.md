@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
-| T329.30 | todo | P3 | 2 | 0% | |
 | T329.27 | todo | P3 | 3 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
@@ -843,13 +842,6 @@ Check: a signature change shows amber on the page and in its side panel, a remov
 T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
-
-
-### T329.30. Graph page: health ring and breakdown per project
-
-The page half of T329.19 (the backend half is in `done.md`). T329 §8f "Score": a coloured ring on the project node (green 80 and up, amber 50 to 79, red below 50; grey for `indexing`) with the breakdown (the three components, the reasons and their fixes) on hover and in the project list, and the scope's lowest score (`ProjectRow.scope_health`) beside the selected project. The data is `ProjectRow.health` and `ProjectRow.scope_health`, already in `/ws` and `web/src/api/snapshot.gen.ts`. Depends on T329.19.
-
-Check: Vitest and a story (axe) for a project at 100, one at 60 with two reasons, one `indexing` and one `missing`; `just check`, `just spa-stories` and `just spa-e2e`.
 
 
 ### T356. Never index `$HOME` or `/` as a graph root

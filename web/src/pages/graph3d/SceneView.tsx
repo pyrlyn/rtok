@@ -158,7 +158,7 @@ export function SceneView({
                 <div
                     role="tooltip"
                     style={{ left: tip.x + 12, top: tip.y + 12 }}
-                    className={`${tooltipBox} fixed`}
+                    className={`${tooltipBox} fixed whitespace-pre-line`}
                 >
                     {tip.text}
                 </div>
