@@ -644,6 +644,18 @@
           ]
         },
         {
+          "description": "What a change did to one project's graph, for Compare mode (T329.35); read-only.",
+          "type": "object",
+          "properties": {
+            "diff": {
+              "$ref": "#/$defs/DiffRequest"
+            }
+          },
+          "required": [
+            "diff"
+          ]
+        },
+        {
           "description": "Start or stop the graph call events (T329.15); the page subscribes while the live\ngraph is visible, so a hidden one costs nothing.",
           "type": "object",
           "properties": {
@@ -686,6 +698,293 @@
         "freshness",
         "backend",
         "links"
+      ]
+    },
+    "DiffDef": {
+      "type": "object",
+      "properties": {
+        "callers": {
+          "description": "`changed` and `removed` rows only.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "kind": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "signature_changed": {
+          "description": "`changed` rows only: the signature moved, not just the body.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "path",
+        "line"
+      ]
+    },
+    "DiffEdge": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "scope",
+        "name"
+      ]
+    },
+    "DiffExport": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The file's name, for the answer's `from`.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The file's content.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
+      ]
+    },
+    "DiffLink": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "kind"
+      ]
+    },
+    "DiffMove": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/DiffDef"
+        },
+        "to": {
+          "$ref": "#/$defs/DiffDef"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "DiffProject": {
+      "type": "object",
+      "properties": {
+        "added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffDef"
+          }
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffDef"
+          }
+        },
+        "edges_added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffEdge"
+          }
+        },
+        "edges_removed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffEdge"
+          }
+        },
+        "from": {
+          "type": "string"
+        },
+        "more": {
+          "description": "Rows left out of the lists by [`DiffReport::capped`].",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "moved": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffMove"
+          }
+        },
+        "not_analysed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffUnread"
+          }
+        },
+        "project": {
+          "type": "string"
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffDef"
+          }
+        },
+        "renamed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffMove"
+          }
+        }
+      },
+      "required": [
+        "project",
+        "from",
+        "changed",
+        "added",
+        "removed",
+        "renamed",
+        "moved",
+        "edges_added",
+        "edges_removed",
+        "not_analysed"
+      ]
+    },
+    "DiffReport": {
+      "description": "`--json` and the graph page's `diff` frame: one typed shape, so the page never recomputes or\nre-parses what the CLI prints.",
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "links_added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffLink"
+          }
+        },
+        "links_removed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffLink"
+          }
+        },
+        "notes": {
+          "description": "Linked projects that could not answer, and what an export cannot compare.",
+          "type": "string"
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffProject"
+          }
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "projects",
+        "links_added",
+        "links_removed"
+      ]
+    },
+    "DiffRequest": {
+      "description": "What the graph page's Compare mode asks (T329.35). The old side is never a path: the page\nsends the text of a saved export it opened itself, because the websocket answers anything on\nlocalhost and must not be made to read a file somebody else chose.",
+      "type": "object",
+      "properties": {
+        "export": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiffExport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "from": {
+          "description": "As `rtok graph diff --from`: a ref, or `PROJECT:REF`; none is `HEAD`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "project": {
+          "description": "An id or a root path, as in `rtok graph projects`.",
+          "type": "string"
+        },
+        "to": {
+          "description": "A ref; none is the working tree.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project",
+        "from",
+        "to",
+        "export"
+      ]
+    },
+    "DiffUnread": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
       ]
     },
     "DoctorAction": {
@@ -2580,6 +2879,27 @@
           "required": [
             "type",
             "graph"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is\nhow the page matches a reply to its question.",
+          "type": "object",
+          "properties": {
+            "diff": {
+              "$ref": "#/$defs/DiffReport"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "diff"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "diff"
           ]
         },
         {

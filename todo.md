@@ -22,7 +22,6 @@
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 - T329.43. Graph page: returned counts for explore, outline, impact by path and graph_diff
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
-- T329.35. Graph page: Compare mode
 - T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
@@ -70,8 +69,6 @@
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
-- T479. TUI: clear safe junk with plan and confirm
 - T484. Web live panel reads the server's calls totals
 - T485. TUI: graph diff and compare view
-- T486. TUI: live calls pane shows call metrics
 - T487. TUI: live calls pane shows the counts taken from the answer

@@ -457,6 +457,14 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
                 .clone();
             return Some(graph_reply(&cfg, &graph));
         }
+        Ok(ClientMessage::Diff { diff }) => {
+            let cfg = state
+                .cfg
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            return Some(diff_reply(&cfg, diff));
+        }
         Err(_) if v.get("project").is_some() => {
             return Some(message_frame("unknown project request"));
         }
@@ -465,6 +473,9 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
         }
         Err(_) if v.get("graph").is_some() => {
             return Some(message_frame("graph needs a project"));
+        }
+        Err(_) if v.get("diff").is_some() => {
+            return Some(message_frame("diff needs a project"));
         }
         Err(_) if v.get("calls").is_some() => {
             return Some(message_frame("calls needs a subscribe flag"));
@@ -535,6 +546,24 @@ fn graph_reply(cfg: &Config, req: &model::DrillRequest) -> String {
 #[cfg(not(feature = "graph"))]
 fn graph_reply(_cfg: &Config, req: &model::DrillRequest) -> String {
     match *req {}
+}
+
+/// T329.35: Compare mode. Read-only like `graph_reply`; the old side is a ref or the text the page
+/// sent, never a path (see `DiffRequest`).
+#[cfg(feature = "graph")]
+fn diff_reply(cfg: &Config, req: model::DiffRequest) -> String {
+    let project = req.project.clone();
+    let diffed = crate::plugin::Runtime::open(cfg.clone(), "web-diff")
+        .and_then(|rt| crate::plugins::graph::diff::page(&rt, &req));
+    match diffed {
+        Ok(diff) => ServerFrame::Diff { project, diff }.to_json(),
+        Err(e) => message_frame(&format!("{e:#}")),
+    }
+}
+
+#[cfg(not(feature = "graph"))]
+fn diff_reply(_cfg: &Config, req: model::DiffRequest) -> String {
+    match req {}
 }
 
 /// T331.12: the `doctor --fix` checklist for the page. The upgrade's origin guard covers it like

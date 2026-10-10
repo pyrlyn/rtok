@@ -216,6 +216,31 @@ fn doctor_fix_exists_on_both_surfaces() {
     );
 }
 
+/// T479: the Hosts page's clear-safe-junk action is on both surfaces and both call
+/// `agents::junk_web`'s plan/apply pair, never a second clear path.
+#[test]
+fn clear_safe_junk_exists_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/junk_clear.rs"
+    ));
+    assert!(
+        web.contains("junk_web::plan") && web.contains("junk_web::apply"),
+        "the web page plans and applies through agents::junk_web"
+    );
+    assert!(
+        tui.contains("junk_web::plan") && tui.contains("junk_web::apply"),
+        "the TUI plans and applies through the same pair"
+    );
+    assert!(
+        app.contains("(\"hosts\", \"c\", \"clear safe junk (plan)\")")
+            && app.contains("(\"hosts\", \"y\", \"remove planned (confirm)\")"),
+        "the TUI's KEYS table lists the clear-safe-junk keys"
+    );
+}
+
 /// T227: both surfaces render the Stats page from the same model accessor — `rtok
 /// stats --price`'s table plus `rtok stats --cache`'s table, D27's one page for two
 /// commands.
@@ -302,6 +327,41 @@ fn live_calls_view_exists_on_both_surfaces() {
         app.contains("(\"graph\", \"f\", \"freeze/unfreeze calls\")"),
         "the TUI's KEYS table documents the freeze key"
     );
+}
+
+/// T486 (D27): the live calls view shows the same five call metrics on both surfaces, read from the
+/// one `Totals` fold (`latency`, `symbols`, `crossed`, `fallbacks`, `caps`) with the page's wording.
+#[test]
+fn call_metrics_exist_on_both_surfaces() {
+    let web = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/live/LiveMetrics.tsx"
+    ));
+    let pane = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/live_calls.rs"
+    ));
+    let pane = pane.split("#[cfg(test)]\nmod tests").next().unwrap();
+    for label in [
+        "latency p50",
+        "p95",
+        "symbols asked",
+        "across projects",
+        "fallbacks",
+        "capped",
+    ] {
+        assert!(web.contains(label), "the page shows `{label}`");
+        assert!(pane.contains(label), "the TUI pane shows `{label}`");
+    }
+    for field in [
+        "latency()",
+        "t.symbols",
+        "t.crossed",
+        "t.fallbacks",
+        "t.caps",
+    ] {
+        assert!(pane.contains(field), "the pane reads `{field}` from Totals");
+    }
 }
 
 /// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page

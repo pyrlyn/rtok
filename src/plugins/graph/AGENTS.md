@@ -57,6 +57,9 @@
   so `mcp.rs` routes it to `diff::call` and not through `graph::call`. T329.29: `--from PROJECT:REF` picks a ref
   per project (`Refs`), `--from-export` builds a names-only old side (`Src::Names`: no signatures, so no changes or
   edges) and compares registry links through `export::collect`; MCP never takes an export path (a model chose it).
+  T329.35: `report` builds the typed `DiffReport` (what `--json` prints and the web `diff` frame carries; a change to it
+  regenerates `web/src/api/ws.schema.json`); `page` is the websocket entry. The websocket takes export TEXT (`export::parse`),
+  never a path, because anything on localhost can send a message; rows are capped per list (`PAGE_ROWS`).
 - `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured).
   One `Export` (the `rtok.graph.v1` types, schema committed at `docs/schemas/rtok.graph.v1.schema.json` and checked
   by `committed_schema_is_current`) is built from `projects::row` and the store's def/ref scans, or read back by

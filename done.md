@@ -3086,6 +3086,32 @@ Result: `just check` passed (fmt, clippy `-D warnings`, jscpd, `cargo nextest ru
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.42 — Graph diff over `/ws`: the typed report and the export as text (split from T329.35)
+
+The server half of T329.35, split at review because the whole change was over the 500-line cap; the Compare panel stays T329.35. `rtok graph diff --json` now prints a typed `DiffReport` built by `diff::report`, and `run` renders its text from the same `gather`. `/ws` gets `ClientMessage::Diff { diff: DiffRequest }`, answered by `ServerFrame::Diff { project, diff: DiffReport }` from the new `diff::page`, which resolves the scope with the registry and calls `diff::report`; each list is cut at 500 rows with a `more` count. `ws.schema.json` and `snapshot.gen.ts` are regenerated; `web/src/api/ws.ts` parses the `diff` frame, and the sample server (`sampleDiff.ts`) answers it for stories and tests.
+
+Trust boundary: `--from-export` stays CLI-only, because the websocket is reachable by anything on localhost and a model must not choose a path rtok reads. A page sends the export's text in `DiffRequest.export { name, text }`, and the server parses it with the new `export::parse`, which `export::read` now delegates to, so the size, JSON, schema-id and shape checks are the same. A request that names a path as the export text is rejected as "is not a graph export". A ref goes through the existing `resolve_rev`, which refuses empty and `-`-prefixed refs.
+
+Check: Rust tests in `src/plugins/graph/diff.rs` assert the page report equals `--json` for the same query, the row cap, and the path-as-text refusal; `ws.test.ts` parses the frame; `committed_schema_is_current`; `just check` and the web gates.
+
+## T329.35 — Graph page: Compare mode
+
+The page half of T329 §8e (split from T329.29 at claim time). Part 1 of the graph page, in the per-project drill-down, gets a "Compare" chip. It colours the nodes and the edges by what changed (added green, removed red, changed amber, moved blue; every colour is a brand role, so both themes and the 3D stage take their own value), and each node label and list row also carries a mark (`+ − ~ →`) and the change word, so colour is never the only cue. A side panel lists the change counts, the changed (signature or body, with callers), removed, renamed, moved and added symbols, the edges added and removed, the links added and removed, `changed, not analysed` with the reason, the cut-off count and the notes. The live graph (part 2) is a separate component and is untouched; Compare is local state of the drill-down.
+
+The page never recomputes the diff: it asks over `/ws` with the `ClientMessage::Diff` / `ServerFrame::Diff` pair that T329.42 added, which `diff::page` answers with the same typed `DiffReport` the CLI's `--json` prints. The old side is a ref or `PROJECT:REF` typed in the panel (sent on Enter), or a saved export.
+
+Trust boundary: the page never sends a path. The browser's file picker reads the export and sends its text (T329.42's `DiffRequest.export`), and a file over 16 MiB is refused in the page before it is sent.
+
+Reused: `diff::{Query, Part, compute, compute_saved, links_between, cap}` and the `--json` shape (now the typed `DiffReport`), `export::read`'s checks (`parse`), `scope::resolve`, the drill-down machinery (`askDoctor` queue, `useDrill`'s keepPreviousData pattern, `drillVersion`, `drillScene`, `Scene2D`, `stage3d`/`resolveRole`), `Pill`, `Result`, `Search`, `Button`, and the sample/`drillServer` stand-ins for stories and `?sample`. Docs in en, ru, uk (`docs/commands.md`), the graph README and AGENTS. T485 (the TUI counterpart) now names `diff::report` as the single path.
+
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue (Vitest `compare.test.ts`, `Compare.test.tsx`, stories `GraphCompare` in both themes with axe); the live graph keeps running (Playwright asserts `graph-live` is still shown); a diff against a saved export works (Vitest, story `AgainstASavedExport`, Playwright with a real `rtok graph export`); Rust tests for the typed report, the export-as-text refusal and the cap; `committed_schema_is_current`.
+
+Result: `just spa-typecheck` passed; `just spa-test` 46 files, 420 tests passed; `just js` passed; `just spa-stories` 34 files, 225 tests passed; `just spa-e2e` 32 passed (earlier runs failed on the load flakes "clear safe junk plans..." and "config page renders from the live snapshot", both passed in the other runs; the two new Compare tests first failed because the project was not yet indexed and because the edited function matched as a rename, and were fixed). `just check`: fmt, clippy `-D warnings` and jscpd passed; `cargo nextest run --workspace --no-fail-fast` 3216 passed, 8 skipped. Two load flakes stopped earlier fail-fast runs, `commands_e2e doctor_reports_the_chain` (passed alone in 93 s) and `agents_install the_agent_alias_prints_what_agents_prints` (passed on the full rerun); `committed_schema_is_current` failed once because the staged schema had been compacted by the formatter, and was regenerated.
+
+Split at review: the server half (typed report, `/ws` pair, `export::parse`, the frame parser and the sample stand-in) shipped first as T329.42, so this entry is the panel and the colouring. Limitations: an edge is coloured only where both call ends are drawn as symbols (an expanded file or a focus); the panel lists every edge either way. A removed symbol is drawn as a ghost only in an expanded file; elsewhere its file node shows removed or changed. The panel shows the current project's entry; a linked project's entry is not drawn, only the links added and removed.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:
@@ -9116,6 +9142,19 @@ Check result: `tui::health::tests` (fixture rows at 100, 60 with two reasons, in
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
 
+### T486. TUI: live calls pane shows call metrics
+
+T329.33 added call metrics to the web live panel and to the shared fold in `src/web/calls_store.rs`: latency p50 and p95 (`Totals::latency`), symbols asked, calls across several projects, fallbacks and capped answers. D27 requires the TUI live calls pane (T480) to show the same numbers. Depends on T480 and T329.33. Done means: the pane shows the five figures from `Totals` for the selected window, with the same wording as the web panel.
+
+Plan: add one metrics line under the KPI line in `LiveCalls::metric_lines` (`src/tui/live_calls.rs`) from `Totals::latency`, `symbols`, `crossed`, `fallbacks`, `caps` with the web wording; take one bar less so the feed keeps its rows at 24 rows; test with the fixture events of `calls_store.rs`; add a `surface_parity` test.
+
+Done: `LiveCalls::metric_lines` in `src/tui/live_calls.rs` adds one line under the KPI line, read from `Totals` (`latency()`, `symbols`, `crossed`, `fallbacks`, `caps`; no second fold) in the web panel's words: `latency p50 30 ms (p95 100 ms)` (`-` before any call has ended, seconds from 1000 ms as the page's `millis`), `symbols asked 3 (1 across projects)`, `fallbacks 1 (1 capped)` (amber when there are fallbacks). The line shares the pane's window, so it follows `w` and the freeze. The bars take one row less (`height - 10`) so the feed keeps its rows on the cramped 24-row Graph page. `tests/surface_parity.rs` gained `call_metrics_exist_on_both_surfaces`.
+
+Check result (2026-10-10): `just check` green: nextest `Summary [ 711.086s] 3229 tests run: 3229 passed (7 slow), 8 skipped`; no `web/src` change, so no SPA gates. The pane tests (`tui::` 59 passed) show 30 ms and 100 ms, 3 symbols, 1 across projects, 1 fallback, 1 capped, and the feed still shows its rows at 24 rows.
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
 In the plan, T329 §6b (branch `docs/plan-graph-projects`, ~lines 787-791, from PR #540 (T329), not merged yet) says later requests "do not re-probe the modes that failed", the cache "is kept until that process restarts" and "nothing else invalidates it". T329 §8d (~lines 917-923) says a background check every 60 s detects **unreachable** (SSH root stops answering) and **backend down**, and "when the project comes back, the alert clears automatically"; §8f (~line 943) scores "Backend alive" from the same record. These contradict each other because detecting an unreachable SSH host or a recovered backend requires probing again, which §6b forbids; under §6b a backend-down alert can never clear without a restart.
@@ -9273,6 +9312,16 @@ Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows a
 Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
 
 Result: new `src/agents/junk_web.rs` holds `JunkCard` (built from `junk::Report`, exposed as `Snapshot.junk`) and `plan` / `apply` over the new `junk_clear::run_in(cfg, report, filter, yes, only)`, the same function `rtok agents junk clear` runs, so the class gate and the per-item re-check (symlink, protected files, 60 s settle, agent running) are shared. The filter names rtok and every host agent with no kinds, so it clears each agent's `safe` kinds (the "Freed by `clear`" number); a bare `clear` on the CLI stays rtok-only (T182). `/ws` gets `ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }` and the frames `ServerFrame::JunkPlan` / `JunkCleared` (both carry `Cleared`); `apply` deletes only the paths the page showed and confirmed, then the junk cache is dropped so the card does not show pre-clear sizes. SPA: `Junk.tsx` with a `junkState.ts` reducer (idle, planning, ready, confirming, applying, done, error), `junkPlan` / `junkApply` in `api/query.tsx` (120 s timeout), sample data and mock for `sample.ts`. Tests: Rust unit tests in `junk_web.rs` and `protocol.rs`, `tests/web_e2e.rs` (seeded stale `rtok.log.N`), 8 Vitest tests, four stories (one with a play function), a Playwright e2e on a throwaway home; `surface_parity` treats `junk` as a non-page snapshot key. Docs: `docs/agents.md` Junk section, en, ru, uk. Known limit: a junk refresh already running when `apply` finishes can still write pre-clear sizes into the cache for up to its 5 min TTL.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
+### T479. TUI: clear safe junk with plan and confirm
+
+T330.7 shipped the web button (`ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }`, frames `ServerFrame::JunkPlan` / `JunkCleared`, both carrying `junk_clear::Cleared`; `agents::junk_web::{plan, apply, JunkCard}` over `junk_clear::run_in`, with the filter naming every agent's `safe` kinds and `apply` taking only the paths the plan showed; `Snapshot.junk` is the card data); D27 (amended 2026-10-10, T346) requires the same action in the TUI, so reuse `junk_web::plan` / `apply`, do not add a second path. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
+
+Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
+
+Result: new `src/tui/junk_clear.rs`: on the Hosts tab `c` takes a report and shows `junk_web::plan`'s dry run through `junk_clear::to_text` (the CLI's own text: per agent and kind, sizes, space to free); `y` takes a fresh report and calls `junk_web::apply` with only the paths the plan showed, then `model::forget_junk()` and a model re-read, and shows "Freed X of Y planned"; any other key declines and writes nothing. The scan is injected (`Engine`) so tests read a fixture home. KEYS gets the `hosts` rows (`c`, `y`, `n/Esc`); `tests/surface_parity.rs::clear_safe_junk_exists_on_both_surfaces` pins both surfaces to `junk_web::plan`/`apply` and the keys; `docs/agents.md` (en, ru, uk) describe the TUI keys. Tests: the plan equals `run_in`'s dry run with the CLI filter, declining by `n`, Esc and `q` leaves the tree (length and mtime) unchanged, confirm removes exactly the safe rtok log and keeps a `review`-kind Claude log, `y` without a plan does nothing. Gates: `just check` green, 3229 tests run: 3229 passed (8 skipped); `tests/surface_parity.rs` 21 passed before the new test, clippy `-D warnings` clean.
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 

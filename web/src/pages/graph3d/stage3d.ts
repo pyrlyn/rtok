@@ -223,7 +223,9 @@ export class Stage implements ViewApi {
     const tint = (e: SceneEdge) =>
       e.alert
         ? new Color(alert)
-        : new Color(e.inScope ? accent : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
+        : e.tone
+          ? new Color(resolveRole(e.tone, style, fg))
+          : new Color(e.inScope ? accent : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
     const lineMat = new MeshBasicMaterial({ color: 0xffffff });
     this.lines = new InstancedMesh(this.cylinder, lineMat, Math.max(1, this.owner.length));
     this.heads = new InstancedMesh(

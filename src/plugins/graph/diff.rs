@@ -16,7 +16,9 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use rtok_plugin_sdk::Ctx;
-use serde_json::{Value, json};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::export::{self, Export};
 use super::projects;
@@ -796,87 +798,229 @@ fn link_text((from, to, kind): &LinkKey) -> String {
     format!("{from} -> {to} ({kind})")
 }
 
-fn link_json((from, to, kind): &LinkKey) -> Value {
-    json!({"from": from, "to": to, "kind": kind})
+/// `--json` and the graph page's `diff` frame: one typed shape, so the page never recomputes or
+/// re-parses what the CLI prints.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffReport {
+    pub from: String,
+    pub to: String,
+    pub projects: Vec<DiffProject>,
+    pub links_added: Vec<DiffLink>,
+    pub links_removed: Vec<DiffLink>,
+    /// Linked projects that could not answer, and what an export cannot compare.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
-fn def_json(d: &DefRow) -> Value {
-    json!({"name": d.name, "kind": d.kind, "path": d.path, "line": d.line})
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffProject {
+    pub project: String,
+    pub from: String,
+    pub changed: Vec<DiffDef>,
+    pub added: Vec<DiffDef>,
+    pub removed: Vec<DiffDef>,
+    pub renamed: Vec<DiffMove>,
+    pub moved: Vec<DiffMove>,
+    pub edges_added: Vec<DiffEdge>,
+    pub edges_removed: Vec<DiffEdge>,
+    pub not_analysed: Vec<DiffUnread>,
+    /// Rows left out of the lists by [`DiffReport::capped`].
+    #[serde(skip_serializing_if = "is_zero")]
+    pub more: usize,
 }
 
-fn edge_json((path, scope, name): &Edge) -> Value {
-    json!({"path": path, "scope": scope, "name": name})
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
-fn part_json(p: &Part) -> Value {
-    let d = &p.diff;
-    let callers = |name: &str| p.callers.get(name).cloned().unwrap_or_default();
-    json!({
-        "project": p.name,
-        "from": p.rev,
-        "changed": d.changed.iter().map(|c| {
-            let mut v = def_json(&c.new);
-            v["signature_changed"] = json!(c.old.signature != c.new.signature);
-            v["callers"] = json!(callers(&c.new.name));
-            v
-        }).collect::<Vec<_>>(),
-        "added": d.added.iter().map(def_json).collect::<Vec<_>>(),
-        "removed": d.removed.iter().map(|r| {
-            let mut v = def_json(r);
-            v["callers"] = json!(callers(&r.name));
-            v
-        }).collect::<Vec<_>>(),
-        "renamed": d.renamed.iter()
-            .map(|(a, b)| json!({"from": def_json(a), "to": def_json(b)}))
-            .collect::<Vec<_>>(),
-        "moved": d.moved.iter()
-            .map(|(a, b)| json!({"from": def_json(a), "to": def_json(b)}))
-            .collect::<Vec<_>>(),
-        "edges_added": d.edges_added.iter().map(edge_json).collect::<Vec<_>>(),
-        "edges_removed": d.edges_removed.iter().map(edge_json).collect::<Vec<_>>(),
-        "not_analysed": d.not_analysed.iter()
-            .map(|(path, why)| json!({"path": path, "reason": why}))
-            .collect::<Vec<_>>(),
-    })
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffDef {
+    pub name: String,
+    pub kind: String,
+    pub path: String,
+    pub line: i32,
+    /// `changed` rows only: the signature moved, not just the body.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_changed: Option<bool>,
+    /// `changed` and `removed` rows only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub callers: Option<Vec<String>>,
 }
 
-/// The diff of every project of `scope` between `q.from` and `q.to`. The text is ordered counts,
-/// changed (most callers first), removed, renamed, moved, added, edges, and goes through the graph
-/// cap, so a long one ends in `N more, expand <id>` with the rest archived; `--json` is whole.
-pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
-    let cx = Ctx::new(rt);
-    let saved = match q.export {
-        Some(path) => {
-            if q.to.is_some() || !q.from.is_empty() {
-                bail!("a saved export is compared with the working tree; drop --from and --to");
-            }
-            let e = export::read(path)?;
-            if e.meta.level == "focus" {
-                bail!(
-                    "{} holds a part of the graph; export with --level symbols to compare",
-                    path.display()
-                );
-            }
-            Some(e)
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffMove {
+    pub from: DiffDef,
+    pub to: DiffDef,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffEdge {
+    pub path: String,
+    pub scope: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffLink {
+    pub from: String,
+    pub to: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffUnread {
+    pub path: String,
+    pub reason: String,
+}
+
+impl DiffReport {
+    /// At most `n` rows per list and project, the rest counted in `more`: a refactor of thousands
+    /// of symbols must not become one websocket frame.
+    pub fn capped(mut self, n: usize) -> Self {
+        fn cut<T>(v: &mut Vec<T>, n: usize) -> usize {
+            let dropped = v.len().saturating_sub(n);
+            v.truncate(n);
+            dropped
         }
-        None => None,
-    };
-    let refs = Refs::parse(rt, scope, q.from)?;
+        for p in &mut self.projects {
+            p.more = cut(&mut p.changed, n)
+                + cut(&mut p.added, n)
+                + cut(&mut p.removed, n)
+                + cut(&mut p.renamed, n)
+                + cut(&mut p.moved, n)
+                + cut(&mut p.edges_added, n)
+                + cut(&mut p.edges_removed, n)
+                + cut(&mut p.not_analysed, n);
+        }
+        self
+    }
+}
+
+fn link_row((from, to, kind): &LinkKey) -> DiffLink {
+    DiffLink {
+        from: from.clone(),
+        to: to.clone(),
+        kind: kind.clone(),
+    }
+}
+
+fn def_row(d: &DefRow) -> DiffDef {
+    DiffDef {
+        name: d.name.clone(),
+        kind: d.kind.clone(),
+        path: d.path.clone(),
+        line: d.line,
+        signature_changed: None,
+        callers: None,
+    }
+}
+
+fn move_row((a, b): &(DefRow, DefRow)) -> DiffMove {
+    DiffMove {
+        from: def_row(a),
+        to: def_row(b),
+    }
+}
+
+fn edge_row((path, scope, name): &Edge) -> DiffEdge {
+    DiffEdge {
+        path: path.clone(),
+        scope: scope.clone(),
+        name: name.clone(),
+    }
+}
+
+fn project_report(p: &Part) -> DiffProject {
+    let d = &p.diff;
+    let callers = |name: &str| Some(p.callers.get(name).cloned().unwrap_or_default());
+    DiffProject {
+        project: p.name.clone(),
+        from: p.rev.clone(),
+        changed: d
+            .changed
+            .iter()
+            .map(|c| DiffDef {
+                signature_changed: Some(c.old.signature != c.new.signature),
+                callers: callers(&c.new.name),
+                ..def_row(&c.new)
+            })
+            .collect(),
+        added: d.added.iter().map(def_row).collect(),
+        removed: d
+            .removed
+            .iter()
+            .map(|r| DiffDef {
+                callers: callers(&r.name),
+                ..def_row(r)
+            })
+            .collect(),
+        renamed: d.renamed.iter().map(move_row).collect(),
+        moved: d.moved.iter().map(move_row).collect(),
+        edges_added: d.edges_added.iter().map(edge_row).collect(),
+        edges_removed: d.edges_removed.iter().map(edge_row).collect(),
+        not_analysed: d
+            .not_analysed
+            .iter()
+            .map(|(path, why)| DiffUnread {
+                path: path.clone(),
+                reason: (*why).to_string(),
+            })
+            .collect(),
+        more: 0,
+    }
+}
+
+/// A saved export as the old side, with the name the answer calls it by.
+pub struct Saved {
+    pub export: Export,
+    pub label: String,
+}
+
+/// Everything `run` prints and `report` returns, before either shapes it.
+struct Gathered {
+    parts: Vec<Part>,
+    labels: Vec<String>,
+    links: (Vec<LinkKey>, Vec<LinkKey>),
+    notes: String,
+    from: String,
+    to: String,
+    shared: String,
+    saved: bool,
+}
+
+fn gather(
+    rt: &Runtime,
+    scope: &[Member],
+    from: &[String],
+    to: Option<&str>,
+    saved: Option<&Saved>,
+) -> Result<Gathered> {
+    let cx = Ctx::new(rt);
+    if let Some(s) = saved {
+        if to.is_some() || !from.is_empty() {
+            bail!("a saved export is compared with the working tree; drop --from and --to");
+        }
+        if s.export.meta.level == "focus" {
+            bail!(
+                "{} holds a part of the graph; export with --level symbols to compare",
+                s.label
+            );
+        }
+    }
+    let refs = Refs::parse(rt, scope, from)?;
     let (done, mut notes) = fan_out(scope, |m| {
         walkable(m)?;
-        let diff = match &saved {
-            Some(e) => compute_saved(rt, &cx, m, e)?,
-            None => compute(rt, &cx, &m.root, refs.of(rt, m), q.to)?,
-        };
-        Ok(diff)
+        match saved {
+            Some(s) => compute_saved(rt, &cx, m, &s.export),
+            None => compute(rt, &cx, &m.root, refs.of(rt, m), to),
+        }
     })?;
     let links = saved
-        .as_ref()
-        .map(|e| links_between(rt, scope, e))
+        .map(|s| links_between(rt, scope, &s.export))
         .transpose()?
         .unwrap_or_default();
-    if let Some(e) = &saved {
-        notes.push_str(&if e.meta.level == "overview" {
+    if let Some(s) = saved {
+        notes.push_str(&if s.export.meta.level == "overview" {
             "note: the export has no symbols (made with --level overview); only links are compared\n".to_string()
         } else {
             "note: against an export only added and removed symbols are listed; changes and edges need a revision\n".to_string()
@@ -909,33 +1053,72 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
             callers: found,
         });
     }
-    let to = q.to.unwrap_or("working");
-    let from = q.export.map_or_else(
-        || refs.shared.to_string(),
-        |p| format!("export {}", p.display()),
-    );
-    if q.json {
-        let projects: Vec<Value> = parts.iter().map(part_json).collect();
-        return Ok(format!(
-            "{}\n",
-            json!({
-                "from": from, "to": to, "projects": projects,
-                "links_added": links.0.iter().map(link_json).collect::<Vec<_>>(),
-                "links_removed": links.1.iter().map(link_json).collect::<Vec<_>>(),
+    Ok(Gathered {
+        parts,
+        labels,
+        links,
+        notes,
+        from: saved.map_or_else(
+            || refs.shared.to_string(),
+            |s| format!("export {}", s.label),
+        ),
+        to: to.unwrap_or("working").to_string(),
+        shared: refs.shared.to_string(),
+        saved: saved.is_some(),
+    })
+}
+
+/// The diff of `scope` as the page and `--json` carry it: whole, with the callers of every
+/// changed or removed symbol.
+pub fn report(
+    rt: &Runtime,
+    scope: &[Member],
+    from: &[String],
+    to: Option<&str>,
+    saved: Option<&Saved>,
+) -> Result<DiffReport> {
+    let g = gather(rt, scope, from, to, saved)?;
+    Ok(DiffReport {
+        from: g.from,
+        to: g.to,
+        projects: g.parts.iter().map(project_report).collect(),
+        links_added: g.links.0.iter().map(link_row).collect(),
+        links_removed: g.links.1.iter().map(link_row).collect(),
+        notes: g.notes,
+    })
+}
+
+/// The diff of every project of `scope` between `q.from` and `q.to`. The text is ordered counts,
+/// changed (most callers first), removed, renamed, moved, added, edges, and goes through the graph
+/// cap, so a long one ends in `N more, expand <id>` with the rest archived; `--json` is whole.
+pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
+    let saved = q
+        .export
+        .map(|path| {
+            Ok::<_, anyhow::Error>(Saved {
+                export: export::read(path)?,
+                label: path.display().to_string(),
             })
-        ));
+        })
+        .transpose()?;
+    if q.json {
+        let r = report(rt, scope, q.from, q.to, saved.as_ref())?;
+        return Ok(format!("{}\n", serde_json::to_string(&r)?));
     }
-    let mut body = format!("graph diff {from} -> {to} (tags)\n");
-    if parts.iter().all(|p| p.diff.is_empty()) && links.0.is_empty() && links.1.is_empty() {
+    let cx = Ctx::new(rt);
+    let g = gather(rt, scope, q.from, q.to, saved.as_ref())?;
+    let mut body = format!("graph diff {} -> {} (tags)\n", g.from, g.to);
+    if g.parts.iter().all(|p| p.diff.is_empty()) && g.links.0.is_empty() && g.links.1.is_empty() {
         body.push_str("no graph changes\n");
     }
-    for (p, label) in parts
+    for (p, label) in g
+        .parts
         .iter()
-        .zip(&labels)
+        .zip(&g.labels)
         .filter(|(p, _)| !p.diff.is_empty())
     {
         // A project compared from its own ref says so; the shared one is in the title.
-        let tag = if saved.is_none() && p.rev != refs.shared {
+        let tag = if !g.saved && p.rev != g.shared {
             format!("[{} from {}] ", p.name, p.rev)
         } else {
             label.clone()
@@ -943,10 +1126,61 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
         render_part(&mut body, p, &tag);
     }
     let mut tail = String::new();
-    listed(&mut tail, "links added", &links.0, link_text);
-    listed(&mut tail, "links removed", &links.1, link_text);
+    listed(&mut tail, "links added", &g.links.0, link_text);
+    listed(&mut tail, "links removed", &g.links.1, link_text);
     body.push_str(&tail);
-    super::cap(&cx, format!("{notes}{body}"))
+    super::cap(&cx, format!("{}{body}", g.notes))
+}
+
+/// What the graph page's Compare mode asks (T329.35). The old side is never a path: the page
+/// sends the text of a saved export it opened itself, because the websocket answers anything on
+/// localhost and must not be made to read a file somebody else chose.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct DiffRequest {
+    /// An id or a root path, as in `rtok graph projects`.
+    pub project: String,
+    /// As `rtok graph diff --from`: a ref, or `PROJECT:REF`; none is `HEAD`.
+    #[serde(default)]
+    pub from: Vec<String>,
+    /// A ref; none is the working tree.
+    #[serde(default)]
+    pub to: Option<String>,
+    #[serde(default)]
+    pub export: Option<DiffExport>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct DiffExport {
+    /// The file's name, for the answer's `from`.
+    pub name: String,
+    /// The file's content.
+    pub text: String,
+}
+
+/// Rows per list and project in one frame; `DiffProject::more` counts the rest.
+const PAGE_ROWS: usize = 500;
+
+/// The page's answer: the same report `--json` prints, capped.
+pub fn page(rt: &Runtime, req: &DiffRequest) -> Result<DiffReport> {
+    if req.project.is_empty() {
+        bail!("diff needs a project");
+    }
+    let scope = super::scope::resolve(&rt.store, Some(&req.project), Path::new("."))?;
+    let saved = req
+        .export
+        .as_ref()
+        .map(|e| {
+            Ok::<_, anyhow::Error>(Saved {
+                export: export::parse(&e.text, &e.name)?,
+                label: e.name.clone(),
+            })
+        })
+        .transpose()?;
+    let to = req
+        .to
+        .as_deref()
+        .filter(|t| !t.is_empty() && *t != "working");
+    Ok(report(rt, &scope, &req.from, to, saved.as_ref())?.capped(PAGE_ROWS))
 }
 
 /// MCP `graph_diff`: `from` (a ref, or a list mixing refs and `project:ref`; default `HEAD`), `to` (default the working tree).
@@ -983,6 +1217,7 @@ mod tests {
     use super::*;
     use crate::plugins::graph::index::tests::cx;
     use crate::store::{LinkKind, Origin};
+    use serde_json::json;
     use std::fs;
 
     fn git(dir: &Path, args: &[&str]) {
@@ -1455,6 +1690,105 @@ mod tests {
         assert!(both.contains("drop --from and --to"), "{both}");
         let missing = against(&rt, &scope, &dir.join("none.json")).unwrap_err();
         assert!(format!("{missing:#}").contains("none.json"), "{missing:#}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    fn page_req(rt: &Runtime, dir: &Path, export: Option<(&str, String)>) -> DiffRequest {
+        let a = rt
+            .store
+            .project_by_root(&dir.join("a"))
+            .unwrap()
+            .unwrap()
+            .id;
+        DiffRequest {
+            project: a.to_string(),
+            from: Vec::new(),
+            to: None,
+            export: export.map(|(name, text)| DiffExport {
+                name: name.into(),
+                text,
+            }),
+        }
+    }
+
+    #[test]
+    fn the_page_gets_the_report_the_json_prints() {
+        let (rt, dir, scope) = linked("t32935-page");
+        fs::write(
+            dir.join("b/lib.rs"),
+            "fn shared(x: i32) {}\nfn fresh() {}\n",
+        )
+        .unwrap();
+        let r = page(&rt, &page_req(&rt, &dir, None)).unwrap();
+        let b = r.projects.iter().find(|p| p.project == "b").unwrap();
+        assert_eq!(b.changed[0].name, "shared");
+        assert_eq!(b.changed[0].signature_changed, Some(true));
+        assert_eq!(
+            b.changed[0].callers.as_deref(),
+            Some(&["[a] lib.rs a_caller d1".to_string()][..])
+        );
+        assert_eq!(b.added[0].name, "fresh");
+        let cli = run(
+            &rt,
+            &scope,
+            &Query {
+                from: &[],
+                to: None,
+                json: true,
+                export: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(&r).unwrap(),
+            serde_json::from_str::<Value>(&cli).unwrap()
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_page_sends_an_export_as_text_and_never_a_path() {
+        let (rt, dir, scope) = linked("t32935-export");
+        let file = save(&rt, &scope, &dir, export::Level::Symbols);
+        fs::write(dir.join("b/lib.rs"), "fn shared() {}\nfn fresh() {}\n").unwrap();
+        let text = fs::read_to_string(&file).unwrap();
+        let r = page(
+            &rt,
+            &page_req(&rt, &dir, Some(("saved.json", text.clone()))),
+        )
+        .unwrap();
+        assert_eq!(r.from, "export saved.json");
+        let b = r.projects.iter().find(|p| p.project == "b").unwrap();
+        assert_eq!(b.added[0].name, "fresh");
+        assert!(
+            r.notes.contains("only added and removed symbols"),
+            "{}",
+            r.notes
+        );
+        // A path in place of the content is not a graph export, so nothing is read from it.
+        let e = page(
+            &rt,
+            &page_req(&rt, &dir, Some(("x", file.display().to_string()))),
+        )
+        .unwrap_err();
+        assert!(format!("{e:#}").contains("is not a graph export"), "{e:#}");
+        let mut with_ref = page_req(&rt, &dir, Some(("saved.json", text)));
+        with_ref.from = vec!["HEAD".into()];
+        assert!(page(&rt, &with_ref).is_err());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_long_report_is_cut_and_counted() {
+        let (rt, dir, _) = linked("t32935-cap");
+        fs::write(
+            dir.join("b/lib.rs"),
+            "fn shared() {}\nfn one() {}\nfn two() {}\n",
+        )
+        .unwrap();
+        let r = page(&rt, &page_req(&rt, &dir, None)).unwrap().capped(1);
+        let b = r.projects.iter().find(|p| p.project == "b").unwrap();
+        assert_eq!((b.added.len(), b.more), (1, 1));
         let _ = fs::remove_dir_all(dir);
     }
 }

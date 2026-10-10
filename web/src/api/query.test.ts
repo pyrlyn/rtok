@@ -390,6 +390,38 @@ describe("drill requests", () => {
   });
 });
 
+describe("diff requests", () => {
+  const request = { project: "1", from: [], to: null, export: null };
+  const frame = (project: string, from: string) =>
+    ({ type: "diff", project, diff: { from, to: "working", projects: [] } }) as unknown as Frame;
+
+  test("a frame settles the request of its own project", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const one = api.diff(request);
+    const two = api.diff({ ...request, project: "2" });
+    expect(s.sent[0]).toEqual({ diff: request });
+    s.server().onFrame(frame("2", "v2"));
+    s.server().onFrame(frame("1", "v1"));
+    await expect(two).resolves.toMatchObject({ from: "v2" });
+    await expect(one).resolves.toMatchObject({ from: "v1" });
+  });
+
+  test("a refusal fails the request, and a drill frame of the same project does not settle it", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const refused = api.diff(request);
+    s.server().onFrame({
+      type: "graph",
+      graph: { project: 1, nodes: [], edges: [] },
+    } as unknown as Frame);
+    s.server().onFrame({ type: "message", text: "1 is not a git repository" });
+    await expect(refused).rejects.toThrow("not a git repository");
+  });
+});
+
 describe("call stream", () => {
   const batch = (head: number) =>
     ({
