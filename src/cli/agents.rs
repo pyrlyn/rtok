@@ -137,6 +137,33 @@ pub(super) enum AgentCmd {
     },
 }
 
+/// How `junk list` and the `clear` dry run print their items (T330.6).
+#[derive(clap::Args)]
+pub(super) struct Breakdown {
+    /// Items listed per kind: a count, `all`, or `0` for totals only
+    #[arg(long = "items", value_name = "N|all", default_value = "10", value_parser = crate::agents::junk_items::shown_arg)]
+    shown: usize,
+    /// Order of the items in a kind: `size` (largest first), `last-used` (longest unused first) or `path`
+    #[arg(long, value_name = "ORDER", default_value = "size", value_parser = clap::builder::PossibleValuesParser::new(crate::agents::junk_items::SORTS))]
+    sort: String,
+    /// Only items of at least this size (`10MB`); on `clear` this also limits what `--yes` removes
+    #[arg(long, value_name = "SIZE", value_parser = crate::bytes::parse_bytes)]
+    min_size: Option<u64>,
+}
+
+impl Breakdown {
+    fn view(&self, cfg: &Config, exact: bool, links: bool) -> crate::agents::junk_items::View {
+        crate::agents::junk_items::View {
+            shown: self.shown,
+            sort: crate::agents::junk_items::Sort::parse(&self.sort),
+            min_size: self.min_size.unwrap_or(0),
+            exact,
+            links,
+            ..crate::agents::junk_items::View::new(cfg)
+        }
+    }
+}
+
 #[derive(Subcommand)]
 pub(super) enum JunkCmd {
     /// Folders, junk kinds and sizes per agent, and the space `agents junk clear` would free
@@ -153,6 +180,8 @@ pub(super) enum JunkCmd {
         /// Sessions untouched for more than this many days are old, for this run only
         #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=3650))]
         session_days: Option<u32>,
+        #[command(flatten)]
+        view: Breakdown,
     },
     /// List what `agents junk clear` would remove; `--yes` applies it
     ///
@@ -183,6 +212,8 @@ pub(super) enum JunkCmd {
         /// Move to the OS trash instead of deleting
         #[arg(long)]
         trash: bool,
+        #[command(flatten)]
+        view: Breakdown,
     },
 }
 
@@ -364,15 +395,17 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
                     bytes,
                     all,
                     session_days,
+                    view,
                 },
         } => {
             let cfg = Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
             let report = crate::agents::junk::report_in_repo(&cfg, all);
+            let links = !json && io::stdout().is_terminal();
+            let view = view.view(&cfg, bytes, links);
             if json {
-                print_json(&report)?;
+                print_json(&crate::agents::junk_items::json(&report, &view))?;
             } else {
-                let links = io::stdout().is_terminal();
-                print!("{}", crate::agents::junk::to_list(&report, bytes, links));
+                print!("{}", crate::agents::junk::to_list(&report, &view));
             }
         }
         AgentCmd::Junk {
@@ -386,6 +419,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
                     older_than,
                     session_days,
                     trash,
+                    view,
                 },
         } => {
             let cfg = Config::load_with(config_file.as_deref(), session_days_flag(session_days))?;
@@ -395,13 +429,15 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
                 include_review: include.is_some(),
                 older_than,
                 trash,
+                min_size: view.min_size.unwrap_or(0),
             };
             if !filter.is_t182() || trash {
                 let cleared = crate::agents::junk_clear::run(&cfg, &filter, yes)?;
                 if json {
                     print_json(&cleared)?;
                 } else {
-                    print!("{}", crate::agents::junk_clear::to_text(&cleared));
+                    let view = view.view(&cfg, false, io::stdout().is_terminal());
+                    print!("{}", crate::agents::junk_clear::to_text(&cleared, &view));
                 }
                 if cleared.failed() {
                     bail!("some junk could not be removed");

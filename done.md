@@ -9008,6 +9008,20 @@ Split at claim (2026-10-08) into T330.5.1 to T330.5.3, one PR each; this card st
 
 Closed 2026-10-10 with T330.5.3, the last of T330.5.1–T330.5.4 (all in `done.md`). Status: done 2026-10-10 · Model: Claude Code / claude-opus-5-5
 
+### T330.6. Junk: item breakdown, `doctor` line (web card split to T330.7)
+
+Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5 and the investigation T343 (the two `--sort` value sets).
+
+Check: the T330 "Breakdown" fixtures; `just check`.
+
+Split at claim (2026-10-10): the web card and its button moved to T330.7, because the size cap does not hold both.
+
+T343 (creator, 2026-10-10): `--sort` orders the items inside each kind; the agents always come by the space `clear` frees, largest first, with no flag.
+
+Result: new `src/agents/junk_items.rs` holds the one item row (`kind`, `class`, `path`, `size_bytes`, `last_used`, `reason`, `will_clear`, `skip_reason`), the view (`--items N|all|0`, `--sort size|last-used|path`, `--min-size`) and the shared text lines. `list` prints each kind's items under its kind line; the `clear` dry run prints the same lines (`Planned` gained `last_used` and `reason`); `list --json` carries every item per agent under `items` (the old `bytes`/`evidence`/`kept` fields became `size_bytes` and `skip_reason`), including rtok's own log and archive files. Last used is the newest file mtime inside the item (`junk_clear::newest`), read only for the rows shown, so a row hidden behind "+N more" costs no walk. Paths under the home print with `~` and as OSC 8 links in a terminal. `--min-size` on `clear` also narrows the plan (`Filter::min_size`), so `--yes` removes exactly what the dry run listed; `crate::bytes::parse_bytes` parses `10MB`. `rtok doctor` text gets `junk` / `reclaimable: X` (plus the hint above 1 GB), set by the command only, so the dashboard snapshot never walks the disks and the JSON and schema are unchanged. The Hosts page text on web and tui carries the item lines too. Docs: `docs/agents.md` Junk section, `commands.md` and `config.md` rows, en/ru/uk. T343 stays open: `--sort` orders items inside a kind, agents keep their fixed order. Not done: grouping thousands of tiny items by parent folder in the text (the 10-per-kind cut covers the output size; JSON keeps every file).
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 
 In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.

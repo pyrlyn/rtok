@@ -70,6 +70,12 @@ pub struct Report {
     #[serde(skip)]
     #[schemars(skip)]
     pub config_notes: Vec<String>,
+    /// What `rtok agents junk clear` would free by default (T330.6). Text only, and set by the
+    /// `rtok doctor` command alone: sizing every agent's folders takes seconds, far too slow
+    /// for the dashboard's snapshot.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub junk_bytes: Option<u64>,
     /// Advice for enabling `[proxy.tools_rewrite]` when applicable (T59.5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools_rewrite_advice: Option<String>,
@@ -314,6 +320,16 @@ impl Report {
                 ));
             }
         }
+        if let Some(bytes) = self.junk_bytes {
+            out.push_str(&format!(
+                "junk\n  reclaimable: {}",
+                crate::bytes::human_bytes(bytes)
+            ));
+            if bytes > JUNK_HINT_BYTES {
+                out.push_str(" (run `rtok agents junk list`)");
+            }
+            out.push('\n');
+        }
         if !self.config_notes.is_empty() {
             out.push_str("config\n");
             for note in &self.config_notes {
@@ -323,6 +339,9 @@ impl Report {
         out
     }
 }
+
+/// Above this much reclaimable junk the doctor line points at `rtok agents junk list`.
+const JUNK_HINT_BYTES: u64 = 1 << 30;
 
 /// Whether Claude Code defers MCP tools (T388).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, schemars::JsonSchema)]
@@ -568,6 +587,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
         },
         tools_rewrite_advice: tools_rewrite_adv,
         config_notes: config_notes(cfg),
+        junk_bytes: None,
         // File reads only: no `--version` probe, so the 2 s dashboard tick stays cheap.
         agents: crate::agents::HOSTS
             .iter()
@@ -1623,6 +1643,7 @@ pub(crate) fn report_fixture() -> Report {
         agents: Vec::new(),
         problems: Vec::new(),
         config_notes: Vec::new(),
+        junk_bytes: None,
     }
 }
 
