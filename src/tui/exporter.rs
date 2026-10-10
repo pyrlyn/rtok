@@ -698,7 +698,13 @@ mod tests {
         export_to(&mut app, 0, 0, 0, &on);
         let on: serde_json::Value = serde_json::from_slice(&std::fs::read(on).unwrap()).unwrap();
         assert_eq!(on["meta"]["redacted"], true);
-        assert!(!on.to_string().contains(base.to_str().unwrap()));
+        // The root field, not the serialised text: JSON escapes Windows backslashes.
+        let root = |v: &serde_json::Value| v["projects"][0]["root"].as_str().unwrap().to_owned();
+        assert!(
+            !std::path::Path::new(&root(&on)).is_absolute(),
+            "{}",
+            root(&on)
+        );
 
         let off = base.join("off.json");
         export_to(&mut app, 0, 0, 1, &off);
@@ -706,7 +712,11 @@ mod tests {
         assert!(shown.contains("redaction was off"), "{shown}");
         let off: serde_json::Value = serde_json::from_slice(&std::fs::read(off).unwrap()).unwrap();
         assert_eq!(off["meta"]["redacted"], false);
-        assert!(off.to_string().contains(base.to_str().unwrap()));
+        let raw = root(&off);
+        assert!(
+            std::path::Path::new(&raw).is_absolute() && raw.ends_with('p'),
+            "{raw}"
+        );
     }
 
     #[test]
