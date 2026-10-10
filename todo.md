@@ -20,7 +20,7 @@
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
-- T329.19. Graph health score per project
+- T329.30. Graph page: health ring and breakdown per project
 - T329.28. Graph page: live camera, 3D live view and the remaining live displays
 - T329.29. Graph page: Compare mode and the remaining diff reports
 - T356. Never index `$HOME` or `/` as a graph root
@@ -72,4 +72,5 @@
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T478. TUI: doctor fix with plan and confirm
 - T479. TUI: clear safe junk with plan and confirm
+- T481. TUI: graph health score per project
 - T480. TUI: live graph calls panel

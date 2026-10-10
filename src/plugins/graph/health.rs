@@ -19,6 +19,8 @@ use rtok_plugin_sdk::Ctx;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+pub mod score;
+
 use super::capability::{self, Chosen, Probe};
 use super::{backend_name, index, lsp};
 use crate::plugin::Runtime;
@@ -195,7 +197,8 @@ pub(crate) fn reach(store: &Store, start: &Project) -> Result<Vec<Reached>> {
 
 /// The notice that heads a graph answer for the scope of `project` (else the project at `cwd`):
 /// "B missing since 14:02 (...); results exclude B". Agents learn of a problem in the answer they
-/// are already reading. `None` when nothing alerts or alerts are off.
+/// are already reading. A scope that scores under 80 (T329.19) adds one health line. `None` when
+/// nothing alerts or alerts are off.
 pub fn notice(rt: &Runtime, project: Option<&str>, cwd: &Path) -> Option<String> {
     if !rt.config.plugins.graph.alerts {
         return None;
@@ -215,7 +218,10 @@ pub fn notice(rt: &Runtime, project: Option<&str>, cwd: &Path) -> Option<String>
         })
         .collect();
     let lines = grouped(found.iter().map(|(a, c)| (a, *c)), true);
-    (!lines.is_empty()).then(|| lines.iter().map(|l| format!("notice: {l}\n")).collect())
+    let alerting: HashSet<_> = found.iter().map(|(a, _)| a.root.as_str()).collect();
+    let mut text: String = lines.iter().map(|l| format!("notice: {l}\n")).collect();
+    text.extend(score::note(rt, &reached, &alerting));
+    (!text.is_empty()).then_some(text)
 }
 
 enum Root {
@@ -596,7 +602,9 @@ mod tests {
         assert_eq!(alerts_of(&rt, b).len(), 1, "one good check does not clear");
         h.tick(&rt, &scope(&rt, a), OK, 240);
         assert!(alerts_of(&rt, b).is_empty());
-        assert!(notice(&rt, None, Path::new(&a.root)).is_none());
+        // The unindexed `c` still lowers the scope's health; the alert itself is gone.
+        let note = notice(&rt, None, Path::new(&a.root)).unwrap_or_default();
+        assert!(!note.contains("missing"), "{note}");
         let after = Ctx::new(&rt)
             .symbol_count(&index::canon(Path::new(&b.root)))
             .unwrap();
