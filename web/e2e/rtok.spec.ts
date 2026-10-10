@@ -261,3 +261,17 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
   await expect(nav).toBeVisible();
   await expect(offline).toHaveCount(0);
 });
+
+test("a graph call from another process reaches the live feed", async ({ page, rtok }) => {
+  await page.goto("/#/graph");
+  await expect(page.getByText("Waiting for graph calls")).toBeVisible();
+
+  // The stream has no replay, so a call made before the server saw the subscription is lost:
+  // the call is repeated until the first one lands.
+  const row = page.getByRole("table", { name: "graph calls" }).getByText("no_such_symbol").first();
+  await expect(async () => {
+    rtok.mcp("callers", { name: "no_such_symbol" });
+    await expect(row).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(page.getByText("Waiting for graph calls")).toHaveCount(0);
+});

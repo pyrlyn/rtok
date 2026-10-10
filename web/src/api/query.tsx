@@ -14,8 +14,9 @@ import {
     useMutationState,
     useQuery,
 } from "@tanstack/react-query";
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import type {
+    CallBatch,
     Cleared,
     ClientMessage,
     DrillGraph,
@@ -55,6 +56,8 @@ export interface Api {
     junkPlan(): Promise<Cleared>;
     junkApply(paths: string[]): Promise<Cleared>;
     drill(request: DrillRequest): Promise<DrillGraph>;
+    /** Starts the graph call stream (T329.26) for as long as a listener is registered; returns the stop. */
+    calls(listener: (batch: CallBatch) => void): () => void;
 }
 
 // `set` and `project` get no reply of their own: the server answers a write with the next
@@ -94,6 +97,8 @@ export function createApi(
     // snapshot on screen, so `dataUpdatedAt` stays the age of what the reader sees.
     let paused = false;
     let held: Snapshot | undefined;
+    const callListeners = new Set<(batch: CallBatch) => void>();
+    const subscribeCalls = (subscribe: boolean) => connection?.send({ calls: { subscribe } });
 
     const writeSnapshot = (update: (prev: Snapshot | undefined) => Snapshot | undefined) => {
         if (paused) held = update(held ?? queryClient.getQueryData<Snapshot>(snapshotKey));
@@ -218,6 +223,9 @@ export function createApi(
             case "graph":
                 settleDoctor("graph", frame.graph, String(frame.graph.project));
                 return;
+            case "calls":
+                for (const listener of callListeners) listener(frame.batch);
+                return;
             case "message":
                 // The server's refusals do not name the request they answer, so a message fails
                 // every request in flight instead of leaving it to the timeout.
@@ -227,6 +235,8 @@ export function createApi(
 
     const onState = (state: ConnectionState) => {
         queryClient.setQueryData<ConnectionState>(connectionKey, state);
+        // A new socket starts with no subscription: the stream resumes with the listeners still registered.
+        if (state === "open" && callListeners.size) subscribeCalls(true);
         if (state === "closed") rejectAll("connection closed");
     };
 
@@ -300,6 +310,14 @@ export function createApi(
             ),
         // `request.project` is the registry id as text, which is what the frame carries back.
         drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
+        calls(listener) {
+            callListeners.add(listener);
+            if (callListeners.size === 1) subscribeCalls(true);
+            return () => {
+                if (callListeners.delete(listener) && callListeners.size === 0)
+                    subscribeCalls(false);
+            };
+        },
     };
 }
 
@@ -395,4 +413,12 @@ export function useDrill(request: DrillRequest, version: readonly unknown[]) {
 export function useExpandMutation() {
     const api = useApi();
     return useMutation({ mutationFn: (id: string) => api.expand(id) });
+}
+
+/** Delivers every call batch while mounted; the socket subscribes only for as long as a page listens. */
+export function useCallStream(onBatch: (batch: CallBatch) => void) {
+    const api = useApi();
+    const latest = useRef(onBatch);
+    latest.current = onBatch;
+    useEffect(() => api.calls((batch) => latest.current(batch)), [api]);
 }
