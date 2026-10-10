@@ -48,7 +48,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
-| T329.25 | todo | P3 | 2 | 0% | |
 | T329.27 | todo | P3 | 3 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
@@ -859,11 +858,6 @@ The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a p
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
 
 
-### T329.25. Graph page: alert badges, toasts and the alerts list
-
-The page half of T329.17 (split at claim time: the backend alone fills the 500-line cap). T329 §8d "Where alerts show": a red badge on the project node and on the link edges to it (levels 1 and 2), a toast when an alert is raised or recovers, and an alerts list on the graph page. The data is `ProjectRow.alert` (the `Alert` objects T329.17 puts into `/ws` and `web/src/api/snapshot.gen.ts`), already grouped by kind. Depends on T329.17.
-
-Check: Vitest and a story (axe) for a project with a "missing" alert, a grouped alert of three projects and a recovered one (toast); `just check`, `just spa-stories` and `just spa-e2e`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 

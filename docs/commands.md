@@ -71,6 +71,13 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   with every call. The feed keeps the newest 200 finished calls, can be filtered by caller (the
   session id), tool and project, shows failed calls in red and marks a call that never ended
   after two minutes as interrupted.
+- **Alerts.** When the health check (see [LSP backend](lsp.md#health-check-and-alerts)) raises an alert for a
+  project, its node carries a red badge in both levels (a red marker in 3D, and the word `alert` in
+  the list and the tooltip), and so does every link into it and every outlined symbol of that
+  project in the one-project view. An alerts list at the top of the page gives one line per kind
+  ("share-1, share-2, share-3 unreachable since 14:02 (3 projects)"). A toast appears when a
+  snapshot raises an alert or clears one, and goes away after a few seconds or on Dismiss; alerts
+  that were already up when the page opened are listed but not toasted.
 - **Graph backend.** Each project in the list carries `lsp` or `tags`, and the selected project's
   header says why: the language whose server answers, or the reason the project fell back to tags,
   when it was last checked and when the health check retries. A project nobody has asked yet says

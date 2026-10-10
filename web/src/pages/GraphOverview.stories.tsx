@@ -6,7 +6,7 @@ import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { createRef, type ReactNode, useEffect, useRef } from "react";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { connectSample } from "../api/sample";
-import { project } from "../api/sampleRows";
+import { alertRow, project } from "../api/sampleRows";
 import type { ProjectRow } from "../api/snapshot.gen";
 import { drawn } from "./canvasPixels";
 import { richSnapshot } from "./fixtures";
@@ -83,6 +83,33 @@ export const Single: Story = {
     args: { rows: [project(1, "solo", { selected: true })] },
     decorators: [viewing("2d")],
 };
+
+const alerted: ProjectRow[] = [
+    project(1, "rtok", {
+        selected: true,
+        links: [{ to: 2, kind: "manual", name: "ketch", reason: null }],
+    }),
+    project(2, "ketch", {
+        alerts: [alertRow("unreachable", "ketch", "/Volumes/work did not answer")],
+    }),
+    project(3, "gone", {
+        state: "missing",
+        missing: true,
+        index: null,
+        alerts: [alertRow("missing", "gone", "the directory no longer exists")],
+    }),
+];
+/** A badge on each alerted node, and the link into one of them in red. */
+export const Alerted: Story = {
+    args: { rows: alerted },
+    decorators: [viewing("2d")],
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await waitFor(() => expect(canvas.getAllByTestId("alert-2d")).toHaveLength(2), READY);
+        await expect(canvas.getByRole("button", { name: /ketch, ok, alert/ })).toBeVisible();
+    },
+};
+export const AlertedList: Story = { args: { rows: alerted }, decorators: [viewing("list")] };
 
 const many = Array.from({ length: 60 }, (_, i) =>
     project(i + 1, `project-${i + 1}`, {

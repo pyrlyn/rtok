@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { DrillEdgeKind, LinkKind, Origin, ProjectRow } from "../../api/snapshot.gen";
+import { alertedIds } from "./alerts";
 
 /** Above this many projects the layout groups them by origin (T329 §8a). */
 export const CLUSTER_ABOVE = 50;
@@ -36,6 +37,8 @@ export interface SceneNode {
   dim: boolean;
   /** Index into `Scene.groups` when the layout is clustered, else 0. */
   group: number;
+  /** The health check raised an alert for this project (T329.17): drawn with a red badge. */
+  alert?: boolean;
 }
 
 export interface SceneEdge {
@@ -48,6 +51,8 @@ export interface SceneEdge {
   reason: string | null;
   /** Both ends are in the selected scope. */
   inScope: boolean;
+  /** The project it points to has an alert, so the edge is the one that leads into the problem. */
+  alert?: boolean;
 }
 
 export interface SceneCounts {
@@ -66,6 +71,14 @@ export interface Scene {
   groups: string[];
   /** What the canvas is a picture of, for assistive technology. */
   label: string;
+}
+
+/** The red of an alert (T329.25): a brand role, so both themes and the 3D stage (`resolveRole`) get their own value. */
+export const ALERT_ROLE = "var(--pyr-danger-fg)";
+
+/** What a node says on hover; the alert is spelled out because the badge alone is colour. */
+export function nodeTip(n: SceneNode): string {
+  return `${n.label} · ${n.state}${n.alert ? " · alert" : ""}`;
 }
 
 /** What an edge says on hover: how it was made for a link, the kind and the call count for a drill edge. */
@@ -140,6 +153,7 @@ export function buildScene(rows: ProjectRow[], opts: SceneOptions): Scene {
     (p) => matches(p, opts.query) && (!opts.scopeOnly || !hasScope || scope.has(p.id)),
   );
   const ids = new Set(shown.map((p) => p.id));
+  const alerted = alertedIds(rows);
   const clustered = rows.length > CLUSTER_ABOVE;
   const groups = ORIGINS.filter((o) => rows.some((p) => p.origin === o));
   const nodes = shown.map<SceneNode>((p) => ({
@@ -156,6 +170,7 @@ export function buildScene(rows: ProjectRow[], opts: SceneOptions): Scene {
     inScope: scope.has(p.id),
     dim: hasScope && !scope.has(p.id),
     group: clustered ? groups.indexOf(p.origin) : 0,
+    ...(alerted.has(p.id) && { alert: true }),
   }));
   const edges: SceneEdge[] = [];
   for (const p of shown) {
@@ -170,6 +185,7 @@ export function buildScene(rows: ProjectRow[], opts: SceneOptions): Scene {
         width: EDGE_WIDTH,
         reason: l.reason,
         inScope: scope.has(p.id) && scope.has(l.to),
+        ...(alerted.has(l.to) && { alert: true }),
       });
     }
   }

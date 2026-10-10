@@ -22,11 +22,13 @@ describe("graph page projects", () => {
     test("the selector lists projects and the header shows the selected one", async () => {
         mount(connectSample, "/graph");
         const list = await screen.findByRole("list", { name: "projects" });
+        // The sample registry goes on with the projects the alerts are shown on (T329.25).
         expect(
             within(list)
                 .getAllByRole("button")
+                .slice(0, 2)
                 .map((b) => b.textContent),
-        ).toEqual(["rtokoklspmanual", "ketchstaletagsmanual", "notesokmanual"]);
+        ).toEqual(["rtokoklspmanual", "ketchstaletagsmanual"]);
         expect(current().getByText("rtok")).toBeTruthy();
         expect(screen.queryByLabelText("find a project")).toBeNull();
     });

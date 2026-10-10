@@ -10,7 +10,7 @@ import {
     useRef,
     useState,
 } from "react";
-import { edgeHow, type Scene, type SceneNode } from "./scene";
+import { ALERT_ROLE, edgeHow, nodeTip, type Scene, type SceneNode } from "./scene";
 import type { Positions, Vec3 } from "./useLayout";
 import type { ViewApi, ViewEvents } from "./webgl";
 
@@ -40,6 +40,38 @@ function fitBox(scene: Scene, map: Map<number, Vec3>): Box {
     const y0 = Math.min(...pts.map(({ p, r }) => p[1] - r));
     const y1 = Math.max(...pts.map(({ p, r }) => p[1] + r));
     return { x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + 2 * PAD, h: y1 - y0 + 2 * PAD };
+}
+
+function Arrow({ id, fill }: { id: string; fill: string }) {
+    return (
+        <marker
+            id={id}
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+        >
+            <path d="M0 0L10 5L0 10z" style={{ fill }} />
+        </marker>
+    );
+}
+
+/** A red disc with a bar, on the node's upper right: the bar tells it apart without colour. */
+function AlertBadge({ n }: { n: SceneNode }) {
+    const r = Math.max(3, n.radius * 0.5);
+    return (
+        <g transform={`translate(${n.radius * 0.8} ${-n.radius * 0.8})`} data-testid="alert-2d">
+            <circle r={r} style={{ fill: ALERT_ROLE }} />
+            <path
+                d={`M0 ${-r * 0.55}V${r * 0.1}M0 ${r * 0.45}v0.1`}
+                style={{ stroke: "var(--pyr-bg)" }}
+                strokeWidth={r * 0.35}
+                strokeLinecap="round"
+            />
+        </g>
+    );
 }
 
 /** One mark per shape, so a file, a type and a function read apart without colour. */
@@ -135,17 +167,8 @@ export default function Scene2D({ scene, positions, api, select, menu, hover, op
             }}
         >
             <defs>
-                <marker
-                    id="arrow-2d"
-                    viewBox="0 0 10 10"
-                    refX="9"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                >
-                    <path d="M0 0L10 5L0 10z" fill="currentColor" />
-                </marker>
+                <Arrow id="arrow-2d" fill="currentColor" />
+                <Arrow id="arrow-2d-alert" fill={ALERT_ROLE} />
             </defs>
             {scene.edges.map((e) => {
                 const a = at(e.from);
@@ -162,11 +185,11 @@ export default function Scene2D({ scene, positions, api, select, menu, hover, op
                         y1={a[1]}
                         x2={a[0] + (b[0] - a[0]) * k}
                         y2={a[1] + (b[1] - a[1]) * k}
-                        stroke="currentColor"
+                        stroke={e.alert ? ALERT_ROLE : "currentColor"}
                         strokeWidth={e.width * 0.5}
                         strokeDasharray={e.dashed ? "4 3" : undefined}
                         opacity={e.inScope ? 0.8 : 0.3}
-                        markerEnd="url(#arrow-2d)"
+                        markerEnd={`url(#arrow-2d${e.alert ? "-alert" : ""})`}
                         data-testid="edge-2d"
                         onPointerEnter={(ev) =>
                             hover({
@@ -190,7 +213,7 @@ export default function Scene2D({ scene, positions, api, select, menu, hover, op
                         transform={`translate(${p[0]} ${p[1]})`}
                         role="button"
                         tabIndex={0}
-                        aria-label={`${n.label}, ${n.state}${n.selected ? ", selected" : ""}`}
+                        aria-label={`${n.label}, ${n.state}${n.alert ? ", alert" : ""}${n.selected ? ", selected" : ""}`}
                         aria-pressed={n.selected}
                         opacity={n.dim ? 0.35 : 1}
                         className="cursor-pointer outline-none focus-visible:[&>:first-child]:stroke-accent"
@@ -207,7 +230,7 @@ export default function Scene2D({ scene, positions, api, select, menu, hover, op
                             menu(n.id, e.clientX, e.clientY)
                         )}
                         onPointerEnter={(e) =>
-                            hover({ text: `${n.label} · ${n.state}`, x: e.clientX, y: e.clientY })
+                            hover({ text: nodeTip(n), x: e.clientX, y: e.clientY })
                         }
                         onPointerLeave={() => hover(null)}
                     >
@@ -220,6 +243,7 @@ export default function Scene2D({ scene, positions, api, select, menu, hover, op
                                 strokeWidth={1}
                             />
                         )}
+                        {n.alert && <AlertBadge n={n} />}
                         <text
                             y={-n.radius - 3}
                             textAnchor="middle"

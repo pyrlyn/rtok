@@ -131,3 +131,18 @@ describe("frame to scene", () => {
     expect(drillScene(frame({ nodes: [], edges: [] }), options()).counts.total).toBe(0);
   });
 });
+
+describe("alerts in the symbol graph", () => {
+  const alerted = { ...options(), alerted: new Set([2]) };
+
+  test("a symbol of an alerted linked project and the call into it carry the badge", () => {
+    const s = drillScene(frame(), alerted);
+    expect(s.nodes.filter((n) => n.alert).map((n) => n.label)).toEqual(["open"]);
+    expect(s.edges.filter((e) => e.alert).map((e) => e.kind)).toEqual(["calls"]);
+  });
+
+  test("the opened project's own symbols are never badged: the page lists its alert", () => {
+    const s = drillScene(frame(), { ...options(), alerted: new Set([1]) });
+    expect(s.nodes.some((n) => n.alert)).toBe(false);
+  });
+});

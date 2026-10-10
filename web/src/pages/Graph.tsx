@@ -12,6 +12,7 @@ import { Pill } from "../ui/Pill";
 import { fmt } from "./format";
 import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./parts";
 import { Projects } from "./Projects";
+import { GraphAlerts } from "./graph3d/GraphAlerts";
 import { drillSearch, type DrillState, openProject, parseDrill } from "./graph3d/drillState";
 import { parseGraph, type DeadSymbol, type GraphView } from "./text";
 
@@ -34,6 +35,7 @@ export function Graph() {
         <WithSnapshot>
             {(snap) => (
                 <>
+                    {snap.projects && <GraphAlerts rows={snap.projects} />}
                     {snap.projects && <Projects rows={snap.projects} />}
                     {snap.projects && snap.projects.length > 0 && (
                         <Suspense fallback={null}>
