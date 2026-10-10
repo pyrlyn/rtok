@@ -47,12 +47,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.17 | todo | P3 | 3 | 0% | |
-| T329.18 | todo | P3 | 4 | 0% | |
+| T329.18 | in progress | P3 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
 | T329.23 | todo | P2 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
+| T329.27 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -841,6 +842,12 @@ Symbols requested and returned per call are not in the T329.15 events; if the di
 
 Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
 
+### T329.27. Graph page: Compare mode and the remaining diff reports
+
+The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (needs T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
+
 ### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 
 T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
@@ -855,9 +862,17 @@ Check: renaming B's directory raises "B missing" after two checks on the page, i
 
 ### T329.18. Graph diff: compare before and after a change
 
-T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14 and T329.22.
+T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14 and T329.22. Split on 2026-10-10: this task is the core (the diff model, `rtok graph diff`, MCP `graph_diff`); the page's Compare mode and the remaining §8e reports are T329.27.
 
 Check: a signature change in B shows in `rtok graph diff --from HEAD` from A with A's affected call sites; the working tree is untouched; a rename is a rename; an unknown ref errors; `graph_diff` returns a capped summary with a paging id; `just check`.
+
+Execution plan:
+
+1. `src/plugins/graph/diff.rs`: the old side is read straight from the git object database (`git ls-tree -r` plus one `git cat-file --batch`), parsed with the index's own tags extractor and `Matcher` rules into in-memory definition and reference rows. It is not written anywhere, so there is no temporary store and no checkout; the working tree and the user's index are never touched. The new side is the project's index (`--to working`, indexed first) or the same git read (`--to REF`).
+2. Model: definitions matched by `(path, name, kind)`; added, removed, changed (signature or body hash); moved (same name, kind and body hash in another path) and renamed (same kind and body once the name is masked, only when exactly one removed and one added definition share it); call edges added and removed from the reference groups. Each changed or removed symbol lists its callers from the new index through the scope walk (`impact_walk_roots`), so a change in B shows A's call sites. `DefRow` gains `content_hash`.
+3. Output: header with the counts, then changed symbols with their callers, removed, renamed, moved, added, edges; `--json`. The whole answer goes through `cap`, so the cut line carries the archive id and `expand <id>` pages the rest.
+4. Wiring: `rtok graph diff [--from REF] [--to REF|working] [--project ID] [--json]` in `src/cli/graph.rs`; MCP `graph_diff` in `Graph::mcp_tools`, `mcp.rs` and `scope.rs`; the unknown ref is an error naming it; the tool-surface test and the description budget follow the sixth tool.
+5. Gates: trycmd fence and `surface_parity`/`config_coverage` goldens, docs in `docs/commands.md` (en, ru, uk), the plugin `AGENTS.md`, `just check`.
 
 ### T329.19. Graph health score per project
 
