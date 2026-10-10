@@ -376,13 +376,20 @@ fn redact(e: &mut Export, home: Option<&Path>) {
     }
     // Node paths are relative, but a folder named after the user inside the project gives the
     // person away just the same, and the id carries the path.
+    let mut ids = HashMap::new();
     for n in &mut e.nodes {
-        n.path = text(&n.path);
-        n.id = text(&n.id);
+        let path = text(&n.path);
+        let id =
+            n.id.replacen(&format!(":{}:", n.path), &format!(":{path}:"), 1);
+        n.path = path;
+        ids.insert(std::mem::replace(&mut n.id, id.clone()), id);
     }
     for edge in &mut e.edges {
-        edge.from = text(&edge.from);
-        edge.to = text(&edge.to);
+        for end in [&mut edge.from, &mut edge.to] {
+            if let Some(id) = ids.get(end.as_str()) {
+                end.clone_from(id);
+            }
+        }
     }
     e.meta.notes = e.meta.notes.iter().map(|n| text(n)).collect();
     e.meta.redacted = true;
@@ -642,6 +649,7 @@ mod tests {
         assert_eq!(e.meta.notes, ["see ~/x", "/Users/alicex/y"]);
         e.meta.notes.pop();
         assert_eq!(e.nodes[0].path, "<user>/lib.rs");
+        assert_eq!(e.nodes[0].id, "1:<user>/lib.rs:1:f");
         assert_eq!(e.edges[0].from, e.nodes[0].id);
         assert!(e.meta.redacted);
         let text = serde_json::to_string(&e).unwrap();
@@ -677,6 +685,13 @@ mod tests {
         )
         .unwrap();
         mcp["meta"].as_object_mut().unwrap().remove("exported_at");
+        // Each call may refresh the index first, so the second can carry a later second.
+        let mut cli = cli;
+        for doc in [&mut cli, &mut mcp] {
+            for p in doc["projects"].as_array_mut().unwrap() {
+                p.as_object_mut().unwrap().remove("indexed_at");
+            }
+        }
         assert_eq!(cli, mcp);
         let _ = fs::remove_dir_all(dir);
     }
