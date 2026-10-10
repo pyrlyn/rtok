@@ -17,6 +17,7 @@ import { Select } from "../ui/Select";
 import { Spinner } from "../ui/Spinner";
 import { Switch } from "../ui/Switch";
 import { fmt, nowSecs } from "./format";
+import { HealthBreakdown, HealthRing, ScopeHealth } from "./graph3d/HealthRing";
 import { backendOf, filterProjects, linkTargets, SEARCH_ABOVE, stateOf } from "./projectLogic";
 
 /** The server owns the registry: every control only asks, and the next snapshot moves the page. */
@@ -66,6 +67,7 @@ function Selector({ rows }: { rows: ProjectRow[] }) {
                             >
                                 {pending && <Spinner size="sm" />}
                                 <b className="truncate">{p.name}</b>
+                                <HealthRing health={p.health} size={20} />
                                 <Pill tone={stateOf(p).tone}>{stateOf(p).label}</Pill>
                                 <BackendTag p={p} />
                                 <span className="ml-auto text-2xs text-fg-muted">{p.origin}</span>
@@ -128,7 +130,12 @@ function Current({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                         {s.label}
                     </Pill>
                     <span className="text-2xs text-fg-muted">{s.hint}</span>
+                    <ScopeHealth score={p.scope_health} />
                 </p>
+                <div className="flex items-start gap-2">
+                    <HealthRing health={p.health} />
+                    <HealthBreakdown health={p.health} />
+                </div>
                 <p className="truncate text-2xs text-fg-subtle">{p.root}</p>
                 <Backend p={p} />
                 {p.index && (

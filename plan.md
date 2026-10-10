@@ -45,8 +45,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
-| T329.30 | todo | P3 | 2 | 0% | |
-| T329.28 | todo | P3 | 4 | 0% | |
+| T329.32 | todo | P3 | 3 | 0% | |
+| T329.33 | todo | P3 | 4 | 0% | |
+| T329.34 | todo | P3 | 3 | 0% | |
 | T329.35 | todo | P3 | 4 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -94,6 +95,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T479 | todo | P3 | 2 | 0% | |
 | T481 | todo | P3 | 2 | 0% | |
 | T480 | todo | P3 | 3 | 0% | |
+| T484 | todo | P3 | 3 | 0% | |
 | T485 | todo | P3 | 3 | 0% | |
 
 
@@ -816,11 +818,23 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
 
-### T329.28. Graph page: live camera, 3D live view and the remaining live displays
+### T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 
-Remainder of T329 §8b after T329.27 (which shipped the read-only 2D live canvas: `Scene2D`'s `live` prop, `live/lit.ts` for the lit state, `live/LiveGraph.tsx` and the splitter): the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of since the page opened, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.27.
+What is left of T329 §8b after T329.28 that only draws what the page already has: maximise buttons for the live canvas and for part 1, the collapsed metrics strip under 900 px, running labels with counters, count-up animation of the numbers, sparklines, the "outside scope" mark on a call that crosses out of the scope, and the nearest-visible-ancestor counter for calls whose target is folded into a "+N more" group. A TUI counterpart is not planned yet (D27); ask the creator for a task.
 
-Check: the live canvas frames a running call and eases back to an overview in 2D and 3D; the latency and symbol counters match the events; the config keys are read and documented; Vitest, stories (axe) and Playwright; `just check`.
+Check: maximising either part fills the page and restores; under 900 px the metrics collapse to a strip that expands; a running call shows its label and elapsed counter; the numbers count up (and jump with `prefers-reduced-motion`); the sparklines match the store buckets; a call outside the scope is marked; folded targets count on their nearest visible ancestor; Vitest, stories (axe) and Playwright; `just check`.
+
+### T329.33. Graph page: call metrics from the events (latency, symbols, files, projects, fallbacks)
+
+What is left of T329 §8b after T329.28 that needs data the events do not carry yet: latency p50 and p95, symbols requested and returned (they have to be added to the T329.15 events first), files touched, projects crossed, and the fallbacks and cap counters. The numbers must match the `graph_events` rows and the `Measurement` rows (`rtok stats`).
+
+Check: the latency and symbol counters match the events of a fixture burst and `rtok stats`; files touched and projects crossed match the call's answer; fallbacks and cap counters match the events; Vitest, stories (axe), Playwright, Rust tests for the event change; `just check`.
+
+### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
+
+What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
+
+Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
 
 ### T329.35. Graph page: Compare mode
 
@@ -833,13 +847,6 @@ Check: a signature change shows amber on the page and in its side panel, a remov
 The rest of T329 §8c after T329.16 (split at claim time: the backend half fills the 500-line cap). T329.16 ships the `rtok.graph.v1` schema file, JSON export with redaction, `rtok graph export`, MCP `graph_export` and a read-only importer (`export::read`, `rtok graph export --from FILE`). Here: `--format json|svg|png` on `rtok graph export`; SVG drawn from the `Export` type of `src/plugins/graph/export.rs` (so a saved file draws the same picture), at most about 200 drawn nodes with the footer "N nodes hidden" while the JSON keeps every node, a legend (project colours, node shapes, edge styles) and a footer (project names, scope, backend per project, `indexed_at`, rtok version, export time, partial marker); PNG at 1x, 2x and 4x (transparent or theme background) rasterised from that SVG with a maintained crate (check `rust.md`: `resvg`) and `--scale N --transparent`; the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; image of the live frame only for part 2; the dialog says that file and symbol names are included); and the page opening an exported JSON read-only with the banner "viewing export from ...". D27: anything the command prints is a page on web and tui, so the TUI gets the same export action. Docs in en, ru, uk. Depends on T329.16, T329.14.
 
 Check: SVG, and PNG exports at 1x, 2x and 4x, of A's scope open and match; the page exports and imports the same JSON the CLI writes; Vitest, stories (axe) and Playwright; `just check`.
-
-### T329.30. Graph page: health ring and breakdown per project
-
-The page half of T329.19 (the backend half is in `done.md`). T329 §8f "Score": a coloured ring on the project node (green 80 and up, amber 50 to 79, red below 50; grey for `indexing`) with the breakdown (the three components, the reasons and their fixes) on hover and in the project list, and the scope's lowest score (`ProjectRow.scope_health`) beside the selected project. The data is `ProjectRow.health` and `ProjectRow.scope_health`, already in `/ws` and `web/src/api/snapshot.gen.ts`. Depends on T329.19.
-
-Check: Vitest and a story (axe) for a project at 100, one at 60 with two reasons, one `indexing` and one `missing`; `just check`, `just spa-stories` and `just spa-e2e`.
-
 
 ### T356. Never index `$HOME` or `/` as a graph root
 
@@ -1205,9 +1212,15 @@ Check: a TUI render test on fixture rows at 100, 60 with two reasons, `indexing`
 
 ### T480. TUI: live graph calls panel
 
-T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26.
+T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26 and T483.
 
 Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
+
+### T484. Web live panel reads the server's calls totals
+
+T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
+
+Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
 
 ### T485. TUI: graph diff and compare view
 

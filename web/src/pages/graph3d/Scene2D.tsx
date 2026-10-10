@@ -10,9 +10,12 @@ import {
     useRef,
     useState,
 } from "react";
+import { HEALTH_ROLE, healthLabel } from "./health";
+import { type Box, boxAround } from "./live/camera";
 import { accentOf, type Lit, type LiveState } from "./live/lit";
+import { useEasedBox } from "./live/useEasedBox";
 import { ALERT_ROLE, edgeHow, nodeTip, type Scene, type SceneNode } from "./scene";
-import type { Positions, Vec3 } from "./useLayout";
+import type { Positions } from "./useLayout";
 import type { ViewApi, ViewEvents } from "./webgl";
 
 export interface View2DProps extends ViewEvents {
@@ -21,28 +24,6 @@ export interface View2DProps extends ViewEvents {
     api: RefObject<ViewApi | null>;
     /** The read-only live picture (T329 §8b): it takes no input, and the nodes carry the call state. */
     live?: LiveState;
-}
-
-interface Box {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-}
-
-const PAD = 30;
-
-function fitBox(scene: Scene, map: Map<number, Vec3>): Box {
-    const pts = scene.nodes.flatMap((n) => {
-        const p = map.get(n.id);
-        return p ? [{ p, r: n.radius }] : [];
-    });
-    if (!pts.length) return { x: -100, y: -100, w: 200, h: 200 };
-    const x0 = Math.min(...pts.map(({ p, r }) => p[0] - r));
-    const x1 = Math.max(...pts.map(({ p, r }) => p[0] + r));
-    const y0 = Math.min(...pts.map(({ p, r }) => p[1] - r));
-    const y1 = Math.max(...pts.map(({ p, r }) => p[1] + r));
-    return { x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + 2 * PAD, h: y1 - y0 + 2 * PAD };
 }
 
 function Arrow({ id, fill }: { id: string; fill: string }) {
@@ -72,6 +53,26 @@ function AlertBadge({ n, testId }: { n: SceneNode; testId: string }) {
                 style={{ stroke: "var(--pyr-bg)" }}
                 strokeWidth={r * 0.35}
                 strokeLinecap="round"
+            />
+        </g>
+    );
+}
+
+/** A ring round the node: the arc is the score, the colour the level; dashed grey while the first index runs. */
+function HealthArc({ n }: { n: SceneNode }) {
+    const h = n.health;
+    if (!h) return null;
+    const r = n.radius * 1.25;
+    const c = 2 * Math.PI * r;
+    const arc = h.level === "indexing" ? "2 2" : `${((h.score ?? 0) / 100) * c} ${c}`;
+    return (
+        <g data-testid="health-2d" data-level={h.level} fill="none" strokeWidth={1.6}>
+            <circle r={r} stroke="currentColor" opacity={0.2} />
+            <circle
+                r={r}
+                style={{ stroke: HEALTH_ROLE[h.level] }}
+                strokeDasharray={arc}
+                transform="rotate(-90)"
             />
         </g>
     );
@@ -154,8 +155,10 @@ export default function Scene2D({
 
     const at = (id: number) => positions.map.get(id);
     const byId = new Map(scene.nodes.map((n) => [n.id, n]));
-    const fitted = fitBox(scene, positions.map);
-    const box = manual ?? fitted;
+    // The live picture is never panned by hand: the camera frames the running calls, or the whole.
+    const focus = live?.focus;
+    const wanted = manual ?? boxAround(scene, positions.map, focus);
+    const box = useEasedBox(wanted, focus?.join(",") ?? "", readOnly);
 
     useImperativeHandle(api, () => ({
         fit: () => setManual(null),
@@ -272,7 +275,7 @@ export default function Scene2D({
                     : {
                           role: "button",
                           tabIndex: 0,
-                          "aria-label": `${n.label}, ${n.state}${n.alert ? ", alert" : ""}${n.selected ? ", selected" : ""}`,
+                          "aria-label": `${n.label}, ${n.state}${n.alert ? ", alert" : ""}${n.health ? `, health ${healthLabel(n.health)}` : ""}${n.selected ? ", selected" : ""}`,
                           "aria-pressed": n.selected,
                           className:
                               "cursor-pointer outline-none focus-visible:[&>:first-child]:stroke-accent",
@@ -303,6 +306,7 @@ export default function Scene2D({
                     >
                         {lit && <Glow n={n} lit={lit} />}
                         <Mark n={n} />
+                        <HealthArc n={n} />
                         {n.selected && (
                             <circle
                                 r={n.radius * 1.5}

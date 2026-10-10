@@ -279,10 +279,15 @@ function subscriptions(page: Page) {
   return seen;
 }
 
+/** The live part draws 3D by default where WebGL works; the 2D tests ask for the SVG picture. */
+const viewing = (page: Page, view: "2d" | "3d") =>
+  page.addInitScript((v) => localStorage.setItem("rtok.graph.view", v), view);
+
 test("a graph call from another process lights its node on the read-only live graph", async ({
   page,
   rtok,
 }) => {
+  await viewing(page, "2d");
   rtok.addProject();
   await page.goto("/#/graph");
   await expect(page.getByText("Waiting for graph calls")).toBeVisible();
@@ -303,6 +308,7 @@ test("a graph call from another process lights its node on the read-only live gr
 });
 
 test("the live graph ignores the wheel, the pointer and the keyboard", async ({ page, rtok }) => {
+  await viewing(page, "2d");
   rtok.addProject();
   await page.goto("/#/graph");
   const live = page.getByTestId("graph-live");
@@ -328,10 +334,52 @@ test("the live graph ignores the wheel, the pointer and the keyboard", async ({ 
   ).not.toBe("graph-live");
 });
 
+test("the live camera frames a call from another process and eases back to the overview", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live");
+  await expect(live.getByTestId("node-live")).toHaveCount(1);
+  const overview = (await live.getAttribute("viewBox"))!;
+  await expect(async () => {
+    callers(rtok);
+    await expect(live).not.toHaveAttribute("viewBox", overview, { timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  // The call is old after a few seconds and the camera lets go.
+  await expect(live).toHaveAttribute("viewBox", overview, { timeout: 15_000 });
+});
+
+test("the 3D live canvas takes no input and its camera holds a call from another process", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "3d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live-3d");
+  await expect(live.or(page.getByText(/3D unavailable/))).toBeVisible();
+  // No WebGL in this browser: the live part says so and draws 2D, which the other tests cover.
+  test.skip(
+    (await page.getByText(/3D unavailable/).count()) > 0,
+    "WebGL is not available in this browser",
+  );
+  await expect(live.locator("canvas")).toHaveCSS("pointer-events", "none");
+  await expect(live).not.toHaveAttribute("data-framed", /.+/);
+  await expect(async () => {
+    callers(rtok);
+    await expect(live).toHaveAttribute("data-framed", /.+/, { timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(live).not.toHaveAttribute("data-framed", /.+/, { timeout: 15_000 });
+});
+
 test("the splitter keeps its place and the hidden state across a reload and stops the stream", async ({
   page,
   rtok,
 }) => {
+  await viewing(page, "2d");
   rtok.addProject();
   const stream = subscriptions(page);
   await page.goto("/#/graph");
@@ -366,6 +414,7 @@ test("the splitter keeps its place and the hidden state across a reload and stop
 });
 
 test("under 900 px the two parts stack and there is no splitter", async ({ page, rtok }) => {
+  await viewing(page, "2d");
   rtok.addProject();
   await page.setViewportSize({ width: 800, height: 900 });
   await page.goto("/#/graph");
@@ -374,6 +423,7 @@ test("under 900 px the two parts stack and there is no splitter", async ({ page,
 });
 
 test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {
+  await viewing(page, "2d");
   rtok.addProject();
   await page.goto("/#/graph");
   const live = page.getByTestId("graph-live");

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { type Frame, layoutInput } from "./layout";
 import { startLayout } from "./layoutClient";
 import { type Scene, topology } from "./scene";
@@ -54,5 +54,6 @@ export function useLayout(scene: Scene): Positions {
     },
     [subs],
   );
-  return { map, subscribe };
+  // One object for the layout's life: a consumer that rebuilds on a new `positions` (the 3D stage) must not rebuild on every render.
+  return useMemo(() => ({ map, subscribe }), [map, subscribe]);
 }

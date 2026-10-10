@@ -34,7 +34,7 @@ export function readView(): View {
     return "3d";
 }
 
-function saveView(v: View) {
+export function saveView(v: View) {
     try {
         localStorage.setItem(VIEW_KEY, v);
     } catch {
@@ -158,7 +158,7 @@ export function SceneView({
                 <div
                     role="tooltip"
                     style={{ left: tip.x + 12, top: tip.y + 12 }}
-                    className={`${tooltipBox} fixed`}
+                    className={`${tooltipBox} fixed whitespace-pre-line`}
                 >
                     {tip.text}
                 </div>

@@ -8,6 +8,9 @@
 //! one [`CallBatch`] and broadcasts it, so the work and the traffic per second are bounded
 //! however many calls arrive.
 //!
+//! [`Reader`] is that one reader without the async: `rtok tui` drives it from a thread, so both
+//! surfaces fold the same rows through the same cursor and [`coalesce`].
+//!
 //! No replay: a socket sees the events written after it subscribed. A page that wants the
 //! past (a window total, a reconnect) reads the store through the snapshot, not this stream.
 
@@ -121,7 +124,7 @@ impl LiveCalls {
         let rx = self.tx.subscribe();
         let db_path = cfg.core.db_path.clone();
         let reader = open_reader(db_path.clone()).await;
-        let head = reader.as_ref().map_or(0, |r| r.1);
+        let head = reader.as_ref().map_or(0, Reader::head);
         if !self.running.swap(true, Ordering::AcqRel) {
             tokio::spawn(poll(self.clone(), db_path, reader));
         }
@@ -133,25 +136,44 @@ impl LiveCalls {
     }
 }
 
-/// A store handle and the newest event id: where a reader that wants only new events starts.
-/// `None` when the file will not open; the poller tries again on its next pass, so a missing or
-/// locked store costs a retry and never a failed socket.
-async fn open_reader(path: std::path::PathBuf) -> Option<(Arc<Store>, i64)> {
-    tokio::task::spawn_blocking(move || {
-        let store = Store::open(&path).ok()?;
-        let head = store.graph_event_head().ok()?;
-        Some((Arc::new(store), head))
-    })
-    .await
-    .ok()
-    .flatten()
+/// A store handle and a cursor: where a reader that wants only new events starts.
+pub struct Reader {
+    store: Store,
+    cursor: i64,
 }
 
-async fn poll(
-    live: Arc<LiveCalls>,
-    db_path: std::path::PathBuf,
-    mut reader: Option<(Arc<Store>, i64)>,
-) {
+impl Reader {
+    /// `None` when the file will not open; callers try again on their next pass, so a missing
+    /// or locked store costs a retry and never a failed socket.
+    pub fn open(path: &std::path::Path) -> Option<Self> {
+        let store = Store::open(path).ok()?;
+        let cursor = store.graph_event_head().ok()?;
+        Some(Self { store, cursor })
+    }
+
+    /// The newest event id read so far.
+    pub fn head(&self) -> i64 {
+        self.cursor
+    }
+
+    /// What was written since the last call, folded; `None` when nothing was, or the read
+    /// failed (the cursor stays, so the events come on the next try).
+    pub fn poll(&mut self) -> Option<CallBatch> {
+        let events = self.store.graph_events_after(self.cursor, FETCH).ok()?;
+        let batch = coalesce(events)?;
+        self.cursor = batch.head;
+        Some(batch)
+    }
+}
+
+async fn open_reader(path: std::path::PathBuf) -> Option<Reader> {
+    tokio::task::spawn_blocking(move || Reader::open(&path))
+        .await
+        .ok()
+        .flatten()
+}
+
+async fn poll(live: Arc<LiveCalls>, db_path: std::path::PathBuf, mut reader: Option<Reader>) {
     loop {
         tokio::time::sleep(POLL).await;
         if live.tx.receiver_count() == 0 {
@@ -162,31 +184,29 @@ async fn poll(
                 return;
             }
         }
-        let (store, cursor) = match reader.take() {
+        let mut r = match reader.take() {
             Some(r) => r,
             None => match open_reader(db_path.clone()).await {
                 Some(r) => r,
                 None => continue,
             },
         };
-        let s = store.clone();
-        let read = tokio::task::spawn_blocking(move || s.graph_events_after(cursor, FETCH))
-            .await
-            .ok()
-            .and_then(Result::ok);
-        let cursor = match read {
-            Some(events) => {
-                let next = events.last().map_or(cursor, |e| e.id);
-                if let Some(batch) = coalesce(events) {
-                    let json = ServerFrame::Calls { batch }.to_json();
-                    // No receiver is not an error: the last socket just left.
-                    let _ = live.tx.send(Arc::from(json));
-                }
-                next
-            }
-            None => cursor,
+        // A failed join drops the reader; the next pass opens a fresh one.
+        let Ok((r, batch)) = tokio::task::spawn_blocking(move || {
+            let batch = r.poll();
+            (r, batch)
+        })
+        .await
+        else {
+            continue;
         };
-        reader = Some((store, cursor));
+        if let Some(batch) = batch {
+            // No receiver is not an error: the last socket just left.
+            let _ = live
+                .tx
+                .send(Arc::from(ServerFrame::Calls { batch }.to_json()));
+        }
+        reader = Some(r);
     }
 }
 

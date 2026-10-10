@@ -25,12 +25,16 @@ import {
   Sprite,
   SpriteMaterial,
   SphereGeometry,
+  TorusGeometry,
   Vector2,
   Vector3,
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { disposeObject } from "./dispose";
+import { HEALTH_ROLE } from "./health";
+import { sphereOf } from "./live/camera";
+import { accentOf, type LiveState } from "./live/lit";
 import {
   ALERT_ROLE,
   edgeHow,
@@ -60,6 +64,8 @@ interface NodeObj {
   ring?: Mesh;
   /** The red marker of an alert: a small sphere on the node's upper right. */
   badge?: Mesh;
+  /** The health ring (T329.30): turned to face the camera every frame. */
+  health?: Mesh;
   label: Sprite;
 }
 
@@ -82,6 +88,7 @@ export class Stage implements ViewApi {
   };
   private cone = new ConeGeometry(1, 1, 12);
   private cylinder = new CylinderGeometry(1, 1, 1, 6, 1, true);
+  private torus = new TorusGeometry(1, 0.06, 6, 48);
   private nodes = new Map<number, NodeObj>();
   private edges: SceneEdge[] = [];
   private lines?: InstancedMesh;
@@ -90,6 +97,12 @@ export class Stage implements ViewApi {
   private owner: number[] = [];
   private raf = 0;
   private userMoved = false;
+  /** The nodes the live camera holds; none means the overview. */
+  private framed?: number[];
+  private live?: LiveState;
+  /** Heat and accent shells per lit node, rebuilt on every `setLive`. */
+  private glows = new Map<number, Group>();
+  private glowGroup = new Group();
   private fly?: { from: Vector3; to: Vector3; t0: number; target: Vector3; targetFrom: Vector3 };
   private down?: { x: number; y: number };
   private hover?: { x: number; y: number };
@@ -106,6 +119,8 @@ export class Stage implements ViewApi {
     private positions: Positions,
     private reducedMotion: boolean,
     private onLost: (reason: string) => void,
+    /** The live picture: it takes no input, so the controls and the pointer handlers are not wired. */
+    private readOnly = false,
   ) {
     // `preserveDrawingBuffer` lets a test read the canvas back; the cost is small at this size.
     this.renderer = new WebGLRenderer({
@@ -117,23 +132,27 @@ export class Stage implements ViewApi {
     canvas.style.cssText = "display:block;width:100%;height:100%;touch-action:none";
     canvas.setAttribute("role", "img");
     // `setScene` names the picture; this covers the frame before the first scene.
-    canvas.setAttribute("aria-label", "3D graph");
+    canvas.setAttribute("aria-label", readOnly ? "Live 3D graph" : "3D graph");
+    if (readOnly) canvas.style.pointerEvents = "none";
     host.appendChild(canvas);
     this.camera.position.copy(DEFAULT_DIR).multiplyScalar(260);
     const sun = new DirectionalLight(0xffffff, 2.2);
     sun.position.set(60, 120, 90);
-    this.three.add(new AmbientLight(0xffffff, 1.6), sun, this.group);
+    this.three.add(new AmbientLight(0xffffff, 1.6), sun, this.group, this.glowGroup);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.addEventListener("change", this.invalidate);
     this.controls.addEventListener("start", () => (this.userMoved = true));
+    this.controls.enabled = !readOnly;
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
-    canvas.addEventListener("pointerdown", this.onDown);
-    canvas.addEventListener("pointerup", this.onUp);
-    canvas.addEventListener("pointermove", this.onMove);
-    canvas.addEventListener("pointerleave", this.onLeave);
-    canvas.addEventListener("dblclick", this.onDouble);
-    canvas.addEventListener("contextmenu", this.onMenu);
+    if (!readOnly) {
+      canvas.addEventListener("pointerdown", this.onDown);
+      canvas.addEventListener("pointerup", this.onUp);
+      canvas.addEventListener("pointermove", this.onMove);
+      canvas.addEventListener("pointerleave", this.onLeave);
+      canvas.addEventListener("dblclick", this.onDouble);
+      canvas.addEventListener("contextmenu", this.onMenu);
+    }
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
     this.unsubscribe = positions.subscribe(this.onPositions);
@@ -144,7 +163,10 @@ export class Stage implements ViewApi {
 
   setScene(scene: Scene): void {
     this.clear();
-    this.renderer.domElement.setAttribute("aria-label", `3D graph of the ${scene.label}`);
+    this.renderer.domElement.setAttribute(
+      "aria-label",
+      `${this.readOnly ? "Live 3D" : "3D"} graph of the ${scene.label}`,
+    );
     const style = getComputedStyle(this.host);
     // Named fallback only for hosts without the brand stylesheet (unit tests).
     const fg = style.color || "gray";
@@ -175,8 +197,26 @@ export class Stage implements ViewApi {
         badge = new Mesh(this.sphere, new MeshBasicMaterial({ color: alert }));
         badge.scale.setScalar(Math.max(2, node.radius * 0.45));
       }
-      this.group.add(mesh, label, ...(ring ? [ring] : []), ...(badge ? [badge] : []));
-      this.nodes.set(node.id, { node, mesh, ring, badge, label });
+      let health: Mesh | undefined;
+      if (node.health) {
+        health = new Mesh(
+          this.torus,
+          new MeshBasicMaterial({
+            color: resolveRole(HEALTH_ROLE[node.health.level], style, fg),
+            transparent: node.dim,
+            opacity: node.dim ? 0.3 : 1,
+          }),
+        );
+        health.scale.setScalar(node.radius * 1.3);
+      }
+      this.group.add(
+        mesh,
+        label,
+        ...(ring ? [ring] : []),
+        ...(badge ? [badge] : []),
+        ...(health ? [health] : []),
+      );
+      this.nodes.set(node.id, { node, mesh, ring, badge, health, label });
     }
     this.edges = scene.edges.filter((e) => this.nodes.has(e.from) && this.nodes.has(e.to));
     this.owner = this.edges.flatMap((e, i) => Array<number>(e.dashed ? DASHES : 1).fill(i));
@@ -202,14 +242,21 @@ export class Stage implements ViewApi {
     for (const m of [this.lines, this.heads]) m.frustumCulled = false;
     this.group.add(this.lines, this.heads);
     this.onPositions();
+    this.paintLive();
   }
 
   private clear() {
+    this.clearGlows();
     for (const c of this.group.children.slice()) {
       this.group.remove(c);
       disposeObject(
         c,
-        new Set<BufferGeometry>([...Object.values(this.shapes), this.cone, this.cylinder]),
+        new Set<BufferGeometry>([
+          ...Object.values(this.shapes),
+          this.cone,
+          this.cylinder,
+          this.torus,
+        ]),
       );
     }
     this.nodes.clear();
@@ -226,9 +273,14 @@ export class Stage implements ViewApi {
       if (!p) continue;
       o.mesh.position.set(...p);
       o.ring?.position.set(...p);
+      o.health?.position.set(...p);
       const nudge = o.node.radius * 0.8;
       o.badge?.position.set(p[0] + nudge, p[1] + nudge, p[2]);
       o.label.position.set(p[0], p[1] + o.node.radius + 5, p[2]);
+    }
+    for (const [id, g] of this.glows) {
+      const p = this.positions.map.get(id);
+      if (p) g.position.set(...p);
     }
     const a = new Vector3();
     const b = new Vector3();
@@ -280,18 +332,87 @@ export class Stage implements ViewApi {
     this.invalidate();
   };
 
+  // --- live ----------------------------------------------------------------------------
+
+  setLive(live: LiveState | undefined): void {
+    this.live = live;
+    this.paintLive();
+  }
+
+  private clearGlows() {
+    for (const g of this.glows.values()) {
+      this.glowGroup.remove(g);
+      // The sphere is the stage's own, shared by every shell; only the materials are the glow's.
+      disposeObject(g, new Set<BufferGeometry>([this.sphere]));
+    }
+    this.glows.clear();
+  }
+
+  /** Heat is a soft halo, each running call a shell in its own accent, a failure a red wireframe. */
+  private paintLive() {
+    this.clearGlows();
+    if (this.disposed || !this.live) return;
+    const style = getComputedStyle(this.host);
+    const fg = style.color || "gray";
+    const shell = (colour: string, radius: number, opacity: number, wireframe: boolean) => {
+      const m = new Mesh(
+        this.sphere,
+        new MeshBasicMaterial({
+          color: colour,
+          transparent: true,
+          opacity,
+          wireframe,
+          depthWrite: false,
+        }),
+      );
+      m.scale.setScalar(radius);
+      return m;
+    };
+    for (const [id, lit] of this.live.lit) {
+      const o = this.nodes.get(id);
+      if (!o) continue;
+      const r = o.node.radius;
+      const g = new Group();
+      if (lit.heat > 0) {
+        const hue = resolveRole(o.node.color, style, fg);
+        g.add(shell(hue, r * (1.4 + lit.heat), 0.12 + 0.35 * lit.heat, false));
+      }
+      lit.accents.forEach((slot, i) => {
+        const accent = accentOf(slot);
+        const hue = resolveRole(accent.color, style, fg);
+        // The second four accents are wireframes, as the 2D view draws them dashed.
+        g.add(shell(hue, r * (1.5 + 0.3 * i), accent.dash ? 0.9 : 0.35, !!accent.dash));
+      });
+      if (lit.failed) g.add(shell(resolveRole(ALERT_ROLE, style, "red"), r * 1.8, 0.9, true));
+      const p = this.positions.map.get(id);
+      if (p) g.position.set(...p);
+      this.glowGroup.add(g);
+      this.glows.set(id, g);
+    }
+    this.invalidate();
+  }
+
   // --- camera --------------------------------------------------------------------------
 
-  private bounds(): { center: Vector3; radius: number } | null {
+  private bounds(ids = this.framed): { center: Vector3; radius: number } | null {
+    const held = ids?.length ? new Set(ids) : null;
     const pts = [...this.nodes.values()]
+      .filter((o) => !held || held.has(o.node.id))
       .map((o) => ({ p: this.positions.map.get(o.node.id), r: o.node.radius }))
       .filter((x): x is { p: [number, number, number]; r: number } => !!x.p);
-    if (!pts.length) return null;
-    const center = new Vector3();
-    pts.forEach(({ p }) => center.add(new Vector3(...p)));
-    center.divideScalar(pts.length);
-    const radius = Math.max(20, ...pts.map(({ p, r }) => center.distanceTo(new Vector3(...p)) + r));
-    return { center, radius };
+    // Ids the layout has not placed yet frame nothing; the overview is better than a blank view.
+    if (!pts.length) return held ? this.bounds([]) : null;
+    const s = sphereOf(pts, 20)!;
+    return { center: new Vector3(...s.center), radius: s.radius };
+  }
+
+  /** The live camera: hold these nodes, or the whole picture when `ids` is empty. Eases unless motion is reduced. */
+  frameOn(ids: readonly number[]): void {
+    const next = ids.length ? [...ids] : undefined;
+    if (next?.join() === this.framed?.join()) return;
+    this.framed = next;
+    const b = this.bounds();
+    if (b) this.place(b.center, this.distanceFor(b.radius), this.direction(), true);
   }
 
   private place(target: Vector3, distance: number, dir: Vector3, animate: boolean) {
@@ -467,6 +588,7 @@ export class Stage implements ViewApi {
     }
     for (const o of this.nodes.values()) {
       o.label.visible = this.camera.position.distanceTo(o.mesh.position) < LABEL_FAR;
+      o.health?.quaternion.copy(this.camera.quaternion);
     }
     this.updateHover();
     this.renderer.render(this.three, this.camera);
@@ -495,6 +617,7 @@ export class Stage implements ViewApi {
     for (const g of Object.values(this.shapes)) g.dispose();
     this.cone.dispose();
     this.cylinder.dispose();
+    this.torus.dispose();
     this.renderer.dispose();
     // Dropping the context now returns GPU memory without waiting for the garbage collector.
     this.renderer.forceContextLoss();

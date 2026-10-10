@@ -69,7 +69,12 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   the project node on the overview, or the node named like its target in the one-project view: a
   ring per running call in one of eight accents, a halo for calls over the last 5 minutes and a
   red ring on a failed call; beyond eight running calls a "busy" count says how many more. Until
-  the first call the picture is dimmed and reads "Waiting for graph calls". A bar between the two
+  the first call the picture is dimmed and reads "Waiting for graph calls". The camera frames the
+  nodes of the running calls, and of calls that ended in the last 4 seconds, and eases back to the
+  whole picture when none is left (it jumps under `prefers-reduced-motion`). The "2D" and "3D"
+  buttons in the corner of the picture switch it; 3D is the same Three.js view as part 1 without
+  orbit or picking, with a halo for heat, a shell per running call and a red wireframe for a
+  failure, and falls back to 2D with a notice when WebGL is not available. A bar between the two
   parts resizes them (drag, arrow keys, double-click for 50/50) and is remembered; "Hide live
   graph" hides the picture and ends the `/ws` subscription, and is remembered too. The page
   subscribes only while the live graph is shown. Below it: running calls, calls and failures, tokens sent, tokens without rtok and saved,
