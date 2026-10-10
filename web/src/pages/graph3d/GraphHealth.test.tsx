@@ -119,7 +119,10 @@ describe("health on the graph page", () => {
     test("the 2D view rings every node and names the score on it", async () => {
         page();
         await screen.findByText(/3D view unavailable/);
-        const rings = await screen.findAllByTestId("health-2d");
+        // The read-only live canvas (T329.27) draws the same nodes, rings included.
+        const rings = (await screen.findAllByTestId("health-2d")).filter((r) =>
+            r.closest('[data-testid="node-2d"]'),
+        );
         expect(rings.map((r) => r.getAttribute("data-level"))).toEqual([
             "good",
             "warn",
