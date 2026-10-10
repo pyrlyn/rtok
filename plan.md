@@ -51,7 +51,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
-| T329.24 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T329.23 | todo | P2 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -862,14 +861,6 @@ Check: a fully indexed A with LSP and intact links scores 100; 30% of files pend
 The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a project badge on every row of the graph page lists (dead symbols, pending files), shown once those lists are scoped to the selected project and its linked projects, so a row says which project it came from. Depends on T329.4, T329.5, T329.20.
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
-
-### T329.24. Graph page: show each project's capability record
-
-Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
-
-Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
-
-Execution plan: add a backend tag to the current-project block in `web/src/pages/Projects.tsx` (logic in `projectLogic.ts`, fixtures in `sampleRows.ts`, Vitest in `Projects.test.tsx`, stories in `Projects.stories.tsx`); check whether the TUI shows the same page and mirror it there; update the projects section of `docs/commands.md` in en, ru, uk; verify with `just js`, `just spa-typecheck`, vitest, `just spa-stories`, `just spa-e2e`, `just check`.
 
 ### T329.23. Graph drill-down: side panel and search
 
