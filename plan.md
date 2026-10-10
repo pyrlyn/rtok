@@ -44,7 +44,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.10 | todo | P3 | 3 | 0% | |
+| T329.10 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.11 | todo | P2 | 3 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
@@ -825,6 +825,14 @@ Check: fixture repos under `tests/fixtures`, no network:
 T329 §6a mode 3 and "when no mode works": word-boundary definition and mention searches in process with `ignore` and `regex`, the crates behind the `search` tool (T4.5; D6/D18, no spawned program), `dead` reported as not available; `ssh://` roots are out of scope (I-118), `text.*` Measurement kinds. Depends on T329.9.
 
 Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
+
+Execution plan (Claude Code / sonnet-5.5):
+
+1. `plugins/read/search.rs`: extract the size-gated, UTF-8-only file iterator out of `search` as `text_files`, so the graph reuses the T4.5 walk rules instead of copying them.
+2. New `plugins/graph/text.rs`: `applies` (mode `text`, or `auto` with no server and no grammar file under the root), `Scan` (word-boundary definition regex from the T329 §6a keywords and mention lines, walked with the graph `Matcher`), `symbol`, `callers`, `impact` (one level), `outline`, and `explore` through the shared `ExploreParts` assembler.
+3. `mod.rs`: `Mode::Text` (config value `text`), a `text_or` door in front of `lsp_or_tags` for the five tools, the `(text)` header, `text.<tool>` `Measurement` rows, `dead` reports "not available in text mode"; `scope.rs`: `plan` answers a scope per project when any member is text, `dead` skips text members with a line.
+4. `rtok-config`: accept `text` in `backend` and `backend_by_language` (validate.rs, comments, default.toml, config-init golden), docs/config.md and docs/lsp.md in en, ru, uk.
+5. Tests: no-grammar project answers `symbol`/`callers`/`impact`/`outline`/`explore` from text and records `text.*`; `dead` not available; ignore rules respected; a source-level test that `text.rs` names no process API; `mise exec -- just check`.
 
 ### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
 
