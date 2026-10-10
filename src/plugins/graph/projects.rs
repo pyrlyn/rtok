@@ -14,7 +14,7 @@ use serde::Serialize;
 use rtok_plugin_sdk::Ctx;
 
 use super::capability::{self, Capability};
-use super::{index, status};
+use super::{health, index, status};
 use crate::plugin::Runtime;
 use crate::render::{Col, table};
 use crate::store::{LinkKind, Origin, Project, Store};
@@ -56,6 +56,9 @@ pub struct ProjectRow {
     /// absent until a request under `lsp` or `auto` has checked.
     #[serde(skip_serializing_if = "Option::is_none")]
     backend: Option<Capability>,
+    /// What the health check raised for this project (T329.17); absent while nothing is wrong.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    alerts: Vec<health::Alert>,
     links: Vec<ProjectLink>,
 }
 
@@ -103,6 +106,7 @@ fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
     let backend = (!missing)
         .then(|| capability::mirrored(cx, Path::new(&p.root)))
         .flatten();
+    let alerts = health::mirrored(cx, &p.root);
     Ok(ProjectRow {
         id: p.id,
         name: p.display_name().to_string(),
@@ -115,6 +119,7 @@ fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
         last_used_at: p.last_used_at,
         index,
         backend,
+        alerts,
         links: link_rows(&rt.store, p.id)?,
     })
 }
