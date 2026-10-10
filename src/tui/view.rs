@@ -20,6 +20,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Clear, Paragraph, Row, Sparkline, Table, TableState, Tabs, Wrap};
 
 use super::app::{App, keys_for};
+use super::health;
 use super::theme::{self, ACCENT, ERR, OK, WARN};
 use crate::model::{self, PluginPage};
 use crate::store::CallRow;
@@ -448,19 +449,28 @@ fn stats(app: &App) -> Paragraph<'static> {
     Paragraph::new(text.clone())
 }
 
-/// The Graph page: the project registry with its keys (T476) above the index health text.
-/// With no registered project there is nothing for the keys to act on, so only the text shows.
+/// The Graph page: the project registry with its keys (T476) above the index health text, and
+/// the live calls pane (T480, D27) below. With no registered project there is nothing for the
+/// keys to act on, so only the text and the pane show.
 fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
+    // The pane takes a bit over half the body, capped, so the index health stays readable.
+    let live = (area.height * 55 / 100).min(18);
+    let [area, calls] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
+    app.live().render(frame, calls);
     let (rows, state) = app.projects();
     if rows.is_empty() {
         return frame.render_widget(graph_page(app), area);
     }
     // Seven rows and the header: the table scrolls to the cursor beyond that.
     let height = (rows.len() as u16 + 1).min(8);
-    let [table, note, hints, text] = Layout::vertical([
+    let detail = health::detail(&rows[state.cursor(&rows)]);
+    // Two hint lines: the project keys (T476) and the live pane's (T480) overflow one at 128 columns.
+    let [table, breakdown, note, hints, text] = Layout::vertical([
         Constraint::Length(height),
+        Constraint::Length(detail.len() as u16),
         Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(2),
         Constraint::Min(0),
     ])
     .areas(area);
@@ -471,6 +481,8 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
             Cell::from(p.name.clone()),
             Cell::from(p.state),
             Cell::from(p.links.len().to_string()),
+            health::cell(p),
+            health::scope_cell(p),
         ])
     });
     let widths = [
@@ -479,20 +491,28 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
         Constraint::Min(16),
         Constraint::Length(12),
         Constraint::Length(5),
+        Constraint::Length(8),
+        Constraint::Length(5),
     ];
     let mut cursor = TableState::default().with_selected(Some(state.cursor(&rows)));
     frame.render_stateful_widget(
         Table::new(body, widths)
-            .header(theme::header(["", "id", "project", "state", "links"]))
+            .header(theme::header([
+                "", "id", "project", "state", "links", "health", "scope",
+            ]))
             .row_highlight_style(theme::selected()),
         table,
         &mut cursor,
     );
+    frame.render_widget(Paragraph::new(detail), breakdown);
     frame.render_widget(
         Paragraph::new(Line::styled(state.note(&rows), Style::new().fg(WARN))),
         note,
     );
-    frame.render_widget(Paragraph::new(status_line("graph", "")), hints);
+    frame.render_widget(
+        Paragraph::new(status_line("graph", "")).wrap(Wrap { trim: true }),
+        hints,
+    );
     frame.render_widget(graph_page(app), text);
 }
 
@@ -728,7 +748,7 @@ fn expand_pane(
 }
 
 /// `HH:MM:SS` — `log::stamp`'s time half; the full date is in the detail view.
-fn time_of(ts: i64) -> String {
+pub(super) fn time_of(ts: i64) -> String {
     crate::log::stamp(ts.max(0) as u64)
         .rsplit_once(' ')
         .map_or_else(|| "-".into(), |(_, t)| t.to_string())

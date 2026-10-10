@@ -1597,7 +1597,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;graph;diff' {
-            [CompletionResult]::new('--from', '--from', [CompletionResultType]::ParameterName, 'Compare from this git ref')
+            [CompletionResult]::new('--from', '--from', [CompletionResultType]::ParameterName, 'Compare from this git ref (default HEAD); `PROJECT:REF` sets it for one project, repeat for more')
+            [CompletionResult]::new('--from-export', '--from-export', [CompletionResultType]::ParameterName, 'Compare from a saved `rtok graph export --level symbols` file instead of a revision')
             [CompletionResult]::new('--to', '--to', [CompletionResultType]::ParameterName, 'Compare to this git ref; `working` is the working tree')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Project id or directory instead of the cwd (see `rtok graph projects`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')

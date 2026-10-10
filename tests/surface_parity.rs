@@ -256,6 +256,54 @@ fn graph_page_exists_on_both_surfaces() {
     );
 }
 
+/// T480 (D27): the live calls view is on both surfaces, fed by one reader of `graph_events` and
+/// one aggregation: the page folds the `calls` stream in `callsStore.ts`, the TUI folds the same
+/// batches in its Rust port, and the pane drives the web's `Reader` instead of opening its own.
+#[test]
+fn live_calls_view_exists_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web_store = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/live/callsStore.ts"
+    ));
+    let web_live = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/live.rs"));
+    let port = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/web/calls_store.rs"
+    ));
+    let pane = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/live_calls.rs"
+    ));
+    // The pane's own tests open a store to feed the poller; only the code above them counts.
+    let pane = pane.split("#[cfg(test)]\nmod tests").next().unwrap();
+    for part in ["fold", "sweep", "windowTotals", "filterFeed"] {
+        assert!(web_store.contains(part), "the page's store has `{part}`");
+    }
+    assert!(
+        web_live.contains("pub struct Reader") && web_live.contains("Reader::open"),
+        "the web poller reads through the shared Reader"
+    );
+    for part in [
+        "pub fn fold",
+        "pub fn sweep",
+        "pub fn window_totals",
+        "pub fn filter_feed",
+    ] {
+        assert!(port.contains(part), "the Rust port has `{part}`");
+    }
+    assert!(
+        pane.contains("Reader::open")
+            && pane.contains("CallsStore")
+            && !pane.contains("Store::open"),
+        "the TUI pane reads through the web's Reader and folds with the web module's store"
+    );
+    assert!(
+        app.contains("(\"graph\", \"f\", \"freeze/unfreeze calls\")"),
+        "the TUI's KEYS table documents the freeze key"
+    );
+}
+
 /// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page
 /// of both surfaces, each through the one `graph projects` function — the web by
 /// `ClientMessage::Project`, the TUI by keys over the same `ProjectRequest` and
@@ -286,6 +334,37 @@ fn project_writes_exist_on_both_surfaces() {
     assert!(
         app.contains("crate::web::project_write"),
         "the TUI writes through the web page's function, not a second one"
+    );
+}
+
+/// T481 (D27): the graph health score is on the Graph page of both surfaces, from the one
+/// `ProjectRow.health` and `scope_health` the registry carries. Both colour a project by the
+/// server's `level`; only the scope's bare number is banded locally, the web by `levelOf` and the
+/// TUI by `score::level_of`. A surface that drops the score, its breakdown or the scope fails here.
+#[test]
+fn graph_health_score_exists_on_both_surfaces() {
+    let web = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/health.ts"
+    ));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/health.rs"));
+    let projects = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/projects.rs"));
+    assert!(
+        web.contains("levelOf") && web.contains("s.level"),
+        "the web page colours by the server's level"
+    );
+    for needle in [
+        "p.health.level",
+        "p.scope_health",
+        "h.components",
+        "h.reasons",
+        "level_of",
+    ] {
+        assert!(tui.contains(needle), "the TUI graph page lacks {needle}");
+    }
+    assert!(
+        projects.contains("p.health.clone()") && projects.contains("p.scope_health"),
+        "the TUI reads the snapshot's rows, not a second store read"
     );
 }
 
@@ -654,7 +733,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ("graph review", "need a diff; CLI only"),
     (
         "graph diff",
-        "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
+        "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.35",
     ),
     (
         "graph export",

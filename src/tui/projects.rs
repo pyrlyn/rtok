@@ -21,6 +21,11 @@ pub(super) struct Entry {
     pub missing: bool,
     pub state: &'static str,
     pub links: Vec<(i32, String)>,
+    /// The server's score, painted as it came (T481); with `graph` off there are no rows.
+    #[cfg(feature = "graph")]
+    pub health: crate::plugins::graph::health::score::Score,
+    #[cfg(feature = "graph")]
+    pub scope_health: Option<u8>,
 }
 
 #[cfg(feature = "graph")]
@@ -36,6 +41,8 @@ pub(super) fn entries(snapshot: &Snapshot) -> Vec<Entry> {
             missing: p.missing,
             state: p.state,
             links: p.links.iter().map(|l| (l.to, l.name.clone())).collect(),
+            health: p.health.clone(),
+            scope_health: p.scope_health,
         })
         .collect()
 }

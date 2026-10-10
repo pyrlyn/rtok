@@ -156,8 +156,9 @@ const ALLOW_KEYS: &[&str] = &[
     "graph.projects.link.reason",
     "graph.projects.unlink.from",
     "graph.projects.unlink.both",
-    // `graph diff --from/--to` (T329.18): which two revisions one call compares, not stored settings.
+    // `graph diff --from/--from-export/--to` (T329.18, T329.29): which two revisions or saved export one call compares, not stored settings.
     "graph.diff.from",
+    "graph.diff.from_export",
     "graph.diff.to",
     "graph.diff.project",
     // `graph export` (T329.16): what one export contains and where it goes, not stored settings.

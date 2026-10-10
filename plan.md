@@ -48,7 +48,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.32 | todo | P3 | 3 | 0% | |
 | T329.33 | todo | P3 | 4 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
-| T329.29 | todo | P3 | 4 | 0% | |
+| T329.35 | todo | P3 | 4 | 0% | |
 | T329.40 | todo | P3 | 4 | 0% | |
 | T329.41 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -94,9 +94,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T479 | todo | P3 | 2 | 0% | |
-| T481 | todo | P3 | 2 | 0% | |
-| T480 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
+| T485 | todo | P3 | 3 | 0% | |
 
 
 
@@ -836,11 +835,11 @@ What is left of T329 §8b after T329.28 that needs the store or the config: a ca
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
 
-### T329.29. Graph page: Compare mode and the remaining diff reports
+### T329.35. Graph page: Compare mode
 
-The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (the reader is `export::read` from T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+The page half of T329 §8e, split from T329.29 at claim time (the backend half filled its own cap). T329.29 shipped `--from PROJECT:REF`, `--from-export FILE`, the registry link diff (against an export only) and the `changed, not analysed` listing in `src/plugins/graph/diff.rs`; `diff::run` with `Query { json: true, .. }` already returns every row. Here: a "Compare" mode in part 1 that colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel (including `changed, not analysed`) and leaves the live graph unaffected. The page asks the server for the diff over `/ws` (a new `ClientMessage` and `ServerFrame` in `src/web/protocol.rs`, answered by `diff::run` on the same revisions the CLI takes, with the cap), never recomputes it, and can open a saved export as the old side (the file is read by the server from a path the user typed, never from a model). The schema file `web/src/api/ws.schema.json` and `snapshot.gen.ts` are regenerated. D27: the TUI counterpart is T485. Docs in en, ru, uk. Depends on T329.29, T329.22.
 
-Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`; `just check`.
 
 ### T329.40. Graph page: Export menu and read-only import view
 
@@ -1210,23 +1209,17 @@ T330.7 shipped the web button (`ClientMessage::Junk { junk: JunkRequest { action
 
 Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
 
-### T481. TUI: graph health score per project
-
-T329.19 puts `ProjectRow.health` and `ProjectRow.scope_health` into `rtok graph projects`, `--json` and `/ws`; D27 (amended 2026-10-10, T346) requires the TUI to show them too, and the TUI `Model.projects` already carries both fields. Depends on T329.19. Done means: the TUI projects view shows each project's score (or `indexing` / `missing`) with the same colour bands as the page (green 80 and up, amber 50 to 79, red below 50), the selected project's breakdown (the three components, the reasons and their fixes) and the scope's lowest score.
-
-Check: a TUI render test on fixture rows at 100, 60 with two reasons, `indexing` and `missing`; `tests/surface_parity.rs` lists the score on both surfaces; `just check`.
-
-### T480. TUI: live graph calls panel
-
-T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26 and T483.
-
-Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
-
 ### T484. Web live panel reads the server's calls totals
 
 T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
 
 Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
+
+### T485. TUI: graph diff and compare view
+
+T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 puts the same report on the web graph page as Compare mode. D27 (amended 2026-10-10, T346) requires the TUI to show it too. Depends on T329.35. Done means: the TUI graph page has a compare view that calls `diff::run` (no second diff path) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
+
+Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed, a removed, an added and a moved symbol; `tests/surface_parity.rs` lists the compare view on both surfaces; `just check`.
 
 ## Reference
 

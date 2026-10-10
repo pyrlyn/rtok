@@ -66,7 +66,7 @@ impl Matcher {
         b
     }
 
-    fn is_excluded(&self, path: &Path) -> bool {
+    pub(super) fn is_excluded(&self, path: &Path) -> bool {
         let rel = path
             .strip_prefix(&self.root)
             .unwrap_or(path)
@@ -78,7 +78,7 @@ impl Matcher {
         })
     }
 
-    fn has_supported_ext(&self, path: &Path) -> bool {
+    pub(super) fn has_supported_ext(&self, path: &Path) -> bool {
         outline::supported_with(path, &self.extensions)
     }
 

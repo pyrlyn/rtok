@@ -22,7 +22,7 @@
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 - T329.33. Graph page: call metrics from the events (latency, symbols, files, projects, fallbacks)
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
-- T329.29. Graph page: Compare mode and the remaining diff reports
+- T329.35. Graph page: Compare mode
 - T329.40. Graph page: Export menu and read-only import view
 - T329.41. TUI: graph export action
 - T356. Never index `$HOME` or `/` as a graph root
@@ -72,6 +72,5 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T479. TUI: clear safe junk with plan and confirm
-- T481. TUI: graph health score per project
-- T480. TUI: live graph calls panel
 - T484. Web live panel reads the server's calls totals
+- T485. TUI: graph diff and compare view

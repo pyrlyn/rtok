@@ -61,12 +61,36 @@ pub struct ProjectRow {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     alerts: Vec<health::Alert>,
     /// The 0 to 100 health score with its components, reasons and fixes (T329.19).
-    health: Score,
+    pub health: Score,
     /// The lowest score in this project's scope (itself and what it links to); absent while
     /// every member is still on its first index.
     #[serde(skip_serializing_if = "Option::is_none")]
-    scope_health: Option<u8>,
+    pub scope_health: Option<u8>,
     pub links: Vec<ProjectLink>,
+}
+
+impl ProjectRow {
+    /// A row with only what the TUI paints, for render tests that must not index a project.
+    #[cfg(test)]
+    pub(crate) fn fixture(id: i32, name: &str, health: Score, scope_health: Option<u8>) -> Self {
+        Self {
+            id,
+            name: name.into(),
+            root: format!("/{name}"),
+            origin: Origin::Manual,
+            selected: false,
+            missing: health.level == score::Level::Missing,
+            state: "indexed",
+            created_at: 0,
+            last_used_at: 0,
+            index: None,
+            backend: None,
+            alerts: Vec::new(),
+            health,
+            scope_health,
+            links: Vec::new(),
+        }
+    }
 }
 
 fn link_rows(store: &Store, from: i32) -> Result<Vec<ProjectLink>> {

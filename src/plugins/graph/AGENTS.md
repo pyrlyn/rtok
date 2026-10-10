@@ -50,7 +50,9 @@
   tokens, not 150). The old side is read from git's object database (`ls-tree`, one `cat-file --batch`), parsed
   by `index::rows_of` and kept in memory: no checkout, no second store, no write. Only files git reports as
   different are compared. Callers come from the current index of the whole scope. It needs the store's scans,
-  so `mcp.rs` routes it to `diff::call` and not through `graph::call`.
+  so `mcp.rs` routes it to `diff::call` and not through `graph::call`. T329.29: `--from PROJECT:REF` picks a ref
+  per project (`Refs`), `--from-export` builds a names-only old side (`Src::Names`: no signatures, so no changes or
+  edges) and compares registry links through `export::collect`; MCP never takes an export path (a model chose it).
 - `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured). `draw.rs` (T329.31) draws an `Export` as SVG and rasterises it to PNG (`resvg`); it reads nothing but the `Export`, so a saved file draws the same picture, and the MCP tool stays JSON.
   One `Export` (the `rtok.graph.v1` types, schema committed at `docs/schemas/rtok.graph.v1.schema.json` and checked
   by `committed_schema_is_current`) is built from `projects::row` and the store's def/ref scans, or read back by

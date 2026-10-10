@@ -707,7 +707,8 @@ complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcomm
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from review" -l staged -d 'Staged files only (`git diff --cached --name-only`)'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from review" -l json -d 'JSON instead of the text list'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from review" -s h -l help -d 'Print help'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l from -d 'Compare from this git ref' -r
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l from -d 'Compare from this git ref (default HEAD); `PROJECT:REF` sets it for one project, repeat for more' -r
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l from-export -d 'Compare from a saved `rtok graph export --level symbols` file instead of a revision' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l to -d 'Compare to this git ref; `working` is the working tree' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l project -d 'Project id or directory instead of the cwd (see `rtok graph projects`)' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F

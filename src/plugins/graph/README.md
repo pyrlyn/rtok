@@ -64,3 +64,5 @@ side read from git's object database); the surface is then 155 description token
 T329.16 added `rtok graph export` and the seventh tool `graph_export` (the graph as redacted `rtok.graph.v1`
 JSON, schema in `docs/schemas/`); the surface is then 165 description tokens, gate 170. T329.31 added `--format svg|png` to the command (`draw.rs`);
 the MCP tool stays JSON.
+T329.29 gave `graph diff` a `--from` per project (`PROJECT:REF`), `--from-export FILE` (added and removed symbols and
+registry links against a saved export; CLI only), and the `changed, not analysed` listing.
