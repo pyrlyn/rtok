@@ -62,6 +62,16 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
   is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
   updates in place without moving the scene.
+- **Live graph calls.** Below the explorer the page lists what the graph tools are doing, from the
+  calls arriving on `/ws` (it subscribes while the page is open, and until the first call it
+  shows "Waiting for graph calls"). Running calls, calls and failures, tokens sent, tokens without rtok and saved,
+  per-tool bars and backend shares, over the last 1, 5 or 15 minutes or since the page opened.
+  Totals come from each frame's `summary` and the `graph` measurement rows, so a window equals
+  `rtok stats` over the same calls (the per-tool bars and backend shares cover the calls a frame
+  lists). "Freeze" holds the picture and counts what arrives meanwhile; "Unfreeze" catches up
+  with every call. The feed keeps the newest 200 finished calls, can be filtered by caller (the
+  session id), tool and project, shows failed calls in red and marks a call that never ended
+  after two minutes as interrupted.
 - **Alerts.** When the health check (see [LSP backend](lsp.md#health-check-and-alerts)) raises an alert for a
   project, its node carries a red badge in both levels (a red marker in 3D, and the word `alert` in
   the list and the tooltip), and so does every link into it and every outlined symbol of that

@@ -102,6 +102,19 @@ export class Rtok {
       JSON.stringify({ hook_event_name: "SessionStart", session_id: "e2e", cwd: this.home }),
     );
     const body = Array.from({ length: 6000 }, (_, i) => `line ${i} NEEDLE-${i}`).join("\n");
+    // Aged past the one-minute settle window, or `clear` would keep them as in use.
+    mkdirSync(join(this.home, "logs"), { recursive: true });
+    const old = new Date(Date.now() - 2 * 86_400_000);
+    for (const name of STALE_LOGS) {
+      writeFileSync(this.logPath(name), "stale");
+      utimesSync(this.logPath(name), old, old);
+    }
+    const reply = this.mcp("mem_save", { title: "fixture", body, kind: "note" });
+    if (!reply.includes('"isError":false')) throw new Error("fixture mem_save failed");
+  }
+
+  /** One tool call through `rtok mcp` on stdio, the way another process of the same store would make it. */
+  mcp(name: string, args: Record<string, unknown>) {
     const rpc = [
       {
         jsonrpc: "2.0",
@@ -119,20 +132,12 @@ export class Rtok {
         id: 2,
         method: "tools/call",
         params: {
-          name: "mem_save",
-          arguments: { title: "fixture", body, kind: "note" },
+          name,
+          arguments: args,
         },
       },
     ];
-    // Aged past the one-minute settle window, or `clear` would keep them as in use.
-    mkdirSync(join(this.home, "logs"), { recursive: true });
-    const old = new Date(Date.now() - 2 * 86_400_000);
-    for (const name of STALE_LOGS) {
-      writeFileSync(this.logPath(name), "stale");
-      utimesSync(this.logPath(name), old, old);
-    }
-    const reply = this.run(["mcp"], rpc.map((m) => JSON.stringify(m)).join("\n"));
-    if (!reply.includes('"isError":false')) throw new Error("fixture mem_save failed");
+    return this.run(["mcp"], rpc.map((m) => JSON.stringify(m)).join("\n"));
   }
 
   async start() {
