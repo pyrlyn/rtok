@@ -29,13 +29,6 @@
 - T329.22. Graph page level 2: the drill-down view (SPA)
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.6. Junk: item breakdown, `doctor` line, web card
-- T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
-- T343. Investigate: T330 `--sort` takes two different value sets on `list`
-- T344. Investigate: T330 "backwards compatible" vs new default deletions
-- T345. Investigate: ProgressRunner in the rtok crate vs `crates/rtok-mcp` with no rtok dependency
-- T346. Investigate: D27 "writing commands stay CLI-only" vs web write actions
-- T347. Investigate: D16 "one task = one PR" vs multi-PR execution plans
-- T348. Investigate: `--agent` means an agent id, a host, or both
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
@@ -81,3 +74,7 @@
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
+- T476. TUI: select, link and unlink projects on the graph page
+- T477. TUI: re-index and remove projects (counterpart of the web actions)
+- T478. TUI: doctor fix with plan and confirm
+- T479. TUI: clear safe junk with plan and confirm

@@ -55,13 +55,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.22 | todo | P2 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
-| T335 | todo | research | 1 | 0% | |
-| T343 | todo | research | 1 | 0% | |
-| T344 | todo | research | 1 | 0% | |
-| T345 | todo | research | 1 | 0% | |
-| T346 | todo | research | 1 | 0% | |
-| T347 | todo | research | 1 | 0% | |
-| T348 | todo | research | 1 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -103,6 +96,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
+| T476 | todo | P3 | 2 | 0% | |
+| T477 | todo | P3 | 3 | 0% | |
+| T478 | todo | P3 | 3 | 0% | |
+| T479 | todo | P3 | 2 | 0% | |
 
 
 
@@ -224,6 +221,7 @@ Execution plan (lands before T277; T277 then moves the core into its crate):
 3. PRs B-D, the other affected hosts in groups of at most 10 files: Copilot and Gemini (`d21_plugin_apply`); Cursor, Codex, VS Code; ZCode, Kimi, Grok. Each deletes that host's MCP branch and adds its table rows to the shared Vfs test.
 4. PR E: `doctor` warning (Fix 5), re-bless `docs/agents.md` and README MCP rows, then the creator-machine Check.
 Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. Left: PR E.
+Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 
@@ -273,7 +271,7 @@ No spinner needed (checked, with the reason):
 - Returns in milliseconds: `demon.rs:603` (`sysctl`), `bench.rs:88` (`sh` probe), `graph/lsp.rs:21,32` (`on_path`, `rustup which`), `graph/mod.rs:755` (`git diff --name-only`).
 
 Architecture: one `ProgressRunner` for every external command (replaces adding spinners site by site):
-- Where it lives: a new module `src/proc/` (`mod.rs` for the runner, `indicator.rs`, `parse.rs`). It is the only place in rtok that calls `std::process::Command::new`; `clippy.toml` gets `disallowed-methods = ["std::process::Command::new"]` with an `#[allow]` only inside `src/proc/`, so a new call site that bypasses the runner fails `just check`. The Windows shim logic now in `spawn_cli` (`agents/mod.rs:246`) and `mcp_command` (`doctor.rs:932`) moves into the runner too.
+- Where it lives: a `proc` module (`mod.rs` for the runner, `indicator.rs`, `parse.rs`) in the existing crate `crates/rtok-sys` (OS process shims), which both `rtok` and `crates/rtok-mcp` (T277) depend on, so the MCP crate needs neither the `rtok` crate nor its own `Command::new`; no new crate. It is the only place in the workspace that calls `std::process::Command::new`; `clippy.toml` gets `disallowed-methods = ["std::process::Command::new"]` with an `#[allow]` only inside `crates/rtok-sys`, so a new call site that bypasses the runner, in `rtok` or in `crates/`, fails `just check`. `TtyIndicator`'s `indicatif` dependency moves to that crate with its `toolchain.md` row. The Windows shim logic now in `spawn_cli` (`agents/mod.rs:246`) and `mcp_command` (`doctor.rs:932`) moves into the runner too.
 - Interface:
   - `ProgressRunner::new(label: &str, program, args)` returns a builder with `.cwd()`, `.env()`, `.stdin()`, `.timeout()`, `.progress(Progress)`, `.output(Output)`, then `.run() -> Result<Captured>` or `.spawn() -> Result<Running>`.
   - `enum Output { Capture, Stream, Inherit, Detached }`. `Capture` keeps stdout/stderr and shows an indicator until exit; `Stream` forwards lines live and suspends the indicator around each write; `Inherit` hands the terminal to the child (`tspin`, `ketch` upgrade) with no indicator; `Detached` is for background children (demon, otel flush, deferred hook) with no indicator.
@@ -287,7 +285,7 @@ Architecture: one `ProgressRunner` for every external command (replaces adding s
 - Result: a new host, plugin CLI or subcommand that runs a program through `ProgressRunner` gets the right indicator with no extra code; the point fixes 1-5 above become one-line `label` / `progress` / `output` choices.
 
 Migration plan:
-1. Add `src/proc/` with the runner, both indicators, the four parsers and `Batch`; unit tests feed recorded `git` / `cargo` / `curl` stderr into the parsers, and a test asserts `Hidden` writes nothing.
+1. Add the `proc` module in `crates/rtok-sys` with the runner, both indicators, the four parsers and `Batch`; unit tests feed recorded `git` / `cargo` / `curl` stderr into the parsers, and a test asserts `Hidden` writes nothing.
 2. Move the shared helpers first: `worktree/git.rs::git`, `agents/mod.rs::run_cli` / `spawn_cli` / `app_version`, `doctor.rs::spawn_mcp` / `mcp_command`. That converts most user-facing sites at once.
 3. Convert the remaining sites file by file, choosing `Output` per the audit: `agents/restart.rs` (10, `Capture`), `bench.rs` (3, `Batch` plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture` per step 1), `graph/lsp.rs` and `graph/mod.rs` (`Capture`, long-lived LSP children via `.spawn()`), `graph/watch.rs` (`Capture`, hidden in the watcher), `demon.rs` (`Detached` for children, `Inherit` for upgrade, `Capture` for `sysctl`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). `build.rs` stays on `Command` (build scripts cannot use the crate) and is the one listed exception.
 4. Delete the point indicators: `with_loader` and the T81 `interactive` switch in `cli.rs`, and `render::loader` / `render::spinner` once `graph index` uses a `Batch` over files. `render.rs` keeps only styles.
@@ -305,16 +303,17 @@ Check: on a TTY, each of items 1-5 shows its message from the moment the process
 
 Execution plan (after T275, T277 and T279, which touch the same `agents` spawn helpers):
 1. Worktree `_worktrees/rtok-T276`. Confirm the audit with `rg` over the workspace and write the site table into this card (Fix 1).
-2. PR 1: `src/proc/` with `ProgressRunner`, `TtyIndicator` / `Hidden`, the four parsers, `Batch`, `proc::suspend`; parser tests on recorded stderr and a no-bytes test for `Hidden`.
+2. PR 1: the `proc` module in `crates/rtok-sys` with `ProgressRunner`, `TtyIndicator` / `Hidden`, the four parsers, `Batch`, `proc::suspend`; parser tests on recorded stderr and a no-bytes test for `Hidden`.
 3. PR 2: the shared helpers (`worktree/git.rs::git`, `run_cli` / `spawn_cli` / `app_version`, `spawn_mcp` / `mcp_command`), with `proc::suspend` replacing the T81 switch.
 4. PRs 3-4: the remaining sites file by file, per the audit's `Output` choice.
 5. PR 5: delete `with_loader` / `render::loader` / `render::spinner`, turn on the `clippy.toml` ban, contributor docs and `CHANGELOG.md`.
+Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 
 Problem: install, update, remove, status and ping of rtok's MCP entry are written separately in each host (`register_mcp` / `unregister_mcp` / `installed` in 20+ `src/agents/<host>/mod.rs`, plus `plugin_is_mcp`, `code_serves_mcp`, `installed_mcp_only` and the MCP half of `d21_plugin_apply`). That is how the Claude Desktop entry removal (T275) was repeated on Cursor, Codex, VS Code, ZCode, Kimi, Grok, Copilot and Gemini. T275's architecture principle states the rule; this task makes it a crate boundary so a host cannot grow its own MCP logic again.
 
-Crate layout (`crates/rtok-mcp`, workspace member, not published, no dependency on the `rtok` crate):
+Crate layout (`crates/rtok-mcp`, workspace member, not published, no dependency on the `rtok` crate; it depends on `rtok-sys` for T276's `ProgressRunner`):
 - `spec.rs`: `McpSpec` (the per-host data from T275): config path(s) per surface, format (`Json`, `Jsonc`, `Toml`), key path (`mcpServers`, `servers`, `context_servers`, `mcp.servers`, `mcp_servers`), server name, command form (bare or absolute), entry shape (`type`, `args`, `env`), duplicate-name behaviour (`Merges`, `OverridesByScope`, `Errors`, `ShowsBoth`), plugin-served name, headless ping command. `Surface { Cli, Desktop, Ide }`.
 - `registry.rs`: the one list of rtok's MCP servers (today `rtok`, plus graph or plugin servers when they get their own entry): name, command, args, env. Hosts never build an entry by hand.
 - `config.rs`: read and write the host config through a `Fs` trait (so the existing `Vfs` tests plug in): `write_entry`, `remove_entry`, `read_entry`, keeping unrelated keys, comments in JSONC and TOML formatting, with a backup like today.
@@ -323,7 +322,7 @@ Crate layout (`crates/rtok-mcp`, workspace member, not published, no dependency 
 - `doctor.rs`: the per-host MCP check `rtok doctor` runs (entry present, command resolves, server starts, `tools/list` answers).
 - `ops.rs`: `apply(spec, Mode::{Install, Update, Remove}, fs) -> Report`, the only entry point hosts call.
 
-What moves: from `src/agents/mod.rs` the MCP read/write helpers, `installed_mcp_only`, the MCP half of `d21_plugin_apply`; from every host its `register_mcp` / `unregister_mcp` and the MCP branch of `installed`; `plugin_is_mcp` (cursor) and `code_serves_mcp` (claude); from `src/doctor.rs` the MCP probe (`spawn_mcp`, `mcp_command`, using T276's `ProgressRunner` for the spawn); the `ping` tool body for T275.1. What stays in `rtok`: hooks, proxy, plugin install via host CLIs, desktop restart, and each host's `McpSpec` value.
+What moves: from `src/agents/mod.rs` the MCP read/write helpers, `installed_mcp_only`, the MCP half of `d21_plugin_apply`; from every host its `register_mcp` / `unregister_mcp` and the MCP branch of `installed`; `plugin_is_mcp` (cursor) and `code_serves_mcp` (claude); from `src/doctor.rs` the MCP probe (`spawn_mcp`, `mcp_command`, using T276's `ProgressRunner` from `crates/rtok-sys` for the spawn, so the crate never calls `Command::new` itself); the `ping` tool body for T275.1. What stays in `rtok`: hooks, proxy, plugin install via host CLIs, desktop restart, and each host's `McpSpec` value.
 
 Migration by host:
 1. Create the crate with `spec`, `registry`, `config`, `status`, `ops` and a table-driven `Vfs` test over sample specs. No host uses it yet.
@@ -341,6 +340,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 3. PRs 3-4: the other hosts, one commit per host, at most 10 files per PR.
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
+Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
@@ -433,6 +433,7 @@ Execution plan:
 2. PR 2: version file and receipt types, the installed/new version lookup, and the pure decision function with its unit tests (step 8, first two groups). No behaviour change yet.
 3. PR 3: `agents update` uses the decision; `--force`, `--dry-run`, `--source`, the legacy path, failure handling; integration tests in `tests/plugin_versions.rs` with a fake host CLI.
 4. PR 4: `docs/plugin-versions.md` with real command output, and its links (step 7).
+Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 Progress (2026-09-28): PRs 1-4 merged (docs: #465, today's behaviour). Open against this card, for the creator: the installed copy's `.rtok-plugin-version` is never read or written (`read_installed` and `VersionFile::write` are unused), so there is no legacy line from it; a missing `claude` on `PATH` prints "already current"; the dry-run reinstall wording differs from step 5; `--source local` fails from a release install; the marketplace source does not read the catalog. Only Claude is wired; Codex, Copilot and Gemini follow.
 
 
@@ -466,6 +467,7 @@ Check: hook fixture test: SessionStart output carries the line and it is identic
 Execution (2026-09-27): two PRs. PR 1, cut on top of T282's branch until #439 merges: the SessionStart line (step 2) inside the injection budget; `RTOK_AGENT_ID` through `CLAUDE_ENV_FILE` (step 3, cited from the Claude Code hooks docs); `rtok agents whoami [--json]` from `RTOK_AGENT_ID` (step 5); tests: hook fixture byte-stable but for the id, `enabled = false` prints nothing, trycmd, `surface_parity`, `config_coverage`, man page. PR 2, after T281's rules and T275's per-host PRs land: `rtok mcp` resolves its agent at `initialize`, `--host <id>` in every host's MCP entry, hook-less hosts register through MCP, MCP tool `whoami`; MCP e2e with a fake client.
 Progress (2026-09-28): PR 1 merged (#449): SessionStart line, `RTOK_AGENT_ID`, `rtok agents whoami` (host session id only in `--json`). Left: PR 2, the MCP link at `initialize` after T281's probe.
 Progress (2026-10-03): PR 2 is split into T283.1 (resolve the link, MCP `whoami`, `rtok mcp --host`), T283.2 (`--host` in every host's MCP entry) and T283.3 (the ancestor-pid rule, which needs the hook wire request to carry a pid). The link rule is derived from `research.md` §26's vendor docs and spawn code; the T281 live probe only confirms it.
+Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 
@@ -602,12 +604,12 @@ Backends are chosen per project and per language, not once per process: in a sco
 **Mode 3: plain text search (last resort).**
 
 - Used when neither LSP nor a tree-sitter grammar is available for the project (for example a language rtok has no grammar for).
-- Runs plain text search through the shell: `rg` (ripgrep) when present, `grep -rn` otherwise, with word-boundary patterns built from the symbol name and simple per-language definition patterns (`fn name`, `def name`, `function name`, `class name`, `func name`). For a project whose root is on another machine (registered as `ssh://host/path`), the same commands run over `ssh host` with the same arguments; the SSH host must already be reachable without a prompt (key or agent), otherwise the mode is reported as not working.
+- Searches in process with the crates rtok already uses for its `search` tool (`ignore` for the walk and the ignore rules, `regex` for the matching; T4.5), so no `rg`, `grep` or `ssh` is spawned (D6, D18), with word-boundary patterns built from the symbol name and simple per-language definition patterns (`fn name`, `def name`, `function name`, `class name`, `func name`). Roots are local paths; `ssh://` roots are not supported (ideas.md I-118).
 - Answers are best effort: `symbol` returns matching definition lines, `callers` returns lines that mention the name outside its definition, `outline` returns definition-pattern matches in the file, `impact` is limited to one level, and `dead` is not offered (the page and the tool say "not available in text mode" instead of guessing).
 - Every text-mode result says it came from text search and may include false positives (comments, strings, same-named symbols). Output is capped the same way as other modes.
 - Respects `.gitignore` and the project's ignore settings; never searches outside the project roots in the scope.
 
-**When no mode works.** If all three fail for a project (no server, no grammar, no `rg`/`grep`, or SSH unreachable), that project is dropped from the answer with one clear line ("project B: no graph backend available: ...") and the other projects still answer. If it is the only project, the tool returns that error.
+**When no mode works.** If all three fail for a project (no server, no grammar, or the root cannot be read), that project is dropped from the answer with one clear line ("project B: no graph backend available: ...") and the other projects still answer. If it is the only project, the tool returns that error.
 
 **Which mode answered.** Every result says which mode answered for each project (page: a small LSP / tree-sitter / text tag next to the project badge; JSON: `backend` per project; text output: one header line). `Measurement` rows keep `kind = "lsp.*"` for LSP and gain `tags.*` and `text.*` kinds, so `rtok stats` shows how often each mode is used.
 
@@ -617,7 +619,7 @@ Backends are chosen per project and per language, not once per process: in a sco
 
 Decision (2026-10-09, creator, T337): requests never probe; only the §8d background health check re-probes, so a backend-down or unreachable alert can clear without a restart while the request path keeps zero probes.
 
-- The first graph request for a project (and language) runs the capability check: find the LSP marker and server binary and try to start it; check for a tree-sitter grammar; check for `rg`/`grep` (and SSH reachability for remote roots). The result is a per-project record such as "LSP works", or "LSP: rust-analyzer not on PATH; tree-sitter works", or "LSP and tree-sitter unavailable; text works".
+- The first graph request for a project (and language) runs the capability check: find the LSP marker and server binary and try to start it; check for a tree-sitter grammar; text search runs in process and needs only a readable root. The result is a per-project record such as "LSP works", or "LSP: rust-analyzer not on PATH; tree-sitter works", or "LSP and tree-sitter unavailable; text works".
 - Later requests use that record directly: they go straight to the working mode and do not re-probe the modes that failed. No `PATH` lookup, no server spawn attempt and no grammar check runs again on each request.
 - The record lives in memory for the hot path and is mirrored into the store (a per-project row, the same pattern as the co-change state), so separate processes (the MCP server, `rtok web`, the CLI, `rtok doctor`) see the same record. A new process reads the mirrored record instead of probing again. A request does not re-probe a failed record; the §8d health check does (below).
 - A working mode that later breaks (server crash, repeated timeouts) is downgraded in the record once, and the next mode becomes the chosen one for that project until the health check sees the failed mode work again (two consecutive good checks); it is not re-probed per request.
@@ -749,8 +751,8 @@ The graph page is split into two parts that show the same graph data side by sid
 
 #### 8d. Alerts: linked project down or unreachable
 
-- **What raises an alert:** a project in the current scope (including auto-linked references) becomes **missing** (root deleted or moved), **unreachable** (a network or SSH root stops answering, an external disk is unmounted), **backend down** (its working backend from 6b fails and no fallback works), **index failing** (re-index errors three times in a row), or **link broken** (a manifest reference now points to a path that does not exist).
-- **Detection:** the `watch` loop and every graph query update project state; a light background check runs every 60 s (`[plugins.graph] health_check_interval_s`) in every process that hosts graph (the MCP server and `rtok web`), for projects in an open scope. It is the only code that re-probes (requests never do, 6b), and it reads the capability record (6b) from the store. The cheap tier runs every interval: the project root exists (missing, unmounted), the server binary has appeared on `PATH` (path and mtime), a running server is still alive (`try_wait`); an SSH reachability probe for remote roots follows T335's outcome. A failed or degraded record is restarted (server spawn plus `initialize`) only when the cheap tier sees a change (new binary, root back) or on a backoff that starts at 60 s, doubles, and is capped (the cap is fixed in T329.17). A state must persist for two checks before it alerts, to avoid flapping on a brief unmount.
+- **What raises an alert:** a project in the current scope (including auto-linked references) becomes **missing** (root deleted or moved), **unreachable** (a network share stops answering, an external disk is unmounted), **backend down** (its working backend from 6b fails and no fallback works), **index failing** (re-index errors three times in a row), or **link broken** (a manifest reference now points to a path that does not exist).
+- **Detection:** the `watch` loop and every graph query update project state; a light background check runs every 60 s (`[plugins.graph] health_check_interval_s`) in every process that hosts graph (the MCP server and `rtok web`), for projects in an open scope. It is the only code that re-probes (requests never do, 6b), and it reads the capability record (6b) from the store. The cheap tier runs every interval: the project root exists (missing, unmounted), the server binary has appeared on `PATH` (path and mtime), a running server is still alive (`try_wait`). A failed or degraded record is restarted (server spawn plus `initialize`) only when the cheap tier sees a change (new binary, root back) or on a backoff that starts at 60 s, doubles, and is capped (the cap is fixed in T329.17). A state must persist for two checks before it alerts, to avoid flapping on a brief unmount.
 - **Where alerts show:** a red badge on the project node and link edges in both parts, a toast and an alerts list on the graph page, a line in `rtok doctor`, `rtok graph projects` output (`state` and `alert` fields in `--json`), and a short notice in graph MCP answers that touch an affected project ("project B unreachable since 14:02; results exclude B"). Agents therefore learn about it in the answer they are already reading.
 - **Optional push:** if T288 (push unread messages to hooked agents) is available, an alert is delivered once to agents whose current scope includes the project; repeated failures do not repeat the message.
 - **Recovery:** when the project comes back, the alert clears automatically after two consecutive good checks (the same two-check rule as raising), the capability record upgrades, a "recovered" entry is logged, and the project is re-indexed if files changed while it was away.
@@ -786,7 +788,7 @@ The graph page is split into two parts that show the same graph data side by sid
 
 #### 10. Delivery
 
-As PRs, backend first; do not merge them.
+As PRs, backend first; do not merge them. Each PR becomes a subtask (`Tn.m`, D16) when it is claimed.
 
 Dependencies: T310.8 for the page; T285 and T289 for worktree-based adding; the existing graph index and LSP integration.
 
@@ -808,7 +810,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - `backend = "lsp"` with no server answers from tags with the T376 `(tags; lsp: <reason>)` header and an `lsp_fallback` row; the default `tags` answers stay byte-identical (`graph_contract.rs`).
 - A server that crashes mid-session: the current request is answered from tree-sitter with a notice, and later requests go straight to tree-sitter until the health check sees the server work again.
 - Capability cache: a test counts probes; 100 requests to the same project after the first run zero further `PATH` lookups or spawn attempts; installing the server is picked up by the health check within one interval (or by a restart), while requests still run zero probes; changing `backend` in config re-checks only the affected projects; two concurrent first requests run one check.
-- Remote text mode: a project registered as `ssh://localhost/<path>` (test runs only when passwordless SSH to localhost works, otherwise skipped) answers `symbol` over SSH; an unreachable host is reported as no backend available without hanging past the timeout.
 - Visual graph, level 1: with A, B, C, D the page shows 4 projects, 3 in A's scope and 3 linked pairs (A to B, B to C, A to D); the A-to-B edge is dashed with the Cargo reason on hover, A-to-D is solid; clicking B selects it; a missing project is drawn hollow and cannot be opened.
 - Visual graph, level 2: opening A shows its files with aggregated edges; expanding a file shows its functions; focusing the function that calls into C shows the edge ending at a C node, and clicking it opens the target symbol inside C; the breadcrumb and browser back return to the overview; a text-mode project shows the "call edges not available" banner; editing a file with `watch` on updates the node without resetting zoom; a fixture with more than 500 nodes shows "+N more" groups and the page stays responsive.
 - 3D: both levels render in Three.js (Playwright with SwiftShader sees a non-empty canvas and can select a node by click); disabling WebGL shows the 2D fallback with a notice; the 2D/3D toggle is remembered across reloads; orbiting the 500-node fixture stays smooth and the layout stops when settled; leaving the page releases the WebGL context.
@@ -819,11 +820,11 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
+### T329.10. Graph text-search backend (in-process)
 
-T329 §6a mode 3 and "when no mode works": word-boundary definition and mention searches through `rg` or `grep -rn`, the same over `ssh host` for `ssh://host/path` roots (passwordless only, test skipped without it), `dead` reported as not available, `text.*` Measurement kinds. Depends on T329.9.
+T329 §6a mode 3 and "when no mode works": word-boundary definition and mention searches in process with `ignore` and `regex`, the crates behind the `search` tool (T4.5; D6/D18, no spawned program), `dead` reported as not available; `ssh://` roots are out of scope (I-118), `text.*` Measurement kinds. Depends on T329.9.
 
-Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; `ssh://localhost/<path>` answers `symbol` when passwordless SSH works (skipped otherwise); an unreachable host reports no backend within the timeout; `just check`.
+Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
 
 ### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
 
@@ -980,7 +981,7 @@ Extra edge cases for these kinds:
 - Under each agent and each kind, the items are listed one per line: a link to the item (OSC 8 `file://` hyperlink in a capable terminal, plain path otherwise), its size, and, for anything time-stamped, **last used** (relative and absolute, for example `3 weeks ago (2026-09-09 14:02)`).
 - "Last used" means, in order of preference: the host's own last-activity time when its format records one (session `updated_at`, last message timestamp); otherwise the newest modification time of any file inside the item; atime is not used (often disabled). For worktrees: the last commit time or the newest file change, whichever is later, and the owning agent id.
 - Each item also shows why it is junk (for example "not touched for 35 days (threshold 30)", "agent session ended 16 days ago", "crash dump 12 days old") and, if it is not going to be cleared, why ("touched 29 days ago, under the 30-day threshold", "uncommitted changes", "agent running", "review kind: add --include review").
-- Items are sorted by size, largest first (`--sort size|last-used|path`). To keep the default output readable, each kind shows its 10 largest items and a "+N more (X)" line; `--items all` shows every item, `--items 0` shows totals only.
+- Items within each kind are sorted by size, largest first; `--sort size|last-used|path` (default `size`) changes the order. To keep the default output readable, each kind shows its 10 largest items and a "+N more (X)" line; `--items all` shows every item, `--items 0` shows totals only.
 - `--json` always includes every item: `{ path, size_bytes, last_used, reason, will_clear, skip_reason? }`.
 - `clear` (dry run) prints the same item list as `list` restricted to what it would delete, so what the user reviewed is exactly what `--yes` removes. `clear --yes` re-scans and refuses to delete an item that changed since the dry run in a way that would change the decision (became recent, gained uncommitted changes, became open by a process) and reports it as skipped.
 - `rtok agents junk list --agent claude --kind sessions --items all` is the way to see every session with its last-used time.
@@ -989,10 +990,10 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 
 #### `rtok agents junk list`
 
-- Scans every agent (or `--agent <host|id>`, repeatable) and prints, per agent: the agent name, each agent folder with a clickable link (OSC 8 hyperlink `file://` in a terminal that supports it, the plain path otherwise), the folder's total size, and under it each junk kind with its size and item count, then a line "Freed by `clear`: X" (safe kinds only) and "Freed with `--include review`: Y".
+- Scans every agent (or `--agent <host>`, repeatable; a host id, plus the pseudo-host `rtok`) and prints, per agent: the agent name, each agent folder with a clickable link (OSC 8 hyperlink `file://` in a terminal that supports it, the plain path otherwise), the folder's total size, and under it each junk kind with its size and item count, then a line "Freed by `clear`: X" (safe kinds only) and "Freed with `--include review`: Y".
 - Sizes are shown in human units with one decimal (B, KB, MB, GB, TB; 1 KB = 1024 B, labelled as such in `--help`) and right-aligned; `--bytes` prints exact bytes. Size means disk usage (allocated blocks), not apparent size, so sparse files and APFS clones are not over-counted; hard links are counted once.
 - Ends with a total across agents: folder sizes, junk by kind, space freed by default and with review kinds.
-- Sorting: by space freed, largest first (`--sort name|size|freed`). `--kind <kind>` (repeatable) filters kinds. `--min-size 10MB` hides smaller rows.
+- Sorting: agents are always ordered by space freed, largest first, with no flag; `--sort size|last-used|path` (default `size`) orders the items within each kind. `--kind <kind>` (repeatable) filters kinds. `--min-size 10MB` hides smaller rows.
 - `--json` prints the same data: `agents[] { name, id?, folders[] { path, size_bytes, kinds[] { kind, class, size_bytes, items, paths_sample[] } }, freed_default_bytes, freed_review_bytes }`, `totals`.
 - Agents that are not installed are skipped; `--all` lists them with "not installed".
 - Read-only: `list` never deletes, moves or touches files (no atime updates where the OS allows avoiding them).
@@ -1001,12 +1002,12 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 
 - Same scan as `list`, then removes. Default is a **dry run**: it prints exactly what would be deleted (per agent, per kind, sizes, the space that would be freed) and changes nothing. `--yes` deletes. `--json` works for both.
 - By default only `safe` kinds are cleared. `--include review` adds review kinds; `--kind <kind>` limits to named kinds (a named review kind is included without `--include review`; an `explicit` kind is cleared only when named). `never` kinds and paths without D36 evidence are never deleted.
-- `--agent <host|id>` limits to one or more agents; `--older-than 7d` applies an age floor to every kind.
+- `--agent <host>` (a host id, plus the pseudo-host `rtok`; on `rtok worktree` commands the same flag is an agent id, D34) limits to one or more agents; `--older-than 7d` applies an age floor to every kind.
 - Before deleting each item, rtok re-checks it (still exists, still matches the kind, not open by a process, not a symlink pointing outside, not modified in the last minute). Anything that fails the check is skipped and reported.
 - Deletion goes to the OS trash when `--trash` is given (macOS Trash, freedesktop trash on Linux, Recycle Bin on Windows); otherwise it is a direct delete.
 - Output after `--yes`: per agent and kind, items removed, bytes freed, items skipped with reasons, and a total "Freed X of Y planned".
 - Exit codes: 0 when everything planned was removed (or on a dry run), 1 when some items could not be removed (as T182 does today: "some junk could not be removed"), 2 on usage errors.
-- Backwards compatible: `rtok agents junk clear` with no new flags still clears T182's `rtok-own` junk, and now also the safe kinds for every agent; `rtok agents junk clear --agent rtok` reproduces T182 exactly.
+- The widening is deliberate: `rtok agents junk clear` with no flags clears the safe kinds of every agent, not only T182's `rtok-own` junk. `--agent rtok` clears rtok's own safe kinds, a superset of what T182 cleared. T182's tests are updated where they pin the exact set.
 
 #### Running agents
 
@@ -1032,7 +1033,7 @@ Breakdown edge cases: a kind with thousands of tiny items (temp files) is groupe
 #### Also
 
 - `rtok doctor` adds one line with total reclaimable space and a hint to run `rtok agents junk list` when it exceeds 1 GB.
-- The web UI gets the same data on a `junk` card on the hosts page (read-only list with sizes and a "clear safe junk" button that runs the dry run, shows it and asks for confirmation), after T310.8.
+- The web UI gets the same data on a `junk` card on the hosts page (read-only list with sizes and a "clear safe junk" button that runs the dry run, shows it and asks for confirmation), after T310.8; its TUI counterpart is T479 (D27).
 - Docs: `docs/agents.md` (new "Junk" section), `docs/config.md`, and `research.md` §22 updated with any new paths, with `docs/ru/` and `docs/uk/` updated in the same change.
 - Deliver as a PR; do not merge it.
 
@@ -1051,73 +1052,17 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - New kinds: a session last touched 31 days ago on a host whose §22.1 sessions cell is documented is listed with its last-used time, kept by `--include review` and removed with `--kind sessions` together with its per-session snapshots, while the host's memory and index files stay; one touched 29 days ago and one modified 5 minutes ago are kept; a finished-session worktree idle 20 days that `rtok worktree gc` would remove is removed per record by gc's rules and its merged branch deleted, while one with uncommitted changes and one with unpushed commits are listed and never removed, and no blanket `git worktree prune` runs and an orphan is only reported; token and credential files are never read for expiry and never touched, even with `--kind`; a 10-day-old crash dump is cleared by default, a 2-day-old one only with `--kind crash-dumps`; a per-project snapshot store (Gemini shadow git) is listed with its size and never removed.
 - Session threshold: `rtok config get agents.junk.stale_session_days` prints 30 by default; `.rtok.toml` and `RTOK_AGENTS_JUNK_STALE_SESSION_DAYS` override it; an invalid value (`-1`, `2.5`, `abc`) is rejected with an error naming the key and the run uses 30; a session exactly 720 h old is not old, at 720 h and 1 min it is; status, size and "newest in project" do not change the result; an open session with threshold 0 is skipped as in use.
 - Breakdown: every planned item appears in `list` with path link, size, last used and reason; `--items all` and `--json` list every item; the default shows 10 per kind plus "+N more"; `clear` dry run prints the same items; touching an item between the dry run and `--yes` makes `--yes` skip it with "changed since plan".
-- `rtok agents junk clear --agent rtok --yes` behaves exactly as T182's tests expect (existing tests stay green unchanged).
+- `rtok agents junk clear --agent rtok --yes` clears rtok's own safe kinds, a superset of T182's set; T182's tests are updated where they pin the exact set, the rest stay green.
 - Permission-denied and timeout folders are reported, not fatal; exit code 1 when anything planned was not removed.
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
 
 ### T330.6. Junk: item breakdown, `doctor` line, web card
 
-Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5 and the investigation T343 (the two `--sort` value sets).
+Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5.
 
 Check: the T330 "Breakdown" fixtures; `just check`.
 
-### T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
-
-In the plan, T329 §6a Mode 3 (branch `docs/plan-graph-projects`, ~line 774, from PR #540 (T329), not merged yet) says the text backend "Runs plain text search through the shell: `rg` (ripgrep) when present, `grep -rn` otherwise", and runs "the same commands ... over `ssh host`" for `ssh://` roots. D6 (plan.md@966f067 line 684) says "A plugin never spawns, links, imports, or reads the data of another tool", D18 (plan.md@966f067 line 695) says "D6 holds: no spawned graph tool", and the Working agreement (plan.md@966f067 line 753) says "No plugin shells out to ... a third-party tool (D6)". These contradict each other because the graph plugin would shell out to third-party tools (and to a remote host), which D6/D18 forbid; the existing LSP spawn was justified separately in the P30 survey, text search was not.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-
-### T343. Investigate: T330 `--sort` takes two different value sets on `list`
-
-In the plan, T330 item breakdown (branch `docs/plan-agents-junk`, ~line 766, from PR #541 (T330), not merged yet) says "Items are sorted by size, largest first (`--sort size|last-used|path`)", and the `rtok agents junk list` section (~line 778) says "Sorting: by space freed, largest first (`--sort name|size|freed`)". These contradict each other because one flag on one command is given two incompatible value sets and two different defaults.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-### T344. Investigate: T330 "backwards compatible" vs new default deletions
-
-In the plan, T330 (branch `docs/plan-agents-junk`, ~line 792, from PR #541 (T330), not merged yet) says "Backwards compatible: `rtok agents junk clear` with no new flags still clears T182's `rtok-own` junk, and now also the safe kinds for every agent; `rtok agents junk clear --agent rtok` reproduces T182 exactly", and its Check requires T182's tests to "stay green unchanged". The same task adds to the `rtok` row the `.rtok-lsp-xdg` caches, `$XDG_CACHE_HOME/rtok`, every `CACHEDIR.TAG` directory and plugin staging caches as `safe` kinds (~lines 705-712). These contradict each other because `clear --yes` without flags now deletes agent data T182 never touched, and `--agent rtok` deletes more than T182 did, so neither claim of compatibility holds.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-### T345. Investigate: ProgressRunner in the rtok crate vs `crates/rtok-mcp` with no rtok dependency
-
-In the plan, T276 (plan.md@966f067 lines 248, 266) says `src/proc/` "is the only place in rtok that calls `std::process::Command::new`", enforced by a `clippy.toml` ban "including `crates/`". T277 (plan.md@966f067 lines 289, 298) says `crates/rtok-mcp` has "no dependency on the `rtok` crate" yet takes over "the MCP probe (`spawn_mcp`, `mcp_command`, using T276's `ProgressRunner` for the spawn)" and the T275.1 ping spawn. These contradict each other because the MCP crate can neither import `ProgressRunner` from the `rtok` crate nor call `Command::new` itself under the ban.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-### T346. Investigate: D27 "writing commands stay CLI-only" vs web write actions
-
-In the plan, D27 (plan.md@966f067 line 704) says "Anything a command prints, or the store keeps, is a page on `rtok web` and `rtok tui`. Writing commands stay CLI-only", and D23 (plan.md@966f067 line 700) says "A page that exists on one surface and not the other is a defect". T329 (branch `docs/plan-graph-projects`, ~lines 703, 818, from PR #540 (T329), not merged yet) adds web actions to select, link, unlink, re-index, remove and "Index now"; T330 (~line 818, from PR #541 (T330), not merged yet) adds a "clear safe junk" button that deletes files; T331 (~line 721, from PR #542 (T331), not merged yet) adds a "Fix selected" action that edits agent configs; none plans a `rtok tui` counterpart. These contradict each other because D27 keeps writes out of the web UI (and D23 demands TUI parity) while three open PRs plan write actions in the web UI only; the existing plugin toggle (T15.4, T310.6) shows the rule is already unclear.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-### T347. Investigate: D16 "one task = one PR" vs multi-PR execution plans
-
-In the plan, D16 (plan.md@966f067 line 694) says "**One task = one PR.** Each task gets its own branch ... and lands through its own pull request". T275 (plan.md@966f067 lines 193-197, PR A-E), T276 (plan.md@966f067 lines 278-283, PR 1-5), T277 (plan.md@966f067 lines 310-315, PR 1-6), T279 (plan.md@966f067 lines 403-407, PR 1-4), T283-T287 (two PRs each) and T329 §10 ("As PRs, backend first", from PR #540 (T329), not merged yet) plan several PRs for one task, while T310 splits its work into subtasks to keep one PR per task. These contradict each other because the rule and the plans disagree on what may land under one task id and when the `plan.md` → `done.md` move happens.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
-
-### T348. Investigate: `--agent` means an agent id, a host, or both
-
-In the plan, D34 (plan.md@966f067 line 710) makes the agent id a UUID accepted by "any unique prefix of 4+ chars", and T285/T286/T289 (plan.md@966f067 lines 493, 510, 557) define `--agent <id-prefix>` for `rtok worktree` commands. T331 (branch `docs/plan-doctor-hooks-mcp`, ~line 733, from PR #542 (T331), not merged yet) defines "`--agent <host>` limits the check to one host", and T330 (~lines 775, 787, from PR #541 (T330), not merged yet) defines `--agent <host|id>`, including the pseudo-agent `rtok`. These contradict each other because one flag name gets three meanings, and under D12 (plan.md@966f067 line 690, "every CLI flag is a config key") it cannot map to one key; a host name that is also valid hex (for example `cafe`) would be ambiguous between the two forms.
-
-Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
-
-Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
 
 
 ### T356. Never index `$HOME` or `/` as a graph root
@@ -1464,6 +1409,30 @@ Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the opera
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
+### T476. TUI: select, link and unlink projects on the graph page
+
+The web graph page already selects, links and unlinks projects (`ClientMessage::Project`, `project_write` in `src/web/mod.rs`, which calls `plugins::graph::projects::run`), and the TUI graph page cannot. D27 (amended 2026-10-10, T346) requires every write action on one UI surface to have its counterpart on the other. Done means: the TUI graph page selects a project and links or unlinks a pair with keys listed in `KEYS` (`src/tui/app.rs`), calling the same `plugins::graph::projects::run` actions as the web and the `rtok graph projects` commands; it shows the plan first and writes only after a confirm key; the outcome shows on the status line like the plugin toggle's (T15.4).
+
+Check: a TUI test with a `TestBackend` drives the keys on a fixture registry and the registry equals what the CLI commands write; declining the confirm writes nothing; the key hints render from `KEYS`; `tests/surface_parity.rs` lists project select/link/unlink on both surfaces; `just check`.
+
+### T477. TUI: re-index and remove projects (counterpart of the web actions)
+
+T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (the TUI project keys). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
+
+Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
+
+### T478. TUI: doctor fix with plan and confirm
+
+The web doctor page plans and applies the `doctor --fix` checklist (`ClientMessage::Doctor`, `crate::doctor::web::plan` and `apply`), and the TUI doctor tab is read-only. D27 (amended 2026-10-10, T346) requires the counterpart in the TUI, including T331's "Fix selected" action. Done means: the TUI doctor tab lets the user select checklist items, shows the dry-run plan from `doctor::web::plan`, and calls `doctor::web::apply` only after a confirm key, with the same selection rules and guards as the web and `rtok doctor --fix`; the result shows per item.
+
+Check: a TUI test with a fixture home: the plan equals the web's plan for the same selection, apply writes exactly what `rtok doctor --fix` writes, declining the confirm writes nothing, host config files stay byte-for-byte except our entry; `tests/surface_parity.rs` lists doctor fix on both surfaces; `just check`.
+
+### T479. TUI: clear safe junk with plan and confirm
+
+T330.6 adds a "clear safe junk" button to the web hosts page that runs the `rtok agents junk clear` dry run, shows it and asks for confirmation; D27 (amended 2026-10-10, T346) requires the same action in the TUI. Depends on T330.6. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
+
+Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
+
 ## Reference
 
 Historical phase notes (P0–P39) live in `done.md`. Companion evidence: `research.md`, `architecture.md`. Per-plugin plan: `roadmap.md`. Unapproved propositions: `ideas.md`.
@@ -1489,7 +1458,7 @@ Claim a `todo` row before work: set Status to `in progress` and Agent to `Provid
 | D13 | **Core persists through a sync ORM on bundled SQLite.** Diesel (`sqlite` + bundled `libsqlite3-sys` with FTS5). Plugins never write SQL; `Store` is the only DB owner. Hook path: metadata always, body only if under the inline cap — never archive, never fail the hook (D1). | Diesel is sync, so the ≤ 10 ms hook path stays blocking and fail-open. |
 | D14 | **CLI is clap 4 (derive); config layers are figment; TOML writes are toml_edit.** Env is `RTOK_<SECTION>_<KEY>` looked up in a leaf table from `Config::default()`. | Clap owns the subcommand tree; Figment tracks per-key provenance. |
 | D15 | **Every plugin is designed against alternatives before it is built.** Each catalogue plugin has `src/plugins/<id>/PLAN.md`. | From-scratch only pays if the design beats what it retires. |
-| D16 | **One task = one PR.** Each task gets its own branch (or worktree) off `origin/main` and lands through its own pull request; never commit to `main` directly. The PR carries the `<task-id>: <title>` commit and the `plan.md` → `done.md` move. Delete the branch after merge. | Every change passes CI before it reaches `main`; concurrent agents stop colliding in one checkout. |
+| D16 | **One task = one PR.** Each task gets its own branch (or worktree) off `origin/main` and lands through its own pull request; never commit to `main` directly. The PR carries the `<task-id>: <title>` commit and the `plan.md` → `done.md` move. Delete the branch after merge. A task that needs several PRs is split into subtasks `Tn.m`, one PR each; the parent card stays as the epic and moves to `done.md` with its last subtask. | Every change passes CI before it reaches `main`; concurrent agents stop colliding in one checkout. |
 | D18 | **The graph index lives in SQLite with the ledgers (D8).** LadybugDB and Grafeo were gated, frozen, then removed (P39). No live `lbug` / `graph-lbug` / `symbols_lbug.rs` / `grafeo` feature flags. SQL for symbols lives only in `src/store/symbols.rs`. D6 holds: no spawned graph tool. | Both graph-store candidates were priced and deleted per the gate. Survey archive: `src/plugins/graph/PLAN.md`. |
 | D19 | **Observability is a projection of the ledgers, never a second recorder.** OpenTelemetry export reads existing rows and posts OTLP/HTTP JSON. Nothing runs on the hook path. | Delivery is at-least-once behind a per-stream watermark. |
 | D20 | **Local web UI is an operator surface, not a catalogue plugin.** `rtok web` serves axum + the embedded React SPA (`web/`, T310). The SPA is a static bundle, not linked code, and `rtok hook` never loads it. | Pulling a UI stack into `rtok hook` would fail the size/latency gate. |
@@ -1499,7 +1468,7 @@ Claim a `todo` row before work: set Status to `in progress` and Agent to `Provid
 | D24 | **`rtok report` renders; it never computes a number of its own.** It reads the D23 operator model. Recommendations are rules over those rows, never an LLM call. | A saving that is not a `Measurement` row does not exist (D3). |
 | D25 | **The plugin contract is `rtok-plugin-sdk`.** Required methods are explicit; event methods keep no-op defaults. `rtok` is the only dispatcher. | One contract, no in-tree shortcut. |
 | D26 | **One log with two readers:** a rotating text file and the `logs` table OTel exports. Bounded (`max_bytes` 1 MiB, `files` 5). | An unbounded log on a long-running proxy is a disk-full bug. |
-| D27 | **Anything a command prints, or the store keeps, is a page on `rtok web` and `rtok tui`.** Writing commands stay CLI-only. | The two surfaces plus CLI must not disagree about what a session is. |
+| D27 | **Anything a command prints, or the store keeps, is a page on `rtok web` and `rtok tui`.** Writing actions may appear on both, each calling the same function as its CLI command with the same guards (dry-run plan, then confirm); every write action on one UI surface needs its counterpart on the other (D23 applies to writes too; creator decision 2026-10-10, T346). | The two surfaces plus CLI must not disagree about what a session is, or about what a write does. |
 | D28 | **The agent-host contract is `rtok-agent-sdk`.** Installers go through it; host-specific code stays in `src/setup/<host>.rs`. | One write cycle, one plugin-offer body. |
 | D29 | **Unit tests prefer a virtual filesystem (`testutil::Vfs`) over host TempDir/std::fs.** Pure path/content/size logic must not require real disk; Windows/macOS quirks are simulated in Vfs. Migrate hottest suites first (read/search/cmd/setup) as T56.x — not a big-bang rewrite of e2e. | Hermetic tests; reproducible CI; path-case and spaced-path bugs (T55) need a simulated FS. |
 | D30 | **HTTPS uses webpki Mozilla roots (`use_preconfigured_tls`); one binary.** Corporate CAs via `SSL_CERT_FILE` (curl parity, fail closed). reqwest 0.13 `rustls` still links `rustls-platform-verifier`; `otool` showed Security.framework still present (T53.3). A second hook binary was rejected. | I-32: 1.3–1.5 ms dyld; dropping the `rustls` feature does not compile. |
