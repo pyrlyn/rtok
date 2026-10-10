@@ -9178,6 +9178,16 @@ Result: `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd,
 
 Deviations: the form has no `--focus`, `--scale` or `--transparent` (the command's defaults apply); a focused subgraph needs a symbol and belongs to the page's Export menu (T329.40). The page's half of the parity check lands with T329.40. A PNG test compares the signature and size with the command's PNG, not every byte: the picture's footer carries the export time to the second and a PNG render takes longer than a second under load; JSON and SVG are compared byte for byte.
 
+### T329.48. TUI: one panel shell for compare and export
+
+`src/tui/compare.rs` (T485) and `src/tui/exporter.rs` (T329.41) repeat the same panel plumbing: the stage enum with a background `Running(mpsc::Receiver)`, `poll`, the thread spawn, scroll keys, the pass-through of the shell's `Left`/`Right`/`q`/digit keys and the two-row layout with the hints line (jscpd lists them as clones). Extract one shared module under `src/tui/` and make both views use it; the keys, texts and behaviour stay as they are.
+
+Check: both views' tests pass unchanged; jscpd lists no clone between the two files; `just check`.
+
+Done: new `src/tui/panel.rs` holds the generic `Panel<V: View>` (stage, scroll, `key`, `poll`, `render`, `is_open`, `typing`), `Stage<A>` with `Stage::run` (the thread and the in-line run for tests), the `View` trait (the opening keys, the field keys, the prompt and running text) and the shared `edit`, `error_lines` and `no_graph`. `compare.rs` is `Compare = Panel<Typed>` and `exporter.rs` is `Exporter = Panel<Export>`; each keeps only its fields, its texts and its `body`. The test helper `render` moved to `tui::app::tests`; the views' tests and their assertions are unchanged.
+
+Result: jscpd lists no clone between `src/tui/compare.rs` and `src/tui/exporter.rs` (the one remaining compare clone is with `plugins/graph/diff.rs`, older); `cargo test -p rtok --lib tui::` 76 passed; `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd 334 clones, 1.74%, none between the two views; cargo nextest 3299 passed and 8 skipped; min-feature build).
+
 ### T329.19. Graph health score per project
 
 T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes (the missing-server fix reads "install the server; it is picked up within one health-check interval, or restart"), the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.

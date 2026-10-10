@@ -18,6 +18,7 @@ mod exporter;
 mod health;
 mod junk_clear;
 mod live_calls;
+mod panel;
 mod projects;
 mod theme;
 mod view;

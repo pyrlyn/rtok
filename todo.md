@@ -23,7 +23,6 @@
 - T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T329.40. Graph page: Export menu and read-only import view
-- T329.48. TUI: one panel shell for compare and export
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
