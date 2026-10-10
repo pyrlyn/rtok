@@ -1008,3 +1008,34 @@ fn recent_calls_is_newest_first_bounded_and_linked() {
     assert_eq!(bounded.len(), 1);
     assert_eq!(bounded[0].id, api);
 }
+
+#[test]
+fn an_observation_call_key_holds_past_the_narrative_window() {
+    let store = Store::open_in_memory().unwrap();
+    let obs = rtok_plugin_sdk::NewObservation {
+        session_id: "s",
+        project: None,
+        obs_type: "command_run",
+        title: "t",
+        narrative: "n",
+        dedup: "d",
+        files: &[],
+    };
+    let insert = |once| store.insert_observation_once(&obs, once).unwrap();
+    assert!(insert(Some("PostToolUse:a")).is_some());
+    assert!(insert(Some("PostToolUse:a")).is_none(), "inside the window");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(
+        insert(Some("PostToolUse:a")).is_none(),
+        "the same call, late"
+    );
+    assert!(
+        insert(Some("PostToolUse:b")).is_some(),
+        "another call, late"
+    );
+    assert!(insert(None).is_none(), "no key: the window still holds");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(insert(None).is_some(), "no key, late");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(insert(None).is_some(), "keyless rows never collide");
+}

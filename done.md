@@ -101,6 +101,18 @@ Check: `cargo test --lib plugins::memory`; `cargo test --lib schema_matches_the_
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
 
+### T501. A re-delivered PostToolUse stores no second observation
+
+`tests/one_call_once.rs::a_claude_hook_delivered_twice_records_once` fails on Windows CI (`left: 4, right: 3`, runs 38043322970 and others). Cause: `memory::observe::capture` relies on `Store::insert_observation`'s 5-second narrative window (`DEDUP_SECS`), and its `observe` measurement's `ref_id` is the new observation id. A re-delivery more than 5 s after the first (a slow runner) inserts a second observation with a new id, so the measurement's `once` key differs and a second `Measurement` row lands. Not a late write: the hook records the call twice (T245 broken for observations).
+
+Plan: migration `0043_observation_call_key` adds a nullable `observations.call_key` with a unique index; `Store::insert_observation_once(obs, once)` (beside `insert_measurement_once`) inserts with `ON CONFLICT (call_key) DO NOTHING` and returns `None` on a repeat, keeping the 5 s window for calls without a key; `Runtime::insert_observation` passes `self.once`. Update `schema.rs` and `schema_snapshot.txt`. Tests: a store test that ages the first row past the window and re-inserts with the same and a new key; a memory plugin test with `once` set; the integration test unchanged.
+
+Check: the store and memory tests fail before the fix and pass after; `one_call_once` passes; `just check`.
+
+Result: migration `0043_observation_call_key` (nullable `observations.call_key`, unique index); `Store::insert_observation_once` inserts with `ON CONFLICT (call_key) DO NOTHING` and keeps the 5 s narrative window for calls without a key; `Runtime::insert_observation` passes the hook's `once` key, so a late re-delivery stores no observation and no `observe` measurement. The memory test failed before the fix (two observations) and passes after; the store test covers the same and a new key past the window and keyless rows. `one_call_once` passes; `just check`: 3258 passed, 8 skipped.
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
 ### T442. Atomic task claim and a ready queue
 
 Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.
@@ -9153,6 +9165,18 @@ Done: new `src/plugins/graph/draw.rs`. `svg(&Export, transparent)` is a pure fun
 Result: `just check` on the final tree: fmt, clippy `-D warnings` and jscpd passed; `cargo nextest run --workspace --no-fail-fast` gave 3218 run, 3216 passed, 2 failed (`hook_fail_open` `a_locked_store_fails_the_hook_open_in_ms` and `a_locked_session_end_is_deferred_not_lost`, the known load flake; `cargo nextest run --test hook_fail_open` alone: 242 passed). Tests: `draw::tests` (7: well-formed SVG with legend and footer text, escaping of names and control characters, the 200-node cap with "25 nodes hidden" and the best connected node surviving, transparent and opaque background, overview panels and links, PNG size at 1x, 2x and 4x, alpha corner of a transparent PNG) and `tests/graph_export_image.rs` (3: SVG of a project scope and the same picture from a saved JSON, PNG at 1x, 2x and 4x through the binary, a bare PNG and `--scale` with SVG refused). `config_coverage` and the trycmd help and completion snapshots are updated.
 
 Deviations: `--theme light|dark` is not there (one light palette; `--transparent` is the only background choice), because the line cap left no room and the card did not ask for the flag by name. The Export menu on the page and the import view are T329.40, the TUI action T329.41 (D27). The PNG is refused on a machine with no fonts instead of being drawn without text. `--scale` takes 1 to 4, not only 1, 2 and 4.
+
+### T329.41. TUI: graph export action
+
+D27 for T329.31 and T329.40: anything the command prints is a page on web and tui, so `rtok tui` gets a graph export key that calls the same function as `rtok graph export` (formats json, svg and png, the same 200-node cap and redaction default, written to a file the user names) and an open-a-saved-export view that is read-only. Depends on T329.31.
+
+Check: the key writes the same bytes as the CLI for json, svg and png; redaction is on unless the user turns it off; the saved-export view writes nothing; TUI tests; `just check`.
+
+Done: on the Graph page `e` opens a form (format json, svg or png; level overview or symbols; redact on or off; the file to write) for the project under the cursor, and `v` asks for the path of a saved export and shows it read-only (banner, projects, links, the first 40 nodes). New `src/tui/exporter.rs`; `export::write` in `src/plugins/graph/export.rs` is `render` plus the file write, and `rtok graph export -o` now ends in it too, so the key and the command share the call, the defaults (redaction on, scale 1, opaque background, pretty JSON, the 200-node cap of the picture) and the bytes. The view opens the file with `export::read`, the importer of `--from`, and opens neither the registry nor the index. Runs off the key loop like compare. KEYS table, help overlay and `docs/commands.md` (en, ru, uk) list the keys; `tests/surface_parity.rs` pins that the command and the TUI use `export::write` and that the view only reads.
+
+Result: `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd, cargo nextest 3279 passed and 8 skipped, min-feature build); the new `tui::exporter` tests (7) cover the bytes against the command's for json, svg and png, redaction default and switch, the typed keys, a failed write, the read-only view (file bytes and directory listing unchanged) and the background run. jscpd lists the shared panel plumbing with `src/tui/compare.rs` as clones without failing the gate; T329.48 extracts it.
+
+Deviations: the form has no `--focus`, `--scale` or `--transparent` (the command's defaults apply); a focused subgraph needs a symbol and belongs to the page's Export menu (T329.40). The page's half of the parity check lands with T329.40. A PNG test compares the signature and size with the command's PNG, not every byte: the picture's footer carries the export time to the second and a PNG render takes longer than a second under load; JSON and SVG are compared byte for byte.
 
 ### T329.19. Graph health score per project
 

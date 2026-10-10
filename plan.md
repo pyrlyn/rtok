@@ -48,7 +48,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T500 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
 | T329.40 | todo | P3 | 4 | 0% | |
-| T329.41 | todo | P3 | 3 | 0% | |
+| T329.48 | todo | P3 | 2 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -822,11 +822,11 @@ The page half of T329 §8c, left over from T329.31: the "Export" menu on the Gra
 
 Check: the page exports the JSON the CLI writes (byte-equal without `exported_at`) and imports it back; an imported file is read-only and shows the banner; the dialog names the file and symbol names; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.41. TUI: graph export action
+### T329.48. TUI: one panel shell for compare and export
 
-D27 for T329.31 and T329.40: anything the command prints is a page on web and tui, so `rtok tui` gets a graph export key that calls the same function as `rtok graph export` (formats json, svg and png, the same 200-node cap and redaction default, written to a file the user names) and an open-a-saved-export view that is read-only. Depends on T329.31.
+`src/tui/compare.rs` (T485) and `src/tui/exporter.rs` (T329.41) repeat the same panel plumbing: the stage enum with a background `Running(mpsc::Receiver)`, `poll`, the thread spawn, scroll keys, the pass-through of the shell's `Left`/`Right`/`q`/digit keys and the two-row layout with the hints line (jscpd lists them as clones). Extract one shared module under `src/tui/` and make both views use it; the keys, texts and behaviour stay as they are.
 
-Check: the key writes the same bytes as the CLI for json, svg and png; redaction is on unless the user turns it off; the saved-export view writes nothing; TUI tests; `just check`.
+Check: both views' tests pass unchanged; jscpd lists no clone between the two files; `just check`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 

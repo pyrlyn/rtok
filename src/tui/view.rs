@@ -65,6 +65,8 @@ pub(super) fn draw(frame: &mut Frame, app: &App) {
 fn render_help(frame: &mut Frame, app: &App) {
     let page = if app.page() == "graph" && app.compare().is_open() {
         "compare"
+    } else if app.page() == "graph" && app.exporter().is_open() {
+        "export"
     } else {
         app.page()
     };
@@ -188,7 +190,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "logs" => frame.render_widget(logs_text(app), area),
         "skills" => render_skills(frame, app, area),
         "stats" => frame.render_widget(stats(app), area),
-        "graph" if app.compare().render(frame, area) => {}
+        "graph" if app.compare().render(frame, area) || app.exporter().render(frame, area) => {}
         "graph" => render_graph(frame, app, area),
         "hosts" => frame.render_widget(
             app.junk()
