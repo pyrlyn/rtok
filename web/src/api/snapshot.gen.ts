@@ -113,6 +113,11 @@ export type ModuleState = "installed" | "not_installed" | "not_supported";
  */
 export type Kind = "missing" | "unreachable" | "backend_down" | "link_broken";
 /**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Component".
+ */
+export type Component = "freshness" | "backend" | "links";
+/**
  * Whether Claude Code defers MCP tools (T388).
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -126,6 +131,11 @@ export type ToolSearchState = ("enabled" | "disabled") | "unknown";
  * via the `definition` "Chosen".
  */
 export type Chosen = "lsp" | "tags";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Level".
+ */
+export type Level = "missing" | "good" | "warn" | "bad" | "indexing";
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "LinkKind".
@@ -739,6 +749,11 @@ export interface Report {
    * down, link broken (T329.17). Read from the store the checking processes write.
    */
   graph_alerts?: Alert[];
+  /**
+   * Projects whose graph health score is under 80, weakest first, with reasons and fixes
+   * (T329.19).
+   */
+  graph_health?: Weak[];
   hooks_by_event: {
     [k: string]: number;
   };
@@ -826,6 +841,29 @@ export interface Alert {
    * Unix seconds of the check that raised it.
    */
   since: number;
+}
+/**
+ * One project under [`NOTICE_BELOW`], as `rtok doctor` lists it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Weak".
+ */
+export interface Weak {
+  project: string;
+  reasons: Reason[];
+  root: string;
+  score: number;
+}
+/**
+ * What lowered a component, and what to do about it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Reason".
+ */
+export interface Reason {
+  component: Component;
+  fix: string;
+  text: string;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -1054,6 +1092,7 @@ export interface ProjectRow {
    */
   backend?: Capability | null;
   created_at: number;
+  health: Score;
   id: number;
   index: ProjectIndex | null;
   last_used_at: number;
@@ -1062,6 +1101,11 @@ export interface ProjectRow {
   name: string;
   origin: Origin;
   root: string;
+  /**
+   * The lowest score in this project's scope (itself and what it links to); absent while
+   * every member is still on its first index.
+   */
+  scope_health?: number | null;
   selected: boolean;
   state: string;
 }
@@ -1099,6 +1143,29 @@ export interface Capability {
    * The language has a language server at all, installed or not.
    */
   server: boolean;
+}
+/**
+ * The 0 to 100 health score with its components, reasons and fixes (T329.19).
+ */
+export interface Score {
+  components: Components;
+  level: Level;
+  reasons?: Reason[];
+  /**
+   * Absent while the project's first index runs.
+   */
+  score: number | null;
+}
+/**
+ * Each component is 0 to 1, rounded to two places.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Components".
+ */
+export interface Components {
+  backend: number;
+  freshness: number;
+  links: number;
 }
 /**
  * `graph status` numbers for one project; absent for a missing root, which has nothing
@@ -1283,6 +1350,19 @@ export interface Overview1 {
    * sessions this is session order, not wall-clock order.
    */
   turns: number[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Score".
+ */
+export interface Score1 {
+  components: Components;
+  level: Level;
+  reasons?: Reason[];
+  /**
+   * Absent while the project's first index runs.
+   */
+  score: number | null;
 }
 /**
  * What the user changed since the defaults.

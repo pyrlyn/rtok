@@ -179,6 +179,30 @@ Alerts are mirrored into the store, so they show in `rtok doctor` (a `graph aler
 line at the head of a graph tool answer whose scope contains the project ("notice: b missing since 14:02
 (directory does not exist); results exclude b").
 
+## Health score
+
+Every project has a score from 0 to 100, built from what the health check and the capability record
+already know (nothing probes for it). Three components, each 0 to 1, weigh 40, 30 and 30:
+
+| Component | Weight | 1 when | Lower when |
+| --- | --- | --- | --- |
+| freshness | 40 | no file is pending | pending files: 0 at a fifth of the files, or when the index is more than 24 h old with changes since |
+| backend | 30 | the configured backend works (`tags` and `text` always do) | under `auto` and `lsp` the server does not answer: 0.6 on the tree-sitter fallback, 0.3 on the text one, 0 when nothing answers |
+| links | 30 | every link leads to a present, reachable, indexed project (no links also scores 1) | a link target is missing, unreachable or not indexed, or a manifest reference is broken |
+
+A language with no language server is not penalised. Each reason that lowered a component comes with
+its fix ("rust-analyzer not on PATH, using tree-sitter": "install the server; it is picked up within one
+health-check interval, or restart"). A missing project scores 0 ("missing"); a project on its first index
+has no score yet (`level: "indexing"`).
+
+`rtok graph projects` has `health` (score) and `scope` columns, and `--json` carries `health` (`score`,
+`level` `good` 80 and up, `warn` 50 to 79, `bad`, `indexing` or `missing`, `components`, `reasons` with
+their `fix`) and `scope_health`, the lowest score in the project's scope: the weakest link decides, not an
+average. A scope under 80 puts one `notice: graph health ...` line at the head of a graph tool answer
+(a project an alert line already names is left out; `alerts = false` silences both), and `rtok doctor`
+lists every project under 80 in a `graph health` section (`graph_health` in `--json`). Scores are
+recomputed at most once a second per project.
+
 ## Without the server
 
 `backend = "lsp"` does not fail when the server cannot answer. When the binary

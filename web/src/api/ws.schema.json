@@ -501,6 +501,37 @@
         }
       ]
     },
+    "Component": {
+      "type": "string",
+      "enum": [
+        "freshness",
+        "backend",
+        "links"
+      ]
+    },
+    "Components": {
+      "description": "Each component is 0 to 1, rounded to two places.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "number",
+          "format": "double"
+        },
+        "freshness": {
+          "type": "number",
+          "format": "double"
+        },
+        "links": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "freshness",
+        "backend",
+        "links"
+      ]
+    },
     "DoctorAction": {
       "oneOf": [
         {
@@ -1056,6 +1087,36 @@
         "unreachable",
         "backend_down",
         "link_broken"
+      ]
+    },
+    "Level": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "missing"
+          ]
+        },
+        {
+          "description": "80 and up.",
+          "type": "string",
+          "const": "good"
+        },
+        {
+          "description": "50 to 79.",
+          "type": "string",
+          "const": "warn"
+        },
+        {
+          "description": "Under 50.",
+          "type": "string",
+          "const": "bad"
+        },
+        {
+          "description": "The first index has not finished; there is no score yet.",
+          "type": "string",
+          "const": "indexing"
+        }
       ]
     },
     "LinkKind": {
@@ -1617,6 +1678,10 @@
           "type": "integer",
           "format": "int64"
         },
+        "health": {
+          "description": "The 0 to 100 health score with its components, reasons and fixes (T329.19).",
+          "$ref": "#/$defs/Score"
+        },
         "id": {
           "type": "integer",
           "format": "int32"
@@ -1653,6 +1718,16 @@
         "root": {
           "type": "string"
         },
+        "scope_health": {
+          "description": "The lowest score in this project's scope (itself and what it links to); absent while\nevery member is still on its first index.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
         "selected": {
           "type": "boolean"
         },
@@ -1671,6 +1746,7 @@
         "created_at",
         "last_used_at",
         "index",
+        "health",
         "links"
       ]
     },
@@ -1703,6 +1779,26 @@
         "grep_tokens",
         "glob_tokens",
         "share"
+      ]
+    },
+    "Reason": {
+      "description": "What lowered a component, and what to do about it.",
+      "type": "object",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/Component"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "text",
+        "fix"
       ]
     },
     "Ref": {
@@ -1749,6 +1845,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Alert"
+          }
+        },
+        "graph_health": {
+          "description": "Projects whose graph health score is under 80, weakest first, with reasons and fixes\n(T329.19).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Weak"
           }
         },
         "hooks_by_event": {
@@ -1964,6 +2067,38 @@
         "rows",
         "saved",
         "plugins"
+      ]
+    },
+    "Score": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "$ref": "#/$defs/Components"
+        },
+        "level": {
+          "$ref": "#/$defs/Level"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Reason"
+          }
+        },
+        "score": {
+          "description": "Absent while the project's first index runs.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "score",
+        "level",
+        "components"
       ]
     },
     "Selection": {
@@ -2805,6 +2940,36 @@
       "required": [
         "text",
         "report"
+      ]
+    },
+    "Weak": {
+      "description": "One project under [`NOTICE_BELOW`], as `rtok doctor` lists it.",
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Reason"
+          }
+        },
+        "root": {
+          "type": "string"
+        },
+        "score": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "project",
+        "root",
+        "score",
+        "reasons"
       ]
     }
   }

@@ -47,10 +47,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
-| T329.19 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
 | T329.25 | todo | P3 | 2 | 0% | |
+| T329.30 | todo | P3 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.7 | todo | P3 | 3 | 0% | |
@@ -846,14 +846,6 @@ T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; th
 
 Check: a signature change in B shows in `rtok graph diff --from HEAD` from A with A's affected call sites; the working tree is untouched; a rename is a rename; an unknown ref errors; `graph_diff` returns a capped summary with a paging id; `just check`.
 
-### T329.19. Graph health score per project
-
-T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes (the missing-server fix reads "install the server; it is picked up within one health-check interval, or restart"), the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
-
-Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback under `auto` reads 0.6 on the backend component, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; `just check`.
-
-Execution plan: (1) a child module `src/plugins/graph/health/score.rs` of `health.rs`, reusing `reach`, the mirrored alerts and `capability::mirrored` (no new probe, no second check): `score(rt, project) -> Score` with `score: Option<u8>` (none while the first index is running), the three components (0 to 1) and `reasons`, each with a `fix`; (2) `ProjectRow.health` in `rtok graph projects` (a `health` column) and `--json`, and in `/ws` (`ws.schema.json` blessed, `snapshot.gen.ts` regenerated); (3) the scope's lowest score and the MCP health note: `health::notice` adds one line when it is under 80; (4) `rtok doctor` lists every project under 80 with its reasons (`graph_health` in `--json`); (5) docs `docs/lsp.md` and `docs/plugins.md` (en, ru, uk) and the plugin `AGENTS.md`; (6) tests on fixture projects with fake probes, then `just check`. The page display of the score (ring, hover breakdown) is a separate subtask.
-
 ### T329.21. Project badges in the graph page lists
 
 The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a project badge on every row of the graph page lists (dead symbols, pending files), shown once those lists are scoped to the selected project and its linked projects, so a row says which project it came from. Depends on T329.4, T329.5, T329.20.
@@ -871,6 +863,12 @@ Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason 
 The page half of T329.17 (split at claim time: the backend alone fills the 500-line cap). T329 §8d "Where alerts show": a red badge on the project node and on the link edges to it (levels 1 and 2), a toast when an alert is raised or recovers, and an alerts list on the graph page. The data is `ProjectRow.alert` (the `Alert` objects T329.17 puts into `/ws` and `web/src/api/snapshot.gen.ts`), already grouped by kind. Depends on T329.17.
 
 Check: Vitest and a story (axe) for a project with a "missing" alert, a grouped alert of three projects and a recovered one (toast); `just check`, `just spa-stories` and `just spa-e2e`.
+
+### T329.30. Graph page: health ring and breakdown per project
+
+The page half of T329.19 (the backend half is in `done.md`). T329 §8f "Score": a coloured ring on the project node (green 80 and up, amber 50 to 79, red below 50; grey for `indexing`) with the breakdown (the three components, the reasons and their fixes) on hover and in the project list, and the scope's lowest score (`ProjectRow.scope_health`) beside the selected project. The data is `ProjectRow.health` and `ProjectRow.scope_health`, already in `/ws` and `web/src/api/snapshot.gen.ts`. Depends on T329.19.
+
+Check: Vitest and a story (axe) for a project at 100, one at 60 with two reasons, one `indexing` and one `missing`; `just check`, `just spa-stories` and `just spa-e2e`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
