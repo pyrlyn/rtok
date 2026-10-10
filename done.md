@@ -101,6 +101,18 @@ Check: `cargo test --lib plugins::memory`; `cargo test --lib schema_matches_the_
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
 
+### T501. A re-delivered PostToolUse stores no second observation
+
+`tests/one_call_once.rs::a_claude_hook_delivered_twice_records_once` fails on Windows CI (`left: 4, right: 3`, runs 38043322970 and others). Cause: `memory::observe::capture` relies on `Store::insert_observation`'s 5-second narrative window (`DEDUP_SECS`), and its `observe` measurement's `ref_id` is the new observation id. A re-delivery more than 5 s after the first (a slow runner) inserts a second observation with a new id, so the measurement's `once` key differs and a second `Measurement` row lands. Not a late write: the hook records the call twice (T245 broken for observations).
+
+Plan: migration `0043_observation_call_key` adds a nullable `observations.call_key` with a unique index; `Store::insert_observation_once(obs, once)` (beside `insert_measurement_once`) inserts with `ON CONFLICT (call_key) DO NOTHING` and returns `None` on a repeat, keeping the 5 s window for calls without a key; `Runtime::insert_observation` passes `self.once`. Update `schema.rs` and `schema_snapshot.txt`. Tests: a store test that ages the first row past the window and re-inserts with the same and a new key; a memory plugin test with `once` set; the integration test unchanged.
+
+Check: the store and memory tests fail before the fix and pass after; `one_call_once` passes; `just check`.
+
+Result: migration `0043_observation_call_key` (nullable `observations.call_key`, unique index); `Store::insert_observation_once` inserts with `ON CONFLICT (call_key) DO NOTHING` and keeps the 5 s narrative window for calls without a key; `Runtime::insert_observation` passes the hook's `once` key, so a late re-delivery stores no observation and no `observe` measurement. The memory test failed before the fix (two observations) and passes after; the store test covers the same and a new key past the window and keyless rows. `one_call_once` passes; `just check`: 3258 passed, 8 skipped.
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
 ### T442. Atomic task claim and a ready queue
 
 Claim, release, a `blocks` edge, priority 0–4 and a ready queue on the disk, GitHub and GitLab task adapters. The file or the issue stays the truth. `task_claims` (migration `0034_task_claims`) is the same-machine row SessionStart and PostCompact turn into one line, `task <id> <title>`, through the existing inject budget. No measurement of its own.

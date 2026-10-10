@@ -46,6 +46,22 @@ fn migration_is_idempotent() {
     let _: i64 = usage::table.count().get_result(&mut *conn).unwrap();
 }
 
+/// Diesel keys a migration by the number before the first `_`, so two branches that both
+/// took the next number merge into one migration and the other one never runs (0043, T501).
+/// The directory is read, not the embedded list, because embedding already lost the second.
+#[test]
+fn every_migration_has_its_own_number() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let mut seen = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+        let number = name.split('_').next().unwrap().to_owned();
+        if let Some(other) = seen.insert(number.clone(), name.clone()) {
+            panic!("{other} and {name} share the number {number}; renumber the newer one");
+        }
+    }
+}
+
 /// A database that already recorded `NNNN.sql` in `schema_migrations` must not run those
 /// files again when Diesel's version table is empty.
 #[test]
@@ -1007,4 +1023,35 @@ fn recent_calls_is_newest_first_bounded_and_linked() {
     let bounded = store.recent_calls(1).unwrap();
     assert_eq!(bounded.len(), 1);
     assert_eq!(bounded[0].id, api);
+}
+
+#[test]
+fn an_observation_call_key_holds_past_the_narrative_window() {
+    let store = Store::open_in_memory().unwrap();
+    let obs = rtok_plugin_sdk::NewObservation {
+        session_id: "s",
+        project: None,
+        obs_type: "command_run",
+        title: "t",
+        narrative: "n",
+        dedup: "d",
+        files: &[],
+    };
+    let insert = |once| store.insert_observation_once(&obs, once).unwrap();
+    assert!(insert(Some("PostToolUse:a")).is_some());
+    assert!(insert(Some("PostToolUse:a")).is_none(), "inside the window");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(
+        insert(Some("PostToolUse:a")).is_none(),
+        "the same call, late"
+    );
+    assert!(
+        insert(Some("PostToolUse:b")).is_some(),
+        "another call, late"
+    );
+    assert!(insert(None).is_none(), "no key: the window still holds");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(insert(None).is_some(), "no key, late");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(insert(None).is_some(), "keyless rows never collide");
 }
