@@ -1079,6 +1079,20 @@ Result (2026-09-28, macOS, warm target/, `web/` JS excluded via `js_files=` beca
 
 Model: Claude Code / claude-opus-5-5
 
+### T487. Min-feature build warns about unused re-exports
+
+`just check`'s `build-min` step (`cargo build --no-default-features --features measure`) warns about unused imports: `is_unwalkable_root` and `strip_prefix` in `src/fs.rs` (used only by the `read` plugin) and `skip_escape` in `src/sanitize.rs` (used only by the `cmd` plugin). Done means: each re-export is gated on the feature of its only users (plus `test` where the module's own tests use it), with no `#[allow(unused_imports)]`, and no build warns.
+
+Check: `just build-min` prints no warning; `just check`.
+
+Done: `src/fs.rs` keeps `canon`, `path_starts_with` and `same_path` ungated and re-exports `is_unwalkable_root` and `strip_prefix` under `#[cfg(any(feature = "read", test))]` (the read plugin is their only user outside the module's own tests); `src/sanitize.rs` re-exports `skip_escape` under `#[cfg(feature = "cmd")]` (only `src/plugins/cmd/run.rs` calls it). No `#[allow(unused_imports)]`.
+
+Check result: `cargo build --no-default-features --features measure` prints no warning; `just check` green (3229 tests passed, `build-min` silent).
+
+Status: done 2026-10-10
+
+Model: Claude Code / claude-opus-5-5
+
 ### T108. Guard tests for the Windows CI job
 
 Asked for by the creator on the T82/T93 PR. `tests/windows_ci.rs`, no new dependency (`regex`, `ignore` are already in `Cargo.toml`):

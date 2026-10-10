@@ -63,7 +63,10 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
 
 // Path identity lives in `rtok-store` so the store and the host share one definition
 // (Windows case, `\\?\`). Re-exported here at the old paths.
-pub(crate) use rtok_store::{canon, is_unwalkable_root, path_starts_with, same_path, strip_prefix};
+pub(crate) use rtok_store::{canon, path_starts_with, same_path};
+// Only the read plugin walks roots and strips prefixes; ungated, a build without it warns.
+#[cfg(any(feature = "read", test))]
+pub(crate) use rtok_store::{is_unwalkable_root, strip_prefix};
 
 /// Forward-slash Vfs key from a [`Path`] (Windows separators normalized).
 #[cfg(test)]

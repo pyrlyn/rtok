@@ -7,5 +7,7 @@
 //! The functions live in `rtok-store` because the store applies them when it saves a body.
 //! This module keeps the path `crate::sanitize`.
 
+// Only the cmd plugin skips escapes itself; ungated, a build without it warns.
+#[cfg(feature = "cmd")]
 pub(crate) use rtok_store::sanitize::skip_escape;
 pub use rtok_store::sanitize::{body, strings, terminal_noise, text};
