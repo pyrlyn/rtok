@@ -345,10 +345,12 @@ fn call_metrics_exist_on_both_surfaces() {
     for label in [
         "latency p50",
         "p95",
-        "symbols asked",
+        "symbols returned",
         "across projects",
         "fallbacks",
         "capped",
+        "files touched",
+        "projects with hits",
     ] {
         assert!(web.contains(label), "the page shows `{label}`");
         assert!(pane.contains(label), "the TUI pane shows `{label}`");
@@ -359,6 +361,9 @@ fn call_metrics_exist_on_both_surfaces() {
         "t.crossed",
         "t.fallbacks",
         "t.caps",
+        "t.symbols_returned",
+        "t.files_touched",
+        "t.projects_hit",
     ] {
         assert!(pane.contains(field), "the pane reads `{field}` from Totals");
     }

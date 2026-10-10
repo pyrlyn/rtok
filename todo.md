@@ -71,4 +71,3 @@
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T484. Web live panel reads the server's calls totals
 - T485. TUI: graph diff and compare view
-- T487. TUI: live calls pane shows the counts taken from the answer

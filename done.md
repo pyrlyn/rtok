@@ -3045,6 +3045,12 @@ Result: `just check` 3233 passed, 8 skipped; `just spa-typecheck` and `just js` 
 
 Limitations: the real LSP counting in `lsp.rs` has no test, because it needs a server. `impact` with `to` counts the symbol and the project but no files, because a call chain names no file.
 
+## T487 — TUI: live calls pane shows the counts taken from the answer
+
+The D27 counterpart of T329.36, done in the same change, because T486's parity test pins the web wording and T329.36 changed it. The pane's metrics line now reads "symbols returned N of M (K across projects)" in place of "symbols asked", and a line of its own shows "files touched" and "projects with hits", all read from the same `Totals` (`symbols_returned`, `files_touched`, `projects_hit`) as the web `LiveMetrics`. The tool bars yield one more row (`height - 11`), so the feed keeps its rows on a 24-row screen.
+
+Check: `the_pane_shows_the_call_metrics_with_the_web_wording` feeds the `calls_store.rs` fixture events with returned counts and the pane shows "symbols returned 2 of 3 (1 across projects)" and "files touched 6  projects with hits 3"; `the_metrics_line_leaves_the_feed_its_rows_at_24_rows` stays green; `tests/surface_parity.rs::call_metrics_exist_on_both_surfaces` lists the new labels and fields on both surfaces; `just check`.
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.

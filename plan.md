@@ -93,7 +93,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T477 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
 | T485 | todo | P3 | 3 | 0% | |
-| T487 | todo | P3 | 2 | 0% | |
 
 
 
@@ -1200,12 +1199,6 @@ Check: the Vitest tests of the live panel and the Playwright test show the same 
 T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 (done) puts the same report on the web graph page as Compare mode, through `diff::report` (the typed `DiffReport` that `--json` and the `/ws` frame share). D27 (amended 2026-10-10, T346) requires the TUI to show it too. Done means: the TUI graph page has a compare view that calls `diff::report` (no second diff path; the page's `diff::page` only adds the registry scope and the row cap) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
 
 Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed, a removed, an added and a moved symbol; `tests/surface_parity.rs` lists the compare view on both surfaces; `just check`.
-
-### T487. TUI: live calls pane shows the counts taken from the answer
-
-T329.36 added `symbols_returned`, `files_touched` and `projects_hit` to `Totals` in `src/web/calls_store.rs` (summed from the batch `summary`) and the web live metrics show "symbols returned of asked", "files touched" and "projects with hits". D27 requires the TUI live calls pane (T480, T486) to show the same three figures with the same wording. Depends on T486 and T329.36. Done means: the pane shows `symbols_returned` of `symbols`, `files_touched` and `projects_hit` for the selected window next to the figures T486 adds.
-
-Check: a TUI test with a `TestBackend` feeds the fixture batch of `calls_store.rs` (`metrics_are_counted_from_the_events_and_the_percentiles_are_measured_latencies`) and the pane shows "2 of 3", 6 files and 3 projects; `tests/surface_parity.rs` lists the three figures on both surfaces; `just check`.
 
 ## Reference
 
