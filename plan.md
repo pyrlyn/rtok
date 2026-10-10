@@ -46,6 +46,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
+| T500 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -63,7 +64,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T404 | todo | P3 | 3 | 10% | |
-| T405 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -483,8 +483,8 @@ Done means: rtok's entry is written into `.cursor/worktrees.json` (`setup-worktr
 
 Check: install/remove e2e per host that changes only our entry.
 
-Open questions (2026-10-03, Claude Code / sonnet-5; not started, ask the creator before coding):
-1. A post-create script runs outside the session: no `RTOK_AGENT_ID`, no session id. `adopt` today refuses without an agent. Whom does it bind? Candidate: the one live agent of that host whose cwd is the repository (T283.1 rule, ambiguous binds nothing), else a claim with no agent that the next `worktree_adopt` or hook in that worktree completes.
+Open questions (2026-10-03, Claude Code / sonnet-5); 1 is decided, 2 and 3 are settled from primary sources at claim time:
+1. Creator decision 2026-10-10: bind the one live agent of that host whose cwd is the repository (T283.1 rule); when none or several match, write a claim with no agent that the next `worktree_adopt` or hook in that worktree completes. The question was: A post-create script runs outside the session: no `RTOK_AGENT_ID`, no session id. `adopt` today refuses without an agent. Whom does it bind? Candidate: the one live agent of that host whose cwd is the repository (T283.1 rule, ambiguous binds nothing), else a claim with no agent that the next `worktree_adopt` or hook in that worktree completes.
 2. The host-config formats must come from primary sources before any writer: the `.cursor/worktrees.json` shape (`setup-worktree*` values), where Devin/Windsurf read `post_setup_worktree` (project vs user `hooks.json`), and Kilo's `.kilo/setup-script` is a plain script, so "our entry only" needs a marked block. `research.md` §26 names the keys but not the exact file shapes.
 3. Whether a git lock breaks a host's own eviction is still the T281 live probe; the scripts must go through `adopt`, which already skips the lock in evicting pools.
 
@@ -814,9 +814,15 @@ Check: fixture repos under `tests/fixtures`, no network:
 
 ### T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 
-What is left of T329 §8b after T329.28 that only draws what the page already has: maximise buttons for the live canvas and for part 1, the collapsed metrics strip under 900 px, running labels with counters, count-up animation of the numbers, sparklines, the "outside scope" mark on a call that crosses out of the scope, and the nearest-visible-ancestor counter for calls whose target is folded into a "+N more" group. A TUI counterpart is not planned yet (D27); ask the creator for a task.
+What is left of T329 §8b after T329.28 that only draws what the page already has: maximise buttons for the live canvas and for part 1, the collapsed metrics strip under 900 px, running labels with counters, count-up animation of the numbers, sparklines, the "outside scope" mark on a call that crosses out of the scope, and the nearest-visible-ancestor counter for calls whose target is folded into a "+N more" group. The TUI counterpart is T500 (creator 2026-10-10); maximise, the collapsed strip and count-up stay web-only.
 
 Check: maximising either part fills the page and restores; under 900 px the metrics collapse to a strip that expands; a running call shows its label and elapsed counter; the numbers count up (and jump with `prefers-reduced-motion`); the sparklines match the store buckets; a call outside the scope is marked; folded targets count on their nearest visible ancestor; Vitest, stories (axe) and Playwright; `just check`.
+
+### T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
+
+D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
+
+Check: the sparklines match the store buckets; an outside-scope call is marked; folded targets count on their nearest visible ancestor; `tests/surface_parity.rs` lists each item on both surfaces; `just check`.
 
 ### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 
@@ -967,14 +973,6 @@ Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local m
 Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
 
 Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
-
-### T405. Task-board extras for the agent task tools
-
-Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F19, F20: a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20).
-
-Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
-
-Check: each sub-task carries its own Check.
 
 ### T413. More agent hosts: popular agents rtok does not install into yet
 
@@ -1519,6 +1517,7 @@ project = "group/name"
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
 12. **T441.12 `rtok task sync`** (split from T441.7) — done: counters raised to what the adapter holds, drift reported, the adapter never written (#820).
+13. **T441.13 Task-board extras** (from T405, creator 2026-10-10; `research.md` §28.4) — a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20). One subtask per item when claimed; F20 and F11's Linear part sit under §13 "Out of scope", so they need the creator's go-ahead at claim time.
 
 #### 12. Open questions
 

@@ -20,6 +20,7 @@
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
+- T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root
@@ -39,7 +40,6 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T404. Evaluate a local draft model that the cloud model only verifies
-- T405. Task-board extras for the agent task tools
 - T413. More agent hosts: popular agents rtok does not install into yet
 - T413.1. `rtok agents install roo` — Roo Code
 - T413.2. `rtok agents install qwen` — Qwen Code
