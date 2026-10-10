@@ -48,3 +48,22 @@ cargo build --no-default-features --features cmd,read
 | `PLAN.md` | собственный план разработки плагина |
 
 Как написать свой: [написание плагинов](plugin-authoring.md).
+
+## Формат экспорта графа
+
+`rtok graph export` и MCP-инструмент `graph_export` выдают один JSON-документ, `"schema": "rtok.graph.v1"`, описанный
+файлом [`docs/schemas/rtok.graph.v1.schema.json`](../schemas/rtok.graph.v1.schema.json) (он генерируется из типов
+Rust и проверяется тестом). Ключи верхнего уровня:
+
+| Ключ | Содержит |
+|------|----------|
+| `projects` | `id`, `name`, `root`, `origin`, `backend` (`tags`, `lsp` или `text`), `health` (`ok`, `stale`, `not indexed`, `missing`), `indexed_at` |
+| `links` | `from`, `to`, `kind` (`manual` или `auto`), `reason`, `references` (ссылки-вызовы из `from` в `to`) |
+| `nodes` | `id`, `project`, `kind`, `name`, `path` (относительно проекта), `line`; пуст на уровне `overview` |
+| `edges` | `from`, `to` (id узлов), `kind` |
+| `meta` | `scope`, `level` (`overview`, `symbols` или `focus`), `focus`, `depth`, `exported_at`, `rtok_version`, `redacted`, `partial`, `notes` |
+
+Абсолютные пути, домашний каталог и имя пользователя скрываются, если не указан `--no-redact` (`graph_export` скрывает
+всегда); исходный текст не включается никогда, имена файлов и символов включаются. Вызов, чьё имя имеет больше восьми
+определений, ребра не рисует. `--from FILE` показывает сохранённый экспорт, не читая
+и не меняя реестр и индекс.
