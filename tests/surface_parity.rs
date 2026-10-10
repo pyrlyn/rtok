@@ -216,6 +216,31 @@ fn doctor_fix_exists_on_both_surfaces() {
     );
 }
 
+/// T479: the Hosts page's clear-safe-junk action is on both surfaces and both call
+/// `agents::junk_web`'s plan/apply pair, never a second clear path.
+#[test]
+fn clear_safe_junk_exists_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/junk_clear.rs"
+    ));
+    assert!(
+        web.contains("junk_web::plan") && web.contains("junk_web::apply"),
+        "the web page plans and applies through agents::junk_web"
+    );
+    assert!(
+        tui.contains("junk_web::plan") && tui.contains("junk_web::apply"),
+        "the TUI plans and applies through the same pair"
+    );
+    assert!(
+        app.contains("(\"hosts\", \"c\", \"clear safe junk (plan)\")")
+            && app.contains("(\"hosts\", \"y\", \"remove planned (confirm)\")"),
+        "the TUI's KEYS table lists the clear-safe-junk keys"
+    );
+}
+
 /// T227: both surfaces render the Stats page from the same model accessor — `rtok
 /// stats --price`'s table plus `rtok stats --cache`'s table, D27's one page for two
 /// commands.
