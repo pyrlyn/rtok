@@ -14,6 +14,7 @@ import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./p
 import { Projects } from "./Projects";
 import { GraphAlerts } from "./graph3d/GraphAlerts";
 import { drillSearch, type DrillState, openProject, parseDrill } from "./graph3d/drillState";
+import { Split } from "./graph3d/live/Split";
 import { parseGraph, type DeadSymbol, type GraphView } from "./text";
 
 // The overview, its force layout and Three.js load only when the graph page opens.
@@ -39,25 +40,27 @@ export function Graph() {
                     {snap.projects && <Projects rows={snap.projects} />}
                     {snap.projects && snap.projects.length > 0 && (
                         <Suspense fallback={null}>
-                            {drill ? (
-                                // Another project is a new picture: the layout and zoom start over.
-                                <DrillView
-                                    key={drill.project}
-                                    state={drill}
-                                    rows={snap.projects}
-                                    go={go}
-                                />
-                            ) : (
-                                <ProjectsOverview
-                                    rows={snap.projects}
-                                    onOpen={(id) => go(openProject(id))}
-                                />
-                            )}
+                            <Split
+                                explorer={
+                                    drill ? (
+                                        // Another project is a new picture: the layout and zoom start over.
+                                        <DrillView
+                                            key={drill.project}
+                                            state={drill}
+                                            rows={snap.projects}
+                                            go={go}
+                                        />
+                                    ) : (
+                                        <ProjectsOverview
+                                            rows={snap.projects}
+                                            onOpen={(id) => go(openProject(id))}
+                                        />
+                                    )
+                                }
+                                live={<LiveSection rows={snap.projects} drill={drill} />}
+                            />
                         </Suspense>
                     )}
-                    <Suspense fallback={null}>
-                        <LiveSection />
-                    </Suspense>
                     <TextPage
                         page="graph"
                         text={snap.graph}

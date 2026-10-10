@@ -3,12 +3,13 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { existsSync, readFileSync } from "node:fs";
+import { basename } from "node:path";
 import type { Page } from "@playwright/test";
 import { mockMachine } from "../src/api/sampleDoctor";
 import type { Selection } from "../src/api/snapshot.gen";
 import { PAGES } from "../src/pages";
 import { expect, test } from "./fixtures";
-import { ARCHIVED_MARKER, STALE_LOGS } from "./rtok";
+import { ARCHIVED_MARKER, type Rtok, STALE_LOGS } from "./rtok";
 
 // `PAGES` mirrors `model::pages()`; `tests/surface_parity.rs` pins the two together, so this
 // loop covers every page the server knows.
@@ -262,16 +263,131 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
   await expect(offline).toHaveCount(0);
 });
 
-test("a graph call from another process reaches the live feed", async ({ page, rtok }) => {
+/** The graph calls the registered home project is asked about, as another process of the store would ask. */
+const callers = (rtok: Rtok, times = 1) =>
+  rtok.mcp("callers", { name: "no_such_symbol", project: basename(rtok.home) }, times);
+
+/** Every `{"calls":{"subscribe":...}}` the page sends, in order. */
+function subscriptions(page: Page) {
+  const seen: boolean[] = [];
+  page.on("websocket", (ws) =>
+    ws.on("framesent", (f) => {
+      const m = /"calls":\{"subscribe":(true|false)\}/.exec(String(f.payload));
+      if (m) seen.push(m[1] === "true");
+    }),
+  );
+  return seen;
+}
+
+test("a graph call from another process lights its node on the read-only live graph", async ({
+  page,
+  rtok,
+}) => {
+  rtok.addProject();
   await page.goto("/#/graph");
   await expect(page.getByText("Waiting for graph calls")).toBeVisible();
+  const live = page.getByTestId("graph-live");
+  await expect(live).toHaveCSS("pointer-events", "none");
+  await expect(live).toHaveCSS("cursor", "auto");
 
   // The stream has no replay, so a call made before the server saw the subscription is lost:
-  // the call is repeated until the first one lands.
-  const row = page.getByRole("table", { name: "graph calls" }).getByText("no_such_symbol").first();
+  // the call is repeated until the first one lands, and each try has one second to light the node.
   await expect(async () => {
-    rtok.mcp("callers", { name: "no_such_symbol" });
-    await expect(row).toBeVisible({ timeout: 2000 });
+    callers(rtok);
+    await expect(live.locator("[data-testid=node-live][data-hot]")).toHaveCount(1, {
+      timeout: 1000,
+    });
   }).toPass({ timeout: 20_000 });
   await expect(page.getByText("Waiting for graph calls")).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "graph calls" })).toBeVisible();
+});
+
+test("the live graph ignores the wheel, the pointer and the keyboard", async ({ page, rtok }) => {
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live");
+  await expect(live.getByTestId("node-live")).toHaveCount(1);
+  const viewBox = () => live.getAttribute("viewBox");
+  const before = await viewBox();
+  const box = (await live.boundingBox())!;
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.wheel(0, 400);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 80, at.y + 60);
+  await page.mouse.up();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  expect(await viewBox()).toBe(before);
+  // The pointer lands on whatever is under the canvas, never on the canvas or its nodes.
+  expect(
+    await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.closest("svg")?.getAttribute("data-testid"),
+      [at.x, at.y],
+    ),
+  ).not.toBe("graph-live");
+});
+
+test("the splitter keeps its place and the hidden state across a reload and stops the stream", async ({
+  page,
+  rtok,
+}) => {
+  rtok.addProject();
+  const stream = subscriptions(page);
+  await page.goto("/#/graph");
+  const bar = page.getByRole("separator", { name: "resize the live graph" });
+  await expect(bar).toHaveAttribute("aria-valuenow", "50");
+  await expect.poll(() => stream).toEqual([true]);
+
+  await bar.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(bar).toHaveAttribute("aria-valuenow", "55");
+  const handle = (await bar.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 150, handle.y + handle.height / 2, { steps: 5 });
+  await page.mouse.up();
+  const dragged = Number(await bar.getAttribute("aria-valuenow"));
+  expect(dragged).toBeLessThan(55);
+
+  await page.reload();
+  await expect(bar).toHaveAttribute("aria-valuenow", String(dragged));
+  await bar.dblclick();
+  await expect(bar).toHaveAttribute("aria-valuenow", "50");
+
+  await page.getByRole("button", { name: "Hide live graph" }).click();
+  await expect(page.getByTestId("graph-live")).toHaveCount(0);
+  await expect.poll(() => stream.at(-1)).toBe(false);
+  const sent = stream.length;
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Show live graph" })).toBeVisible();
+  await expect(page.getByRole("banner").getByText("live", { exact: true })).toBeVisible();
+  expect(stream).toHaveLength(sent);
+});
+
+test("under 900 px the two parts stack and there is no splitter", async ({ page, rtok }) => {
+  rtok.addProject();
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.goto("/#/graph");
+  await expect(page.getByTestId("graph-live")).toBeVisible();
+  await expect(page.getByRole("separator")).toBeHidden();
+});
+
+test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live");
+  await expect(live).toBeVisible();
+  await expect(async () => {
+    callers(rtok);
+    await expect(page.getByRole("table", { name: "graph calls" })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+
+  callers(rtok, 500);
+  const hide = page.getByRole("button", { name: "Hide live graph" });
+  await expect(hide).toBeEnabled();
+  await hide.click({ timeout: 2000 });
+  await expect(page.getByRole("button", { name: "Show live graph" })).toBeVisible({
+    timeout: 2000,
+  });
 });

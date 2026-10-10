@@ -61,9 +61,17 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
   is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
   updates in place without moving the scene.
-- **Live graph calls.** Below the explorer the page lists what the graph tools are doing, from the
-  calls arriving on `/ws` (it subscribes while the page is open, and until the first call it
-  shows "Waiting for graph calls"). Running calls, calls and failures, tokens sent, tokens without rtok and saved,
+- **Live graph.** Beside the explorer (stacked under 900 px) a second, read-only picture shows what
+  the graph tools are doing, from the calls arriving on `/ws`. It draws the level the explorer
+  shows with the same layout and colours: the registered projects, or the drilled project. It
+  takes no input (no pointer, wheel or keys, and the cursor stays the default arrow). A call lights
+  the project node on the overview, or the node named like its target in the one-project view: a
+  ring per running call in one of eight accents, a halo for calls over the last 5 minutes and a
+  red ring on a failed call; beyond eight running calls a "busy" count says how many more. Until
+  the first call the picture is dimmed and reads "Waiting for graph calls". A bar between the two
+  parts resizes them (drag, arrow keys, double-click for 50/50) and is remembered; "Hide live
+  graph" hides the picture and ends the `/ws` subscription, and is remembered too. The page
+  subscribes only while the live graph is shown. Below it: running calls, calls and failures, tokens sent, tokens without rtok and saved,
   per-tool bars and backend shares, over the last 1, 5 or 15 minutes or since the page opened.
   Totals come from each frame's `summary` and the `graph` measurement rows, so a window equals
   `rtok stats` over the same calls (the per-tool bars and backend shares cover the calls a frame
