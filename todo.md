@@ -19,7 +19,9 @@
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
-- T329.28. Graph page: live camera, 3D live view and the remaining live displays
+- T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
+- T329.33. Graph page: call metrics from the events (latency, symbols, files, projects, fallbacks)
+- T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T329.29. Graph page: Compare mode and the remaining diff reports
 - T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root

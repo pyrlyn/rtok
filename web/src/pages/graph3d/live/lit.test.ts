@@ -7,7 +7,7 @@ import { project } from "../../../api/sampleRows";
 import { buildScene, type Scene } from "../scene";
 import { type CallsStore, emptyStore, fold } from "./callsStore";
 import { batch, end, event } from "./callsFixtures";
-import { accentOf, liveState, MAX_ACCENTS } from "./lit";
+import { accentOf, FOCUS_MS, liveState, MAX_ACCENTS } from "./lit";
 
 const NOW = 1_000_000;
 const overview = buildScene([project(1, "rtok"), project(2, "ketch")], {
@@ -66,5 +66,33 @@ describe("what the live canvas lights", () => {
     expect([...lit.keys()]).toEqual([drilled.nodes[0]!.id]);
     const stale = liveState(drilled, store(event({ target: "store" })), NOW).lit;
     expect([...stale.keys()]).toEqual([drilled.nodes[1]!.id]);
+  });
+});
+
+describe("what the camera frames", () => {
+  test("a running call and a call that ended a moment ago, nothing once it is old", () => {
+    const running = liveState(overview, store(event({ call: "a" })), NOW);
+    expect(running.focus).toEqual([idOf("rtok")]);
+    const ended = store(end("a", 10, 4, { project: "ketch" }));
+    expect(liveState(overview, ended, NOW + 1000).focus).toEqual([idOf("ketch")]);
+    expect(liveState(overview, ended, NOW + FOCUS_MS + 1).focus).toEqual([]);
+    // Heat is still there: only the camera lets go.
+    expect(
+      liveState(overview, ended, NOW + FOCUS_MS + 1).lit.get(idOf("ketch"))?.heat,
+    ).toBeGreaterThan(0);
+  });
+
+  test("an idle picture and a call on a project the picture lacks frame nothing", () => {
+    expect(liveState(overview, emptyStore, NOW).focus).toEqual([]);
+    expect(
+      liveState(overview, store(event({ call: "a", project: "elsewhere" })), NOW).focus,
+    ).toEqual([]);
+  });
+
+  test("calls on two nodes frame both, in a stable order", () => {
+    const both = store(event({ call: "a", project: "ketch" }), event({ call: "b" }));
+    expect(liveState(overview, both, NOW).focus).toEqual(
+      [idOf("rtok"), idOf("ketch")].sort((a, b) => a - b),
+    );
   });
 });
