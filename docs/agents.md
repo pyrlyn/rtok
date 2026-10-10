@@ -149,3 +149,5 @@ Both commands print the items behind the totals, so you can check the exact set 
 - `--json` always carries every item: `path`, `size_bytes`, `last_used` (Unix seconds or `null`), `reason`, `will_clear` and, when it is not cleared, `skip_reason`.
 
 `rtok doctor` adds a `junk` line with the space `clear` would free by default, and points at `rtok agents junk list` when that is over a gigabyte. The Hosts page of `rtok web` and `rtok tui` shows the same list.
+
+On the Hosts page of `rtok web` the list is a `junk` card: per agent and kind the items and sizes, and the `Freed by clear` and `Freed with --include review` lines. Its **Clear safe junk** button runs the dry run of `clear` for every agent's `safe` kinds (never `review`, `explicit` or `never` kinds, and never the trash), lists what it would remove, and deletes nothing until you press **Confirm**. Only the items you were shown are removed, each one checked again just before it goes, so a running agent's files, a changed folder, a symlink or a protected file stay and are reported. The `rtok tui` button is still to come (T479).

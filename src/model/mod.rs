@@ -27,6 +27,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::agents::junk_web::JunkCard;
 use crate::agents::usage;
 use crate::config::{Config, layers};
 use crate::demon::{self, Service};
@@ -89,6 +90,9 @@ pub struct Snapshot {
     /// behind a cache: never blocks a 2 s tick on a cold or stale probe — the tick
     /// renders the last known text, or "probing hosts…" before the first one lands.
     pub hosts: String,
+    /// The Hosts page's junk card (T330.7): the numbers of the `junk` section of `hosts`, as data
+    /// ([`junk_page`] reads the one cached report). `None` while the first measurement runs.
+    pub junk: Option<JunkCard>,
     /// Config page (T228): `rtok config show --sources`'s rows, through
     /// [`config_page_text`] (D27, no second layering). `None` on a failed tick.
     pub config: Option<String>,
@@ -896,6 +900,12 @@ struct Background<T> {
 }
 
 impl<T: Clone + Send + 'static> Background<T> {
+    fn forget(&self) {
+        if let Ok(mut guard) = self.cache.lock() {
+            *guard = None;
+        }
+    }
+
     const fn new() -> Self {
         Self {
             cache: Mutex::new(None),
@@ -934,23 +944,35 @@ impl<T: Clone + Send + 'static> Background<T> {
 /// first probe lands. The junk section below it has its own cache, [`WORKTREES_TTL`].
 fn hosts_page_text(cfg: &Config) -> String {
     static HOSTS: Background<String> = Background::new();
-    static JUNK: Background<String> = Background::new();
     let hosts_cfg = cfg.clone();
     let Some(hosts) = HOSTS.get(DOCTOR_SNAPSHOT_TTL, move || crate::agents::list(&hosts_cfg))
     else {
         return "probing hosts…\n".to_string();
     };
-    // T330.1: the junk list rides this page (D27). It walks every installed host's folders
-    // (up to `AGENT_SCAN_LIMIT` each), so it has its own slow cache: on the 30 s host-probe
-    // TTL an open tui or web would re-walk the disk almost nonstop (the T232 worktrees case).
-    let junk_cfg = cfg.clone();
-    let junk = JUNK
-        .get(WORKTREES_TTL, move || {
-            let report = crate::agents::junk::report(&junk_cfg);
-            crate::agents::junk::to_list(&report, &crate::agents::junk_items::View::new(&junk_cfg))
-        })
-        .unwrap_or_else(|| "measuring folders…\n".to_string());
+    let junk = junk_page(cfg).map_or_else(|| "measuring folders…\n".to_string(), |j| j.0);
     format!("{hosts}\njunk\n{junk}")
+}
+
+static JUNK: Background<(String, JunkCard)> = Background::new();
+
+/// Drops the cached junk report: after a clear the sizes on the page would otherwise stay as
+/// they were for up to [`WORKTREES_TTL`].
+pub fn forget_junk() {
+    JUNK.forget();
+}
+
+/// The junk section of the Hosts page as text (tui) and as the card (web), from one report.
+/// T330.1: the list rides this page (D27). It walks every installed host's folders (up to
+/// `AGENT_SCAN_LIMIT` each), so it has its own slow cache: on the 30 s host-probe TTL an open
+/// tui or web would re-walk the disk almost nonstop (the T232 worktrees case).
+fn junk_page(cfg: &Config) -> Option<(String, JunkCard)> {
+    let junk_cfg = cfg.clone();
+    JUNK.get(WORKTREES_TTL, move || {
+        let report = crate::agents::junk::report(&junk_cfg);
+        let text =
+            crate::agents::junk::to_list(&report, &crate::agents::junk_items::View::new(&junk_cfg));
+        (text, JunkCard::from(&report))
+    })
 }
 
 /// The Config page (T228): [`config_entries`]'s rows, the same ones `config
@@ -1149,6 +1171,7 @@ impl<'a> Model<'a> {
             projects: project_rows(self.cfg),
             // T231: cached in the background — see `hosts_page_text`.
             hosts: hosts_page_text(self.cfg),
+            junk: junk_page(self.cfg).map(|j| j.1),
             // T228: reads the layered figment fresh each tick — see `config_page_text`.
             config: config_page_text(self.cfg),
             // T229: reuses `demon::rows` and `otel_status` — see `services_page_text`.

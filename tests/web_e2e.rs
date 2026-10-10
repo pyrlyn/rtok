@@ -345,3 +345,61 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
     );
     ws.close(None).await.expect("close");
 }
+
+/// T330.7: "clear safe junk" over the real socket. A plan removes nothing; `apply` removes
+/// only a path the page confirmed, and a stale rtok log generation is the junk (the throwaway
+/// home has no installed host).
+#[tokio::test]
+async fn junk_plans_without_removing_and_applies_only_confirmed_paths() {
+    let web = start("junk").await;
+    let logs = web.home.join("logs");
+    std::fs::create_dir_all(&logs).expect("log dir");
+    let (shown, unseen) = (logs.join("rtok.log.7"), logs.join("rtok.log.8"));
+    let old = std::time::SystemTime::now() - Duration::from_secs(2 * 86_400);
+    for f in [&shown, &unseen] {
+        std::fs::write(f, b"stale").expect("stale log");
+        std::fs::File::options()
+            .write(true)
+            .open(f)
+            .and_then(|f| f.set_modified(old))
+            .expect("age the log past the settle window");
+    }
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
+        .await
+        .expect("ws connect");
+
+    ws.send(Message::text(r#"{"junk":{"action":"plan"}}"#))
+        .await
+        .expect("send plan");
+    let plan = next_of(&mut ws, "junkplan").await;
+    let items = plan["plan"]["items"].as_array().expect("items");
+    let listed: Vec<&str> = items.iter().filter_map(|i| i["path"].as_str()).collect();
+    assert!(listed.contains(&shown.to_str().unwrap()), "{plan}");
+    assert_eq!(plan["plan"]["yes"], false);
+    assert!(
+        shown.exists() && unseen.exists(),
+        "a plan removed something"
+    );
+
+    let apply = serde_json::json!({"junk": {"action": "apply", "paths": [shown]}});
+    ws.send(Message::text(apply.to_string()))
+        .await
+        .expect("send apply");
+    let cleared = next_of(&mut ws, "junkcleared").await;
+    assert_eq!(cleared["cleared"]["yes"], true, "{cleared}");
+    assert!(!shown.exists(), "the confirmed path stayed");
+    assert!(
+        unseen.exists(),
+        "a path the user never confirmed was removed"
+    );
+
+    ws.send(Message::text(r#"{"junk":{"action":"burn"}}"#))
+        .await
+        .expect("send bad");
+    let msg = next_of(&mut ws, "message").await;
+    assert!(
+        msg["text"].as_str().unwrap().contains("junk needs"),
+        "{msg}"
+    );
+    ws.close(None).await.expect("close");
+}

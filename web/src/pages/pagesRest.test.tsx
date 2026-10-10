@@ -168,6 +168,7 @@ describe("hosts", () => {
             "Cursor",
             "Gemini CLI",
             "Zed",
+            "junk",
         ]);
         expect(screen.getByText(/nothing of rtok here/)).toBeTruthy();
     });
