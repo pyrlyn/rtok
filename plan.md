@@ -52,7 +52,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
 | T329.23 | todo | P2 | 2 | 0% | |
-| T329.26 | todo | P3 | 4 | 0% | |
+| T329.26 | in progress | P3 | 4 | 0% | Claude Code / sonnet-5.5 |
+| T329.27 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -840,6 +841,25 @@ Display half of T329 §8b, split from T329.15 on 2026-10-10 (the data path staye
 Symbols requested and returned per call are not in the T329.15 events; if the display needs them, add them to the event first. Depends on T329.15, T329.14.
 
 Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
+
+Split at claim time (over the 500-line cap): this card keeps the data and the 2D display; the camera, the 3D live view and the rest of the live displays are T329.27.
+
+Execution plan (T329.26):
+
+1. `web/src/api/query.tsx`: `Api.calls(listener)` subscribes on the first listener, unsubscribes on the last, re-sends the subscription after a reconnect and routes `calls` frames; `useCallStream`. `sample.ts` stays a no-op.
+2. `web/src/pages/graph3d/live/callsStore.ts` (pure): folds `CallBatch` frames into running calls, a 200-row feed, per-batch buckets (1, 5, 15 minute and since-start windows from `summary`, so a burst never undercounts), per-tool and per-backend counts, interrupted sweep, filters. `useCalls.ts`: rAF-batched state and freeze (the store keeps folding while the view is held).
+3. `LiveMetrics.tsx` (Kpi strip, window selector, per-tool bars, backend shares) and `CallFeed.tsx` (DataTable, agent/tool/project filters, red failed rows), both reusing `web/src/ui/*` and `format.ts`.
+4. `Scene2D.tsx` gets a `live` prop (no pointer or keyboard input, default cursor, no tooltips, glow, accents, busy pulse); `LiveGraph.tsx` follows part 1's level (overview scene, or the drilled project's `useDrill` scene) and maps events to nodes.
+5. `Graph.tsx`: two parts with a splitter (double-click resets, remembered, "Hide live graph", stacked under 900 px); subscribe only while part 2 is visible; empty state "Waiting for graph calls".
+6. Tests: Vitest for the store and the splitter, stories (axe), one Playwright test (an `rtok mcp` call from a second process shows a feed row); docs in `docs/commands.md`, ru, uk.
+
+Verify: `just check`, `just spa-typecheck`, `just spa-stories`, `just spa-e2e`, `just js`.
+
+### T329.27. Graph page: live camera, 3D live view and the remaining live displays
+
+Remainder of T329 §8b after T329.26: the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.26.
+
+Check: the live canvas frames a running call and eases back to an overview in 2D and 3D; the latency and symbol counters match the events; the config keys are read and documented; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 
