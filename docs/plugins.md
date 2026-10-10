@@ -44,3 +44,22 @@ cargo build --no-default-features --features cmd,read
 | `PLAN.md` | the plugin's own build plan |
 
 Writing your own: [plugin authoring](plugin-authoring.md).
+
+## Graph export format
+
+`rtok graph export` and the MCP tool `graph_export` write one JSON document, `"schema": "rtok.graph.v1"`,
+described by [`docs/schemas/rtok.graph.v1.schema.json`](schemas/rtok.graph.v1.schema.json) (generated from the
+Rust types and checked by a test). Top-level keys:
+
+| Key | Holds |
+|-----|-------|
+| `projects` | `id`, `name`, `root`, `origin`, `backend` (`tags`, `lsp` or `text`), `health` (`ok`, `stale`, `not indexed`, `missing`), `indexed_at` |
+| `links` | `from`, `to`, `kind` (`manual` or `auto`), `reason`, `references` (call references from `from` into `to`) |
+| `nodes` | `id`, `project`, `kind`, `name`, `path` (relative to the project), `line`; empty at the `overview` level |
+| `edges` | `from`, `to` (node ids), `kind` |
+| `meta` | `scope`, `level` (`overview`, `symbols` or `focus`), `focus`, `depth`, `exported_at`, `rtok_version`, `redacted`, `partial`, `notes` |
+
+Absolute paths, the home directory and the user name are redacted unless `--no-redact` is given (`graph_export` always
+redacts); source text is never included, file and symbol names are. A call whose name has more than eight definitions
+draws no edge. `--from FILE` shows a saved export without reading or writing the
+registry or the index.

@@ -77,8 +77,9 @@ fn assert_lsp_state_stays_in(dir: &Path, root: &Path) {
 #[test]
 fn mcp_tool_names_are_unchanged() {
     let names: Vec<_> = Graph.mcp_tools().into_iter().map(|t| t.name).collect();
-    // T68.1 added `explore` as the fifth tool and T329.18 `graph_diff` as the sixth; the
-    // surface-token gate lives in `graph::tests::graph_surface_is_six_tools_under_budget`.
+    // T68.1 added `explore` as the fifth tool, T329.18 `graph_diff` as the sixth and T329.16
+    // `graph_export` as the seventh; the surface-token gate lives in
+    // `graph::tests::graph_surface_is_seven_tools_under_budget`.
     assert_eq!(
         names,
         [
@@ -87,7 +88,8 @@ fn mcp_tool_names_are_unchanged() {
             "impact",
             "outline",
             "explore",
-            "graph_diff"
+            "graph_diff",
+            "graph_export"
         ]
     );
 }

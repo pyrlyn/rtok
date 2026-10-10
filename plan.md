@@ -45,10 +45,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
-| T329.16 | todo | P3 | 3 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
+| T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -824,16 +824,15 @@ Check: the live canvas frames a running call and eases back to an overview in 2D
 
 ### T329.29. Graph page: Compare mode and the remaining diff reports
 
-The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (needs T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (the reader is `export::read` from T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
 
 Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
+### T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 
-T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
+The rest of T329 §8c after T329.16 (split at claim time: the backend half fills the 500-line cap). T329.16 ships the `rtok.graph.v1` schema file, JSON export with redaction, `rtok graph export`, MCP `graph_export` and a read-only importer (`export::read`, `rtok graph export --from FILE`). Here: `--format json|svg|png` on `rtok graph export`; SVG drawn from the `Export` type of `src/plugins/graph/export.rs` (so a saved file draws the same picture), at most about 200 drawn nodes with the footer "N nodes hidden" while the JSON keeps every node, a legend (project colours, node shapes, edge styles) and a footer (project names, scope, backend per project, `indexed_at`, rtok version, export time, partial marker); PNG at 1x, 2x and 4x (transparent or theme background) rasterised from that SVG with a maintained crate (check `rust.md`: `resvg`) and `--scale N --transparent`; the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; image of the live frame only for part 2; the dialog says that file and symbol names are included); and the page opening an exported JSON read-only with the banner "viewing export from ...". D27: anything the command prints is a page on web and tui, so the TUI gets the same export action. Docs in en, ru, uk. Depends on T329.16, T329.14.
 
-Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
-
+Check: SVG, and PNG exports at 1x, 2x and 4x, of A's scope open and match; the page exports and imports the same JSON the CLI writes; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.30. Graph page: health ring and breakdown per project
 

@@ -160,6 +160,14 @@ const ALLOW_KEYS: &[&str] = &[
     "graph.diff.from",
     "graph.diff.to",
     "graph.diff.project",
+    // `graph export` (T329.16): what one export contains and where it goes, not stored settings.
+    "graph.export.level",
+    "graph.export.focus",
+    "graph.export.depth",
+    "graph.export.no_redact",
+    "graph.export.from",
+    "graph.export.output",
+    "graph.export.project",
     // `task create|list|status` (T441.5): what one task is and which rows one call shows;
     // `[tasks]` holds the adapter and the prefix, which `task init` writes.
     "task.create.description",

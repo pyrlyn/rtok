@@ -51,6 +51,11 @@
   by `index::rows_of` and kept in memory: no checkout, no second store, no write. Only files git reports as
   different are compared. Callers come from the current index of the whole scope. It needs the store's scans,
   so `mcp.rs` routes it to `diff::call` and not through `graph::call`.
+- `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured).
+  One `Export` (the `rtok.graph.v1` types, schema committed at `docs/schemas/rtok.graph.v1.schema.json` and checked
+  by `committed_schema_is_current`) is built from `projects::row` and the store's def/ref scans, or read back by
+  `export::read`; every output is a function of it, so the import never touches the registry or the index. Redaction is on by default and always on for MCP. A change to an export type is a schema
+  change: regenerate the file and, when a field changes meaning, bump the schema id.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and
