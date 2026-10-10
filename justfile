@@ -279,3 +279,8 @@ codeql *langs="actions javascript-typescript python rust":
 # Read rtok's own log (D26) through tailspin (T225); `just logs -f` follows it.
 logs *flags:
     {{tspin}} {{flags}} "${RTOK_HOME:-$HOME/.rtok}/logs/rtok.log"
+
+# Opt-in Cranelift dev build (nightly; dev profile only, never release). `just cranelift check` also works.
+cranelift *args='build':
+    rustup component add rustc-codegen-cranelift-preview --toolchain nightly
+    cargo +nightly --config .cargo/cranelift.toml {{args}}
