@@ -405,7 +405,6 @@ fn rebuild_hook_inputs(rows: Vec<HookInputRow>) -> Vec<String> {
 }
 
 /// `(host slug, project, cwd)` — [`Store::session_row`].
-#[cfg(any(test, feature = "test-util"))]
 pub type SessionRow = (Option<String>, Option<String>, Option<String>);
 
 /// Text stored inline for display, the sha256 of `body`'s raw bytes, and — only when `body`

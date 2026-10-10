@@ -1258,6 +1258,13 @@ section! {
         /// T329.17: seconds between the health checks of a process that hosts graph (`rtok mcp`,
         /// `rtok web`); 0 turns the check off.
         health_check_interval_s: u32 = 60,
+        /// T329.34: seconds a node stays warm on the web graph page's live canvas after a call.
+        live_heat_window_s: u32 = 300,
+        /// T329.34: most call events one second of the live panel lists; counters still count
+        /// every call.
+        live_max_events_per_s: u32 = 50,
+        /// T329.34: finished calls the live panel keeps in its feed.
+        live_feed_rows: u32 = 200,
         exclude: Vec<String> = vec![],
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),

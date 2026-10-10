@@ -558,6 +558,9 @@ reference_depth = 3                   # T329.8: reference levels followed from t
 max_auto_projects = 20                # T329.8: most projects references may add to the registry; reaching it is shown and logged
 alerts = true                         # T329.17: alert when a project in the scope is missing, unreachable, has its backend down or a broken manifest link; shown by rtok doctor, graph projects and graph answers
 health_check_interval_s = 60          # T329.17: seconds between health checks in rtok mcp and rtok web (an alert needs two in a row); 0 = off
+live_heat_window_s = 300            # T329.34: секунд, сколько узел остаётся «тёплым» на живом холсте графа после вызова (rtok web, rtok tui)
+live_max_events_per_s = 50          # T329.34: сколько событий вызовов живая панель показывает в секунду; счётчики считают каждый вызов
+live_feed_rows = 200                # T329.34: сколько завершённых вызовов хранит живая лента (1-1000)
 
 [plugins.toon]
 enabled  = true

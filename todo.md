@@ -22,7 +22,6 @@
 - T329.52. Graph page: metrics collapsed to a strip under 900 px
 - T329.53. Graph page: count-up animation of the live numbers
 - T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
-- T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
