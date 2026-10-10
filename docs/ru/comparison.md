@@ -102,8 +102,8 @@ issue #112 портит inline-код. Семантический кеш bifrost
 
 Этот столбец — не разовая плата: он повторно отправляется с каждым запросом каждой сессии. Два из этих
 серверов вместе стоят за ход больше, чем весь бюджет внедрения rtok. `graph` отвечает на
-`symbol` / `callers` / `impact` / `outline` / `explore` за 127 токенов описаний
-(`cargo nextest run -p rtok graph_surface`, 2026-09-18).
+`symbol` / `callers` / `impact` / `outline` / `explore` / `graph_diff` за 155 токенов описаний
+(`cargo nextest run -p rtok graph_surface`, 2026-10-10).
 
 Компромисс, однако, реален, и §5 его называет: serena разрешает ссылки, которые индекс tree-sitter tags
 в rtok пропускает.
