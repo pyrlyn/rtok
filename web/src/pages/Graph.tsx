@@ -21,6 +21,9 @@ const ProjectsOverview = lazy(() =>
     import("./graph3d/ProjectsOverview").then((m) => ({ default: m.ProjectsOverview })),
 );
 const DrillView = lazy(() => import("./graph3d/DrillView").then((m) => ({ default: m.DrillView })));
+const LiveSection = lazy(() =>
+    import("./graph3d/live/LiveSection").then((m) => ({ default: m.LiveSection })),
+);
 
 export function Graph() {
     // The drill-down lives in the URL (T329.22): each step is a history entry, so Back climbs out.
@@ -52,6 +55,9 @@ export function Graph() {
                             )}
                         </Suspense>
                     )}
+                    <Suspense fallback={null}>
+                        <LiveSection />
+                    </Suspense>
                     <TextPage
                         page="graph"
                         text={snap.graph}
