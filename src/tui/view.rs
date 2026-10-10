@@ -20,6 +20,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Clear, Paragraph, Row, Sparkline, Table, TableState, Tabs, Wrap};
 
 use super::app::{App, keys_for};
+use super::health;
 use super::theme::{self, ACCENT, ERR, OK, WARN};
 use crate::model::{self, PluginPage};
 use crate::store::CallRow;
@@ -463,9 +464,11 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     }
     // Seven rows and the header: the table scrolls to the cursor beyond that.
     let height = (rows.len() as u16 + 1).min(8);
+    let detail = health::detail(&rows[state.cursor(&rows)]);
     // Two hint lines: the project keys (T476) and the live pane's (T480) overflow one at 128 columns.
-    let [table, note, hints, text] = Layout::vertical([
+    let [table, breakdown, note, hints, text] = Layout::vertical([
         Constraint::Length(height),
+        Constraint::Length(detail.len() as u16),
         Constraint::Length(1),
         Constraint::Length(2),
         Constraint::Min(0),
@@ -478,6 +481,8 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
             Cell::from(p.name.clone()),
             Cell::from(p.state),
             Cell::from(p.links.len().to_string()),
+            health::cell(p),
+            health::scope_cell(p),
         ])
     });
     let widths = [
@@ -486,15 +491,20 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
         Constraint::Min(16),
         Constraint::Length(12),
         Constraint::Length(5),
+        Constraint::Length(8),
+        Constraint::Length(5),
     ];
     let mut cursor = TableState::default().with_selected(Some(state.cursor(&rows)));
     frame.render_stateful_widget(
         Table::new(body, widths)
-            .header(theme::header(["", "id", "project", "state", "links"]))
+            .header(theme::header([
+                "", "id", "project", "state", "links", "health", "scope",
+            ]))
             .row_highlight_style(theme::selected()),
         table,
         &mut cursor,
     );
+    frame.render_widget(Paragraph::new(detail), breakdown);
     frame.render_widget(
         Paragraph::new(Line::styled(state.note(&rows), Style::new().fg(WARN))),
         note,
