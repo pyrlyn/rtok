@@ -189,6 +189,15 @@ fn compact(n: i64) -> String {
     }
 }
 
+/// `30 ms`, `1.5 s`: the web page's `millis`.
+fn millis(ms: f64) -> String {
+    if ms < 1000.0 {
+        format!("{} ms", ms.round())
+    } else {
+        format!("{:.1} s", ms / 1000.0)
+    }
+}
+
 fn percent(part: i64, whole: i64) -> String {
     if whole == 0 {
         "-".into()
@@ -284,7 +293,24 @@ impl LiveCalls {
                 Style::new().fg(ACCENT),
             ),
         ]);
-        let mut lines = vec![Line::from(windows), kpi];
+        let latency = t.latency().map_or_else(
+            || Span::raw("-  "),
+            |(p50, p95)| Span::raw(format!("{} (p95 {})  ", millis(p50), millis(p95))),
+        );
+        let fallbacks = if t.fallbacks > 0 {
+            Style::new().fg(WARN)
+        } else {
+            theme::muted()
+        };
+        let metrics = Line::from(vec![
+            Span::styled("latency p50 ", theme::muted()),
+            latency,
+            Span::styled("symbols asked ", theme::muted()),
+            Span::raw(format!("{} ({} across projects)  ", t.symbols, t.crossed)),
+            Span::styled("fallbacks ", theme::muted()),
+            Span::styled(format!("{} ({} capped)", t.fallbacks, t.caps), fallbacks),
+        ]);
+        let mut lines = vec![Line::from(windows), kpi, metrics];
         let mut tools: Vec<_> = t.tools.iter().collect();
         tools.sort_by(|a, b| b.1.calls.cmp(&a.1.calls).then(a.0.cmp(b.0)));
         let top = tools.first().map_or(1, |(_, v)| v.calls).max(1);
@@ -316,7 +342,8 @@ impl LiveCalls {
 
     pub(super) fn render(&self, frame: &mut Frame, area: Rect) {
         let t = self.shown().window_totals(self.window, self.shown_now());
-        let bars = MAX_BARS.min(usize::from(area.height).saturating_sub(8));
+        // The Graph page gives the pane 13 rows at 24; the bars yield so the feed keeps its rows.
+        let bars = MAX_BARS.min(usize::from(area.height).saturating_sub(10));
         let mut lines = self.metric_lines(&t, bars);
         let mut filters = Vec::new();
         for (name, value) in [
@@ -383,6 +410,7 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     use super::*;
+    use crate::store::MeasurementSample;
     use crate::tui::app::{App, KEYS, tests::config};
     use crate::tui::view;
     use crate::web::calls_store::fixtures::{T, batch, end, event};
@@ -396,7 +424,11 @@ mod tests {
     }
 
     fn screen(app: &App) -> String {
-        let mut terminal = Terminal::new(TestBackend::new(130, 40)).unwrap();
+        screen_at(app, 130, 40)
+    }
+
+    fn screen_at(app: &App, width: u16, height: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal.draw(|f| view::draw(f, app)).unwrap();
         let buf = terminal.backend().buffer().clone();
         (0..buf.area.height)
@@ -444,6 +476,66 @@ mod tests {
         }
         let t = app.live().latest.window_totals(3, T);
         assert_eq!((t.calls, t.failed, t.before, t.after), (2, 1, 100, 30));
+    }
+
+    /// The events and figures of the `calls_store.rs` metrics test, read off the pane.
+    #[test]
+    fn the_pane_shows_the_call_metrics_with_the_web_wording() {
+        let sample = |kind: &str, ref_id: Option<&str>| MeasurementSample {
+            id: 1,
+            kind: kind.into(),
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id: ref_id.map(Into::into),
+        };
+        let timed = |call: &str, ms: f64| {
+            let mut e = end(call, 0, 0);
+            e.ms = Some(ms);
+            e.samples.clear();
+            e
+        };
+        let mut a = timed("a", 10.0);
+        a.symbols = Some(2);
+        a.total = Some(3);
+        a.samples = vec![sample("lsp_fallback", None)];
+        let mut b = timed("b", 20.0);
+        b.symbols = Some(1);
+        b.total = Some(1);
+        b.samples = vec![sample("cap", Some("ab")), sample("explore", None)];
+        let events = vec![a, b, timed("c", 30.0), timed("d", 40.0), timed("e", 100.0)];
+        let mut app = graph_app();
+        app.live_mut().feed_batch(&batch(events, 0), T);
+        let s = screen(&app);
+        for want in [
+            "latency p50 30 ms (p95 100 ms)",
+            "symbols asked 3 (1 across projects)",
+            "fallbacks 1 (1 capped)",
+        ] {
+            assert!(s.contains(want), "missing `{want}` in\n{s}");
+        }
+    }
+
+    /// The Graph page is cramped at 24 rows: the metrics line must not push the feed out.
+    #[test]
+    fn the_metrics_line_leaves_the_feed_its_rows_at_24_rows() {
+        let mut app = graph_app();
+        app.live_mut().feed_batch(&first_batch(), T);
+        let s = screen_at(&app, 130, 24);
+        assert!(s.contains("latency p50 12 ms (p95 12 ms)"), "{s}");
+        assert!(s.contains("no backend"), "{s}");
+        assert!(s.contains("tags · 70 saved · 12 ms"), "{s}");
+    }
+
+    #[test]
+    fn a_slow_call_is_shown_in_seconds_and_no_latency_as_a_dash() {
+        assert_eq!(millis(29.6), "30 ms");
+        assert_eq!(millis(1500.0), "1.5 s");
+        let app = graph_app();
+        let t = app.live().latest.window_totals(1, T);
+        let line = app.live().metric_lines(&t, 0)[2].to_string();
+        assert!(line.starts_with("latency p50 -  symbols asked 0"), "{line}");
     }
 
     #[test]

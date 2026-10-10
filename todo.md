@@ -73,4 +73,3 @@
 - T479. TUI: clear safe junk with plan and confirm
 - T484. Web live panel reads the server's calls totals
 - T485. TUI: graph diff and compare view
-- T486. TUI: live calls pane shows call metrics
