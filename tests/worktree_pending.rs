@@ -39,7 +39,8 @@ fn scene(name: &str) -> Scene {
             made.to_str().unwrap(),
         ],
     );
-    let made = made.canonicalize().unwrap();
+    // The store keeps paths without the Windows `\\?\` prefix that std adds.
+    let made = dunce::canonicalize(&made).unwrap();
     Scene {
         home,
         work,
