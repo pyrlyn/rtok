@@ -30,6 +30,7 @@ pub mod jsonc;
 pub mod junk;
 pub mod junk_cache;
 pub mod junk_clear;
+pub mod junk_items;
 pub mod junk_kinds;
 pub mod junk_map;
 pub mod junk_review;

@@ -550,7 +550,7 @@ map_rank   = "refs"                   # порядок карти на SessionSt
 body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
 auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
 auto_add_projects = true               # T329.6: реєструвати каталог у реєстрі проєктів, коли там стартує сесія з хуками, створюється або приєднується worktree через `rtok worktree` (під назвою його гілки) або виконується виклик graph MCP; false = реєстр змінюється лише через сторінку й CLI
-backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
+backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)
 lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
 backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 watch      = "off"                    # off | notify: фонове переіндексування всередині `rtok mcp` (P8d)
@@ -762,12 +762,15 @@ default_model = ""
 `backend = "tags"` (типово) відповідає з індексу tree-sitter. `"lsp"` спрямовує `symbol` / `callers` /
 `impact` / `outline` / `explore` через мовний сервер із `PATH` і віддає відповідь tags, коли сервер
 відповісти не може. `"auto"` обирає режим для кожного проєкту й мови: сервер, якщо для мови проєкту він
-встановлений, інакше tags, і кожна відповідь повідомляє, який режим відповів. `text` з'явиться в T329.10
-і до того відхиляється.
+встановлений, інакше tags, а якщо жодна граматика не розбирає проєкт — текстовий пошук, і кожна відповідь
+повідомляє, який режим відповів. `"text"` (T329.10) закріплює простий текстовий пошук: шаблони з межами
+слів для визначень і згадок по файлах, які обходить інструмент `search`, усередині процесу (`rg`, `grep`
+і `ssh` не запускаються), без графа викликів, тому `dead` і ланцюжки `to` в `impact` відповідають
+«not available in text mode».
 
 `backend_by_language` перевизначає `backend` для однієї мови, яку визначає файл-маркер проєкту: `rust`,
-`c`, `typescript`, `dart`, `go`, `python`, `javascript` (`go = "tags"` лишає Go на індексі, поки решта
-працює в `auto`). `lsp_timeout_ms` (типово 40000) — скільки може тривати одне очікування сервера, перш ніж
+`c`, `typescript`, `dart`, `go`, `python`, `javascript`, `java`, `ruby`, `php`, `elixir`, `swift`
+(`go = "tags"` лишає Go на індексі, поки решта працює в `auto`). `lsp_timeout_ms` (типово 40000) — скільки може тривати одне очікування сервера, перш ніж
 запит відкотиться на tags. Покрокове налаштування для Rust (rust-analyzer) і Dart (Dart SDK) та формат
 відповіді `auto`: `docs/lsp.md`.
 
@@ -829,7 +832,7 @@ color = false   # RTOK_UI_COLOR=false
 | `worktree whoami` | — | читає `RTOK_AGENT_ID` і `[worktree] root` (T411); власного ключа немає (`--json` — див. рядок «читання») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записуються в `.rtok.toml` цієї копії репозиторію (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного виклику (без ключа): яке завдання і які рядки показати; адаптер і префікс вибирає `[tasks]` |
-| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | на один виклик (без ключа): що один запуск показує або видаляє; `--session-days` це `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` без прапорця |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--items`, `--sort`, `--min-size`, `--yes` | на один виклик (без ключа): що один запуск показує або видаляє; `--session-days` це `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` без прапорця |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а також `.dirs.<host>` без прапорця (`--unpriced` обирає вигляд одного виклику, `--json` — див. рядок «читання») |
 | `agents sessions` | `--all` | (дія: також перелічує завершені сесії; live чи idle визначає `agents.idle`) |
 | `agents show` | — | знаходить префікс id через сховище (T284); live чи idle визначає `agents.idle` (`--json` — див. рядок «читання») |

@@ -523,8 +523,7 @@ fn is_open(dotted: &str) -> bool {
         || dotted.starts_with("plugins.graph.extensions.")
 }
 
-/// `text` is left out until T329.10 ships it: a value the graph cannot honour is refused here.
-const GRAPH_BACKENDS: &[&str] = &["tags", "lsp", "auto"];
+const GRAPH_BACKENDS: &[&str] = &["tags", "lsp", "auto", "text"];
 
 const GRAPH_GRAMMARS: &[&str] = &[
     "rust", "ts", "tsx", "js", "mjs", "cjs", "py", "dart", "c", "h", "go",
