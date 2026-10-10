@@ -87,6 +87,22 @@ pub(super) enum GraphCmd {
         #[arg(long)]
         project: Option<String>,
     },
+    // T329.18
+    /// What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers
+    Diff {
+        /// Compare from this git ref
+        #[arg(long, default_value = "HEAD")]
+        from: String,
+        /// Compare to this git ref; `working` is the working tree
+        #[arg(long, default_value = "working")]
+        to: String,
+        /// JSON instead of the text answer (whole, not capped)
+        #[arg(long)]
+        json: bool,
+        /// Project id or directory instead of the cwd (see `rtok graph projects`)
+        #[arg(long)]
+        project: Option<String>,
+    },
     /// Tests that reach files changed in git (`git diff --name-only`)
     Affected {
         /// Diff against this ref
@@ -283,6 +299,28 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                     since.as_deref(),
                     staged,
                     json,
+                )?
+            );
+        }
+        GraphCmd::Diff {
+            from,
+            to,
+            json,
+            project,
+        } => {
+            let root = crate::plugins::graph::cli_root(None)?;
+            let scope =
+                crate::plugins::graph::scope::resolve(&cx.store, project.as_deref(), &root)?;
+            print!(
+                "{}",
+                crate::plugins::graph::diff::run(
+                    &cx,
+                    &scope,
+                    &crate::plugins::graph::diff::Query {
+                        from: &from,
+                        to: Some(to.as_str()).filter(|t| *t != "working"),
+                        json,
+                    },
                 )?
             );
         }

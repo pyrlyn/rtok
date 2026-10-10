@@ -46,6 +46,11 @@
   index status, the mirrored capability record and the mirrored alerts only: it never probes, spawns or
   walks files, and recomputes at most once a second per project. The missing-server fix text is fixed by
   the plan; a project an alert names is left out of the health notice.
+- `diff.rs` (T329.18) answers `rtok graph diff` and MCP `graph_diff`, the sixth tool (the surface gate is 160
+  tokens, not 150). The old side is read from git's object database (`ls-tree`, one `cat-file --batch`), parsed
+  by `index::rows_of` and kept in memory: no checkout, no second store, no write. Only files git reports as
+  different are compared. Callers come from the current index of the whole scope. It needs the store's scans,
+  so `mcp.rs` routes it to `diff::call` and not through `graph::call`.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and

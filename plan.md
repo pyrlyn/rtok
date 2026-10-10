@@ -46,12 +46,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
-| T329.18 | todo | P3 | 4 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
-| T329.24 | todo | P3 | 2 | 0% | |
 | T329.25 | todo | P3 | 2 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
+| T329.29 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.7 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -99,6 +98,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T477 | todo | P3 | 3 | 0% | |
 | T478 | todo | P3 | 3 | 0% | |
 | T479 | todo | P3 | 2 | 0% | |
+| T481 | todo | P3 | 2 | 0% | |
 
 
 
@@ -834,17 +834,18 @@ Symbols requested and returned per call are not in the T329.15 events; if the di
 
 Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
 
+### T329.29. Graph page: Compare mode and the remaining diff reports
+
+The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (needs T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
+
 ### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 
 T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
 
-### T329.18. Graph diff: compare before and after a change
-
-T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14 and T329.22.
-
-Check: a signature change in B shows in `rtok graph diff --from HEAD` from A with A's affected call sites; the working tree is untouched; a rename is a rename; an unknown ref errors; `graph_diff` returns a capped summary with a paging id; `just check`.
 
 ### T329.21. Project badges in the graph page lists
 
@@ -852,11 +853,6 @@ The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a p
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
 
-### T329.24. Graph page: show each project's capability record
-
-Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
-
-Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
 
 ### T329.25. Graph page: alert badges, toasts and the alerts list
 
@@ -1418,6 +1414,12 @@ Check: a TUI test with a fixture home: the plan equals the web's plan for the sa
 T330.7 adds a "clear safe junk" button to the web hosts page that runs the `rtok agents junk clear` dry run, shows it and asks for confirmation; D27 (amended 2026-10-10, T346) requires the same action in the TUI. Depends on T330.7. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
 
 Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
+
+### T481. TUI: graph health score per project
+
+T329.19 puts `ProjectRow.health` and `ProjectRow.scope_health` into `rtok graph projects`, `--json` and `/ws`; D27 (amended 2026-10-10, T346) requires the TUI to show them too, and the TUI `Model.projects` already carries both fields. Depends on T329.19. Done means: the TUI projects view shows each project's score (or `indexing` / `missing`) with the same colour bands as the page (green 80 and up, amber 50 to 79, red below 50), the selected project's breakdown (the three components, the reasons and their fixes) and the scope's lowest score.
+
+Check: a TUI render test on fixture rows at 100, 60 with two reasons, `indexing` and `missing`; `tests/surface_parity.rs` lists the score on both surfaces; `just check`.
 
 ## Reference
 

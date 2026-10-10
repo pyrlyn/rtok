@@ -662,16 +662,17 @@ complete -c rtok -n "__fish_rtok_using_subcommand docs; and __fish_seen_subcomma
 complete -c rtok -n "__fish_rtok_using_subcommand docs; and __fish_seen_subcommand_from fetch" -s h -l help -d 'Print help'
 complete -c rtok -n "__fish_rtok_using_subcommand docs; and __fish_seen_subcommand_from help" -f -a "fetch" -d 'Download rustdoc JSON for a Cargo.lock dependency (the only network path)'
 complete -c rtok -n "__fish_rtok_using_subcommand docs; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -s h -l help -d 'Print help'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "index" -d 'Walk a tree and insert definitions + references'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "dead" -d 'List unreferenced private definitions (skips pub, trait impls, tests, macros)'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "status" -d 'Index health for the current or given root'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "impact" -d 'Symbol impact or call paths to a target'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "projects" -d 'The project registry: list, add, remove, select'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "review" -d 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "affected" -d 'Tests that reach files changed in git (`git diff --name-only`)'
-complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review affected help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -s h -l help -d 'Print help'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "index" -d 'Walk a tree and insert definitions + references'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "dead" -d 'List unreferenced private definitions (skips pub, trait impls, tests, macros)'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "status" -d 'Index health for the current or given root'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "impact" -d 'Symbol impact or call paths to a target'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "projects" -d 'The project registry: list, add, remove, select'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "review" -d 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "diff" -d 'What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "affected" -d 'Tests that reach files changed in git (`git diff --name-only`)'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and not __fish_seen_subcommand_from index dead status impact projects review diff affected help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from index" -l project -d 'Project id or directory (see `rtok graph projects`)' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from index" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from index" -l dry-run -d 'Report what would be indexed and write no rows'
@@ -705,6 +706,12 @@ complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcomm
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from review" -l staged -d 'Staged files only (`git diff --cached --name-only`)'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from review" -l json -d 'JSON instead of the text list'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from review" -s h -l help -d 'Print help'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l from -d 'Compare from this git ref' -r
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l to -d 'Compare to this git ref; `working` is the working tree' -r
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l project -d 'Project id or directory instead of the cwd (see `rtok graph projects`)' -r
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -l json -d 'JSON instead of the text answer (whole, not capped)'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from diff" -s h -l help -d 'Print help'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from affected" -l since -d 'Diff against this ref' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from affected" -l project -d 'Project id or directory instead of the cwd (see `rtok graph projects`)' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from affected" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
@@ -717,6 +724,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcomm
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from help" -f -a "impact" -d 'Symbol impact or call paths to a target'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from help" -f -a "projects" -d 'The project registry: list, add, remove, select'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from help" -f -a "review" -d 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from help" -f -a "diff" -d 'What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from help" -f -a "affected" -d 'Tests that reach files changed in git (`git diff --name-only`)'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c rtok -n "__fish_rtok_using_subcommand guard; and not __fish_seen_subcommand_from check help" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
@@ -899,6 +907,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcomma
 complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from graph" -f -a "impact" -d 'Symbol impact or call paths to a target'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from graph" -f -a "projects" -d 'The project registry: list, add, remove, select'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from graph" -f -a "review" -d 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)'
+complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from graph" -f -a "diff" -d 'What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from graph" -f -a "affected" -d 'Tests that reach files changed in git (`git diff --name-only`)'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from guard" -f -a "check" -d 'Print `{"allow":true}` or `{"allow":false,"reason":…}` (fail open: bad input allows)'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and __fish_seen_subcommand_from demon" -f -a "start" -d 'Detach a supervisor that restarts the service whenever it dies'

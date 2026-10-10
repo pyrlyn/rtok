@@ -26,6 +26,7 @@ build never blocks the host.
 | `rtok graph index [path]` | build the tree-sitter symbol index for a tree |
 | `rtok graph impact <name> [--all] [--project <id\|dir>]` | what breaks if a symbol changes (files grouped and cut at `plugins.graph.impact_tokens`; `--all` prints every row), over the project and the projects it links to; `dead` and `affected` run over that scope too (a symbol only a linked project calls is not dead; `git diff` is read in every project, tests are listed per project); `index` and `status` take `--project` too. One answer, one cap; with `watch` on, `rtok mcp` watches every project of the scope |
 | `rtok graph review [--since <ref>\|--staged] [--json] [--project <id\|dir>]` | risk-ranked reading list for a git diff: each changed file's score, the definitions no test reaches, and the line ranges to read |
+| `rtok graph diff [--from <ref>] [--to <ref>\|working] [--json] [--project <id\|dir>]` | what a change did to the graph, MCP `graph_diff`: symbols changed (signature or body), added, removed, renamed or moved, and call edges added or removed, each changed or removed symbol with its callers from the project and the projects it links to. The old side is read from git's object database (no checkout, the working tree is not touched); `--from` defaults to `HEAD`, `--to` to the working tree. A renamed symbol is shown only when exactly one removed and one added definition share its body; the text is cut at `plugins.graph.max_tokens` with an `expand <id>` for the rest, `--json` is whole |
 | `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
 | `rtok memory import <file>` | import notes as JSONL, deduped by body hash |
 | `rtok otel flush\|status` | export the ledgers over OTLP/HTTP, or report the watermarks |
@@ -60,6 +61,10 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
   is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
   updates in place without moving the scene.
+- **Graph backend.** Each project in the list carries `lsp` or `tags`, and the selected project's
+  header says why: the language whose server answers, or the reason the project fell back to tags,
+  when it was last checked and when the health check retries. A project nobody has asked yet says
+  it has no record.
 
 ## Every flag is a config key
 

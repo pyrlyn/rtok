@@ -6,7 +6,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { connectSample } from "../api/sample";
 import { project } from "../api/sampleRows";
-import type { ProjectRow } from "../api/snapshot.gen";
+import type { Capability, ProjectRow } from "../api/snapshot.gen";
 import { richSnapshot } from "./fixtures";
 import { Graph } from "./Graph";
 import { Projects } from "./Projects";
@@ -35,6 +35,32 @@ export const Failed: Story = { args: { rows: inState("failed") } };
 export const Missing: Story = {
     args: { rows: inState("missing", { missing: true, index: null }) },
 };
+const record: Capability = {
+    backend: "lsp",
+    checked_at: 1_790_000_000,
+    config: "auto",
+    language: "rust",
+    next_probe_at: null,
+    reason: null,
+    server: true,
+};
+
+export const BackendLsp: Story = { args: { rows: inState("ok", { backend: record }) } };
+export const BackendTagsWithReason: Story = {
+    args: {
+        rows: inState("ok", {
+            backend: {
+                ...record,
+                backend: "tags",
+                reason: "rust-analyzer is not installed",
+                next_probe_at: 1_790_000_300,
+            },
+        }),
+    },
+};
+// No record is the state of a project nobody has asked the graph about yet.
+export const BackendNoRecord: Story = { args: { rows: inState("ok") } };
+
 export const NothingSelected: Story = {
     args: { rows: [project(1, "rtok"), project(2, "ketch")] },
 };

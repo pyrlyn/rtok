@@ -593,6 +593,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("graph affected", "need a target; CLI/MCP only"),
     ("graph review", "need a diff; CLI only"),
     (
+        "graph diff",
+        "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
+    ),
+    (
         "graph projects",
         "the registry's list and actions; the Graph page gets the selector in T329.12",
     ),
