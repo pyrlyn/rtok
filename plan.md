@@ -19,7 +19,6 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 | T466 | P2 | move | suspected | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Used four times in `ci.yml`; share it from `pyrlyn/ci` so other repos can reuse it. |
 | T467 | P2 | move | confirmed | `src/store/` (`mod.rs` is 5,275 lines) → `crates/rtok-store` | Issue #628 (P2 on GitHub): architecture work for incremental builds, not a bug. |
 | T468 | P3 | dead code | confirmed | `src/plugins/toon/mod.rs:212` | `toon::decode` is test-only. Put it under `cfg(test)` if release builds should not carry it. |
-| T469 | P3 | dead code | confirmed | `crates/rtok-agent-sdk/src/lib.rs:1086` | `copy_dir` is dead on Unix. Gate it with `cfg(not(unix))`. |
 | T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
 
 Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` (`src/agents/plugin_version.rs:84`, `:112`, `:268`) are open on T279.

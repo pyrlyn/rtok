@@ -34,6 +34,12 @@ Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
 
 Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
 
+### T469. `copy_dir` is not dead on Unix
+
+Cloud review finding (2026-10-08): `copy_dir` in `crates/rtok-agent-sdk/src/lib.rs` carried `#[allow(dead_code)]` and was said to be dead on Unix, to be gated with `cfg(not(unix))`. The claim was wrong: `copy_dir` is reached on every target through `copy_owned_with` and `copy_owned`, which `SkillPlan::Copy` calls when a skill is installed as an owned copy. Gating it would break that path on Unix. Only the stale allow was removed; clippy `-D warnings` on the crate reports no dead code without it.
+
+Check: `cargo fmt --check`, `cargo clippy -p rtok-agent-sdk --all-targets -- -D warnings`, `cargo test -p rtok-agent-sdk`.
+
 ### T460. Budgeted `mem_pack` for memory notes
 
 The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
