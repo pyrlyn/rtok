@@ -1,8 +1,8 @@
 name: ci
 
-# Push to main arms `revert-on-failure` (auto-revert of a bad push, then a draft PR
-# `revert-<branch>` that brings the work back — T84). That is intentional: main must stay
-# green. Pull requests against main are the review gate; draft PRs are skipped so
+# Pull requests against main are the review gate: the `protect-main` ruleset requires a green
+# `gate` before merge. A red main push (merge skew or a flake) is fixed forward; T502 retired
+# the auto-revert job (T84), whose push to main that ruleset rejects. Draft PRs are skipped so
 # half-finished work does not burn runners. `workflow_dispatch` remains for manual runs
 # (release branches, one-off checks).
 on:
@@ -26,7 +26,7 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Read-only by default; `revert-on-failure` widens its own.
+# Read-only by default; jobs that cancel the run add `actions: write`.
 permissions:
   contents: read
 
@@ -132,7 +132,7 @@ jobs:
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
   # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
-  # T83.4: a gate like `check` — a Windows-only failure fails the run and reverts main.
+  # T83.4: a gate like `check` — a Windows-only failure fails the run.
   # The suite run (~250 s) outweighs the build (~85 s) on this runner, so it is split across
   # `partitions` runners with nextest `--partition count:i/n`. Every shard builds the same
   # test binaries and runs its share; the job still fails if any shard fails.
@@ -252,21 +252,3 @@ jobs:
       - run: just docs-check
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
-
-  revert-on-failure:
-    name: revert-on-failure
-    needs: [lint, check, windows, spa, docs]
-    if: >-
-      always()
-      && github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && contains(join(needs.*.result, ','), 'failure')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      # Revert, then a draft `revert-<branch>` PR that re-applies the work (T84, T253). The
-      # shared action skips new branches, bot and auto-revert commits, and pushes touching
-      # .github/ (GITHUB_TOKEN cannot push workflow files).
-      - uses: pyrlyn/ci/.github/actions/revert-on-failure@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main

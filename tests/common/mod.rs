@@ -10,6 +10,7 @@ pub mod agents;
 #[cfg(unix)]
 pub mod fake_lsp;
 pub mod git;
+pub mod lanes;
 pub mod mcp;
 pub mod proxy;
 

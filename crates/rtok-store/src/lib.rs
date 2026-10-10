@@ -95,7 +95,11 @@ use schema::{
 pub(crate) use sql_ext::{coalesce, length, substr, sum_bigint, unixepoch};
 
 // `usage_by_model_tier` groups by a column of each table.
-diesel::allow_columns_to_appear_in_same_group_by_clause!(usage::model, calls::kind);
+diesel::allow_columns_to_appear_in_same_group_by_clause!(
+    usage::model,
+    calls::kind,
+    calls::service_tier
+);
 
 /// Pause between `open` attempts while another connection holds the lock.
 const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
@@ -180,6 +184,10 @@ pub(crate) fn unix_now() -> u64 {
 
 /// `calls.kind` of a Batch-lane request. The host's `lane::KIND_BATCH` is this string.
 pub const BATCH_CALL_KIND: &str = "api_request:batch";
+
+/// `calls.service_tier` of a request a provider served on its Flex tier (T385.12.2); the price
+/// key suffix `@flex` is this name.
+pub const FLEX_SERVICE_TIER: &str = "flex";
 
 /// What [`Store::housekeeping`] skipped. The caller prints and logs `message`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -635,10 +643,12 @@ pub struct ApiUsage {
     pub output: i64,
 }
 
-/// Aggregated usage totals grouped by `calls.kind` (T385.6).
+/// Aggregated usage totals grouped by `calls.kind` and `calls.service_tier` (T385.6, T385.12.2).
 #[derive(Debug, Clone)]
 pub struct LaneUsage {
     pub kind: String,
+    /// The tier the provider reported; `None` when the response named none.
+    pub tier: Option<String>,
     pub input: i64,
     pub cache_create: i64,
     pub cache_read: i64,

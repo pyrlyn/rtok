@@ -248,7 +248,7 @@ client ──POST /v1/…──► axum fallback
                                ├─ compress    → Plugin::proxy_filter (mode=compress)
                                ├─ tools_rewrite (opt-in)
                                ├─ prepare     → Wire shaping (include_usage today;
-                               │                Flex service_tier **planned**)
+                               │                Flex service_tier, src/proxy/flex.rs)
                                └─ forward ──► provider upstream
                                                 │
                                                 └─ tee response → usage when Wire matches
@@ -258,7 +258,7 @@ client ──POST /v1/…──► axum fallback
 |---------|------------------|-----------|
 | Sync chat (`/v1/messages`, `/v1/chat/completions`, `/v1/responses`, Gemini generate) | yes | record + optional compress/prepare + usage |
 | Batch (`/v1/batches`, `/v1/messages/batches`, …) | no (exact path match) | fallback pass-through; call row without usage parsing; observe/result parsing **planned** |
-| Flex | same sync wires | client may set `service_tier`; rtok injection via `prepare` **planned** |
+| Flex | same sync wires | `[proxy.lanes.<lane>] flex` sets `service_tier` in `prepare` (`src/proxy/flex.rs`); the tier the response names is stored on `calls.service_tier` and priced at the `<model>@flex` row (T385.12.2) |
 | Model routing (D9) | sync wires | **planned** rewrite under `[proxy.routing]` |
 
 No transparent sync→Batch conversion: agents need the reply on the same HTTP request.

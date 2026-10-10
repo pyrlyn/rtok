@@ -338,6 +338,7 @@ mod tests {
                 by_cause: vec![],
                 detail: vec![],
             },
+            lanes: Default::default(),
             expand: crate::model::ReportExpand {
                 decisions: 0,
                 expanded: 0,
@@ -406,6 +407,7 @@ mod tests {
                 by_cause: vec![],
                 detail: vec![],
             },
+            lanes: Default::default(),
             expand: crate::model::ReportExpand {
                 decisions: 0,
                 expanded: 0,

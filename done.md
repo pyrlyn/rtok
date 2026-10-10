@@ -561,6 +561,19 @@ Check: `actionlint` + `shellcheck` clean on `.github/workflows/ci.yml`; the titl
 
 Result: setting on (`can_approve_pull_request_reviews: true`), stale branch deleted, `ci.yml` reads the merged PR once for both its head branch and title.
 
+### T502. Retire the `revert-on-failure` CI job
+
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
+Creator decision 2026-10-10. Since 2026-10-08 the `protect-main` ruleset requires a pull request and a green `gate` on main, and its only bypass is the admin role through a PR. `ci / revert-on-failure` (T84, T253) still pushed `ci: auto-revert <sha>` straight to main, so the push was rejected (`push declined due to repository rule violations`, main pipeline runs 38043322970 and 38044250038, 2026-10-10): the job failed, main stayed red and nothing was reverted. With the ruleset, a red main push comes only from merge skew or a flake (the docs-only `efe19f07` failed `spa`), which should be fixed forward, not reverted. Rejected options: a revert PR with auto-merge (a `GITHUB_TOKEN` PR starts no workflow, so `gate` never runs without a PAT or App secret) and a ruleset bypass for GitHub Actions (any workflow with `contents: write` could push past the checks). `pyrlyn/ci` and the ruleset stay as they are.
+
+Plan: delete the `revert-on-failure` job from `.github/workflows/ci.yml` and the comments that describe it; lower the `ci` caller permissions in `.github/workflows/pipeline.yml` to `contents: read` and `actions: write`, since no ci.yml job writes contents or pull requests now.
+
+Check: no `revert-on-failure` left in `.github/`; the PR's pipeline passes (actionlint runs in `pipeline`); `just check`.
+
+Result: job and its comments removed; the `ci` caller runs with `contents: read` and `actions: write`.
+
 ### T252. `surface_parity` web test reads the real `~/.claude` history
 
 Creator request 2026-09-24. `tests/surface_parity.rs::web_serves_exactly_the_pages_the_model_offers` built its `Config` with `load_from(tempdir)` only, so `doctor.*`, `stats.transcripts_dir` and `stats.codex_dir` stayed at this machine's real `~/.claude*` and `~/.codex/sessions`: every snapshot parsed the creator's whole JSONL history (~80 s locally, 180 s timeout under load, non-hermetic). The same leak hid in `web_doctor_instruction_audit_matches_cli_order` (19 s: `rtok doctor` scans `stats.transcripts_dir`), `tests/web.rs::ws_set_accepts_plugin_enabled` (67 s: a web `set` reloads `config.toml`, dropping the in-memory redirects `tests/web.rs` had copied three times), `tests/graph_model.rs::graph_page_matches_dead_json_on_the_fixture_index` (75 s: a snapshot on a bare `load_from`) and in `tests/stats_model.rs` (fixture transcripts, but `doctor.*` still real).
@@ -8447,6 +8460,16 @@ Split from T385.12 (2026-10-08): the whole card would pass the 500-line cap, and
 Check: trycmd for `rtok batch`; a mock-upstream round trip for both providers; a `stats --price` fixture with a Batch row; `just check` (new CLI command gates: trycmd fence, surface parity, config coverage).
 Result: `src/batch.rs` is the client (`rtok batch submit <jsonl>`, `status <id>`, `fetch <id> <out>`; `--provider`, else read from the id prefix; `--url`, else `[proxy] bind`/`port`). The key comes only from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. Every JSONL line is validated first (shape per provider, one endpoint per OpenAI file); Anthropic lines are joined into `requests` byte for byte, an OpenAI file is uploaded as `purpose=batch` and then created for its shared `url`; `fetch` follows `output_file_id`, refuses an existing target and removes a torn download. Ids are restricted to `[A-Za-z0-9_-]` before they reach a URL path. The proxy sent OpenAI's `/v1/batches*` and `/v1/files*` to the Anthropic upstream (no wire); `ProxyState::upstream_for` now sends them to `proxy.openai_upstream` unless the request carries `anthropic-version` (Anthropic's Files API). `[stats.prices]` ships `@batch` rows for the five Claude models and both GPT-5 models and `@flex` rows for the GPT-5 models, fetched 2026-10-08 from the Anthropic and OpenAI pricing pages (Anthropic Batch is half the standard input/output with the cache multipliers stacked; OpenAI Batch and Flex list the same rates). `Store::usage_by_model_tier` keys Batch-lane usage `<model>@batch` and `attach_costs` prices it there, so a model without a Batch row stays `-`. Nothing reads the `@flex` rows until T385.12.2 records the tier. Tests: `tests/batch_cli.rs` (both providers against mock upstreams through a real proxy, the wrong upstream never hit), unit tests in `src/batch.rs`, `src/proxy/mod.rs` and `src/measure/stats.rs`, trycmd `batch-no-key`/`batch-bad-file` plus the regenerated help, man, completions, config-show, config-init and report goldens; `docs/batch-flex.md`, `docs/commands.md`, `docs/config.md` (en, ru, uk) and the README command table updated.
 Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
+
+Split from T385.12; T385.6 and T385.12.1 are done (the price rows and `usage_by_model_tier` are in place). Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
+
+Check: a report fixture with Batch and Flex rows; `just check`.
+Result: migration `0043_calls_service_tier` adds a nullable `calls.service_tier`; `proxy::finish` sets it from the response (`wire::service_tier_from_response`: OpenAI `service_tier` on the object or under `response`, Anthropic `usage.service_tier` or `message.usage`, JSON or SSE, last mention wins), so a Flex request that came back on another tier is recorded as that tier; the request is never consulted. Sources checked 2026-10-10: openai-python `types/chat/chat_completion.py` and `types/responses/response.py`, anthropic-sdk-python `types/usage.py`. `usage_by_model_tier` lists tier `flex` usage under `<model>@flex` (a Batch call stays `@batch`), so `stats --price` costs it at that row. `Store::usage_by_lane` became `usage_by_lane_tier` (kind and tier); `stats::lane_rows` folds it into the `lane` table and a new `lane/tier` table (`Report.lane_tiers`, `--json` `lane_tiers`; a response with no tier prints `-`). The tier table, like the lane table, is left out while all traffic ran on the agent lane at `standard`/`default`, so untouched setups print the same. `rtok report` shows the same rows under its Cache section in md, html, pdf and `--ai` (`ReportLedgers.lanes`, `LANE_HEADS`, `lane_cells`), not as a new section, which keeps the fixed P22 section ids and the md/html/pdf parity. Web and TUI never showed the lane table (T385.6), so no new surface item. Tests: `service_tier_comes_from_the_response_on_every_shape` (`wire.rs`), `flex_usage_is_priced_at_its_flex_row_and_listed_by_tier` (`stats.rs`), `stats_breaks_the_lanes_down_by_service_tier`, `report_lists_cache_counters_per_lane_and_tier` (fixture with agent, Flex, standard bulk and Batch rows, `tests/common/lanes.rs`), and `tests/proxy_service_tier.rs` (mock upstream through the proxy). docs/config.md (en, ru, uk) and docs/batch-flex.md updated. `just check`: 3258 passed, 8 skipped.
+Status: done 2026-10-10
 
 Model: Claude Code / claude-sonnet-5-5
 

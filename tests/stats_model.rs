@@ -16,6 +16,8 @@ fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_rtok")
 }
 
+mod common;
+
 fn home(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rtok-t1511-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
@@ -399,5 +401,32 @@ fn stats_has_no_lane_table_for_agent_only_traffic() {
     let json: serde_json::Value = serde_json::from_str(&rtok(&["stats", "--json"], &h)).unwrap();
     assert!(json.get("lanes").is_none());
     assert!(!rtok(&["stats"], &h).contains("lane "));
+    let _ = fs::remove_dir_all(&h);
+}
+
+/// T385.12.2: the lanes split again by the tier the provider reported, a Batch call (no tier in
+/// its response) printing `-`, and the table is a JSON field of its own.
+#[test]
+fn stats_breaks_the_lanes_down_by_service_tier() {
+    let h = home("lane-tiers");
+    let cfg = rtok::config::Config::load_from(&h).expect("config");
+    common::lanes::seed_lane_tiers(&rtok::store::Store::open(&cfg.core.db_path).expect("store"));
+    let out = rtok(&["stats"], &h);
+    assert!(
+        out.contains(
+            "\
+lane/tier                   input cache_create cache_read output    hit
+agent/default                   5            5         90      7  90.0%
+batch/-                        50            0          0      5   0.0%
+bulk/default                   10           10         80      2  80.0%
+bulk/flex                     100            0          0      9   0.0%
+"
+        ),
+        "{out}"
+    );
+    let json: serde_json::Value = serde_json::from_str(&rtok(&["stats", "--json"], &h)).unwrap();
+    assert_eq!(json["lane_tiers"]["bulk/flex"]["input"], 100);
+    // The per-lane table folds the tiers back together.
+    assert_eq!(json["lanes"]["bulk"]["input"], 110);
     let _ = fs::remove_dir_all(&h);
 }

@@ -58,7 +58,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385.9 | todo | P3 | 5 | 10% | |
 | T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
-| T385.12.2 | todo | P3 | 3 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -922,12 +921,6 @@ Check: dollars per lane before/after from `stats --price` on fixtures; `just che
 optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas and replayed thinking blocks, only where the measurement in each idea shows a saving (I-86 was rejected at 0.03 % — re-measure before building).
 
 Check: per-wire tests and a dated bench row; `just check`.
-
-### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
-
-Split from T385.12; T385.6 and T385.12.1 are done (the price rows and `usage_by_model_tier` are in place). Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
-
-Check: a report fixture with Batch and Flex rows; `just check`.
 
 ### T394. Run the paid live benches and record them
 
