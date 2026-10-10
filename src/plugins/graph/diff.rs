@@ -771,6 +771,12 @@ mod tests {
         while let Some(d) = stack.pop() {
             for e in fs::read_dir(&d).unwrap().flatten() {
                 let p = e.path();
+                // Background `git maintenance` from the fixture's commits writes
+                // lock files under `.git` at any moment; the check is about the
+                // working tree.
+                if p.file_name().is_some_and(|n| n == ".git") {
+                    continue;
+                }
                 if p.is_dir() {
                     stack.push(p);
                 } else {
