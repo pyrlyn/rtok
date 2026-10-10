@@ -51,7 +51,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
-| T329.23 | todo | P2 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.7 | todo | P3 | 3 | 0% | |
@@ -504,7 +503,7 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13, T329.14, T329.20 and T329.22 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. T337, which gated T329.11/T329.17, is settled (requests never re-probe; the health check does); T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13, T329.14, T329.20, T329.22 and T329.23 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. T337, which gated T329.11/T329.17, is settled (requests never re-probe; the health check does); T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
@@ -870,17 +869,6 @@ Check: Vitest and a story for a scoped list with badges from two projects; `just
 Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
 
 Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
-
-### T329.23. Graph drill-down: side panel and search
-
-The rest of T329.22 (split on 2026-10-10: the view, URL state, shapes, "+N more", states and live re-request shipped in T329.22; these two parts did not fit its 500-line cap). T329 §8a level 2 on top of `DrillView` (`web/src/pages/graph3d/DrillView.tsx`):
-
-- Side panel for the selected node: path and line, signature, callers and callees from the frame's edges, and an editor link (`vscode://file/<root>/<path>:<line>`; for an `external` node the root of the project that owns it).
-- Search box: Enter sends the request's `query`, the frame's `hits` are listed (the scope's projects named), and a hit focuses its symbol, or opens the other project with that symbol focused.
-
-Depends on T329.22.
-
-Check: Vitest for the panel contents and the editor link (including an external node) and for the search request; a story on the sample server (select a function, read the panel, search, click a hit in another project; both themes, axe); `just spa-stories`, `just check`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 

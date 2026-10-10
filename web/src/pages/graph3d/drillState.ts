@@ -83,6 +83,19 @@ export const openProject = (id: number): DrillState => ({
   depth: DEPTH_DEFAULT,
 });
 
+/**
+ * `vscode://file/<root>/<path>:<line>`. Each segment is encoded because a path may hold `#` or `?`,
+ * which would end the link early; the drive colon stays, and a file (line 0) has no line.
+ */
+export function editorLink(root: string, path: string, line: number): string {
+  const parts = `${root}/${path}`
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean)
+    .map((s) => encodeURIComponent(s).replace(/%3A/gi, ":"));
+  return `vscode://file/${parts.join("/")}${line > 0 ? `:${line}` : ""}`;
+}
+
 /** A symbol of another project: that project, nothing expanded, the symbol focused. */
 export const openSymbol = (project: number, focus: DrillFocus): DrillState => ({
   ...openProject(project),

@@ -46,6 +46,13 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   node in that project's colour, and clicking it opens that project with the symbol focused.
   `+N more` raises the node cap by 500. A `⚠` marks a file changed since the last index run, and a
   banner says the picture is partial while any file is.
+- **Side panel and search.** The selected node's panel gives its path and line, its signature, its
+  callers and callees (the other ends of the `calls` edges in the picture; click one to select
+  it) and an Open in editor link, `vscode://file/<root>/<path>:<line>`. For a node of a linked
+  project the link uses that project's root, and Open in `<project>` steps into it. The search box
+  sends its text when you press Enter (typing alone sends nothing) and lists the matches in the
+  project and its linked projects, each with its project; a match in this project is focused, a
+  match in another opens that project with the symbol focused.
 - **Where you are is in the address.** The project, the expanded files, the focus and the depth
   are in the page's URL, so every step is a history entry, the breadcrumb (`All projects / rtok /
   src/plugins/graph`) climbs back, and a copied link opens the same view.

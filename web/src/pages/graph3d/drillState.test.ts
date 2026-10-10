@@ -7,6 +7,7 @@ import {
   breadcrumb,
   DEPTH_DEFAULT,
   drillSearch,
+  editorLink,
   focusOn,
   openProject,
   openSymbol,
@@ -94,6 +95,22 @@ describe("drill URL state", () => {
       focus: { path: "lib.rs", name: "open" },
       depth: DEPTH_DEFAULT,
     });
+  });
+});
+
+describe("editor link", () => {
+  test("root, path and line make one vscode link; a file has no line", () => {
+    expect(editorLink("/work/rtok", "src/main.rs", 3)).toBe(
+      "vscode://file/work/rtok/src/main.rs:3",
+    );
+    expect(editorLink("/work/rtok/", "src/main.rs", 0)).toBe("vscode://file/work/rtok/src/main.rs");
+  });
+
+  test("characters that would end the link early are encoded, a Windows drive is not", () => {
+    expect(editorLink("/my work", "a#b/c?.rs", 1)).toBe("vscode://file/my%20work/a%23b/c%3F.rs:1");
+    expect(editorLink("C:\\work\\rtok", "src\\lib.rs", 2)).toBe(
+      "vscode://file/C:/work/rtok/src/lib.rs:2",
+    );
   });
 });
 
