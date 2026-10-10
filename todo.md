@@ -21,7 +21,6 @@
 - T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 - T329.17. Graph alerts: linked project down or unreachable
-- T329.18. Graph diff: compare before and after a change
 - T329.19. Graph health score per project
 - T329.21. Project badges in the graph page lists
 - T329.24. Graph page: show each project's capability record

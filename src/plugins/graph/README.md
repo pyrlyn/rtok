@@ -59,3 +59,5 @@ its recall clause was amended after T8.8 measured the index (`plan.md` §6). T68
 `cargo nextest run -p rtok graph_surface`), still ≤ 150. T68.5 added `rtok graph affected`
 and `impact(path)` with no `name` (same walk, no Measurement on print). T454 added
 `rtok graph review`: a risk-ranked reading list for a git diff, CLI only, same five MCP tools.
+T329.18 added `rtok graph diff` and the sixth tool `graph_diff` (what a change did to the graph, the old
+side read from git's object database); the surface is then 155 description tokens, gate 160.

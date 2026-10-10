@@ -745,7 +745,7 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         #[cfg(feature = "read")]
         "tree" => tree_files(cx, args),
         #[cfg(feature = "graph")]
-        "symbol" | "callers" | "impact" | "outline" | "explore" => {
+        "symbol" | "callers" | "impact" | "outline" | "explore" | "graph_diff" => {
             // T329.6: the root a graph call answers for is the project in use.
             if cx.config.plugins.graph.auto_add_projects
                 && let Ok(root) = std::env::current_dir()
@@ -761,6 +761,10 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
                 crate::plugins::graph::scope::resolve(&cx.store, args["project"].as_str(), &cwd)
                     .and_then(|scope| {
                         call.progress(scope.len());
+                        // The diff reads the store's scans, which a plugin `Ctx` does not carry.
+                        if name == "graph_diff" {
+                            return crate::plugins::graph::diff::call(cx, args, &scope);
+                        }
                         crate::plugins::graph::call(
                             &crate::plugin::Ctx::new(cx),
                             name,

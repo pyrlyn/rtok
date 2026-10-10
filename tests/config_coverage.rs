@@ -151,6 +151,10 @@ const ALLOW_KEYS: &[&str] = &[
     "graph.projects.link.reason",
     "graph.projects.unlink.from",
     "graph.projects.unlink.both",
+    // `graph diff --from/--to` (T329.18): which two revisions one call compares, not stored settings.
+    "graph.diff.from",
+    "graph.diff.to",
+    "graph.diff.project",
     // `task create|list|status` (T441.5): what one task is and which rows one call shows;
     // `[tasks]` holds the adapter and the prefix, which `task init` writes.
     "task.create.description",
