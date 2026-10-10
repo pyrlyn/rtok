@@ -23,6 +23,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Serialize;
 
 use super::junk_cache::{self, Ctx, Item, Owned};
+use super::junk_items::{self, View};
 use super::junk_kinds;
 use super::junk_map::{Role, Roots, specs};
 use super::junk_review;
@@ -228,6 +229,10 @@ pub struct AgentJunk {
 #[derive(Debug, Serialize)]
 pub struct Report {
     pub agents: Vec<AgentJunk>,
+    /// rtok's own log and archive files `clear` would remove: no `Item`, so the totals keep
+    /// counting them through `kinds`; the breakdown lists them from here.
+    #[serde(skip)]
+    pub own: Vec<Outcome>,
     /// Every folder once, however many agents share it.
     pub total_bytes: u64,
     pub freed_default_bytes: u64,
@@ -805,22 +810,30 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         freed_review_bytes: freed(true),
         agents,
         total_bytes,
+        own: outcomes,
     }
 }
 
 /// `text` as an OSC 8 hyperlink to the folder, for a terminal that renders it. A path that is
 /// not absolute has no `file://` URL and stays plain.
-fn folder_link(path: &str, text: &str) -> String {
+pub(super) fn folder_link(path: &str, text: &str) -> String {
     match url::Url::from_file_path(path) {
         Ok(u) => format!("\x1b]8;;{u}\x1b\\{text}\x1b]8;;\x1b\\"),
         Err(()) => text.to_string(),
     }
 }
 
-/// Text of `agents junk list` and of the Hosts page's junk section; `exact` prints raw bytes,
-/// `links` wraps each folder path in an OSC 8 link (only for a terminal).
-pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
-    let size = |n: u64| if exact { n.to_string() } else { human_bytes(n) };
+/// Text of `agents junk list` and of the Hosts page's junk section; `view` says how sizes
+/// print, whether paths are OSC 8 links (only for a terminal) and how many items each kind lists.
+pub fn to_list(report: &Report, view: &View) -> String {
+    let size = |n: u64| {
+        if view.exact {
+            n.to_string()
+        } else {
+            human_bytes(n)
+        }
+    };
+    let groups = junk_items::groups(junk_items::rows(report), view);
     let mut out = String::new();
     for a in &report.agents {
         out.push_str(a.name);
@@ -829,7 +842,7 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
         }
         out.push('\n');
         for f in &a.folders {
-            let path = if links {
+            let path = if view.links {
                 folder_link(&f.path, &f.path)
             } else {
                 f.path.clone()
@@ -857,6 +870,12 @@ pub fn to_list(report: &Report, exact: bool, links: bool) -> String {
                 k.items,
                 size(k.size_bytes)
             ));
+            if let Some(g) = groups
+                .iter()
+                .find(|g| (g.agent, g.kind) == (a.name, k.kind))
+            {
+                out.push_str(&g.lines(view, "      "));
+            }
         }
         for note in &a.notes {
             out.push_str(&format!("  {note}\n"));
@@ -1064,7 +1083,7 @@ mod tests {
                 .any(|f| f.path == logs.display().to_string())
         );
 
-        let text = to_list(&report, true, false);
+        let text = to_list(&report, &View::test(true, false));
         assert!(text.contains("log (safe): 2 items, 12"), "{text}");
         assert!(text.contains("Freed by `clear`: 12"), "{text}");
     }
@@ -1160,7 +1179,7 @@ mod tests {
         assert_eq!(folder(x, &dir.join(".codex/log")).role, "logs");
         assert!(folder(x, &dir.join(".codex")).documented);
 
-        let text = to_list(&report, true, false);
+        let text = to_list(&report, &View::test(true, false));
         assert!(
             text.contains(&format!(
                 "{}  data  {}  not documented: not cleared",
@@ -1170,7 +1189,7 @@ mod tests {
             "{text}"
         );
         assert!(!text.contains("\x1b]8"), "no link off a terminal: {text}");
-        let linked = to_list(&report, true, true);
+        let linked = to_list(&report, &View::test(true, true));
         assert!(linked.contains("\x1b]8;;file://"), "{linked}");
     }
 
@@ -1247,7 +1266,7 @@ mod tests {
             "{} !< {both}",
             report.total_bytes
         );
-        assert!(to_list(&report, false, false).contains("shared with codex"));
+        assert!(to_list(&report, &View::test(false, false)).contains("shared with codex"));
     }
 
     #[test]
@@ -1276,7 +1295,8 @@ mod tests {
             .unwrap();
         assert!(absent.folders.is_empty());
         assert!(
-            to_list(&every, false, false).contains(&format!("{} (not installed)", absent.name))
+            to_list(&every, &View::test(false, false))
+                .contains(&format!("{} (not installed)", absent.name))
         );
     }
 
@@ -1420,7 +1440,7 @@ mod tests {
             report.freed_default_bytes, counted,
             "Cursor's caches add nothing"
         );
-        let text = to_list(&report, true, false);
+        let text = to_list(&report, &View::test(true, false));
         assert!(text.contains("cache (safe): 2 items"), "{text}");
         assert!(
             text.contains(&format!(
@@ -1584,7 +1604,7 @@ mod tests {
         assert!(!paths.iter().any(|p| p.ends_with("0.2.0")));
         assert_eq!(report.freed_default_bytes, want + disk_usage(&stale));
 
-        let text = to_list(&report, true, false);
+        let text = to_list(&report, &View::test(true, false));
         assert!(text.contains("temp (safe): 1 items"), "{text}");
         assert!(text.contains("locks: 1 listed"), "{text}");
         assert!(
@@ -1649,7 +1669,7 @@ mod tests {
         assert_eq!((index.class, index.items), ("review", 2));
         assert_eq!(own.freed_default_bytes, 0);
         assert!(own.freed_review_bytes >= 100);
-        let text = to_list(&report, true, false);
+        let text = to_list(&report, &View::test(true, false));
         assert!(text.contains("sessions (explicit): 1 items"), "{text}");
         assert!(text.contains("index (review): 2 items"), "{text}");
     }

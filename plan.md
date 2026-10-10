@@ -55,7 +55,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.6 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T330.7 | todo | P3 | 3 | 0% | |
 | T335 | todo | research | 1 | 0% | |
 | T343 | todo | research | 1 | 0% | |
 | T344 | todo | research | 1 | 0% | |
@@ -882,7 +882,7 @@ Check: Vitest and a story for a scoped list with badges from two projects; `just
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
-Split into T330.1 to T330.6 (one PR each); this card stays the spec and the epic.
+Split into T330.1 to T330.7 (one PR each); this card stays the spec and the epic.
 
 Ivan, 2026-10-01: one command group to see and clean junk for every agent: `rtok agents junk list` to view and `rtok agents junk clear` to remove. For each agent, show its folders (as links), the size of each folder in KB/MB/GB, and how much space a clear would free. `clear` stays a dry run by default and deletes only with `--yes`, as T182's `rtok agents junk clear` does today.
 
@@ -1053,13 +1053,11 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
 
-### T330.6. Junk: item breakdown, `doctor` line, web card
+### T330.7. Junk: web card with a "clear safe junk" button
 
-Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5 and the investigation T343 (the two `--sort` value sets).
+Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows the junk list as plain text today (the item lines of T330.6 included). This task turns it into a `junk` card (per agent, per kind, sizes and the "Freed by `clear`" lines) and adds the "clear safe junk" button: it runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does (a `ClientMessage` plan/apply pair, `src/web/protocol.rs`, regenerated schema and types, a story and a Vitest). `rtok tui` keeps the read-only text on its Hosts page (writing commands stay CLI-only there). Depends on T330.6; the web write action itself waits on the creator's answer to T346 (D27 against web write actions).
 
-Check: the T330 "Breakdown" fixtures; `just check`.
-
-Execution plan (Claude Code / sonnet-5.5): (1) new `src/agents/junk_items.rs` holds the one item row (`path`, `size_bytes`, `last_used`, `reason`, `will_clear`, `skip_reason`), the `--items`/`--sort`/`--min-size` view and the shared text lines; `list` and the `clear` dry run both print through it, `--json` carries every item. `--sort size|last-used|path` orders the items inside each kind (T343 is still open: agents keep their fixed order). (2) `rtok doctor` text gets a reclaimable-space line from the same report (hint above 1 GB), computed in the CLI path only so the dashboard tick never walks disks. (3) Docs: `docs/agents.md` Junk section and `docs/config.md` flags, en/ru/uk. (4) The web card and its "clear safe junk" button (a `/ws` plan/apply pair like the doctor one) do not fit the size cap together with the above: they move to a new card T330.7.
+Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
 
 ### T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 

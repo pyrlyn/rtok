@@ -29,7 +29,7 @@
 - T329.19. Graph health score per project
 - T329.21. Project badges in the graph page lists
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
-- T330.6. Junk: item breakdown, `doctor` line, web card
+- T330.7. Junk: web card with a "clear safe junk" button
 - T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
 - T343. Investigate: T330 `--sort` takes two different value sets on `list`
 - T344. Investigate: T330 "backwards compatible" vs new default deletions

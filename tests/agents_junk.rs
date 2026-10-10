@@ -648,7 +648,12 @@ fn stale_worktrees_are_what_gc_removes_and_clear_removes_only_those() {
             .filter(|i| i["kind"] == "stale-worktrees")
         {
             let name = Path::new(i["path"].as_str().unwrap()).file_name().unwrap();
-            let reason = i["kept"].as_str().unwrap_or("");
+            // A counted review item is listed with the flag it needs; gc's own verdict
+            // is the reason for every other one.
+            let reason = i["skip_reason"].as_str().unwrap_or("");
+            let reason = reason
+                .strip_prefix("review kind: add --include review")
+                .unwrap_or(reason);
             rows.push((
                 a["name"].as_str().unwrap().to_string(),
                 name.to_string_lossy().into_owned(),
@@ -730,4 +735,175 @@ fn stale_worktrees_are_what_gc_removes_and_clear_removes_only_those() {
     let (code, again) = c.json_in(&repo, &["--include", "review", "--yes", "--json"]);
     assert_eq!(code, 0, "{again}");
     assert!(names(&again["items"], |i| i["kind"] == "stale-worktrees").is_empty());
+}
+
+/// T330.6: three stray log generations of different sizes, so the breakdown has an order, a
+/// cut and a size floor to check without faking any host.
+fn stray_logs(name: &str) -> (PathBuf, Vec<PathBuf>) {
+    let home = home(name);
+    let cfg = rtok::config::Config::load_from(&home).expect("config");
+    let log = cfg.log.path.clone();
+    fs::create_dir_all(log.parent().unwrap()).unwrap();
+    let base = log.file_name().unwrap().to_str().unwrap().to_string();
+    let paths: Vec<PathBuf> = [(1, 30), (2, 10), (3, 20)]
+        .into_iter()
+        .map(|(n, size)| {
+            let p = log.with_file_name(format!("{base}.{}", cfg.log.files + n));
+            fs::write(&p, vec![b'x'; size]).unwrap();
+            p
+        })
+        .collect();
+    (home, paths)
+}
+
+#[test]
+fn list_prints_each_item_with_its_reason_and_cuts_a_kind_at_items() {
+    let (home, paths) = stray_logs("items");
+    let all = rtok(
+        &["agents", "junk", "list", "--bytes", "--items", "all"],
+        &home,
+    );
+    // The test home is `$HOME`, so the paths print with `~`.
+    let name = |p: &Path| p.file_name().unwrap().to_str().unwrap().to_string();
+    let line = |p: &Path| {
+        all.lines()
+            .find(|l| l.contains(&name(p)))
+            .unwrap()
+            .to_string()
+    };
+    assert!(line(&paths[0]).contains("  30  last used "), "{all}");
+    assert!(line(&paths[0]).contains("past `[log] files`"), "{all}");
+    let first = all.find(&name(&paths[0])).unwrap();
+    let last = all.find(&name(&paths[1])).unwrap();
+    assert!(first < last, "largest first: {all}");
+
+    let cut = rtok(
+        &["agents", "junk", "list", "--bytes", "--items", "1"],
+        &home,
+    );
+    assert!(cut.contains("+2 more (30)"), "{cut}");
+    let totals = rtok(
+        &["agents", "junk", "list", "--bytes", "--items", "0"],
+        &home,
+    );
+    assert!(
+        !totals.contains("last used") && !totals.contains("more ("),
+        "{totals}"
+    );
+    let path_order = rtok(
+        &["agents", "junk", "list", "--sort", "path", "--items", "all"],
+        &home,
+    );
+    let (a, b) = (
+        path_order.find(&name(&paths[0])),
+        path_order.find(&name(&paths[1])),
+    );
+    assert!(a < b, "by path: {path_order}");
+}
+
+#[test]
+fn json_carries_every_item_and_min_size_limits_both_list_and_clear() {
+    let (home, paths) = stray_logs("min-size");
+    let json = rtok(&["agents", "junk", "list", "--json", "--items", "1"], &home);
+    let report: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let own = report["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["name"] == "rtok")
+        .unwrap();
+    let items: Vec<&serde_json::Value> = own["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["kind"] == "log")
+        .collect();
+    assert_eq!(items.len(), 3, "--items does not cut the JSON: {json}");
+    assert_eq!(items[0]["size_bytes"], 30);
+    assert_eq!(
+        items[0]["path"],
+        paths[0].display().to_string(),
+        "JSON keeps the full path"
+    );
+    assert_eq!(items[0]["will_clear"], true);
+    assert!(items[0]["last_used"].is_i64(), "{json}");
+    assert!(
+        items[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("past `[log] files`")
+    );
+
+    let big = rtok(
+        &["agents", "junk", "list", "--json", "--min-size", "25"],
+        &home,
+    );
+    let big: serde_json::Value = serde_json::from_str(&big).unwrap();
+    let own = big["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["name"] == "rtok")
+        .unwrap();
+    assert_eq!(
+        own["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["kind"] == "log")
+            .count(),
+        1
+    );
+
+    let plan = rtok(
+        &[
+            "agents",
+            "junk",
+            "clear",
+            "--kind",
+            "log",
+            "--min-size",
+            "15",
+            "--json",
+        ],
+        &home,
+    );
+    let plan: serde_json::Value = serde_json::from_str(&plan).unwrap();
+    assert_eq!(plan["items"].as_array().unwrap().len(), 2, "{plan}");
+    assert!(plan["items"][0]["last_used"].is_i64() && plan["items"][0]["reason"].is_string());
+    assert!(
+        paths.iter().all(|p| p.exists()),
+        "a dry run removes nothing"
+    );
+    // `clear` never removes what changed in the last minute.
+    paths.iter().for_each(|p| age(p, 3_600));
+    rtok(
+        &[
+            "agents",
+            "junk",
+            "clear",
+            "--kind",
+            "log",
+            "--min-size",
+            "15",
+            "--yes",
+        ],
+        &home,
+    );
+    assert!(
+        !paths[0].exists() && !paths[2].exists() && paths[1].exists(),
+        "only the items at least 15 B"
+    );
+}
+
+#[test]
+fn doctor_reports_reclaimable_space_in_its_text_only() {
+    let (home, _) = stray_logs("doctor");
+    let text = rtok(&["doctor"], &home);
+    assert!(text.contains("junk\n  reclaimable: "), "{text}");
+    assert!(
+        !text.contains("rtok agents junk list"),
+        "no hint under 1 GB: {text}"
+    );
+    assert!(!rtok(&["doctor", "--json"], &home).contains("reclaimable"));
 }
