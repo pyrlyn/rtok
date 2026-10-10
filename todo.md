@@ -69,3 +69,4 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T484. Web live panel reads the server's calls totals
+- T502. Retire the `revert-on-failure` CI job

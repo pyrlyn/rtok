@@ -91,6 +91,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
+| T502 | in progress | P1 | 1 | 50% | Claude / opus-5.5 |
 
 
 
@@ -1183,6 +1184,14 @@ Check: a TUI test on a fixture project: re-index brings a stale project to index
 T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
 
 Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
+
+### T502. Retire the `revert-on-failure` CI job
+
+Creator decision 2026-10-10. Since 2026-10-08 the `protect-main` ruleset requires a pull request and a green `gate` on main, and its only bypass is the admin role through a PR. `ci / revert-on-failure` (T84, T253) still pushes `ci: auto-revert <sha>` straight to main, so the push is rejected (`push declined due to repository rule violations`, main pipeline runs 38043322970 and 38044250038, 2026-10-10): the job fails, main stays red and nothing is reverted. With the ruleset, a red main push comes only from merge skew or a flake (the docs-only `efe19f07` failed `spa`), which should be fixed forward, not reverted. Rejected options: a revert PR with auto-merge (a `GITHUB_TOKEN` PR starts no workflow, so `gate` never runs without a PAT or App secret) and a ruleset bypass for GitHub Actions (any workflow with `contents: write` could push past the checks). `pyrlyn/ci` and the ruleset stay as they are.
+
+Plan: delete the `revert-on-failure` job from `.github/workflows/ci.yml` and the comments that describe it; lower the `ci` caller permissions in `.github/workflows/pipeline.yml` to `contents: read` and `actions: write`, since no ci.yml job writes contents or pull requests now.
+
+Check: no `revert-on-failure` left in `.github/`; the PR's pipeline passes (actionlint runs in `pipeline`); `just check`.
 
 ## Reference
 
