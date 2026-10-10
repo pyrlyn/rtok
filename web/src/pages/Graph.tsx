@@ -3,7 +3,8 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
+import type { Imported } from "../api/query";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
 import { Kpi } from "../ui/Kpi";
@@ -12,7 +13,9 @@ import { Pill } from "../ui/Pill";
 import { fmt } from "./format";
 import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./parts";
 import { Projects } from "./Projects";
+import { ExportMenu } from "./graph3d/ExportMenu";
 import { GraphAlerts } from "./graph3d/GraphAlerts";
+import { ImportedView } from "./graph3d/ImportedView";
 import { drillSearch, type DrillState, openProject, parseDrill } from "./graph3d/drillState";
 import { Split } from "./graph3d/live/Split";
 import { parseGraph, type DeadSymbol, type GraphView } from "./text";
@@ -30,6 +33,8 @@ export function Graph() {
     // The drill-down lives in the URL (T329.22): each step is a history entry, so Back climbs out.
     const drill = parseDrill(useSearch({ strict: false }) as Record<string, unknown>);
     const navigate = useNavigate();
+    // A saved export shown read-only in place of the live pictures; it lives only in this page.
+    const [imported, setImported] = useState<Imported | null>(null);
     const go = (next: DrillState | null) =>
         void navigate({ search: ((prev: object) => ({ ...prev, ...drillSearch(next) })) as never });
     return (
@@ -38,7 +43,11 @@ export function Graph() {
                 <>
                     {snap.projects && <GraphAlerts rows={snap.projects} />}
                     {snap.projects && <Projects rows={snap.projects} />}
-                    {snap.projects && snap.projects.length > 0 && (
+                    {snap.projects && (
+                        <ExportMenu rows={snap.projects} drill={drill} onImported={setImported} />
+                    )}
+                    {imported && <ImportedView view={imported} onClose={() => setImported(null)} />}
+                    {!imported && snap.projects && snap.projects.length > 0 && (
                         <Suspense fallback={null}>
                             <Split
                                 explorer={
