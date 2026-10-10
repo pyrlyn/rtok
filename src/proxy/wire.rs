@@ -351,6 +351,21 @@ pub(super) fn find_usage(value: &Value, fields: &UsageFields) -> Option<Usage> {
     })
 }
 
+fn is_sse(content_type: Option<&str>) -> bool {
+    content_type.is_some_and(|c| c.contains("text/event-stream"))
+}
+
+/// The JSON payloads of an SSE body's `data:` lines, skipping `[DONE]` and unparseable lines.
+fn sse_events(text: &str) -> impl Iterator<Item = Value> + '_ {
+    text.lines().filter_map(|line| {
+        let data = line.strip_prefix("data:")?.trim();
+        if data.is_empty() || data == "[DONE]" {
+            return None;
+        }
+        serde_json::from_str(data).ok()
+    })
+}
+
 /// Decode JSON or SSE response usage through the selected provider wire.
 pub fn usage_from_response(
     wire: &dyn Wire,
@@ -358,24 +373,12 @@ pub fn usage_from_response(
     body: &[u8],
 ) -> Option<Usage> {
     let text = std::str::from_utf8(body).ok()?;
-    if content_type.is_some_and(|c| c.contains("text/event-stream")) {
+    if is_sse(content_type) {
         let mut usage = Usage::default();
         let mut found = false;
-        for line in text.lines() {
-            let Some(data) = line.strip_prefix("data:") else {
-                continue;
-            };
-            let data = data.trim();
-            if data.is_empty() || data == "[DONE]" {
-                continue;
-            }
-            let Ok(event) = serde_json::from_str(data) else {
-                continue;
-            };
-            if let Some(next) = wire.usage_from_sse(&event) {
-                found = true;
-                usage.merge(next);
-            }
+        for next in sse_events(text).filter_map(|event| wire.usage_from_sse(&event)) {
+            found = true;
+            usage.merge(next);
         }
         found.then_some(usage)
     } else {
@@ -383,10 +386,68 @@ pub fn usage_from_response(
     }
 }
 
+/// The tier the provider says it served the request on (T385.12.2). OpenAI puts
+/// `service_tier` on the response object (Responses SSE nests it under `response`); Anthropic
+/// puts it in `usage` (`message.usage` on the `message_start` event). It is the response's
+/// word, not the request's: a Flex request can come back on another tier. Sources, checked
+/// 2026-10-10: openai-python `types/chat/chat_completion.py` and `types/responses/response.py`,
+/// anthropic-sdk-python `types/usage.py`.
+pub fn service_tier_from_response(content_type: Option<&str>, body: &[u8]) -> Option<String> {
+    fn tier(value: &Value) -> Option<String> {
+        let name = |v: &Value| v.get("service_tier")?.as_str().map(str::to_string);
+        name(value)
+            .or_else(|| name(value.get("usage")?))
+            .or_else(|| name(value.get("response")?))
+            .or_else(|| name(value.get("message")?.get("usage")?))
+    }
+    let text = std::str::from_utf8(body).ok()?;
+    if is_sse(content_type) {
+        // A later event can restate it, so the last one named wins.
+        sse_events(text).filter_map(|event| tier(&event)).last()
+    } else {
+        tier(&serde_json::from_slice(body).ok()?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// T385.12.2: the tier is read from the response object, `usage`, or the nested
+    /// `response` / `message.usage` of a stream event, and the last stream mention wins.
+    #[test]
+    fn service_tier_comes_from_the_response_on_every_shape() {
+        let json = |v: Value| service_tier_from_response(None, v.to_string().as_bytes());
+        assert_eq!(
+            json(json!({"service_tier": "flex"})).as_deref(),
+            Some("flex")
+        );
+        assert_eq!(
+            json(json!({"usage": {"service_tier": "batch"}})).as_deref(),
+            Some("batch")
+        );
+        assert_eq!(json(json!({"usage": {"input_tokens": 1}})), None);
+        assert_eq!(service_tier_from_response(None, b"not json"), None);
+
+        let sse = |events: &[Value]| {
+            let text: String = events.iter().map(|e| format!("data: {e}\n\n")).collect();
+            service_tier_from_response(Some("text/event-stream"), text.as_bytes())
+        };
+        let responses = [
+            json!({"type": "response.created", "response": {"service_tier": "auto"}}),
+            json!({"type": "response.completed", "response": {"service_tier": "flex"}}),
+        ];
+        assert_eq!(sse(&responses).as_deref(), Some("flex"));
+        let anthropic =
+            [json!({"type": "message_start", "message": {"usage": {"service_tier": "standard"}}})];
+        assert_eq!(sse(&anthropic).as_deref(), Some("standard"));
+        assert_eq!(
+            sse(&[json!({"service_tier": "default", "choices": []})]).as_deref(),
+            Some("default")
+        );
+        assert_eq!(sse(&[json!({"choices": []})]), None);
+    }
 
     #[test]
     fn int_field_accepts_whole_number_floats() {

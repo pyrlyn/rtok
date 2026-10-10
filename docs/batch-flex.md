@@ -180,13 +180,15 @@ a sync chat call. Both are stripped before forwarding. See `[proxy.lanes]` in
 - ~~when results are fetched, parse per-line usage into `usage` rows~~ — `[proxy.batch]
   parse_results` (T385.4); `rtok stats --price` costs that usage at the `<model>@batch` row of
   `[stats.prices]` (T385.12.1)
-- surface Batch vs sync vs Flex in `rtok report` / stats breakdowns (T385.12.2)
+- ~~surface Batch vs sync vs Flex in `rtok report` / stats breakdowns~~ — the `lane/tier` table
+  of `rtok stats` and the Cache section of `rtok report` (T385.12.2)
 
-**Planned for Flex:**
+**Flex:**
 
-- record the effective `service_tier` on the `calls` row (T385.12.2)
-- price Flex tokens with the `<model>@flex` rows, which ship in `[stats.prices]` (OpenAI
-  lists Flex at the Batch rates); nothing reads them until the tier is recorded
+- ~~record the effective `service_tier` on the `calls` row~~ — `calls.service_tier`, read from
+  the response, not the request (T385.12.2)
+- ~~price Flex tokens with the `<model>@flex` rows~~ — `stats --price` lists tier `flex` usage
+  under `<model>@flex` (OpenAI lists Flex at the Batch rates)
 
 Until those land, treat Batch/Flex savings as provider-console numbers, not
 rtok ledger numbers.

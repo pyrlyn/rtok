@@ -1035,6 +1035,12 @@ fn finish(
     if let Err(e) = state.store.set_call_ms(r.call_id, elapsed_ms(start)) {
         log_err("set_call_ms", e.into());
     }
+    if wire.is_some()
+        && let Some(tier) = wire::service_tier_from_response(content_type, response_body)
+        && let Err(e) = state.store.set_call_service_tier(r.call_id, &tier)
+    {
+        log_err("service_tier", e.into());
+    }
     if response_total_bytes > response_body.len() {
         // The true size, since call_io's recorded response_bytes reflects only what was
         // retained under MAX_BODY_BYTES — surface the gap instead of under-reporting it.

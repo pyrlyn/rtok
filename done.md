@@ -561,6 +561,19 @@ Check: `actionlint` + `shellcheck` clean on `.github/workflows/ci.yml`; the titl
 
 Result: setting on (`can_approve_pull_request_reviews: true`), stale branch deleted, `ci.yml` reads the merged PR once for both its head branch and title.
 
+### T502. Retire the `revert-on-failure` CI job
+
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
+Creator decision 2026-10-10. Since 2026-10-08 the `protect-main` ruleset requires a pull request and a green `gate` on main, and its only bypass is the admin role through a PR. `ci / revert-on-failure` (T84, T253) still pushed `ci: auto-revert <sha>` straight to main, so the push was rejected (`push declined due to repository rule violations`, main pipeline runs 38043322970 and 38044250038, 2026-10-10): the job failed, main stayed red and nothing was reverted. With the ruleset, a red main push comes only from merge skew or a flake (the docs-only `efe19f07` failed `spa`), which should be fixed forward, not reverted. Rejected options: a revert PR with auto-merge (a `GITHUB_TOKEN` PR starts no workflow, so `gate` never runs without a PAT or App secret) and a ruleset bypass for GitHub Actions (any workflow with `contents: write` could push past the checks). `pyrlyn/ci` and the ruleset stay as they are.
+
+Plan: delete the `revert-on-failure` job from `.github/workflows/ci.yml` and the comments that describe it; lower the `ci` caller permissions in `.github/workflows/pipeline.yml` to `contents: read` and `actions: write`, since no ci.yml job writes contents or pull requests now.
+
+Check: no `revert-on-failure` left in `.github/`; the PR's pipeline passes (actionlint runs in `pipeline`); `just check`.
+
+Result: job and its comments removed; the `ci` caller runs with `contents: read` and `actions: write`.
+
 ### T252. `surface_parity` web test reads the real `~/.claude` history
 
 Creator request 2026-09-24. `tests/surface_parity.rs::web_serves_exactly_the_pages_the_model_offers` built its `Config` with `load_from(tempdir)` only, so `doctor.*`, `stats.transcripts_dir` and `stats.codex_dir` stayed at this machine's real `~/.claude*` and `~/.codex/sessions`: every snapshot parsed the creator's whole JSONL history (~80 s locally, 180 s timeout under load, non-hermetic). The same leak hid in `web_doctor_instruction_audit_matches_cli_order` (19 s: `rtok doctor` scans `stats.transcripts_dir`), `tests/web.rs::ws_set_accepts_plugin_enabled` (67 s: a web `set` reloads `config.toml`, dropping the in-memory redirects `tests/web.rs` had copied three times), `tests/graph_model.rs::graph_page_matches_dead_json_on_the_fixture_index` (75 s: a snapshot on a bare `load_from`) and in `tests/stats_model.rs` (fixture transcripts, but `doctor.*` still real).
@@ -8450,6 +8463,16 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
+
+Split from T385.12; T385.6 and T385.12.1 are done (the price rows and `usage_by_model_tier` are in place). Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
+
+Check: a report fixture with Batch and Flex rows; `just check`.
+Result: migration `0043_calls_service_tier` adds a nullable `calls.service_tier`; `proxy::finish` sets it from the response (`wire::service_tier_from_response`: OpenAI `service_tier` on the object or under `response`, Anthropic `usage.service_tier` or `message.usage`, JSON or SSE, last mention wins), so a Flex request that came back on another tier is recorded as that tier; the request is never consulted. Sources checked 2026-10-10: openai-python `types/chat/chat_completion.py` and `types/responses/response.py`, anthropic-sdk-python `types/usage.py`. `usage_by_model_tier` lists tier `flex` usage under `<model>@flex` (a Batch call stays `@batch`), so `stats --price` costs it at that row. `Store::usage_by_lane` became `usage_by_lane_tier` (kind and tier); `stats::lane_rows` folds it into the `lane` table and a new `lane/tier` table (`Report.lane_tiers`, `--json` `lane_tiers`; a response with no tier prints `-`). The tier table, like the lane table, is left out while all traffic ran on the agent lane at `standard`/`default`, so untouched setups print the same. `rtok report` shows the same rows under its Cache section in md, html, pdf and `--ai` (`ReportLedgers.lanes`, `LANE_HEADS`, `lane_cells`), not as a new section, which keeps the fixed P22 section ids and the md/html/pdf parity. Web and TUI never showed the lane table (T385.6), so no new surface item. Tests: `service_tier_comes_from_the_response_on_every_shape` (`wire.rs`), `flex_usage_is_priced_at_its_flex_row_and_listed_by_tier` (`stats.rs`), `stats_breaks_the_lanes_down_by_service_tier`, `report_lists_cache_counters_per_lane_and_tier` (fixture with agent, Flex, standard bulk and Batch rows, `tests/common/lanes.rs`), and `tests/proxy_service_tier.rs` (mock upstream through the proxy). docs/config.md (en, ru, uk) and docs/batch-flex.md updated. `just check`: 3258 passed, 8 skipped.
+Status: done 2026-10-10
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T385.13. Measure cross-session read duplication
 
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Measured 2026-10-08 (window 2026-10-05 to 2026-10-08, 38 sessions, 3,049 reads, 13.6 MB; same content = equal SHA-256 of the returned text, within a day = same UTC day): 38 cross-session duplicate reads, 56,561 B (about 14,140 tokens), 0.42 % of the bytes read, 0.00034 % of input counted once and 0.25 % to 0.60 % of input resident-weighted (input 4,139,214,544 tokens, main plus sub-agents). Cross-checks over 25 days (MCP read, 0.28 %) and via `read_cache` (0.84 % of bytes) agree; keyed on path plus content only 2 reads repeat, because worktrees give the same file different paths. Under the 1 % gate, so no build task; the optimization.md §5 row records the number.
@@ -10818,6 +10841,19 @@ Check: findings with sources and dates in `research.md`; the T441 card adjusted 
 Result: `research.md` §35. Corrections to the card: Backlog.md (v1.53.0) and Taskmaster (0.43.1) lock id allocation per repository, beads (v1.3.1) uses hash ids and already syncs GitHub and GitLab, so "nobody has collision-free ids" was wrong; what rtok would add is one per-project counter shared by every checkout, worktree and host on the machine. Settled: the allocator is a Diesel table in the existing store (WAL + `exclusive_transaction`); subtask depth 2 fits GitHub sub-issues (100 per parent) and GitLab issue → task (every tier, parent link through GraphQL only); GitLab native Status and scoped labels are Premium, so Free swaps a plain `status::` label; won't-do is native on both; GitHub's 500 content-creating requests/hour paces bulk writes; remote collision checks list by label, not search. New open question for the creator in §12: build rtok's own core or adopt beads/Backlog.md.
 
 Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T405. Task-board extras for the agent task tools
+
+Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F19, F20: a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20).
+
+Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
+
+Check: each sub-task carries its own Check.
+
+Result: folded into T441 by the creator's decision of 2026-10-10: T441 (own task core, approved 2026-10-07) supersedes I-103 and the §28.5 questions, so the five items became milestone 13 (T441.13) of the T441 card. No code.
+
+Status: closed 2026-10-10
 Model: Claude Code / claude-opus-5-5
 
 ### T436. Operation icons and a spinner on every wait, the way ketch draws them

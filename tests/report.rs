@@ -15,6 +15,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod common;
+
 fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_rtok")
 }
@@ -701,4 +703,31 @@ fn report_totals_agree_with_the_store_and_otel_export() {
     }
 
     let _ = fs::remove_dir_all(&h);
+}
+
+/// T385.12.2: the Cache section lists the hit rate per lane and tier, Batch and Flex rows
+/// included, and the HTML renderer carries the same rows.
+#[test]
+fn report_lists_cache_counters_per_lane_and_tier() {
+    let h = home("lane-tiers");
+    let cfg = rtok::config::Config::load_from(&h).expect("config");
+    common::lanes::seed_lane_tiers(&rtok::store::Store::open(&cfg.core.db_path).expect("store"));
+    let md = rtok(&["report", "--format", "md"], &h);
+    for row in [
+        "| agent/default | 5 | 5 | 90 | 7 | 90.0% |",
+        "| batch/- | 50 | 0 | 0 | 5 | 0.0% |",
+        "| bulk/default | 10 | 10 | 80 | 2 | 80.0% |",
+        "| bulk/flex | 100 | 0 | 0 | 9 | 0.0% |",
+    ] {
+        assert!(md.contains(row), "missing {row}\n{md}");
+    }
+    let html = rtok(&["report", "--format", "html"], &h);
+    assert!(html.contains("<td>bulk/flex</td><td>100</td>"), "{html}");
+    let ai = rtok(&["report", "--ai"], &h);
+    assert!(ai.contains("bulk/flex"), "{ai}");
+    // A store without them prints no such table.
+    let plain = home("lane-tiers-none");
+    assert!(!rtok(&["report", "--format", "md"], &plain).contains("lane/tier"));
+    let _ = fs::remove_dir_all(&h);
+    let _ = fs::remove_dir_all(&plain);
 }
