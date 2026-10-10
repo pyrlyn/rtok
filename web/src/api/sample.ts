@@ -9,6 +9,7 @@ import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
 import { mockJunk, sampleJunkCard } from "./sampleJunk";
+import { diffReply } from "./sampleDiff";
 import { drillReply } from "./sampleDrill";
 import type { Report, Snapshot } from "./snapshot.gen";
 // The text pages have no live source offline, so `?sample` shows the same made-up text the
@@ -386,6 +387,11 @@ export const connectSample: Connect = (handlers) => {
       }
       if ("calls" in message) {
         // The sample has no other process to watch; the stream starts with the live graph (T329.26).
+        return true;
+      }
+      if ("diff" in message) {
+        const { diff } = message;
+        later(() => handlers.onFrame(diffReply(diff, snapshot.projects ?? [])));
         return true;
       }
       if ("graph" in message) {

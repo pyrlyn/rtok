@@ -27,6 +27,9 @@ export type ClientMessage =
       graph: DrillRequest;
     }
   | {
+      diff: DiffRequest;
+    }
+  | {
       calls: CallsRequest;
     };
 /**
@@ -98,6 +101,11 @@ export type ServerFrame =
   | {
       graph: DrillGraph;
       type: "graph";
+    }
+  | {
+      diff: DiffReport;
+      project: string;
+      type: "diff";
     }
   | {
       batch: CallBatch;
@@ -258,6 +266,43 @@ export interface DrillRequest {
 export interface DrillFocus {
   name: string;
   path: string;
+}
+/**
+ * What the graph page's Compare mode asks (T329.35). The old side is never a path: the page
+ * sends the text of a saved export it opened itself, because the websocket answers anything on
+ * localhost and must not be made to read a file somebody else chose.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffRequest".
+ */
+export interface DiffRequest {
+  export: DiffExport | null;
+  /**
+   * As `rtok graph diff --from`: a ref, or `PROJECT:REF`; none is `HEAD`.
+   */
+  from: string[];
+  /**
+   * An id or a root path, as in `rtok graph projects`.
+   */
+  project: string;
+  /**
+   * A ref; none is the working tree.
+   */
+  to: string | null;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffExport".
+ */
+export interface DiffExport {
+  /**
+   * The file's name, for the answer's `from`.
+   */
+  name: string;
+  /**
+   * The file's content.
+   */
+  text: string;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -433,6 +478,96 @@ export interface DrillNode {
    * Edge count through the node; the page sizes it by this.
    */
   weight: number;
+}
+/**
+ * `--json` and the graph page's `diff` frame: one typed shape, so the page never recomputes or
+ * re-parses what the CLI prints.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffReport".
+ */
+export interface DiffReport {
+  from: string;
+  links_added: DiffLink[];
+  links_removed: DiffLink[];
+  /**
+   * Linked projects that could not answer, and what an export cannot compare.
+   */
+  notes?: string;
+  projects: DiffProject[];
+  to: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffLink".
+ */
+export interface DiffLink {
+  from: string;
+  kind: string;
+  to: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffProject".
+ */
+export interface DiffProject {
+  added: DiffDef[];
+  changed: DiffDef[];
+  edges_added: DiffEdge[];
+  edges_removed: DiffEdge[];
+  from: string;
+  /**
+   * Rows left out of the lists by [`DiffReport::capped`].
+   */
+  more?: number;
+  moved: DiffMove[];
+  not_analysed: DiffUnread[];
+  project: string;
+  removed: DiffDef[];
+  renamed: DiffMove[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffDef".
+ */
+export interface DiffDef {
+  /**
+   * `changed` and `removed` rows only.
+   */
+  callers?: string[] | null;
+  kind: string;
+  line: number;
+  name: string;
+  path: string;
+  /**
+   * `changed` rows only: the signature moved, not just the body.
+   */
+  signature_changed?: boolean | null;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffEdge".
+ */
+export interface DiffEdge {
+  name: string;
+  path: string;
+  scope: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffMove".
+ */
+export interface DiffMove {
+  from: DiffDef;
+  to: DiffDef;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DiffUnread".
+ */
+export interface DiffUnread {
+  path: string;
+  reason: string;
 }
 /**
  * What one poll found, as one frame. `summary` counts every event of the poll (including

@@ -875,6 +875,16 @@ pub enum DrillGraph {}
 #[derive(Debug, serde::Deserialize, Serialize, JsonSchema)]
 pub enum DrillRequest {}
 
+/// The graph page's Compare mode request and answer (T329.35); with `graph` off no request parses.
+#[cfg(feature = "graph")]
+pub use crate::plugins::graph::diff::{DiffReport, DiffRequest};
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, Serialize, JsonSchema)]
+pub enum DiffReport {}
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, serde::Deserialize, Serialize, JsonSchema)]
+pub enum DiffRequest {}
+
 #[cfg(feature = "graph")]
 fn project_rows(cfg: &Config) -> Option<Vec<ProjectRow>> {
     let rt = crate::plugin::Runtime::open(cfg.clone(), "web-projects").ok()?;

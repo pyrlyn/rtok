@@ -11,7 +11,7 @@ use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
 
 use super::live::CallBatch;
-use super::model::{DrillGraph, DrillRequest, Snapshot};
+use super::model::{DiffReport, DiffRequest, DrillGraph, DrillRequest, Snapshot};
 use crate::agents::junk_clear::Cleared;
 use crate::doctor::web::{Fixed, Plan, Selection};
 
@@ -37,6 +37,9 @@ pub enum ServerFrame {
     JunkCleared { cleared: Cleared },
     /// The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).
     Graph { graph: DrillGraph },
+    /// The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is
+    /// how the page matches a reply to its question.
+    Diff { project: String, diff: DiffReport },
     /// What the graph tools did since the last frame (T329.15): sent only after
     /// [`ClientMessage::Calls`] subscribed, at most four times a second.
     Calls { batch: CallBatch },
@@ -64,6 +67,8 @@ pub enum ClientMessage {
     Junk { junk: JunkRequest },
     /// The inside of one project for the graph page's level 2 (T329.14); read-only.
     Graph { graph: DrillRequest },
+    /// What a change did to one project's graph, for Compare mode (T329.35); read-only.
+    Diff { diff: DiffRequest },
     /// Start or stop the graph call events (T329.15); the page subscribes while the live
     /// graph is visible, so a hidden one costs nothing.
     Calls { calls: CallsRequest },
@@ -222,6 +227,20 @@ mod tests {
             ClientMessage::Junk { junk: JunkRequest { action: JunkAction::Plan, paths } } if paths.is_empty()
         ));
         assert!(serde_json::from_str::<ClientMessage>(r#"{"junk":{"action":"all"}}"#).is_err());
+    }
+
+    #[test]
+    fn a_diff_request_carries_a_project_and_the_text_of_an_export() {
+        let m: ClientMessage = serde_json::from_str(
+            r#"{"diff":{"project":"3","from":["main"],"export":{"name":"a.json","text":"{}"}}}"#,
+        )
+        .unwrap();
+        let ClientMessage::Diff { diff } = m else {
+            panic!("not a diff");
+        };
+        assert_eq!((diff.project.as_str(), diff.from.len()), ("3", 1));
+        assert_eq!(diff.export.unwrap().name, "a.json");
+        assert!(serde_json::from_str::<ClientMessage>(r#"{"diff":{"from":[]}}"#).is_err());
     }
 
     #[test]
