@@ -75,3 +75,4 @@
 - T479. TUI: clear safe junk with plan and confirm
 - T481. TUI: graph health score per project
 - T480. TUI: live graph calls panel
+- T484. Web live panel reads the server's calls totals

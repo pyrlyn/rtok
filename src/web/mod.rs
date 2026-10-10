@@ -11,6 +11,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub use crate::model;
+pub mod calls_store;
 pub mod live;
 pub mod protocol;
 pub mod spa;

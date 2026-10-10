@@ -2981,6 +2981,18 @@ Deviations: over the 500-line cap, so split at claim time and again while implem
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T483 — Shared live-calls reader and Rust calls store (split from T480)
+
+T480 needs the TUI to read `graph_events` through the web's poller and to fold the `calls` stream into the same totals as the page, which would have put it over the 500-line cap. This task is the shared half. `src/web/live.rs` gets `Reader` (a store handle and a cursor; `open` arms it at the newest event, `poll` returns the next folded `CallBatch`), and the async poller of `rtok web` now calls it instead of holding its own cursor, so any second surface reads through the same code and the same `coalesce`. `src/web/calls_store.rs` is a Rust port of `web/src/pages/graph3d/live/callsStore.ts` (T329.26): the fold, the 1, 5, 15 minute and since-open windows, the 120 s interrupt sweep, the 200-row feed, and the caller, tool and project filters. The server does not send totals (the page folds batches in the browser), so the port is held to the TypeScript by tests that repeat the cases of `callsStore.test.ts` with the same numbers; T484 removes the duplicate fold.
+
+Check: `calls_store` tests (a start runs and its end moves it to the feed with the measured tokens, a failed end, a 400-call burst giving 401 calls and 4100/1630 tokens, the feed cap, windows 40/60/70/70, buckets older than 15 minutes, interrupted calls and a late end, filters); the web live tests and `web_*` e2e tests stay green with the poller on `Reader`; `just check`.
+
+Check result (2026-10-10): `just check` green on this commit: nextest `Summary [ 321.901s] 3188 tests run: 3188 passed, 8 skipped`; fmt, clippy `-D warnings`, oxlint, pytest and jscpd clean; `calls_store` 8/8. Earlier runs under load 16 failed one unrelated timing test each (`mcp_with_watcher_exits_on_stdin_eof`, `agents_install the_agent_alias_prints_what_agents_prints`, `otel hook_skips_spawning_when_a_flush_is_already_queued`); each passed alone and the full run passed with `NEXTEST_TEST_THREADS=4`
+
+Deviations: the folded totals still exist twice (TypeScript and Rust) until T484.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.
