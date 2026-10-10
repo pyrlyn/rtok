@@ -141,6 +141,8 @@ const ALLOW_KEYS: &[&str] = &[
     // listing and a one-shot exit status, not stored settings.
     "setup.check",
     "setup.exit_code",
+    // `agents install|uninstall --project` (T289.3): which file one call edits, not a stored setting.
+    "setup.project",
     // `agents usage --unpriced` (T358.1): which view one call prints, not a stored setting.
     "agents.usage.unpriced",
     // `doctor --fix --yes --dry-run --only` (T331.5): same per-call rule as `worktree gc` —

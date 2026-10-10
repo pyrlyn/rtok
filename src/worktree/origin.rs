@@ -25,6 +25,17 @@ pub fn evicts(origin: &str) -> bool {
     matches!(origin, "cursor" | "windsurf" | "codex")
 }
 
+/// The rtok hosts whose agents work in a pool's worktrees and whose post-create script
+/// (T289.3) adopts them. Devin and Windsurf share one pool.
+pub fn hosts(origin: &str) -> &'static [&'static str] {
+    match origin {
+        "cursor" => &["cursor"],
+        "windsurf" => &["windsurf", "devin"],
+        "kilo" => &["kilo"],
+        _ => &[],
+    }
+}
+
 pub fn of(path: &Path) -> &'static str {
     of_with(
         path,

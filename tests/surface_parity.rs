@@ -281,17 +281,22 @@ fn graph_page_exists_on_both_surfaces() {
     );
 }
 
-/// T480 (D27): the live calls view is on both surfaces, fed by one reader of `graph_events` and
-/// one aggregation: the page folds the `calls` stream in `callsStore.ts`, the TUI folds the same
-/// batches in its Rust port, and the pane drives the web's `Reader` instead of opening its own.
+/// T480 (D27, T484): the live calls view is on both surfaces, fed by one reader of `graph_events`
+/// and one aggregation: the web poller folds each batch into the `CallsStore` and sends the totals
+/// in the `calls` frame, which the page only renders; the TUI folds the same batches in the same
+/// store, and the pane drives the web's `Reader` instead of opening its own.
 #[test]
 fn live_calls_view_exists_on_both_surfaces() {
     let Surfaces { app, .. } = SURFACES;
-    let web_store = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/web/src/pages/graph3d/live/callsStore.ts"
-    ));
     let web_live = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/live.rs"));
+    let view = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/web/calls_view.rs"
+    ));
+    let page = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/live/useCalls.ts"
+    ));
     let port = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/src/web/calls_store.rs"
@@ -302,12 +307,21 @@ fn live_calls_view_exists_on_both_surfaces() {
     ));
     // The pane's own tests open a store to feed the poller; only the code above them counts.
     let pane = pane.split("#[cfg(test)]\nmod tests").next().unwrap();
-    for part in ["fold", "sweep", "windowTotals", "filterFeed"] {
-        assert!(web_store.contains(part), "the page's store has `{part}`");
-    }
     assert!(
         web_live.contains("pub struct Reader") && web_live.contains("Reader::open"),
         "the web poller reads through the shared Reader"
+    );
+    assert!(
+        web_live.contains("store.fold(") && web_live.contains("CallsView::of"),
+        "the web poller folds into the CallsStore and sends its view"
+    );
+    assert!(
+        view.contains("store.window_totals("),
+        "the frame's windows are the store's window totals"
+    );
+    assert!(
+        !page.contains("fold(") && page.contains("useCallStream"),
+        "the page renders the server's frames and keeps no fold of its own"
     );
     for part in [
         "pub fn fold",
@@ -315,7 +329,7 @@ fn live_calls_view_exists_on_both_surfaces() {
         "pub fn window_totals",
         "pub fn filter_feed",
     ] {
-        assert!(port.contains(part), "the Rust port has `{part}`");
+        assert!(port.contains(part), "the shared store has `{part}`");
     }
     assert!(
         pane.contains("Reader::open")
@@ -477,7 +491,7 @@ fn graph_compare_exists_on_both_surfaces() {
     );
 }
 
-/// T329.40 (D27, web half; the TUI half lands with T329.41): the Graph page's Export menu asks the
+/// T329.40 (D27, web half; the TUI half is the test below): the Graph page's Export menu asks the
 /// server for the file, which calls the one `render` behind `rtok graph export`, and opens a saved
 /// file through `export::parse`. A page that draws or serialises the graph itself fails here.
 #[test]
@@ -512,6 +526,34 @@ fn graph_export_page_asks_the_one_render() {
         !menu.contains("<svg") && !menu.contains("toDataURL"),
         "the page saves the server's file; it draws no second picture"
     );
+}
+
+/// T329.41 (D27): the TUI exports the graph with the function `rtok graph export -o` ends in, and
+/// views a saved file with the importer the CLI's `--from` uses, so the three cannot write or read
+/// different things. The page's half is the test above.
+#[test]
+fn graph_export_tui_shares_the_cli_writer_and_reader() {
+    let Surfaces { app, .. } = SURFACES;
+    let cli = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cli/graph.rs"));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/exporter.rs"));
+    // The view's own tests call `export::render` to compute what the command writes.
+    let tui = tui.split("#[cfg(all(test").next().unwrap();
+    assert!(
+        cli.contains("export::write(") && tui.contains("export::write("),
+        "the command and the TUI write through export::write"
+    );
+    assert!(
+        tui.contains("export::read(")
+            && !tui.contains("fs::write(")
+            && !tui.contains("Store::open"),
+        "the saved-export view reads with export::read and writes nothing"
+    );
+    for key in [
+        "(\"graph\", \"e\", \"export graph\")",
+        "(\"graph\", \"v\", \"view saved export\")",
+    ] {
+        assert!(app.contains(key), "the TUI's KEYS table lacks {key}");
+    }
 }
 
 /// T481 (D27): the graph health score is on the Graph page of both surfaces, from the one
@@ -914,7 +956,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "graph export",
-        "needs a scope and a file; CLI/MCP, and the Graph page's Export menu (T329.40) asks the same render over /ws; the TUI action lands with T329.41",
+        "needs a scope and a file; CLI/MCP, the TUI has the export key and the saved-export view (T329.41), and the Graph page's Export menu (T329.40) asks the same render over /ws",
     ),
     (
         "graph projects",

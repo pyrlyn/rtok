@@ -574,6 +574,19 @@ Check: no `revert-on-failure` left in `.github/`; the PR's pipeline passes (acti
 
 Result: job and its comments removed; the `ci` caller runs with `contents: read` and `actions: write`.
 
+### T503. Deterministic WebGL click story on the graph overview
+
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
+`src/pages/GraphOverview.stories.tsx > Webgl Draws And Click Selects` fails intermittently in `ci / spa` (main pipeline run 38044250038 on a docs-only merge; PR run 38046303471, job 114196564243): after ~11 s, `Unable to find an element with the text: ketch`, and the header DOM still shows `rtok`, so the click on ketch's sphere missed. (The `chart renderer unavailable ... 'dpr'` lines in those logs come from the jsdom `unit` project, where echarts gets no canvas; they are unrelated.) Cause: the play function took two equal rounded `screenOf(2)` samples (50 ms apart, or back to back on a DOM mutation) as "the layout stopped". A cooling d3 layout still drifts the node 3–5 px after that, enough to miss its small sphere. Locally, a 3 s pause after that point and a click at the old target fails every time, and a click at the current position passes.
+
+Plan: `Positions` gains `settled` (set from the layout worker's `Frame.settled`, cleared when a new topology is pushed); `Stage.frame` marks its canvas `data-settled` once the drawn frame shows a resting layout and no camera flight; the story waits for that attribute instead of the two-sample heuristic, then aims at `screenOf(2)`. Files: `web/src/pages/graph3d/useLayout.ts`, `stage3d.ts`, `live/camera2d.test.tsx` (fake `Positions`), `web/src/pages/GraphOverview.stories.tsx`.
+
+Check: the story passes with a 3 s pause before the click and with the layout worker slowed to 60 ms per step; full `vitest --project storybook` green several times, also under 16 busy-loop processes with SwiftShader WebGL; `just js`, `just spa-test`, `tsc --noEmit`.
+
+Result: the story waits for `data-settled` on the 3D canvas; under the old heuristic a 3 s pause before the click failed 2/2 runs, with the fix it passed 3/3 with that pause and the slowed worker; full storybook project 225/225 in 3 runs under load with SwiftShader and 2 runs on the GPU; `useLayout.test.ts` covers `subscribe` and `settled` (it fails without the reset on new topology); `just js`, `just spa-test` and `tsc --noEmit` green.
+
 ### T252. `surface_parity` web test reads the real `~/.claude` history
 
 Creator request 2026-09-24. `tests/surface_parity.rs::web_serves_exactly_the_pages_the_model_offers` built its `Config` with `load_from(tempdir)` only, so `doctor.*`, `stats.transcripts_dir` and `stats.codex_dir` stayed at this machine's real `~/.claude*` and `~/.codex/sessions`: every snapshot parsed the creator's whole JSONL history (~80 s locally, 180 s timeout under load, non-hermetic). The same leak hid in `web_doctor_instruction_audit_matches_cli_order` (19 s: `rtok doctor` scans `stats.transcripts_dir`), `tests/web.rs::ws_set_accepts_plugin_enabled` (67 s: a web `set` reloads `config.toml`, dropping the in-memory redirects `tests/web.rs` had copied three times), `tests/graph_model.rs::graph_page_matches_dead_json_on_the_fixture_index` (75 s: a snapshot on a bare `load_from`) and in `tests/stats_model.rs` (fixture transcripts, but `doctor.*` still real).
@@ -3011,6 +3024,20 @@ Check: `calls_store` tests (a start runs and its end moves it to the feed with t
 Check result (2026-10-10): `just check` green on this commit: nextest `Summary [ 321.901s] 3188 tests run: 3188 passed, 8 skipped`; fmt, clippy `-D warnings`, oxlint, pytest and jscpd clean; `calls_store` 8/8. Earlier runs under load 16 failed one unrelated timing test each (`mcp_with_watcher_exits_on_stdin_eof`, `agents_install the_agent_alias_prints_what_agents_prints`, `otel hook_skips_spawning_when_a_flush_is_already_queued`); each passed alone and the full run passed with `NEXTEST_TEST_THREADS=4`
 
 Deviations: the folded totals still exist twice (TypeScript and Rust) until T484.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
+## T484 — Web live panel reads the server's calls totals
+
+T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` ran two implementations of the same computation. Now the one poller of `rtok web` (`src/web/live.rs`) owns one `CallsStore`, folds each poll's batch into it, sweeps interrupted calls, builds a `CallsView` (new `src/web/calls_view.rs`) and sends it as the `calls` frame: running calls, the feed, and the totals of all four windows (1, 5, 15 minutes, since open), each with calls, failed, tokens before and after, the per-tool bars, the backend counts, latency p50 and p95, symbols asked and returned, crossed, fallbacks, caps, files touched and projects with hits. The page renders what the frame carries. `callsStore.ts` and its test are gone (257 and 163 lines); `feedFilter.ts` keeps the client-side caller, tool and project filters.
+
+Design: the page chooses its window and feed filters and freezes, none of which change a total, so every frame carries all four windows and the page indexes them; a filter only narrows the feed rows it already has. Freeze stays in the page: it holds the last frame on screen while newer frames keep arriving, so "N held" and the totals after unfreezing are the server's exact figures. One shared store per server (not per socket) means a second page that opens later starts from the totals so far instead of from zero, and a frame is the whole state, so the fan-out is a `tokio::sync::watch` channel that hands every socket the current frame first and then each change; a slow socket skips frames and loses nothing, where the old broadcast queue could drop whole batches and undercount. The poller sends only when the view changed apart from its clock, so an idle stream is silent. The frame carries the server's `now`; the page follows it by an offset, so rows age on one clock between frames. The poller stops with the last socket and a new one starts from zero, as before.
+
+Check: `calls_view` tests (all windows carry the store's totals, tools most calls first, measured percentiles, wire names); `tests/web_live.rs` (the ack carries empty totals, a call from another process equals its `rtok stats` rows in feed and window, a 500-call burst totals 500 in at most 60 frames with the feed capped, a second page starts from the totals so far and an idle stream sends nothing, no replay); `tests/surface_parity.rs`; Vitest `live.test.tsx` (running list, 75% saved, metrics from the frame, the failed row, rings, busy count, camera, freeze with "2 held" and 300 tokens after unfreeze, each window chip shows its window, a 500-call frame), `lit.test.ts`, `feedFilter.test.ts`, `ws.test.ts`; stories on frames.
+
+Check result (2026-10-10): `just check` green: nextest `Summary [ 555.221s] 3257 tests run: 3257 passed (3 slow), 8 skipped`, clippy `-D warnings`, fmt, oxlint and jscpd clean; `just spa-typecheck` clean; `just spa-test` 46 files, 413 tests passed; `just js` clean; `just spa-stories` 34 files, 225 tests passed; `just spa-e2e` 32 passed. A first e2e run under host load 20 timed out two tests (the 500-call burst waiting 30 s on its `rtok mcp` child, and Compare against a saved export); the burst test passed alone and the whole suite passed on the rerun.
+
+Deviations: the running list no longer carries `done` and `total` (the page never showed them). The frame key is `calls` instead of `batch`; the schema and `snapshot.gen.ts` no longer contain `CallBatch`, `GraphEvent` or `CallSummary`. `Reader::head` had no caller left and is gone.
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
@@ -9135,7 +9162,19 @@ Check: the page exports the JSON the CLI writes (byte-equal without `exported_at
 
 Done: the page asks and the server answers, so the CLI and the page share one drawing path. `export::page_file(rt, &ExportRequest)` resolves the scope like `--project`, calls the same `render` the CLI calls (redacted, pretty, the 200-node cap in `draw`) and returns an `ExportFile` (name, mime, base64 data); `Level` and `Format` gained serde and schema derives. `/ws` gained `ClientMessage::Export`/`Import` and `ServerFrame::Export`/`Imported`; `Import` carries the file's TEXT (never a path) and `export::parse` answers without opening a `Runtime`, so nothing reaches the registry or the index. Web: `ExportMenu.tsx` (an Export button opening an inline group that says "File names and symbol names are included", scope radios for the overview, the symbol graph and the focused subgraph, format json|svg|png, size 1x to 4x, transparent, Download through `download()`, and an "open an export" file picker) and `ImportedView.tsx` (the banner "viewing export from NAME", a Close export button, projects, links and the first 200 symbols; the live frame and the scene give way). `ws.schema.json` and `snapshot.gen.ts` were regenerated (`RTOK_BLESS=1`, `npm run gen:api`). Reused: `export::render`/`parse`, the Diff request pattern (`askDoctor`), `download()`, Compare's `Section`/`Row` and `tooLarge`, `drillServer` for stories. New dependency `base64` 0.23.1 (optional, under `graph`): the PNG travels inside a text frame; it is already listed in `rust.md` and now in `toolchain.md`.
 
-Deviations: the image of the live frame is not here (the card says part 2 only); the TUI half of D27 lands with T329.41 and `tests/surface_parity.rs` pins the web half now.
+Deviations: the image of the live frame is not here (the card says part 2 only); the TUI half of D27 is T329.41, and `tests/surface_parity.rs` pins both halves.
+
+### T329.41. TUI: graph export action
+
+D27 for T329.31 and T329.40: anything the command prints is a page on web and tui, so `rtok tui` gets a graph export key that calls the same function as `rtok graph export` (formats json, svg and png, the same 200-node cap and redaction default, written to a file the user names) and an open-a-saved-export view that is read-only. Depends on T329.31.
+
+Check: the key writes the same bytes as the CLI for json, svg and png; redaction is on unless the user turns it off; the saved-export view writes nothing; TUI tests; `just check`.
+
+Done: on the Graph page `e` opens a form (format json, svg or png; level overview or symbols; redact on or off; the file to write) for the project under the cursor, and `v` asks for the path of a saved export and shows it read-only (banner, projects, links, the first 40 nodes). New `src/tui/exporter.rs`; `export::write` in `src/plugins/graph/export.rs` is `render` plus the file write, and `rtok graph export -o` now ends in it too, so the key and the command share the call, the defaults (redaction on, scale 1, opaque background, pretty JSON, the 200-node cap of the picture) and the bytes. The view opens the file with `export::read`, the importer of `--from`, and opens neither the registry nor the index. Runs off the key loop like compare. KEYS table, help overlay and `docs/commands.md` (en, ru, uk) list the keys; `tests/surface_parity.rs` pins that the command and the TUI use `export::write` and that the view only reads.
+
+Result: `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd, cargo nextest 3279 passed and 8 skipped, min-feature build); the new `tui::exporter` tests (7) cover the bytes against the command's for json, svg and png, redaction default and switch, the typed keys, a failed write, the read-only view (file bytes and directory listing unchanged) and the background run. jscpd lists the shared panel plumbing with `src/tui/compare.rs` as clones without failing the gate; T329.48 extracts it.
+
+Deviations: the form has no `--focus`, `--scale` or `--transparent` (the command's defaults apply); a focused subgraph needs a symbol and belongs to the page's Export menu (T329.40). The page's half of the parity check lands with T329.40. A PNG test compares the signature and size with the command's PNG, not every byte: the picture's footer carries the export time to the second and a PNG render takes longer than a second under load; JSON and SVG are compared byte for byte.
 
 ### T329.19. Graph health score per project
 
@@ -10493,6 +10532,16 @@ Done means: `skills/` tells the agent on Codex, Grok Build, MiMo, omp and Antigr
 Check: the skill's gate tests.
 
 Result (2026-10-03, Claude Code / sonnet-5): `skills/worktrees/SKILL.md` names the hosts whose own worktrees an agent binds (Cursor, Codex, Kilo, Devin, Grok Build, MiMo, omp, Antigravity) with MCP `worktree_adopt` or `rtok worktree adopt --task`, and the skill's list line mentions `origin`. The skill body had to stay under its 2048-byte limit, so the surrounding prose was tightened. The command-and-flag gate in `tests/skill.rs` now requires `rtok worktree adopt`.
+
+### T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
+
+Done means: rtok's entry is written into `.cursor/worktrees.json` (`setup-worktree*`), `.kilo/setup-script` and Devin/Windsurf's `post_setup_worktree` hook config, our entry only and the rest of each file byte-for-byte (host-config rule), and removal takes it out; the entry runs `rtok worktree adopt`.
+
+Check: install/remove e2e per host that changes only our entry.
+
+Result (2026-10-10, Claude Code / sonnet-5.5): `rtok agents install|uninstall <host> --project` (`src/agents/post_create.rs`; hosts `cursor`, `kilo`, `windsurf`, `devin`, any other is refused) edits the git root's project files. Cursor gets one command in each array-valued `setup-worktree*` list (a script-path value is reported, not edited, and a missing file gets `setup-worktree`). Devin and Windsurf get one `post_setup_worktree` entry in the file the host reads today (`.devin/hooks.json`, or a legacy `.windsurf/hooks.json` that still defines hooks, so a new file never switches legacy hooks off). Kilo gets a marked block right after the shebang of `.kilo/setup-script` (or the `.sh` it would otherwise shadow), run in a subshell. JSON goes through the new `jsonc::push_item`/`pull_items` (byte-span edits), so install then uninstall restores the file byte-for-byte and a file we created goes away; no `_backup` folders because these files are committed. File shapes and sources are in `research.md` §26. `adopt` with no agent (the post-create script has none) now binds the one live agent of the pool's host whose cwd is the repository (`claim::bind_unattended`; the directory comparison is the new `fs::same_dir`, which `agents::link::resolve` now uses too), and fails naming the problem when there is none or several. Reused: `agents::command`, `rtok_agent_sdk::{Apply, write}`, `jsonc` helpers, `hook_resolver`, `claim::bind`, the T283.1 cwd rule. Tests: `tests/agents_post_create.rs` (8), `jsonc` unit tests (3), `tests/worktree.rs` adopt binding with seeded agent rows. Check: `just check` green, 3268 tests passed, 8 skipped (nextest); trycmd and completion snapshots, `config_coverage` (`setup.project` allow-listed) and `module_graph` updated or satisfied.
+
+Deviations: the creator's "none or several: a claim with no agent completed later" half is split into T289.5 (store table, migration, hook step; it would have put T289.3 over the 500-line limit). T289.5 is the next free id under T289.
 
 ### T290. Docs, skill and one cross-host test for agents and worktrees
 

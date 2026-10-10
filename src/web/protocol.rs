@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
 
-use super::live::CallBatch;
+use super::calls_view::CallsView;
 use super::model::{
     DiffReport, DiffRequest, DrillGraph, DrillRequest, ExportFile, ExportRequest, GraphExport,
     ImportRequest, Snapshot,
@@ -48,9 +48,10 @@ pub enum ServerFrame {
     /// The answer to [`ClientMessage::Import`]: the saved export, parsed and checked against the
     /// schema; the page shows it read-only.
     Imported { name: String, export: GraphExport },
-    /// What the graph tools did since the last frame (T329.15): sent only after
-    /// [`ClientMessage::Calls`] subscribed, at most four times a second.
-    Calls { batch: CallBatch },
+    /// The live calls panel's whole state (T329.15, T484): running calls, the feed and the totals
+    /// of every window. Sent after [`ClientMessage::Calls`] subscribed, first at once and then
+    /// when something in it changed, at most four times a second.
+    Calls { calls: CallsView },
 }
 
 impl ServerFrame {

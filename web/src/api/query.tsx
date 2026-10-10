@@ -16,7 +16,7 @@ import {
 } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import type {
-    CallBatch,
+    CallsView,
     Cleared,
     ClientMessage,
     DiffReport,
@@ -77,7 +77,7 @@ export interface Api {
     /** A saved export's text, parsed by the server; nothing is written (T329.40). */
     importGraph(request: ImportRequest): Promise<Imported>;
     /** Starts the graph call stream (T329.26) for as long as a listener is registered; returns the stop. */
-    calls(listener: (batch: CallBatch) => void): () => void;
+    calls(listener: (view: CallsView) => void): () => void;
 }
 
 // `set` and `project` get no reply of their own: the server answers a write with the next
@@ -125,7 +125,7 @@ export function createApi(
     // snapshot on screen, so `dataUpdatedAt` stays the age of what the reader sees.
     let paused = false;
     let held: Snapshot | undefined;
-    const callListeners = new Set<(batch: CallBatch) => void>();
+    const callListeners = new Set<(view: CallsView) => void>();
     const subscribeCalls = (subscribe: boolean) => connection?.send({ calls: { subscribe } });
 
     const writeSnapshot = (update: (prev: Snapshot | undefined) => Snapshot | undefined) => {
@@ -257,7 +257,7 @@ export function createApi(
                 settleDoctor("imported", { name: frame.name, export: frame.export });
                 return;
             case "calls":
-                for (const listener of callListeners) listener(frame.batch);
+                for (const listener of callListeners) listener(frame.calls);
                 return;
             case "message":
                 // The server's refusals do not name the request they answer, so a message fails
@@ -471,10 +471,10 @@ export function useExpandMutation() {
     return useMutation({ mutationFn: (id: string) => api.expand(id) });
 }
 
-/** Delivers every call batch while mounted; the socket subscribes only for as long as a page listens. */
-export function useCallStream(onBatch: (batch: CallBatch) => void) {
+/** Delivers every calls frame while mounted; the socket subscribes only for as long as a page listens. */
+export function useCallStream(onView: (view: CallsView) => void) {
     const api = useApi();
-    const latest = useRef(onBatch);
-    latest.current = onBatch;
-    useEffect(() => api.calls((batch) => latest.current(batch)), [api]);
+    const latest = useRef(onView);
+    latest.current = onView;
+    useEffect(() => api.calls((view) => latest.current(view)), [api]);
 }

@@ -494,6 +494,14 @@ pub fn render(rt: &Runtime, scope: &[Member], q: &Query, img: &Image) -> Result<
     }
 }
 
+/// Renders and writes `file`. `rtok graph export -o` and the TUI's export key both end here, so
+/// the two cannot write different bytes for the same query.
+pub fn write(rt: &Runtime, scope: &[Member], q: &Query, img: &Image, file: &Path) -> Result<usize> {
+    let bytes = render(rt, scope, q, img)?;
+    std::fs::write(file, &bytes).with_context(|| file.display().to_string())?;
+    Ok(bytes.len())
+}
+
 pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
     let e = build(rt, scope, q)?;
     let mut out = if q.pretty {

@@ -12,6 +12,7 @@
 
 pub use crate::model;
 pub mod calls_store;
+pub mod calls_view;
 pub mod live;
 pub mod protocol;
 pub mod spa;
@@ -31,7 +32,7 @@ use axum::routing::get;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::watch;
 
 use crate::config::{Config, validate};
 use crate::plugins::Registry;
@@ -334,24 +335,19 @@ pub fn frame(cfg: &Config) -> String {
         .to_string()
 }
 
-/// The next call-event frame of a subscribed socket; never resolves for one that is not.
-/// A socket that fell behind skips the frames it missed: the page rebuilds totals from the
-/// store, so a gap costs a few rows of the feed and nothing else.
-async fn next_calls(calls: &mut Option<broadcast::Receiver<Arc<str>>>) -> Option<Arc<str>> {
-    let Some(rx) = calls else {
-        return std::future::pending().await;
-    };
-    loop {
-        match rx.recv().await {
-            Ok(frame) => return Some(frame),
-            Err(broadcast::error::RecvError::Lagged(_)) => {}
-            Err(broadcast::error::RecvError::Closed) => return std::future::pending().await,
-        }
+/// The next calls frame of a subscribed socket; never resolves for one that is not. Every frame
+/// is the whole state, so a socket that fell behind skips the ones in between and loses nothing.
+async fn next_calls(calls: &mut Option<watch::Receiver<Arc<str>>>) -> Option<Arc<str>> {
+    if let Some(rx) = calls
+        && rx.changed().await.is_ok()
+    {
+        return Some(rx.borrow_and_update().clone());
     }
+    std::future::pending().await
 }
 
 async fn socket_loop(mut socket: WebSocket, state: Arc<DashState>) {
-    let mut calls: Option<broadcast::Receiver<Arc<str>>> = None;
+    let mut calls: Option<watch::Receiver<Arc<str>>> = None;
     // A fixed period, not a sleep per pass: call frames arriving every few hundred
     // milliseconds must not keep pushing the next snapshot out.
     let mut tick = tokio::time::interval(Duration::from_secs(2));

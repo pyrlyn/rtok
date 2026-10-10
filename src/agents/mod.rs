@@ -49,6 +49,7 @@ pub mod pi;
 pub mod plugin;
 pub(crate) mod plugin_install;
 pub(crate) mod plugin_version;
+pub mod post_create;
 pub(crate) mod proxy_env;
 pub mod qwen;
 pub mod restart;

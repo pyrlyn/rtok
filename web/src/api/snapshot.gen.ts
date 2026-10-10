@@ -133,7 +133,7 @@ export type ServerFrame =
       type: "imported";
     }
   | {
-      batch: CallBatch;
+      calls: CallsView;
       type: "calls";
     };
 /**
@@ -146,11 +146,6 @@ export type DrillEdgeKind = "contains" | "calls" | "implements" | "imports";
  * via the `definition` "DrillNodeKind".
  */
 export type DrillNodeKind = ("file" | "type" | "module" | "function") | "external";
-/**
- * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "EventPhase".
- */
-export type EventPhase = "start" | "progress" | "end";
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ModuleState".
@@ -747,136 +742,106 @@ export interface Proj {
   root: string;
 }
 /**
- * What one poll found, as one frame. `summary` counts every event of the poll (including
- * the ones left out of `events`), so a page that adds summaries up never undercounts a burst.
+ * The state of the live calls panel at `now`.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "CallBatch".
+ * via the `definition` "CallsView".
  */
-export interface CallBatch {
+export interface CallsView {
   /**
-   * Newest last. A call's start and progress events are left out when its end is in the
-   * batch, since the end carries the same call and tool.
+   * Newest first.
    */
-  events: GraphEvent[];
+  feed: Finished[];
   /**
-   * The newest event id the batch covers.
+   * The server's clock in epoch milliseconds: the page ages rows by `now - at` on this clock,
+   * so a skew between the two machines moves nothing.
    */
-  head: number;
+  now: number;
+  running: Running[];
   /**
-   * Events cut because the batch held more than [`MAX_EVENTS`] (the oldest go first).
+   * One per chip, in the order of [`WINDOWS`]; the last is "since open".
    */
-  omitted: number;
-  summary: CallSummary;
+  windows: WindowView[];
 }
 /**
- * One event of a graph call. `call` ties a call's events together; `ts_ms`, `id` and the
- * clipping of free text are the store's, so a writer leaves `id` and `ts_ms` at zero.
- *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "GraphEvent".
+ * via the `definition` "Finished".
  */
-export interface GraphEvent {
-  /**
-   * Estimated tokens of the answer the caller received (end events).
-   */
-  answer_tokens: number | null;
-  /**
-   * `lsp`, `tags` or `text`: the backend that answered (end events).
-   */
+export interface Finished {
+  after: number;
+  at: number;
   backend: string | null;
+  before: number;
   call: string;
-  /**
-   * Scope members done and in total (progress and end events).
-   */
-  done: number | null;
   error: string | null;
-  files_touched: number | null;
-  id: number;
-  /**
-   * Elapsed milliseconds (end events).
-   */
+  interrupted: boolean;
   ms: number | null;
   ok: boolean;
-  phase: EventPhase;
   project: string | null;
-  projects_hit: number | null;
-  /**
-   * The call's `graph` measurement rows (end events); empty when the answer was not shortened.
-   */
-  samples: MeasurementSample[];
   session: string;
-  /**
-   * Symbols the call asked for (every event); `None` for a tool that takes none.
-   */
-  symbols: number | null;
-  /**
-   * What the answer returned, counted by the backends (end events of `symbol`, `callers` and
-   * `impact` by name): asked symbols it lists, distinct files of its rows, projects with a row.
-   */
-  symbols_returned: number | null;
   target: string | null;
   tool: string;
-  total: number | null;
-  ts_ms: number;
-}
-/**
- * One `measurements` row of the call, with the columns `rtok stats` sums. Copied from the
- * table at the call's end, so a page that adds these up gets the report's numbers.
- *
- * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "MeasurementSample".
- */
-export interface MeasurementSample {
-  after_bytes: number;
-  before_bytes: number;
-  est_after: number;
-  est_before: number;
-  id: number;
-  kind: string;
-  /**
-   * Set when the row's answer was cut and archived: how a page tells a cap hit from an
-   * `explore` row that only stands for several smaller calls. Absent in rows written before T329.33.
-   */
-  ref_id: string | null;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "CallSummary".
+ * via the `definition` "Running".
  */
-export interface CallSummary {
+export interface Running {
   /**
-   * Rows with a `ref_id`: answers cut at `max_tokens`.
+   * The reader's clock: the interrupt timeout must not depend on the writer's.
    */
+  at: number;
+  call: string;
+  project: string | null;
+  session: string;
+  target: string | null;
+  tool: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "WindowView".
+ */
+export interface WindowView {
+  after: number;
+  backends: {
+    [k: string]: number;
+  };
+  before: number;
+  calls: number;
   caps: number;
-  /**
-   * Ended calls whose scope held more than one project.
-   */
   crossed: number;
-  ends: number;
-  est_after: number;
-  /**
-   * Sums of the `samples` of the end events: the `Measurement` columns `rtok stats` adds up.
-   */
-  est_before: number;
   failed: number;
-  /**
-   * `lsp_fallback` rows of the ended calls: each is one answer the tags index gave after the
-   * language server could not.
-   */
   fallbacks: number;
   files_touched: number;
+  label: string;
+  /**
+   * `None` before any call in the window has ended.
+   */
+  latency: Latency | null;
   projects_hit: number;
-  starts: number;
-  /**
-   * Symbols the ended calls asked for.
-   */
   symbols: number;
-  /**
-   * What the ended calls returned, counted by the graph backends (T329.36): asked symbols
-   * the answers list, distinct files per call and projects with a row per call.
-   */
   symbols_returned: number;
+  /**
+   * Most calls first.
+   */
+  tools: ToolView[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Latency".
+ */
+export interface Latency {
+  p50: number;
+  p95: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ToolView".
+ */
+export interface ToolView {
+  calls: number;
+  saved: number;
+  tool: string;
 }
 /**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface

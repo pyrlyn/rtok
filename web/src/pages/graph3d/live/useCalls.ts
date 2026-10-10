@@ -4,62 +4,74 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCallStream } from "../../../api/query";
-import { type CallsStore, emptyStore, fold, sweep } from "./callsStore";
+import type { CallsView, WindowView } from "../../../api/snapshot.gen";
+
+export const emptyCalls: CallsView = { now: 0, running: [], feed: [], windows: [] };
+export const emptyWindow: WindowView = {
+  label: "",
+  calls: 0,
+  failed: 0,
+  before: 0,
+  after: 0,
+  tools: [],
+  backends: {},
+  fallbacks: 0,
+  caps: 0,
+  symbols: 0,
+  crossed: 0,
+  symbols_returned: 0,
+  files_touched: 0,
+  projects_hit: 0,
+  latency: null,
+};
+
+/** The server totals "since open" last, so its count is every call the stream has seen. */
+export const totalCalls = (v: CallsView) => v.windows.at(-1)?.calls ?? 0;
 
 /**
- * The call stream as a store the page can freeze. The latest store always takes every batch,
- * so a freeze holds the picture and nothing else: the totals are exact the moment it lifts.
- * Painting is batched to one state update per animation frame, however many batches arrive.
+ * The server's calls frames as a picture the page can freeze. The totals are the server's
+ * (`rtok tui` shows the same ones), so a freeze only holds the frame on screen: the latest frame
+ * keeps arriving, and the totals are exact the moment it lifts.
  */
 export function useCalls() {
-  const latest = useRef<CallsStore>(emptyStore);
+  const latest = useRef<CallsView>(emptyCalls);
   const frozen = useRef(false);
-  const frame = useRef(0);
-  const [shown, setShown] = useState<CallsStore>(emptyStore);
+  const heldAt = useRef(0);
+  // The frame's `now` is the server's clock: the page follows it by an offset, so rows age on
+  // one clock between frames whatever the browser's says.
+  const skew = useRef(0);
+  const [shown, setShown] = useState<CallsView>(emptyCalls);
   const [now, setNow] = useState(() => Date.now());
   const [held, setHeld] = useState(false);
-  const heldAt = useRef(0);
   const [pending, setPending] = useState(0);
 
-  const paint = useCallback(() => {
-    frame.current = 0;
-    if (frozen.current) setPending(latest.current.all.calls - heldAt.current);
-    else setShown(latest.current);
-  }, []);
-  const schedule = useCallback(() => {
-    if (!frame.current) frame.current = requestAnimationFrame(paint);
-  }, [paint]);
-
-  useCallStream((batch) => {
-    latest.current = fold(latest.current, batch, Date.now());
-    schedule();
+  useCallStream((view) => {
+    latest.current = view;
+    skew.current = Date.now() - view.now;
+    if (frozen.current) {
+      setPending(totalCalls(view) - heldAt.current);
+      return;
+    }
+    setShown(view);
+    setNow(view.now);
   });
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const t = Date.now();
-      const next = sweep(latest.current, t);
-      if (next !== latest.current) {
-        latest.current = next;
-        schedule();
-      }
-      if (!frozen.current) setNow(t);
+      if (!frozen.current) setNow(Date.now() - skew.current);
     }, 1000);
-    return () => {
-      clearInterval(timer);
-      cancelAnimationFrame(frame.current);
-    };
-  }, [schedule]);
+    return () => clearInterval(timer);
+  }, []);
 
   const freeze = useCallback((on: boolean) => {
     frozen.current = on;
-    heldAt.current = latest.current.all.calls;
+    heldAt.current = totalCalls(latest.current);
     setHeld(on);
     setPending(0);
     if (!on) {
-      setNow(Date.now());
+      setNow(Date.now() - skew.current);
       setShown(latest.current);
     }
   }, []);
-  return { store: shown, now, frozen: held, freeze, pending };
+  return { view: shown, now, frozen: held, freeze, pending };
 }
