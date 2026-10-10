@@ -2,77 +2,87 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import type { CallBatch, GraphEvent } from "../../../api/snapshot.gen";
+import type { CallsView, Finished, Running, WindowView } from "../../../api/snapshot.gen";
 
-export const event = (over: Partial<GraphEvent> = {}): GraphEvent => ({
-  answer_tokens: null,
-  backend: null,
-  call: "s:1",
-  done: null,
-  error: null,
-  id: 1,
-  ms: null,
-  ok: true,
-  phase: "start",
-  project: "rtok",
-  samples: [],
-  session: "session-abcdef",
-  symbols: null,
-  symbols_returned: null,
-  files_touched: null,
-  projects_hit: null,
-  target: "open_index",
+export const NOW = 1_000_000;
+
+export const running = (call: string, over: Partial<Running> = {}): Running => ({
+  call,
   tool: "callers",
-  total: null,
-  ts_ms: 0,
+  target: "open_index",
+  project: "rtok",
+  session: "session-abcdef",
+  at: NOW,
   ...over,
 });
 
-/** An end event whose one measurement row cut `before` tokens down to `after`. */
-export const end = (call: string, before: number, after: number, over: Partial<GraphEvent> = {}) =>
-  event({
-    call,
-    phase: "end",
-    backend: "tags",
-    ms: 12,
-    samples: [
-      {
-        id: 1,
-        kind: "graph.callers",
-        before_bytes: 0,
-        after_bytes: 0,
-        est_before: before,
-        est_after: after,
-        ref_id: null,
-      },
-    ],
-    ...over,
-  });
+/** A finished call whose measurement cut `before` tokens down to `after`. */
+export const done = (
+  call: string,
+  before: number,
+  after: number,
+  over: Partial<Finished> = {},
+): Finished => ({
+  call,
+  tool: "callers",
+  target: "open_index",
+  project: "rtok",
+  session: "session-abcdef",
+  ok: true,
+  error: null,
+  backend: "tags",
+  ms: 12,
+  before,
+  after,
+  at: NOW,
+  interrupted: false,
+  ...over,
+});
 
-/** A batch whose summary counts exactly the events it lists, plus `omitted` ends of 10 to 4 tokens. */
-export function batch(events: GraphEvent[], omitted = 0): CallBatch {
-  const ends = events.filter((e) => e.phase === "end");
-  const samples = ends.flatMap((e) => e.samples);
+export const LABELS = ["1 min", "5 min", "15 min", "since open"];
+
+/** What the server would total for `feed`; `over` sets the figures that come from the batch summary. */
+export function windowOf(
+  label: string,
+  feed: readonly Finished[],
+  over: Partial<WindowView> = {},
+): WindowView {
+  const tools = new Map<string, { calls: number; saved: number }>();
+  const backends: Record<string, number> = {};
+  for (const r of feed) {
+    const t = tools.get(r.tool) ?? { calls: 0, saved: 0 };
+    tools.set(r.tool, { calls: t.calls + 1, saved: t.saved + r.before - r.after });
+    if (r.backend) backends[r.backend] = (backends[r.backend] ?? 0) + 1;
+  }
   return {
-    events,
-    head: events.length,
-    omitted,
-    summary: {
-      starts: events.filter((e) => e.phase === "start").length,
-      ends: ends.length + omitted,
-      failed: ends.filter((e) => !e.ok).length,
-      est_before:
-        ends.reduce((n, e) => n + e.samples.reduce((m, s) => m + s.est_before, 0), 0) +
-        omitted * 10,
-      est_after:
-        ends.reduce((n, e) => n + e.samples.reduce((m, s) => m + s.est_after, 0), 0) + omitted * 4,
-      fallbacks: samples.filter((s) => s.kind === "lsp_fallback").length,
-      caps: samples.filter((s) => s.ref_id).length,
-      symbols: ends.reduce((n, e) => n + (e.symbols ?? 0), 0),
-      crossed: ends.filter((e) => (e.total ?? 0) > 1).length,
-      symbols_returned: ends.reduce((n, e) => n + (e.symbols_returned ?? 0), 0),
-      files_touched: ends.reduce((n, e) => n + (e.files_touched ?? 0), 0),
-      projects_hit: ends.reduce((n, e) => n + (e.projects_hit ?? 0), 0),
-    },
+    label,
+    calls: feed.length,
+    failed: feed.filter((r) => !r.ok).length,
+    before: feed.reduce((n, r) => n + r.before, 0),
+    after: feed.reduce((n, r) => n + r.after, 0),
+    tools: [...tools].map(([tool, v]) => ({ tool, ...v })).sort((a, b) => b.calls - a.calls),
+    backends,
+    fallbacks: 0,
+    caps: 0,
+    symbols: 0,
+    crossed: 0,
+    symbols_returned: 0,
+    files_touched: 0,
+    projects_hit: 0,
+    latency: null,
+    ...over,
+  };
+}
+
+/** A `calls` frame in which all four windows total the same `feed`, unless `windows` says otherwise. */
+export function view(over: Partial<CallsView> & { totals?: Partial<WindowView> } = {}): CallsView {
+  const { totals, ...rest } = over;
+  const feed = rest.feed ?? [];
+  return {
+    now: NOW,
+    running: [],
+    feed,
+    windows: LABELS.map((label) => windowOf(label, feed, totals)),
+    ...rest,
   };
 }

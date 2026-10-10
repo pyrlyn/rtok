@@ -8,7 +8,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use super::link::shell_agent;
 use super::{Mode, OutdatedSelection, Request, installed_hosts, print_human, report};
@@ -40,6 +40,8 @@ pub struct Install {
     pub desktop: bool,
     pub all: bool,
     pub no_restart: bool,
+    /// T289.3: write the project's post-create script entry instead of the host's own config.
+    pub project: bool,
 }
 
 /// The host installers, one call site for `rtok agents install|uninstall` and the deprecated
@@ -52,6 +54,12 @@ pub fn install(
     let mut cfg = Config::load_with(config_file, flags)?;
     // Comma-separated hosts: `rtok agents install opencode,cursor` installs both.
     let hosts = parse_hosts(&args.host)?;
+    if args.project {
+        let root = crate::config::layers::git_root(&std::env::current_dir()?)
+            .context("--project: run it inside the project's git repository")?;
+        crate::log::stdout(&super::post_create::run(&cfg, &hosts, args.remove, &root)?);
+        return Ok(());
+    }
     let mode = if args.remove {
         Mode::Remove
     } else if args.replace {

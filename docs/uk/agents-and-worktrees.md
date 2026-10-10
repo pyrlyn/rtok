@@ -53,7 +53,7 @@ lang: uk
 - Cursor, Codex і Windsurf/Devin самі видаляють worktree, щоб не перевищити ліміт (приблизно 25, 15 і 20). Чи переживає блокування git таке видалення, не підтверджено, тож прийняття там записує заявку лише в сховищі rtok і не пише блокування.
 - Кожне інше походження отримує те саме блокування v2, що й `worktree_add`.
 - Worktree, заблокований кимось іншим, ніколи не береться.
-- Запуск `adopt` зі скрипта після створення в хості (Cursor `.cursor/worktrees.json`, Kilo `.kilo/setup-script`, Windsurf і Devin `post_setup_worktree`) — **очікує T289.3**. До того агент приймає worktree через skill нижче.
+- Запуск `adopt` зі скрипта після створення в хості (Cursor `.cursor/worktrees.json`, Kilo `.kilo/setup-script`, Windsurf і Devin `post_setup_worktree`) — налаштовується командою `rtok agents install <host> --project` (хости `cursor`, `kilo`, `windsurf`, `devin`): вона додає один запис у файл проєкту й нічого більше не чіпає; `rtok agents uninstall <host> --project` його прибирає. Без названого агента `adopt` прив'язує єдиного живого агента хоста цього пулу, чий робочий каталог — репозиторій, і завершується помилкою, якщо таких немає або їх кілька (відкладене завершення claim — T289.5). Через skill нижче агент може прийняти worktree завжди.
 
 Skill `worktrees` розповідає агентові все це: `worktree_add` для нової роботи, `worktree_adopt` для worktree, створеного хостом, `worktree_remove`, коли злито.
 
@@ -64,11 +64,11 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | Хост | Хуки | Рядок агента з | Нативні worktree | Прийняття worktree, створеного хостом |
 | --- | --- | --- | --- | --- |
 | `claude` | так | хуки | `.claude/worktrees/<name>`; `WorktreeCreate`/`WorktreeRemove` можуть замінити типовий (перенаправлення rtok очікує T159) | `worktree_adopt` |
-| `cursor` | так | хуки | `~/.cursor/worktrees/`, ліміт 25 | `worktree_adopt`; скрипт після створення: очікує T289.3 |
+| `cursor` | так | хуки | `~/.cursor/worktrees/`, ліміт 25 | `worktree_adopt`; скрипт після створення: `agents install --project` |
 | `codex` | так | хуки | `$CODEX_HOME/worktrees`, зберігає 15 | `worktree_adopt` |
-| `windsurf` | ні | MCP | `~/.windsurf/worktrees/<repo>`, ліміт приблизно 20 | `worktree_adopt`; скрипт після створення: очікує T289.3 |
-| `devin` | так | хуки | ділить пул із Windsurf | `worktree_adopt`; скрипт після створення: очікує T289.3 |
-| `kilo` | ні | MCP | `.kilo/worktrees/` | `worktree_adopt`; скрипт після створення: очікує T289.3 |
+| `windsurf` | ні | MCP | `~/.windsurf/worktrees/<repo>`, ліміт приблизно 20 | `worktree_adopt`; скрипт після створення: `agents install --project` |
+| `devin` | так | хуки | ділить пул із Windsurf | `worktree_adopt`; скрипт після створення: `agents install --project` |
+| `kilo` | ні | MCP | `.kilo/worktrees/` | `worktree_adopt`; скрипт після створення: `agents install --project` |
 | `grok` | ні | MCP (`GROK_SESSION_ID`) | worktree субагентів `--parallel`, шлях не перевірено | `worktree_adopt` |
 | `mimo` | ні | MCP | `auto_worktree` і режим оркестратора | `worktree_adopt` |
 | `omp` | ні | MCP | ізоляція на завдання | `worktree_adopt` |

@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { Scene } from "../scene";
-import type { CallsStore } from "./callsStore";
+import type { CallsView } from "../../../api/snapshot.gen";
 
 /** What the live canvas adds to one node. */
 export interface Lit {
@@ -40,7 +40,7 @@ const bare = (label: string) => label.replace(/^⚠ /, "");
  * files, so it lights the node named like the call's target. A call on something the picture
  * does not hold lights nothing (the totals still count it).
  */
-export function liveState(scene: Scene, store: CallsStore, now: number): LiveState {
+export function liveState(scene: Scene, store: CallsView, now: number): LiveState {
   const overview = scene.label === "registered projects";
   const key = (c: { project: string | null; target: string | null }) =>
     overview ? c.project : c.target;

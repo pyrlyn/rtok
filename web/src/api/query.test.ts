@@ -423,37 +423,16 @@ describe("diff requests", () => {
 });
 
 describe("call stream", () => {
-  const batch = (head: number) =>
-    ({
-      type: "calls",
-      batch: {
-        events: [],
-        head,
-        omitted: 0,
-        summary: {
-          starts: 0,
-          ends: 0,
-          failed: 0,
-          est_before: 0,
-          est_after: 0,
-          fallbacks: 0,
-          caps: 0,
-          symbols: 0,
-          crossed: 0,
-          symbols_returned: 0,
-          files_touched: 0,
-          projects_hit: 0,
-        },
-      },
-    }) as Frame;
+  const batch = (now: number) =>
+    ({ type: "calls", calls: { now, running: [], feed: [], windows: [] } }) as Frame;
 
   test("the first listener subscribes, the last one unsubscribes, a second shares the stream", () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const seen: number[] = [];
-    const stopA = api.calls((b) => seen.push(b.head));
-    const stopB = api.calls((b) => seen.push(b.head * 10));
+    const stopA = api.calls((b) => seen.push(b.now));
+    const stopB = api.calls((b) => seen.push(b.now * 10));
     expect(s.sent).toEqual([{ calls: { subscribe: true } }]);
     s.server().onFrame(batch(3));
     expect(seen).toEqual([3, 30]);

@@ -4,7 +4,7 @@
 
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { useDrill } from "../../../api/query";
-import type { ProjectRow } from "../../../api/snapshot.gen";
+import type { CallsView, ProjectRow } from "../../../api/snapshot.gen";
 import { Empty } from "../../../states";
 import { Chip } from "../../../ui/Chip";
 import { drillScene, emptyScene } from "../drillScene";
@@ -15,8 +15,8 @@ import Scene2D from "../Scene2D";
 import { readView, saveView, useStableScene } from "../SceneView";
 import { useLayout } from "../useLayout";
 import { type ViewApi, webglAvailable } from "../webgl";
-import type { CallsStore } from "./callsStore";
 import { liveState } from "./lit";
+import { totalCalls } from "./useCalls";
 
 // The 3D chunk loads only when the live part draws in 3D.
 const Scene3D = lazy(() => import("../Scene3D"));
@@ -42,7 +42,7 @@ function Canvas({
     view,
 }: {
     scene: Scene;
-    store: CallsStore;
+    store: CallsView;
     now: number;
     view: View;
 }) {
@@ -50,7 +50,7 @@ function Canvas({
     const api = useRef<ViewApi | null>(null);
     const live = useMemo(() => liveState(scene, store, now), [scene, store, now]);
     // Until the first call the picture is the static graph, dimmed.
-    const idle = store.all.calls === 0 && store.running.length === 0;
+    const idle = totalCalls(store) === 0 && store.running.length === 0;
     return (
         <div className="relative h-80 overflow-hidden rounded-md border border-border bg-bg/60">
             {scene.nodes.length === 0 ? (
@@ -129,7 +129,7 @@ function Overview({
     view,
 }: {
     rows: ProjectRow[];
-    store: CallsStore;
+    store: CallsView;
     now: number;
     view: View;
 }) {
@@ -146,7 +146,7 @@ function Drilled({
 }: {
     state: DrillState;
     rows: ProjectRow[];
-    store: CallsStore;
+    store: CallsView;
     now: number;
     view: View;
 }) {
@@ -170,7 +170,7 @@ export function LiveGraph({
 }: {
     rows: ProjectRow[];
     drill: DrillState | null;
-    store: CallsStore;
+    store: CallsView;
     now: number;
 }) {
     // The page's remembered choice starts it; "list" has no picture, so the live part draws 2D.

@@ -65,6 +65,15 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
 // (Windows case, `\\?\`). Re-exported here at the old paths.
 pub(crate) use rtok_store::{canon, is_unwalkable_root, path_starts_with, same_path, strip_prefix};
 
+/// Whether two spellings name one directory (`/var` vs `/private/var`, `RUNNER~1`, `\\?\`). A
+/// path that no longer resolves matches only itself, so an ended session's row never links.
+pub(crate) fn same_dir(a: &str, b: &str) -> bool {
+    a == b
+        || dunce::canonicalize(a)
+            .ok()
+            .is_some_and(|a| dunce::canonicalize(b).ok() == Some(a))
+}
+
 /// Forward-slash Vfs key from a [`Path`] (Windows separators normalized).
 #[cfg(test)]
 pub(crate) fn path_key(path: &Path) -> String {

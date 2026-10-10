@@ -7,8 +7,8 @@
 //! can carry hooks and the MCP process's own row for one that cannot, never a real agent. Every
 //! host must come out with the same worktree path rule, lock format and list row.
 //!
-//! Post-create scripts (T289.3) are not built yet, so adoption is exercised through MCP
-//! `worktree_adopt` only.
+//! Post-create scripts (T289.3) are covered in `agents_post_create.rs`; here adoption goes through
+//! MCP `worktree_adopt` only.
 
 mod common;
 

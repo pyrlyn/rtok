@@ -497,6 +497,125 @@ pub fn is_empty_at(raw: &str, segs: &[Seg]) -> bool {
     locate(raw, segs).is_some_and(|(_, vs, ve)| is_blank(&raw[vs + 1..ve.saturating_sub(1)]))
 }
 
+/// Insert `"key": value` as the last member of the object opening at `open`, `pad` spaces deep.
+fn push_member(text: &mut String, open: usize, key: &str, value: &Value, pad: usize) {
+    let close = skip_value(text, open).unwrap_or(text.len());
+    let brace = close - 1;
+    let member = format!("{}: {}", qkey(key), render_entry(value, pad));
+    let outer = " ".repeat(pad.saturating_sub(2));
+    let ind = " ".repeat(pad);
+    let inner = &text[open + 1..brace];
+    if is_blank(inner) {
+        text.replace_range(open + 1..brace, &format!("\n{ind}{member}\n{outer}"));
+    } else if let Some(last) = last_value_end(text, open) {
+        text.insert_str(last, &format!(",\n{ind}{member}"));
+    } else {
+        text.insert_str(brace, &format!("\n{ind}{member}\n{outer}"));
+    }
+}
+
+/// Append `item` to the array opening at `open` (its `]` closes at `end`), in the array's own
+/// style: one element per line, or inline after the last one.
+fn push_element(text: &mut String, open: usize, end: usize, item: &Value) {
+    let line = text[..open].rfind('\n').map_or(0, |n| n + 1);
+    let base: String = text[line..]
+        .chars()
+        .take_while(|c| c.is_whitespace())
+        .collect();
+    let (mut n, mut last) = (0, None);
+    while let Some(span) = nth_element(text, open, n) {
+        last = Some(span);
+        n += 1;
+    }
+    let Some((start, stop)) = last else {
+        let pad = base.len() + 2;
+        let at = open + 1..end - 1;
+        let blank = is_blank(&text[at.clone()]);
+        let body = format!("\n{}{}\n{base}", " ".repeat(pad), render_entry(item, pad));
+        if blank {
+            text.replace_range(at, &body);
+        } else {
+            text.insert_str(end - 1, &body);
+        }
+        return;
+    };
+    let before = &text[text[..start].rfind('\n').map_or(0, |n| n + 1)..start];
+    let add = if before.trim().is_empty() {
+        format!(",\n{before}{}", render_entry(item, before.len()))
+    } else {
+        format!(", {}", serde_json::to_string(item).unwrap_or_default())
+    };
+    text.insert_str(stop, &add);
+}
+
+/// Add `item` to the array at `raw[keys[0]]…[keys[n]]`, creating the objects and the array that
+/// are missing. Every other byte of `raw` stays: comments, trailing commas, indentation. A
+/// value of another shape on the way is an error, never replaced.
+pub fn push_item(raw: &str, path: &Path, keys: &[&str], item: &Value) -> Result<String> {
+    anyhow::ensure!(!keys.is_empty(), "push_item needs a key");
+    let mut text = if strip_comments(raw).trim().is_empty() {
+        String::from("{}")
+    } else {
+        parse_at(raw, path)?;
+        raw.to_string()
+    };
+    let mut open =
+        root_open(&text).with_context(|| format!("{}: not a JSON object", path.display()))?;
+    for (depth, key) in keys.iter().enumerate() {
+        let Some((_, vs, ve)) = find_key(&text, open, key) else {
+            let value = keys[depth + 1..]
+                .iter()
+                .rev()
+                .fold(Value::Array(vec![item.clone()]), |v, k| {
+                    Value::Object([(k.to_string(), v)].into_iter().collect())
+                });
+            push_member(&mut text, open, key, &value, 2 * (depth + 1));
+            return Ok(text);
+        };
+        let want = if depth + 1 == keys.len() { b'[' } else { b'{' };
+        anyhow::ensure!(
+            text.as_bytes()[vs] == want,
+            "{}: `{key}` is not an {}",
+            path.display(),
+            if want == b'[' { "array" } else { "object" }
+        );
+        if want == b'[' {
+            push_element(&mut text, vs, ve, item);
+            return Ok(text);
+        }
+        open = vs;
+    }
+    unreachable!("the last key returns")
+}
+
+/// Drop the elements `ours` accepts from the array at `keys`, then the array and every object
+/// that leaves empty (nothing else in them, not even a comment). The count of dropped elements.
+pub fn pull_items(
+    raw: &str,
+    path: &Path,
+    keys: &[&str],
+    ours: impl Fn(&Value) -> bool,
+) -> Result<(String, usize)> {
+    let doc = parse_at(raw, path)?;
+    let found = keys.iter().try_fold(&doc, |v, k| v.get(*k));
+    let hits: Vec<usize> = found
+        .and_then(Value::as_array)
+        .map(|a| (0..a.len()).filter(|&i| ours(&a[i])).rev().collect())
+        .unwrap_or_default();
+    let mut text = raw.to_string();
+    let mut segs: Vec<Seg> = keys.iter().map(|k| Seg::Key(k)).collect();
+    for &i in &hits {
+        segs.push(Seg::Index(i));
+        text = remove_at(&text, path, &segs)?.0;
+        segs.pop();
+    }
+    while !hits.is_empty() && !segs.is_empty() && is_empty_at(&text, &segs) {
+        text = remove_at(&text, path, &segs)?.0;
+        segs.pop();
+    }
+    Ok((text, hits.len()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -660,5 +779,97 @@ mod tests {
             remove_member("{}", Path::new("t"), "chat.pluginLocations", "/p").unwrap();
         assert!(!removed);
         assert_eq!(body, "{}");
+    }
+
+    fn push(raw: &str, keys: &[&str], item: Value) -> String {
+        push_item(raw, Path::new("t"), keys, &item).unwrap()
+    }
+
+    fn pull(raw: &str, keys: &[&str]) -> (String, usize) {
+        pull_items(raw, Path::new("t"), keys, |v| {
+            v == "ours" || v["c"] == "ours"
+        })
+        .unwrap()
+    }
+
+    /// Every other byte stays whatever the file's style: inline list, one element per line, a
+    /// trailing comma, a comment, an empty list, and a file that is blank or only `{}`.
+    #[test]
+    fn push_item_follows_the_list_style_and_pull_items_undoes_it() {
+        let ours = json!("ours");
+        let hook = json!({"c": "ours"});
+        for (raw, keys, item, exact) in [
+            (
+                "{\n  // c\n  \"a\": [\"x\", \"y\"],\n  \"b\": 1\n}\n",
+                &["a"][..],
+                &ours,
+                true,
+            ),
+            (
+                "{\n  \"a\": [\n    \"x\",\n    \"y\",\n  ]\n}\n",
+                &["a"][..],
+                &ours,
+                true,
+            ),
+            (
+                "{\n  \"h\": {\n    \"o\": [1]\n  }\n}\n",
+                &["h", "p"][..],
+                &hook,
+                true,
+            ),
+            (
+                "{\n  \"h\": {\n    \"p\": [\n      {\"c\": \"x\"}\n    ]\n  }\n}\n",
+                &["h", "p"][..],
+                &hook,
+                true,
+            ),
+            ("{\n  // only a comment\n}\n", &["h", "p"][..], &hook, false),
+            ("{\"z\": 1}", &["h", "p"][..], &hook, false),
+        ] {
+            let got = push(raw, keys, item.clone());
+            let doc = parse(&got).unwrap();
+            let list = keys.iter().fold(&doc, |v, k| &v[*k]).as_array().unwrap();
+            assert!(
+                list.iter().any(|v| v == "ours" || v["c"] == "ours"),
+                "{got}"
+            );
+            let (back, n) = pull(&got, keys);
+            assert_eq!(n, 1, "{got}");
+            if exact {
+                assert_eq!(back, raw, "{got}");
+            } else {
+                assert_eq!(
+                    parse(&back).unwrap(),
+                    parse(raw).unwrap(),
+                    "{raw} -> {got} -> {back}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn push_item_creates_a_blank_file_and_refuses_a_value_of_another_shape() {
+        assert_eq!(
+            parse(&push("{\"a\": []}", &["a"], json!("ours"))).unwrap(),
+            json!({"a": ["ours"]})
+        );
+        let got = push("", &["h", "p"], json!("ours"));
+        assert_eq!(parse(&got).unwrap(), json!({"h": {"p": ["ours"]}}));
+        let (back, n) = pull(&got, &["h", "p"]);
+        assert_eq!(n, 1);
+        assert!(is_empty_at(&back, &[]), "{back:?}");
+        for raw in ["{\"h\": 1}", "{\"h\": {\"p\": {}}}", "[1]"] {
+            assert!(
+                push_item(raw, Path::new("t"), &["h", "p"], &json!("x")).is_err(),
+                "{raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn pull_items_leaves_a_list_that_holds_nothing_of_ours() {
+        let raw = "{\"a\": [\"x\"]}";
+        assert_eq!(pull(raw, &["a"]), (raw.to_string(), 0));
+        assert_eq!(pull(raw, &["a", "b"]), (raw.to_string(), 0));
     }
 }

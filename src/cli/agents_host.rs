@@ -22,6 +22,10 @@ pub(super) struct RemoveArgs {
     /// Also remove rtok entries you changed, without asking
     #[arg(long)]
     pub(super) yes: bool,
+    // T289.3
+    /// Take rtok out of the project's post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host's config
+    #[arg(long)]
+    pub(super) project: bool,
 }
 
 #[derive(clap::Args)]
@@ -137,6 +141,11 @@ pub(super) struct SetupArgs {
     /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     pub(super) no_restart: bool,
+    // T289.3
+    /// Add rtok to the project's post-create script, so a worktree the host makes joins rtok
+    /// (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository
+    #[arg(long)]
+    pub(super) project: bool,
 }
 
 impl SetupArgs {
@@ -155,6 +164,7 @@ impl SetupArgs {
             desktop: false,
             all: true,
             no_restart: args.no_restart,
+            project: args.project,
         }
     }
 }
@@ -175,6 +185,7 @@ pub(super) fn setup_host(config_file: Option<&std::path::Path>, args: SetupArgs)
         desktop,
         all,
         no_restart,
+        project,
     } = args;
     crate::agents::command::install(
         config_file,
@@ -186,6 +197,7 @@ pub(super) fn setup_host(config_file: Option<&std::path::Path>, args: SetupArgs)
             desktop,
             all,
             no_restart,
+            project,
         },
         setup_flags(dry_run, yes, mcp, proxy, &mode, false, None),
     )

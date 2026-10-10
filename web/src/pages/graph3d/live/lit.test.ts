@@ -5,28 +5,27 @@
 import { describe, expect, test } from "vitest";
 import { project } from "../../../api/sampleRows";
 import { buildScene, type Scene } from "../scene";
-import { type CallsStore, emptyStore, fold } from "./callsStore";
-import { batch, end, event } from "./callsFixtures";
+import { done, NOW, running, view } from "./callsFixtures";
 import { accentOf, FOCUS_MS, liveState, MAX_ACCENTS } from "./lit";
 
-const NOW = 1_000_000;
 const overview = buildScene([project(1, "rtok"), project(2, "ketch")], {
   query: "",
   scopeOnly: false,
 });
 const idOf = (name: string) => overview.nodes.find((n) => n.label === name)!.id;
-const store = (...events: Parameters<typeof batch>[0]) => fold(emptyStore, batch(events), NOW);
+const live = (...calls: ReturnType<typeof running>[]) => view({ running: calls });
+const ended = (...rows: ReturnType<typeof done>[]) => view({ feed: rows });
 
 describe("what the live canvas lights", () => {
   test("a running call lights the project node with one accent", () => {
-    const { lit, busy } = liveState(overview, store(event({ call: "a" })), NOW);
+    const { lit, busy } = liveState(overview, live(running("a")), NOW);
     expect(lit.get(idOf("rtok"))?.accents).toEqual([0]);
     expect(lit.has(idOf("ketch"))).toBe(false);
     expect(busy).toBe(0);
   });
 
   test("a finished call leaves heat that fades over five minutes and is gone after", () => {
-    const s = store(end("a", 10, 4));
+    const s = ended(done("a", 10, 4));
     const fresh = liveState(overview, s, NOW).lit.get(idOf("rtok"))!;
     const later = liveState(overview, s, NOW + 240_000).lit.get(idOf("rtok"))!;
     expect(fresh.heat).toBeGreaterThan(later.heat);
@@ -35,16 +34,16 @@ describe("what the live canvas lights", () => {
   });
 
   test("a failed call is red only for a moment, an interrupted one never lights", () => {
-    const s = store(end("a", 0, 0, { ok: false, error: "no backend" }));
+    const s = ended(done("a", 0, 0, { ok: false, error: "no backend" }));
     expect(liveState(overview, s, NOW).lit.get(idOf("rtok"))?.failed).toBe(true);
     expect(liveState(overview, s, NOW + 6000).lit.get(idOf("rtok"))?.failed).toBe(false);
-    const gone: CallsStore = { ...s, feed: s.feed.map((r) => ({ ...r, interrupted: true })) };
+    const gone = { ...s, feed: s.feed.map((r) => ({ ...r, interrupted: true })) };
     expect(liveState(overview, gone, NOW).lit.size).toBe(0);
   });
 
   test("beyond eight running calls only the count grows, and slots stay distinct", () => {
-    const many = Array.from({ length: 11 }, (_, i) => event({ call: `c${i}` }));
-    const { lit, busy } = liveState(overview, store(...many), NOW);
+    const many = Array.from({ length: 11 }, (_, i) => running(`c${i}`));
+    const { lit, busy } = liveState(overview, live(...many), NOW);
     expect(lit.get(idOf("rtok"))?.accents).toEqual([...Array(MAX_ACCENTS).keys()]);
     expect(busy).toBe(3);
     const colours = [...Array(MAX_ACCENTS).keys()].map((s) => JSON.stringify(accentOf(s)));
@@ -52,7 +51,7 @@ describe("what the live canvas lights", () => {
   });
 
   test("a call on a project the picture does not hold lights nothing", () => {
-    const s = store(event({ project: "elsewhere" }), event({ call: "b", project: null }));
+    const s = live(running("a", { project: "elsewhere" }), running("b", { project: null }));
     expect(liveState(overview, s, NOW).lit.size).toBe(0);
   });
 
@@ -62,35 +61,35 @@ describe("what the live canvas lights", () => {
       label: "symbols of rtok",
       nodes: overview.nodes.map((n, i) => ({ ...n, label: i ? "⚠ store" : "open_index" })),
     };
-    const lit = liveState(drilled, store(event({ target: "open_index" })), NOW).lit;
+    const lit = liveState(drilled, live(running("a", { target: "open_index" })), NOW).lit;
     expect([...lit.keys()]).toEqual([drilled.nodes[0]!.id]);
-    const stale = liveState(drilled, store(event({ target: "store" })), NOW).lit;
+    const stale = liveState(drilled, live(running("a", { target: "store" })), NOW).lit;
     expect([...stale.keys()]).toEqual([drilled.nodes[1]!.id]);
   });
 });
 
 describe("what the camera frames", () => {
   test("a running call and a call that ended a moment ago, nothing once it is old", () => {
-    const running = liveState(overview, store(event({ call: "a" })), NOW);
-    expect(running.focus).toEqual([idOf("rtok")]);
-    const ended = store(end("a", 10, 4, { project: "ketch" }));
-    expect(liveState(overview, ended, NOW + 1000).focus).toEqual([idOf("ketch")]);
-    expect(liveState(overview, ended, NOW + FOCUS_MS + 1).focus).toEqual([]);
+    const whileRunning = liveState(overview, live(running("a")), NOW);
+    expect(whileRunning.focus).toEqual([idOf("rtok")]);
+    const finished = ended(done("a", 10, 4, { project: "ketch" }));
+    expect(liveState(overview, finished, NOW + 1000).focus).toEqual([idOf("ketch")]);
+    expect(liveState(overview, finished, NOW + FOCUS_MS + 1).focus).toEqual([]);
     // Heat is still there: only the camera lets go.
     expect(
-      liveState(overview, ended, NOW + FOCUS_MS + 1).lit.get(idOf("ketch"))?.heat,
+      liveState(overview, finished, NOW + FOCUS_MS + 1).lit.get(idOf("ketch"))?.heat,
     ).toBeGreaterThan(0);
   });
 
   test("an idle picture and a call on a project the picture lacks frame nothing", () => {
-    expect(liveState(overview, emptyStore, NOW).focus).toEqual([]);
-    expect(
-      liveState(overview, store(event({ call: "a", project: "elsewhere" })), NOW).focus,
-    ).toEqual([]);
+    expect(liveState(overview, view(), NOW).focus).toEqual([]);
+    expect(liveState(overview, live(running("a", { project: "elsewhere" })), NOW).focus).toEqual(
+      [],
+    );
   });
 
   test("calls on two nodes frame both, in a stable order", () => {
-    const both = store(event({ call: "a", project: "ketch" }), event({ call: "b" }));
+    const both = live(running("a", { project: "ketch" }), running("b"));
     expect(liveState(overview, both, NOW).focus).toEqual(
       [idOf("rtok"), idOf("ketch")].sort((a, b) => a - b),
     );
