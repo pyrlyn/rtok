@@ -34,6 +34,14 @@ Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
 
 Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
 
+### T504. Read hook: case-insensitive path match on Windows
+
+Cloud review finding of 2026-10-08, filed as T460 in the findings table (an id the done `mem_pack` task already holds). `same_path` in `src/plugins/read/hook.rs` compared with `==` and `Path::ends_with`, so `C:\Repo\Src\Main.rs` and `c:\repo\src\main.rs` (or a relative `src\main.rs` against it) were different files on Windows and the "edited just now" window missed the write. The same copy sat in `src/measure/stats.rs`. Both now call `crate::fs::same_spelling`, built on the shared `rtok_store::same_path` plus the new `rtok_store::path_ends_with` (whole components, ASCII case folded on Windows only, empty suffix matches nothing). macOS stays case-sensitive: the shared helpers fold on Windows only, and a case-sensitive APFS volume would otherwise merge two real files.
+
+Check: `paths::tests::suffix_match_folds_ascii_case_only_when_asked` (the fold flag is a parameter, so the Windows branch runs on every platform; it fails when folding is switched off), `plugins::read::hook::tests::same_path_follows_the_platform_case_rule` (asserts the fold on Windows and none elsewhere); `just fmt-check`, `just lint`.
+
+Result: 2026-10-10. Hook and stats tests pass; no new dependency.
+
 ### T460. Budgeted `mem_pack` for memory notes
 
 The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
@@ -75,6 +83,16 @@ Check: `the_client_does_not_send_a_body_over_the_cap_to_the_resident` (a fake re
 Result: see the commit; `just check` green.
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
+
+### T467. Move `src/store/` into `crates/rtok-store`
+
+Cloud review finding (2026-10-08, issue #628): `src/store/mod.rs` was 5,275 lines and belonged in `crates/rtok-store`. Already done before the review was triaged: #907 (#628) extracted the SQLite store into `rtok-store`, and #910 (#631) stopped it writing the terminal. `src/store/mod.rs` is now a 120-line re-export with the housekeeping warning hand-off to `stdio::stderr`. Nothing left to move.
+
+Check: `wc -l src/store/mod.rs` (120 at `26fe6c18`); `git log -- src/store/mod.rs`.
+
+Result: closed without code; the findings row leaves `plan.md`.
+Status: done 2026-10-10
+Model: Claude Code / opus-5.5
 
 ### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
 
@@ -3070,6 +3088,16 @@ First slice of what was left of T329 §8b after T329.27; the card was too big fo
 Check: `camera.test.ts` (box and sphere maths, easing), `camera2d.test.tsx` (the 2D camera jumps with reduced motion, eases otherwise, retargets mid-flight, follows a moving layout), `lit.test.ts` (focus), `live.test.tsx` (the viewBox narrows for a running call and returns once it is old; the 2D/3D switch is remembered and 3D without WebGL falls back with a notice), stories `Pages/Live graph` (axe; 2D frames a running call; the 3D canvas draws, takes no input and holds the node, dark and light), Playwright (the 2D camera frames a call from another process and returns to the overview; the 3D canvas takes no input and holds the call; the earlier live tests ask for 2D). `just spa-typecheck`, `just spa-test` (394), `just js`, `just spa-stories` (214), `just spa-e2e` (30), `just check`.
 
 Deviations: split at claim time. Maximise buttons, the collapsed metrics strip, running labels, count-up, sparklines and the scope marks are T329.32; latency, symbols, files, projects and fallback counters are T329.33; caller names, store-wide totals and the `live_*` config keys are T329.34. The Three.js camera has no unit test of its own (it needs a GL context); its maths is tested through `sphereOf`, the held ids through `data-framed`, and the picture by the story and Playwright. A TUI counterpart is not planned yet (D27).
+
+## T329.32 — Graph page: live sparklines, outside-scope mark and folded-call counter
+
+Slice of what was left of T329 §8b after T329.28 that only draws what the page already has. The card did not fit the 500-line cap, so the rest became T329.50 (running labels with elapsed counters), T329.51 (maximise buttons), T329.52 (metrics strip under 900 px) and T329.53 (count-up); T500 is the TUI counterpart of this slice and its card names the wording.
+
+Sparklines: `CallsStore::spark(window, now)` (`src/web/calls_store.rs`) spreads the store's per-batch buckets over `SPARK_SLOTS` = 30 equal slots ending at `now` (calls and tokens saved per slot, oldest first; a bucket exactly one span old is the first slot; "since open" covers the 15 minutes the buckets keep) and `WindowView` carries it as `spark` (`calls_view.rs`, `ws.schema.json` and `snapshot.gen.ts` regenerated). The "calls" and "saved" cards of `LiveMetrics` show it with the shared `Sparkline`, named "calls over the last N min" and "tokens saved over the last N min". Outside scope: `live/scope.ts` takes the scope (the drilled project, else the selected one, plus everything its links reach, through `scopeOf`; no such project means no scope); a feed row for a project outside it carries an "outside scope" pill, and `liveState` no longer lights or frames such a call (running or finished). Folded calls: in the one-project view, when the cap left nodes out (`graph.more`), a call of the last 5 minutes whose target matches no drawn node counts on the drawn node whose path equals or is a directory prefix of the target, else on the "+N more" group; the canvas lists them as `{label} · {n} folded` under "folded calls" (2D and 3D) and the 2D node carries `+n`. Docs in en, ru and uk. Reused: `scopeOf`, `Sparkline`/`Kpi`/`Pill`, the store buckets and window totals, `liveState`. Existing stories and a camera test that lit a project outside the selected scope now use one inside it.
+
+Check: `a_sparkline_spreads_the_buckets_over_equal_slots_and_adds_up_to_the_window` (slots sum to the window's calls and saved tokens), `scope.test.ts`, `lit.test.ts` (outside scope lights nothing, folded counters), `live.test.tsx` (sparklines named for the span, the pill, the "+N more" counter on the 600-file project), stories `OutsideScope`, `Sparklines`, `FoldedCalls` (axe). `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records that the TUI pane waits for T500.
+
+Check result (2026-10-10): `just check` green, nextest `Summary [227.799s] 3301 tests run: 3301 passed (1 slow), 8 skipped`; `just spa-typecheck` clean; `just spa-test` 48 files, 427 tests passed; `just js` oxlint and oxfmt clean; `just spa-stories` 34 files, 228 tests passed; `just spa-e2e` 30 passed, 2 failed (`a 500-call burst leaves the page responsive` timed out in `rtok mcp` and `Compare against a saved export` hit the 30 s test timeout, both with load average about 20 and neither touching the code of this change).
 
 ## T480 — TUI: live graph calls panel
 
