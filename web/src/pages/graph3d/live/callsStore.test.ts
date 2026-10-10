@@ -46,9 +46,19 @@ describe("fold", () => {
     const s = fold(
       emptyStore,
       batch([
-        timed("a", 10, { symbols: 2, total: 3, samples: [sample("lsp_fallback")] }),
+        timed("a", 10, {
+          symbols: 2,
+          symbols_returned: 1,
+          files_touched: 4,
+          projects_hit: 2,
+          total: 3,
+          samples: [sample("lsp_fallback")],
+        }),
         timed("b", 20, {
           symbols: 1,
+          symbols_returned: 1,
+          files_touched: 2,
+          projects_hit: 1,
           total: 1,
           samples: [sample("cap", "ab"), sample("explore")],
         }),
@@ -60,6 +70,7 @@ describe("fold", () => {
     );
     const t = windowTotals(s, "1m", T);
     expect([t.fallbacks, t.caps, t.symbols, t.crossed]).toEqual([1, 1, 3, 1]);
+    expect([t.symbolsReturned, t.filesTouched, t.projectsHit]).toEqual([2, 6, 3]);
     expect(latency(t)).toEqual({ p50: 30, p95: 100 });
     expect(latency(s.all)).toEqual(latency(t));
     expect(latency(emptyStore.all)).toBeNull();

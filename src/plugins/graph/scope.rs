@@ -20,8 +20,8 @@ use super::{
     backend_name, blast, callers_filtered, cap, cap_kind, capability, changed_starts, defs_text,
     flag_ambiguous, format_affected, git_changed_files, impact_filtered, impact_lines_text,
     impact_walk_roots, index, index_for, is_test_path, lsp, lsp_none_answer, mode_of, outline_in,
-    projects, rel_of, reverse_call_chain, stale_banner, symbol_filtered, tests_json, text, via_of,
-    with_stale, without_mode_line,
+    projects, rel_of, reverse_call_chain, stale_banner, symbol_filtered, tally, tests_json, text,
+    via_of, with_stale, without_mode_line,
 };
 use crate::store::Store;
 
@@ -280,6 +280,7 @@ pub fn symbol(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Result
         String::new()
     };
     for (m, (rows, callees)) in found {
+        tally::hit(&m.root, name, rows.iter().map(|r| r.0.as_str()));
         let tag = Tag {
             prefix: &label(m),
             suffix: if many { " ?" } else { "" },
@@ -320,6 +321,9 @@ pub fn callers(cx: &Ctx, scope: &[Member], name: &str, filter: &Filter) -> Resul
     let defs: usize = done.iter().map(|(_, (_, n))| n).sum();
     let mut body = String::new();
     for (m, (rows, _)) in &done {
+        if !rows.is_empty() {
+            tally::hit(&m.root, name, rows.iter().map(|r| r.0.as_str()));
+        }
         for (path, scope, n, line) in rows {
             let scope = if scope.is_empty() {
                 String::new()
@@ -379,6 +383,9 @@ pub fn impact(
     let body = if let Some(target) = to.filter(|t| !t.is_empty()) {
         let mut body = String::new();
         for (m, (_, chains, _)) in &done {
+            if !chains.is_empty() {
+                tally::hit(&m.root, name, std::iter::empty::<&str>());
+            }
             for chain in chains {
                 body.push_str(&format!("{}{}\n", label(m), reverse_call_chain(chain)));
             }
@@ -420,6 +427,9 @@ fn walk_rows(
     let mut rows = impact_walk_roots(cx, keys, name, depth, true)?;
     rows.retain(|(_, _, path, _)| filter.path_ok(path));
     rows.sort_by(|a, b| (a.1, a.0, &a.2, &a.3).cmp(&(b.1, b.0, &b.2, &b.3)));
+    for (i, _, path, _) in &rows {
+        tally::hit(Path::new(keys[*i]), name, [path.as_str()]);
+    }
     Ok(rows
         .into_iter()
         .map(|(i, d, path, scope)| (d, format!("{}{path}", labels[i]), scope))
@@ -1383,6 +1393,67 @@ mod tests {
         assert!(out.contains("[c] skipped: server gone"), "{out}");
         let first = |_: &Member| -> Result<String> { bail!("no root") };
         assert!(per_project(&ctx, &scope, first).is_err());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The files and projects an answer lists, read off its `[project] path` heads.
+    fn listed(answer: &str) -> (usize, usize) {
+        let head = regex::Regex::new(r"\[([a-z]+)\] ([A-Za-z0-9_./-]+?)(?:::|\s|$)").unwrap();
+        let heads: Vec<_> = head
+            .captures_iter(answer)
+            .map(|c| (c[1].to_string(), c[2].to_string()))
+            .collect();
+        let projects: HashSet<_> = heads.iter().map(|h| &h.0).collect();
+        let files: HashSet<_> = heads.iter().collect();
+        (files.len(), projects.len())
+    }
+
+    /// T329.36: the backend counts what it returns while it builds the answer. A name defined in
+    /// one project, a name defined nowhere and callers in two other projects give counts that
+    /// equal what the answer text lists.
+    #[test]
+    fn the_counts_equal_what_the_answer_lists() {
+        let (cx, dir) = world(
+            "t32936-counts",
+            [
+                "fn a_caller() { shared(); }\n",
+                "fn b_caller() { shared(); }\nfn b_other() { shared(); }\n",
+                CALL,
+                "",
+            ],
+        );
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        let counted = |tool: &str, args: serde_json::Value| {
+            super::tally::arm();
+            let answer = super::super::call(&ctx, tool, &args, &scope).unwrap();
+            (answer, super::tally::take())
+        };
+        let counts = |symbols, files, projects| super::tally::Counts {
+            symbols,
+            files,
+            projects,
+        };
+
+        let (answer, got) = counted("symbol", serde_json::json!({"names": ["shared", "ghost"]}));
+        assert_eq!(listed(&answer), (1, 1), "{answer}");
+        assert!(
+            answer.contains("= ghost\nno definition of ghost"),
+            "{answer}"
+        );
+        assert_eq!(got, counts(1, 1, 1), "two asked, one defined");
+
+        let (answer, got) = counted("callers", serde_json::json!({"name": "shared"}));
+        assert_eq!(listed(&answer), (2, 2), "{answer}");
+        assert_eq!(got, counts(1, 2, 2));
+
+        let (answer, got) = counted("impact", serde_json::json!({"name": "shared", "depth": 2}));
+        assert_eq!(listed(&answer), (2, 2), "{answer}");
+        assert_eq!(got, counts(1, 2, 2));
+
+        let (answer, got) = counted("callers", serde_json::json!({"name": "ghost"}));
+        assert!(answer.starts_with("no references to ghost"), "{answer}");
+        assert_eq!(got, counts(0, 0, 0));
         let _ = fs::remove_dir_all(dir);
     }
 }
