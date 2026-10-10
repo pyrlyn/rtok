@@ -2981,6 +2981,16 @@ Deviations: over the 500-line cap, so split at claim time and again while implem
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.27 — Graph page: read-only live canvas and splitter
+
+Canvas half of T329 §8b, split from T329.26. The graph page now puts the explorer and a read-only live graph side by side (`live/Split.tsx`: a draggable bar with arrow keys, double-click for 50/50, both remembered in `localStorage` through the guarded `readStored` and `writeStored`; stacked under 900 px, where the bar is not drawn). A "Hide live graph" chip hides the live part; the part is not rendered while hidden, so `useCallStream` unsubscribes and the page sends `{"calls":{"subscribe":false}}`, and a reload keeps it hidden without subscribing. `live/LiveGraph.tsx` draws the level the explorer shows: the registered projects, or the drilled project through `useDrill` with the request `drillRequest(state, limit)` that `DrillView` now shares (one reply serves both parts). `Scene2D` takes an optional `live` prop: with it the SVG attaches no handler, has `pointer-events-none` and `aria-hidden` nodes, keeps the default cursor, and each node carries the call state from `live/lit.ts` (`liveState`: a ring per running call in one of eight accents, four hues with the second four dashed; a heat halo over 5 minutes; a red ring for 5 seconds after a failed call; running calls beyond eight are one "busy: N more" count). A call lights the project node on the overview and the node named like its target in the drill-down. Until the first call the picture is dimmed and reads "Waiting for graph calls"; freeze holds the canvas along with the metrics.
+
+Check: `lit.test.ts` (accents, busy count, heat fading, failure flash, interrupted calls, overview versus drill keys), `live.test.tsx` (rings and halo rendered, busy count, canvas without handlers, split keys, clamping, remount and no-storage cases, hide stops the stream), stories `Pages/Live graph` (axe), and Playwright: an MCP `callers` call from another process lights the node within a second, the canvas ignores wheel, pointer and keys, the split and hidden state survive a reload and hiding sends the unsubscribe, the 900 px stacking, and a 500-call burst leaves the page responsive. `Rtok.mcp` gained a repeat count and `Rtok.addProject` registers the throwaway home.
+
+Deviations: the part-1 drill-down alert badge shows on the live canvas too (test id `alert-live`), because the live picture uses the same scene colours. `GraphDrill.stories` lowered its 3D pixel threshold from 200 to 50 because the explorer is half as wide beside the live graph. The camera, the 3D live canvas and the remaining displays stay in T329.28.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.

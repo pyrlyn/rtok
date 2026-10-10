@@ -47,7 +47,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
-| T329.27 | todo | P3 | 3 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -817,17 +816,9 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
 
-### T329.27. Graph page: read-only live canvas and splitter
-
-Canvas half of T329 §8b, split from T329.26 (which shipped the call store, the metric displays, the window selector, freeze and the feed as a panel under the explorer). Places the explorer and the live graph side by side with a splitter (drag, arrow keys, double-click resets to 50/50, a remembered "Hide live graph" toggle that also drops the `{"calls":{"subscribe":true}}` subscription, stacked under 900 px) and draws the call events on a read-only canvas: same layout and colours as part 1 at the level part 1 shows (overview, or the drilled project via `useDrill` with the same request), no pointer or keyboard input and a default cursor, a ring per running call in one of eight accents with a "busy" count beyond eight, a heat halo over 5 minutes, a red ring on a failed call, and the "Waiting for graph calls" dimming of the static picture. The 2D canvas only (`Scene2D` gets a read-only `live` prop; a call lights the project node on the overview and the node named like its target in the drill-down).
-
-A full implementation of this card is on the local branch `t329.26-full-wip`; the display files `live/lit.ts`, `live/LiveGraph.tsx` and `live/Split.tsx` and the `Scene2D` changes are the part to bring over. Depends on T329.26, T329.14.
-
-Check: an MCP `callers` call from another process lights the node within one second; the live canvas ignores input (wheel, pointer, keys); the splitter keeps its position and the hidden state across a reload and stops the subscription; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
-
 ### T329.28. Graph page: live camera, 3D live view and the remaining live displays
 
-Remainder of T329 §8b after T329.27: the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of since the page opened, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.27.
+Remainder of T329 §8b after T329.27 (which shipped the read-only 2D live canvas: `Scene2D`'s `live` prop, `live/lit.ts` for the lit state, `live/LiveGraph.tsx` and the splitter): the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of since the page opened, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.27.
 
 Check: the live canvas frames a running call and eases back to an overview in 2D and 3D; the latency and symbol counters match the events; the config keys are read and documented; Vitest, stories (axe) and Playwright; `just check`.
 
