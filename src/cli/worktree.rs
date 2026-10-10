@@ -182,6 +182,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             } else {
                 println!("{}", done.path.display());
             }
+            if done.pending {
+                crate::log::stderr_ln(
+                    "pending: no single agent matched; the next agent to adopt or start a session in this worktree takes it",
+                );
+            }
 
             Ok(())
         }
@@ -248,6 +253,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                     .context("--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
+                pending: crate::worktree::ops::pending_paths(&cfg),
             };
             let outcomes = gc::run(&std::env::current_dir()?, &policy, yes)?;
             if json {

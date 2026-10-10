@@ -16,7 +16,6 @@
 - T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 - T283. An agent learns its own rtok agent id
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
-- T289.5. Pending claim for `rtok worktree adopt` from a post-create script when no single agent matches
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)

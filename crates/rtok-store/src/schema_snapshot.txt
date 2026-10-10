@@ -47,6 +47,7 @@ index|sqlite_autoindex_symbol_stale_1|symbol_stale|
 index|sqlite_autoindex_task_claims_1|task_claims|
 index|sqlite_autoindex_task_counters_1|task_counters|
 index|sqlite_autoindex_worktree_claims_1|worktree_claims|
+index|sqlite_autoindex_worktree_pending_1|worktree_pending|
 index|symbols_root_name|symbols|CREATE INDEX symbols_root_name ON symbols(root, name)
 index|symbols_root_path|symbols|CREATE INDEX symbols_root_path ON symbols(root, path)
 index|tokens_call|tokens|CREATE INDEX tokens_call ON tokens (call_id, phase)
@@ -111,6 +112,7 @@ table|task_counters|task_counters|CREATE TABLE task_counters ( project TEXT NOT 
 table|tokens|tokens|CREATE TABLE tokens ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), call_id INTEGER NOT NULL REFERENCES calls(id), plugin TEXT, phase TEXT NOT NULL, source TEXT NOT NULL, tokens INTEGER NOT NULL, bytes INTEGER, input INTEGER, output INTEGER, cache_create INTEGER, cache_read INTEGER )
 table|usage|usage|CREATE TABLE usage ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, model TEXT, input INTEGER NOT NULL DEFAULT 0, cache_create INTEGER NOT NULL DEFAULT 0, cache_read INTEGER NOT NULL DEFAULT 0, output INTEGER NOT NULL DEFAULT 0 , call_id INTEGER REFERENCES calls(id), api TEXT NOT NULL DEFAULT 'anthropic')
 table|worktree_claims|worktree_claims|CREATE TABLE worktree_claims ( path TEXT PRIMARY KEY, agent_id TEXT NOT NULL REFERENCES agents(id), task TEXT NOT NULL, claimed_at INTEGER NOT NULL DEFAULT (unixepoch()), released_at INTEGER )
+table|worktree_pending|worktree_pending|CREATE TABLE worktree_pending ( path TEXT PRIMARY KEY, task TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()) )
 trigger|doc_items_ad|doc_items|CREATE TRIGGER doc_items_ad AFTER DELETE ON doc_items BEGIN INSERT INTO doc_items_fts (doc_items_fts, rowid, path, docs) VALUES ('delete', old.id, old.path, old.docs); END
 trigger|doc_items_ai|doc_items|CREATE TRIGGER doc_items_ai AFTER INSERT ON doc_items BEGIN INSERT INTO doc_items_fts (rowid, path, docs) VALUES (new.id, new.path, new.docs); END
 trigger|doc_items_au|doc_items|CREATE TRIGGER doc_items_au AFTER UPDATE ON doc_items BEGIN INSERT INTO doc_items_fts (doc_items_fts, rowid, path, docs) VALUES ('delete', old.id, old.path, old.docs); INSERT INTO doc_items_fts (rowid, path, docs) VALUES (new.id, new.path, new.docs); END

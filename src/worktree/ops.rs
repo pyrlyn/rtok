@@ -141,3 +141,15 @@ pub fn live_ids(cfg: &Config) -> HashSet<String> {
         .map(|agents| agents.into_iter().map(|a| a.id).collect())
         .unwrap_or_default()
 }
+
+/// Worktrees `adopt` parked for the next agent (T285's `live_ids` counterpart, T289.5).
+pub fn pending_paths(cfg: &Config) -> Vec<std::path::PathBuf> {
+    Store::open(&cfg.core.db_path)
+        .and_then(|s| s.pending_worktrees())
+        .map(|rows| {
+            rows.into_iter()
+                .map(|(p, _)| crate::fs::canon(Path::new(&p)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
