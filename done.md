@@ -8835,6 +8835,19 @@ Deviations: A mixed `auto` scope does not walk links through the tags index (a s
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
 
+### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
+
+T329 §6b: a per-project (and language) record of which mode works, in memory for the hot path and mirrored into the store so the CLI, web and `rtok doctor` see it; single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page with `checked_at` and `next_probe_at`. Exposes a `reprobe(project)` entry point for the §8d health check (T329.17); requests never call it. T337 is decided: requests never re-probe. Depends on T329.9.
+
+Check: a test counts probes, 100 requests after the first run zero lookups or spawns; a `reprobe` after installing the server picks it up while 100 requests still run zero probes; a `backend` change re-checks only affected projects; concurrent first requests run one check; a second process reads the mirrored record; `just check`.
+
+Done: new `src/plugins/graph/capability.rs` holds the per-project record (`backend` lsp or tags, `language`, `server`, `reason`, `config`, `checked_at`, `next_probe_at`) in memory, one slot per canonical root behind its own lock, and mirrors it into the store as `plugin_state` key `capability:<root>` (JSON through `Ctx::plugin_state_set`, so no SQL). The `lsp_or_tags` door (now a thin wrapper over `door`, which takes the probe so tests can count it) asks `capability::ask`: the first request checks the marker and the server binary (`lsp::probe`, which replaces `has_server` and `usable`) and makes the first server call under the project's lock, so concurrent first requests share one check and one start; later requests read the record and run no `PATH` lookup, no marker stat and no spawn for a project that is on tags. A server that breaks (dead pipe, timeout, not on `PATH`) is downgraded once with its reason; an error reply to one request (`lsp::Refused`) is not a break. The record stores the `backend` value it was made under (`backend_name`: the language override, else `backend`), so a config change replaces exactly the records whose value changed, with no watcher. A new process adopts a mirrored record until its `next_probe_at` (60 s after a failure) and checks for itself afterwards, so restarting after installing a server picks it up. `capability::reprobe(cx, root, config, probe)` replaces one record; only T329.17 will call it. `scope::plan` reads the record instead of `lsp::usable` (which ran `rustup which` per request). `ProjectRow.backend` (skipped when absent) puts the mirrored record into `rtok graph projects --json` and `/ws`; `ws.schema.json` is blessed and `snapshot.gen.ts` regenerated. `docs/lsp.md` (en, ru, uk) has a "Checked once" section.
+
+Deviations: The page display is split into T329.24. The first server timeout downgrades the project (not "repeated timeouts"): the single-downgrade rule is the smaller one and the health check restores it. A project on `backend = "tags"` has no record, as nothing is probed for it. The T329.9 door tests that stood in for the server on one root now use one project per question (a project is checked once), through a `served` helper that passes a probe which always finds the server. Tests (no real language server): `capability::tests` count probes and server calls (101 requests, one check; a missing server looked for once; a reprobe after install picks it up while 100 requests run zero checks), a break downgraded once while an error reply is not, 8 concurrent first requests (one check, one server attempt for a server that cannot start), a config change that re-checks only the project it reaches, and a second process adopting a fresh record and checking a due one; `projects::tests::rows_carry_the_mirrored_capability_record`; `tests/graph_projects.rs` runs `rtok graph impact` with `RTOK_PLUGINS_GRAPH_BACKEND=auto` and reads the record from a second `rtok graph projects --json`.
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T337. Investigate: T329: capability cache never re-probes vs alerts/health that need re-probing
 
 In the plan, T329 §6b (branch `docs/plan-graph-projects`, ~lines 787-791, from PR #540 (T329), not merged yet) says later requests "do not re-probe the modes that failed", the cache "is kept until that process restarts" and "nothing else invalidates it". T329 §8d (~lines 917-923) says a background check every 60 s detects **unreachable** (SSH root stops answering) and **backend down**, and "when the project comes back, the alert clears automatically"; §8f (~line 943) scores "Backend alive" from the same record. These contradict each other because detecting an unreachable SSH host or a recovered backend requires probing again, which §6b forbids; under §6b a backend-down alert can never clear without a restart.
@@ -8879,6 +8892,76 @@ Updated in `plan.md`: the T330 `stale-worktrees` row, its edge case, the unmerge
 
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
+
+### T335. Investigate: graph text mode spawns `rg`/`grep`/`ssh` vs D6/D18
+
+In the plan, T329 §6a Mode 3 (branch `docs/plan-graph-projects`, ~line 774, from PR #540 (T329), not merged yet) says the text backend "Runs plain text search through the shell: `rg` (ripgrep) when present, `grep -rn` otherwise", and runs "the same commands ... over `ssh host`" for `ssh://` roots. D6 (plan.md@966f067 line 684) says "A plugin never spawns, links, imports, or reads the data of another tool", D18 (plan.md@966f067 line 695) says "D6 holds: no spawned graph tool", and the Working agreement (plan.md@966f067 line 753) says "No plugin shells out to ... a third-party tool (D6)". These contradict each other because the graph plugin would shell out to third-party tools (and to a remote host), which D6/D18 forbid; the existing LSP spawn was justified separately in the P30 survey, text search was not.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): the graph text backend searches in process with the crates rtok already uses for its `search` tool (`ignore` plus `regex`, T4.5); it spawns no `rg`, `grep` or `ssh`. D6 and D18 stay unchanged. `ssh://` roots are dropped from the plan (T329 §6a mode 3, the capability check, the alerts text and the T329.10 card) and parked as I-118 in `ideas.md`, which needs a decision on the transport first because D6 forbids spawning `ssh`.
+
+### T343. Investigate: T330 `--sort` takes two different value sets on `list`
+
+In the plan, T330 item breakdown (branch `docs/plan-agents-junk`, ~line 766, from PR #541 (T330), not merged yet) says "Items are sorted by size, largest first (`--sort size|last-used|path`)", and the `rtok agents junk list` section (~line 778) says "Sorting: by space freed, largest first (`--sort name|size|freed`)". These contradict each other because one flag on one command is given two incompatible value sets and two different defaults.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): `rtok agents junk list --sort size|last-used|path` (default `size`) sorts the items within each kind; agents are always ordered by space freed, largest first, with no flag. The T330 `list` section says so, and T330.6 no longer depends on this investigation.
+
+### T344. Investigate: T330 "backwards compatible" vs new default deletions
+
+In the plan, T330 (branch `docs/plan-agents-junk`, ~line 792, from PR #541 (T330), not merged yet) says "Backwards compatible: `rtok agents junk clear` with no new flags still clears T182's `rtok-own` junk, and now also the safe kinds for every agent; `rtok agents junk clear --agent rtok` reproduces T182 exactly", and its Check requires T182's tests to "stay green unchanged". The same task adds to the `rtok` row the `.rtok-lsp-xdg` caches, `$XDG_CACHE_HOME/rtok`, every `CACHEDIR.TAG` directory and plugin staging caches as `safe` kinds (~lines 705-712). These contradict each other because `clear --yes` without flags now deletes agent data T182 never touched, and `--agent rtok` deletes more than T182 did, so neither claim of compatibility holds.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): the widening is deliberate. `rtok agents junk clear` without flags clears the safe kinds of every agent, and `--agent rtok` clears rtok's own safe kinds, a superset of T182. The "Backwards compatible" claim and the Check line that T182's tests stay green unchanged are gone from T330; T182's tests are updated where they pin the exact set.
+
+### T345. Investigate: ProgressRunner in the rtok crate vs `crates/rtok-mcp` with no rtok dependency
+
+In the plan, T276 (plan.md@966f067 lines 248, 266) says `src/proc/` "is the only place in rtok that calls `std::process::Command::new`", enforced by a `clippy.toml` ban "including `crates/`". T277 (plan.md@966f067 lines 289, 298) says `crates/rtok-mcp` has "no dependency on the `rtok` crate" yet takes over "the MCP probe (`spawn_mcp`, `mcp_command`, using T276's `ProgressRunner` for the spawn)" and the T275.1 ping spawn. These contradict each other because the MCP crate can neither import `ProgressRunner` from the `rtok` crate nor call `Command::new` itself under the ban.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): `ProgressRunner` lives in the existing crate `crates/rtok-sys` (OS process shims), which both `rtok` and `crates/rtok-mcp` depend on. The clippy `Command::new` ban covers everything except that crate. T276 and T277 say so; no new crate.
+
+### T346. Investigate: D27 "writing commands stay CLI-only" vs web write actions
+
+In the plan, D27 (plan.md@966f067 line 704) says "Anything a command prints, or the store keeps, is a page on `rtok web` and `rtok tui`. Writing commands stay CLI-only", and D23 (plan.md@966f067 line 700) says "A page that exists on one surface and not the other is a defect". T329 (branch `docs/plan-graph-projects`, ~lines 703, 818, from PR #540 (T329), not merged yet) adds web actions to select, link, unlink, re-index, remove and "Index now"; T330 (~line 818, from PR #541 (T330), not merged yet) adds a "clear safe junk" button that deletes files; T331 (~line 721, from PR #542 (T331), not merged yet) adds a "Fix selected" action that edits agent configs; none plans a `rtok tui` counterpart. These contradict each other because D27 keeps writes out of the web UI (and D23 demands TUI parity) while three open PRs plan write actions in the web UI only; the existing plugin toggle (T15.4, T310.6) shows the rule is already unclear.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): full parity. D27 is amended: writing actions may appear on `rtok web` and `rtok tui`, each calling the same function as its CLI command with the same guards (dry-run plan, then confirm), and every write action on one UI surface needs its counterpart on the other (D23 applies to writes too). The TUI counterparts of the web write actions are the new tasks T476 (project select, link, unlink), T477 (project re-index and remove), T478 (doctor fix) and T479 (junk clear); the TUI already has the plugin toggle (T15.4).
+
+### T347. Investigate: D16 "one task = one PR" vs multi-PR execution plans
+
+In the plan, D16 (plan.md@966f067 line 694) says "**One task = one PR.** Each task gets its own branch ... and lands through its own pull request". T275 (plan.md@966f067 lines 193-197, PR A-E), T276 (plan.md@966f067 lines 278-283, PR 1-5), T277 (plan.md@966f067 lines 310-315, PR 1-6), T279 (plan.md@966f067 lines 403-407, PR 1-4), T283-T287 (two PRs each) and T329 §10 ("As PRs, backend first", from PR #540 (T329), not merged yet) plan several PRs for one task, while T310 splits its work into subtasks to keep one PR per task. These contradict each other because the rule and the plans disagree on what may land under one task id and when the `plan.md` → `done.md` move happens.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): D16 stays. A task that needs several PRs is split into subtasks `Tn.m`, one PR each, and the parent card stays as the epic and moves to `done.md` with its last subtask. T275, T276, T277, T279, T283 and T329 §10 say that each PR they list becomes a subtask when claimed; their lists are not rewritten (T284-T287 are no longer in `plan.md`).
+
+### T348. Investigate: `--agent` means an agent id, a host, or both
+
+In the plan, D34 (plan.md@966f067 line 710) makes the agent id a UUID accepted by "any unique prefix of 4+ chars", and T285/T286/T289 (plan.md@966f067 lines 493, 510, 557) define `--agent <id-prefix>` for `rtok worktree` commands. T331 (branch `docs/plan-doctor-hooks-mcp`, ~line 733, from PR #542 (T331), not merged yet) defines "`--agent <host>` limits the check to one host", and T330 (~lines 775, 787, from PR #541 (T330), not merged yet) defines `--agent <host|id>`, including the pseudo-agent `rtok`. These contradict each other because one flag name gets three meanings, and under D12 (plan.md@966f067 line 690, "every CLI flag is a config key") it cannot map to one key; a host name that is also valid hex (for example `cafe`) would be ambiguous between the two forms.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): no renames. `--agent` means one thing per command: on `rtok worktree` commands an agent id (D34 prefix); on `rtok doctor` and `rtok agents junk` a host id (plus the pseudo-host `rtok` for junk). T330 now says `--agent <host>`; config keys are per command already (D12).
 
 ### T330.5.3. Junk: `stale-worktrees` through `rtok worktree gc`'s verdict
 

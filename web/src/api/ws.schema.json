@@ -250,6 +250,66 @@
         "output"
       ]
     },
+    "Capability": {
+      "description": "One project's record, as stored and as `rtok graph projects --json` prints it.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/Chosen"
+        },
+        "checked_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "config": {
+          "description": "The `backend` value the record was made under; another value makes it stale.",
+          "type": "string"
+        },
+        "language": {
+          "description": "The project's language when it has a marker file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "next_probe_at": {
+          "description": "When the health check retries a failed record; absent while the server answers.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "reason": {
+          "description": "Why the server does not answer; absent while it does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "server": {
+          "description": "The language has a language server at all, installed or not.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "backend",
+        "language",
+        "server",
+        "reason",
+        "config",
+        "checked_at",
+        "next_probe_at"
+      ]
+    },
+    "Chosen": {
+      "description": "The mode that answers a project's requests.",
+      "type": "string",
+      "enum": [
+        "lsp",
+        "tags"
+      ]
+    },
     "ClientMessage": {
       "description": "A message a client sends over `/ws`.",
       "anyOf": [
@@ -1242,6 +1302,17 @@
       "description": "One registry row as `graph projects` prints it and the `/ws` snapshot carries it.",
       "type": "object",
       "properties": {
+        "backend": {
+          "description": "Which graph mode works here, as the last process to answer for it recorded (T329.11);\nabsent until a request under `lsp` or `auto` has checked.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Capability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "created_at": {
           "type": "integer",
           "format": "int64"

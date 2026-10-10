@@ -160,15 +160,36 @@ pub(crate) fn language_of(root: &Path) -> Option<&'static str> {
         .map(|(_, lang, _)| *lang)
 }
 
-/// The project's language has a server at all (marker file), installed or not.
-pub(crate) fn has_server(root: &Path) -> bool {
-    pick(root).is_ok()
+/// The capability check (T329.11): the project's language has a server and its binary is
+/// installed. File presence only, no spawn; starting the server is the first real request.
+pub(crate) fn probe(root: &Path) -> super::capability::Probe {
+    let (bin, _) = pick(root).map_err(|e| super::capability::Absent {
+        server: false,
+        reason: format!("{e:#}"),
+    })?;
+    on_path(bin)
+        .then_some(())
+        .ok_or_else(|| super::capability::Absent {
+            server: true,
+            reason: format!("lsp: {bin} not on PATH"),
+        })
 }
 
-/// The project's language has a server and its binary is installed. File presence only, no
-/// spawn, so `auto` can choose a mode before it asks anything.
-pub(crate) fn usable(root: &Path) -> bool {
-    pick(root).is_ok_and(|(bin, _)| on_path(bin))
+/// The server answered a request with an error. It is alive, so unlike a timeout or a dead
+/// pipe this does not make it a server to stop asking.
+#[derive(Debug)]
+pub(crate) struct Refused(pub(crate) String);
+
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Refused {}
+
+pub(crate) fn server_broke(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<Refused>().is_none()
 }
 
 fn pick(root: &Path) -> Result<Server> {
@@ -451,7 +472,7 @@ impl Session {
             }
             if msg.get("id") == Some(&id) {
                 if let Some(err) = msg.get("error") {
-                    bail!("lsp {method}: {err}");
+                    return Err(Refused(format!("lsp {method}: {err}")).into());
                 }
                 return Ok(msg["result"].clone());
             }

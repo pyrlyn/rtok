@@ -228,3 +228,34 @@ fn link_unlink_from_the_selected_project_index_the_target_and_die_with_a_removed
     );
     assert!(links_of(&rows, "c").is_empty());
 }
+
+/// T329.11: one process checks a project's graph mode, another process shows the record.
+#[test]
+fn the_capability_record_a_request_made_shows_in_the_json_list() {
+    let home = fixture("capability");
+    let proj = home.join("goproj");
+    fs::create_dir_all(&proj).unwrap();
+    // Go has no language server, so `auto` decides without starting anything.
+    fs::write(proj.join("go.mod"), "module x\n").unwrap();
+    fs::write(proj.join("main.go"), "package main\nfunc alpha() {}\n").unwrap();
+    ok(&home, &["graph", "projects", "add", proj.to_str().unwrap()]);
+    assert!(by_name(&list(&home), "goproj").get("backend").is_none());
+
+    let asked = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .args(["graph", "impact", "alpha"])
+        .current_dir(&proj)
+        .env("RTOK_HOME", &home)
+        .env("HOME", &home)
+        .env("RTOK_PLUGINS_GRAPH_BACKEND", "auto")
+        .output()
+        .unwrap();
+    assert!(asked.status.success(), "{asked:?}");
+
+    let rows = list(&home);
+    let rec = &by_name(&rows, "goproj")["backend"];
+    assert_eq!(rec["backend"], "tags", "{rec}");
+    assert_eq!(rec["language"], "go");
+    assert_eq!(rec["server"], false);
+    assert_eq!(rec["config"], "auto");
+    assert!(rec["next_probe_at"].as_i64().unwrap() > rec["checked_at"].as_i64().unwrap());
+}
