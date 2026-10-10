@@ -541,35 +541,6 @@ fn payload(v: &Value) -> Vec<u8> {
     serde_json::to_vec(v).unwrap_or_default()
 }
 
-/// `rtok guard check` — same verdict as the hook path (T70.5).
-pub fn check_json(
-    cfg: &crate::config::Config,
-    tool: &str,
-    input: &serde_json::Value,
-) -> serde_json::Value {
-    use rtok_plugin_sdk::PreToolUse;
-    let cx = match crate::plugin::Runtime::open(
-        cfg.clone(),
-        format!("guard-check-{}", std::process::id()),
-    ) {
-        Ok(c) => c,
-        Err(_) => return serde_json::json!({"decision": "allow"}),
-    };
-    let ev = PreToolUse {
-        tool_name: tool,
-        tool_input: input,
-    };
-    match Guard.pre_tool(&ev, &crate::plugin::Ctx::new(&cx)) {
-        Some(PreToolDecision::Deny { reason }) => {
-            serde_json::json!({"decision": "deny", "reason": reason})
-        }
-        Some(PreToolDecision::Rewrite { input, reason }) => {
-            serde_json::json!({"decision": "rewrite", "input": input, "reason": reason})
-        }
-        None => serde_json::json!({"decision": "allow"}),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -78,6 +78,12 @@ Result: `just check` against `61d491aa`: fmt, clippy `-D warnings`, `build-min`,
 Status: done 2026-10-09
 Model: Cursor / grok 4.7
 
+### T462. Drop the uncalled `guard::check_json`
+
+Cloud review finding (2026-10-08): `guard::check_json` in `src/plugins/guard/mod.rs` has no callers; the CLI (`rtok guard check`) calls `guard::check`. Removed it; its imports were all shared with the rest of the module.
+
+Check: grep for `check_json` over `src`, `tests`, `crates`, `docs`, `benches`, `examples` found only the definition; `just fmt-check`, `just lint`, `cargo nextest run -p rtok -E 'test(guard) | test(plan)'`.
+
 ### T474. Symbol byte spans, a recoverable cut body, and id lookup
 
 Merged as T454 (pyrlyn/rtok#898); renumbered to T474 because #888, opened earlier, also took T454.
