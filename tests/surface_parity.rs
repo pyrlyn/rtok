@@ -304,6 +304,41 @@ fn live_calls_view_exists_on_both_surfaces() {
     );
 }
 
+/// T486 (D27): the live calls view shows the same five call metrics on both surfaces, read from the
+/// one `Totals` fold (`latency`, `symbols`, `crossed`, `fallbacks`, `caps`) with the page's wording.
+#[test]
+fn call_metrics_exist_on_both_surfaces() {
+    let web = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/live/LiveMetrics.tsx"
+    ));
+    let pane = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/live_calls.rs"
+    ));
+    let pane = pane.split("#[cfg(test)]\nmod tests").next().unwrap();
+    for label in [
+        "latency p50",
+        "p95",
+        "symbols asked",
+        "across projects",
+        "fallbacks",
+        "capped",
+    ] {
+        assert!(web.contains(label), "the page shows `{label}`");
+        assert!(pane.contains(label), "the TUI pane shows `{label}`");
+    }
+    for field in [
+        "latency()",
+        "t.symbols",
+        "t.crossed",
+        "t.fallbacks",
+        "t.caps",
+    ] {
+        assert!(pane.contains(field), "the pane reads `{field}` from Totals");
+    }
+}
+
 /// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page
 /// of both surfaces, each through the one `graph projects` function — the web by
 /// `ClientMessage::Project`, the TUI by keys over the same `ProjectRequest` and

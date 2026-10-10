@@ -3074,6 +3074,32 @@ Result: `just check` passed (fmt, clippy `-D warnings`, jscpd, `cargo nextest ru
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.42 — Graph diff over `/ws`: the typed report and the export as text (split from T329.35)
+
+The server half of T329.35, split at review because the whole change was over the 500-line cap; the Compare panel stays T329.35. `rtok graph diff --json` now prints a typed `DiffReport` built by `diff::report`, and `run` renders its text from the same `gather`. `/ws` gets `ClientMessage::Diff { diff: DiffRequest }`, answered by `ServerFrame::Diff { project, diff: DiffReport }` from the new `diff::page`, which resolves the scope with the registry and calls `diff::report`; each list is cut at 500 rows with a `more` count. `ws.schema.json` and `snapshot.gen.ts` are regenerated; `web/src/api/ws.ts` parses the `diff` frame, and the sample server (`sampleDiff.ts`) answers it for stories and tests.
+
+Trust boundary: `--from-export` stays CLI-only, because the websocket is reachable by anything on localhost and a model must not choose a path rtok reads. A page sends the export's text in `DiffRequest.export { name, text }`, and the server parses it with the new `export::parse`, which `export::read` now delegates to, so the size, JSON, schema-id and shape checks are the same. A request that names a path as the export text is rejected as "is not a graph export". A ref goes through the existing `resolve_rev`, which refuses empty and `-`-prefixed refs.
+
+Check: Rust tests in `src/plugins/graph/diff.rs` assert the page report equals `--json` for the same query, the row cap, and the path-as-text refusal; `ws.test.ts` parses the frame; `committed_schema_is_current`; `just check` and the web gates.
+
+## T329.35 — Graph page: Compare mode
+
+The page half of T329 §8e (split from T329.29 at claim time). Part 1 of the graph page, in the per-project drill-down, gets a "Compare" chip. It colours the nodes and the edges by what changed (added green, removed red, changed amber, moved blue; every colour is a brand role, so both themes and the 3D stage take their own value), and each node label and list row also carries a mark (`+ − ~ →`) and the change word, so colour is never the only cue. A side panel lists the change counts, the changed (signature or body, with callers), removed, renamed, moved and added symbols, the edges added and removed, the links added and removed, `changed, not analysed` with the reason, the cut-off count and the notes. The live graph (part 2) is a separate component and is untouched; Compare is local state of the drill-down.
+
+The page never recomputes the diff: it asks over `/ws` with the `ClientMessage::Diff` / `ServerFrame::Diff` pair that T329.42 added, which `diff::page` answers with the same typed `DiffReport` the CLI's `--json` prints. The old side is a ref or `PROJECT:REF` typed in the panel (sent on Enter), or a saved export.
+
+Trust boundary: the page never sends a path. The browser's file picker reads the export and sends its text (T329.42's `DiffRequest.export`), and a file over 16 MiB is refused in the page before it is sent.
+
+Reused: `diff::{Query, Part, compute, compute_saved, links_between, cap}` and the `--json` shape (now the typed `DiffReport`), `export::read`'s checks (`parse`), `scope::resolve`, the drill-down machinery (`askDoctor` queue, `useDrill`'s keepPreviousData pattern, `drillVersion`, `drillScene`, `Scene2D`, `stage3d`/`resolveRole`), `Pill`, `Result`, `Search`, `Button`, and the sample/`drillServer` stand-ins for stories and `?sample`. Docs in en, ru, uk (`docs/commands.md`), the graph README and AGENTS. T485 (the TUI counterpart) now names `diff::report` as the single path.
+
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue (Vitest `compare.test.ts`, `Compare.test.tsx`, stories `GraphCompare` in both themes with axe); the live graph keeps running (Playwright asserts `graph-live` is still shown); a diff against a saved export works (Vitest, story `AgainstASavedExport`, Playwright with a real `rtok graph export`); Rust tests for the typed report, the export-as-text refusal and the cap; `committed_schema_is_current`.
+
+Result: `just spa-typecheck` passed; `just spa-test` 46 files, 420 tests passed; `just js` passed; `just spa-stories` 34 files, 225 tests passed; `just spa-e2e` 32 passed (earlier runs failed on the load flakes "clear safe junk plans..." and "config page renders from the live snapshot", both passed in the other runs; the two new Compare tests first failed because the project was not yet indexed and because the edited function matched as a rename, and were fixed). `just check`: fmt, clippy `-D warnings` and jscpd passed; `cargo nextest run --workspace --no-fail-fast` 3216 passed, 8 skipped. Two load flakes stopped earlier fail-fast runs, `commands_e2e doctor_reports_the_chain` (passed alone in 93 s) and `agents_install the_agent_alias_prints_what_agents_prints` (passed on the full rerun); `committed_schema_is_current` failed once because the staged schema had been compacted by the formatter, and was regenerated.
+
+Split at review: the server half (typed report, `/ws` pair, `export::parse`, the frame parser and the sample stand-in) shipped first as T329.42, so this entry is the panel and the colouring. Limitations: an edge is coloured only where both call ends are drawn as symbols (an expanded file or a focus); the panel lists every edge either way. A removed symbol is drawn as a ghost only in an expanded file; elsewhere its file node shows removed or changed. The panel shows the current project's entry; a linked project's entry is not drawn, only the links added and removed.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:
@@ -9112,6 +9138,19 @@ Done: `src/tui/health.rs` paints the registry row's `ProjectRow.health` and `sco
 Deviations: The cursor row wears the table's highlight, which overrides the cell colours, so its level colour is shown by the breakdown line under the table instead; the other rows keep theirs. More than three reasons are cut off there (`rtok graph projects` has them all).
 
 Check result: `tui::health::tests` (fixture rows at 100, 60 with two reasons, indexing and missing: cell colours are OK, WARN, MUTED and ERR, the cursor's breakdown shows the components, both reasons and their fixes, a 70 the server calls Bad is painted red and the scope 49 goes through `level_of`); `tests/surface_parity.rs::graph_health_score_exists_on_both_surfaces`; `just check` green.
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
+### T486. TUI: live calls pane shows call metrics
+
+T329.33 added call metrics to the web live panel and to the shared fold in `src/web/calls_store.rs`: latency p50 and p95 (`Totals::latency`), symbols asked, calls across several projects, fallbacks and capped answers. D27 requires the TUI live calls pane (T480) to show the same numbers. Depends on T480 and T329.33. Done means: the pane shows the five figures from `Totals` for the selected window, with the same wording as the web panel.
+
+Plan: add one metrics line under the KPI line in `LiveCalls::metric_lines` (`src/tui/live_calls.rs`) from `Totals::latency`, `symbols`, `crossed`, `fallbacks`, `caps` with the web wording; take one bar less so the feed keeps its rows at 24 rows; test with the fixture events of `calls_store.rs`; add a `surface_parity` test.
+
+Done: `LiveCalls::metric_lines` in `src/tui/live_calls.rs` adds one line under the KPI line, read from `Totals` (`latency()`, `symbols`, `crossed`, `fallbacks`, `caps`; no second fold) in the web panel's words: `latency p50 30 ms (p95 100 ms)` (`-` before any call has ended, seconds from 1000 ms as the page's `millis`), `symbols asked 3 (1 across projects)`, `fallbacks 1 (1 capped)` (amber when there are fallbacks). The line shares the pane's window, so it follows `w` and the freeze. The bars take one row less (`height - 10`) so the feed keeps its rows on the cramped 24-row Graph page. `tests/surface_parity.rs` gained `call_metrics_exist_on_both_surfaces`.
+
+Check result (2026-10-10): `just check` green: nextest `Summary [ 711.086s] 3229 tests run: 3229 passed (7 slow), 8 skipped`; no `web/src` change, so no SPA gates. The pane tests (`tui::` 59 passed) show 30 ms and 100 ms, 3 symbols, 1 across projects, 1 fallback, 1 capped, and the feed still shows its rows at 24 rows.
 
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5

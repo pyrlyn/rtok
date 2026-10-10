@@ -417,17 +417,25 @@ pub fn read(path: &Path) -> Result<Export> {
         );
     }
     let text = std::fs::read_to_string(path).with_context(|| path.display().to_string())?;
-    let value: Value = serde_json::from_str(&text)
-        .with_context(|| format!("{} is not a graph export", path.display()))?;
+    parse(&text, &path.display().to_string())
+}
+
+/// The same checks on text that came from somewhere other than a path rtok opened, such as the
+/// graph page's file picker; `label` names the source in the errors.
+pub fn parse(text: &str, label: &str) -> Result<Export> {
+    if text.len() as u64 > MAX_IMPORT {
+        bail!(
+            "{label}: {} bytes is more than a graph export can be",
+            text.len()
+        );
+    }
+    let value: Value =
+        serde_json::from_str(text).with_context(|| format!("{label} is not a graph export"))?;
     match value["schema"].as_str() {
         Some(SCHEMA) => {}
-        other => bail!(
-            "{}: schema {other:?}, this rtok reads {SCHEMA}",
-            path.display()
-        ),
+        other => bail!("{label}: schema {other:?}, this rtok reads {SCHEMA}"),
     }
-    serde_json::from_value(value)
-        .with_context(|| format!("{} does not match {SCHEMA}", path.display()))
+    serde_json::from_value(value).with_context(|| format!("{label} does not match {SCHEMA}"))
 }
 
 /// The committed schema file: pretty JSON with a trailing newline, generated from the types.

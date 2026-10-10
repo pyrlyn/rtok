@@ -19,6 +19,8 @@ import type {
     CallBatch,
     Cleared,
     ClientMessage,
+    DiffReport,
+    DiffRequest,
     DrillGraph,
     DrillRequest,
     Fixed,
@@ -56,6 +58,8 @@ export interface Api {
     junkPlan(): Promise<Cleared>;
     junkApply(paths: string[]): Promise<Cleared>;
     drill(request: DrillRequest): Promise<DrillGraph>;
+    /** What a change did to a project's graph (T329.35); the old side is a ref or export text. */
+    diff(request: DiffRequest): Promise<DiffReport>;
     /** Starts the graph call stream (T329.26) for as long as a listener is registered; returns the stop. */
     calls(listener: (batch: CallBatch) => void): () => void;
 }
@@ -78,9 +82,9 @@ interface PendingExpand {
 // not the request, and the server answers those off the executor, so `key` (the project)
 // is what ties it back; within one project the order holds.
 interface PendingDoctor {
-    kind: "doctorplan" | "doctorfixed" | "junkplan" | "junkcleared" | "graph";
+    kind: "doctorplan" | "doctorfixed" | "junkplan" | "junkcleared" | "graph" | "diff";
     key?: string;
-    resolve(frame: Plan | Fixed | Cleared | DrillGraph): void;
+    resolve(frame: Plan | Fixed | Cleared | DrillGraph | DiffReport): void;
     reject(error: Error): void;
 }
 
@@ -151,7 +155,7 @@ export function createApi(
 
     const settleDoctor = (
         kind: PendingDoctor["kind"],
-        frame: Plan | Fixed | Cleared | DrillGraph,
+        frame: Plan | Fixed | Cleared | DrillGraph | DiffReport,
         key?: string,
     ) => {
         const i = pendingDoctor.findIndex((p) => p.kind === kind && p.key === key);
@@ -160,7 +164,7 @@ export function createApi(
         entry?.resolve(frame);
     };
 
-    const askDoctor = <T extends Plan | Fixed | Cleared | DrillGraph>(
+    const askDoctor = <T extends Plan | Fixed | Cleared | DrillGraph | DiffReport>(
         kind: PendingDoctor["kind"],
         message: ClientMessage,
         key?: string,
@@ -222,6 +226,9 @@ export function createApi(
                 return;
             case "graph":
                 settleDoctor("graph", frame.graph, String(frame.graph.project));
+                return;
+            case "diff":
+                settleDoctor("diff", frame.diff, frame.project);
                 return;
             case "calls":
                 for (const listener of callListeners) listener(frame.batch);
@@ -310,6 +317,7 @@ export function createApi(
             ),
         // `request.project` is the registry id as text, which is what the frame carries back.
         drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
+        diff: (request) => askDoctor<DiffReport>("diff", { diff: request }, request.project),
         calls(listener) {
             callListeners.add(listener);
             if (callListeners.size === 1) subscribeCalls(true);
@@ -404,6 +412,22 @@ export function useDrill(request: DrillRequest, version: readonly unknown[]) {
     return useQuery({
         queryKey: ["drill", request, version],
         queryFn: () => api.drill(request),
+        placeholderData: keepPreviousData,
+        staleTime: Infinity,
+        retry: false,
+    });
+}
+
+/**
+ * The diff of one project (T329.35). `tag` stands for the export text, which is too long for a
+ * query key; the report is kept while the next one loads, as the drill-down frame is.
+ */
+export function useDiff(request: DiffRequest | null, tag: readonly unknown[]) {
+    const api = useApi();
+    return useQuery({
+        queryKey: ["diff", request && { ...request, export: null }, tag],
+        queryFn: () => api.diff(request!),
+        enabled: request !== null,
         placeholderData: keepPreviousData,
         staleTime: Infinity,
         retry: false,
