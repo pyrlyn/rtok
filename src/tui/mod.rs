@@ -12,6 +12,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod app;
+mod live_calls;
 mod theme;
 mod view;
 

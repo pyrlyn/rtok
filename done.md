@@ -2993,6 +2993,20 @@ Deviations: the folded totals still exist twice (TypeScript and Rust) until T484
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T480 — TUI: live graph calls panel
+
+T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26.
+
+Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
+
+Check result (2026-10-10): `just check` green on this commit: nextest `Summary [ 376.962s] 3194 tests run: 3194 passed, 8 skipped` (run with `NEXTEST_TEST_THREADS=4`, since the machine ran at load 16 and unrelated timing tests failed one per run at the default); fmt, clippy `-D warnings`, oxlint, pytest and jscpd clean; `live_calls` tests 5/5 (the end-to-end test writes calls until the reader is armed and one arrives, with a 30 s bound, instead of sleeping), `surface_parity` 17/17; no `web/` file touched, so the SPA gates did not apply
+
+How it was built: the shared half is T483 (`Reader` in `src/web/live.rs`, the Rust `CallsStore` in `src/web/calls_store.rs`); the pane is `src/tui/live_calls.rs`: a reader thread on `Reader`, started on the first look at the Graph tab, folding into `CallsStore`. Keys, all in `KEYS`: `f` freeze, `w` window, `a`/`t`/`o` caller, tool and project filters. A freeze keeps a copy of the store for display while the live one keeps folding, so unfreezing shows every held call. The totals equal the page's because both fold the same batches with a fold held to `callsStore.ts` by T483's tests; making the server send the totals so the page drops its own fold is T484.
+
+Deviations: split from the first draft, which was about 600 lines of code; the shared half became T483. The pane omits what the page shows beyond the brief: the running-call list with elapsed seconds (running tools are named in the KPI line), `since open` counts from the first look at the Graph tab, as the page's counts from subscription, and the feed has no scrolling beyond the rows that fit.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.

@@ -179,7 +179,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "logs" => frame.render_widget(logs_text(app), area),
         "skills" => render_skills(frame, app, area),
         "stats" => frame.render_widget(stats(app), area),
-        "graph" => frame.render_widget(graph_page(app), area),
+        "graph" => render_graph(frame, app, area),
         "hosts" => frame.render_widget(hosts_page(app), area),
         "config" => frame.render_widget(config_page(app), area),
         "services" => frame.render_widget(services_page(app), area),
@@ -445,6 +445,16 @@ fn stats(app: &App) -> Paragraph<'static> {
     Paragraph::new(text.clone())
 }
 
+/// The Graph page: the model's text on top and, below it, the live calls pane (T480, D27).
+/// The pane takes a bit over half the body, capped, so the index health stays readable.
+fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
+    let live = (area.height * 55 / 100).min(18);
+    let [text, calls] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
+    frame.render_widget(graph_page(app), text);
+    app.live().render(frame, calls);
+}
+
 /// The model's Graph page (T230), verbatim: `rtok graph status`'s index health plus
 /// `rtok graph dead`'s unreferenced-definition list, from the same store read the
 /// snapshot already carries (D27) — a rendering, not a second read. `None` is a
@@ -677,7 +687,7 @@ fn expand_pane(
 }
 
 /// `HH:MM:SS` — `log::stamp`'s time half; the full date is in the detail view.
-fn time_of(ts: i64) -> String {
+pub(super) fn time_of(ts: i64) -> String {
     crate::log::stamp(ts.max(0) as u64)
         .rsplit_once(' ')
         .map_or_else(|| "-".into(), |(_, t)| t.to_string())

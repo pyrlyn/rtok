@@ -12,6 +12,7 @@ use std::sync::mpsc;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
+use super::live_calls::LiveCalls;
 use crate::config::{Config, validate};
 use crate::model::{self, Snapshot};
 
@@ -31,6 +32,11 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("calls", "Enter/z", "detail pane"),
     ("calls", "e", "expand archive"),
     ("calls", "/", "filter expand"),
+    ("graph", "f", "freeze/unfreeze calls"),
+    ("graph", "w", "calls window"),
+    ("graph", "a", "filter calls by caller"),
+    ("graph", "t", "filter calls by tool"),
+    ("graph", "o", "filter calls by project"),
     ("sessions", "↑/↓", "move selection"),
     ("sessions", "Enter", "detail pane"),
     ("sessions", "l", "live-only filter"),
@@ -69,6 +75,8 @@ pub struct App {
     /// live-only filter is on.
     sessions: SessionsState,
     skills: SkillsState,
+    /// The Graph page's live calls pane (T480).
+    live: LiveCalls,
     /// The Config page's own state (T228): `/` filter text and whether it is capturing.
     config: ConfigState,
     /// Whether the `?` help overlay is up (T60.8).
@@ -193,6 +201,7 @@ impl App {
             calls: CallsState::default(),
             sessions: SessionsState::default(),
             skills: SkillsState::default(),
+            live: LiveCalls::new(cfg.core.db_path.clone()),
             config: ConfigState::default(),
             help: false,
             worker: None,
@@ -295,11 +304,22 @@ impl App {
 
     /// Take the worker's newest finished read, if any. Called by the loop between keys.
     pub fn poll(&mut self) {
+        self.live.poll(self.page() == "graph");
         let Some(latest) = self.worker.as_ref().and_then(|w| w.rx.try_iter().last()) else {
             return;
         };
         self.refresh(latest.1);
         self.shown = latest.0;
+    }
+
+    /// The Graph page's live calls pane (T480).
+    pub(super) fn live(&self) -> &LiveCalls {
+        &self.live
+    }
+
+    #[cfg(test)]
+    pub(super) fn live_mut(&mut self) -> &mut LiveCalls {
+        &mut self.live
     }
 
     /// Whether a requested re-read has not reached the screen yet.
@@ -580,6 +600,9 @@ impl App {
             return false;
         }
         if self.page() == "sessions" && self.sessions_key(code) {
+            return false;
+        }
+        if self.page() == "graph" && self.live.key(code) {
             return false;
         }
         if self.page() == "skills" && self.skills_key(code) {

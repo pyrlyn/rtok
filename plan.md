@@ -96,7 +96,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T478 | todo | P3 | 3 | 0% | |
 | T479 | todo | P3 | 2 | 0% | |
 | T481 | todo | P3 | 2 | 0% | |
-| T480 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
 
 
@@ -1226,12 +1225,6 @@ Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, c
 T329.19 puts `ProjectRow.health` and `ProjectRow.scope_health` into `rtok graph projects`, `--json` and `/ws`; D27 (amended 2026-10-10, T346) requires the TUI to show them too, and the TUI `Model.projects` already carries both fields. Depends on T329.19. Done means: the TUI projects view shows each project's score (or `indexing` / `missing`) with the same colour bands as the page (green 80 and up, amber 50 to 79, red below 50), the selected project's breakdown (the three components, the reasons and their fixes) and the scope's lowest score.
 
 Check: a TUI render test on fixture rows at 100, 60 with two reasons, `indexing` and `missing`; `tests/surface_parity.rs` lists the score on both surfaces; `just check`.
-
-### T480. TUI: live graph calls panel
-
-T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26 and T483.
-
-Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
 
 ### T484. Web live panel reads the server's calls totals
 
