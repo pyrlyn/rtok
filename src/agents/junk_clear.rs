@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::Result;
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::junk::{self, AGENT_SCAN_LIMIT, Report};
@@ -109,7 +110,7 @@ pub fn agent_arg(s: &str) -> Result<String, String> {
 }
 
 /// One item of the plan and what happened to it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Planned {
     pub agent: &'static str,
     pub kind: &'static str,
@@ -133,7 +134,7 @@ pub struct Planned {
     real: PathBuf,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Cleared {
     pub yes: bool,
     pub items: Vec<Planned>,
@@ -410,13 +411,28 @@ fn running(cfg: &Config) -> impl Fn(&str) -> bool {
 
 /// `clear` beyond T182: scan as `list` does, plan, and with `yes` apply.
 pub fn run(cfg: &Config, f: &Filter, yes: bool) -> Result<Cleared> {
-    let report = junk::report(cfg);
+    Ok(run_in(cfg, &junk::report(cfg), f, yes, None))
+}
+
+/// [`run`] over a report already taken, cut to `only`: the paths a user was shown and
+/// confirmed, so an item that appeared since their plan is never removed unseen. `None` takes
+/// the whole plan.
+pub fn run_in(
+    cfg: &Config,
+    report: &Report,
+    f: &Filter,
+    yes: bool,
+    only: Option<&[String]>,
+) -> Cleared {
     let now = SystemTime::now();
-    let mut items = plan(cfg, &report, f, now, &running(cfg));
+    let mut items = plan(cfg, report, f, now, &running(cfg));
+    if let Some(only) = only {
+        items.retain(|p| only.contains(&p.path));
+    }
     if yes {
         apply(cfg, &mut items, f, now);
     }
-    Ok(summed(items, yes))
+    summed(items, yes)
 }
 
 pub fn summed(items: Vec<Planned>, yes: bool) -> Cleared {
