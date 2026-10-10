@@ -69,6 +69,7 @@ table|doc_items_fts_idx|doc_items_fts_idx|CREATE TABLE 'doc_items_fts_idx'(segid
 table|events|events|CREATE TABLE events ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, event TEXT NOT NULL, tool TEXT, plugin TEXT, ms REAL )
 table|extractor|extractor|CREATE TABLE extractor ( root TEXT PRIMARY KEY NOT NULL, fingerprint TEXT NOT NULL , indexed_at INTEGER)
 table|file_rank|file_rank|CREATE TABLE file_rank ( root TEXT PRIMARY KEY NOT NULL, graph TEXT NOT NULL )
+table|graph_events|graph_events|CREATE TABLE graph_events ( id INTEGER PRIMARY KEY, ts_ms INTEGER NOT NULL, call TEXT NOT NULL, phase TEXT NOT NULL, session TEXT NOT NULL, tool TEXT NOT NULL, target TEXT, project TEXT, backend TEXT, ok INTEGER NOT NULL DEFAULT 1, error TEXT, ms REAL, done INTEGER, total INTEGER, answer_tokens INTEGER, rows_json TEXT )
 table|hook_sessions|hook_sessions|CREATE TABLE hook_sessions ( id INTEGER PRIMARY KEY, fields TEXT NOT NULL UNIQUE )
 table|hosts|hosts|CREATE TABLE hosts ( id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()) )
 table|kv|kv|CREATE TABLE kv ( key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL )
