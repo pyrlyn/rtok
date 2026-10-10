@@ -1055,7 +1055,7 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 
 ### T330.7. Junk: web card with a "clear safe junk" button
 
-Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows the junk list as plain text today (the item lines of T330.6 included). This task turns it into a `junk` card (per agent, per kind, sizes and the "Freed by `clear`" lines) and adds the "clear safe junk" button: it runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does (a `ClientMessage` plan/apply pair, `src/web/protocol.rs`, regenerated schema and types, a story and a Vitest). `rtok tui` keeps the read-only text on its Hosts page (writing commands stay CLI-only there). Depends on T330.6; the web write action itself waits on the creator's answer to T346 (D27 against web write actions).
+Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows the junk list as plain text today (the item lines of T330.6 included). This task turns it into a `junk` card (per agent, per kind, sizes and the "Freed by `clear`" lines) and adds the "clear safe junk" button: it runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does (a `ClientMessage` plan/apply pair, `src/web/protocol.rs`, regenerated schema and types, a story and a Vitest). The `rtok tui` counterpart of the button is T479 (D27 as amended by T346: write actions on both surfaces, same guards). Depends on T330.6.
 
 Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
 

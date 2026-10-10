@@ -144,7 +144,7 @@ More in [Plugin versions: Listing outdated plugins](plugin-versions.md#listing-o
 Both commands print the items behind the totals, so you can check the exact set before deleting. Each item is one line: its path (a link in a terminal that supports them, with `~` for your home), its size, when it was last used (the newest file in it, for example `3 weeks ago (2026-09-09 14:02)`), why it is junk, and, when it will not be cleared, why not (`review kind: add --include review`, `agent running`).
 
 - `--items N|all` sets how many items each kind lists (default 10, then `+N more (size)`); `--items 0` prints the totals only.
-- `--sort size|last-used|path` orders the items inside each kind: largest first (default), longest unused first, or by path. An item whose time cannot be read counts as recent and sorts last.
+- `--sort size|last-used|path` orders the items inside each kind: largest first (default), longest unused first, or by path. An item whose time cannot be read counts as recent and sorts last. Agents themselves always come by the space `clear` frees, largest first.
 - `--min-size SIZE` (a number with B, KB, MB, GB or TB) hides smaller items. On `clear` it also limits the plan, so what the dry run lists is what `--yes` removes.
 - `--json` always carries every item: `path`, `size_bytes`, `last_used` (Unix seconds or `null`), `reason`, `will_clear` and, when it is not cleared, `skip_reason`.
 

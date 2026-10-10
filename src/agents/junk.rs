@@ -805,9 +805,13 @@ pub fn report_with(cfg: &Config, roots: &Roots, opts: Options, limit: Duration) 
         let by_path: BTreeMap<&Path, u64> = items.map(|i| (Path::new(&i.path), i.bytes)).collect();
         log_archive + top_level_bytes(by_path.iter().map(|(p, b)| (*p, *b)))
     };
+    // T343: agents always come by space freed, largest first; `--sort` orders the items.
+    // Stable, so rtok keeps the lead on a tie.
+    let (default_bytes, review_bytes) = (freed(false), freed(true));
+    agents.sort_by_key(|a| std::cmp::Reverse(a.freed_default_bytes));
     Report {
-        freed_default_bytes: freed(false),
-        freed_review_bytes: freed(true),
+        freed_default_bytes: default_bytes,
+        freed_review_bytes: review_bytes,
         agents,
         total_bytes,
         own: outcomes,
@@ -1074,8 +1078,9 @@ mod tests {
         let planned: u64 = scan(&cfg).iter().map(|o| o.bytes).sum();
         assert_eq!(planned, 12);
         assert_eq!(report.freed_default_bytes, planned);
-        let rtok = &report.agents[0];
-        assert_eq!(rtok.name, "rtok");
+        let freed: Vec<u64> = report.agents.iter().map(|a| a.freed_default_bytes).collect();
+        assert!(freed.windows(2).all(|w| w[0] >= w[1]), "{freed:?}");
+        let rtok = report.agents.iter().find(|a| a.name == "rtok").unwrap();
         assert_eq!((rtok.kinds[0].kind, rtok.kinds[0].items), ("log", 2));
         assert!(
             rtok.folders
