@@ -492,6 +492,10 @@ export interface GraphEvent {
    */
   samples: MeasurementSample[];
   session: string;
+  /**
+   * Symbols the call asked for (every event); `None` for a tool that takes none.
+   */
+  symbols: number | null;
   target: string | null;
   tool: string;
   total: number | null;
@@ -511,12 +515,25 @@ export interface MeasurementSample {
   est_before: number;
   id: number;
   kind: string;
+  /**
+   * Set when the row's answer was cut and archived: how a page tells a cap hit from an
+   * `explore` row that only stands for several smaller calls. Absent in rows written before T329.33.
+   */
+  ref_id: string | null;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "CallSummary".
  */
 export interface CallSummary {
+  /**
+   * Rows with a `ref_id`: answers cut at `max_tokens`.
+   */
+  caps: number;
+  /**
+   * Ended calls whose scope held more than one project.
+   */
+  crossed: number;
   ends: number;
   est_after: number;
   /**
@@ -524,7 +541,16 @@ export interface CallSummary {
    */
   est_before: number;
   failed: number;
+  /**
+   * `lsp_fallback` rows of the ended calls: each is one answer the tags index gave after the
+   * language server could not.
+   */
+  fallbacks: number;
   starts: number;
+  /**
+   * Symbols the ended calls asked for.
+   */
+  symbols: number;
 }
 /**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface

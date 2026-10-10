@@ -448,6 +448,7 @@ diesel::table! {
 }
 
 // 0040 (T329.15): graph call events; `rows_json` is the call's `measurements` rows as JSON.
+// 0041 (T329.33): `symbols`, how many symbols the call asked for.
 diesel::table! {
     graph_events (id) {
         id -> BigInt,
@@ -466,6 +467,7 @@ diesel::table! {
         total -> Nullable<Integer>,
         answer_tokens -> Nullable<Integer>,
         rows_json -> Nullable<Text>,
+        symbols -> Nullable<Integer>,
     }
 }
 

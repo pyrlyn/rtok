@@ -10,6 +10,8 @@ import {
   filterFeed,
   fold,
   INTERRUPT_MS,
+  LATENCY_KEEP,
+  latency,
   sweep,
   windowTotals,
 } from "./callsStore";
@@ -26,6 +28,49 @@ describe("fold", () => {
     expect(done.feed[0]).toMatchObject({ call: "a", before: 100, after: 30, backend: "tags" });
     expect(done.all).toMatchObject({ calls: 1, before: 100, after: 30 });
     expect(done.all.tools.callers).toEqual({ calls: 1, saved: 70 });
+  });
+
+  // Same events and numbers as `calls_store.rs`.
+  test("fallbacks, caps, symbols, projects and latency percentiles are counted from the events", () => {
+    const sample = (kind: string, ref_id: string | null = null) => ({
+      id: 1,
+      kind,
+      before_bytes: 0,
+      after_bytes: 0,
+      est_before: 0,
+      est_after: 0,
+      ref_id,
+    });
+    const timed = (call: string, ms: number, over = {}) =>
+      end(call, 0, 0, { ms, samples: [], ...over });
+    const s = fold(
+      emptyStore,
+      batch([
+        timed("a", 10, { symbols: 2, total: 3, samples: [sample("lsp_fallback")] }),
+        timed("b", 20, {
+          symbols: 1,
+          total: 1,
+          samples: [sample("cap", "ab"), sample("explore")],
+        }),
+        timed("c", 30),
+        timed("d", 40),
+        timed("e", 100),
+      ]),
+      T,
+    );
+    const t = windowTotals(s, "1m", T);
+    expect([t.fallbacks, t.caps, t.symbols, t.crossed]).toEqual([1, 1, 3, 1]);
+    expect(latency(t)).toEqual({ p50: 30, p95: 100 });
+    expect(latency(s.all)).toEqual(latency(t));
+    expect(latency(emptyStore.all)).toBeNull();
+  });
+
+  test("the latencies kept are the newest ones", () => {
+    let s = emptyStore;
+    for (let i = 0; i < LATENCY_KEEP + 5; i++)
+      s = fold(s, batch([end(`c${i}`, 0, 0, { ms: i })]), T + i);
+    expect(s.all.ms).toHaveLength(LATENCY_KEEP);
+    expect(s.all.ms[0]).toBe(5);
   });
 
   test("a failed end counts and keeps its error", () => {
