@@ -191,7 +191,13 @@ fn gc_keeps_a_pending_worktree_that_it_would_otherwise_remove() {
         let rows: Vec<serde_json::Value> = serde_json::from_str(&out).unwrap();
         let row = rows
             .into_iter()
-            .find(|r| r["path"] == s.made.to_str().unwrap())
+            // git prints `C:/...` on Windows; compare the paths, not the spelling.
+            .find(|r| {
+                r["path"]
+                    .as_str()
+                    .and_then(|p| dunce::canonicalize(p).ok())
+                    .is_some_and(|p| p == s.made)
+            })
             .expect("the worktree is listed");
         (
             row["action"].as_str().unwrap().to_string(),
