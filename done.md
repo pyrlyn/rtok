@@ -8899,6 +8899,23 @@ Deviations: The page display is split into T329.24. The first server timeout dow
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
 
+## T329.24 — Graph page: show each project's capability record
+
+The Projects panel of the Graph page shows `ProjectRow.backend` (T329.11, already in `/ws` and `snapshot.gen.ts`).
+
+- Selector: a `lsp` or `tags` pill after the index-state pill on every row that has a record; its title carries the detail line and the exact stamps. A row without a record shows nothing, as the list stays one line per project.
+- Header: a "graph backend" line for the selected project: the pill (green for `lsp`, amber for `tags` with a reason, grey for `tags` without one), then "<language> server answers" or the reason the project fell back, "checked <age>" and, when the health check will retry, "retries at HH:MM". A project without a record says "no record yet: a graph request under lsp or auto makes one".
+- Logic: `backendOf(p, now)` in `projectLogic.ts` builds the tone, label, line and title once for both places; `now` is a parameter, as in `ago`.
+- Fixtures: the `?sample` server has three projects now: rtok on LSP, ketch on tags with a reason and a retry time, notes without a record.
+- Tests: a Vitest case for the three records on the header, the selector list expectation updated, and stories `BackendLsp`, `BackendTagsWithReason`, `BackendNoRecord` (axe runs on them in `just spa-stories`).
+- Docs: a "Graph backend" bullet in "The graph page" of `docs/commands.md` (en, ru, uk).
+
+Result: `just js`, `just spa-typecheck`, Vitest (`--project unit`, 34 files), `just spa-stories`, `just spa-e2e` and `just check` pass.
+
+Deviations: the record holds the language and a `server` flag, not a server name, so the header names the language ("rust server answers") instead of the binary. A project without a record is stated in the header (the task text said "nothing"; the creator asked for it to be said plainly) and the selector row stays bare. The TUI has no projects page (`src/tui` does not render `ProjectRow`; only the `/ws` model carries it), so there was nothing to mirror.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ### T329.17. Graph alerts: linked project down or unreachable
 
 T329 §8d, backend half (the page badges, toasts and alerts list are T329.25, split at claim time; the optional T288 push is skipped): alert states, the two-check rule, the 60 s background check, `rtok doctor` and `rtok graph projects --json`, notices in MCP answers. Adds `alerts` and `health_check_interval_s`. Owns the tiered re-probe loop in every process that hosts graph (`rtok mcp`, `rtok web`), and the clearing of backend-down and unreachable alerts after two good checks (T337 decided). Depends on T329.11, T329.12.

@@ -7,7 +7,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, describe, expect, test } from "vitest";
 import { connectSample } from "../api/sample";
 import { project } from "../api/sampleRows";
-import type { ClientMessage, ProjectRow, Snapshot } from "../api/snapshot.gen";
+import type { Capability, ClientMessage, ProjectRow, Snapshot } from "../api/snapshot.gen";
 import { richSnapshot } from "./fixtures";
 import { mount, serving, wire } from "./testHelpers";
 
@@ -26,9 +26,43 @@ describe("graph page projects", () => {
             within(list)
                 .getAllByRole("button")
                 .map((b) => b.textContent),
-        ).toEqual(["rtokokmanual", "ketchstalemanual"]);
+        ).toEqual(["rtokoklspmanual", "ketchstaletagsmanual", "notesokmanual"]);
         expect(current().getByText("rtok")).toBeTruthy();
         expect(screen.queryByLabelText("find a project")).toBeNull();
+    });
+
+    test("the header says which backend the project is on and why", async () => {
+        const rec = (over: Partial<Capability>): Capability => ({
+            backend: "tags",
+            checked_at: 1_790_000_000,
+            config: "auto",
+            language: "rust",
+            next_probe_at: null,
+            reason: null,
+            server: true,
+            ...over,
+        });
+        const lsp = rec({ backend: "lsp" });
+        const down = rec({
+            reason: "rust-analyzer is not installed",
+            next_probe_at: 1_790_000_300,
+        });
+        const cases: [Capability | null, RegExp, RegExp | null][] = [
+            [lsp, /rust server answers/, null],
+            [down, /rust-analyzer is not installed.*retries at/, null],
+            [null, /no record yet/, /answers|checked/],
+        ];
+        for (const [backend, line, absent] of cases) {
+            const view = mount(
+                serving(withProjects([project(1, "a", { selected: true, backend })])),
+                "/graph",
+            );
+            const header = within(await screen.findByLabelText("graph backend"));
+            expect(header.getByText(line)).toBeTruthy();
+            if (backend) expect(header.getByText(backend.backend)).toBeTruthy();
+            if (absent) expect(header.queryByText(absent)).toBeNull();
+            view.unmount();
+        }
     });
 
     test("every index state has its own indicator", async () => {

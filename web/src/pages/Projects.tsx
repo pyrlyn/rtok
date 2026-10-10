@@ -16,8 +16,8 @@ import { Search } from "../ui/Search";
 import { Select } from "../ui/Select";
 import { Spinner } from "../ui/Spinner";
 import { Switch } from "../ui/Switch";
-import { fmt } from "./format";
-import { filterProjects, linkTargets, SEARCH_ABOVE, stateOf } from "./projectLogic";
+import { fmt, nowSecs } from "./format";
+import { backendOf, filterProjects, linkTargets, SEARCH_ABOVE, stateOf } from "./projectLogic";
 
 /** The server owns the registry: every control only asks, and the next snapshot moves the page. */
 export function Projects({ rows }: { rows: ProjectRow[] }) {
@@ -67,6 +67,7 @@ function Selector({ rows }: { rows: ProjectRow[] }) {
                                 {pending && <Spinner size="sm" />}
                                 <b className="truncate">{p.name}</b>
                                 <Pill tone={stateOf(p).tone}>{stateOf(p).label}</Pill>
+                                <BackendTag p={p} />
                                 <span className="ml-auto text-2xs text-fg-muted">{p.origin}</span>
                             </button>
                         </li>
@@ -83,6 +84,39 @@ function Selector({ rows }: { rows: ProjectRow[] }) {
     );
 }
 
+function BackendTag({ p }: { p: ProjectRow }) {
+    const b = backendOf(p, nowSecs());
+    if (!b) return null;
+    return (
+        <span title={`${b.detail} (${b.title})`}>
+            <Pill tone={b.tone}>{b.label}</Pill>
+        </span>
+    );
+}
+
+function Backend({ p }: { p: ProjectRow }) {
+    const b = backendOf(p, nowSecs());
+    return (
+        <p aria-label="graph backend" className="flex flex-wrap items-center gap-2 text-2xs">
+            <span className="text-fg-muted">graph backend</span>
+            {b ? (
+                <>
+                    <span title={b.title}>
+                        <Pill tone={b.tone} dot>
+                            {b.label}
+                        </Pill>
+                    </span>
+                    <span className="text-fg-muted">{b.detail}</span>
+                </>
+            ) : (
+                <span className="text-fg-muted">
+                    no record yet: a graph request under lsp or auto makes one
+                </span>
+            )}
+        </p>
+    );
+}
+
 function Current({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
     const s = stateOf(p);
     return (
@@ -96,6 +130,7 @@ function Current({ rows, p }: { rows: ProjectRow[]; p: ProjectRow }) {
                     <span className="text-2xs text-fg-muted">{s.hint}</span>
                 </p>
                 <p className="truncate text-2xs text-fg-subtle">{p.root}</p>
+                <Backend p={p} />
                 {p.index && (
                     <div className="grid grid-cols-3 gap-2">
                         <Kpi label="rows" value={fmt(p.index.rows)} />

@@ -70,6 +70,10 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   with every call. The feed keeps the newest 200 finished calls, can be filtered by caller (the
   session id), tool and project, shows failed calls in red and marks a call that never ended
   after two minutes as interrupted.
+- **Graph backend.** Each project in the list carries `lsp` or `tags`, and the selected project's
+  header says why: the language whose server answers, or the reason the project fell back to tags,
+  when it was last checked and when the health check retries. A project nobody has asked yet says
+  it has no record.
 
 ## Every flag is a config key
 
