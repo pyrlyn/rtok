@@ -9188,6 +9188,18 @@ Result: `just fmt-check` and `just lint` pass; cargo nextest for `web::`, `plugi
 
 Deviations: the image of the live frame is not here (the card says part 2 only); the TUI half of D27 is T329.41, and `tests/surface_parity.rs` pins both halves.
 
+### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
+
+What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
+
+Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
+
+Done: the live reader (`web::live::Reader`, shared by the page and the TUI pane) resolves each session to `<host> <agent short id>` through `Store::agents_of_sessions`, falling back to `<host> <session>` from the `sessions` row and then to the bare session id; the caller column and its filter use that name. `LiveCalls` notes the newest `graph_events` id when the server starts and every new poller replays the stored events above it into the `CallsStore` (windows and feed included) before streaming, so a reload shows the same totals and the label reads "since start". `[plugins.graph]` gained `live_heat_window_s` (300), `live_max_events_per_s` (50) and `live_feed_rows` (200) in `rtok-config` (types, `default.toml`, range checks in `validate.rs`), documented in `docs/config.md` (en, ru, uk) with the command pages. The TUI live calls pane mirrors this from its own start (D27), so `tests/surface_parity.rs` checks both surfaces for replay and caller instead of recording a gap.
+
+Result: `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd, cargo nextest 3307 passed and 8 skipped, min-feature build); the first run failed in the min-feature build (`Store::session_row` was test-only) and `session_row` and `SessionRow` are now public. `just spa-typecheck`, `just js` and `just spa-stories` (230 passed) pass; `just spa-test` 425 passed with `--maxWorkers=2` (a default-parallel run had 5 timeouts at load average 38). `just spa-e2e`: 26 to 31 passed and 2 to 7 failed per run at load average 30 to 40, always among the hosts page, clear safe junk, 500-call burst, Compare and Export tests (the 500-call burst fails when its `rtok mcp` helper is killed by its own timeout); the same five fail with the main checkout's `rtok` binary (`RTOK_BIN`), so they are load, not this change; the graph live-call tests that read the caller column and the totals passed in every run.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ### T329.41. TUI: graph export action
 
 D27 for T329.31 and T329.40: anything the command prints is a page on web and tui, so `rtok tui` gets a graph export key that calls the same function as `rtok graph export` (formats json, svg and png, the same 200-node cap and redaction default, written to a file the user names) and an open-a-saved-export view that is read-only. Depends on T329.31.

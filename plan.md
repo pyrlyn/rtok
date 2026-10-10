@@ -45,7 +45,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
 | T500 | todo | P3 | 3 | 0% | |
-| T329.34 | todo | P3 | 3 | 0% | |
 | T329.48 | todo | P3 | 2 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -814,12 +813,6 @@ Check: maximising either part fills the page and restores; under 900 px the metr
 D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
 
 Check: the sparklines match the store buckets; an outside-scope call is marked; folded targets count on their nearest visible ancestor; `tests/surface_parity.rs` lists each item on both surfaces; `just check`.
-
-### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
-
-What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
-
-Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
 
 ### T329.48. TUI: one panel shell for compare and export
 

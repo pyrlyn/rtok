@@ -302,6 +302,12 @@
             "$ref": "#/$defs/Finished"
           }
         },
+        "heat_window_s": {
+          "description": "`[plugins.graph] live_heat_window_s`: how long a node stays warm on the live canvas.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "now": {
           "description": "The server's clock in epoch milliseconds: the page ages rows by `now - at` on this clock,\nso a skew between the two machines moves nothing.",
           "type": "integer",
@@ -314,7 +320,7 @@
           }
         },
         "windows": {
-          "description": "One per chip, in the order of [`WINDOWS`]; the last is \"since open\".",
+          "description": "One per chip, in the order of [`WINDOWS`]; the last is \"since start\".",
           "type": "array",
           "items": {
             "$ref": "#/$defs/WindowView"
@@ -325,6 +331,7 @@
         "now",
         "running",
         "feed",
+        "heat_window_s",
         "windows"
       ]
     },
@@ -1394,6 +1401,9 @@
         "call": {
           "type": "string"
         },
+        "caller": {
+          "type": "string"
+        },
         "error": {
           "type": [
             "string",
@@ -1438,6 +1448,7 @@
         "target",
         "project",
         "session",
+        "caller",
         "ok",
         "error",
         "backend",
@@ -2854,6 +2865,10 @@
         "call": {
           "type": "string"
         },
+        "caller": {
+          "description": "T329.34: what the store calls the session (`claude 3f9a1c2e`), else the session's start.",
+          "type": "string"
+        },
         "project": {
           "type": [
             "string",
@@ -2879,6 +2894,7 @@
         "target",
         "project",
         "session",
+        "caller",
         "at"
       ]
     },

@@ -301,6 +301,10 @@ fn live_calls_view_exists_on_both_surfaces() {
         env!("CARGO_MANIFEST_DIR"),
         "/src/web/calls_store.rs"
     ));
+    let page_feed = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/live/CallFeed.tsx"
+    ));
     let pane = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/src/tui/live_calls.rs"
@@ -340,6 +344,20 @@ fn live_calls_view_exists_on_both_surfaces() {
     assert!(
         app.contains("(\"graph\", \"f\", \"freeze/unfreeze calls\")"),
         "the TUI's KEYS table documents the freeze key"
+    );
+    // T329.34: both surfaces count from their own start, replayed from the store by the one
+    // Reader, and show the caller names the Reader resolves.
+    assert!(
+        web_live.contains("r.replay(") || web_live.contains(".replay(since)"),
+        "the web poller replays the store since the server started"
+    );
+    assert!(
+        pane.contains("r.replay(") && pane.contains("live::head_of"),
+        "the TUI pane replays the store since the TUI started"
+    );
+    assert!(
+        pane.contains("r.caller") && page_feed.contains("r.caller"),
+        "both surfaces show the caller name, not the session id"
     );
 }
 

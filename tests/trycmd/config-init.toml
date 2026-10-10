@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,530 @@
+@@ -0,0 +1,533 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -515,6 +515,9 @@ target/tmp/t60-2-config-init.toml
 +# max_auto_projects = 20                # most projects references may add to the registry; reaching it is shown and logged
 +# alerts = true                         # alert when a project in the scope is missing, unreachable, has its backend down or a broken manifest link; shown by rtok doctor, graph projects and graph answers
 +# health_check_interval_s = 60          # seconds between health checks in rtok mcp and rtok web (an alert needs two in a row); 0 = off
++# live_heat_window_s = 300              # seconds a node stays warm on the live graph canvas after a call (rtok web, rtok tui)
++# live_max_events_per_s = 50            # most call events the live panel lists per second; the counters still count every call
++# live_feed_rows = 200                  # finished calls the live feed keeps
 +# exclude    = []                       # gitignore-style paths dropped from the walk
 +# include    = []                       # gitignore-style paths forced back in
 +# extensions = {}                       # ext = "grammar" remap for custom suffixes

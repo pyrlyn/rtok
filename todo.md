@@ -20,7 +20,6 @@
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 - T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
-- T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T329.48. TUI: one panel shell for compare and export
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window

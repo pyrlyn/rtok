@@ -753,13 +753,17 @@ export interface CallsView {
    */
   feed: Finished[];
   /**
+   * `[plugins.graph] live_heat_window_s`: how long a node stays warm on the live canvas.
+   */
+  heat_window_s: number;
+  /**
    * The server's clock in epoch milliseconds: the page ages rows by `now - at` on this clock,
    * so a skew between the two machines moves nothing.
    */
   now: number;
   running: Running[];
   /**
-   * One per chip, in the order of [`WINDOWS`]; the last is "since open".
+   * One per chip, in the order of [`WINDOWS`]; the last is "since start".
    */
   windows: WindowView[];
 }
@@ -773,6 +777,7 @@ export interface Finished {
   backend: string | null;
   before: number;
   call: string;
+  caller: string;
   error: string | null;
   interrupted: boolean;
   ms: number | null;
@@ -792,6 +797,10 @@ export interface Running {
    */
   at: number;
   call: string;
+  /**
+   * T329.34: what the store calls the session (`claude 3f9a1c2e`), else the session's start.
+   */
+  caller: string;
   project: string | null;
   session: string;
   target: string | null;

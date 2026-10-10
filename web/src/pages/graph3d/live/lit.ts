@@ -23,8 +23,6 @@ export interface LiveState {
   focus: number[];
 }
 
-/** Heat fades over this long. */
-const HEAT_MS = 300_000;
 /** The accents: running calls beyond this many are only counted ("busy"). */
 export const MAX_ACCENTS = 8;
 const FAIL_FLASH_MS = 5000;
@@ -41,6 +39,8 @@ const bare = (label: string) => label.replace(/^⚠ /, "");
  * does not hold lights nothing (the totals still count it).
  */
 export function liveState(scene: Scene, store: CallsView, now: number): LiveState {
+  // `[plugins.graph] live_heat_window_s`: heat fades over this long.
+  const heatMs = store.heat_window_s * 1000;
   const overview = scene.label === "registered projects";
   const key = (c: { project: string | null; target: string | null }) =>
     overview ? c.project : c.target;
@@ -59,11 +59,11 @@ export function liveState(scene: Scene, store: CallsView, now: number): LiveStat
   for (const r of store.feed) {
     const age = now - r.at;
     const k = key(r);
-    if (r.interrupted || age > HEAT_MS || !k) continue;
+    if (r.interrupted || age > heatMs || !k) continue;
     for (const id of byKey.get(k) ?? []) {
       if (age <= FOCUS_MS) focus.add(id);
       const l = at(id);
-      l.heat = Math.min(1, l.heat + (1 - age / HEAT_MS) / FULL_HEAT);
+      l.heat = Math.min(1, l.heat + (1 - age / heatMs) / FULL_HEAT);
       if (!r.ok && age < FAIL_FLASH_MS) l.failed = true;
     }
   }

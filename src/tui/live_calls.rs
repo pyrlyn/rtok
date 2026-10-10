@@ -21,6 +21,7 @@ use ratatui::widgets::{Paragraph, Row, Table};
 
 use super::theme::{self, ACCENT, ERR, WARN};
 use super::view::time_of;
+use crate::config::{Config, Graph};
 use crate::web::calls_store::{
     CallsStore, FeedFilter, Finished, Totals, WINDOWS, clock_ms, distinct, filter_feed,
 };
@@ -38,9 +39,14 @@ struct Held {
 /// The pane's state. The clock arrives through [`Self::poll`], like the rest of the TUI state.
 pub(super) struct LiveCalls {
     db_path: PathBuf,
+    graph: Graph,
+    /// The newest event id when the TUI started: the totals count the events above it, read from
+    /// the store when the reader starts, so they do not depend on when the Graph tab was first
+    /// opened.
+    started: Option<i64>,
     /// Started on the first look at the Graph tab, as the web's poller starts on the first
     /// subscribed socket; `None` until then.
-    feed: Option<mpsc::Receiver<CallBatch>>,
+    feed: Option<mpsc::Receiver<(CallBatch, i64)>>,
     latest: CallsStore,
     held: Option<Held>,
     window: usize,
@@ -48,21 +54,34 @@ pub(super) struct LiveCalls {
     now: i64,
 }
 
-/// One thread on the web's reader; it ends when the TUI drops the receiver.
-fn spawn_reader(path: PathBuf) -> Option<mpsc::Receiver<CallBatch>> {
+/// One thread on the web's reader; it ends when the TUI drops the receiver. Batches come with
+/// the time to fold them at: the replay of the calls since `started` carries their own times.
+fn spawn_reader(
+    path: PathBuf,
+    graph: Graph,
+    started: Option<i64>,
+) -> Option<mpsc::Receiver<(CallBatch, i64)>> {
     let (tx, rx) = mpsc::channel();
     std::thread::Builder::new()
         .name("rtok-tui-calls".into())
         .spawn(move || {
             let mut reader = None;
+            let mut since = started;
             loop {
                 // Open before the first sleep: events written while it runs must not be skipped.
                 if reader.is_none() {
-                    reader = Reader::open(&path);
+                    reader = Reader::open(&path, &graph);
+                    if let (Some(r), Some(from)) = (reader.as_mut(), since.take()) {
+                        for item in r.replay(from) {
+                            if tx.send(item).is_err() {
+                                return;
+                            }
+                        }
+                    }
                 }
                 std::thread::sleep(live::POLL);
                 if let Some(batch) = reader.as_mut().and_then(Reader::poll)
-                    && tx.send(batch).is_err()
+                    && tx.send((batch, clock_ms())).is_err()
                 {
                     return;
                 }
@@ -73,11 +92,13 @@ fn spawn_reader(path: PathBuf) -> Option<mpsc::Receiver<CallBatch>> {
 }
 
 impl LiveCalls {
-    pub(super) fn new(db_path: PathBuf) -> Self {
+    pub(super) fn new(cfg: &Config) -> Self {
         Self {
-            db_path,
+            db_path: cfg.core.db_path.clone(),
+            graph: cfg.plugins.graph.clone(),
+            started: live::head_of(&cfg.core.db_path),
             feed: None,
-            latest: CallsStore::default(),
+            latest: CallsStore::with(&cfg.plugins.graph),
             held: None,
             window: 1,
             filter: FeedFilter::default(),
@@ -89,12 +110,13 @@ impl LiveCalls {
     /// Graph tab is up; the reader is not started before that.
     pub(super) fn poll(&mut self, active: bool) {
         if active && self.feed.is_none() {
-            self.feed = spawn_reader(self.db_path.clone());
+            self.feed = spawn_reader(self.db_path.clone(), self.graph.clone(), self.started);
         }
         self.now = clock_ms();
-        let batches: Vec<CallBatch> = self.feed.iter().flat_map(|rx| rx.try_iter()).collect();
-        for batch in &batches {
-            self.latest.fold(batch, self.now);
+        let batches: Vec<(CallBatch, i64)> =
+            self.feed.iter().flat_map(|rx| rx.try_iter()).collect();
+        for (batch, at) in &batches {
+            self.latest.fold(batch, *at);
         }
         self.latest.sweep(self.now);
     }
@@ -139,7 +161,7 @@ impl LiveCalls {
             KeyCode::Char('w') => {
                 self.window = (self.window + 1) % WINDOWS.len();
             }
-            KeyCode::Char('a') => cycle(&mut self.filter.session, feed, |r| Some(&r.session)),
+            KeyCode::Char('a') => cycle(&mut self.filter.caller, feed, |r| Some(&r.caller)),
             KeyCode::Char('t') => cycle(&mut self.filter.tool, feed, |r| Some(&r.tool)),
             KeyCode::Char('o') => cycle(&mut self.filter.project, feed, |r| r.project.as_deref()),
             _ => return false,
@@ -350,7 +372,7 @@ impl LiveCalls {
         let mut lines = self.metric_lines(&t, bars);
         let mut filters = Vec::new();
         for (name, value) in [
-            ("caller [a]", &self.filter.session),
+            ("caller [a]", &self.filter.caller),
             ("tool [t]", &self.filter.tool),
             ("project [o]", &self.filter.project),
         ] {
@@ -375,7 +397,7 @@ impl LiveCalls {
                 time_of(r.at / 1000),
                 r.tool.clone(),
                 r.target.clone().unwrap_or_else(|| "-".into()),
-                r.session.chars().take(8).collect(),
+                r.caller.clone(),
                 r.project.clone().unwrap_or_else(|| "-".into()),
                 result_cell(r),
             ]);
@@ -391,7 +413,7 @@ impl LiveCalls {
                 Constraint::Length(8),
                 Constraint::Length(9),
                 Constraint::Min(10),
-                Constraint::Length(8),
+                Constraint::Length(16),
                 Constraint::Min(8),
                 Constraint::Min(20),
             ],
@@ -589,13 +611,13 @@ mod tests {
         press(&mut app, 'w');
         assert!(
             screen(&app).contains("calls 3 (1 failed)"),
-            "since open sums all"
+            "since start sums all"
         );
     }
 
     #[test]
     fn every_graph_key_in_the_table_is_handled() {
-        let mut live = LiveCalls::new(std::path::PathBuf::new());
+        let mut live = LiveCalls::new(&config());
         // The Graph page also lists the project keys (T476); the pane's rows all name the calls.
         let pane = KEYS
             .iter()
@@ -614,7 +636,7 @@ mod tests {
     fn rows_the_poller_finds_in_the_store_reach_the_pane() {
         let mut cfg = config();
         cfg.tui.tab = "graph".into();
-        let mut live = LiveCalls::new(cfg.core.db_path.clone());
+        let mut live = LiveCalls::new(&cfg);
         live.poll(true);
         // The reader arms itself at the newest event and says nothing when it has, so calls are
         // written until one is seen: whichever lands after the arming reaches the pane.
@@ -635,5 +657,41 @@ mod tests {
             (all.before, all.after),
             (100 * all.calls as i64, 30 * all.calls as i64)
         );
+    }
+
+    #[test]
+    fn the_caller_column_shows_the_name_the_store_gave_else_the_session() {
+        let mut app = graph_app();
+        let mut b = first_batch();
+        b.callers
+            .insert("session-abcdef".into(), "claude 3f9a1c2e".into());
+        app.live_mut().feed_batch(&b, T);
+        let s = screen(&app);
+        assert!(s.contains("claude 3f9a1c2e"), "{s}");
+        let mut other = end("z", 8, 4);
+        other.session = "mcp-1234567".into();
+        app.live_mut().feed_batch(&batch(vec![other], 0), T + 1);
+        assert!(screen(&app).contains("mcp-1234"));
+    }
+
+    /// The pane counts the calls made since the TUI started, even when the Graph tab was opened
+    /// after them.
+    #[test]
+    fn calls_made_before_the_graph_tab_opened_are_counted() {
+        let mut cfg = config();
+        cfg.tui.tab = "graph".into();
+        let mut live = LiveCalls::new(&cfg);
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        for e in [event("early"), end("early", 100, 30)] {
+            store.insert_graph_event(&e).unwrap();
+        }
+        live.poll(true);
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        while live.latest.all.calls == 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(100));
+            live.poll(true);
+        }
+        assert_eq!(live.latest.all.calls, 1);
+        assert_eq!(live.latest.feed[0].target.as_deref(), Some("open_index"));
     }
 }

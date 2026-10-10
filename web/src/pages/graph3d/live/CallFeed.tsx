@@ -11,7 +11,7 @@ import { compact, hms } from "../../format";
 import type { Finished } from "../../../api/snapshot.gen";
 import { distinct, type FeedFilter, filterFeed } from "./feedFilter";
 
-const none: FeedFilter = { session: "", tool: "", project: "" };
+const none: FeedFilter = { caller: "", tool: "", project: "" };
 
 /** Failed rows are red and an interrupted one says so; nothing in the feed is clickable. */
 function Cell({ row, children }: { row: Finished; children: ReactNode }) {
@@ -27,12 +27,12 @@ const columns: Column<Finished>[] = [
     },
     { id: "tool", header: "tool", width: "80px", cell: (r) => <Cell row={r}>{r.tool}</Cell> },
     { id: "target", header: "symbol", cell: (r) => <Cell row={r}>{r.target ?? "-"}</Cell> },
-    // The event carries the process's session id; it is the caller until the events name the agent.
+    // The server names the caller from the store's agent and host rows (T329.34), else the session id.
     {
         id: "caller",
         header: "caller",
-        width: "88px",
-        cell: (r) => <Cell row={r}>{r.session.slice(0, 8)}</Cell>,
+        width: "136px",
+        cell: (r) => <Cell row={r}>{r.caller}</Cell>,
     },
     { id: "project", header: "project", cell: (r) => <Cell row={r}>{r.project ?? "-"}</Cell> },
     {
@@ -72,7 +72,7 @@ export function CallFeed({ feed }: { feed: readonly Finished[] }) {
     return (
         <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
-                {pick("session", "caller")}
+                {pick("caller", "caller")}
                 {pick("tool", "tool")}
                 {pick("project", "project")}
             </div>

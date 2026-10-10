@@ -295,8 +295,8 @@ test("a graph call from another process lights its node on the read-only live gr
   await expect(live).toHaveCSS("pointer-events", "none");
   await expect(live).toHaveCSS("cursor", "auto");
 
-  // The stream has no replay, so a call made before the server saw the subscription is lost:
-  // the call is repeated until the first one lands, and each try has one second to light the node.
+  // The server replays the stored events a new subscriber missed, but the call is still repeated
+  // until the first one lands: the poll that reads it runs after the call, not with it.
   await expect(async () => {
     callers(rtok);
     await expect(live.locator("[data-testid=node-live][data-hot]")).toHaveCount(1, {
