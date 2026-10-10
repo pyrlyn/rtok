@@ -10,6 +10,8 @@ import type {
   ClientMessage,
   DiffReport,
   DrillGraph,
+  Export,
+  ExportFile,
   Fixed,
   Plan,
   ServerFrame,
@@ -115,6 +117,21 @@ export function parseFrame(raw: unknown): Frame | null {
       const d = v.diff as Record<string, unknown> | null;
       return d && Array.isArray(d.projects) && typeof v.project === "string"
         ? { type: "diff", project: v.project, diff: d as unknown as DiffReport }
+        : null;
+    }
+    case "export": {
+      const f = v.file as Record<string, unknown> | null;
+      return f &&
+        typeof f.name === "string" &&
+        typeof f.mime === "string" &&
+        typeof f.data === "string"
+        ? { type: "export", file: f as unknown as ExportFile }
+        : null;
+    }
+    case "imported": {
+      const e = v.export as Record<string, unknown> | null;
+      return typeof v.name === "string" && e && Array.isArray(e.projects) && Array.isArray(e.nodes)
+        ? { type: "imported", name: v.name, export: e as unknown as Export }
         : null;
     }
     case "snapshot":

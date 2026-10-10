@@ -108,6 +108,17 @@ describe("parseFrame", () => {
     expect(parseFrame('{"type":"diff","project":"3","diff":null}')).toBeNull();
   });
 
+  test("an export frame needs the file's name, type and data; an imported one the parsed lists", () => {
+    const file = { name: "a.json", mime: "application/json", data: "e30=" };
+    expect(parseFrame(JSON.stringify({ type: "export", file }))).toEqual({ type: "export", file });
+    expect(parseFrame('{"type":"export","file":{"name":"a.json","mime":"x"}}')).toBeNull();
+    const doc = { schema: "rtok.graph.v1", projects: [], nodes: [] };
+    const imported = { type: "imported", name: "a.json", export: doc };
+    expect(parseFrame(JSON.stringify(imported))).toEqual(imported);
+    expect(parseFrame('{"type":"imported","name":"a.json","export":{"nodes":[]}}')).toBeNull();
+    expect(parseFrame('{"type":"imported","export":{"projects":[],"nodes":[]}}')).toBeNull();
+  });
+
   test("a graph frame needs its project and both lists", () => {
     const graph = { project: 3, name: "rtok", root: "/r", state: "ok", nodes: [], edges: [] };
     expect(parseFrame(JSON.stringify({ type: "graph", graph }))).toEqual({ type: "graph", graph });

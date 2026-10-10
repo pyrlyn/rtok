@@ -67,7 +67,10 @@
   One `Export` (the `rtok.graph.v1` types, schema committed at `docs/schemas/rtok.graph.v1.schema.json` and checked
   by `committed_schema_is_current`) is built from `projects::row` and the store's def/ref scans, or read back by
   `export::read`; every output is a function of it, so the import never touches the registry or the index. Redaction is on by default and always on for MCP. A change to an export type is a schema
-  change: regenerate the file and, when a field changes meaning, bump the schema id.
+  change: regenerate the file and, when a field changes meaning, bump the schema id. The graph page's Export menu
+  (T329.40) is the `ExportRequest` message: `page_file` calls the same `render` as the CLI (redacted, pretty) and the
+  frame carries the bytes as base64; an opened file is the `ImportRequest` text, parsed by `export::parse` with no
+  `Runtime` opened.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and
