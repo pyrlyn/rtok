@@ -5,9 +5,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { drillServer } from "../../../api/sampleDrill";
+import { BIG, drillServer } from "../../../api/sampleDrill";
 import { project } from "../../../api/sampleRows";
 import type { Snapshot } from "../../../api/snapshot.gen";
+import type { Connect, Frame } from "../../../api/ws";
 import { richSnapshot } from "../../fixtures";
 import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
@@ -91,6 +92,40 @@ describe("live graph", () => {
         expect(await card("fallbacks")).toContain("11 capped");
     });
 
+    test("calls and tokens saved each get a sparkline named for the window's span", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        const feed = [done("a", 10, 4)];
+        const spark = { span_ms: 300_000, calls: [0, 2, 1], saved: [0, 8, 4] };
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({ feed, windows: LABELS.map((l) => windowOf(l, feed, { spark })) }),
+            }),
+        );
+        expect(await screen.findByRole("img", { name: "calls over the last 5 min" })).toBeTruthy();
+        expect(screen.getByRole("img", { name: "tokens saved over the last 5 min" })).toBeTruthy();
+    });
+
+    test("a call on a project outside the scope is marked in the feed and does not light the canvas", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        const svg = await canvas();
+        const feed = [
+            done("b", 10, 4, { project: "pyrlyn" }),
+            done("a", 10, 4, { project: "ketch" }),
+        ];
+        act(() => w.frame({ type: "calls", calls: view({ feed }) }));
+        const table = await screen.findByRole("table", { name: "graph calls" });
+        // The snapshot selects rtok, which links nothing here, so ketch is outside too.
+        await waitFor(() => expect(within(table).getAllByText("outside scope")).toHaveLength(2));
+        expect(svg.querySelectorAll("[data-testid=heat]")).toHaveLength(0);
+        act(() => w.frame({ type: "calls", calls: view({ feed: [done("c", 10, 4)] }) }));
+        await waitFor(() => expect(svg.querySelectorAll("[data-testid=heat]")).toHaveLength(1));
+        expect(within(table).queryByText("outside scope")).toBeNull();
+    });
+
     test("a failed call is red in the feed", async () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
@@ -161,14 +196,14 @@ describe("live graph", () => {
         act(() =>
             w.frame({
                 type: "calls",
-                calls: view({ running: [running("a", { project: "ketch" })] }),
+                calls: view({ running: [running("a")] }),
             }),
         );
         await waitFor(() => expect(height()).toBe(140));
         act(() =>
             w.frame({
                 type: "calls",
-                calls: view({ feed: [done("a", 10, 4, { project: "ketch" })] }),
+                calls: view({ feed: [done("a", 10, 4)] }),
             }),
         );
         // The call has ended; the next one-second tick finds it older than the hold.
@@ -311,6 +346,25 @@ describe("split", () => {
         expect(localStorage.getItem(SPLIT_KEY)).toBe("0.55");
         fireEvent.doubleClick(bar);
         expect(bar.getAttribute("aria-valuenow")).toBe("50");
+    });
+
+    test("calls on nodes the cap folded away are counted on the +N more group", async () => {
+        const big = {
+            ...snap,
+            projects: [project(1, "rtok", { selected: true }), project(3, BIG)],
+        };
+        let push: (f: Frame) => void = () => {};
+        const served = drillServer(big);
+        const connect: Connect = (h) => ((push = h.onFrame), served(h));
+        mount(connect, "/graph?p=3");
+        const svg = await canvas();
+        await waitFor(() =>
+            expect(svg.querySelectorAll("[data-testid=node-live]").length).toBeGreaterThan(100),
+        );
+        const hidden = running("a", { project: BIG, target: "fn_599" });
+        act(() => push({ type: "calls", calls: view({ running: [hidden] }) }));
+        const list = await screen.findByRole("list", { name: "folded calls" });
+        expect(within(list).getByText(/^\+\d+ more · 1 folded$/)).toBeTruthy();
     });
 
     test("the live graph follows the drilled project", async () => {

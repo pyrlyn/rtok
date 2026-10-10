@@ -9,7 +9,7 @@ admin moved to React/Vite on `main` and ships `web/src/styles/tokens.css`, which
 ## Conflicts
 
 rtok surfaces compared (read-only): web admin `web/` on branch `design/web-admin` (draft PR #447,
-not live), rtok docs site `site/` (deployed to listepo.github.io/rtok), the rtok page on the
+not live), rtok docs site `site/`, the rtok page on the
 listepo project site (listepo/landing `main`, deployed), the TUI `src/tui/theme.rs`, and the v3-B
 brand pack. Rule: prefer what is live in production; where a live value is not actually rendered,
 or fails WCAG AA, take the AA-passing value and say so. Paths are relative to each repo;

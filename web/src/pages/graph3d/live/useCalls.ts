@@ -23,6 +23,7 @@ export const emptyWindow: WindowView = {
   files_touched: 0,
   projects_hit: 0,
   latency: null,
+  spark: { span_ms: 0, calls: [], saved: [] },
 };
 
 /** The server totals "since open" last, so its count is every call the stream has seen. */

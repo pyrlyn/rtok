@@ -10,6 +10,7 @@ import { Select } from "../../../ui/Select";
 import { compact, hms } from "../../format";
 import type { Finished } from "../../../api/snapshot.gen";
 import { distinct, type FeedFilter, filterFeed } from "./feedFilter";
+import { outsideScope } from "./scope";
 
 const none: FeedFilter = { session: "", tool: "", project: "" };
 
@@ -18,7 +19,8 @@ function Cell({ row, children }: { row: Finished; children: ReactNode }) {
     return <span className={row.ok ? "" : "text-delta-fg"}>{children}</span>;
 }
 
-const columns: Column<Finished>[] = [
+/** The project column also says when a call crossed out of the scope; the canvas ignores such a call. */
+const columnsFor = (scope: ReadonlySet<string> | null): Column<Finished>[] => [
     {
         id: "time",
         header: "time",
@@ -34,7 +36,21 @@ const columns: Column<Finished>[] = [
         width: "88px",
         cell: (r) => <Cell row={r}>{r.session.slice(0, 8)}</Cell>,
     },
-    { id: "project", header: "project", cell: (r) => <Cell row={r}>{r.project ?? "-"}</Cell> },
+    {
+        id: "project",
+        header: "project",
+        cell: (r) => (
+            <Cell row={r}>
+                {r.project ?? "-"}
+                {outsideScope(scope, r.project) && (
+                    <>
+                        {" "}
+                        <Pill tone="warn">outside scope</Pill>
+                    </>
+                )}
+            </Cell>
+        ),
+    },
     {
         id: "result",
         header: "result",
@@ -52,8 +68,15 @@ const columns: Column<Finished>[] = [
     },
 ];
 
-export function CallFeed({ feed }: { feed: readonly Finished[] }) {
+export function CallFeed({
+    feed,
+    scope,
+}: {
+    feed: readonly Finished[];
+    scope: ReadonlySet<string> | null;
+}) {
     const [filter, setFilter] = useState(none);
+    const columns = useMemo(() => columnsFor(scope), [scope]);
     const rows = useMemo(() => filterFeed(feed, filter), [feed, filter]);
     const pick = (key: keyof FeedFilter, label: string) => (
         <Select

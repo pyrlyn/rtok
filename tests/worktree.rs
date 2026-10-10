@@ -1758,7 +1758,8 @@ fn mcp_worktree_adopt_binds_a_host_made_worktree_for_the_linked_agent() {
 
 /// T289.3: `adopt` from a post-create script has no agent. The one live agent of the pool's host
 /// whose cwd is the repository takes the worktree; none, two, or a lone agent of another host
-/// bind nothing and say so, and a pool without a post-create script still needs an agent.
+/// park a claim for the next agent (T289.5), and a pool without a post-create script still needs
+/// an agent.
 #[test]
 fn adopt_without_an_agent_binds_the_one_live_agent_of_the_pools_host() {
     let tmp = rtok::testutil::tmp_dir("worktree-adopt-unattended");
@@ -1789,7 +1790,23 @@ fn adopt_without_an_agent_binds_the_one_live_agent_of_the_pools_host() {
         assert!(err.contains(why), "{err}");
     };
 
-    refused(&wt("none"), "no live cursor agent");
+    let parks = |dir: &Path| {
+        let out = adopt(dir);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(String::from_utf8_lossy(&out.stderr).contains("pending"));
+        assert!(
+            store
+                .pending_worktrees()
+                .unwrap()
+                .iter()
+                .any(|(p, _)| *p == stored_claim_path(dir))
+        );
+    };
+    parks(&wt("none"));
     let mine = store
         .register_agent(host("cursor"), "cur-1", None, Some(cwd), None)
         .unwrap();
@@ -1811,12 +1828,13 @@ fn adopt_without_an_agent_binds_the_one_live_agent_of_the_pools_host() {
         store.open_worktree_claims().unwrap(),
         [(stored_claim_path(&wt("one")), mine)]
     );
-    refused(&tmp.join(".kilo/worktrees/t9-k"), "no live kilo agent");
+    parks(&tmp.join(".kilo/worktrees/t9-k"));
     refused(&tmp.join("elsewhere"), "no agent to bind");
 
     store
         .register_agent(host("cursor"), "cur-2", None, Some(cwd), None)
         .unwrap();
-    refused(&wt("two"), "2 live cursor agents");
+    parks(&wt("two"));
     assert_eq!(store.open_worktree_claims().unwrap().len(), 1);
+    assert_eq!(store.pending_worktrees().unwrap().len(), 3);
 }

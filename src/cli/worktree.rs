@@ -40,7 +40,7 @@ pub(super) enum WorktreeCmd {
     /// Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
     /// pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With
     /// no agent (a post-create script) the one live agent of that host in the repository takes
-    /// it
+    /// it; with none or several the claim waits for the next agent that adopts or starts there
     Adopt {
         /// The worktree, or a directory inside it; defaults to the current directory
         path: Option<PathBuf>,
@@ -182,6 +182,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             } else {
                 println!("{}", done.path.display());
             }
+            if done.pending {
+                crate::log::stderr_ln(
+                    "pending: no single agent matched; the next agent to adopt or start a session in this worktree takes it",
+                );
+            }
 
             Ok(())
         }
@@ -248,6 +253,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                     .context("--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
+                pending: crate::worktree::ops::pending_paths(&cfg),
             };
             let outcomes = gc::run(&std::env::current_dir()?, &policy, yes)?;
             if json {

@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true # a host-integration author needs no newer toolchain than mise.toml
 readme = "README.md"
 repository.workspace = true
-homepage = "https://pyrlyn.github.io/landing/rtok/"
 description = "The rtok agent-host contract: reversible, idempotent installs for `rtok agent setup <host>`"
 license = "Apache-2.0"
 categories = ["development-tools"]

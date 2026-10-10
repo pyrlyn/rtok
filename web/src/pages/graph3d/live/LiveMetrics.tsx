@@ -2,15 +2,44 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import type { CallsView } from "../../../api/snapshot.gen";
+import { useMemo } from "react";
+import type { CallsView, WindowView } from "../../../api/snapshot.gen";
 import { Chip } from "../../../ui/Chip";
 import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
+import { Sparkline } from "../../../ui/Sparkline";
 import { compact, fmt, pct } from "../../format";
 import { emptyWindow } from "./useCalls";
 
 const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
 const millis = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+
+const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
+
+/** A sparkline of the server's slots (T329.32); the TUI draws the same series. */
+function Trend({
+    spark,
+    values,
+    what,
+}: {
+    spark: WindowView["spark"];
+    values: number[];
+    what: string;
+}) {
+    const slot = spark.span_ms / Math.max(1, values.length);
+    const x = useMemo(
+        () => values.map((_, i) => `${seconds((values.length - i) * slot)} ago`),
+        [values, slot],
+    );
+    return (
+        <Sparkline
+            values={values}
+            x={x}
+            label={`${what} over the last ${minutes(spark.span_ms)}`}
+            name={what}
+        />
+    );
+}
 
 /**
  * The server computes every number (T484), from `summary` and the `Measurement` samples of the end
@@ -78,6 +107,7 @@ export function LiveMetrics({
                     value={fmt(t.calls)}
                     tone={t.failed ? "warn" : "default"}
                     sub={`${fmt(t.failed)} failed`}
+                    viz={<Trend spark={t.spark} values={t.spark.calls} what="calls" />}
                 />
                 <Kpi
                     label="latency p50"
@@ -104,6 +134,7 @@ export function LiveMetrics({
                     value={compact(saved)}
                     tone="saved"
                     sub={t.before ? pct(saved / t.before, 0) : "-"}
+                    viz={<Trend spark={t.spark} values={t.spark.saved} what="tokens saved" />}
                 />
             </div>
             {view.running.length > 0 && (

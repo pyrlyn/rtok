@@ -332,6 +332,18 @@ export default function Scene2D({
                         >
                             {n.label}
                         </text>
+                        {lit && lit.folded > 0 && (
+                            <text
+                                y={n.radius + 8}
+                                textAnchor="middle"
+                                fontSize={6}
+                                fill="currentColor"
+                                className="pointer-events-none select-none font-mono"
+                                data-testid="folded"
+                            >
+                                +{lit.folded}
+                            </text>
+                        )}
                     </g>
                 );
             })}

@@ -219,7 +219,9 @@ fn needs_quotes(s: &str) -> bool {
         )
 }
 
-#[allow(dead_code)]
+/// The round-trip oracle for `encode` (the plugin's lossless rule); no runtime path reads TOON
+/// back, so it, `unescape_quoted_cell` and `decode_cell` are compiled for tests only.
+#[cfg(test)]
 fn decode(toon: &str) -> Option<Value> {
     let (header, body) = toon.split_once('\n')?;
     let s = header.trim().strip_suffix(':')?;
@@ -246,6 +248,7 @@ fn decode(toon: &str) -> Option<Value> {
     Some(Value::Array(rows))
 }
 
+#[cfg(test)]
 fn unescape_quoted_cell(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -270,7 +273,7 @@ fn unescape_quoted_cell(s: &str) -> String {
     out
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn decode_cell(s: &str) -> Value {
     if s.is_empty() {
         return Value::Null;
