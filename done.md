@@ -10595,6 +10595,14 @@ Result (2026-10-10, Claude Code / sonnet-5.5): `rtok agents install|uninstall <h
 
 Deviations: the creator's "none or several: a claim with no agent completed later" half is split into T289.5 (store table, migration, hook step; it would have put T289.3 over the 500-line limit). T289.5 is the next free id under T289.
 
+### T289.5. Pending claim for `rtok worktree adopt` from a post-create script when no single agent matches
+
+Split from T289.3 (500-line limit). Done means: when `adopt` runs with no agent (a host's post-create script) and no live agent of the pool's host, or several, has the repository as cwd, it stores a claim with no agent and no git lock, and the next `worktree_adopt` (MCP or CLI) or `SessionStart` hook for a session whose cwd is inside that worktree completes it (creator decision 2026-10-10). Today `adopt` fails with a message that names the missing or ambiguous agents.
+
+Check: adopt with zero and with two seeded agents stores the claim; `worktree_adopt` and the hook complete it; a gc run does not treat a pending claim as an orphan.
+
+Result (2026-10-10, Claude Code / sonnet-5.5): `claim::bind_unattended` now parks the claim when zero or several live agents of the pool's host work in the repository: a row in the new `worktree_pending` table (migration 0045; `Store::add_pending_worktree`, `pending_worktrees`, `take_pending_worktree`), no agent, no git lock, the project auto-added, `Adopted.pending` (`"pending": true` in `--json`, a stderr note on the CLI). A separate table instead of a nullable `worktree_claims.agent_id`: that column is NOT NULL (relaxing it needs a SQLite table rebuild) and four readers assume every open claim names an agent. `claim::remember` (so `adopt` by CLI or MCP `worktree_adopt`, and `worktree add`) takes the pending row of the worktree it binds; `claim::complete_pending` is the `SessionStart` hook step: the deepest pending worktree around the session's cwd goes to that session's agent with the stored task, with no git call and every error ignored. `worktree remove` drops the parked row; `gc::Policy.pending` holds a parked worktree like a live agent's (a finished task still goes once idle). Docs updated in en, ru and uk; the `adopt` help text is unchanged. Tests: store (2), `gc::decide` (3 cases), `tests/worktree_pending.rs` (zero and two seeded agents park, one binds, the hook and an explicit `adopt` complete, `gc` keeps), `tests/worktree.rs` adjusted. Gates (focused, the disk was too tight for `just check`): `just fmt-check` and `just lint` clean; nextest on the touched binaries (`worktree` 375, `worktree_pending`, `agents_worktrees`, `agents_post_create`, `surface_parity`, `docs_structure`, `hook_fail_open`, `hooks::` and `worktree::gc`) all passed; `rtok-store` lib 173 passed.
+
 ### T290. Docs, skill and one cross-host test for agents and worktrees
 
 Depends on T282–T289 (lands last; T159 may land after it and adds its own rows).
