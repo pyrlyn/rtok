@@ -549,7 +549,7 @@ map_rank   = "refs"                   # SessionStart map order: refs = reference
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI
-backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
+backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)
 lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
 backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 watch      = "off"                    # off | notify: background re-index inside `rtok mcp` (P8d)
@@ -760,12 +760,15 @@ default_model = ""
 `backend = "tags"` (по умолчанию) отвечает из индекса tree-sitter. `"lsp"` направляет `symbol` / `callers` /
 `impact` / `outline` / `explore` через языковой сервер из `PATH` и отдаёт ответ tags, когда сервер
 ответить не может. `"auto"` выбирает режим для каждого проекта и языка: сервер, если для языка проекта
-он установлен, иначе tags, и каждый ответ сообщает, какой режим ответил. `text` появится в T329.10 и до
-тех пор отклоняется.
+он установлен, иначе tags, а если ни одна грамматика не разбирает проект — текстовый поиск, и каждый
+ответ сообщает, какой режим ответил. `"text"` (T329.10) закрепляет простой текстовый поиск: шаблоны со
+границами слов для определений и упоминаний по файлам, которые обходит инструмент `search`, внутри
+процесса (`rg`, `grep` и `ssh` не запускаются), без графа вызовов, поэтому `dead` и цепочки `to` в
+`impact` отвечают «not available in text mode».
 
 `backend_by_language` переопределяет `backend` для одного языка, который определяется по файлу-маркеру
-проекта: `rust`, `c`, `typescript`, `dart`, `go`, `python`, `javascript` (`go = "tags"` оставляет Go на
-индексе, пока остальные работают в `auto`). `lsp_timeout_ms` (по умолчанию 40000) — сколько может длиться
+проекта: `rust`, `c`, `typescript`, `dart`, `go`, `python`, `javascript`, `java`, `ruby`, `php`,
+`elixir`, `swift` (`go = "tags"` оставляет Go на индексе, пока остальные работают в `auto`). `lsp_timeout_ms` (по умолчанию 40000) — сколько может длиться
 одно ожидание сервера, прежде чем запрос откатится на tags. Пошаговая настройка для Rust (rust-analyzer) и
 Dart (Dart SDK) и формат ответа `auto`: `docs/lsp.md`.
 

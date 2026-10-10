@@ -151,6 +151,14 @@ const LANGS: &[(&str, &str, Option<Server>)] = &[
     ("go.mod", "go", None),
     ("pyproject.toml", "python", None),
     ("package.json", "javascript", None),
+    // T329.10: languages with neither a server nor a grammar, named so that
+    // `backend_by_language` can pin them to `text`.
+    ("pom.xml", "java", None),
+    ("build.gradle", "java", None),
+    ("Gemfile", "ruby", None),
+    ("composer.json", "php", None),
+    ("mix.exs", "elixir", None),
+    ("Package.swift", "swift", None),
 ];
 
 pub(crate) fn language_of(root: &Path) -> Option<&'static str> {

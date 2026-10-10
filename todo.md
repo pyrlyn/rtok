@@ -18,7 +18,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
-- T329.10. Graph text-search backend (in-process)
 - T329.11. Graph capability cache: one probe per project until the process restarts
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`

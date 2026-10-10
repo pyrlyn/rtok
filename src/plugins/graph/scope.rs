@@ -20,7 +20,7 @@ use super::{
     blast, callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous,
     format_affected, git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots,
     index, index_for, is_test_path, lsp, lsp_none_answer, mode_of, outline_in, projects, rel_of,
-    reverse_call_chain, stale_banner, symbol_filtered, tests_json, via_of, with_stale,
+    reverse_call_chain, stale_banner, symbol_filtered, tests_json, text, via_of, with_stale,
     without_mode_line,
 };
 use crate::store::Store;
@@ -106,15 +106,15 @@ enum Plan {
     Tags,
     /// `backend = "lsp"`: the server answers the first project only (T376).
     LspFirst,
-    /// `auto` with a server installed for some project: each project asks for itself.
+    /// `auto` with a server installed for some project, or a project answered by text search
+    /// (T329.10): each project asks for itself.
     PerProject,
 }
 
 fn plan(cx: &Ctx, scope: &[Member]) -> Plan {
-    if scope
-        .iter()
-        .any(|m| mode_of(cx, &m.root) == Mode::Auto && lsp::usable(&m.root))
-    {
+    if scope.iter().any(|m| {
+        text::applies(cx, &m.root) || (mode_of(cx, &m.root) == Mode::Auto && lsp::usable(&m.root))
+    }) {
         Plan::PerProject
     } else if mode_of(cx, &scope[0].root) == Mode::Lsp {
         Plan::LspFirst
@@ -557,10 +557,21 @@ type DeadByProject<'a> = Vec<(&'a Member, Vec<DeadRow>)>;
 /// dead; one only a linked project references stays live, as `callers` counts that project's call
 /// sites. The rows stay per project, so a symbol is still reported where it is defined.
 fn dead_by_project<'a>(cx: &Ctx, scope: &'a [Member]) -> Result<(DeadByProject<'a>, String)> {
-    let (mut done, notes) = fan_out(scope, |m| {
+    // A text-mode project has no reference edges to judge by, so it says so and lists nothing.
+    let texty: Vec<&Member> = scope
+        .iter()
+        .filter(|m| text::applies(cx, &m.root))
+        .collect();
+    let (mut done, mut notes) = fan_out(scope, |m| {
         walkable(m)?;
+        if texty.iter().any(|t| t.root == m.root) {
+            return Ok(Vec::new());
+        }
         super::dead_rows(cx, &m.root)
     })?;
+    for m in texty {
+        notes.push_str(&format!("{}dead: {}\n", label(m), text::UNAVAILABLE));
+    }
     let keys: Vec<String> = done.iter().map(|(m, _)| index::canon(&m.root)).collect();
     if keys.len() > 1 {
         for (i, (_, rows)) in done.iter_mut().enumerate() {
@@ -627,6 +638,9 @@ pub fn dead(cx: &Ctx, scope: &[Member]) -> Result<String> {
         }
     }
     if body.is_empty() {
+        if done.iter().all(|(m, _)| text::applies(cx, &m.root)) {
+            return Ok(notes);
+        }
         let names: Vec<&str> = done.iter().map(|(m, _)| m.name.as_str()).collect();
         return Ok(format!("{notes}no dead code in [{}]", names.join("], [")));
     }

@@ -28,6 +28,10 @@
 - `impact` prints the flat `depth  path  scope` listing while it fits `impact_tokens`; past it `blast.rs`
   groups files (depth, stored file rank, refs), prints 3 lines each and ends in the cut line.
   `--all` / MCP `all` and `impact_tokens = 0` keep the flat listing. The LSP backend is not budgeted.
+- T329.10 `text.rs`: the last-resort backend (`backend = "text"`, or `auto` with no server and no
+  grammar file). It searches in process with `ignore` + `regex` through `read::search::text_files`
+  and never starts a program (`tests/deps.rs` pins it). Answers are headed `(text)`; `dead` and the
+  `to` chains of `impact` say "not available in text mode". Its `text.*` rows record time, not a saving.
 - The plugin never writes SQL (D13). Storage is `src/store/symbols.rs` (`symbol_*` methods).
 - `symbol` takes `name` or `names`. One name is the old text; several are headed `= name`
   and capped together. `symbol` / `callers` / `impact` / `explore` prepend
