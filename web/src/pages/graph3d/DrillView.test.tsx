@@ -94,10 +94,14 @@ describe("drill-down page", () => {
         const run = await screen.findByRole("button", { name: /^run/ });
         fireEvent.click(run);
         fireEvent.click(run);
-        await waitFor(() => expect(search(router)).toMatchObject({ fp: "src/plugins/graph/drill.rs", fn: "run" }));
+        await waitFor(() =>
+            expect(search(router)).toMatchObject({ fp: "src/plugins/graph/drill.rs", fn: "run" }),
+        );
         fireEvent.click(await screen.findByRole("button", { name: "depth 2" }));
         await waitFor(() => expect(search(router).d).toBe(2));
-        await waitFor(() => expect(asked.at(-1)).toMatchObject({ depth: 2, focus: { name: "run" } }));
+        await waitFor(() =>
+            expect(asked.at(-1)).toMatchObject({ depth: 2, focus: { name: "run" } }),
+        );
     });
 
     test("an external node opens the linked project with the symbol focused", async () => {
@@ -108,7 +112,9 @@ describe("drill-down page", () => {
             expect(search(router)).toMatchObject({ p: "2", fp: "src/lib.rs", fn: "open_index" }),
         );
         expect(search(router).x).toBeUndefined();
-        await waitFor(() => expect(asked.at(-1)).toMatchObject({ project: "2", focus: { name: "open_index" } }));
+        await waitFor(() =>
+            expect(asked.at(-1)).toMatchObject({ project: "2", focus: { name: "open_index" } }),
+        );
         const crumbs = within(await screen.findByRole("navigation", { name: "breadcrumb" }));
         expect(crumbs.getByText("ketch")).toBeTruthy();
     });
@@ -133,7 +139,9 @@ describe("drill-down page", () => {
         expect(asked[0]!.limit).toBe(500);
         fireEvent.click(more);
         // 600 buttons in happy-dom take a while to commit.
-        await waitFor(() => expect(screen.queryByText("+100 more")).toBeNull(), { timeout: 10_000 });
+        await waitFor(() => expect(screen.queryByText("+100 more")).toBeNull(), {
+            timeout: 10_000,
+        });
         expect(asked.at(-1)!.limit).toBe(1000);
         expect((await list()).querySelectorAll("li")).toHaveLength(600);
     }, 20_000);
@@ -141,9 +149,9 @@ describe("drill-down page", () => {
     test("an unindexed project says how to index it, and a missing one is hollow", async () => {
         const first = serve();
         const a = mountRouted(first.connect, "/graph?p=5");
-        expect((await screen.findByText("Not indexed yet")).closest("[role=status]")!.textContent).toMatch(
-            /rtok graph index --project 5/,
-        );
+        expect(
+            (await screen.findByText("Not indexed yet")).closest("[role=status]")!.textContent,
+        ).toMatch(/rtok graph index --project 5/);
         a.view.unmount();
         const second = serve();
         mountRouted(second.connect, "/graph?p=4");
@@ -152,7 +160,9 @@ describe("drill-down page", () => {
     });
 
     test("pending files give a partial banner and a refusal gives an error", async () => {
-        const partial = snapshot(rows({ 1: { index: { files: 4, indexed_at: 1, pending: 2, rows: 9, watch: "on" } } }));
+        const partial = snapshot(
+            rows({ 1: { index: { files: 4, indexed_at: 1, pending: 2, rows: 9, watch: "on" } } }),
+        );
         mountRouted(serve(partial).connect, "/graph?p=1");
         expect((await screen.findByText(/Partial: some files changed/)).textContent).toBeTruthy();
         cleanup();
@@ -178,7 +188,9 @@ describe("drill-down page", () => {
         act(() => w.frame(drillReply(graphs(w.sent)[0]!, snapshot().projects!)));
         await list();
 
-        const moved = snapshot(rows({ 1: { index: { files: 5, indexed_at: 2, pending: 0, rows: 400, watch: "on" } } }));
+        const moved = snapshot(
+            rows({ 1: { index: { files: 5, indexed_at: 2, pending: 0, rows: 400, watch: "on" } } }),
+        );
         act(() => w.push(moved));
         await waitFor(() => expect(asks()).toBe(2));
         // The first frame is still on screen while the second is in flight.
@@ -211,9 +223,13 @@ describe("opening a project from the overview", () => {
         fireEvent.doubleClick(gone);
         expect(search(router).p).toBeUndefined();
         fireEvent.contextMenu(gone);
-        expect((await screen.findByRole("menuitem", { name: "Open" })).hasAttribute("disabled")).toBe(true);
+        expect(
+            (await screen.findByRole("menuitem", { name: "Open" })).hasAttribute("disabled"),
+        ).toBe(true);
         fireEvent.keyDown(document, { key: "Escape" });
-        fireEvent.doubleClick(nodes.find((n) => n.getAttribute("aria-label")!.startsWith("ketch"))!);
+        fireEvent.doubleClick(
+            nodes.find((n) => n.getAttribute("aria-label")!.startsWith("ketch"))!,
+        );
         await waitFor(() => expect(search(router).p).toBe("2"));
     });
 });

@@ -101,7 +101,10 @@ export const MoreOnALargeProject: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         const more = await canvas.findByRole("button", { name: "+100 more" }, READY);
-        await waitFor(() => expect(canvas.getAllByTestId("node-2d").length).toBeGreaterThan(400), READY);
+        await waitFor(
+            () => expect(canvas.getAllByTestId("node-2d").length).toBeGreaterThan(400),
+            READY,
+        );
         await userEvent.click(more);
         await waitFor(() => expect(canvas.queryByText("+100 more")).toBeNull(), READY);
     },
@@ -110,7 +113,11 @@ export const MoreOnALargeProject: Story = {
 export const ListView: Story = {
     decorators: [viewing("list"), withData(drillServer(snapshot()), at(1, ["src/store.rs"]))],
     play: async ({ canvasElement }) => {
-        const list = await within(canvasElement).findByRole("list", { name: "symbol graph" }, READY);
+        const list = await within(canvasElement).findByRole(
+            "list",
+            { name: "symbol graph" },
+            READY,
+        );
         await expect(within(list).getAllByRole("button").length).toBeGreaterThan(4);
     },
 };
@@ -118,7 +125,9 @@ export const ListView: Story = {
 export const NotIndexed: Story = {
     decorators: [viewing("2d"), withData(drillServer(snapshot()), at(5))],
     play: async ({ canvasElement }) =>
-        expect(await within(canvasElement).findByText("Not indexed yet", undefined, READY)).toBeVisible(),
+        expect(
+            await within(canvasElement).findByText("Not indexed yet", undefined, READY),
+        ).toBeVisible(),
 };
 
 export const MissingDirectory: Story = {

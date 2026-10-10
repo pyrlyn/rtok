@@ -113,7 +113,8 @@ export function DrillView({
     const click = (id: string) => {
         const n = graph?.nodes.find((x) => x.id === id);
         if (!n) return;
-        if (n.kind === "external") return go(openSymbol(n.project, { path: n.path, name: n.label }));
+        if (n.kind === "external")
+            return go(openSymbol(n.project, { path: n.path, name: n.label }));
         setSelected(id);
         // The second click on the selected node is the step into it.
         if (id !== selected) return;
@@ -176,7 +177,11 @@ export function DrillView({
                     list={<NodeList graph={graph} select={click} selected={selected} />}
                     toolbar={
                         state.focus && (
-                            <div role="group" aria-label="depth" className="flex items-center gap-1">
+                            <div
+                                role="group"
+                                aria-label="depth"
+                                className="flex items-center gap-1"
+                            >
                                 {Array.from({ length: DEPTH_MAX }, (_, i) => i + 1).map((d) => (
                                     <Chip
                                         key={d}

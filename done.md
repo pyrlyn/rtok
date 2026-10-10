@@ -2959,6 +2959,8 @@ Check: `drill` unit tests on a temp store (files with a call summed to 2, an exp
 Deviations: the page half (breadcrumb, URL state, expand and focus on the canvas, side panel, search box, "+N more" control, live re-request under `watch`, docs) is T329.22, because the two together were over the 500-line cap. The text-mode banner and the dead-symbol toggle are not here: only the tags backend answers today (T329.9), and the toggle needs the scoped dead list on the page. A file with parse errors is not marked (the index keeps no parse status); `stale` marks files changed since the last index run.
 
 
+Status: done 2026-10-09 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.
@@ -2975,7 +2977,6 @@ Check: Vitest for the frame parsing, the request queue and the keep-previous beh
 Deviations: the side panel (path and line, signature, callers and callees, editor link) and the search box with its hits are T329.23, because with them the task was over the 500-line cap. There is no "Index now" button: the protocol has no index action, so the empty state shows the command. The text-mode banner waits for T329.9 (only the tags backend answers today). The level-1 move into `SceneView` is moved code, which is why the diff is larger than the net count.
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
-Status: done 2026-10-09 · Model: Claude Code / sonnet-5.5
 
 ## T329.7 — Reference discovery from manifests (Cargo, npm, Go, Python, submodules)
 
