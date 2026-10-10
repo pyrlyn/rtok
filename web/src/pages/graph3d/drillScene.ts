@@ -21,6 +21,8 @@ export interface DrillSceneOptions {
   /** Project id to root, for the colour of a node that belongs to a linked project. */
   roots: ReadonlyMap<number, string>;
   selected: string | null;
+  /** Projects with an alert (T329.25): their outlines in this frame and the edges to them are badged. */
+  alerted?: ReadonlySet<number>;
 }
 
 /**
@@ -31,6 +33,10 @@ export interface DrillSceneOptions {
 export function drillScene(g: DrillGraph, o: DrillSceneOptions): Scene {
   const dirs = [...new Set(g.nodes.map((n) => dirOf(n.path)))].sort();
   const ids = new Set(g.nodes.map((n) => n.id));
+  const alert = (project: number) => o.alerted?.has(project) ?? false;
+  const down = new Set(
+    g.nodes.filter((n) => n.kind === "external" && alert(n.project)).map((n) => n.id),
+  );
   const nodes = g.nodes.map((n) => ({
     id: o.idOf(n.id),
     label: n.stale ? `⚠ ${n.label}` : n.label,
@@ -46,6 +52,7 @@ export function drillScene(g: DrillGraph, o: DrillSceneOptions): Scene {
     inScope: true,
     dim: false,
     group: dirs.indexOf(dirOf(n.path)),
+    ...(down.has(n.id) && { alert: true }),
   }));
   const edges = g.edges
     .filter((e) => ids.has(e.from) && ids.has(e.to))
@@ -58,6 +65,7 @@ export function drillScene(g: DrillGraph, o: DrillSceneOptions): Scene {
       width: EDGE_WIDTH * (1 + Math.min(2, Math.log10(e.count || 1))),
       reason: e.count > 1 ? `×${e.count}` : null,
       inScope: true,
+      ...(down.has(e.to) && { alert: true }),
     }));
   return {
     nodes,

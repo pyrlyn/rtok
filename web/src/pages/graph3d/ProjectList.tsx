@@ -49,6 +49,11 @@ export function ProjectList({
                             />
                             <b className="truncate">{n.label}</b>
                             <Pill tone={s.tone}>{s.label}</Pill>
+                            {n.alert && (
+                                <Pill tone="fail" dot>
+                                    alert
+                                </Pill>
+                            )}
                             {n.inScope && !n.selected && <Pill tone="info">in scope</Pill>}
                             <span className="ml-auto text-2xs text-fg-muted">{n.origin}</span>
                             {out.length > 0 && (

@@ -5,7 +5,7 @@
 // Offline data source (`?sample`) and the snapshot fixture shared by Storybook, Vitest and
 // offline e2e. Typed as `Snapshot`, so a schema change breaks `tsc` here instead of drifting.
 import type { Connect, Connection } from "./ws";
-import { call, plugin, project, stats } from "./sampleRows";
+import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
 import { drillReply } from "./sampleDrill";
@@ -183,7 +183,32 @@ export const sampleSnapshot: Snapshot = {
       selected: true,
       links: [{ kind: "manual", name: "ketch", reason: "shared store", to: 2 }],
     }),
-    project(2, "ketch", { state: "stale", index: null }),
+    project(2, "ketch", {
+      state: "stale",
+      index: null,
+      links: [
+        { kind: "manual", name: "docs-site", reason: null, to: 3 },
+        ...[4, 5, 6].map((to) => ({
+          kind: "auto" as const,
+          name: `share-${to - 3}`,
+          reason: "shared deps",
+          to,
+        })),
+      ],
+    }),
+    // One project whose directory is gone, and three on one share that stopped answering: the
+    // page shows the second as a single grouped alert.
+    project(3, "docs-site", {
+      index: null,
+      missing: true,
+      state: "missing",
+      alerts: [alertRow("missing", "docs-site", "the directory no longer exists")],
+    }),
+    ...[1, 2, 3].map((n) =>
+      project(n + 3, `share-${n}`, {
+        alerts: [alertRow("unreachable", `share-${n}`, "/Volumes/share did not answer in 2 s")],
+      }),
+    ),
   ],
   hosts: hostsText,
   logs: [
