@@ -20,6 +20,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # anyhow: the capability traits return `Result` and a plugin author already has it in tree
 anyhow = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [lints]
 workspace = true

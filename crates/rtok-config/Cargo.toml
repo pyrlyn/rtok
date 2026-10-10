@@ -21,6 +21,7 @@ thiserror = { workspace = true } # the config crate's public error enum
 similar = { workspace = true } # uncoloured unified diff until a surface registers paint
 globset = { workspace = true } # `agents.junk.exclude` must compile
 url = { workspace = true } # `proxy.lanes.*.upstream` is an http(s) URL or empty
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 rstest = { workspace = true }

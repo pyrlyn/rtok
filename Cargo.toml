@@ -1,7 +1,7 @@
 # The binary crate is the workspace root (T23.1, D25). `rtok-plugin-sdk` is the published
 # plugin contract; `fuzz` is the nightly-only cargo-fuzz crate and stays out of `cargo test`.
 [workspace]
-members = ["crates/rtok-agent-sdk", "crates/rtok-config", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest"]
+members = ["crates/rtok-agent-sdk", "crates/rtok-config", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest", "workspace-hack"]
 exclude = ["fuzz"]
 
 [workspace.package]
@@ -205,6 +205,7 @@ trash = { version = "5.2.9", default-features = false, features = ["coinit_apart
 jiff = "0.2" # T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger
 resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts"], optional = true } # T329.31: `rtok graph export --format png` rasterises the drawn SVG; pure Rust, no raster-images/memmap-fonts
 base64 = { version = "0.23.1", optional = true } # T329.40: the graph page receives a PNG export inside a text frame; already in the lock
+workspace-hack = { version = "0.1", path = "workspace-hack" }
 
 [dev-dependencies]
 rtok-store = { path = "crates/rtok-store", features = ["test-util"] } # store test helpers; off the library build

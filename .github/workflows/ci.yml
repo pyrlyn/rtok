@@ -289,3 +289,22 @@ jobs:
       - run: just docs-check
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
+  # Fails when workspace-hack drifts from the dependency graph (cargo-hakari
+  # comes from mise.toml). Own job, so the required check names stay as they are.
+  hakari:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+        with:
+          # Only what the check needs, not every tool in mise.toml.
+          install_args: rust cargo:cargo-hakari
+      - run: cargo hakari generate --diff
+      - run: cargo hakari manage-deps --dry-run
+      - run: cargo hakari verify
