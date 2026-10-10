@@ -103,6 +103,13 @@ export type ModuleState = "installed" | "not_installed" | "not_supported";
  */
 export type ToolSearchState = ("enabled" | "disabled") | "unknown";
 /**
+ * The mode that answers a project's requests.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Chosen".
+ */
+export type Chosen = "lsp" | "tags";
+/**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "LinkKind".
  */
@@ -899,6 +906,11 @@ export interface Stats {
  * via the `definition` "ProjectRow".
  */
 export interface ProjectRow {
+  /**
+   * Which graph mode works here, as the last process to answer for it recorded (T329.11);
+   * absent until a request under `lsp` or `auto` has checked.
+   */
+  backend?: Capability | null;
   created_at: number;
   id: number;
   index: ProjectIndex | null;
@@ -910,6 +922,36 @@ export interface ProjectRow {
   root: string;
   selected: boolean;
   state: string;
+}
+/**
+ * One project's record, as stored and as `rtok graph projects --json` prints it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Capability".
+ */
+export interface Capability {
+  backend: Chosen;
+  checked_at: number;
+  /**
+   * The `backend` value the record was made under; another value makes it stale.
+   */
+  config: string;
+  /**
+   * The project's language when it has a marker file.
+   */
+  language: string | null;
+  /**
+   * When the health check retries a failed record; absent while the server answers.
+   */
+  next_probe_at: number | null;
+  /**
+   * Why the server does not answer; absent while it does.
+   */
+  reason: string | null;
+  /**
+   * The language has a language server at all, installed or not.
+   */
+  server: boolean;
 }
 /**
  * `graph status` numbers for one project; absent for a missing root, which has nothing
