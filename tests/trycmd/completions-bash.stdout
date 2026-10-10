@@ -1472,7 +1472,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__agents__subcmd__junk__subcmd__clear)
-            opts="-h --yes --json --agent --kind --include --older-than --session-days --trash --config --help"
+            opts="-h --yes --json --agent --kind --include --older-than --session-days --trash --items --sort --min-size --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1495,6 +1495,18 @@ _rtok() {
                     return 0
                     ;;
                 --session-days)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --items)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --sort)
+                    COMPREPLY=($(compgen -W "size last-used path" -- "${cur}"))
+                    return 0
+                    ;;
+                --min-size)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -1566,13 +1578,25 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__agents__subcmd__junk__subcmd__list)
-            opts="-h --json --bytes --all --session-days --config --help"
+            opts="-h --json --bytes --all --session-days --items --sort --min-size --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --session-days)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --items)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --sort)
+                    COMPREPLY=($(compgen -W "size last-used path" -- "${cur}"))
+                    return 0
+                    ;;
+                --min-size)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

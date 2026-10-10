@@ -49,6 +49,10 @@ pub struct Capability {
     pub checked_at: i64,
     /// When the health check retries a failed record; absent while the server answers.
     pub next_probe_at: Option<i64>,
+    /// The server was installed and working, then broke. Unlike a server that was never there,
+    /// this is what the health check raises "backend down" for.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub down: bool,
 }
 
 /// Why the language server cannot be used.
@@ -142,6 +146,7 @@ fn measure(root: &Path, config: &str, probe: impl FnOnce(&Path) -> Probe) -> Cap
         config: config.to_string(),
         checked_at: at,
         next_probe_at: (backend == Chosen::Tags).then_some(at + RECHECK_S),
+        down: false,
     }
 }
 
@@ -181,6 +186,7 @@ impl State {
         rec.reason = Some(reason);
         rec.checked_at = now();
         rec.next_probe_at = Some(rec.checked_at + RECHECK_S);
+        rec.down = true;
         write_mirror(cx, key, rec);
     }
 }
@@ -226,9 +232,15 @@ pub(crate) fn server_ready(
     lock(&slot).current(cx, &key, root, config, probe).backend == Chosen::Lsp
 }
 
+/// The record this process holds for `root`. The health check retries only these: another
+/// process keeps its own copy in memory, which a write to the store would not change.
+pub(crate) fn held(root: &Path) -> Option<Capability> {
+    let slot = Arc::clone(lock(&CACHE).get(&index::canon(root))?);
+    lock(&slot).rec.clone()
+}
+
 /// Check one project again and replace its record. The only caller besides a `backend` change
 /// is the health check (T329.17); a request never calls it.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn reprobe(
     cx: &Ctx,
     root: &Path,

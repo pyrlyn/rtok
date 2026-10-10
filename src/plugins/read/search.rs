@@ -65,6 +65,25 @@ pub(crate) fn skip_git(e: &ignore::DirEntry) -> bool {
     e.file_name() != ".git"
 }
 
+/// The regular files a walk reaches whose bytes are valid UTF-8 text, as `(path, text)`, read one
+/// at a time. T55.5: a file over `max_bytes` is skipped before it is read, so a multi-GB blob
+/// cannot spike MCP memory. Shared by `search` and the graph text backend (T329.10).
+pub(crate) fn text_files(
+    walk: WalkBuilder,
+    max_bytes: u64,
+) -> impl Iterator<Item = (PathBuf, String)> {
+    walk.build()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+        .filter_map(move |e| {
+            if fs::metadata(e.path()).ok()?.len() > max_bytes {
+                return None;
+            }
+            let text = fs::read_to_string(e.path()).ok()?;
+            Some((e.into_path(), text))
+        })
+}
+
 /// `path:line: snippet` rows, at most `max` (default `plugins.read.search_max`).
 pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<String> {
     let cfg = cx.plugin_config::<crate::config::Read>("read");
@@ -82,31 +101,15 @@ pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<S
     let re = Regex::new(pattern).or_else(|_| Regex::new(&regex::escape(pattern)))?;
     let base = canonical_base(&cwd);
     let mut hits = Vec::new();
-    for entry in WalkBuilder::new(&root)
-        .hidden(false)
-        .filter_entry(skip_git)
-        .build()
-    {
-        if hits.len() >= cap {
+    let mut walk = WalkBuilder::new(&root);
+    walk.hidden(false).filter_entry(skip_git);
+    let mut files = text_files(walk, cfg.search_max_bytes);
+    // Checked before the next file is read, so a full result set never costs another read.
+    while hits.len() < cap {
+        let Some((path, text)) = files.next() else {
             break;
-        }
-        let Ok(entry) = entry else {
-            continue;
         };
-        if !entry.file_type().is_some_and(|t| t.is_file()) {
-            continue;
-        }
-        // T55.5: skip before reading so a multi-GB blob cannot spike MCP memory.
-        let Ok(meta) = fs::metadata(entry.path()) else {
-            continue;
-        };
-        if meta.len() > cfg.search_max_bytes {
-            continue;
-        }
-        let Ok(text) = fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        let rel = display_rel(entry.path(), &root, &base);
+        let rel = display_rel(&path, &root, &base);
         for (i, line) in text.lines().enumerate() {
             if hits.len() >= cap {
                 break;

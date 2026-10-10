@@ -36,6 +36,7 @@ pub mod diff;
 pub mod drill;
 pub mod events;
 pub mod follow;
+pub mod health;
 pub mod index;
 pub mod lsp;
 pub mod projects;
@@ -44,6 +45,7 @@ pub mod resolve;
 pub mod review;
 pub mod scope;
 pub mod status;
+pub mod text;
 pub mod walk;
 pub mod watch;
 
@@ -231,6 +233,8 @@ pub(crate) enum Mode {
     Lsp,
     /// Per project and language: server first, tags second, and the answer says which spoke.
     Auto,
+    /// T329.10: plain text search, no index and no server (`text.rs`).
+    Text,
 }
 
 /// The `backend` value that governs the project at `root`: its language's
@@ -247,11 +251,12 @@ pub(crate) fn backend_name(cx: &Ctx, root: &Path) -> String {
 }
 
 impl Mode {
-    /// A value the config schema refuses (`text` until T329.10) reads as `Tags`, the safe answer.
+    /// A value the config schema refuses reads as `Tags`, the safe answer.
     fn named(name: &str) -> Self {
         match name {
             "lsp" => Mode::Lsp,
             "auto" => Mode::Auto,
+            "text" => Mode::Text,
             _ => Mode::Tags,
         }
     }
@@ -262,9 +267,9 @@ pub(crate) fn mode_of(cx: &Ctx, root: &Path) -> Mode {
     Mode::named(&backend_name(cx, root))
 }
 
-/// The text after the line that names the mode (`(lsp)`, `(tags)`, `(tags; lsp: <reason>)`).
+/// The text after the line that names the mode (`(lsp)`, `(text)`, `(tags)`, `(tags; lsp: <reason>)`).
 pub(crate) fn without_mode_line(text: &str) -> &str {
-    if text.starts_with("(lsp)\n") || text.starts_with("(tags") {
+    if text.starts_with("(lsp)\n") || text.starts_with("(text)\n") || text.starts_with("(tags") {
         text.split_once('\n').map_or(text, |(_, rest)| rest)
     } else {
         text
@@ -312,6 +317,37 @@ fn tags_kind(tool: &str) -> &'static str {
     }
 }
 
+fn text_kind(tool: &str) -> &'static str {
+    match tool {
+        "symbol" => "text.symbol",
+        "callers" => "text.callers",
+        "outline" => "text.outline",
+        "explore" => "text.explore",
+        _ => "text.impact",
+    }
+}
+
+/// T329.10: the text backend's door, in front of [`lsp_or_tags`]. When `text::applies`, `text`
+/// `searched` answers headed `(text)` and records a `text.<tool>` row; otherwise `rest` answers as
+/// before. A root the search cannot read is the one error the answer is allowed to be (plan T329
+/// 6a, "when no mode works"), so it names itself instead of falling to an index that is not there.
+fn text_or(
+    cx: &Ctx,
+    root: &Path,
+    tool: &'static str,
+    searched: impl FnOnce() -> Result<String>,
+    rest: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+    if !text::applies(cx, root) {
+        return rest();
+    }
+    let t0 = std::time::Instant::now();
+    let body = searched().map_err(|e| anyhow::anyhow!("no graph backend available: {e:#}"))?;
+    let out = format!("(text)\n{}", cap(cx, body)?);
+    record_mode_row(cx, text_kind(tool), t0, &out);
+    Ok(out)
+}
+
 /// T376, T329.9, T329.11: the one door the five tools take. `Lsp` and `Auto` ask the project's
 /// capability record (`capability`) whether the language server answers: it is checked on the
 /// first request only, and a server that is missing, not ready or dead gives the tags answer
@@ -344,7 +380,8 @@ fn door(
 ) -> Result<String> {
     let name = backend_name(cx, root);
     let mode = Mode::named(&name);
-    if mode == Mode::Tags {
+    // `Text` never gets here: `text_or` answers it first.
+    if matches!(mode, Mode::Tags | Mode::Text) {
         return tags();
     }
     let auto = mode == Mode::Auto;
@@ -545,13 +582,21 @@ pub fn symbol(cx: &Ctx, root: &Path, name: &str) -> Result<String> {
 
 /// Filtered `symbol`: a non-empty `filter` keeps only matching definitions (T52.1).
 pub fn symbol_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<String> {
-    lsp_or_tags(
+    text_or(
         cx,
         root,
         "symbol",
-        &[name],
-        || lsp::symbol(cx, root, name, filter),
-        || symbol_tags(cx, root, name, filter),
+        || text::symbol(cx, root, name, filter),
+        || {
+            lsp_or_tags(
+                cx,
+                root,
+                "symbol",
+                &[name],
+                || lsp::symbol(cx, root, name, filter),
+                || symbol_tags(cx, root, name, filter),
+            )
+        },
     )
 }
 
@@ -839,13 +884,21 @@ pub fn callers(cx: &Ctx, root: &Path, name: &str) -> Result<String> {
 
 /// Filtered `callers`: a non-empty `filter.path` keeps one subtree (T52.1).
 pub fn callers_filtered(cx: &Ctx, root: &Path, name: &str, filter: &Filter) -> Result<String> {
-    lsp_or_tags(
+    text_or(
         cx,
         root,
         "callers",
-        &[name],
-        || lsp::callers(cx, root, name, filter),
-        || callers_tags(cx, root, name, filter),
+        || text::callers(cx, root, name, filter),
+        || {
+            lsp_or_tags(
+                cx,
+                root,
+                "callers",
+                &[name],
+                || lsp::callers(cx, root, name, filter),
+                || callers_tags(cx, root, name, filter),
+            )
+        },
     )
 }
 
@@ -908,13 +961,21 @@ pub fn impact_filtered(
     filter: &Filter,
     to: Option<&str>,
 ) -> Result<String> {
-    lsp_or_tags(
+    text_or(
         cx,
         root,
         "impact",
-        &[name],
-        || with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?),
-        || impact_tags(cx, root, name, depth, filter, to),
+        || text::impact(cx, root, name, depth, filter, to),
+        || {
+            lsp_or_tags(
+                cx,
+                root,
+                "impact",
+                &[name],
+                || with_stale(cx, root, lsp::impact(cx, root, name, depth, filter, to)?),
+                || impact_tags(cx, root, name, depth, filter, to),
+            )
+        },
     )
 }
 
@@ -1072,6 +1133,10 @@ pub struct DeadRow {
 /// [`dead_candidates`]. The shared computation behind `dead()`'s text and `graph dead
 /// --json` — CLI calls that are expected to walk the tree once for a current answer.
 pub fn dead_rows(cx: &Ctx, root: &Path) -> Result<Vec<DeadRow>> {
+    // T329.10: a text search has no reference edges, so "unreferenced" would be a guess.
+    if text::applies(cx, root) {
+        anyhow::bail!("dead: {}", text::UNAVAILABLE);
+    }
     index_for(cx, root)?;
     dead_candidates(cx, root)
 }
@@ -1156,6 +1221,9 @@ fn has_test_attr(above: &[String]) -> bool {
 /// `dead()`: [`dead_rows`] as `path:line kind name` lines (T52.4), capped for hook /
 /// CLI text output. `graph dead --json` (T230) prints the same rows uncapped instead.
 pub fn dead(cx: &Ctx, root: &Path) -> Result<String> {
+    if text::applies(cx, root) {
+        return Ok(format!("(text)\ndead: {}", text::UNAVAILABLE));
+    }
     let rows = dead_rows(cx, root)?;
     if rows.is_empty() {
         return Ok(format!("no dead code in {}", root.display()));
@@ -1586,19 +1654,33 @@ fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
     } else {
         None
     };
-    lsp_or_tags(
+    text_or(
         cx,
         root,
         "outline",
-        &[],
+        || text::outline(cx, abs.as_deref().unwrap_or(Path::new(path))),
         || {
-            let abs = abs.as_deref().unwrap_or(Path::new(path));
-            with_stale(cx, root, lsp::outline(cx, root, &abs.to_string_lossy())?)
-        },
-        || {
-            let text =
-                crate::plugins::read::read_with(cx, &crate::fs::HostFs, root, path, "map", None)?;
-            with_stale(cx, root, cap(cx, text)?)
+            lsp_or_tags(
+                cx,
+                root,
+                "outline",
+                &[],
+                || {
+                    let abs = abs.as_deref().unwrap_or(Path::new(path));
+                    with_stale(cx, root, lsp::outline(cx, root, &abs.to_string_lossy())?)
+                },
+                || {
+                    let text = crate::plugins::read::read_with(
+                        cx,
+                        &crate::fs::HostFs,
+                        root,
+                        path,
+                        "map",
+                        None,
+                    )?;
+                    with_stale(cx, root, cap(cx, text)?)
+                },
+            )
         },
     )
 }
@@ -1726,13 +1808,24 @@ pub(crate) fn assemble_named(
 pub fn explore(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<String> {
     let tokens = explore_tokens(query);
     let names: Vec<&str> = tokens.iter().map(String::as_str).collect();
-    lsp_or_tags(
+    text_or(
         cx,
         root,
         "explore",
-        &names,
-        || lsp::explore(cx, root, query, filter),
-        || explore_tags(cx, root, query, filter),
+        || {
+            let mut parts = text::TextExplore::new(cx, root, filter);
+            Ok(assemble_explore(query, filter, &mut parts)?.0)
+        },
+        || {
+            lsp_or_tags(
+                cx,
+                root,
+                "explore",
+                &names,
+                || lsp::explore(cx, root, query, filter),
+                || explore_tags(cx, root, query, filter),
+            )
+        },
     )
 }
 
@@ -2807,7 +2900,7 @@ mod tests {
     /// The language name comes from the marker file; a value the schema refuses reads as tags.
     #[test]
     fn mode_of_reads_the_language_and_distrusts_unknown_values() {
-        let (cx, dir) = auto_runtime("t3299-mode", &[("go", "tags"), ("rust", "text")]);
+        let (cx, dir) = auto_runtime("t3299-mode", &[("go", "tags"), ("rust", "grep")]);
         let ctx = Ctx::new(&cx);
         assert_eq!(mode_of(&ctx, &dir), Mode::Auto);
         fs::write(dir.join("go.mod"), "module x\n").unwrap();
@@ -2818,9 +2911,112 @@ mod tests {
         assert_eq!(mode_of(&ctx, &dir), Mode::Tags);
         assert_eq!(without_mode_line("(tags; lsp: x)\nbody\n"), "body\n");
         assert_eq!(without_mode_line("(lsp)\nbody"), "body");
+        assert_eq!(without_mode_line("(text)\nbody"), "body");
         assert_eq!(
             without_mode_line("(not a mode line)\n"),
             "(not a mode line)\n"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.10: under `auto`, a project with no server and no file a grammar parses is answered by
+    /// text search through every tool, headed `(text)`, and each answer leaves a `text.*` row. A
+    /// project the tags index can parse keeps the `(tags)` answer, and `dead` makes no guess.
+    #[test]
+    fn auto_answers_a_language_with_no_grammar_from_text_search() {
+        let (cx, dir) = auto_runtime("t32910-auto", &[]);
+        fs::write(
+            dir.join("app.rb"),
+            "def greet(name)\n  puts name\nend\n\ndef main\n  greet('x')\nend\n",
+        )
+        .unwrap();
+        let ctx = Ctx::new(&cx);
+        let scope = [scope::Member {
+            name: "web".into(),
+            root: dir.clone(),
+        }];
+        let ask = |tool: &str, args: Value| call(&ctx, tool, &args, &scope).unwrap();
+        let symbol = ask("symbol", json!({"name": "greet"}));
+        assert!(
+            symbol.starts_with("(text)\napp.rb:1 function\ndef greet(name)\n"),
+            "{symbol}"
+        );
+        assert!(ask("callers", json!({"name": "greet"})).starts_with("(text)\napp.rb ×1 (L6)\n"));
+        assert!(ask("impact", json!({"name": "greet"})).starts_with("(text)\n1  app.rb  ×1\n"));
+        let explore = ask("explore", json!({"query": "greet"}));
+        assert!(
+            explore.starts_with("(text)\n= greet\napp.rb:1 function\n"),
+            "{explore}"
+        );
+        let outline = ask("outline", json!({"path": "app.rb"}));
+        assert!(
+            outline.starts_with("(text)\n1 function greet\n5 function main\n"),
+            "{outline}"
+        );
+        assert_eq!(
+            kinds(&cx),
+            [
+                "text.callers",
+                "text.explore",
+                "text.impact",
+                "text.outline",
+                "text.symbol"
+            ]
+        );
+        let dead = dead(&ctx, &dir).unwrap();
+        assert!(dead.contains("dead: not available in text mode"), "{dead}");
+        assert!(dead_rows(&ctx, &dir).is_err());
+        let scoped = scope::dead(&ctx, &scope).unwrap();
+        assert!(scoped.contains("not available in text mode"), "{scoped}");
+        // Text search only wins where nothing parses the project.
+        fs::write(dir.join("lib.rs"), "fn alpha() {}\n").unwrap();
+        let tags = ask("symbol", json!({"name": "alpha"}));
+        assert!(tags.starts_with("(tags)\n"), "{tags}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.10: `backend = "text"` pins text search even where a grammar parses the project, and in a
+    /// scope each project answers through its own mode, labelled.
+    #[test]
+    fn text_pin_and_a_scope_of_mixed_modes() {
+        let (mut c, dir) = crate::testutil::config("t32910-mixed");
+        c.plugins.graph.backend = "auto".into();
+        c.plugins
+            .graph
+            .backend_by_language
+            .insert("ruby".into(), "text".into());
+        let cx = crate::plugin::Runtime::open(c, "t32910-mixed").unwrap();
+        let (web, api) = (dir.join("web"), dir.join("api"));
+        fs::create_dir_all(&web).unwrap();
+        fs::create_dir_all(&api).unwrap();
+        fs::write(web.join("Gemfile"), "").unwrap();
+        fs::write(web.join("app.rb"), "def greet\nend\n").unwrap();
+        fs::write(api.join("lib.rs"), "fn serve() {}\n").unwrap();
+        assert_eq!(lsp::language_of(&web), Some("ruby"));
+        let ctx = Ctx::new(&cx);
+        assert_eq!(mode_of(&ctx, &web), Mode::Text);
+        let scope = [
+            scope::Member {
+                name: "api".into(),
+                root: api.clone(),
+            },
+            scope::Member {
+                name: "web".into(),
+                root: web.clone(),
+            },
+        ];
+        let out = scope::symbol(&ctx, &scope, "greet", &Filter::none()).unwrap();
+        assert!(
+            out.starts_with("[web] (text)\napp.rb:1 function\n"),
+            "{out}"
+        );
+        assert!(!out.contains("(tags)"), "{out}");
+        let both = scope::symbol(&ctx, &scope, "serve", &Filter::none()).unwrap();
+        assert!(both.starts_with("[api] (tags)\n"), "{both}");
+        let dead = scope::dead(&ctx, &scope).unwrap();
+        assert!(
+            dead.contains("[web] dead: not available in text mode"),
+            "{dead}"
         );
         let _ = fs::remove_dir_all(dir);
     }

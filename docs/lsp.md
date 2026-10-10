@@ -105,8 +105,31 @@ own answer; the linked tags traversal runs only when no project of the scope has
 and then each project's mode is one `[name] (tags)` line at the top.
 
 `[plugins.graph.backend_by_language]` pins one language, named by the project's marker file (`rust`,
-`c`, `typescript`, `dart`, `go`, `python`, `javascript`): `go = "tags"` keeps Go on the index while the
-rest use `auto`. `text` is not accepted until T329.10.
+`c`, `typescript`, `dart`, `go`, `python`, `javascript`, `java`, `ruby`, `php`, `elixir`, `swift`):
+`go = "tags"` keeps Go on the index while the rest use `auto`.
+
+## Text search
+
+`backend = "text"` (T329.10), or `auto` for a project with no language server and no file a grammar
+parses (for example a Java or Ruby project), answers by text search. It runs in rtok's own process
+with the walk and ignore rules of the `search` tool (`.gitignore`, the graph's `include` and
+`exclude`, `plugins.read.search_max_bytes`): no `rg`, `grep` or `ssh` is started, and `ssh://` roots
+are not supported. Every answer is headed `(text)`, and one that lists hits ends with a line saying
+it may include comments, strings and same-named symbols.
+
+- `symbol` prints each definition line, `path:line kind`, found by `fn`, `def`, `function`, `func`,
+  `class`, `struct`, `enum`, `trait`, `interface`, `type` and a few more keywords before the whole
+  word. No body is printed, because a text search cannot tell where a definition ends.
+- `callers` prints the files that mention the name outside a definition line, `path xN (Lline)`.
+- `impact` is one level of the same files; `to` chains need call edges and answer "not available in
+  text mode".
+- `outline` lists the definition keywords of one file; `explore` assembles definitions and the
+  one-level impact, with no call paths.
+- `dead` answers "not available in text mode" instead of guessing.
+
+A text answer records a `text.symbol | text.callers | text.impact | text.outline | text.explore`
+measurement row (the time spent, not a saving). A project whose root cannot be read is dropped with
+`no graph backend available: <reason>`.
 
 ## Checked once
 
@@ -123,8 +146,38 @@ page) show it under `backend`: `backend` (`lsp` or `tags`), `language`, `server`
 seconds; the earliest a health check retries a failed record). Changing `backend` or
 `backend_by_language` re-checks only the projects whose value changed. A new process uses a record
 another process wrote until `next_probe_at`, then checks for itself, so restarting rtok after installing
-the server picks it up. Nothing re-checks a running process yet; that is the background health check
-(T329.17).
+the server picks it up. Requests never re-check; the health check below does.
+
+## Health check and alerts
+
+Every process that hosts graph (`rtok mcp`, `rtok web`) runs a light check every
+`[plugins.graph] health_check_interval_s` (60 s; `0` turns it off) over the projects of its scope. It is
+the only code that looks again. Each round it checks that the project root exists, that the manifest
+references of the project point at directories that exist, and the capability record. A server installed
+since the record was made is picked up in that round. A server that broke is tried again after 60 s, then
+120 s, doubling up to 15 minutes; the retry is the same check as the first one (the binary is on `PATH`),
+so the next request is the trial, and a server that fails it is dropped again and the wait keeps growing.
+Only the record the process holds is retried, so an `rtok web` page never overrides an `rtok mcp` session.
+
+A problem raises an alert once two checks in a row have seen it, and an alert clears after two good
+checks, so a brief unmount does not flap (`[plugins.graph] alerts = false` turns alerts off):
+
+| Alert | Raised when |
+| --- | --- |
+| `missing` | the root was deleted or moved (its parent still exists) |
+| `unreachable` | the root or its parent is gone (an unmounted disk), errors, or does not answer a `stat` in 2 s |
+| `backend down` | the language server worked, then broke, and the project answers from tags |
+| `link broken` | a manifest reference (Cargo path, npm `file:`, go `replace`, Python path) names a directory that does not exist |
+
+Alerts of the same kind raised together read as one line ("b, c missing since 14:02 (2 projects)"), and a
+project linked only through others names the chain ("a to b to c: c missing"). A server that is simply not
+installed is not an alert. A project removed from the registry never alerts. When a missing or
+unreachable project returns and the alert clears, it is indexed again.
+
+Alerts are mirrored into the store, so they show in `rtok doctor` (a `graph alerts` section and
+`graph_alerts` in `--json`), in `rtok graph projects --json` (`alerts` per project) and as a `notice:`
+line at the head of a graph tool answer whose scope contains the project ("notice: b missing since 14:02
+(directory does not exist); results exclude b").
 
 ## Without the server
 

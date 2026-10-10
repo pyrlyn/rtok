@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,528 @@
+@@ -0,0 +1,530 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -506,13 +506,15 @@ target/tmp/t60-2-config-init.toml
 +# map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 +# body_lines = 40                       # symbol(): source lines shown per definition
 +# auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
-+# backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
++# backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)
 +# lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
 +# backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 +# watch      = "off"                    # off | notify (P8d): background re-index inside `rtok mcp`
 +# auto_link_references = true           # follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 +# reference_depth = 3                   # reference levels followed from the project (A -> B is 1); reaching it is shown and logged
 +# max_auto_projects = 20                # most projects references may add to the registry; reaching it is shown and logged
++# alerts = true                         # alert when a project in the scope is missing, unreachable, has its backend down or a broken manifest link; shown by rtok doctor, graph projects and graph answers
++# health_check_interval_s = 60          # seconds between health checks in rtok mcp and rtok web (an alert needs two in a row); 0 = off
 +# exclude    = []                       # gitignore-style paths dropped from the walk
 +# include    = []                       # gitignore-style paths forced back in
 +# extensions = {}                       # ext = "grammar" remap for custom suffixes

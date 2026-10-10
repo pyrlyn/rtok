@@ -31,6 +31,30 @@ fn only_store_depends_on_diesel() {
     );
 }
 
+/// T329.10: the graph text backend searches in process (D6, D18). Neither its module nor the walk
+/// it shares with `search` may name a way to start a program, so `rg`, `grep` and `ssh` cannot be
+/// run from it.
+#[test]
+fn graph_text_backend_starts_no_process() {
+    let needles = [
+        "Command",
+        "std::process",
+        "tokio::process",
+        "spawn",
+        "exec(",
+    ];
+    for file in ["src/plugins/graph/text.rs", "src/plugins/read/search.rs"] {
+        let src =
+            std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(file)).unwrap();
+        // The test modules below may build fixtures; only the shipped code is bound.
+        let shipped = src.split("#[cfg(test)]").next().unwrap();
+        let code = strip_comments(shipped);
+        for needle in needles {
+            assert!(!code.contains(needle), "{file} names `{needle}`");
+        }
+    }
+}
+
 /// `ratatui` and `crossterm` render the operator model. They stay in `src/tui/` until a
 /// tui crate exists; the only package that may depend on them until then is `rtok`.
 #[test]

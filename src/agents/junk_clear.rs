@@ -15,6 +15,7 @@ use serde::Serialize;
 
 use super::junk::{self, AGENT_SCAN_LIMIT, Report};
 use super::junk_cache::{GC_VERDICT, RTOK_OWN, SECTION_22, TAG, real};
+use super::junk_items::{self, Row, View};
 use super::junk_kinds::{PACKAGE_LOCKS, held_reason};
 use super::junk_review::EXTRA;
 use super::junk_worktrees::{self, Remover};
@@ -62,6 +63,8 @@ pub struct Filter {
     pub include_review: bool,
     pub older_than: Option<Duration>,
     pub trash: bool,
+    /// Only items at least this big: what the dry run shows is what `--yes` removes (T330.6).
+    pub min_size: u64,
 }
 
 impl Filter {
@@ -70,6 +73,7 @@ impl Filter {
         self.kinds.is_empty()
             && !self.include_review
             && self.older_than.is_none()
+            && self.min_size == 0
             && self.agents.iter().all(|a| a == "rtok")
     }
 
@@ -111,6 +115,10 @@ pub struct Planned {
     pub kind: &'static str,
     pub path: String,
     pub bytes: u64,
+    /// Unix seconds of the newest file in it; `None` when unreadable (T330.6).
+    pub last_used: Option<i64>,
+    /// Why it is junk, as `list` says it.
+    pub reason: String,
     /// In the plan: false for an item left at planning time (a running agent's).
     pub planned: bool,
     /// `clear` (removed, or would be on a dry run) or `skip`.
@@ -186,31 +194,47 @@ pub fn plan(
         f.older_than.is_none_or(old_enough)
     };
     let mut out: Vec<Planned> = Vec::new();
-    let item = |agent, kind, path: &str, bytes, evidence, note: Option<&str>| Planned {
-        agent,
-        kind,
-        path: path.to_string(),
-        bytes,
-        planned: note.is_none(),
-        action: if note.is_none() { "clear" } else { "skip" },
-        note: note.unwrap_or_default().to_string(),
-        failed: false,
-        evidence,
-        real: real(Path::new(path)),
+    let view = View {
+        now,
+        ..View::new(cfg)
+    };
+    let item = |agent, kind, path: &str, bytes, evidence, note: Option<&str>, why: &str| {
+        let (last_used, reason) = junk_items::stamp_planned(kind, evidence, path, why, &view);
+        Planned {
+            agent,
+            kind,
+            path: path.to_string(),
+            bytes,
+            last_used,
+            reason,
+            planned: note.is_none(),
+            action: if note.is_none() { "clear" } else { "skip" },
+            note: note.unwrap_or_default().to_string(),
+            failed: false,
+            evidence,
+            real: real(Path::new(path)),
+        }
     };
     for a in report.agents.iter().filter(|a| f.wants_agent(a.name)) {
         if !a.host {
             let own = junk::scan_with(cfg, retention_days(cfg, f));
             let own = own.iter().filter(|o| f.wants_kind(o.kind, "safe"));
+            let own = own.filter(|o| o.bytes >= f.min_size);
             for o in own.filter(|o| o.kind == "archive" || old(Path::new(&o.path))) {
-                out.push(item(a.name, o.kind, &o.path, o.bytes, RTOK_OWN, None));
+                out.push(item(
+                    a.name, o.kind, &o.path, o.bytes, RTOK_OWN, None, &o.note,
+                ));
             }
         }
         let mut live: Option<bool> = None;
         for i in a.items.iter().filter(|i| i.counted()) {
             // D36 evidence only, whatever else marked the item counted.
             let documented = matches!(i.evidence, SECTION_22 | TAG | RTOK_OWN | EXTRA | GC_VERDICT);
-            if !documented || !f.wants_kind(i.kind, i.class) || !old(Path::new(&i.path)) {
+            if !documented
+                || i.bytes < f.min_size
+                || !f.wants_kind(i.kind, i.class)
+                || !old(Path::new(&i.path))
+            {
                 continue;
             }
             // A path the user named is no more known to tolerate a running agent than §22's.
@@ -218,7 +242,7 @@ pub fn plan(
                 LIVE_KINDS.contains(&i.kind) || matches!(i.evidence, SECTION_22 | EXTRA);
             let busy = a.host && sensitive && *live.get_or_insert_with(|| running(a.name));
             let note = busy.then_some(RUNNING);
-            out.push(item(a.name, i.kind, &i.path, i.bytes, i.evidence, note));
+            out.push(item(a.name, i.kind, &i.path, i.bytes, i.evidence, note, ""));
         }
     }
     // A folder shared with a running agent stays, whichever owner was listed first.
@@ -406,29 +430,17 @@ pub fn summed(items: Vec<Planned>, yes: bool) -> Cleared {
     }
 }
 
-/// The item table, then planned and freed bytes per agent and kind, then the total.
-pub fn to_text(c: &Cleared) -> String {
-    let mut lines = vec![
-        ["action", "agent", "kind", "path", "bytes"]
-            .map(String::from)
-            .to_vec(),
-    ];
-    lines.extend(c.items.iter().map(|p| {
-        let cells = [p.action, p.agent, p.kind, p.path.as_str()].map(String::from);
-        [cells.to_vec(), vec![human_bytes(p.bytes)]].concat()
-    }));
-    let left = || crate::render::Col::left(0);
-    let cols = [left(), left(), left(), left(), crate::render::Col::right(0)];
-    let notes = c.items.iter().map(|p| p.note.as_str());
-    let mut out = crate::worktree::noted_table(&cols, &lines, notes);
-    let mut groups: Vec<(&str, &str)> = c.items.iter().map(|p| (p.agent, p.kind)).collect();
-    groups.dedup();
-    out.push('\n');
-    for (agent, kind) in groups {
+/// Each kind's items as `list` prints them, then planned and freed bytes per agent and kind,
+/// then the total.
+pub fn to_text(c: &Cleared, view: &View) -> String {
+    let rows: Vec<Row> = c.items.iter().map(Row::from).collect();
+    let mut out = String::new();
+    for g in junk_items::groups(rows, view) {
+        out.push_str(&g.lines(view, "  "));
         let of = c
             .items
             .iter()
-            .filter(|p| (p.agent, p.kind) == (agent, kind));
+            .filter(|p| (p.agent, p.kind) == (g.agent, g.kind));
         let planned: u64 = of.clone().filter(|p| p.planned).map(|p| p.bytes).sum();
         let freed: u64 = of
             .filter(|p| c.yes && p.action == "clear")
@@ -443,7 +455,7 @@ pub fn to_text(c: &Cleared) -> String {
         } else {
             format!("{} planned", human_bytes(planned))
         };
-        out.push_str(&format!("{agent} {kind}: {what}\n"));
+        out.push_str(&format!("{} {}: {what}\n", g.agent, g.kind));
     }
     let n = c.items.iter().filter(|p| p.planned).count();
     out.push_str(&match (c.yes, n) {
@@ -503,6 +515,7 @@ mod tests {
     fn report(agents: Vec<AgentJunk>) -> Report {
         Report {
             agents,
+            own: Vec::new(),
             total_bytes: 0,
             freed_default_bytes: 0,
             freed_review_bytes: 0,
@@ -757,7 +770,7 @@ mod tests {
         let c = summed(planned, true);
         assert!(c.failed());
         assert_eq!(c.freed_bytes, 20);
-        let text = to_text(&c);
+        let text = to_text(&c, &View::test(false, false));
         assert!(
             text.contains("claude cache: freed 10 B of 20 B planned"),
             "{text}"
@@ -795,13 +808,16 @@ mod tests {
             SystemTime::now(),
             &idle,
         );
-        let text = to_text(&summed(planned, false));
+        let text = to_text(&summed(planned, false), &View::test(false, false));
         assert!(dir.join("cache/blob").is_file());
         assert!(text.contains("claude cache: 10 B planned"), "{text}");
         assert!(
             text.ends_with("dry run: 1 items, 10 B to free, nothing changed; rerun with --yes\n")
         );
         let none = summed(Vec::new(), true);
-        assert_eq!(to_text(&none).lines().last(), Some("nothing to clear"));
+        assert_eq!(
+            to_text(&none, &View::test(false, false)).lines().last(),
+            Some("nothing to clear")
+        );
     }
 }

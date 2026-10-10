@@ -549,13 +549,15 @@ map_rank   = "refs"                   # SessionStart map order: refs = reference
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI
-backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
+backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)
 lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
 backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 watch      = "off"                    # off | notify: background re-index inside `rtok mcp` (P8d)
 auto_link_references = true           # T329.8: follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 reference_depth = 3                   # T329.8: reference levels followed from the project (A -> B is 1); reaching it is shown and logged
 max_auto_projects = 20                # T329.8: most projects references may add to the registry; reaching it is shown and logged
+alerts = true                         # T329.17: alert when a project in the scope is missing, unreachable, has its backend down or a broken manifest link; shown by rtok doctor, graph projects and graph answers
+health_check_interval_s = 60          # T329.17: seconds between health checks in rtok mcp and rtok web (an alert needs two in a row); 0 = off
 
 [plugins.toon]
 enabled  = true
@@ -759,12 +761,15 @@ the flag is visible in `rtok config show --sources` but has no loader.
 `backend = "tags"` (default) answers from the tree-sitter index. `"lsp"` routes `symbol` / `callers` /
 `impact` / `outline` / `explore` through a language server from `PATH` and gives the tags answer when
 the server cannot answer. `"auto"` chooses per project and language: the server when the project's
-language has one installed, tags otherwise, and every answer says which mode spoke. `text` arrives
-with T329.10 and is refused until then.
+language has one installed, tags otherwise, text search when no grammar parses the project, and every
+answer says which mode spoke. `"text"` (T329.10) pins plain text search: word-boundary patterns for
+definitions and mentions over the files the `search` tool walks, in process (no `rg`, `grep` or `ssh`
+is started), with no call graph, so `dead` and the `to` chains of `impact` answer "not available in
+text mode".
 
 `backend_by_language` overrides `backend` for one language, named by the project's marker file:
-`rust`, `c`, `typescript`, `dart`, `go`, `python`, `javascript` (`go = "tags"` keeps Go on the index
-while the rest use `auto`). `lsp_timeout_ms` (default 40000) is how long one server wait may take
+`rust`, `c`, `typescript`, `dart`, `go`, `python`, `javascript`, `java`, `ruby`, `php`, `elixir`,
+`swift` (`go = "tags"` keeps Go on the index while the rest use `auto`). `lsp_timeout_ms` (default 40000) is how long one server wait may take
 before the request falls back to tags. Setup walkthrough for Rust (rust-analyzer) and Dart (Dart SDK),
 and the `auto` answer format: `docs/lsp.md`.
 
@@ -826,7 +831,7 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 | `worktree whoami` | — | reads `RTOK_AGENT_ID` and `[worktree] root` (T411); no key of its own (`--json` is the reading row) |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: written into the checkout's `.rtok.toml` (T441.5) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | per call (no key): what one task is and which rows one call shows; `[tasks]` picks the adapter and the prefix |
-| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--yes` | per call (no key): what one run lists or removes; `--session-days` is `agents.junk.stale_session_days` for one run; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` have no flag |
+| `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--items`, `--sort`, `--min-size`, `--yes` | per call (no key): what one run lists or removes; `--session-days` is `agents.junk.stale_session_days` for one run; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` have no flag |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, plus `.dirs.<host>` with no flag (`--unpriced` picks the view of one call, `--json` is the reading row) |
 | `agents sessions` | `--all` | (action: also lists ended sessions; live vs idle follows `agents.idle`) |
 | `agents show` | — | resolves an id prefix through the store (T284); live vs idle follows `agents.idle` (`--json` is the reading row) |

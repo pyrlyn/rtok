@@ -126,6 +126,11 @@ const ALLOW_KEYS: &[&str] = &[
     // `agents junk --session-days` (T330.5.2): a one-run override of `agents.junk.stale_session_days`;
     // the flag name differs from the key, so the doc scan sees it as a keyless flag.
     "junk.session_days",
+    // `agents junk list|clear --items --sort --min-size` (T330.6): how one call prints its item
+    // breakdown; `--min-size` on `clear` narrows that run's plan, so it is per-call like the filters.
+    "junk.items",
+    "junk.sort",
+    "junk.min_size",
     // `rtok mcp ping --timeout` (T275.1): one call's wait, default 60s, not a stored setting.
     "mcp.ping.timeout_s",
     // `agents send --all-live` / `agents inbox --unread` (T287): who gets one message and

@@ -809,6 +809,9 @@ _arguments "${_arguments_options[@]}" : /
             (list)
 _arguments "${_arguments_options[@]}" : /
 '--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
+'--items=[Items listed per kind/: a count, /`all/`, or /`0/` for totals only]:N|all:_default' /
+'--sort=[Order of the items in a kind/: /`size/` (largest first), /`last-used/` (longest unused first) or /`path/`]:ORDER:(size last-used path)' /
+'--min-size=[Only items of at least this size (/`10MB/`); on /`clear/` this also limits what /`--yes/` removes]:SIZE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '--bytes[Exact byte counts instead of KB/MB/GB]' /
@@ -824,6 +827,9 @@ _arguments "${_arguments_options[@]}" : /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
 '--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
+'--items=[Items listed per kind/: a count, /`all/`, or /`0/` for totals only]:N|all:_default' /
+'--sort=[Order of the items in a kind/: /`size/` (largest first), /`last-used/` (longest unused first) or /`path/`]:ORDER:(size last-used path)' /
+'--min-size=[Only items of at least this size (/`10MB/`); on /`clear/` this also limits what /`--yes/` removes]:SIZE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
@@ -1215,6 +1221,9 @@ _arguments "${_arguments_options[@]}" : /
             (list)
 _arguments "${_arguments_options[@]}" : /
 '--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
+'--items=[Items listed per kind/: a count, /`all/`, or /`0/` for totals only]:N|all:_default' /
+'--sort=[Order of the items in a kind/: /`size/` (largest first), /`last-used/` (longest unused first) or /`path/`]:ORDER:(size last-used path)' /
+'--min-size=[Only items of at least this size (/`10MB/`); on /`clear/` this also limits what /`--yes/` removes]:SIZE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '--bytes[Exact byte counts instead of KB/MB/GB]' /
@@ -1230,6 +1239,9 @@ _arguments "${_arguments_options[@]}" : /
 '--include=[Also the review kinds]:CLASS:(review)' /
 '--older-than=[Only items not modified for this long (/`7d/`, /`12h/`)]:AGE:_default' /
 '--session-days=[Sessions untouched for more than this many days are old, for this run only]:N:_default' /
+'--items=[Items listed per kind/: a count, /`all/`, or /`0/` for totals only]:N|all:_default' /
+'--sort=[Order of the items in a kind/: /`size/` (largest first), /`last-used/` (longest unused first) or /`path/`]:ORDER:(size last-used path)' /
+'--min-size=[Only items of at least this size (/`10MB/`); on /`clear/` this also limits what /`--yes/` removes]:SIZE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
 '--json[JSON instead of the table]' /
