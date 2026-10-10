@@ -22,6 +22,9 @@ export type ClientMessage =
     }
   | {
       graph: DrillRequest;
+    }
+  | {
+      calls: CallsRequest;
     };
 /**
  * The registry writes the graph page offers; `<project>` is an id or a
@@ -79,6 +82,10 @@ export type ServerFrame =
   | {
       graph: DrillGraph;
       type: "graph";
+    }
+  | {
+      batch: CallBatch;
+      type: "calls";
     };
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -90,6 +97,11 @@ export type DrillEdgeKind = "contains" | "calls" | "implements" | "imports";
  * via the `definition` "DrillNodeKind".
  */
 export type DrillNodeKind = ("file" | "type" | "module" | "function") | "external";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "EventPhase".
+ */
+export type EventPhase = "start" | "progress" | "end";
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ModuleState".
@@ -208,6 +220,13 @@ export interface DrillRequest {
 export interface DrillFocus {
   name: string;
   path: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "CallsRequest".
+ */
+export interface CallsRequest {
+  subscribe: boolean;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -333,6 +352,98 @@ export interface DrillNode {
    * Edge count through the node; the page sizes it by this.
    */
   weight: number;
+}
+/**
+ * What one poll found, as one frame. `summary` counts every event of the poll (including
+ * the ones left out of `events`), so a page that adds summaries up never undercounts a burst.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "CallBatch".
+ */
+export interface CallBatch {
+  /**
+   * Newest last. A call's start and progress events are left out when its end is in the
+   * batch, since the end carries the same call and tool.
+   */
+  events: GraphEvent[];
+  /**
+   * The newest event id the batch covers.
+   */
+  head: number;
+  /**
+   * Events cut because the batch held more than [`MAX_EVENTS`] (the oldest go first).
+   */
+  omitted: number;
+  summary: CallSummary;
+}
+/**
+ * One event of a graph call. `call` ties a call's events together; `ts_ms`, `id` and the
+ * clipping of free text are the store's, so a writer leaves `id` and `ts_ms` at zero.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "GraphEvent".
+ */
+export interface GraphEvent {
+  /**
+   * Estimated tokens of the answer the caller received (end events).
+   */
+  answer_tokens: number | null;
+  /**
+   * `lsp`, `tags` or `text`: the backend that answered (end events).
+   */
+  backend: string | null;
+  call: string;
+  /**
+   * Scope members done and in total (progress and end events).
+   */
+  done: number | null;
+  error: string | null;
+  id: number;
+  /**
+   * Elapsed milliseconds (end events).
+   */
+  ms: number | null;
+  ok: boolean;
+  phase: EventPhase;
+  project: string | null;
+  /**
+   * The call's `graph` measurement rows (end events); empty when the answer was not shortened.
+   */
+  samples: MeasurementSample[];
+  session: string;
+  target: string | null;
+  tool: string;
+  total: number | null;
+  ts_ms: number;
+}
+/**
+ * One `measurements` row of the call, with the columns `rtok stats` sums. Copied from the
+ * table at the call's end, so a page that adds these up gets the report's numbers.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "MeasurementSample".
+ */
+export interface MeasurementSample {
+  after_bytes: number;
+  before_bytes: number;
+  est_after: number;
+  est_before: number;
+  id: number;
+  kind: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "CallSummary".
+ */
+export interface CallSummary {
+  ends: number;
+  est_after: number;
+  /**
+   * Sums of the `samples` of the end events: the `Measurement` columns `rtok stats` adds up.
+   */
+  est_before: number;
+  failed: number;
+  starts: number;
 }
 /**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface

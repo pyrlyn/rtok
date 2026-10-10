@@ -45,14 +45,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
-| T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
 | T329.23 | todo | P2 | 2 | 0% | |
-| T329.25 | todo | P3 | 2 | 0% | |
+| T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -827,11 +826,19 @@ T329 §6a mode 3 and "when no mode works": word-boundary definition and mention 
 Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
 
 
-### T329.15. Graph page: two-part UI with the read-only live graph and live metrics
+### T329.26. Graph page: two-part UI with the read-only live graph and live metrics
 
-T329 §8b: the explorer and the read-only live graph side by side with a splitter, the start/end/progress call events on `/ws` from every process through the store, the live canvas and its metric displays (values from the same `Measurement` rows as `rtok stats`), freeze, window selector and the call feed. Over the size budget on its own; split into data path and display when claimed. Depends on T329.13, T329.14 and T329.22.
+Display half of T329 §8b, split from T329.15 on 2026-10-10 (the data path stayed there). Draws the call events T329.15 puts on `/ws` (`{"type":"calls"}` frames, `CallBatch` in `web/src/api/ws.schema.json`, subscribed with `{"calls":{"subscribe":true}}` only while part 2 is visible):
 
-Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; `just check`.
+- the explorer and the read-only live graph side by side with a splitter (stacked on narrow screens);
+- the live canvas: same layout and colours, no pointer or keyboard input, default cursor, an automatic camera that frames the running call and eases back to an overview, running labels, a heat glow, up to 8 concurrent accents and a "busy" pulse beyond that;
+- the metric displays (now running, tokens sent, without rtok and saved, backend shares, caps, per-tool bars) from the `rows` the events carry, equal to `rtok stats`;
+- freeze and unfreeze that keep exact totals, the 1, 5 and 15 minute and "since start" window selector recomputed from the store, and the call feed (200 rows, filters by agent, tool and project, failed rows in red, interrupted rows marked after a timeout);
+- the empty state "Waiting for graph calls", a rendering batched per animation frame, and the docs in en, ru, uk.
+
+Symbols requested and returned per call are not in the T329.15 events; if the display needs them, add them to the event first. Depends on T329.15, T329.14.
+
+Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 

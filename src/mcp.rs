@@ -760,11 +760,22 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
                     .store
                     .auto_add_project(&root, crate::store::Origin::Mcp, None);
             }
+            // T329.15: the page streams these events from the store; a failed write is ignored.
+            let mut call = crate::plugins::graph::events::Call::start(cx, name, args);
             let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
-            let scope =
-                crate::plugins::graph::scope::resolve(&cx.store, args["project"].as_str(), &cwd)?;
             let answer =
-                crate::plugins::graph::call(&crate::plugin::Ctx::new(cx), name, args, &scope)?;
+                crate::plugins::graph::scope::resolve(&cx.store, args["project"].as_str(), &cwd)
+                    .and_then(|scope| {
+                        call.progress(scope.len());
+                        crate::plugins::graph::call(
+                            &crate::plugin::Ctx::new(cx),
+                            name,
+                            args,
+                            &scope,
+                        )
+                    });
+            call.end(&answer);
+            let answer = answer?;
             // T329.17: a project of the scope that is down is said in the answer being read.
             let notice = crate::plugins::graph::health::notice(cx, args["project"].as_str(), &cwd);
             Ok(match notice {

@@ -11,6 +11,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub use crate::model;
+pub mod live;
 pub mod protocol;
 pub mod spa;
 
@@ -29,7 +30,7 @@ use axum::routing::get;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 
 use crate::config::{Config, validate};
 use crate::plugins::Registry;
@@ -51,6 +52,8 @@ pub struct DashState {
     cfg: Mutex<Config>,
     build: Mutex<BuildSlot>,
     build_fn: BuildFn,
+    /// The graph call events every subscribed socket shares (T329.15).
+    live: Arc<live::LiveCalls>,
 }
 
 impl DashState {
@@ -65,6 +68,7 @@ impl DashState {
             cfg: Mutex::new(cfg),
             build: Mutex::new(BuildSlot::Idle),
             build_fn,
+            live: Arc::new(live::LiveCalls::new()),
         }
     }
 
@@ -73,6 +77,14 @@ impl DashState {
     /// frame (refused `set`) or an `expand` payload frame.
     pub fn inbound(&self, text: &str) -> Option<String> {
         inbound(self, text)
+    }
+
+    /// A copy of the live configuration, taken under its lock.
+    fn config(&self) -> Config {
+        self.cfg
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// The snapshot frame `/ws` sends next, after any accepted `set`.
@@ -321,17 +333,61 @@ pub fn frame(cfg: &Config) -> String {
         .to_string()
 }
 
-async fn socket_loop(mut socket: WebSocket, state: Arc<DashState>) {
+/// The next call-event frame of a subscribed socket; never resolves for one that is not.
+/// A socket that fell behind skips the frames it missed: the page rebuilds totals from the
+/// store, so a gap costs a few rows of the feed and nothing else.
+async fn next_calls(calls: &mut Option<broadcast::Receiver<Arc<str>>>) -> Option<Arc<str>> {
+    let Some(rx) = calls else {
+        return std::future::pending().await;
+    };
     loop {
-        let snap = state.snapshot_shared().await;
-        if socket.send(Message::text(snap)).await.is_err() {
-            break;
+        match rx.recv().await {
+            Ok(frame) => return Some(frame),
+            Err(broadcast::error::RecvError::Lagged(_)) => {}
+            Err(broadcast::error::RecvError::Closed) => return std::future::pending().await,
+        }
+    }
+}
+
+async fn socket_loop(mut socket: WebSocket, state: Arc<DashState>) {
+    let mut calls: Option<broadcast::Receiver<Arc<str>>> = None;
+    // A fixed period, not a sleep per pass: call frames arriving every few hundred
+    // milliseconds must not keep pushing the next snapshot out.
+    let mut tick = tokio::time::interval(Duration::from_secs(2));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut snapshot_due = true;
+    loop {
+        if std::mem::take(&mut snapshot_due) {
+            let snap = state.snapshot_shared().await;
+            if socket.send(Message::text(snap)).await.is_err() {
+                break;
+            }
+            tick.reset();
         }
         tokio::select! {
+            frame = next_calls(&mut calls) => {
+                if let Some(frame) = frame
+                    && socket.send(Message::text(frame.as_ref())).await.is_err()
+                {
+                    break;
+                }
+            }
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Close(_))) | None => break,
                     Some(Ok(Message::Text(text))) => {
+                        if let Some(on) = calls_subscription(&text) {
+                            calls = None;
+                            if on {
+                                let (rx, armed) = state.live.subscribe(&state.config()).await;
+                                if socket.send(Message::text(armed.as_ref())).await.is_err() {
+                                    break;
+                                }
+                                calls = Some(rx);
+                            }
+                            continue;
+                        }
+                        snapshot_due = true;
                         // A registry write can index a project, so it runs off the executor.
                         let st = state.clone();
                         let text = text.to_string();
@@ -349,8 +405,17 @@ async fn socket_loop(mut socket: WebSocket, state: Arc<DashState>) {
                     Some(Err(_)) => break,
                 }
             }
-            _ = tokio::time::sleep(Duration::from_secs(2)) => {}
+            _ = tick.tick() => snapshot_due = true,
         }
+    }
+}
+
+/// `Some(on)` for a call-event subscription message (T329.15), which belongs to the socket and not
+/// to [`inbound`]: it owns the receiver.
+fn calls_subscription(text: &str) -> Option<bool> {
+    match serde_json::from_str::<ClientMessage>(text) {
+        Ok(ClientMessage::Calls { calls }) => Some(calls.subscribe),
+        _ => None,
     }
 }
 
@@ -379,6 +444,8 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
                 .map(|e| message_frame(&format!("{e:#}")));
         }
         Ok(ClientMessage::Set { set }) => set,
+        // Handled by the socket loop, which owns the subscription; a stray one here is a no-op.
+        Ok(ClientMessage::Calls { .. }) => return None,
         Ok(ClientMessage::Doctor { doctor }) => return Some(doctor_reply(state, &doctor)),
         Ok(ClientMessage::Graph { graph }) => {
             let cfg = state
@@ -396,6 +463,9 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
         }
         Err(_) if v.get("graph").is_some() => {
             return Some(message_frame("graph needs a project"));
+        }
+        Err(_) if v.get("calls").is_some() => {
+            return Some(message_frame("calls needs a subscribe flag"));
         }
         Err(_) if v.get("doctor").is_some() => {
             return Some(message_frame("doctor needs an action and a selection"));
