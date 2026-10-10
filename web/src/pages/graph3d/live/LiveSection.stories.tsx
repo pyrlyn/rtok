@@ -4,18 +4,29 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
-import type { Connect, Frame } from "../../../api/ws";
+import { project } from "../../../api/sampleRows";
+import type { Frame, Connect } from "../../../api/ws";
 import { richSnapshot } from "../../fixtures";
 import { withData } from "../../storyData";
 import { batch, end, event } from "./callsFixtures";
 import { LiveSection } from "./LiveSection";
+
+const projects = [
+    project(1, "rtok", {
+        selected: true,
+        links: [{ to: 2, kind: "manual", name: "ketch", reason: null }],
+    }),
+    project(2, "ketch"),
+    project(3, "pyrlyn"),
+];
+const snapshot = { ...richSnapshot, projects };
 
 /** A server that plays `frames` once the page subscribes to the call stream. */
 const streaming =
     (frames: Frame[]): Connect =>
     (h) => {
         h.onState("open");
-        h.onFrame({ type: "snapshot", snapshot: richSnapshot });
+        h.onFrame({ type: "snapshot", snapshot });
         return {
             send: (m) => {
                 if ("calls" in m && m.calls.subscribe)
@@ -27,8 +38,9 @@ const streaming =
     };
 
 const meta = {
-    title: "Pages/Live graph calls",
+    title: "Pages/Live graph",
     component: LiveSection,
+    args: { rows: projects, drill: null },
     decorators: [withData(streaming([]))],
 } satisfies Meta<typeof LiveSection>;
 export default meta;
@@ -36,8 +48,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Waiting: Story = {
     play: async ({ canvasElement }) => {
-        const view = within(canvasElement);
-        await waitFor(() => expect(view.getByText("Waiting for graph calls")).toBeTruthy());
+        await waitFor(() =>
+            expect(within(canvasElement).getByText("Waiting for graph calls")).toBeTruthy(),
+        );
     },
 };
 
@@ -60,6 +73,9 @@ export const Busy: Story = {
         const view = within(canvasElement);
         await waitFor(() => expect(view.getByText("no backend")).toBeTruthy());
         expect(view.getByRole("list", { name: "running calls" })).toBeTruthy();
-        expect(view.getByRole("list", { name: "calls per tool" })).toBeTruthy();
+        await waitFor(() =>
+            expect(canvasElement.querySelectorAll("[data-testid=accent]").length).toBe(2),
+        );
+        expect(canvasElement.querySelectorAll("[data-testid=failed]").length).toBe(1);
     },
 };

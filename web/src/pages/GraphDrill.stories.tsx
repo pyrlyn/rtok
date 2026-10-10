@@ -200,6 +200,7 @@ export const ThreeDDrawsTheShapes: Story = {
             if (!c) throw new Error("no canvas yet");
             return c;
         }, READY);
-        await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), READY);
+        // The explorer shares the row with the live graph, so the stage is half as wide as it was.
+        await waitFor(() => expect(drawn(gl)).toBeGreaterThan(50), READY);
     },
 };

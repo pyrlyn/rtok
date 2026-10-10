@@ -858,6 +858,7 @@ Commands:
   review    Risk-ranked reading list for a git diff (files, untested defs, line ranges)
   diff      What a change did to the graph: symbols changed, added, removed, renamed or moved, with
             callers
+  export    The graph as `rtok.graph.v1` JSON, with home, user name and absolute paths redacted
   affected  Tests that reach files changed in git (`git diff --name-only`)
   help      Print this message or the help of the given subcommand(s)
 
@@ -948,6 +949,23 @@ Options:
       --from <FROM>        Compare from this git ref [default: HEAD]
       --to <TO>            Compare to this git ref; `working` is the working tree [default: working]
       --json               JSON instead of the text answer (whole, not capped)
+      --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
+  -h, --help               Print help
+
+$ rtok graph export --help
+The graph as `rtok.graph.v1` JSON, with home, user name and absolute paths redacted
+
+Usage: rtok graph export [OPTIONS]
+
+Options:
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --level <LEVEL>      `overview` is projects and links; `symbols` adds every symbol and call
+                           [default: overview] [possible values: overview, symbols]
+      --focus <FOCUS>      Only the symbols within `--depth` calls of this one, callers and callees
+      --depth <DEPTH>      Calls to follow from `--focus` [default: 2]
+      --no-redact          Keep absolute paths, the home directory and the user name
+      --from <FROM>        Show a saved export instead of the live graph (read-only)
+  -o, --output <OUTPUT>    Write to this file instead of stdout
       --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
   -h, --help               Print help
 

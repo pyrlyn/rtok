@@ -12,6 +12,8 @@ use std::sync::mpsc;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
+use super::doctor_fix::{DoctorFix, Engine, Keyed};
+use super::projects::{self, Key};
 use crate::config::{Config, validate};
 use crate::model::{self, Snapshot};
 
@@ -36,7 +38,19 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("sessions", "l", "live-only filter"),
     ("skills", "↑/↓", "move selection"),
     ("skills", "n", "never-invoked only"),
+    ("doctor", "f", "fix checklist"),
+    ("doctor", "Space", "select entry"),
+    ("doctor", "k", "keep this copy"),
+    ("doctor", "Enter/y", "apply selected (confirm)"),
     ("config", "/", "filter entries"),
+    ("graph", "↑/↓", "move cursor"),
+    ("graph", "s", "select project"),
+    ("graph", "l", "link to…"),
+    ("graph", "u", "unlink from…"),
+    ("graph", "b", "both ways"),
+    ("graph", "Enter", "pick target"),
+    ("graph", "y", "confirm plan"),
+    ("graph", "n/Esc", "decline"),
 ];
 
 /// The key rows for one page: globals first, then the page's own.
@@ -69,8 +83,12 @@ pub struct App {
     /// live-only filter is on.
     sessions: SessionsState,
     skills: SkillsState,
+    /// The Doctor tab's `doctor --fix` checklist (T478).
+    doctor_fix: DoctorFix,
     /// The Config page's own state (T228): `/` filter text and whether it is capturing.
     config: ConfigState,
+    /// The Graph page's registry cursor and the plan being made (T476).
+    projects: projects::ProjectsState,
     /// Whether the `?` help overlay is up (T60.8).
     help: bool,
     /// The running TUI's model reader: a snapshot parses transcripts and probes the
@@ -193,7 +211,9 @@ impl App {
             calls: CallsState::default(),
             sessions: SessionsState::default(),
             skills: SkillsState::default(),
+            doctor_fix: DoctorFix::new(Engine::machine()),
             config: ConfigState::default(),
+            projects: projects::ProjectsState::default(),
             help: false,
             worker: None,
             requested: 0,
@@ -428,9 +448,44 @@ impl App {
         false
     }
 
+    /// The Graph page's project keys (T476). A confirmed plan is written through the web page's
+    /// own function, then the model is re-read so the table shows what the registry now holds.
+    fn graph_key(&mut self, code: KeyCode) -> bool {
+        let rows = projects::entries(&self.snapshot);
+        match self.projects.key(code, &rows) {
+            Key::Ignored => return false,
+            Key::Handled => {}
+            Key::Write(req, plan) => {
+                let status = match crate::web::project_write(&self.cfg, req) {
+                    // `select` answers with the registry table, which the page already shows.
+                    Ok(_) if plan.starts_with("select ") => format!("{plan}: done"),
+                    Ok(out) => out.trim().lines().collect::<Vec<_>>().join("; "),
+                    Err(e) => format!("{e:#}"),
+                };
+                self.projects.set_status(status);
+                self.request();
+            }
+        }
+        true
+    }
+
+    /// The Graph page's registry rows and the state its keys keep (T476).
+    pub(super) fn projects(&self) -> (Vec<projects::Entry>, &projects::ProjectsState) {
+        (projects::entries(&self.snapshot), &self.projects)
+    }
+
+    pub(super) fn doctor_fix(&self) -> &DoctorFix {
+        &self.doctor_fix
+    }
+
     /// The Config page's filter state: whether `/` is capturing keys, and the filter text.
     pub fn config_filter(&self) -> (bool, &str) {
         (self.config.filtering, self.config.filter.as_str())
+    }
+
+    #[cfg(test)]
+    pub(in crate::tui) fn set_doctor_engine(&mut self, engine: Engine) {
+        self.doctor_fix = DoctorFix::new(engine);
     }
 
     #[cfg(test)]
@@ -587,6 +642,19 @@ impl App {
         }
         if self.page() == "config" && self.config_key(code) {
             return false;
+        }
+        if self.page() == "graph" && self.graph_key(code) {
+            return false;
+        }
+        if self.page() == "doctor" {
+            match self.doctor_fix.key(code, &self.cfg) {
+                Keyed::Pass => {}
+                Keyed::Taken => return false,
+                Keyed::Wrote => {
+                    self.request();
+                    return false;
+                }
+            }
         }
         match code {
             KeyCode::Char('q') | KeyCode::Esc => true,

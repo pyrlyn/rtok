@@ -12,6 +12,8 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod app;
+mod doctor_fix;
+mod projects;
 mod theme;
 mod view;
 
