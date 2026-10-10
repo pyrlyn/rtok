@@ -585,7 +585,7 @@ Plan: `Positions` gains `settled` (set from the layout worker's `Frame.settled`,
 
 Check: the story passes with a 3 s pause before the click and with the layout worker slowed to 60 ms per step; full `vitest --project storybook` green several times, also under 16 busy-loop processes with SwiftShader WebGL; `just js`, `just spa-test`, `tsc --noEmit`.
 
-Result: the story waits for `data-settled` on the 3D canvas; under the old heuristic a 3 s pause before the click failed 2/2 runs, with the fix it passed 3/3 with that pause and the slowed worker; full storybook project 225/225 in 3 runs under load with SwiftShader and 2 runs on the GPU; `just js`, `just spa-test` (423) and `tsc --noEmit` green.
+Result: the story waits for `data-settled` on the 3D canvas; under the old heuristic a 3 s pause before the click failed 2/2 runs, with the fix it passed 3/3 with that pause and the slowed worker; full storybook project 225/225 in 3 runs under load with SwiftShader and 2 runs on the GPU; `useLayout.test.ts` covers `subscribe` and `settled` (it fails without the reset on new topology); `just js`, `just spa-test` and `tsc --noEmit` green.
 
 ### T252. `surface_parity` web test reads the real `~/.claude` history
 
