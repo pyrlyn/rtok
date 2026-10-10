@@ -2998,6 +2998,14 @@ Deviations: the side panel (path and line, signature, callers and callees, edito
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.18 — Graph diff: compare before and after a change
+
+T329 §8e core: `rtok graph diff [--from REF] [--to REF|working] [--project ID] [--json]` and MCP `graph_diff` (the sixth graph tool). The old side is read straight from the git object database (`git ls-tree -r` plus one `git cat-file --batch`), parsed with the index's own tags extractor into in-memory rows; nothing is written and the working tree and the user's index are never touched. Definitions are matched by `(path, name, kind)`; the report lists changed (signature or body hash), removed, renamed (same kind and body once the name is masked, only when unique), moved (same name, kind and body in another path), added, and call edges added and removed. Changed and removed symbols list their callers from the current index through the scope walk (`impact_walk_roots`), so a change in B shows A's call sites. The answer goes through `cap`: the cut line carries an archive id and `expand <id>` pages the rest. An unknown ref is an error naming it. `DefRow` gained `content_hash` and the byte range. The page's Compare mode and the remaining §8e reports are T329.29.
+
+Check: unit tests in `src/plugins/graph/diff.rs` (a signature change in a linked project lists its callers and leaves the tree untouched, body change, rename, ambiguous rename stays remove plus add, moved and untracked file, added and removed, two revisions, errors, cap with archive id paging, json); trycmd `graph diff --help`; `surface_parity`, `config_coverage`, `graph_lsp_gate`; `just check`.
+
+Deviations: the old side is held in memory instead of a temporary index, so there is no temp store to clean up. The MCP surface is now six tools and the description budget went from 150 to 160 tokens (`graph_diff` does not fit in fewer); `README.md`, `docs/comparison.md`, `docs/lsp.md` and `skills/rtok/SKILL.md` still say five tools. The task is over the 500-line cap (about 690 non-test lines in `diff.rs`, plus wiring); `--from-export`, project links, a per-project `--from`, the "changed, not analysed" listing and the page's Compare mode are T329.29.
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:

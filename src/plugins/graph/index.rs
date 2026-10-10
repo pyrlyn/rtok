@@ -351,10 +351,22 @@ fn parse(job: &Job) -> Parsed {
     if job.known.as_deref() == Some(sha.as_str()) {
         return Parsed::Same;
     }
-    match outline::tags_with_extensions(&job.path, &src, &job.extensions) {
-        Ok(hits) => Parsed::Rows(sha, scoped(&src, &hits)),
-        Err(_) => Parsed::Unparsed,
+    match rows_of(&job.path, &src, &job.extensions) {
+        Some(rows) => Parsed::Rows(sha, rows),
+        None => Parsed::Unparsed,
     }
+}
+
+/// The rows an index run stores for `src`; `None` when the grammar fails. Also what the graph
+/// diff (T329.18) reads a git blob with, so the old side of a diff is extracted exactly as the
+/// index extracts a file.
+pub(super) fn rows_of(
+    path: &Path,
+    src: &str,
+    extensions: &std::collections::HashMap<String, String>,
+) -> Option<Vec<Row>> {
+    let hits = outline::tags_with_extensions(path, src, extensions).ok()?;
+    Some(scoped(src, &hits))
 }
 
 /// Parses `jobs` on up to one worker per core and hands each result to `write` on this thread

@@ -20,12 +20,12 @@
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
-- T329.18. Graph diff: compare before and after a change
 - T329.19. Graph health score per project
 - T329.21. Project badges in the graph page lists
 - T329.25. Graph page: alert badges, toasts and the alerts list
 - T329.27. Graph page: read-only live canvas and splitter
 - T329.28. Graph page: live camera, 3D live view and the remaining live displays
+- T329.29. Graph page: Compare mode and the remaining diff reports
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.7. Junk: web card with a "clear safe junk" button
 - T356. Never index `$HOME` or `/` as a graph root

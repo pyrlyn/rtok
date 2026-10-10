@@ -18,6 +18,28 @@ use crate::Result;
 /// SQLite's default bind limit is 999; a name batch stays well under it.
 const NAME_CHUNK: usize = 500;
 
+const DEF_COLUMNS: (
+    symbols::path,
+    symbols::name,
+    symbols::kind,
+    symbols::line,
+    symbols::end_line,
+    symbols::signature,
+    symbols::content_hash,
+    symbols::start_byte,
+    symbols::end_byte,
+) = (
+    symbols::path,
+    symbols::name,
+    symbols::kind,
+    symbols::line,
+    symbols::end_line,
+    symbols::signature,
+    symbols::content_hash,
+    symbols::start_byte,
+    symbols::end_byte,
+);
+
 /// One definition: where it is and the line that declares it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefRow {
@@ -27,12 +49,18 @@ pub struct DefRow {
     pub line: i32,
     pub end_line: i32,
     pub signature: String,
+    /// Sha256 of the definition's bytes (T329.18 compares it between two trees).
+    pub content_hash: String,
+    pub start_byte: i64,
+    pub end_byte: i64,
 }
 
-type DefTuple = (String, String, String, i32, i32, String);
+type DefTuple = (String, String, String, i32, i32, String, String, i64, i64);
 
 impl From<DefTuple> for DefRow {
-    fn from((path, name, kind, line, end_line, signature): DefTuple) -> Self {
+    fn from(
+        (path, name, kind, line, end_line, signature, content_hash, start_byte, end_byte): DefTuple,
+    ) -> Self {
         Self {
             path,
             name,
@@ -40,6 +68,9 @@ impl From<DefTuple> for DefRow {
             line,
             end_line,
             signature,
+            content_hash,
+            start_byte,
+            end_byte,
         }
     }
 }
@@ -64,14 +95,7 @@ impl Store {
             .filter(symbols::is_def.eq(1))
             .filter(symbols::name.ne(""))
             .order((symbols::path.asc(), symbols::line.asc()))
-            .select((
-                symbols::path,
-                symbols::name,
-                symbols::kind,
-                symbols::line,
-                symbols::end_line,
-                symbols::signature,
-            ))
+            .select(DEF_COLUMNS)
             .load(&mut *conn)?;
         Ok(rows.into_iter().map(DefRow::from).collect())
     }
@@ -165,14 +189,7 @@ impl Store {
                 .filter(symbols::root.eq(root))
                 .filter(symbols::is_def.eq(1))
                 .filter(symbols::name.eq_any(chunk))
-                .select((
-                    symbols::path,
-                    symbols::name,
-                    symbols::kind,
-                    symbols::line,
-                    symbols::end_line,
-                    symbols::signature,
-                ))
+                .select(DEF_COLUMNS)
                 .load(&mut *conn)?;
             out.extend(rows.into_iter().map(DefRow::from));
         }
