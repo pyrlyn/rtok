@@ -26,8 +26,8 @@
 - T329.21. Project badges in the graph page lists
 - T329.24. Graph page: show each project's capability record
 - T329.23. Graph drill-down: side panel and search
-- T329.26. Graph page: two-part UI with the read-only live graph and live metrics
-- T329.27. Graph page: live camera, 3D live view and the remaining live displays
+- T329.27. Graph page: read-only live canvas and splitter
+- T329.28. Graph page: live camera, 3D live view and the remaining live displays
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T356. Never index `$HOME` or `/` as a graph root
