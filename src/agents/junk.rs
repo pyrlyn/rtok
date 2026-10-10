@@ -1078,7 +1078,11 @@ mod tests {
         let planned: u64 = scan(&cfg).iter().map(|o| o.bytes).sum();
         assert_eq!(planned, 12);
         assert_eq!(report.freed_default_bytes, planned);
-        let freed: Vec<u64> = report.agents.iter().map(|a| a.freed_default_bytes).collect();
+        let freed: Vec<u64> = report
+            .agents
+            .iter()
+            .map(|a| a.freed_default_bytes)
+            .collect();
         assert!(freed.windows(2).all(|w| w[0] >= w[1]), "{freed:?}");
         let rtok = report.agents.iter().find(|a| a.name == "rtok").unwrap();
         assert_eq!((rtok.kinds[0].kind, rtok.kinds[0].items), ("log", 2));
