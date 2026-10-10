@@ -102,6 +102,8 @@ async fn listen(endpoint: &Path, lock: &Path, state: Arc<State>) -> Result<()> {
                 }
             },
             () = state.stale.notified() => break,
+            // Unlike the Unix socket, the pipe has no file to delete, and `first_pipe_instance`
+            // stops a second resident from taking the name, so only the lock can go.
             _ = tick.tick() => if !lock.exists() { break },
         }
     }
