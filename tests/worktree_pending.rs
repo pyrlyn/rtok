@@ -78,7 +78,7 @@ fn adopt_unattended(s: &Scene) -> serde_json::Value {
     serde_json::from_str(&out).unwrap()
 }
 
-fn session_start(s: &Scene, session: &str, cwd: &Path) -> String {
+fn start_session(s: &Scene, session: &str, cwd: &Path) -> String {
     let payload = serde_json::json!({
         "hook_event_name": "SessionStart",
         "session_id": session,
@@ -142,12 +142,12 @@ fn session_start_inside_the_worktree_completes_it() {
     let s = scene("pending-hook");
     adopt_unattended(&s);
     // A session elsewhere in the repository takes nothing.
-    session_start(&s, "sess-main", &s.work);
+    start_session(&s, "sess-main", &s.work);
     assert_eq!(parked(&s).len(), 1);
 
     let nested = s.made.join("sub");
     std::fs::create_dir_all(&nested).unwrap();
-    let out = session_start(&s, "sess-wt", &nested);
+    let out = start_session(&s, "sess-wt", &nested);
     let id = out
         .split("(full: ")
         .nth(1)
