@@ -47,7 +47,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
-| T329.25 | todo | P3 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -849,11 +848,6 @@ T329 §8f: the 0 to 100 score with freshness, backend and link components, reaso
 
 Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback under `auto` reads 0.6 on the backend component, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; `just check`.
 
-### T329.25. Graph page: alert badges, toasts and the alerts list
-
-The page half of T329.17 (split at claim time: the backend alone fills the 500-line cap). T329 §8d "Where alerts show": a red badge on the project node and on the link edges to it (levels 1 and 2), a toast when an alert is raised or recovers, and an alerts list on the graph page. The data is `ProjectRow.alert` (the `Alert` objects T329.17 puts into `/ws` and `web/src/api/snapshot.gen.ts`), already grouped by kind. Depends on T329.17.
-
-Check: Vitest and a story (axe) for a project with a "missing" alert, a grouped alert of three projects and a recovered one (toast); `just check`, `just spa-stories` and `just spa-e2e`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 
