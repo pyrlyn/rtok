@@ -1,4 +1,5 @@
 [tools]
+sccache = { version = "0.18.0", os = ["linux", "macos"] } # compiler cache; mise [env] below makes it the rustc wrapper where it is installed
 "cargo:cargo-hakari" = "0.9.39" # workspace-hack unification; CI runs `cargo hakari verify`
 "cargo:cargo-cache" = "0.8.3" # `just cache` / `just cache-autoclean` (T17.2); the shared cargo home fills up
 "cargo:cargo-nextest" = "0.9.143" # `just test` / `just check` (cargo nextest run)
@@ -24,3 +25,10 @@ docker-cli = "29.8.1" # `docker` client; talks to Colima's Docker daemon (aqua:d
 docker-compose = "5.5.1" # standalone `docker-compose` (Compose v5) against the same daemon (github:docker/compose)
 
 "ubi:bensadeh/tailspin" = { version = "7.0.0", exe = "tspin" } # `just logs` (T225): highlights `~/.rtok/logs/rtok.log` and `RUST_LOG` stderr; a viewer, not a logger
+
+[env]
+# sccache as the rustc wrapper only where mise has it installed; empty means no wrapper (CI jobs
+# that install just Rust, Windows, machines without the tool). Not in .cargo/config.toml: there a
+# missing sccache would break every build. The probe variable stops `mise which` from recursing
+# into this same template. CI backend (R2): .github/actions/sccache, where the repo has its own jobs.
+RUSTC_WRAPPER = "{% if os() != 'windows' and get_env(name='MISE_SCCACHE_PROBE', default='') == '' %}{{ exec(command='MISE_SCCACHE_PROBE=1 \"' ~ mise_bin ~ '\" which sccache 2>/dev/null || true') }}{% endif %}"
