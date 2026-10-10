@@ -3,10 +3,13 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+
+/** Two rotated log generations past `[log] files`: the junk the card offers to clear. */
+export const STALE_LOGS = ["rtok.log.7", "rtok.log.8"];
 
 /** First line of the memory body the fixture stores; the expand test looks for it. */
 export const ARCHIVED_MARKER = "line 0 NEEDLE-0";
@@ -59,6 +62,11 @@ export class Rtok {
 
   get url() {
     return `http://127.0.0.1:${this.port}`;
+  }
+
+  /** Where a stale log generation lives: beside `rtok.log` in `$RTOK_HOME/logs`. */
+  logPath(name: string) {
+    return join(this.home, "logs", name);
   }
 
   get configPath() {
@@ -116,6 +124,13 @@ export class Rtok {
         },
       },
     ];
+    // Aged past the one-minute settle window, or `clear` would keep them as in use.
+    mkdirSync(join(this.home, "logs"), { recursive: true });
+    const old = new Date(Date.now() - 2 * 86_400_000);
+    for (const name of STALE_LOGS) {
+      writeFileSync(this.logPath(name), "stale");
+      utimesSync(this.logPath(name), old, old);
+    }
     const reply = this.run(["mcp"], rpc.map((m) => JSON.stringify(m)).join("\n"));
     if (!reply.includes('"isError":false')) throw new Error("fixture mem_save failed");
   }

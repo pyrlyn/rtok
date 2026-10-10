@@ -6,6 +6,7 @@
 // constructor and timers are injectable so Vitest drives it without a server or a browser.
 import type {
   CallBatch,
+  Cleared,
   ClientMessage,
   DrillGraph,
   Fixed,
@@ -83,6 +84,18 @@ export function parseFrame(raw: unknown): Frame | null {
       const fixed = v.fixed as Record<string, unknown> | null;
       return fixed && typeof fixed.text === "string" && typeof fixed.code === "number"
         ? { type: "doctorfixed", fixed: fixed as unknown as Fixed }
+        : null;
+    }
+    case "junkplan": {
+      const plan = v.plan as Record<string, unknown> | null;
+      return plan && Array.isArray(plan.items) && typeof plan.planned_bytes === "number"
+        ? { type: "junkplan", plan: plan as unknown as Cleared }
+        : null;
+    }
+    case "junkcleared": {
+      const cleared = v.cleared as Record<string, unknown> | null;
+      return cleared && Array.isArray(cleared.items) && typeof cleared.freed_bytes === "number"
+        ? { type: "junkcleared", cleared: cleared as unknown as Cleared }
         : null;
     }
     case "calls": {

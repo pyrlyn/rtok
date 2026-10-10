@@ -856,6 +856,8 @@ Commands:
   impact    Symbol impact or call paths to a target
   projects  The project registry: list, add, remove, select
   review    Risk-ranked reading list for a git diff (files, untested defs, line ranges)
+  diff      What a change did to the graph: symbols changed, added, removed, renamed or moved, with
+            callers
   affected  Tests that reach files changed in git (`git diff --name-only`)
   help      Print this message or the help of the given subcommand(s)
 
@@ -933,6 +935,19 @@ Options:
       --since <SINCE>      Diff against this ref
       --staged             Staged files only (`git diff --cached --name-only`)
       --json               JSON instead of the text list
+      --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
+  -h, --help               Print help
+
+$ rtok graph diff --help
+What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers
+
+Usage: rtok graph diff [OPTIONS]
+
+Options:
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --from <FROM>        Compare from this git ref [default: HEAD]
+      --to <TO>            Compare to this git ref; `working` is the working tree [default: working]
+      --json               JSON instead of the text answer (whole, not capped)
       --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
   -h, --help               Print help
 

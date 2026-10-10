@@ -416,12 +416,109 @@
         "next_probe_at"
       ]
     },
+    "CardAgent": {
+      "type": "object",
+      "properties": {
+        "freed_default_bytes": {
+          "description": "\"Freed by `clear`\".",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "freed_review_bytes": {
+          "description": "\"Freed with `--include review`\".",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CardKind"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "total_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "total_bytes",
+        "kinds",
+        "freed_default_bytes",
+        "freed_review_bytes"
+      ]
+    },
+    "CardKind": {
+      "description": "One junk kind under an agent.",
+      "type": "object",
+      "properties": {
+        "class": {
+          "description": "`safe`, `review`, `explicit` or `never` (the T330 classes).",
+          "type": "string"
+        },
+        "items": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "kind": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "class",
+        "items",
+        "size_bytes"
+      ]
+    },
     "Chosen": {
       "description": "The mode that answers a project's requests.",
       "type": "string",
       "enum": [
         "lsp",
         "tags"
+      ]
+    },
+    "Cleared": {
+      "type": "object",
+      "properties": {
+        "freed_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Planned"
+          }
+        },
+        "planned_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "yes": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "yes",
+        "items",
+        "planned_bytes",
+        "freed_bytes"
       ]
     },
     "ClientMessage": {
@@ -473,6 +570,18 @@
           },
           "required": [
             "doctor"
+          ]
+        },
+        {
+          "description": "\"Clear safe junk\" on the Hosts page: plan it, or remove once the user confirmed.",
+          "type": "object",
+          "properties": {
+            "junk": {
+              "$ref": "#/$defs/JunkRequest"
+            }
+          },
+          "required": [
+            "junk"
           ]
         },
         {
@@ -1049,6 +1158,73 @@
         "can_keep"
       ]
     },
+    "JunkAction": {
+      "oneOf": [
+        {
+          "description": "Return the dry run; nothing is removed.",
+          "type": "string",
+          "const": "plan"
+        },
+        {
+          "description": "Remove the confirmed paths: the page sends this only after its confirmation.",
+          "type": "string",
+          "const": "apply"
+        }
+      ]
+    },
+    "JunkCard": {
+      "description": "The `junk` card of the Hosts page.",
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CardAgent"
+          }
+        },
+        "freed_default_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "freed_review_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "total_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "agents",
+        "total_bytes",
+        "freed_default_bytes",
+        "freed_review_bytes"
+      ]
+    },
+    "JunkRequest": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/JunkAction"
+        },
+        "paths": {
+          "description": "For `apply`: the paths of the plan the user was shown. A planned item not named here\nstays, so nothing that appeared since the plan goes unseen.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "action",
+        "paths"
+      ]
+    },
     "Kind": {
       "type": "string",
       "enum": [
@@ -1330,6 +1506,65 @@
         "items",
         "diff",
         "refused"
+      ]
+    },
+    "Planned": {
+      "description": "One item of the plan and what happened to it.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "`clear` (removed, or would be on a dry run) or `skip`.",
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "failed": {
+          "description": "Planned and not removed: the re-check refused it or the removal failed.",
+          "type": "boolean"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "last_used": {
+          "description": "Unix seconds of the newest file in it; `None` when unreadable (T330.6).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "note": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "planned": {
+          "description": "In the plan: false for an item left at planning time (a running agent's).",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why it is junk, as `list` says it.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "kind",
+        "path",
+        "bytes",
+        "last_used",
+        "reason",
+        "planned",
+        "action",
+        "note",
+        "failed"
       ]
     },
     "PluginPage": {
@@ -2068,6 +2303,40 @@
           ]
         },
         {
+          "description": "The dry run of \"clear safe junk\" (T330.7): what `agents junk clear` would remove for every\nagent; nothing was removed.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/Cleared"
+            },
+            "type": {
+              "type": "string",
+              "const": "junkplan"
+            }
+          },
+          "required": [
+            "type",
+            "plan"
+          ]
+        },
+        {
+          "description": "What a confirmed junk apply removed.",
+          "type": "object",
+          "properties": {
+            "cleared": {
+              "$ref": "#/$defs/Cleared"
+            },
+            "type": {
+              "type": "string",
+              "const": "junkcleared"
+            }
+          },
+          "required": [
+            "type",
+            "cleared"
+          ]
+        },
+        {
           "description": "The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).",
           "type": "object",
           "properties": {
@@ -2524,6 +2793,17 @@
           "description": "Hosts page (T231): `agents list`'s blocks — kind, detected version, installed\nsurfaces, config path — one per known host variant (D27), so `agents list` /\n`agents info` can join `COMMAND_PAGES`. [`hosts_page_text`] reuses the same\nprobe `agents_list`'s JSON form calls (T168's `--version` noise filter and all)\nbehind a cache: never blocks a 2 s tick on a cold or stale probe — the tick\nrenders the last known text, or \"probing hosts…\" before the first one lands.",
           "type": "string"
         },
+        "junk": {
+          "description": "The Hosts page's junk card (T330.7): the numbers of the `junk` section of `hosts`, as data\n([`junk_page`] reads the one cached report). `None` while the first measurement runs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JunkCard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "logs": {
           "description": "Logs page (T15.7): the last `[log] lines` log lines, newest first — the same\nselection `rtok logs` screens ([`Model::log_lines`], T15.11). Riding the snapshot\nmakes the page both surfaces' (D23); `[log] lines` is the frame's bound too.",
           "type": "array",
@@ -2613,6 +2893,7 @@
         "graph",
         "projects",
         "hosts",
+        "junk",
         "config",
         "services",
         "worktrees",

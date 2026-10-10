@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
+import type { JunkCard } from "../api/snapshot.gen";
 import { Empty, Loading } from "../states";
 import { Panel } from "../ui/Panel";
 import { Pill, type PillTone } from "../ui/Pill";
 import { Unknown, orUnknown } from "../ui/Unknown";
 import { why } from "./missing";
+import { Junk } from "./Junk";
 import { Kv, OtherLines, TextPage, WithSnapshot } from "./parts";
 import { parseHosts, type HostBlock, type HostsView } from "./text";
 
@@ -20,7 +22,7 @@ export function Hosts() {
                     command="rtok agents list"
                     note="`rtok agents list`, one block per host variant, cached so the 2 s tick never waits"
                 >
-                    {(text) => <HostsBody view={parseHosts(text)} />}
+                    {(text) => <HostsBody view={parseHosts(text)} junk={snap.junk} />}
                 </TextPage>
             )}
         </WithSnapshot>
@@ -56,7 +58,7 @@ export function hostNote(note: string): { tone: PillTone; label: string } {
     return { tone: "ok", label: note || "present" };
 }
 
-function HostsBody({ view }: { view: HostsView }) {
+function HostsBody({ view, junk }: { view: HostsView; junk: JunkCard | null }) {
     if (view.probing)
         return (
             <Panel title="hosts">
@@ -80,6 +82,7 @@ function HostsBody({ view }: { view: HostsView }) {
                     <Host key={`${b.kind}-${b.name}`} block={b} />
                 ))}
             </div>
+            <Junk card={junk} />
             <OtherLines lines={view.other} />
         </>
     );
