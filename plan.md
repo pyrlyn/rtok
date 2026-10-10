@@ -44,7 +44,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.10 | todo | P3 | 3 | 0% | |
+| T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
@@ -53,7 +53,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.23 | todo | P2 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.6 | todo | P3 | 3 | 0% | |
+| T330.7 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -819,12 +819,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.10. Graph text-search backend (in-process)
-
-T329 §6a mode 3 and "when no mode works": word-boundary definition and mention searches in process with `ignore` and `regex`, the crates behind the `search` tool (T4.5; D6/D18, no spawned program), `dead` reported as not available; `ssh://` roots are out of scope (I-118), `text.*` Measurement kinds. Depends on T329.9.
-
-Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
-
 
 ### T329.26. Graph page: two-part UI with the read-only live graph and live metrics
 
@@ -889,7 +883,7 @@ Check: Vitest for the panel contents and the editor link (including an external 
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
-Split into T330.1 to T330.6 (one PR each); this card stays the spec and the epic.
+Split into T330.1 to T330.7 (one PR each); this card stays the spec and the epic.
 
 Ivan, 2026-10-01: one command group to see and clean junk for every agent: `rtok agents junk list` to view and `rtok agents junk clear` to remove. For each agent, show its folders (as links), the size of each folder in KB/MB/GB, and how much space a clear would free. `clear` stays a dry run by default and deletes only with `--yes`, as T182's `rtok agents junk clear` does today.
 
@@ -1060,11 +1054,11 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
 
-### T330.6. Junk: item breakdown, `doctor` line, web card
+### T330.7. Junk: web card with a "clear safe junk" button
 
-Part of T330. `list` and the `clear` dry run print every planned item (link, size, last used, reason, skip reason; 10 per kind plus "+N more", `--items`, `--sort`, `--min-size`), `--json` carries every item, `rtok doctor` adds one reclaimable-space line (hint when over 1 GB), the web hosts page gets the "clear safe junk" button (after T310.8), `docs/agents.md` gets a Junk section (en, ru, uk). Depends on T330.5.
+Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows the junk list as plain text today (the item lines of T330.6 included). This task turns it into a `junk` card (per agent, per kind, sizes and the "Freed by `clear`" lines) and adds the "clear safe junk" button: it runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does (a `ClientMessage` plan/apply pair, `src/web/protocol.rs`, regenerated schema and types, a story and a Vitest). The `rtok tui` counterpart of the button is T479 (D27 as amended by T346: write actions on both surfaces, same guards). Depends on T330.6.
 
-Check: the T330 "Breakdown" fixtures; `just check`.
+Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
 
 
 
@@ -1432,7 +1426,7 @@ Check: a TUI test with a fixture home: the plan equals the web's plan for the sa
 
 ### T479. TUI: clear safe junk with plan and confirm
 
-T330.6 adds a "clear safe junk" button to the web hosts page that runs the `rtok agents junk clear` dry run, shows it and asks for confirmation; D27 (amended 2026-10-10, T346) requires the same action in the TUI. Depends on T330.6. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
+T330.7 adds a "clear safe junk" button to the web hosts page that runs the `rtok agents junk clear` dry run, shows it and asks for confirmation; D27 (amended 2026-10-10, T346) requires the same action in the TUI. Depends on T330.7. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
 
 Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
 

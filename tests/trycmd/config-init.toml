@@ -506,7 +506,7 @@ target/tmp/t60-2-config-init.toml
 +# map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 +# body_lines = 40                       # symbol(): source lines shown per definition
 +# auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
-+# backend    = "tags"                   # tags | lsp | auto: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second
++# backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)
 +# lsp_timeout_ms = 40000                # how long one language-server wait (starting, still indexing) may take before the request falls back to tags
 +# backend_by_language = {}              # backend for one language, e.g. { go = "tags", rust = "lsp" }
 +# watch      = "off"                    # off | notify (P8d): background re-index inside `rtok mcp`

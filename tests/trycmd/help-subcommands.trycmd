@@ -372,6 +372,13 @@ Options:
       --bytes             Exact byte counts instead of KB/MB/GB
       --all               Also the hosts that are not installed
       --session-days <N>  Sessions untouched for more than this many days are old, for this run only
+      --items <N|all>     Items listed per kind: a count, `all`, or `0` for totals only [default:
+                          10]
+      --sort <ORDER>      Order of the items in a kind: `size` (largest first), `last-used` (longest
+                          unused first) or `path` [default: size] [possible values: size, last-used,
+                          path]
+      --min-size <SIZE>   Only items of at least this size (`10MB`); on `clear` this also limits
+                          what `--yes` removes
   -h, --help              Print help
 
 $ rtok agents junk clear --help
@@ -414,6 +421,22 @@ Options:
 
       --trash
           Move to the OS trash instead of deleting
+
+      --items <N|all>
+          Items listed per kind: a count, `all`, or `0` for totals only
+          
+          [default: 10]
+
+      --sort <ORDER>
+          Order of the items in a kind: `size` (largest first), `last-used` (longest unused first)
+          or `path`
+          
+          [default: size]
+          [possible values: size, last-used, path]
+
+      --min-size <SIZE>
+          Only items of at least this size (`10MB`); on `clear` this also limits what `--yes`
+          removes
 
   -h, --help
           Print help (see a summary with '-h')

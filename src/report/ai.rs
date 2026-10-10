@@ -427,6 +427,7 @@ mod tests {
                 config_notes: vec![],
                 #[cfg(feature = "graph")]
                 graph_alerts: vec![],
+                junk_bytes: None,
             },
             recommendations: vec![
                 crate::report::Recommendation {

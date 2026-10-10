@@ -105,8 +105,31 @@ own answer; the linked tags traversal runs only when no project of the scope has
 and then each project's mode is one `[name] (tags)` line at the top.
 
 `[plugins.graph.backend_by_language]` pins one language, named by the project's marker file (`rust`,
-`c`, `typescript`, `dart`, `go`, `python`, `javascript`): `go = "tags"` keeps Go on the index while the
-rest use `auto`. `text` is not accepted until T329.10.
+`c`, `typescript`, `dart`, `go`, `python`, `javascript`, `java`, `ruby`, `php`, `elixir`, `swift`):
+`go = "tags"` keeps Go on the index while the rest use `auto`.
+
+## Text search
+
+`backend = "text"` (T329.10), or `auto` for a project with no language server and no file a grammar
+parses (for example a Java or Ruby project), answers by text search. It runs in rtok's own process
+with the walk and ignore rules of the `search` tool (`.gitignore`, the graph's `include` and
+`exclude`, `plugins.read.search_max_bytes`): no `rg`, `grep` or `ssh` is started, and `ssh://` roots
+are not supported. Every answer is headed `(text)`, and one that lists hits ends with a line saying
+it may include comments, strings and same-named symbols.
+
+- `symbol` prints each definition line, `path:line kind`, found by `fn`, `def`, `function`, `func`,
+  `class`, `struct`, `enum`, `trait`, `interface`, `type` and a few more keywords before the whole
+  word. No body is printed, because a text search cannot tell where a definition ends.
+- `callers` prints the files that mention the name outside a definition line, `path xN (Lline)`.
+- `impact` is one level of the same files; `to` chains need call edges and answer "not available in
+  text mode".
+- `outline` lists the definition keywords of one file; `explore` assembles definitions and the
+  one-level impact, with no call paths.
+- `dead` answers "not available in text mode" instead of guessing.
+
+A text answer records a `text.symbol | text.callers | text.impact | text.outline | text.explore`
+measurement row (the time spent, not a saving). A project whose root cannot be read is dropped with
+`no graph backend available: <reason>`.
 
 ## Checked once
 

@@ -916,7 +916,7 @@ fn hosts_page_text(cfg: &Config) -> String {
     let junk = JUNK
         .get(WORKTREES_TTL, move || {
             let report = crate::agents::junk::report(&junk_cfg);
-            crate::agents::junk::to_list(&report, false, false)
+            crate::agents::junk::to_list(&report, &crate::agents::junk_items::View::new(&junk_cfg))
         })
         .unwrap_or_else(|| "measuring folders…\n".to_string());
     format!("{hosts}\njunk\n{junk}")
