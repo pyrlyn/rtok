@@ -7,13 +7,15 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, describe, expect, test } from "vitest";
 import { connectSample } from "../api/sample";
 import { project } from "../api/sampleRows";
-import type { Capability, ProjectRow, Snapshot } from "../api/snapshot.gen";
+import type { Capability, ClientMessage, ProjectRow, Snapshot } from "../api/snapshot.gen";
 import { richSnapshot } from "./fixtures";
 import { mount, serving, wire } from "./testHelpers";
 
 afterEach(cleanup);
 
 const withProjects = (projects: ProjectRow[] | null): Snapshot => ({ ...richSnapshot, projects });
+// The live graph subscribes to the call stream on its own; these tests are about the page's requests.
+const requests = (sent: ClientMessage[]) => sent.filter((m) => !("calls" in m));
 const current = () => within(screen.getByLabelText("current project"));
 
 describe("graph page projects", () => {
@@ -106,8 +108,8 @@ describe("graph page projects", () => {
         const w = wire(withProjects(rows));
         mount(w.connect, "/graph");
         fireEvent.click(await screen.findByRole("button", { name: /^b/ }));
-        await waitFor(() => expect(w.sent).toHaveLength(1));
-        expect(w.sent).toEqual([{ project: { action: "select", project: "2" } }]);
+        await waitFor(() => expect(requests(w.sent)).toHaveLength(1));
+        expect(requests(w.sent)).toEqual([{ project: { action: "select", project: "2" } }]);
         // The button waits for the answer: busy and not clickable until the snapshot arrives.
         // Scoped to the selector: other panels can also show a button named after project b.
         const list = within(screen.getByRole("list", { name: "projects" }));
@@ -133,7 +135,7 @@ describe("graph page projects", () => {
         mount(w.connect, "/graph");
         const button = await screen.findByRole("button", { name: /^gone/ });
         fireEvent.click(button);
-        await waitFor(() => expect(w.sent).toHaveLength(1));
+        await waitFor(() => expect(requests(w.sent)).toHaveLength(1));
         w.message("project 9 is gone");
         expect(await screen.findByText("project 9 is gone")).toBeTruthy();
         expect((button as HTMLButtonElement).disabled).toBe(false);
@@ -158,8 +160,9 @@ describe("graph page projects", () => {
         fireEvent.click(links.getByLabelText("both ways"));
         fireEvent.click(links.getByRole("button", { name: "link" }));
         fireEvent.click(links.getByRole("button", { name: "unlink c" }));
-        await waitFor(() => expect(w.sent).toHaveLength(2));
-        expect(w.sent).toEqual([
+        const writes = () => requests(w.sent);
+        await waitFor(() => expect(writes()).toHaveLength(2));
+        expect(writes()).toEqual([
             { project: { action: "link", from: "1", to: "2", both: true } },
             { project: { action: "unlink", from: "1", to: "3", both: false } },
         ]);

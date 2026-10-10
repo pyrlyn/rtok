@@ -2971,6 +2971,16 @@ Deviations: the display (splitter, live canvas, metric displays, freeze, window 
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.26 — Graph page: live call store, metric displays and feed (canvas and splitter split to T329.27)
+
+Display half of T329 §8b, split from T329.15, minus the canvas. The graph page gets a "live graph calls" panel under the explorer that draws the `{"type":"calls"}` frames T329.15 puts on `/ws`. `Api.calls` (`web/src/api/query.tsx`) subscribes with `{"calls":{"subscribe":true}}` when the first listener registers, unsubscribes with the last, and sends the subscription again after a reconnect; `useCallStream` ties it to a mounted component. `live/callsStore.ts` is a pure store: running calls, a 200-row feed (newest first, a late end replaces an "interrupted" mark), one bucket per batch for the 1, 5, 15 minute and "since open" windows (summed from the batch `summary` and the end events' `Measurement` samples, so a 500-call burst cut to 100 listed events still counts every call and equals `rtok stats`), per-tool and per-backend counts (from the listed events), an interrupted sweep after two minutes, and the agent/tool/project filters (the "caller" is the session id, the only identity the events carry). `useCalls` paints once per animation frame and freezes: the store keeps folding while the picture is held, a "N held" count shows, and unfreezing catches up with every call. `LiveMetrics` (running, calls and failures, tokens sent, without rtok, saved, per-tool bars, backend shares, window chips, Freeze) and `CallFeed` (`DataTable`, failed rows red) reuse `Kpi`, `Chip`, `Select`, `Pill` and `DataTable`. Empty state "Waiting for graph calls". Documented in `docs/commands.md` and its ru and uk copies.
+
+Check: `callsStore.test.ts` (fold, burst totals, feed cap, windows, interrupted, filters), `live.test.tsx` (subscription, waiting state, running then finished call, red failed row, freeze and unfreeze keep exact totals, window selector, 500-call burst), `query.test.ts` (subscribe, share, unsubscribe, resubscribe on reconnect), stories `Pages/Live graph calls` (axe), a Playwright test in which `rtok mcp` in a second process makes a `callers` call and the row reaches the page; `just check`, `just spa-typecheck`, `just spa-stories`, `just spa-e2e`, `just js`.
+
+Deviations: over the 500-line cap, so split at claim time and again while implementing. The read-only canvas, the splitter and the hide toggle are T329.27; the camera, the 3D live view and the remaining displays (latency, symbols requested and returned, sparklines, count-up, config keys) are T329.28. "Since open" counts from the moment the page subscribed, because the stream has no replay; reading the window from the store is T329.28. The per-tool bars and backend shares cover the events a frame lists (a burst frame lists 100), while the call, failure and token totals are exact. A TUI counterpart does not exist yet (D27).
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.
