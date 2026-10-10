@@ -1110,7 +1110,6 @@ fn copy_owned_with(src: &Path, dest: &Path, fix: CopyFix) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 fn copy_dir(src: &Path, dest: &Path, fix: CopyFix, rel: &Path) -> Result<()> {
     fs::create_dir_all(dest)?;
     for entry in fs::read_dir(src)? {

@@ -42,6 +42,12 @@ Callers: `decode` in the two round-trip tests of the same module; nothing in `te
 
 Check: `just fmt-check`, `just lint` (clippy `-D warnings` on the lib and its test build), `cargo nextest run -p rtok -E 'test(toon) | test(plan)'`.
 
+### T469. `copy_dir` is not dead on Unix
+
+Cloud review finding (2026-10-08): `copy_dir` in `crates/rtok-agent-sdk/src/lib.rs` carried `#[allow(dead_code)]` and was said to be dead on Unix, to be gated with `cfg(not(unix))`. The claim was wrong: `copy_dir` is reached on every target through `copy_owned_with` and `copy_owned`, which `SkillPlan::Copy` calls when a skill is installed as an owned copy. Gating it would break that path on Unix. Only the stale allow was removed; clippy `-D warnings` on the crate reports no dead code without it.
+
+Check: `cargo fmt --check`, `cargo clippy -p rtok-agent-sdk --all-targets -- -D warnings`, `cargo test -p rtok-agent-sdk`.
+
 ### T504. Read hook: case-insensitive path match on Windows
 
 Cloud review finding of 2026-10-08, filed as T460 in the findings table (an id the done `mem_pack` task already holds). `same_path` in `src/plugins/read/hook.rs` compared with `==` and `Path::ends_with`, so `C:\Repo\Src\Main.rs` and `c:\repo\src\main.rs` (or a relative `src\main.rs` against it) were different files on Windows and the "edited just now" window missed the write. The same copy sat in `src/measure/stats.rs`. Both now call `crate::fs::same_spelling`, built on the shared `rtok_store::same_path` plus the new `rtok_store::path_ends_with` (whole components, ASCII case folded on Windows only, empty suffix matches nothing). macOS stays case-sensitive: the shared helpers fold on Windows only, and a case-sensitive APFS volume would otherwise merge two real files.
