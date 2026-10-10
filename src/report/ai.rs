@@ -195,23 +195,27 @@ fn cache(doc: &Document) -> String {
     let mut s = String::from("units: counts from usage rows, whole ledger\n");
     if cache.sessions == 0 {
         s.push_str("no rows.\n");
-        return s;
+    } else {
+        // Two columns are not tabular for the toon encoder (it needs ≥ 3), and read
+        // denser as lines than as an encoded block — `table` falls back on its own.
+        s.push_str(&table(
+            &["cause", "busts"],
+            &cache
+                .by_cause
+                .iter()
+                .map(|(cause, n)| vec![cause.clone(), n.to_string()])
+                .collect::<Vec<_>>(),
+        ));
+        let _ = writeln!(
+            s,
+            "turns={} sessions={} busts={}",
+            cache.turns, cache.sessions, cache.busts
+        );
     }
-    // Two columns are not tabular for the toon encoder (it needs ≥ 3), and read
-    // denser as lines than as an encoded block — `table` falls back on its own.
-    s.push_str(&table(
-        &["cause", "busts"],
-        &cache
-            .by_cause
-            .iter()
-            .map(|(cause, n)| vec![cause.clone(), n.to_string()])
-            .collect::<Vec<_>>(),
-    ));
-    let _ = writeln!(
-        s,
-        "turns={} sessions={} busts={}",
-        cache.turns, cache.sessions, cache.busts
-    );
+    if !doc.ledgers.lanes.is_empty() {
+        s.push_str("hit = cache_read over all input, per proxy lane/tier\n");
+        s.push_str(&table(&crate::model::LANE_HEADS, &doc.ledgers.lane_cells()));
+    }
     s
 }
 
@@ -390,6 +394,7 @@ mod tests {
                         cache_read: 200,
                     }],
                 },
+                lanes: Default::default(),
                 expand: ReportExpand {
                     decisions: 3,
                     expanded: 1,

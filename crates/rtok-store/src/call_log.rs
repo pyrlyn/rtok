@@ -44,6 +44,15 @@ impl Store {
         Ok(())
     }
 
+    /// The tier the provider reported serving the request on (T385.12.2).
+    pub fn set_call_service_tier(&self, id: i32, tier: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(calls::table.filter(calls::id.eq(id)))
+            .set(calls::service_tier.eq(tier))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
     pub fn set_call_ms(&self, id: i32, ms: f64) -> Result<()> {
         let mut conn = self.lock()?;
         diesel::update(calls::table.filter(calls::id.eq(id)))
@@ -495,27 +504,37 @@ impl Store {
     }
 
     /// Usage totals grouped by the `calls.kind` of the request that produced them, which is
-    /// the proxy lane that handled it (T385.6). Every proxy `usage` row carries its call, so
-    /// the inner join drops nothing.
-    pub fn usage_by_lane(&self) -> Result<Vec<LaneUsage>> {
+    /// the proxy lane that handled it (T385.6), and by the service tier the provider reported
+    /// (T385.12.2). Every proxy `usage` row carries its call, so the inner join drops nothing.
+    pub fn usage_by_lane_tier(&self) -> Result<Vec<LaneUsage>> {
+        type Row = (
+            String,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+        );
         let mut conn = self.lock()?;
-        let rows = usage::table
+        let rows: Vec<Row> = usage::table
             .inner_join(calls::table)
-            .group_by(calls::kind)
+            .group_by((calls::kind, calls::service_tier))
             .select((
                 calls::kind,
+                calls::service_tier,
                 sum_bigint(usage::input),
                 sum_bigint(usage::cache_create),
                 sum_bigint(usage::cache_read),
                 sum_bigint(usage::output),
             ))
-            .order(calls::kind)
-            .load::<(String, Option<i64>, Option<i64>, Option<i64>, Option<i64>)>(&mut *conn)?;
+            .order((calls::kind, calls::service_tier))
+            .load(&mut *conn)?;
         Ok(rows
             .into_iter()
             .map(
-                |(kind, input, cache_create, cache_read, output)| LaneUsage {
+                |(kind, tier, input, cache_create, cache_read, output)| LaneUsage {
                     kind,
+                    tier,
                     input: input.unwrap_or(0),
                     cache_create: cache_create.unwrap_or(0),
                     cache_read: cache_read.unwrap_or(0),
@@ -540,13 +559,16 @@ impl Store {
     }
 
     /// [`Self::usage_by_model`] with the usage of Batch-lane calls (T385.12.1) listed under
-    /// `<model>@batch`, the key of the matching `[stats.prices]` row.
+    /// `<model>@batch` and that of calls the provider served on Flex (T385.12.2) under
+    /// `<model>@flex`, the keys of the matching `[stats.prices]` rows. A Batch call is never
+    /// Flex, so the lane wins.
     pub fn usage_by_model_tier(&self) -> Result<Vec<ModelUsage>> {
         self.model_usage(true)
     }
 
     fn model_usage(&self, by_tier: bool) -> Result<Vec<ModelUsage>> {
         type Row = (
+            Option<String>,
             Option<String>,
             Option<String>,
             Option<i64>,
@@ -558,10 +580,11 @@ impl Store {
         let mut conn = self.lock()?;
         let rows: Vec<Row> = usage::table
             .left_join(calls::table)
-            .group_by((usage::model, calls::kind))
+            .group_by((usage::model, calls::kind, calls::service_tier))
             .select((
                 usage::model,
                 calls::kind.nullable(),
+                calls::service_tier.nullable(),
                 sum_bigint(usage::input),
                 sum_bigint(usage::cache_create),
                 sum_bigint(usage::cache_read),
@@ -569,10 +592,12 @@ impl Store {
             ))
             .load(&mut *conn)?;
         let mut by_model: BTreeMap<String, ModelUsage> = BTreeMap::new();
-        for (model, kind, input, cache_create, cache_read, output) in rows {
+        for (model, kind, tier, input, cache_create, cache_read, output) in rows {
             let mut model = model.unwrap_or_else(|| "unknown".to_string());
             if by_tier && kind.as_deref() == Some(batch) {
                 model.push_str("@batch");
+            } else if by_tier && tier.as_deref() == Some(FLEX_SERVICE_TIER) {
+                model.push_str("@flex");
             }
             let entry = by_model.entry(model.clone()).or_insert(ModelUsage {
                 model,

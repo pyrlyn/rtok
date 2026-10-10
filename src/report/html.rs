@@ -156,6 +156,18 @@ pub fn render(doc: &Document) -> String {
             cache.busts, cache.turns, cache.sessions
         ));
     }
+    if !doc.ledgers.lanes.is_empty() {
+        s.push_str("<p>Prompt-cache hit rate per proxy lane and service tier:</p>\n");
+        table(
+            &mut s,
+            &crate::model::LANE_HEADS,
+            doc.ledgers
+                .lane_cells()
+                .into_iter()
+                .map(|row| row.iter().map(|c| esc(c)).collect())
+                .collect(),
+        );
+    }
 
     let exp = &doc.ledgers.expand;
     s.push_str("<h2 id=\"expand\">Expand</h2>\n<p>How often a live-zone pointer had to be expanded (<code>archive_decisions</code> rows).</p>\n");

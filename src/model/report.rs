@@ -161,7 +161,40 @@ pub struct ReportLedgers {
     pub sinks: ReportSinksSection,
     pub calls: ReportCallsSection,
     pub cache: ReportCache,
+    /// Per proxy lane and service tier counters (T385.12.2), `lane/tier` keyed. Empty while
+    /// every request ran on the agent lane at the ordinary tier, so the section is left out.
+    pub lanes: BTreeMap<String, stats::ApiRow>,
     pub expand: ReportExpand,
+}
+
+/// Column heads of the cache-by-lane table every renderer prints under the Cache section.
+pub const LANE_HEADS: [&str; 6] = [
+    "lane/tier",
+    "input",
+    "cache_create",
+    "cache_read",
+    "output",
+    "hit",
+];
+
+impl ReportLedgers {
+    /// The lane/tier rows as strings in [`LANE_HEADS`] order, so the four renderers print one
+    /// table (D24: formatting a number is not computing one).
+    pub fn lane_cells(&self) -> Vec<Vec<String>> {
+        self.lanes
+            .iter()
+            .map(|(key, r)| {
+                vec![
+                    key.clone(),
+                    r.input.to_string(),
+                    r.cache_create.to_string(),
+                    r.cache_read.to_string(),
+                    r.output.to_string(),
+                    format!("{:.1}%", r.hit * 100.0),
+                ]
+            })
+            .collect()
+    }
 }
 
 /// The report's ledger read (T22.1). A store that will not open is an error, as in
@@ -177,6 +210,7 @@ pub fn report_ledgers(cfg: &Config) -> Result<ReportLedgers> {
         savings: report_savings(&store)?,
         sinks: report_sinks(&store, cfg)?,
         cache: report_cache(&store)?,
+        lanes: stats::lane_rows(&store)?.1,
         expand: report_expand(&store)?,
     })
 }

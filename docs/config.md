@@ -746,7 +746,10 @@ defaults the `--price` display on (`RTOK_STATS_PRICE=true` works too).
 
 A row keyed `<model>@batch` (or `<model>@flex`) prices that model on the Batch (or Flex) tier. `--price` lists
 usage of Batch-lane calls under `<model>@batch` and costs it at that row; with no such row it prints `-`
-rather than borrow the standard rate. Nothing reads `@flex` rows yet: the Flex tier is not recorded.
+rather than borrow the standard rate. Calls the provider reports serving on Flex (`service_tier` in the response,
+recorded on `calls.service_tier`) are listed under `<model>@flex` and costed the same way. `rtok stats` and `rtok report`
+add a `lane/tier` table of cache counters once traffic ran off the agent lane or on a tier other than `standard` /
+`default`; a call whose response named no tier prints `-`.
 
 ### WASM plugin host (`[plugins.wasm]`)
 

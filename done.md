@@ -8450,6 +8450,16 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
+
+Split from T385.12; T385.6 and T385.12.1 are done (the price rows and `usage_by_model_tier` are in place). Record the effective `service_tier` of a proxied request, cost Flex usage at the `<model>@flex` row, and add a per-lane, per-tier breakdown to `rtok stats` and `rtok report` on top of T385.6's lane table.
+
+Check: a report fixture with Batch and Flex rows; `just check`.
+Result: migration `0043_calls_service_tier` adds a nullable `calls.service_tier`; `proxy::finish` sets it from the response (`wire::service_tier_from_response`: OpenAI `service_tier` on the object or under `response`, Anthropic `usage.service_tier` or `message.usage`, JSON or SSE, last mention wins), so a Flex request that came back on another tier is recorded as that tier; the request is never consulted. Sources checked 2026-10-10: openai-python `types/chat/chat_completion.py` and `types/responses/response.py`, anthropic-sdk-python `types/usage.py`. `usage_by_model_tier` lists tier `flex` usage under `<model>@flex` (a Batch call stays `@batch`), so `stats --price` costs it at that row. `Store::usage_by_lane` became `usage_by_lane_tier` (kind and tier); `stats::lane_rows` folds it into the `lane` table and a new `lane/tier` table (`Report.lane_tiers`, `--json` `lane_tiers`; a response with no tier prints `-`). The tier table, like the lane table, is left out while all traffic ran on the agent lane at `standard`/`default`, so untouched setups print the same. `rtok report` shows the same rows under its Cache section in md, html, pdf and `--ai` (`ReportLedgers.lanes`, `LANE_HEADS`, `lane_cells`), not as a new section, which keeps the fixed P22 section ids and the md/html/pdf parity. Web and TUI never showed the lane table (T385.6), so no new surface item. Tests: `service_tier_comes_from_the_response_on_every_shape` (`wire.rs`), `flex_usage_is_priced_at_its_flex_row_and_listed_by_tier` (`stats.rs`), `stats_breaks_the_lanes_down_by_service_tier`, `report_lists_cache_counters_per_lane_and_tier` (fixture with agent, Flex, standard bulk and Batch rows, `tests/common/lanes.rs`), and `tests/proxy_service_tier.rs` (mock upstream through the proxy). docs/config.md (en, ru, uk) and docs/batch-flex.md updated. `just check`: 3258 passed, 8 skipped.
+Status: done 2026-10-10
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T385.13. Measure cross-session read duplication
 
 optimization.md §5 ("Not built; measure first"). From `calls`: how often the same file content is read in more than one session within a day, and the bytes involved. Measured 2026-10-08 (window 2026-10-05 to 2026-10-08, 38 sessions, 3,049 reads, 13.6 MB; same content = equal SHA-256 of the returned text, within a day = same UTC day): 38 cross-session duplicate reads, 56,561 B (about 14,140 tokens), 0.42 % of the bytes read, 0.00034 % of input counted once and 0.25 % to 0.60 % of input resident-weighted (input 4,139,214,544 tokens, main plus sub-agents). Cross-checks over 25 days (MCP read, 0.28 %) and via `read_cache` (0.84 % of bytes) agree; keyed on path plus content only 2 reads repeat, because worktrees give the same file different paths. Under the 1 % gate, so no build task; the optimization.md §5 row records the number.
