@@ -62,6 +62,14 @@ Result: `just check` against `6f8e4147`: fmt, clippy `-D warnings`, `build-min`,
 Status: done 2026-10-09
 Model: Cursor / grok 4.7
 
+### T463. rtok-mcp uses the sdk's rtok-binary walk instead of `runs_rtok`
+
+Cloud review finding (2026-10-08): `crates/rtok-mcp/src/ops.rs` carried `runs_rtok`, a weaker copy of `rtok_agent_sdk::runs_bin`: it matched only `rtok`, `*/rtok` and `*\rtok.exe`, so `rtok.exe`, `RTOK.EXE` and the running binary's own path were "not rtok's". Deleted it; `not_removable` calls `rtok_agent_sdk::runs_bin`. The binary check (`is_rtok_bin`) lives in the `rtok` crate, which `rtok-mcp` cannot depend on, so `ops::apply` takes it as `is_bin: fn(&str) -> bool`, the same shape `judge_owned` and `unregister_owned` already use. `rtok-mcp` gains the path dependency `rtok-agent-sdk`.
+
+Callers: none outside `ops.rs` tests (`apply` is unused until T277 wires hosts); the tests pass a test-local `is_rtok_bin`. Their expectations did not change.
+
+Check: grep for `runs_rtok` over the repo found only `ops.rs`; `just fmt-check`, `just lint`, `cargo nextest run -p rtok-mcp -p rtok-agent-sdk` and `-p rtok -E "test(plan)"`.
+
 ### T461. Windows resident exit condition matches Unix
 
 Cloud review finding (suspected): the Windows resident (`src/hooks/resident.rs`) exits only when `hook.lock` vanishes, while the Unix one also exits when its socket file vanishes. Not a bug. The Unix check exists because a new resident unlinks and rebinds the socket path, which would orphan the old listener. A named pipe has no file a user or another resident can delete, and `ServerOptions::first_pipe_instance(true)` makes a second resident fail to create the pipe while the first holds it, so there is no Windows counterpart to mirror. Added a comment on the Windows tick saying why; no behaviour change.
