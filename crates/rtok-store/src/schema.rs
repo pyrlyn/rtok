@@ -239,6 +239,7 @@ diesel::table! {
         ms -> Nullable<Double>,
         ok -> Integer,
         error -> Nullable<Text>,
+        service_tier -> Nullable<Text>,
     }
 }
 

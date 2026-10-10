@@ -379,6 +379,15 @@ fn sections(doc: &Document) -> Vec<Sec> {
             cache.busts, cache.turns, cache.sessions
         ));
     }
+    if !doc.ledgers.lanes.is_empty() {
+        lines.push("Hit rate per proxy lane and service tier:".into());
+        lines.extend(doc.ledgers.lane_cells().into_iter().map(|row| {
+            let [lane, input, create, read, output, hit] = &row[..] else {
+                return row.join(" ");
+            };
+            format!("{lane}: input {input}, cache_create {create}, cache_read {read}, output {output}, hit {hit}")
+        }));
+    }
     let mut blocks = paras(lines);
     if cache.sessions > 0 {
         blocks.push(chart(
@@ -796,6 +805,7 @@ mod tests {
                     by_cause: vec![],
                     detail: vec![],
                 },
+                lanes: Default::default(),
                 expand: ReportExpand {
                     decisions: 0,
                     expanded: 0,

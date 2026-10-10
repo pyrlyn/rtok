@@ -70,6 +70,7 @@ pub struct Call {
     pub ms: Option<f64>,
     pub ok: i32,
     pub error: Option<String>,
+    pub service_tier: Option<String>,
 }
 
 #[derive(Debug, Queryable, Selectable, Identifiable, Associations)]
