@@ -1089,6 +1089,9 @@ pub(crate) fn outline(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
                 flatten(arr, &mut text);
             }
             if !text.is_empty() || Instant::now() >= deadline {
+                if !text.is_empty() {
+                    super::tally::hit(root, "", [path]);
+                }
                 return finish(cx, "outline", t0, text.trim_end().to_string());
             }
             std::thread::sleep(Duration::from_millis(250));

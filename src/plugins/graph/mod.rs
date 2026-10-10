@@ -1360,7 +1360,15 @@ pub(crate) fn affected_from_paths(
             }
         }
     }
+    tally_tests(root, &hits);
     Ok(format_affected(&hits, json))
+}
+
+/// The affected test files a project lists; the symbol each is reached through names no file.
+pub(super) fn tally_tests(root: &Path, hits: &Hits) {
+    if !hits.is_empty() {
+        tally::hit(root, "", hits.iter().map(|(file, _)| file.as_str()));
+    }
 }
 
 /// What a project's changed paths start from: the test files they hit directly or by naming
@@ -1674,7 +1682,7 @@ fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
         cx,
         root,
         "outline",
-        || text::outline(cx, abs.as_deref().unwrap_or(Path::new(path))),
+        || text::outline(cx, root, abs.as_deref().unwrap_or(Path::new(path))),
         || {
             lsp_or_tags(
                 cx,
@@ -1694,6 +1702,7 @@ fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
                         "map",
                         None,
                     )?;
+                    tally::hit(root, "", [path]);
                     with_stale(cx, root, cap(cx, text)?)
                 },
             )
@@ -1707,7 +1716,7 @@ fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
 /// first 8 — single letters are real identifiers (`b`, `c`, `x`), so nothing but
 /// empty runs are dropped; the cap keeps the resolution and the pairwise path
 /// walk below fast.
-fn explore_tokens(query: &str) -> Vec<String> {
+pub(super) fn explore_tokens(query: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     query
         .split(|c: char| !c.is_alphanumeric() && c != '_')
@@ -1744,11 +1753,14 @@ pub(crate) fn assemble_explore(
     filter: &Filter,
     parts: &mut dyn ExploreParts,
 ) -> Result<(String, u64)> {
-    let mut names: Vec<String> = Vec::new();
+    let mut names: Vec<Named> = Vec::new();
     for token in explore_tokens(query) {
         for name in parts.resolve(&token)? {
-            if !names.contains(&name) {
-                names.push(name);
+            if !names.iter().any(|n| n.name == name) {
+                names.push(Named {
+                    name,
+                    token: token.clone(),
+                });
             }
         }
         if names.len() >= EXPLORE_MAX_NAMES {
@@ -1758,12 +1770,19 @@ pub(crate) fn assemble_explore(
     assemble_named(query, filter, parts, &names)
 }
 
+/// A name `explore` prints and the query token that resolved it (empty when the full-text
+/// fallback found it, which no token asked for).
+pub(crate) struct Named {
+    pub name: String,
+    pub token: String,
+}
+
 /// The answer `assemble_explore` prints once the names are known.
 pub(crate) fn assemble_named(
     query: &str,
     filter: &Filter,
     parts: &mut dyn ExploreParts,
-    names: &[String],
+    names: &[Named],
 ) -> Result<(String, u64)> {
     if names.is_empty() {
         return Ok((
@@ -1772,7 +1791,7 @@ pub(crate) fn assemble_named(
         ));
     }
     let mut counts = HashMap::new();
-    for name in names {
+    for Named { name, .. } in names {
         counts.insert(name.clone(), parts.def_count(name)?);
     }
     let ambiguous = counts.values().filter(|c| **c > 1).count();
@@ -1782,19 +1801,24 @@ pub(crate) fn assemble_named(
     }
     let mut before = 0u64;
     let mut impact = Vec::new();
-    for name in names {
+    for Named { name, token } in names {
+        let seen = tally::mark();
         let defs = parts.defs(name)?;
+        tally::rename(seen, token);
         before += defs.len() as u64;
         out.push_str(&format!("= {name}\n{defs}"));
+        // The impact line prints a count, not the callers' files, so those rows are not listed.
+        let seen = tally::mark();
         let (text, n) = parts.impact1(name)?;
+        tally::rewind(seen);
         before += text.len() as u64;
         let mark = if counts[name] > 1 { " ?" } else { "" };
         impact.push(format!("{name} ← {n}{mark}"));
     }
     out.push_str("paths:\n");
     let mut any = false;
-    for a in names {
-        for b in names {
+    for a in names.iter().map(|n| &n.name) {
+        for b in names.iter().map(|n| &n.name) {
             if a != b {
                 for chain in parts.paths(a, b)? {
                     out.push_str(&chain);
@@ -1854,11 +1878,14 @@ fn explore_tags(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<S
         key: index::canon(root),
         label: "",
     };
-    let mut names: Vec<String> = Vec::new();
+    let mut names: Vec<Named> = Vec::new();
     for token in explore_tokens(query) {
         for name in parts.resolve(&token)? {
-            if !names.contains(&name) {
-                names.push(name);
+            if !names.iter().any(|n| n.name == name) {
+                names.push(Named {
+                    name,
+                    token: token.clone(),
+                });
             }
         }
         if names.len() >= EXPLORE_MAX_NAMES {
@@ -1871,8 +1898,11 @@ fn explore_tags(cx: &Ctx, root: &Path, query: &str, filter: &Filter) -> Result<S
         && let Ok(hits) = cx.symbol_fts(&parts.key, query, EXPLORE_MAX_NAMES as i64)
     {
         for (_, name, _, _) in hits {
-            if !names.contains(&name) {
-                names.push(name);
+            if !names.iter().any(|n| n.name == name) {
+                names.push(Named {
+                    name,
+                    token: String::new(),
+                });
             }
             if names.len() >= EXPLORE_MAX_NAMES {
                 break;
@@ -1922,6 +1952,7 @@ impl ExploreParts for TagsExplore<'_> {
                 self.filter.scope_note()
             ));
         }
+        tally::hit(self.root, name, rows.iter().map(|r| r.0.as_str()));
         let callees = self.cx.symbol_callees(&self.key, name)?;
         let tag = Tag {
             prefix: self.label,
