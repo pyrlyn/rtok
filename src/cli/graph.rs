@@ -90,9 +90,12 @@ pub(super) enum GraphCmd {
     // T329.18
     /// What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers
     Diff {
-        /// Compare from this git ref
-        #[arg(long, default_value = "HEAD")]
-        from: String,
+        /// Compare from this git ref (default HEAD); `PROJECT:REF` sets it for one project, repeat for more
+        #[arg(long)]
+        from: Vec<String>,
+        /// Compare from a saved `rtok graph export --level symbols` file instead of a revision
+        #[arg(long, conflicts_with_all = ["from", "to"])]
+        from_export: Option<PathBuf>,
         /// Compare to this git ref; `working` is the working tree
         #[arg(long, default_value = "working")]
         to: String,
@@ -329,6 +332,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
         }
         GraphCmd::Diff {
             from,
+            from_export,
             to,
             json,
             project,
@@ -345,6 +349,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                         from: &from,
                         to: Some(to.as_str()).filter(|t| *t != "working"),
                         json,
+                        export: from_export.as_deref(),
                     },
                 )?
             );

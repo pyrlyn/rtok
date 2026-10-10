@@ -654,7 +654,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ("graph review", "need a diff; CLI only"),
     (
         "graph diff",
-        "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
+        "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.35",
     ),
     (
         "graph export",

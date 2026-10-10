@@ -47,7 +47,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
-| T329.29 | todo | P3 | 4 | 0% | |
+| T329.35 | todo | P3 | 4 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -94,6 +94,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T479 | todo | P3 | 2 | 0% | |
 | T481 | todo | P3 | 2 | 0% | |
 | T480 | todo | P3 | 3 | 0% | |
+| T485 | todo | P3 | 3 | 0% | |
 
 
 
@@ -821,11 +822,11 @@ Remainder of T329 §8b after T329.27 (which shipped the read-only 2D live canvas
 
 Check: the live canvas frames a running call and eases back to an overview in 2D and 3D; the latency and symbol counters match the events; the config keys are read and documented; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.29. Graph page: Compare mode and the remaining diff reports
+### T329.35. Graph page: Compare mode
 
-The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (the reader is `export::read` from T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+The page half of T329 §8e, split from T329.29 at claim time (the backend half filled its own cap). T329.29 shipped `--from PROJECT:REF`, `--from-export FILE`, the registry link diff (against an export only) and the `changed, not analysed` listing in `src/plugins/graph/diff.rs`; `diff::run` with `Query { json: true, .. }` already returns every row. Here: a "Compare" mode in part 1 that colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel (including `changed, not analysed`) and leaves the live graph unaffected. The page asks the server for the diff over `/ws` (a new `ClientMessage` and `ServerFrame` in `src/web/protocol.rs`, answered by `diff::run` on the same revisions the CLI takes, with the cap), never recomputes it, and can open a saved export as the old side (the file is read by the server from a path the user typed, never from a model). The schema file `web/src/api/ws.schema.json` and `snapshot.gen.ts` are regenerated. D27: the TUI counterpart is T485. Docs in en, ru, uk. Depends on T329.29, T329.22.
 
-Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`; `just check`.
 
 ### T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 
@@ -1207,6 +1208,12 @@ Check: a TUI render test on fixture rows at 100, 60 with two reasons, `indexing`
 T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26.
 
 Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
+
+### T485. TUI: graph diff and compare view
+
+T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 puts the same report on the web graph page as Compare mode. D27 (amended 2026-10-10, T346) requires the TUI to show it too. Depends on T329.35. Done means: the TUI graph page has a compare view that calls `diff::run` (no second diff path) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
+
+Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed, a removed, an added and a moved symbol; `tests/surface_parity.rs` lists the compare view on both surfaces; `just check`.
 
 ## Reference
 
