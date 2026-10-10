@@ -131,12 +131,49 @@ jobs:
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
+  # The Windows test binaries are built once here and archived (`cargo nextest archive`); the
+  # `windows` shards below only download the archive and run their partition, so the build is
+  # no longer repeated per shard. Archive and run share one runner OS and target.
+  windows-build:
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nextest-archive-windows
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+      - if: failure() && github.event_name == 'pull_request'
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
   # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
   # T83.4: a gate like `check` — a Windows-only failure fails the run.
   # The suite run (~250 s) outweighs the build (~85 s) on this runner, so it is split across
-  # `partitions` runners with nextest `--partition count:i/n`. Every shard builds the same
-  # test binaries and runs its share; the job still fails if any shard fails.
+  # `partitions` runners with nextest `--partition count:i/n`. `windows-build` archives the test
+  # binaries once and every shard runs its share from that archive;
+  # the job still fails if any shard fails.
   windows:
+    needs: windows-build
     if: >-
       (github.event_name != 'pull_request' || !github.event.pull_request.draft)
       && !inputs.docs-only
@@ -163,12 +200,12 @@ jobs:
         with:
           path: ${{ steps.rustup.outputs.path }}
           key: ${{ steps.rustup.outputs.key }}
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/download-artifact@v8
         with:
-          # The shards build the same target dir; one upload is enough.
-          save-if: ${{ github.ref == 'refs/heads/main' && matrix.partition == 1 }}
+          name: nextest-archive-windows
       - run: >-
-          mise exec -- cargo nextest run --workspace
+          mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
+          --workspace-remap .
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
