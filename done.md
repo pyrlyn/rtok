@@ -561,6 +561,19 @@ Check: `actionlint` + `shellcheck` clean on `.github/workflows/ci.yml`; the titl
 
 Result: setting on (`can_approve_pull_request_reviews: true`), stale branch deleted, `ci.yml` reads the merged PR once for both its head branch and title.
 
+### T502. Retire the `revert-on-failure` CI job
+
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
+Creator decision 2026-10-10. Since 2026-10-08 the `protect-main` ruleset requires a pull request and a green `gate` on main, and its only bypass is the admin role through a PR. `ci / revert-on-failure` (T84, T253) still pushed `ci: auto-revert <sha>` straight to main, so the push was rejected (`push declined due to repository rule violations`, main pipeline runs 38043322970 and 38044250038, 2026-10-10): the job failed, main stayed red and nothing was reverted. With the ruleset, a red main push comes only from merge skew or a flake (the docs-only `efe19f07` failed `spa`), which should be fixed forward, not reverted. Rejected options: a revert PR with auto-merge (a `GITHUB_TOKEN` PR starts no workflow, so `gate` never runs without a PAT or App secret) and a ruleset bypass for GitHub Actions (any workflow with `contents: write` could push past the checks). `pyrlyn/ci` and the ruleset stay as they are.
+
+Plan: delete the `revert-on-failure` job from `.github/workflows/ci.yml` and the comments that describe it; lower the `ci` caller permissions in `.github/workflows/pipeline.yml` to `contents: read` and `actions: write`, since no ci.yml job writes contents or pull requests now.
+
+Check: no `revert-on-failure` left in `.github/`; the PR's pipeline passes (actionlint runs in `pipeline`); `just check`.
+
+Result: job and its comments removed; the `ci` caller runs with `contents: read` and `actions: write`.
+
 ### T252. `surface_parity` web test reads the real `~/.claude` history
 
 Creator request 2026-09-24. `tests/surface_parity.rs::web_serves_exactly_the_pages_the_model_offers` built its `Config` with `load_from(tempdir)` only, so `doctor.*`, `stats.transcripts_dir` and `stats.codex_dir` stayed at this machine's real `~/.claude*` and `~/.codex/sessions`: every snapshot parsed the creator's whole JSONL history (~80 s locally, 180 s timeout under load, non-hermetic). The same leak hid in `web_doctor_instruction_audit_matches_cli_order` (19 s: `rtok doctor` scans `stats.transcripts_dir`), `tests/web.rs::ws_set_accepts_plugin_enabled` (67 s: a web `set` reloads `config.toml`, dropping the in-memory redirects `tests/web.rs` had copied three times), `tests/graph_model.rs::graph_page_matches_dead_json_on_the_fixture_index` (75 s: a snapshot on a bare `load_from`) and in `tests/stats_model.rs` (fixture transcripts, but `doctor.*` still real).
