@@ -6,7 +6,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { BIG, drillReply, drillServer } from "../../api/sampleDrill";
-import { project } from "../../api/sampleRows";
+import { alertRow, project } from "../../api/sampleRows";
 import type { ClientMessage, DrillRequest, ProjectRow, Snapshot } from "../../api/snapshot.gen";
 import { richSnapshot } from "../fixtures";
 import { mountRouted, wire } from "../testHelpers";
@@ -62,6 +62,15 @@ describe("drill-down page", () => {
         const crumbs = within(screen.getByRole("navigation", { name: "breadcrumb" }));
         expect(crumbs.getByText("All projects")).toBeTruthy();
         expect(crumbs.getByText("rtok").getAttribute("aria-current")).toBe("page");
+    });
+
+    test("a symbol of a linked project with an alert says so", async () => {
+        const down = alertRow("unreachable", "ketch", "share did not answer");
+        const { connect } = serve(snapshot(rows({ 2: { alerts: [down] } })));
+        mountRouted(connect, "/graph?p=1");
+        const open = await screen.findByRole("button", { name: /^open_index/ });
+        expect(open.textContent).toMatch(/alert/);
+        expect(screen.getByRole("button", { name: /^main\.rs/ }).textContent).not.toMatch(/alert/);
     });
 
     test("a second click on a file expands it, and Back returns", async () => {
