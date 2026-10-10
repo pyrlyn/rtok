@@ -187,6 +187,9 @@ Options:
                        all)
       --all            All variants (the default when neither `--cli` nor `--desktop` is given)
       --no-restart     Skip closing/reopening a running desktop app around the write
+      --project        Add rtok to the project's post-create script, so a worktree the host makes
+                       joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the
+                       repository
   -h, --help           Print help
 
 $ rtok agents uninstall --help
@@ -203,6 +206,8 @@ Options:
       --dry-run        Print what would be removed and exit
       --no-restart     Skip closing/reopening a running desktop app around the write
       --yes            Also remove rtok entries you changed, without asking
+      --project        Take rtok out of the project's post-create script (`cursor`, `kilo`,
+                       `windsurf`, `devin`) instead of the host's config
   -h, --help           Print help
 
 $ rtok agents update --help
@@ -1188,7 +1193,8 @@ Commands:
   claim   Bind an existing worktree to an agent: rewrites its lock only when unlocked or already
           yours
   adopt   Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
-          pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only
+          pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With
+          no agent (a post-create script) the one live agent of that host in the repository takes it
   remove  Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
           merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless
           the task is finished (merged, clean, with commits of its own)
@@ -1289,7 +1295,8 @@ Options:
 
 $ rtok worktree adopt --help
 Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a pool its
-host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only
+host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a
+post-create script) the one live agent of that host in the repository takes it
 
 Usage: rtok worktree adopt [OPTIONS] [PATH]
 
