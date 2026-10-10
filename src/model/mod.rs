@@ -885,6 +885,25 @@ pub enum DiffReport {}
 #[derive(Debug, serde::Deserialize, Serialize, JsonSchema)]
 pub enum DiffRequest {}
 
+/// The graph page's Export menu and read-only import view (T329.40); with `graph` off no request
+/// parses.
+#[cfg(feature = "graph")]
+pub use crate::plugins::graph::export::{
+    Export as GraphExport, ExportFile, ExportRequest, ImportRequest,
+};
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, Serialize, JsonSchema)]
+pub enum GraphExport {}
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, Serialize, JsonSchema)]
+pub enum ExportFile {}
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, serde::Deserialize, Serialize, JsonSchema)]
+pub enum ExportRequest {}
+#[cfg(not(feature = "graph"))]
+#[derive(Debug, serde::Deserialize, Serialize, JsonSchema)]
+pub enum ImportRequest {}
+
 #[cfg(feature = "graph")]
 fn project_rows(cfg: &Config) -> Option<Vec<ProjectRow>> {
     let rt = crate::plugin::Runtime::open(cfg.clone(), "web-projects").ok()?;

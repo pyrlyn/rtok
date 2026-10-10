@@ -23,7 +23,11 @@ import type {
     DiffRequest,
     DrillGraph,
     DrillRequest,
+    Export,
+    ExportFile,
+    ExportRequest,
     Fixed,
+    ImportRequest,
     Plan,
     ProjectRequest,
     Selection,
@@ -44,6 +48,14 @@ export const JUNK_TIMEOUT_MS = 120_000;
 // A project select can index the project before the server answers.
 export const WRITE_TIMEOUT_MS = 30_000;
 
+/** A saved graph export the server parsed (T329.40); the page shows it read-only. */
+export interface Imported {
+    name: string;
+    export: Export;
+}
+
+type Answer = Plan | Fixed | Cleared | DrillGraph | DiffReport | ExportFile | Imported;
+
 export interface Api {
     open(): void;
     close(): void;
@@ -60,6 +72,10 @@ export interface Api {
     drill(request: DrillRequest): Promise<DrillGraph>;
     /** What a change did to a project's graph (T329.35); the old side is a ref or export text. */
     diff(request: DiffRequest): Promise<DiffReport>;
+    /** The file `rtok graph export` writes for the same arguments (T329.40). */
+    exportGraph(request: ExportRequest): Promise<ExportFile>;
+    /** A saved export's text, parsed by the server; nothing is written (T329.40). */
+    importGraph(request: ImportRequest): Promise<Imported>;
     /** Starts the graph call stream (T329.26) for as long as a listener is registered; returns the stop. */
     calls(listener: (view: CallsView) => void): () => void;
 }
@@ -82,9 +98,17 @@ interface PendingExpand {
 // not the request, and the server answers those off the executor, so `key` (the project)
 // is what ties it back; within one project the order holds.
 interface PendingDoctor {
-    kind: "doctorplan" | "doctorfixed" | "junkplan" | "junkcleared" | "graph" | "diff";
+    kind:
+        | "doctorplan"
+        | "doctorfixed"
+        | "junkplan"
+        | "junkcleared"
+        | "graph"
+        | "diff"
+        | "export"
+        | "imported";
     key?: string;
-    resolve(frame: Plan | Fixed | Cleared | DrillGraph | DiffReport): void;
+    resolve(frame: Answer): void;
     reject(error: Error): void;
 }
 
@@ -153,18 +177,14 @@ export function createApi(
         for (const p of done) p.resolve();
     };
 
-    const settleDoctor = (
-        kind: PendingDoctor["kind"],
-        frame: Plan | Fixed | Cleared | DrillGraph | DiffReport,
-        key?: string,
-    ) => {
+    const settleDoctor = (kind: PendingDoctor["kind"], frame: Answer, key?: string) => {
         const i = pendingDoctor.findIndex((p) => p.kind === kind && p.key === key);
         if (i < 0) return;
         const [entry] = pendingDoctor.splice(i, 1);
         entry?.resolve(frame);
     };
 
-    const askDoctor = <T extends Plan | Fixed | Cleared | DrillGraph | DiffReport>(
+    const askDoctor = <T extends Answer>(
         kind: PendingDoctor["kind"],
         message: ClientMessage,
         key?: string,
@@ -229,6 +249,12 @@ export function createApi(
                 return;
             case "diff":
                 settleDoctor("diff", frame.diff, frame.project);
+                return;
+            case "export":
+                settleDoctor("export", frame.file);
+                return;
+            case "imported":
+                settleDoctor("imported", { name: frame.name, export: frame.export });
                 return;
             case "calls":
                 for (const listener of callListeners) listener(frame.calls);
@@ -318,6 +344,8 @@ export function createApi(
         // `request.project` is the registry id as text, which is what the frame carries back.
         drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
         diff: (request) => askDoctor<DiffReport>("diff", { diff: request }, request.project),
+        exportGraph: (request) => askDoctor<ExportFile>("export", { export: request }),
+        importGraph: (request) => askDoctor<Imported>("imported", { import: request }),
         calls(listener) {
             callListeners.add(listener);
             if (callListeners.size === 1) subscribeCalls(true);
@@ -399,6 +427,10 @@ export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {
 }
 
 export function useJunkApi(): Pick<Api, "junkPlan" | "junkApply"> {
+    return useApi();
+}
+
+export function useGraphFileApi(): Pick<Api, "exportGraph" | "importGraph"> {
     return useApi();
 }
 

@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.32 | todo | P3 | 3 | 0% | |
 | T500 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
-| T329.40 | todo | P3 | 4 | 0% | |
 | T329.48 | todo | P3 | 2 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -821,12 +820,6 @@ Check: the sparklines match the store buckets; an outside-scope call is marked; 
 What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
-
-### T329.40. Graph page: Export menu and read-only import view
-
-The page half of T329 §8c, left over from T329.31: the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; an image of the live frame only for part 2; the dialog says that file and symbol names are included) that downloads the same JSON, SVG and PNG the CLI writes (one function behind both, no second drawing code), and the page opening an exported JSON read-only with the banner "viewing export from ..." (the importer is `export::read`; nothing is written to the registry or the index). Depends on T329.31 and T329.14.
-
-Check: the page exports the JSON the CLI writes (byte-equal without `exported_at`) and imports it back; an imported file is read-only and shows the banner; the dialog names the file and symbol names; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.48. TUI: one panel shell for compare and export
 
