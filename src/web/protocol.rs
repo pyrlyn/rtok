@@ -11,7 +11,10 @@ use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
 
 use super::calls_view::CallsView;
-use super::model::{DiffReport, DiffRequest, DrillGraph, DrillRequest, Snapshot};
+use super::model::{
+    DiffReport, DiffRequest, DrillGraph, DrillRequest, ExportFile, ExportRequest, GraphExport,
+    ImportRequest, Snapshot,
+};
 use crate::agents::junk_clear::Cleared;
 use crate::doctor::web::{Fixed, Plan, Selection};
 
@@ -40,6 +43,11 @@ pub enum ServerFrame {
     /// The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is
     /// how the page matches a reply to its question.
     Diff { project: String, diff: DiffReport },
+    /// The answer to [`ClientMessage::Export`] (T329.40): the file the CLI would write.
+    Export { file: ExportFile },
+    /// The answer to [`ClientMessage::Import`]: the saved export, parsed and checked against the
+    /// schema; the page shows it read-only.
+    Imported { name: String, export: GraphExport },
     /// The live calls panel's whole state (T329.15, T484): running calls, the feed and the totals
     /// of every window. Sent after [`ClientMessage::Calls`] subscribed, first at once and then
     /// when something in it changed, at most four times a second.
@@ -70,6 +78,10 @@ pub enum ClientMessage {
     Graph { graph: DrillRequest },
     /// What a change did to one project's graph, for Compare mode (T329.35); read-only.
     Diff { diff: DiffRequest },
+    /// Download the graph as JSON, SVG or PNG (T329.40); read-only.
+    Export { export: ExportRequest },
+    /// Open a saved JSON export, sent as text, for the page's read-only view (T329.40).
+    Import { import: ImportRequest },
     /// Start or stop the graph call events (T329.15); the page subscribes while the live
     /// graph is visible, so a hidden one costs nothing.
     Calls { calls: CallsRequest },
@@ -242,6 +254,30 @@ mod tests {
         assert_eq!((diff.project.as_str(), diff.from.len()), ("3", 1));
         assert_eq!(diff.export.unwrap().name, "a.json");
         assert!(serde_json::from_str::<ClientMessage>(r#"{"diff":{"from":[]}}"#).is_err());
+    }
+
+    #[test]
+    fn export_requests_make_a_file_or_open_a_text_never_a_path() {
+        let m: ClientMessage = serde_json::from_str(
+            r#"{"export":{"project":"3","level":"symbols","format":"png","scale":2}}"#,
+        )
+        .unwrap();
+        let ClientMessage::Export { export } = m else {
+            panic!("not an export");
+        };
+        assert_eq!(
+            (export.project.as_str(), export.scale, export.transparent),
+            ("3", Some(2), false)
+        );
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"import":{"name":"a.json","text":"{}"}}"#).unwrap();
+        assert!(matches!(m, ClientMessage::Import { import } if import.text == "{}"));
+        for bad in [
+            r#"{"import":{"path":"/etc/passwd"}}"#,
+            r#"{"export":{"project":"3","level":"all","format":"json"}}"#,
+        ] {
+            assert!(serde_json::from_str::<ClientMessage>(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

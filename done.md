@@ -40,6 +40,14 @@ Cloud review finding (2026-10-08): `copy_dir` in `crates/rtok-agent-sdk/src/lib.
 
 Check: `cargo fmt --check`, `cargo clippy -p rtok-agent-sdk --all-targets -- -D warnings`, `cargo test -p rtok-agent-sdk`.
 
+### T504. Read hook: case-insensitive path match on Windows
+
+Cloud review finding of 2026-10-08, filed as T460 in the findings table (an id the done `mem_pack` task already holds). `same_path` in `src/plugins/read/hook.rs` compared with `==` and `Path::ends_with`, so `C:\Repo\Src\Main.rs` and `c:\repo\src\main.rs` (or a relative `src\main.rs` against it) were different files on Windows and the "edited just now" window missed the write. The same copy sat in `src/measure/stats.rs`. Both now call `crate::fs::same_spelling`, built on the shared `rtok_store::same_path` plus the new `rtok_store::path_ends_with` (whole components, ASCII case folded on Windows only, empty suffix matches nothing). macOS stays case-sensitive: the shared helpers fold on Windows only, and a case-sensitive APFS volume would otherwise merge two real files.
+
+Check: `paths::tests::suffix_match_folds_ascii_case_only_when_asked` (the fold flag is a parameter, so the Windows branch runs on every platform; it fails when folding is switched off), `plugins::read::hook::tests::same_path_follows_the_platform_case_rule` (asserts the fold on Windows and none elsewhere); `just fmt-check`, `just lint`.
+
+Result: 2026-10-10. Hook and stats tests pass; no new dependency.
+
 ### T460. Budgeted `mem_pack` for memory notes
 
 The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
@@ -81,6 +89,16 @@ Check: `the_client_does_not_send_a_body_over_the_cap_to_the_resident` (a fake re
 Result: see the commit; `just check` green.
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
+
+### T467. Move `src/store/` into `crates/rtok-store`
+
+Cloud review finding (2026-10-08, issue #628): `src/store/mod.rs` was 5,275 lines and belonged in `crates/rtok-store`. Already done before the review was triaged: #907 (#628) extracted the SQLite store into `rtok-store`, and #910 (#631) stopped it writing the terminal. `src/store/mod.rs` is now a 120-line re-export with the housekeeping warning hand-off to `stdio::stderr`. Nothing left to move.
+
+Check: `wc -l src/store/mod.rs` (120 at `26fe6c18`); `git log -- src/store/mod.rs`.
+
+Result: closed without code; the findings row leaves `plan.md`.
+Status: done 2026-10-10
+Model: Claude Code / opus-5.5
 
 ### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
 
@@ -9181,6 +9199,18 @@ Done: new `src/plugins/graph/draw.rs`. `svg(&Export, transparent)` is a pure fun
 Result: `just check` on the final tree: fmt, clippy `-D warnings` and jscpd passed; `cargo nextest run --workspace --no-fail-fast` gave 3218 run, 3216 passed, 2 failed (`hook_fail_open` `a_locked_store_fails_the_hook_open_in_ms` and `a_locked_session_end_is_deferred_not_lost`, the known load flake; `cargo nextest run --test hook_fail_open` alone: 242 passed). Tests: `draw::tests` (7: well-formed SVG with legend and footer text, escaping of names and control characters, the 200-node cap with "25 nodes hidden" and the best connected node surviving, transparent and opaque background, overview panels and links, PNG size at 1x, 2x and 4x, alpha corner of a transparent PNG) and `tests/graph_export_image.rs` (3: SVG of a project scope and the same picture from a saved JSON, PNG at 1x, 2x and 4x through the binary, a bare PNG and `--scale` with SVG refused). `config_coverage` and the trycmd help and completion snapshots are updated.
 
 Deviations: `--theme light|dark` is not there (one light palette; `--transparent` is the only background choice), because the line cap left no room and the card did not ask for the flag by name. The Export menu on the page and the import view are T329.40, the TUI action T329.41 (D27). The PNG is refused on a machine with no fonts instead of being drawn without text. `--scale` takes 1 to 4, not only 1, 2 and 4.
+
+### T329.40. Graph page: Export menu and read-only import view
+
+The page half of T329 §8c, left over from T329.31: the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; an image of the live frame only for part 2; the dialog says that file and symbol names are included) that downloads the same JSON, SVG and PNG the CLI writes (one function behind both, no second drawing code), and the page opening an exported JSON read-only with the banner "viewing export from ..." (the importer is `export::read`; nothing is written to the registry or the index). Depends on T329.31 and T329.14.
+
+Check: the page exports the JSON the CLI writes (byte-equal without `exported_at`) and imports it back; an imported file is read-only and shows the banner; the dialog names the file and symbol names; Vitest, stories (axe) and Playwright; `just check`.
+
+Done: the page asks and the server answers, so the CLI and the page share one drawing path. `export::page_file(rt, &ExportRequest)` resolves the scope like `--project`, calls the same `render` the CLI calls (redacted, pretty, the 200-node cap in `draw`) and returns an `ExportFile` (name, mime, base64 data); `Level` and `Format` gained serde and schema derives. `/ws` gained `ClientMessage::Export`/`Import` and `ServerFrame::Export`/`Imported`; `Import` carries the file's TEXT (never a path) and `export::parse` answers without opening a `Runtime`, so nothing reaches the registry or the index. Web: `ExportMenu.tsx` (an Export button opening an inline group that says "File names and symbol names are included", scope radios for the overview, the symbol graph and the focused subgraph, format json|svg|png, size 1x to 4x, transparent, Download through `download()`, and an "open an export" file picker) and `ImportedView.tsx` (the banner "viewing export from NAME", a Close export button, projects, links and the first 200 symbols; the live frame and the scene give way). `ws.schema.json` and `snapshot.gen.ts` were regenerated (`RTOK_BLESS=1`, `npm run gen:api`). Reused: `export::render`/`parse`, the Diff request pattern (`askDoctor`), `download()`, Compare's `Section`/`Row` and `tooLarge`, `drillServer` for stories. New dependency `base64` 0.23.1 (optional, under `graph`): the PNG travels inside a text frame; it is already listed in `rust.md` and now in `toolchain.md`.
+
+Result: `just fmt-check` and `just lint` pass; cargo nextest for `web::`, `plugins::graph::export`, `tui::exporter`, `surface_parity` and `cli_trycmd`: 81 passed; `just spa-typecheck`; `just spa-test` 423 passed; `just js`; `just spa-stories` 230 passed; `just spa-e2e` 33 passed.
+
+Deviations: the image of the live frame is not here (the card says part 2 only); the TUI half of D27 is T329.41, and `tests/surface_parity.rs` pins both halves.
 
 ### T329.41. TUI: graph export action
 

@@ -21,7 +21,9 @@ pub(crate) use bail;
 mod error;
 pub use error::{Result, StoreError};
 mod paths;
-pub use paths::{canon, is_unwalkable_root, path_starts_with, same_path, strip_prefix};
+pub use paths::{
+    canon, is_unwalkable_root, path_ends_with, path_starts_with, same_path, strip_prefix,
+};
 pub mod sanitize;
 mod task_id;
 pub use task_id::{MAX_DEPTH, MAX_PREFIX, TaskId, check_prefix};
