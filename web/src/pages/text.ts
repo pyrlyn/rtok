@@ -251,8 +251,12 @@ export function parseHosts(text: string): HostsView {
   if (text.startsWith("probing hosts")) return { probing: true, blocks: [], other: [] };
   const blocks: HostBlock[] = [];
   const other: string[] = [];
+  // The text ends with the `junk` section the tui prints; the web shows it as the junk card.
+  let inJunk = false;
   for (const l of lines(text)) {
     if (!l.trim()) continue;
+    if (l === "junk") inJunk = true;
+    if (inJunk) continue;
     const h = /^(CLI|Desktop): (.+?)(?: — (.+))?$/.exec(l);
     if (h) {
       blocks.push({

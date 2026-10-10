@@ -17,6 +17,19 @@ export function compact(n: number | null | undefined): string {
   return String(n);
 }
 
+/** `1023 B`, `1.0 KB`, `1.5 MB`: the same binary units and one decimal as the CLI's sizes. */
+export function bytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = n / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(1)} ${units[unit]}`;
+}
+
 export const pct = (x: number, digits = 1): string =>
   Number.isFinite(x) ? `${(x * 100).toFixed(digits)}%` : "-";
 
