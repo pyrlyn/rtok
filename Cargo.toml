@@ -64,7 +64,7 @@ rust-version.workspace = true
 repository.workspace = true
 # Both fields are also what dist reads when it builds a Homebrew formula — off today, kept
 # commented out in dist-workspace.toml to be fixed later, so leave them in place.
-homepage = "https://pyrlyn.github.io/landing/rtok/"
+homepage = "https://github.com/pyrlyn/rtok"
 license.workspace = true
 description = "Token-reduction CLI for AI coding agents: hooks, MCP server and API proxy with pluggable methods"
 # T23.6: only `rtok-plugin-sdk` is published. A release of the binary is a tag plus dist
