@@ -10,11 +10,14 @@ export function Search({
     onChange,
     label,
     placeholder,
+    onEnter,
 }: {
     value: string;
     onChange: (next: string) => void;
     label: string;
     placeholder?: string;
+    /** For a search that asks a server: filtering as you type would send a request per key. */
+    onEnter?: () => void;
 }) {
     const id = useId();
     return (
@@ -28,6 +31,7 @@ export function Search({
                 value={value}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
                 className={`${focusRing} h-control w-full rounded-md border border-border bg-bg/60 px-2.5 text-xs text-fg transition-colors duration-fast ease-standard placeholder:text-fg-subtle max-md:h-touch max-md:text-sm hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40`}
             />
         </div>

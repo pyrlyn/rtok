@@ -4,7 +4,7 @@
 
 import { type RefObject, useRef, useState } from "react";
 import { useDrill } from "../../api/query";
-import type { DrillGraph, ProjectRow } from "../../api/snapshot.gen";
+import type { DrillGraph, DrillHit, DrillNode, ProjectRow } from "../../api/snapshot.gen";
 import { Empty } from "../../states";
 import { Button } from "../../ui/Button";
 import { Chip } from "../../ui/Chip";
@@ -12,7 +12,9 @@ import { focusRing } from "../../ui/cx";
 import { Panel } from "../../ui/Panel";
 import { Pill } from "../../ui/Pill";
 import { Result } from "../../ui/Result";
+import { Search } from "../../ui/Search";
 import { Spinner } from "../../ui/Spinner";
+import { Hits, NodeDetails } from "./DrillPanel";
 import { drillScene, emptyScene } from "./drillScene";
 import {
     breadcrumb,
@@ -85,6 +87,9 @@ export function DrillView({
     const row = rows.find((r) => String(r.id) === state.project);
     const [limit, setLimit] = useState(PAGE);
     const [selected, setSelected] = useState<string | null>(null);
+    // What is typed is not sent until Enter: each key would otherwise be a request.
+    const [typed, setTyped] = useState("");
+    const [asked, setAsked] = useState("");
     // The layout keeps the position of an id it has seen, so a string id keeps its number across frames.
     const ids = useRef(new Map<string, number>()).current;
     const own = useRef<ViewApi | null>(null);
@@ -100,20 +105,34 @@ export function DrillView({
             focus: state.focus,
             depth: state.focus ? state.depth : null,
             limit,
-            query: "",
+            query: asked,
         },
         [ix?.rows, ix?.files, ix?.pending, ix?.indexed_at],
     );
     const graph = q.data;
     const roots = new Map(rows.map((r) => [r.id, r.root]));
+    // With nothing picked, the panel follows the focus, so a hit that was just opened is the one shown.
+    const focused =
+        state.focus &&
+        graph?.nodes.find(
+            (n) =>
+                n.path === state.focus!.path &&
+                n.label === state.focus!.name &&
+                n.project === graph.project &&
+                n.kind !== "file",
+        );
+    const shown = graph?.nodes.find((n) => n.id === selected) ?? focused ?? undefined;
     const scene = useStableScene(
-        graph?.state === "ok" ? drillScene(graph, { idOf, roots, selected }) : emptyScene,
+        graph?.state === "ok"
+            ? drillScene(graph, { idOf, roots, selected: shown?.id ?? null })
+            : emptyScene,
     );
 
+    const openNode = (n: DrillNode) => go(openSymbol(n.project, { path: n.path, name: n.label }));
     const click = (id: string) => {
         const n = graph?.nodes.find((x) => x.id === id);
         if (!n) return;
-        if (n.kind === "external") return go(openSymbol(n.project, { path: n.path, name: n.label }));
+        if (n.kind === "external") return openNode(n);
         setSelected(id);
         // The second click on the selected node is the step into it.
         if (id !== selected) return;
@@ -121,6 +140,17 @@ export function DrillView({
         else if (n.kind === "function") go(focusOn(state, { path: n.path, name: n.label }));
     };
     const byNumber = (num: number) => graph?.nodes.find((n) => idOf(n.id) === num)?.id;
+    // A hit in this project focuses its symbol here; one in a linked project opens that project with it focused.
+    const pick = (h: DrillHit) => {
+        setSelected(null);
+        const focus = { path: h.path, name: h.name };
+        go(
+            String(h.project) === state.project
+                ? focusOn(state, focus)
+                : openSymbol(h.project, focus),
+        );
+    };
+    const names = new Map(rows.map((r) => [r.id, r.name]));
     const crumbs = breadcrumb(state, graph?.name ?? row?.name ?? `project ${state.project}`);
 
     return (
@@ -162,47 +192,97 @@ export function DrillView({
             ) : graph.state === "missing" ? (
                 <Empty title="The directory is missing" hint={graph.root} />
             ) : (
-                <SceneView
-                    scene={scene}
-                    api={api}
-                    empty="Nothing to draw"
-                    events={{
-                        select: (num) => {
-                            const id = byNumber(num);
-                            if (id) click(id);
-                        },
-                        menu: () => {},
-                    }}
-                    list={<NodeList graph={graph} select={click} selected={selected} />}
-                    toolbar={
-                        state.focus && (
-                            <div role="group" aria-label="depth" className="flex items-center gap-1">
-                                {Array.from({ length: DEPTH_MAX }, (_, i) => i + 1).map((d) => (
-                                    <Chip
-                                        key={d}
-                                        pressed={state.depth === d}
-                                        onPressedChange={() => go({ ...state, depth: d })}
-                                    >
-                                        {`depth ${d}`}
-                                    </Chip>
-                                ))}
-                            </div>
-                        )
-                    }
-                >
-                    {q.isFetching && <Busy>Updating…</Busy>}
-                    {graph.partial && (
-                        <Result verb="index" kind="warn">
-                            Partial: some files changed since the last index run, so this picture
-                            lags the tree.
-                        </Result>
-                    )}
-                    {graph.more > 0 && (
-                        <Button pending={q.isFetching} onClick={() => setLimit(limit + PAGE)}>
-                            {`+${graph.more} more`}
-                        </Button>
-                    )}
-                </SceneView>
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                    <div className="flex min-w-0 flex-col gap-2">
+                        <SceneView
+                            scene={scene}
+                            api={api}
+                            empty="Nothing to draw"
+                            events={{
+                                select: (num) => {
+                                    const id = byNumber(num);
+                                    if (id) click(id);
+                                },
+                                menu: () => {},
+                            }}
+                            list={
+                                <NodeList
+                                    graph={graph}
+                                    select={click}
+                                    selected={shown?.id ?? null}
+                                />
+                            }
+                            toolbar={
+                                <>
+                                    <div className="w-56">
+                                        <Search
+                                            label="search symbols"
+                                            placeholder="name, then Enter"
+                                            value={typed}
+                                            onChange={setTyped}
+                                            onEnter={() => setAsked(typed.trim())}
+                                        />
+                                    </div>
+                                    {state.focus && (
+                                        <div
+                                            role="group"
+                                            aria-label="depth"
+                                            className="flex items-center gap-1"
+                                        >
+                                            {Array.from({ length: DEPTH_MAX }, (_, i) => i + 1).map(
+                                                (d) => (
+                                                    <Chip
+                                                        key={d}
+                                                        pressed={state.depth === d}
+                                                        onPressedChange={() =>
+                                                            go({ ...state, depth: d })
+                                                        }
+                                                    >
+                                                        {`depth ${d}`}
+                                                    </Chip>
+                                                ),
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            }
+                        >
+                            {q.isFetching && <Busy>Updating…</Busy>}
+                            {graph.partial && (
+                                <Result verb="index" kind="warn">
+                                    Partial: some files changed since the last index run, so this
+                                    picture lags the tree.
+                                </Result>
+                            )}
+                            {graph.more > 0 && (
+                                <Button
+                                    pending={q.isFetching}
+                                    onClick={() => setLimit(limit + PAGE)}
+                                >
+                                    {`+${graph.more} more`}
+                                </Button>
+                            )}
+                        </SceneView>
+                    </div>
+                    <aside
+                        aria-label="node details"
+                        className="flex min-w-0 flex-col gap-3 rounded-md border border-border p-2.5"
+                    >
+                        {asked && !q.isPlaceholderData && (
+                            <section aria-label="search results" className="flex flex-col gap-1">
+                                <h3 className="text-2xs font-semibold text-fg-muted">{`results for "${asked}"`}</h3>
+                                <Hits hits={graph.hits} names={names} pick={pick} />
+                            </section>
+                        )}
+                        <NodeDetails
+                            graph={graph}
+                            node={shown}
+                            rows={rows}
+                            select={setSelected}
+                            open={openNode}
+                        />
+                    </aside>
+                </div>
             )}
         </Panel>
     );

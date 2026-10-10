@@ -26,7 +26,6 @@
 - T329.18. Graph diff: compare before and after a change
 - T329.19. Graph health score per project
 - T329.21. Project badges in the graph page lists
-- T329.23. Graph drill-down: side panel and search
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T356. Never index `$HOME` or `/` as a graph root
