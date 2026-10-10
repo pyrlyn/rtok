@@ -58,13 +58,45 @@ pub fn owner(
     })
 }
 
-/// Record the claim in the store; a store error only warns — the lock already holds it.
+/// Record the claim in the store; a store error only warns — the lock already holds it. An agent
+/// that takes the worktree settles its pending claim (T289.5).
 pub fn remember(store: Option<&Store>, path: &Path, agent: &str, task: &str) {
-    let path = crate::fs::canon(path);
-    let saved = store.map(|s| s.claim_worktree(&path.to_string_lossy(), agent, task));
-    if let Some(Err(e)) = saved {
+    let path = crate::fs::canon(path).to_string_lossy().into_owned();
+    let Some(store) = store else {
+        return;
+    };
+    let saved = store
+        .claim_worktree(&path, agent, task)
+        .and_then(|()| store.take_pending_worktree(&path).map(drop));
+    if let Err(e) = saved {
         crate::log::stderr_ln(&format!("warning: claim not stored: {e:#}"));
     }
+}
+
+/// `SessionStart` (T289.5): the session `agent`, whose working directory is `cwd`, takes the
+/// worktree around it that a post-create script left pending. Returns the worktree's path.
+/// Fail open: it makes no git call (the task was named when the claim was parked) and every
+/// store error just means nothing was completed.
+pub fn complete_pending(store: &Store, cwd: &Path, agent: &str) -> Option<String> {
+    let parked = store.pending_worktrees().ok()?;
+    if parked.is_empty() {
+        return None;
+    }
+    let here = crate::fs::canon(cwd);
+    // The deepest one wins, as in [`linked`]: worktrees may nest.
+    let (path, task) = parked
+        .into_iter()
+        .filter(|(p, _)| crate::fs::path_starts_with(&here, &crate::fs::canon(Path::new(p))))
+        .max_by_key(|(p, _)| Path::new(p).components().count())?;
+    // Taking the row first lets only one of two sessions starting together win it.
+    if !store.take_pending_worktree(&path).ok()? {
+        return None;
+    }
+    if store.claim_worktree(&path, agent, &task).is_err() {
+        let _ = store.add_pending_worktree(&path, &task);
+        return None;
+    }
+    Some(path)
 }
 
 /// Seed the new worktree's symbol rows from the main checkout so the next index
@@ -134,6 +166,9 @@ pub struct Adopted {
     pub task: String,
     pub origin: &'static str,
     pub locked: bool,
+    /// No agent was bound: the claim waits for the next agent in the worktree (T289.5).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub pending: bool,
     /// The branch the worktree has checked out; the project's name when auto-added.
     #[serde(skip)]
     pub branch: Option<String>,
@@ -222,6 +257,7 @@ pub fn run(
         task,
         origin,
         locked,
+        pending: false,
         branch: record.branch.clone(),
     })
 }
@@ -244,8 +280,9 @@ pub fn bind(
 }
 
 /// `adopt` with no agent to name, as from a host's post-create script (T289.3): the one live
-/// agent of the pool's host working in the repository takes the worktree. Several or none are
-/// an error rather than a guess, which would hand the worktree to another agent.
+/// agent of the pool's host working in the repository takes the worktree. With none or several,
+/// guessing would hand the worktree to another agent, so the claim is parked without an agent
+/// and without a git lock (T289.5) and the next agent to adopt or start in it takes it.
 pub fn bind_unattended(
     store: &Store,
     (path, task): (&Path, Option<&str>),
@@ -276,20 +313,26 @@ pub fn bind_unattended(
                 .is_some_and(|c| crate::fs::same_dir(c, &repo))
         })
         .collect();
-    match here.len() {
-        1 => {
-            let agent = store
-                .agent_detail(&here.remove(0).id)?
-                .context("the live agent vanished")?;
-            bind(Some(store), path, &agent, None, task, true, auto_add)
-        }
-        0 => bail!(
-            "no live {} agent works in {repo}; pass --agent or set RTOK_AGENT_ID",
-            hosts.join("/")
-        ),
-        n => bail!(
-            "{n} live {} agents work in {repo}; pass --agent to name one",
-            hosts.join("/")
-        ),
+    if here.len() == 1 {
+        let agent = store
+            .agent_detail(&here.remove(0).id)?
+            .context("the live agent vanished")?;
+        return bind(Some(store), path, &agent, None, task, true, auto_add);
     }
+    let task = task_of(path, task, &record)?;
+    store.add_pending_worktree(&crate::fs::canon(&record.path).to_string_lossy(), &task)?;
+    register_project(
+        Some(store),
+        auto_add,
+        &record.path,
+        record.branch.as_deref(),
+    );
+    Ok(Adopted {
+        path: record.path.clone(),
+        task,
+        origin: origin::of(&record.path),
+        locked: false,
+        pending: true,
+        branch: record.branch.clone(),
+    })
 }

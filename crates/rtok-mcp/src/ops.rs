@@ -28,8 +28,15 @@ pub enum Report {
 }
 
 /// Install, update, or remove `spec`'s entry. Never silently removes an entry the user edited
-/// or that never was rtok's (T246's ownership rule, restated behind this crate's own [`Fs`]).
-pub fn apply(spec: &McpSpec, mode: Mode, fs: &mut impl Fs) -> Result<Report> {
+/// or that never was rtok's (T246's ownership rule, restated behind this crate's own [`Fs`]). `is_bin` says whether a string
+/// names the rtok binary, as for `rtok_agent_sdk::runs_bin`: the binary's check also knows
+/// `rtok.exe`, case folding and its own running path, which this crate cannot see.
+pub fn apply(
+    spec: &McpSpec,
+    mode: Mode,
+    fs: &mut impl Fs,
+    is_bin: fn(&str) -> bool,
+) -> Result<Report> {
     let ours = spec.entry();
     let at = format!("{}.{}", spec.key_path.join("."), spec.server.name);
     match mode {
@@ -41,7 +48,7 @@ pub fn apply(spec: &McpSpec, mode: Mode, fs: &mut impl Fs) -> Result<Report> {
             let Some(have) = config::read_entry(fs, spec)? else {
                 return Ok(Report::NoChanges);
             };
-            if let Some(reason) = not_removable(&have, &ours) {
+            if let Some(reason) = not_removable(&have, &ours, is_bin) {
                 return Ok(Report::Left(format!("leave {at} ({reason})")));
             }
             match config::remove_entry(fs, spec)? {
@@ -55,21 +62,11 @@ pub fn apply(spec: &McpSpec, mode: Mode, fs: &mut impl Fs) -> Result<Report> {
 /// `None` when `have` is safe to remove; `Some(reason)` otherwise — mirrors
 /// `rtok_agent_sdk::judge_owned`'s two checks (not rtok's at all; rtok's but user-edited) at a
 /// smaller scope, since no host calls this yet and there is nowhere to ask "remove anyway?".
-fn not_removable(have: &Value, ours: &Value) -> Option<&'static str> {
-    if !runs_rtok(have) {
+fn not_removable(have: &Value, ours: &Value, is_bin: fn(&str) -> bool) -> Option<&'static str> {
+    if !rtok_agent_sdk::runs_bin(have, is_bin) {
         return Some("not rtok's; remove by hand");
     }
     (have != ours).then_some("changed by you; remove by hand")
-}
-
-/// True when `v`, or anything nested in it, names the rtok binary — bare or as a path.
-fn runs_rtok(v: &Value) -> bool {
-    match v {
-        Value::String(s) => s == "rtok" || s.ends_with("/rtok") || s.ends_with("\\rtok.exe"),
-        Value::Array(a) => a.iter().any(runs_rtok),
-        Value::Object(m) => m.values().any(runs_rtok),
-        _ => false,
-    }
 }
 
 #[cfg(test)]
@@ -103,6 +100,11 @@ mod tests {
             self.backups += 1;
             Ok(())
         }
+    }
+
+    /// Stands in for the binary check a host passes (`rtok`'s own lives in the binary crate).
+    fn is_rtok_bin(s: &str) -> bool {
+        Path::new(s).file_stem().is_some_and(|n| n == "rtok")
     }
 
     fn spec(format: Format, key_path: &str) -> McpSpec {
@@ -168,7 +170,7 @@ mod tests {
                     .unwrap();
             }
 
-            let install = apply(&spec, Mode::Install, &mut fs).unwrap();
+            let install = apply(&spec, Mode::Install, &mut fs, is_rtok_bin).unwrap();
             assert!(
                 matches!(install, Report::Wrote(_)),
                 "{:?}: {install:?}",
@@ -188,7 +190,7 @@ mod tests {
 
             // A second install of the same entry is a no-op — the shared "no changes" gate.
             assert_eq!(
-                apply(&spec, Mode::Install, &mut fs).unwrap(),
+                apply(&spec, Mode::Install, &mut fs, is_rtok_bin).unwrap(),
                 Report::NoChanges
             );
             assert_eq!(
@@ -211,7 +213,7 @@ mod tests {
                 );
             }
 
-            let remove = apply(&spec, Mode::Remove, &mut fs).unwrap();
+            let remove = apply(&spec, Mode::Remove, &mut fs, is_rtok_bin).unwrap();
             assert!(
                 matches!(remove, Report::Wrote(_)),
                 "{:?}: {remove:?}",
@@ -224,7 +226,7 @@ mod tests {
                 case.format
             );
             assert_eq!(
-                apply(&spec, Mode::Remove, &mut fs).unwrap(),
+                apply(&spec, Mode::Remove, &mut fs, is_rtok_bin).unwrap(),
                 Report::NoChanges
             );
         }
@@ -240,7 +242,7 @@ mod tests {
         ] {
             let spec = spec(Format::Toml, key_path);
             let mut fs = MemFs::default();
-            apply(&spec, Mode::Install, &mut fs).unwrap();
+            apply(&spec, Mode::Install, &mut fs, is_rtok_bin).unwrap();
             let body = String::from_utf8(fs.read(&spec.config_path).unwrap()).unwrap();
             assert!(body.starts_with(header), "{body}");
             assert!(!body.contains("rtok = {"), "{body}");
@@ -251,11 +253,11 @@ mod tests {
     fn remove_leaves_an_entry_the_user_edited() {
         let spec = spec(Format::Json, "mcpServers");
         let mut fs = MemFs::default();
-        apply(&spec, Mode::Install, &mut fs).unwrap();
+        apply(&spec, Mode::Install, &mut fs, is_rtok_bin).unwrap();
         let edited = br#"{"mcpServers":{"rtok":{"type":"stdio","command":"rtok","args":["mcp","--extra"]}}}"#;
         fs.write(&spec.config_path, edited.to_vec()).unwrap();
 
-        let report = apply(&spec, Mode::Remove, &mut fs).unwrap();
+        let report = apply(&spec, Mode::Remove, &mut fs, is_rtok_bin).unwrap();
         assert!(matches!(report, Report::Left(_)), "{report:?}");
         assert!(config::read_entry(&fs, &spec).unwrap().is_some());
     }
@@ -270,7 +272,7 @@ mod tests {
         )
         .unwrap();
 
-        let report = apply(&spec, Mode::Remove, &mut fs).unwrap();
+        let report = apply(&spec, Mode::Remove, &mut fs, is_rtok_bin).unwrap();
         assert!(matches!(report, Report::Left(_)), "{report:?}");
         assert!(config::read_entry(&fs, &spec).unwrap().is_some());
     }

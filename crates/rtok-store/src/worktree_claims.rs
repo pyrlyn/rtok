@@ -38,6 +38,8 @@ impl Store {
     /// `rtok worktree remove` (T286): the open claim on `path`, if any, is released.
     /// SQL equality misses a `\\?\` prefix and Windows case, so the match is [`crate::same_path`].
     pub fn release_worktree_claim(&self, path: &str) -> Result<()> {
+        // A worktree that goes has nobody left to take it (T289.5).
+        self.take_pending_worktree(path)?;
         let mut conn = self.lock()?;
         let open: Vec<String> = worktree_claims::table
             .filter(worktree_claims::released_at.is_null())

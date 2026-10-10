@@ -23,6 +23,8 @@ pub const INTERRUPT_MS: i64 = 120_000;
 const LONGEST_BUCKET_MS: i64 = 900_000;
 /// Latencies kept for the percentiles: "since open" would otherwise grow with every call.
 pub const LATENCY_KEEP: usize = 1000;
+/// Slots of a sparkline. The page and the TUI draw the same series, so the count is fixed here.
+pub const SPARK_SLOTS: usize = 30;
 
 /// The window chips of the page; the last one is "since open" and reads the running total.
 pub const WINDOWS: [(&str, i64); 4] = [
@@ -58,6 +60,16 @@ pub struct Finished {
     pub after: i64,
     pub at: i64,
     pub interrupted: bool,
+}
+
+/// Calls and tokens saved per slot over a window, oldest first. Summed from the same buckets as
+/// the window totals, so the slots add up to them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct Spark {
+    /// What the slots cover. "since open" reads the buckets, which are kept for 15 minutes only.
+    pub span_ms: i64,
+    pub calls: Vec<u64>,
+    pub saved: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -273,6 +285,30 @@ impl CallsStore {
     }
 }
 
+impl CallsStore {
+    /// The window's buckets spread over [`SPARK_SLOTS`] equal slots ending at `now`.
+    pub fn spark(&self, window: usize, now: i64) -> Spark {
+        let span_ms = WINDOWS[window].1.min(LONGEST_BUCKET_MS);
+        let width = span_ms / SPARK_SLOTS as i64;
+        let mut spark = Spark {
+            span_ms,
+            calls: vec![0; SPARK_SLOTS],
+            saved: vec![0; SPARK_SLOTS],
+        };
+        for (at, b) in &self.buckets {
+            let age = (now - at).max(0);
+            if age > span_ms {
+                continue;
+            }
+            // A bucket exactly `span_ms` old lands one past the first slot: it belongs in it.
+            let back = ((age / width) as usize).min(SPARK_SLOTS - 1);
+            spark.calls[SPARK_SLOTS - 1 - back] += b.calls;
+            spark.saved[SPARK_SLOTS - 1 - back] += b.before - b.after;
+        }
+        spark
+    }
+}
+
 /// Empty strings mean "all".
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FeedFilter {
@@ -396,6 +432,39 @@ mod tests {
 
     fn folded(store: &mut CallsStore, events: Vec<GraphEvent>, now: i64) {
         store.fold(&batch(events, 0), now);
+    }
+
+    #[test]
+    fn a_sparkline_spreads_the_buckets_over_equal_slots_and_adds_up_to_the_window() {
+        let mut s = CallsStore::default();
+        let now = T + 600_000;
+        folded(&mut s, vec![end("old", 100, 30)], T);
+        folded(&mut s, vec![end("edge", 40, 10)], now - 60_000);
+        folded(
+            &mut s,
+            vec![end("new", 20, 5), end("new2", 8, 8)],
+            now - 1000,
+        );
+
+        let long = s.spark(2, now);
+        assert_eq!((long.span_ms, long.calls.len()), (900_000, SPARK_SLOTS));
+        // 30 s slots: 10 minutes back is the 21st slot from the end, a second back the last one.
+        assert_eq!((long.calls[9], long.saved[9]), (1, 70));
+        assert_eq!((long.calls[27], long.saved[27]), (1, 30));
+        assert_eq!((long.calls[29], long.saved[29]), (2, 15));
+        let w = s.window_totals(2, now);
+        assert_eq!(long.calls.iter().sum::<u64>(), w.calls);
+        assert_eq!(long.saved.iter().sum::<i64>(), w.before - w.after);
+
+        // A bucket exactly one span old is the first slot; an older one is not in the series.
+        let short = s.spark(0, now);
+        assert_eq!(
+            (short.span_ms, short.calls[0], short.calls[29]),
+            (60_000, 1, 2)
+        );
+        assert_eq!(short.calls.iter().sum::<u64>(), 3);
+        // "since open" has no buckets beyond 15 minutes: it draws the last 15.
+        assert_eq!(s.spark(3, now), long);
     }
 
     #[test]

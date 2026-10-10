@@ -9,23 +9,13 @@
 //! view of a saved export, which opens the file with [`export::read`] and writes nothing. The
 //! panel replaces the page body while it is open, as compare does.
 
-use std::sync::mpsc;
-
 use crossterm::event::KeyCode;
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::Line;
-use ratatui::widgets::{Paragraph, Wrap};
 
+use super::panel::{self, Answer, Panel, Stage, error_lines};
 use super::theme;
-use super::view::status_line;
 use crate::config::Config;
-
-/// Rows one PageUp or PageDown moves.
-const PAGE: u16 = 10;
-
-type Answer = Result<Vec<Line<'static>>, String>;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Format {
@@ -66,8 +56,8 @@ fn next<T: Copy + PartialEq>(all: &[T], cur: T) -> T {
     all[(i + 1) % all.len()]
 }
 
-impl Form {
-    fn new() -> Self {
+impl Default for Form {
+    fn default() -> Self {
         Self {
             format: Format::Json,
             level: Level::Overview,
@@ -77,7 +67,9 @@ impl Form {
             note: String::new(),
         }
     }
+}
 
+impl Form {
     fn cycle(&mut self) {
         match FIELDS[self.at] {
             Field::Format => {
@@ -132,109 +124,93 @@ impl Form {
     }
 }
 
-enum Stage {
-    Closed,
+/// What the panel is asking for while a field has the keys.
+#[derive(Clone, Copy)]
+pub(super) enum Ask {
     Form,
     /// Typing the path of a saved export to view.
     Open,
-    /// Computing off the key loop; Esc drops the receiver and with it the answer.
-    Running(mpsc::Receiver<Answer>),
-    Shown(Vec<Line<'static>>),
 }
 
-pub(super) struct Exporter {
-    stage: Stage,
+pub(super) type Exporter = Panel<Export>;
+
+#[derive(Default)]
+pub(super) struct Export {
     form: Form,
     input: String,
     /// The registry id handed to the export, and the name the panel calls it by.
     project: (String, String),
-    scroll: u16,
 }
 
-impl Default for Exporter {
-    fn default() -> Self {
-        Self {
-            stage: Stage::Closed,
-            form: Form::new(),
-            input: String::new(),
-            project: (String::new(), String::new()),
-            scroll: 0,
+impl panel::View for Export {
+    type Ask = Ask;
+    const LABEL: &'static str = "export";
+
+    fn open(&mut self, code: KeyCode, target: Option<(i32, &str)>) -> Option<Stage<Ask>> {
+        match code {
+            KeyCode::Char('e') => Some(match target {
+                Some((id, name)) => {
+                    self.project = (id.to_string(), name.to_owned());
+                    // The choices stay, as a second export of the same graph differs in one
+                    // field; the name does not, or typing a new one would append to the last.
+                    self.form.at = FIELDS.len() - 1;
+                    self.form.path.clear();
+                    self.form.note.clear();
+                    Stage::Prompt(Ask::Form)
+                }
+                None => Stage::Shown(error_lines("no project to export")),
+            }),
+            KeyCode::Char('v') => {
+                self.input.clear();
+                Some(Stage::Prompt(Ask::Open))
+            }
+            _ => None,
         }
     }
-}
 
-fn error_lines(e: &str) -> Vec<Line<'static>> {
-    vec![theme::banner('✕', e, theme::ERR)]
-}
-
-impl Exporter {
-    pub(super) fn is_open(&self) -> bool {
-        !matches!(self.stage, Stage::Closed)
-    }
-
-    /// Whether keys go to a field, ahead of the shell's own (`?`, `r`, `q`).
-    pub(super) fn typing(&self) -> bool {
-        matches!(self.stage, Stage::Form | Stage::Open)
-    }
-
-    /// `target` is the registry row under the cursor (id, name). Returns whether the panel took
-    /// the key; the shell keeps its own tab, quit and digit keys while a result is up.
-    pub(super) fn key(
+    fn prompt(
         &mut self,
+        ask: Ask,
         code: KeyCode,
-        target: Option<(i32, &str)>,
         cfg: &Config,
         background: bool,
-    ) -> bool {
-        if self.is_open()
-            && !self.typing()
-            && matches!(
-                code,
-                KeyCode::Left | KeyCode::Right | KeyCode::Char('q' | '1'..='9')
-            )
-        {
-            return false;
-        }
-        match &mut self.stage {
-            Stage::Closed => match code {
-                KeyCode::Char('e') => self.open_form(target),
-                KeyCode::Char('v') => self.open_view(),
-                _ => return false,
-            },
-            Stage::Form => self.form_key(code, cfg, background),
-            Stage::Open => match code {
-                KeyCode::Esc => self.stage = Stage::Closed,
+    ) -> Option<Stage<Ask>> {
+        match ask {
+            Ask::Form => self.form_key(code, cfg, background),
+            Ask::Open => match code {
+                KeyCode::Esc => Some(Stage::Closed),
                 KeyCode::Enter => self.view(background),
-                KeyCode::Backspace => {
-                    self.input.pop();
+                _ => {
+                    panel::edit(&mut self.input, code);
+                    None
                 }
-                KeyCode::Char(c) => self.input.push(c),
-                _ => {}
             },
-            Stage::Running(_) if code == KeyCode::Esc => self.stage = Stage::Closed,
-            Stage::Running(_) => {}
-            Stage::Shown(lines) => {
-                let last = u16::try_from(lines.len().saturating_sub(1)).unwrap_or(u16::MAX);
-                match code {
-                    KeyCode::Esc => self.stage = Stage::Closed,
-                    KeyCode::Char('e') => self.open_form(target),
-                    KeyCode::Char('v') => self.open_view(),
-                    KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
-                    KeyCode::Down => self.scroll = self.scroll.saturating_add(1).min(last),
-                    KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(PAGE),
-                    KeyCode::PageDown => self.scroll = self.scroll.saturating_add(PAGE).min(last),
-                    KeyCode::Home => self.scroll = 0,
-                    _ => {}
-                }
-            }
         }
-        true
     }
 
-    fn form_key(&mut self, code: KeyCode, cfg: &Config, background: bool) {
+    fn prompt_lines(&self, ask: Ask) -> Vec<Line<'static>> {
+        match ask {
+            Ask::Form => self.form.lines(&self.project.1),
+            Ask::Open => vec![
+                Line::from(format!("view the saved export: {}▏", self.input)),
+                Line::styled(
+                    "the path of a JSON file `rtok graph export` wrote; it is only read",
+                    theme::muted(),
+                ),
+            ],
+        }
+    }
+
+    fn running_lines(&self) -> Vec<Line<'static>> {
+        vec![Line::styled("working …", theme::muted())]
+    }
+}
+
+impl Export {
+    fn form_key(&mut self, code: KeyCode, cfg: &Config, background: bool) -> Option<Stage<Ask>> {
         let f = &mut self.form;
         match code {
-            KeyCode::Esc => self.stage = Stage::Closed,
+            KeyCode::Esc => return Some(Stage::Closed),
             KeyCode::Up => f.at = f.at.saturating_sub(1),
             KeyCode::Down => f.at = (f.at + 1).min(FIELDS.len() - 1),
             KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if FIELDS[f.at] != Field::Path => {
@@ -249,99 +225,38 @@ impl Exporter {
             }
             KeyCode::Enter => {
                 let (cfg, project, form) = (cfg.clone(), self.project.0.clone(), f.clone());
-                self.spawn(background, move || body::write(&cfg, &project, &form));
+                return Some(Stage::run(
+                    <Self as panel::View>::LABEL,
+                    background,
+                    move || body::write(&cfg, &project, &form),
+                ));
             }
             _ => {}
         }
+        None
     }
 
-    fn open_form(&mut self, target: Option<(i32, &str)>) {
-        self.scroll = 0;
-        self.stage = match target {
-            Some((id, name)) => {
-                self.project = (id.to_string(), name.to_owned());
-                // The choices stay, as a second export of the same graph differs in one field; the
-                // name does not, or typing a new one would append to the last.
-                self.form.at = FIELDS.len() - 1;
-                self.form.path.clear();
-                self.form.note.clear();
-                Stage::Form
-            }
-            None => Stage::Shown(error_lines("no project to export")),
-        };
-    }
-
-    fn open_view(&mut self) {
-        self.scroll = 0;
-        self.input.clear();
-        self.stage = Stage::Open;
-    }
-
-    fn view(&mut self, background: bool) {
+    fn view(&self, background: bool) -> Option<Stage<Ask>> {
         let path = self.input.trim().to_owned();
-        if path.is_empty() {
-            return;
-        }
-        self.spawn(background, move || body::view(&path));
+        (!path.is_empty()).then(|| {
+            Stage::run(<Self as panel::View>::LABEL, background, move || {
+                body::view(&path)
+            })
+        })
+    }
+}
+
+#[cfg(not(feature = "graph"))]
+mod body {
+    use super::{Answer, Form};
+    use crate::config::Config;
+
+    pub(super) fn write(_: &Config, _: &str, _: &Form) -> Answer {
+        super::panel::no_graph()
     }
 
-    fn spawn(&mut self, background: bool, work: impl FnOnce() -> Answer + Send + 'static) {
-        if !background {
-            self.stage = Stage::Shown(work().unwrap_or_else(|e| error_lines(&e)));
-            return;
-        }
-        let (tx, rx) = mpsc::channel();
-        let spawned = std::thread::Builder::new()
-            .name("rtok-tui-export".into())
-            .spawn(move || tx.send(work()));
-        self.stage = match spawned {
-            Ok(_) => Stage::Running(rx),
-            Err(e) => Stage::Shown(error_lines(&format!("export did not start: {e}"))),
-        };
-    }
-
-    /// Takes a finished run, if any. Called by the loop between keys.
-    pub(super) fn poll(&mut self) {
-        let Stage::Running(rx) = &self.stage else {
-            return;
-        };
-        self.stage = match rx.try_recv() {
-            Ok(answer) => Stage::Shown(answer.unwrap_or_else(|e| error_lines(&e))),
-            Err(mpsc::TryRecvError::Empty) => return,
-            Err(mpsc::TryRecvError::Disconnected) => {
-                Stage::Shown(error_lines("export stopped without an answer"))
-            }
-        };
-    }
-
-    /// Draws the panel over `area`; `false` when it is closed and the page draws itself.
-    pub(super) fn render(&self, frame: &mut Frame, area: Rect) -> bool {
-        let lines = match &self.stage {
-            Stage::Closed => return false,
-            Stage::Form => self.form.lines(&self.project.1),
-            Stage::Open => vec![
-                Line::from(format!("view the saved export: {}▏", self.input)),
-                Line::styled(
-                    "the path of a JSON file `rtok graph export` wrote; it is only read",
-                    theme::muted(),
-                ),
-            ],
-            Stage::Running(_) => vec![Line::styled("working …", theme::muted())],
-            Stage::Shown(lines) => lines.clone(),
-        };
-        let [text, hints] =
-            Layout::vertical([Constraint::Min(0), Constraint::Length(2)]).areas(area);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .wrap(Wrap { trim: false })
-                .scroll((self.scroll, 0)),
-            text,
-        );
-        frame.render_widget(
-            Paragraph::new(status_line("export", "")).wrap(Wrap { trim: true }),
-            hints,
-        );
-        true
+    pub(super) fn view(_: &str) -> Answer {
+        super::panel::no_graph()
     }
 }
 
@@ -494,33 +409,18 @@ mod body {
     }
 }
 
-#[cfg(not(feature = "graph"))]
-mod body {
-    use super::{Answer, Form};
-    use crate::config::Config;
-
-    pub(super) fn write(_: &Config, _: &str, _: &Form) -> Answer {
-        Err("the graph feature is not built in".into())
-    }
-
-    pub(super) fn view(_: &str) -> Answer {
-        Err("the graph feature is not built in".into())
-    }
-}
-
 #[cfg(all(test, feature = "graph"))]
 mod tests {
     use std::path::{Path, PathBuf};
 
     use crossterm::event::KeyModifiers;
-    use ratatui::backend::TestBackend;
 
     use super::*;
     use crate::plugin::Runtime;
     use crate::plugins::graph::{export, scope};
     use crate::store::Origin;
-    use crate::tui::app::{App, tests::config};
-    use crate::tui::view;
+    use crate::tui::app::App;
+    use crate::tui::app::tests::{config, render};
 
     const SRC: &str = "pub fn caller() {\n    callee();\n}\n\npub fn callee() {}\n";
 
@@ -545,18 +445,6 @@ mod tests {
         for c in text.chars() {
             press(app, KeyCode::Char(c));
         }
-    }
-
-    fn render(app: &App, width: u16) -> String {
-        let mut terminal = ratatui::Terminal::new(TestBackend::new(width, 40)).unwrap();
-        terminal.draw(|frame| view::draw(frame, app)).unwrap();
-        let buffer = terminal.backend().buffer().clone();
-        buffer
-            .content()
-            .chunks(usize::from(width))
-            .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 
     /// Opens the form, picks `format` and `level` with Space, names the file and writes it.

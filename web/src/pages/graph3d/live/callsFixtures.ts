@@ -70,6 +70,7 @@ export function windowOf(
     files_touched: 0,
     projects_hit: 0,
     latency: null,
+    spark: { span_ms: 300_000, calls: [], saved: [] },
     ...over,
   };
 }

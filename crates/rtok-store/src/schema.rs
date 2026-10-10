@@ -391,6 +391,15 @@ diesel::table! {
     }
 }
 
+// 0045 (T289.5): an adopted worktree no single agent could be named for yet.
+diesel::table! {
+    worktree_pending (path) {
+        path -> Text,
+        task -> Text,
+        created_at -> BigInt,
+    }
+}
+
 // 0026 (T287): messages between agents and the user. `from_agent` NULL = the user at a
 // terminal; `body` is capped and cleaned by `Store::send_message`.
 diesel::table! {
@@ -526,6 +535,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     symbol_stale,
     agents,
     worktree_claims,
+    worktree_pending,
     messages,
     projects,
     project_links,
