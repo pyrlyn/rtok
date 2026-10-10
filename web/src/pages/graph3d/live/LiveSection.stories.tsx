@@ -4,13 +4,14 @@
 
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
+import { BIG, drillServer } from "../../../api/sampleDrill";
 import { project } from "../../../api/sampleRows";
 import type { Frame, Connect } from "../../../api/ws";
 import { richSnapshot } from "../../fixtures";
 import { drawn } from "../../canvasPixels";
 import { withData } from "../../storyData";
 import { VIEW_KEY } from "../SceneView";
-import { done, running, view } from "./callsFixtures";
+import { done, LABELS, running, view, windowOf } from "./callsFixtures";
 import { LiveSection } from "./LiveSection";
 
 const projects = [
@@ -77,7 +78,7 @@ const calls = (): Frame[] => [
         type: "calls",
         calls: view({
             running: [
-                running("d", { project: "pyrlyn", target: "run" }),
+                running("d", { project: "rtok", target: "run" }),
                 running("e", { project: "ketch", target: "go", tool: "explore" }),
             ],
             feed: [
@@ -111,7 +112,7 @@ export const Busy: Story = {
 const runningFrames = (): Frame[] => [
     {
         type: "calls",
-        calls: view({ running: [running("d", { project: "pyrlyn", target: "run" })] }),
+        calls: view({ running: [running("d", { project: "rtok", target: "run" })] }),
     },
 ];
 
@@ -156,3 +157,84 @@ export const Live3d: Story = {
 };
 
 export const Live3dLight: Story = { ...Live3d, globals: { theme: "light" } };
+
+const outside = (): Frame[] => {
+    const feed = [
+        done("b", 400, 100, { target: "run", project: "pyrlyn" }),
+        done("a", 1000, 250, { target: "open_index", project: "rtok" }),
+    ];
+    return [{ type: "calls", calls: view({ feed }) }];
+};
+
+/** rtok links ketch only: a call on pyrlyn is listed with its mark, and only the call in scope glows. */
+export const OutsideScope: Story = {
+    decorators: [withData(streaming(outside()))],
+    play: async ({ canvasElement }) => {
+        const view = within(canvasElement);
+        const table = await view.findByRole("table", { name: "graph calls" });
+        await waitFor(() => expect(within(table).getAllByText("outside scope")).toHaveLength(1));
+        await waitFor(
+            () => expect(canvasElement.querySelectorAll("[data-testid=heat]").length).toBe(1),
+            READY,
+        );
+    },
+};
+
+const trend = () => {
+    const spark = {
+        span_ms: 300_000,
+        calls: Array.from({ length: 30 }, (_, i) => (i * 7) % 5),
+        saved: Array.from({ length: 30 }, (_, i) => (i * 13) % 40),
+    };
+    const feed = [done("a", 1000, 250)];
+    return [
+        {
+            type: "calls",
+            calls: view({ feed, windows: LABELS.map((l) => windowOf(l, feed, { spark })) }),
+        },
+    ] satisfies Frame[];
+};
+
+/** The calls and saved cards each carry a sparkline of the server's 30 slots. */
+export const Sparklines: Story = {
+    decorators: [withData(streaming(trend()))],
+    play: async ({ canvasElement }) => {
+        const view = within(canvasElement);
+        await view.findByRole("img", { name: "calls over the last 5 min" });
+        expect(view.getByRole("img", { name: "tokens saved over the last 5 min" })).toBeTruthy();
+    },
+};
+
+const bigRows = [project(1, "rtok", { selected: true }), project(3, BIG)];
+
+/** The drill-down cut at 500 nodes: a call on a symbol the cap left out counts on "+N more". */
+export const FoldedCalls: Story = {
+    args: { rows: bigRows, drill: { project: "3", expand: [], focus: null, depth: 1 } },
+    decorators: [
+        withData((h) => {
+            const served = drillServer({ ...snapshot, projects: bigRows })(h);
+            return {
+                ...served,
+                send: (m) => {
+                    if ("calls" in m && m.calls.subscribe) {
+                        const hidden = running("h", { project: BIG, target: "fn_599" });
+                        setTimeout(
+                            () => h.onFrame({ type: "calls", calls: view({ running: [hidden] }) }),
+                            0,
+                        );
+                    }
+                    return served.send(m);
+                },
+            };
+        }),
+        viewing("2d"),
+    ],
+    play: async ({ canvasElement }) => {
+        const list = await within(canvasElement).findByRole(
+            "list",
+            { name: "folded calls" },
+            READY,
+        );
+        expect(within(list).getByText(/^\+\d+ more · 1 folded$/)).toBeTruthy();
+    },
+};

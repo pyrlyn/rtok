@@ -15,7 +15,7 @@ import Scene2D from "../Scene2D";
 import { readView, saveView, useStableScene } from "../SceneView";
 import { useLayout } from "../useLayout";
 import { type ViewApi, webglAvailable } from "../webgl";
-import { liveState } from "./lit";
+import { foldedCounters, liveState } from "./lit";
 import { totalCalls } from "./useCalls";
 
 // The 3D chunk loads only when the live part draws in 3D.
@@ -40,15 +40,24 @@ function Canvas({
     store,
     now,
     view,
+    scope,
+    more = 0,
 }: {
     scene: Scene;
     store: CallsView;
     now: number;
     view: View;
+    scope: ReadonlySet<string> | null;
+    /** Nodes the cap folded away: the calls on them count on the nearest drawn ancestor. */
+    more?: number;
 }) {
     const positions = useLayout(scene);
     const api = useRef<ViewApi | null>(null);
-    const live = useMemo(() => liveState(scene, store, now), [scene, store, now]);
+    const live = useMemo(
+        () => liveState(scene, store, now, { scope, more }),
+        [scene, store, now, scope, more],
+    );
+    const folded = foldedCounters(scene, live, more);
     // Until the first call the picture is the static graph, dimmed.
     const idle = totalCalls(store) === 0 && store.running.length === 0;
     return (
@@ -110,6 +119,21 @@ function Canvas({
                     3D unavailable ({view.why}); showing 2D
                 </p>
             )}
+            {folded.length > 0 && (
+                <ul
+                    aria-label="folded calls"
+                    className="absolute right-2 bottom-2 flex flex-col items-end gap-1 text-2xs"
+                >
+                    {folded.map((f) => (
+                        <li
+                            key={f.label}
+                            className="rounded-md border border-border bg-bg/80 px-2 py-1 text-fg-muted"
+                        >
+                            {f.label} · {f.calls} folded
+                        </li>
+                    ))}
+                </ul>
+            )}
             {live.busy > 0 && (
                 <p
                     role="status"
@@ -127,14 +151,16 @@ function Overview({
     store,
     now,
     view,
+    scope,
 }: {
     rows: ProjectRow[];
     store: CallsView;
     now: number;
     view: View;
+    scope: ReadonlySet<string> | null;
 }) {
     const scene = useStableScene(buildScene(rows, { query: "", scopeOnly: false }));
-    return <Canvas scene={scene} store={store} now={now} view={view} />;
+    return <Canvas scene={scene} store={store} now={now} view={view} scope={scope} />;
 }
 
 function Drilled({
@@ -143,12 +169,14 @@ function Drilled({
     store,
     now,
     view,
+    scope,
 }: {
     state: DrillState;
     rows: ProjectRow[];
     store: CallsView;
     now: number;
     view: View;
+    scope: ReadonlySet<string> | null;
 }) {
     const ids = useRef(new Map<string, number>()).current;
     const idOf = (id: string) => ids.get(id) ?? (ids.set(id, ids.size + 1), ids.size);
@@ -158,7 +186,8 @@ function Drilled({
     const scene = useStableScene(
         graph?.state === "ok" ? drillScene(graph, { idOf, roots, selected: null }) : emptyScene,
     );
-    return <Canvas scene={scene} store={store} now={now} view={view} />;
+    const more = graph?.state === "ok" ? graph.more : 0;
+    return <Canvas scene={scene} store={store} now={now} view={view} scope={scope} more={more} />;
 }
 
 /** Part 2 of the graph page: the level part 1 shows, drawn read-only and lit by the calls arriving. */
@@ -167,11 +196,13 @@ export function LiveGraph({
     drill,
     store,
     now,
+    scope,
 }: {
     rows: ProjectRow[];
     drill: DrillState | null;
     store: CallsView;
     now: number;
+    scope: ReadonlySet<string> | null;
 }) {
     // The page's remembered choice starts it; "list" has no picture, so the live part draws 2D.
     const [choice, setChoice] = useState<LiveView>(() => (readView() === "3d" ? "3d" : "2d"));
@@ -197,8 +228,9 @@ export function LiveGraph({
             store={store}
             now={now}
             view={view}
+            scope={scope}
         />
     ) : (
-        <Overview rows={rows} store={store} now={now} view={view} />
+        <Overview rows={rows} store={store} now={now} view={view} scope={scope} />
     );
 }

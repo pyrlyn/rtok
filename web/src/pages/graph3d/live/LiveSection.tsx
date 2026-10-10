@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useConnection } from "../../../api/query";
 import type { ProjectRow } from "../../../api/snapshot.gen";
 import { Panel } from "../../../ui/Panel";
@@ -10,6 +10,7 @@ import type { DrillState } from "../drillState";
 import { CallFeed } from "./CallFeed";
 import { LiveGraph } from "./LiveGraph";
 import { LiveMetrics } from "./LiveMetrics";
+import { scopeNames } from "./scope";
 import { useCalls } from "./useCalls";
 
 /**
@@ -21,9 +22,10 @@ export function LiveSection({ rows, drill }: { rows: ProjectRow[]; drill: DrillS
     // The chips are the server's windows in its order; "5 min" is the second.
     const [window, setWindow] = useState(1);
     const connection = useConnection();
+    const scope = useMemo(() => scopeNames(rows, drill), [rows, drill]);
     return (
         <Panel title="live graph" hint={connection === "open" ? "read-only" : "reconnecting"}>
-            <LiveGraph rows={rows} drill={drill} store={calls.view} now={calls.now} />
+            <LiveGraph rows={rows} drill={drill} store={calls.view} now={calls.now} scope={scope} />
             <LiveMetrics
                 view={calls.view}
                 now={calls.now}
@@ -33,7 +35,7 @@ export function LiveSection({ rows, drill }: { rows: ProjectRow[]; drill: DrillS
                 pending={calls.pending}
                 onFreeze={calls.freeze}
             />
-            <CallFeed feed={calls.view.feed} />
+            <CallFeed feed={calls.view.feed} scope={scope} />
         </Panel>
     );
 }

@@ -27,7 +27,7 @@ const positions: Positions = {
     settled: true,
     subscribe: () => () => {},
 };
-const idle: LiveState = { lit: new Map(), busy: 0, focus: [] };
+const idle: LiveState = { lit: new Map(), busy: 0, focus: [], group: 0 };
 const on = (...focus: number[]): LiveState => ({ ...idle, focus });
 const noop = () => {};
 
