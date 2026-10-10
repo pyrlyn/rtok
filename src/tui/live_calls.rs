@@ -5,13 +5,12 @@
 //! T480 (D27): the live calls pane of the Graph tab, the terminal counterpart of the web graph
 //! page's panel (T329.26). The rows are `graph_events`, read by the web's own reader
 //! ([`live::Reader`], the poller of `src/web/live.rs` without the async) and folded by the web
-//! module's port of the page's store ([`CallsStore`]), so the pane and the page show the same
+//! module's [`CallsStore`], which the page's `calls` frame is built from, so the pane and the page show the same
 //! totals for the same calls. A freeze holds the picture only: the latest store keeps taking
 //! batches, so nothing is lost when it lifts.
 
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crossterm::event::KeyCode;
 use ratatui::Frame;
@@ -23,7 +22,7 @@ use ratatui::widgets::{Paragraph, Row, Table};
 use super::theme::{self, ACCENT, ERR, WARN};
 use super::view::time_of;
 use crate::web::calls_store::{
-    CallsStore, FeedFilter, Finished, Totals, WINDOWS, distinct, filter_feed,
+    CallsStore, FeedFilter, Finished, Totals, WINDOWS, clock_ms, distinct, filter_feed,
 };
 use crate::web::live::{self, CallBatch, Reader};
 
@@ -47,12 +46,6 @@ pub(super) struct LiveCalls {
     window: usize,
     filter: FeedFilter,
     now: i64,
-}
-
-fn clock_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// One thread on the web's reader; it ends when the TUI drops the receiver.
@@ -463,8 +456,7 @@ mod tests {
         batch(vec![end("a", 100, 30), failed, event("c")], 0)
     }
 
-    /// The numbers are those `callsStore.test.ts` expects for the same events, and the same
-    /// ones the store computes for this batch.
+    /// The numbers the store computes for this batch, which is what the page's frame carries.
     #[test]
     fn the_pane_shows_the_totals_the_web_store_computes() {
         let mut app = graph_app();

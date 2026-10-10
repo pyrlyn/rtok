@@ -11,7 +11,7 @@ import type { Snapshot } from "../../../api/snapshot.gen";
 import { richSnapshot } from "../../fixtures";
 import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
-import { batch, end, event } from "./callsFixtures";
+import { done, LABELS, running, view, windowOf } from "./callsFixtures";
 import { FOCUS_MS } from "./lit";
 import { HIDE_KEY, SPLIT_KEY } from "./Split";
 
@@ -46,13 +46,13 @@ describe("live graph", () => {
         expect(await screen.findByText("Waiting for graph calls")).toBeTruthy();
         await waitFor(() => expect(calls(w.sent)).toEqual([true]));
 
-        act(() => w.frame({ type: "calls", batch: batch([event({ call: "a" })]) }));
+        act(() => w.frame({ type: "calls", calls: view({ running: [running("a")] }) }));
         await waitFor(() => expect(screen.queryByText("Waiting for graph calls")).toBeNull());
         expect(
             within(screen.getByRole("list", { name: "running calls" })).getByText("callers"),
         ).toBeTruthy();
 
-        act(() => w.frame({ type: "calls", batch: batch([end("a", 1000, 250)]) }));
+        act(() => w.frame({ type: "calls", calls: view({ feed: [done("a", 1000, 250)] }) }));
         const table = await screen.findByRole("table", { name: "graph calls" });
         await waitFor(() => expect(within(table).getByText(/750 saved/)).toBeTruthy());
         expect(screen.getByText("75%")).toBeTruthy();
@@ -62,38 +62,22 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        const row = (kind: string, ref_id: string | null) => ({
-            id: 1,
-            kind,
-            before_bytes: 0,
-            after_bytes: 0,
-            est_before: 0,
-            est_after: 0,
-            ref_id,
-        });
         act(() =>
             w.frame({
                 type: "calls",
-                batch: batch([
-                    end("a", 0, 0, {
-                        ms: 40,
-                        symbols: 2,
-                        symbols_returned: 1,
-                        files_touched: 3,
-                        projects_hit: 2,
-                        total: 2,
-                        samples: [row("lsp_fallback", null)],
-                    }),
-                    end("b", 0, 0, {
-                        ms: 1500,
-                        symbols: 1,
-                        symbols_returned: 1,
-                        files_touched: 2,
-                        projects_hit: 1,
-                        total: 1,
-                        samples: [row("cap", "ab")],
-                    }),
-                ]),
+                calls: view({
+                    feed: [done("b", 0, 0, { ms: 1500 }), done("a", 0, 0, { ms: 40 })],
+                    totals: {
+                        latency: { p50: 40, p95: 1500 },
+                        symbols: 3,
+                        symbols_returned: 2,
+                        crossed: 1,
+                        files_touched: 5,
+                        projects_hit: 3,
+                        fallbacks: 1,
+                        caps: 1,
+                    },
+                }),
             }),
         );
         const card = async (label: string) =>
@@ -114,7 +98,7 @@ describe("live graph", () => {
         act(() =>
             w.frame({
                 type: "calls",
-                batch: batch([end("a", 0, 0, { ok: false, error: "no backend" })]),
+                calls: view({ feed: [done("a", 0, 0, { ok: false, error: "no backend" })] }),
             }),
         );
         const cell = await screen.findByText("no backend");
@@ -137,13 +121,13 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         const svg = await canvas();
-        const running = ["a", "b"].map((call) => event({ call }));
-        act(() => w.frame({ type: "calls", batch: batch(running) }));
+        const calls = ["a", "b"].map((call) => running(call));
+        act(() => w.frame({ type: "calls", calls: view({ running: calls }) }));
         await waitFor(() => expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(2));
         expect(svg.querySelectorAll("[data-running]")).toHaveLength(1);
 
-        const ended = [end("a", 10, 4), end("b", 0, 0, { ok: false, error: "no backend" })];
-        act(() => w.frame({ type: "calls", batch: batch(ended) }));
+        const ended = [done("b", 0, 0, { ok: false, error: "no backend" }), done("a", 10, 4)];
+        act(() => w.frame({ type: "calls", calls: view({ feed: ended }) }));
         await waitFor(() => expect(svg.querySelectorAll("[data-testid=failed]")).toHaveLength(1));
         expect(svg.querySelectorAll("[data-testid=heat]")).toHaveLength(1);
         expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(0);
@@ -153,8 +137,8 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         const svg = await canvas();
-        const many = Array.from({ length: 10 }, (_, i) => event({ call: `c${i}` }));
-        act(() => w.frame({ type: "calls", batch: batch(many) }));
+        const many = Array.from({ length: 10 }, (_, i) => running(`c${i}`));
+        act(() => w.frame({ type: "calls", calls: view({ running: many }) }));
         expect(await screen.findByText("busy: 2 more")).toBeTruthy();
         expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(8);
     });
@@ -175,11 +159,17 @@ describe("live graph", () => {
         const height = () => Number(svg.getAttribute("viewBox")!.split(" ")[3]);
         await waitFor(() => expect(height()).toBeGreaterThan(140));
         act(() =>
-            w.frame({ type: "calls", batch: batch([event({ call: "a", project: "ketch" })]) }),
+            w.frame({
+                type: "calls",
+                calls: view({ running: [running("a", { project: "ketch" })] }),
+            }),
         );
         await waitFor(() => expect(height()).toBe(140));
         act(() =>
-            w.frame({ type: "calls", batch: batch([end("a", 10, 4, { project: "ketch" })]) }),
+            w.frame({
+                type: "calls",
+                calls: view({ feed: [done("a", 10, 4, { project: "ketch" })] }),
+            }),
         );
         // The call has ended; the next one-second tick finds it older than the hold.
         const real = Date.now();
@@ -204,16 +194,17 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        act(() =>
-            w.frame({ type: "calls", batch: batch([end("a", 100, 50, { target: "alpha" })]) }),
-        );
+        const alpha = done("a", 100, 50, { target: "alpha" });
+        act(() => w.frame({ type: "calls", calls: view({ feed: [alpha] }) }));
         await screen.findByText("alpha");
 
         fireEvent.click(screen.getByRole("button", { name: "Freeze" }));
         act(() =>
             w.frame({
                 type: "calls",
-                batch: batch([end("b", 100, 50, { target: "beta" }), end("c", 100, 50)]),
+                calls: view({
+                    feed: [done("c", 100, 50), done("b", 100, 50, { target: "beta" }), alpha],
+                }),
             }),
         );
         expect(await screen.findByText("2 held")).toBeTruthy();
@@ -227,17 +218,32 @@ describe("live graph", () => {
         expect(await screen.findByText("300")).toBeTruthy();
     });
 
-    test("the window selector recomputes the totals", async () => {
+    test("each window chip shows that window's totals from the frame", async () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        act(() => w.frame({ type: "calls", batch: batch([end("a", 10, 4)]) }));
+        const feed = [done("a", 10, 4)];
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({
+                    feed,
+                    windows: LABELS.map((label, i) => windowOf(label, feed, { calls: i + 1 })),
+                }),
+            }),
+        );
         await screen.findByRole("table", { name: "graph calls" });
-        for (const label of ["1 min", "5 min", "15 min", "since open"]) {
+        const card = () =>
+            screen
+                .getAllByText("calls")
+                .map((e) => e.parentElement?.textContent)
+                .find((t) => t?.includes("failed"));
+        for (const [i, label] of LABELS.entries()) {
             fireEvent.click(screen.getByRole("button", { name: label }));
             expect(screen.getByRole("button", { name: label }).getAttribute("aria-pressed")).toBe(
                 "true",
             );
+            expect(card()).toBe(`calls${i + 1}0 failed`);
         }
     });
 
@@ -245,8 +251,10 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        const listed = Array.from({ length: 100 }, (_, i) => end(`c${i}`, 10, 4));
-        act(() => w.frame({ type: "calls", batch: batch(listed, 400) }));
+        const listed = Array.from({ length: 100 }, (_, i) => done(`c${i}`, 10, 4));
+        act(() =>
+            w.frame({ type: "calls", calls: view({ feed: listed, totals: { calls: 500 } }) }),
+        );
         fireEvent.click(screen.getByRole("button", { name: "since open" }));
         await waitFor(() => expect(screen.getByText("500")).toBeTruthy());
     });

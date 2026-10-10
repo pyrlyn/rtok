@@ -10,7 +10,7 @@ import { richSnapshot } from "../../fixtures";
 import { drawn } from "../../canvasPixels";
 import { withData } from "../../storyData";
 import { VIEW_KEY } from "../SceneView";
-import { batch, end, event } from "./callsFixtures";
+import { done, running, view } from "./callsFixtures";
 import { LiveSection } from "./LiveSection";
 
 const projects = [
@@ -75,13 +75,22 @@ export const Waiting: Story = {
 const calls = (): Frame[] => [
     {
         type: "calls",
-        batch: batch([
-            end("a", 1000, 250, { target: "open_index", project: "rtok", backend: "lsp" }),
-            end("b", 400, 100, { target: "store", project: "ketch", tool: "impact" }),
-            end("c", 0, 0, { target: "missing", project: "rtok", ok: false, error: "no backend" }),
-            event({ call: "d", project: "pyrlyn", target: "run" }),
-            event({ call: "e", project: "ketch", target: "go", tool: "explore" }),
-        ]),
+        calls: view({
+            running: [
+                running("d", { project: "pyrlyn", target: "run" }),
+                running("e", { project: "ketch", target: "go", tool: "explore" }),
+            ],
+            feed: [
+                done("c", 0, 0, {
+                    target: "missing",
+                    project: "rtok",
+                    ok: false,
+                    error: "no backend",
+                }),
+                done("b", 400, 100, { target: "store", project: "ketch", tool: "impact" }),
+                done("a", 1000, 250, { target: "open_index", project: "rtok", backend: "lsp" }),
+            ],
+        }),
     },
 ];
 
@@ -99,8 +108,11 @@ export const Busy: Story = {
     },
 };
 
-const running = (): Frame[] => [
-    { type: "calls", batch: batch([event({ call: "d", project: "pyrlyn", target: "run" })]) },
+const runningFrames = (): Frame[] => [
+    {
+        type: "calls",
+        calls: view({ running: [running("d", { project: "pyrlyn", target: "run" })] }),
+    },
 ];
 
 const viewBox = (svg: Element) => svg.getAttribute("viewBox")!.split(" ").map(Number);
@@ -116,7 +128,7 @@ export const IdleOverview2d: Story = {
 
 /** A running call: the 2D camera closes in on its node (140 is the smallest frame). */
 export const CameraFramesRunningCall2d: Story = {
-    decorators: [withData(streaming(running())), viewing("2d")],
+    decorators: [withData(streaming(runningFrames())), viewing("2d")],
     play: async ({ canvasElement }) => {
         const svg = await within(canvasElement).findByTestId("graph-live", undefined, READY);
         await waitFor(() => expect(viewBox(svg)[3]).toBe(140), READY);
@@ -126,7 +138,7 @@ export const CameraFramesRunningCall2d: Story = {
 
 /** The same call in the Three.js canvas: drawn, read-only, and the camera holds the node. */
 export const Live3d: Story = {
-    decorators: [withData(streaming(running(), 1500)), viewing("3d")],
+    decorators: [withData(streaming(runningFrames(), 1500)), viewing("3d")],
     play: async ({ canvasElement }) => {
         const host = await within(canvasElement).findByTestId("graph-live-3d", undefined, READY);
         const canvas = () => {
