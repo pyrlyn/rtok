@@ -26,7 +26,6 @@
 - T329.24. Graph page: show each project's capability record
 - T329.25. Graph page: alert badges, toasts and the alerts list
 - T329.26. Graph page: two-part UI with the read-only live graph and live metrics
-- T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
