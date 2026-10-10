@@ -125,6 +125,7 @@ Project programs and direct packages from the manifests.
 | ratatui | local | https://crates.io/crates/ratatui | TUI |
 | regex | local | https://crates.io/crates/regex | Rust dependency |
 | reqwest | local | https://crates.io/crates/reqwest | HTTP: proxy and otel (async), task adapters (`blocking`) |
+| resvg | local | https://crates.io/crates/resvg | T329.31: `rtok graph export --format png` rasterises the drawn SVG; features `text` and `system-fonts` only (no raster-images, memmap-fonts or filters), pure Rust |
 | rmcp | local | https://crates.io/crates/rmcp | MCP types; feature `transport-streamable-http-server` serves `rtok mcp --http` (T401) |
 | rstest | local | https://crates.io/crates/rstest | Rust dependency |
 | rust-embed | local | https://crates.io/crates/rust-embed | Embeds the built SPA (`web/dist`) in the binary in every profile; memory-serve reads disk in debug builds and has no run-time override, include_dir has no media types or digests |

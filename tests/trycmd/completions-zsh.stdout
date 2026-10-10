@@ -2089,11 +2089,14 @@ _arguments "${_arguments_options[@]}" : /
 '--focus=[Only the symbols within /`--depth/` calls of this one, callers and callees]:FOCUS:_default' /
 '--depth=[Calls to follow from /`--focus/`]:DEPTH:_default' /
 '(--project --focus)--from=[Show a saved export instead of the live graph (read-only)]:FROM:_files' /
+'--format=[/`json/` is the data, /`svg/` a picture of it (the 200 best connected nodes), /`png/` that picture rasterised (needs /`--output/`)]:FORMAT:(json svg png)' /
+'--scale=[PNG size/: 1 to 4 times the SVG size]:SCALE:_default' /
 '-o+[Write to this file instead of stdout]:OUTPUT:_files' /
 '--output=[Write to this file instead of stdout]:OUTPUT:_files' /
 '--project=[Project id or directory instead of the cwd (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--no-redact[Keep absolute paths, the home directory and the user name]' /
+'--transparent[SVG and PNG without a background]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0

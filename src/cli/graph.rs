@@ -121,6 +121,16 @@ pub(super) enum GraphCmd {
         /// Show a saved export instead of the live graph (read-only)
         #[arg(long, conflicts_with_all = ["project", "focus"])]
         from: Option<PathBuf>,
+        /// `json` is the data, `svg` a picture of it (the 200 best connected nodes), `png` that
+        /// picture rasterised (needs `--output`)
+        #[arg(long, value_enum, default_value = "json", requires_if("png", "output"))]
+        format: crate::plugins::graph::export::Format,
+        /// PNG size: 1 to 4 times the SVG size
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..=4))]
+        scale: Option<u32>,
+        /// SVG and PNG without a background
+        #[arg(long)]
+        transparent: bool,
         /// Write to this file instead of stdout
         #[arg(short, long)]
         output: Option<PathBuf>,
@@ -355,19 +365,26 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             depth,
             no_redact,
             from,
+            format,
+            scale,
+            transparent,
             output,
             project,
         } => {
+            use crate::plugins::graph::export::{self, Format};
+            if scale.is_some() && format != Format::Png {
+                anyhow::bail!("--scale is for --format png");
+            }
             let root = crate::plugins::graph::cli_root(None)?;
             let scope = if from.is_some() {
                 Vec::new()
             } else {
                 crate::plugins::graph::scope::resolve(&cx.store, project.as_deref(), &root)?
             };
-            let text = crate::plugins::graph::export::run(
+            let bytes = export::render(
                 &cx,
                 &scope,
-                &crate::plugins::graph::export::Query {
+                &export::Query {
                     level,
                     focus: focus.as_deref(),
                     depth,
@@ -375,13 +392,18 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                     pretty: true,
                     from: from.as_deref(),
                 },
+                &export::Image {
+                    format,
+                    transparent,
+                    scale: scale.unwrap_or(1),
+                },
             )?;
             match output {
                 Some(file) => {
-                    std::fs::write(&file, &text)?;
-                    println!("wrote {} bytes to {}", text.len(), file.display());
+                    std::fs::write(&file, &bytes)?;
+                    println!("wrote {} bytes to {}", bytes.len(), file.display());
                 }
-                None => print!("{text}"),
+                None => print!("{}", String::from_utf8_lossy(&bytes)),
             }
         }
         GraphCmd::Affected {

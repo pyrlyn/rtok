@@ -718,10 +718,15 @@ symbols/t''"
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l focus -d 'Only the symbols within `--depth` calls of this one, callers and callees' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l depth -d 'Calls to follow from `--focus`' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l from -d 'Show a saved export instead of the live graph (read-only)' -r -F
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l format -d '`json` is the data, `svg` a picture of it (the 200 best connected nodes), `png` that picture rasterised (needs `--output`)' -r -f -a "json/t''
+svg/t''
+png/t''"
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l scale -d 'PNG size: 1 to 4 times the SVG size' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -s o -l output -d 'Write to this file instead of stdout' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l project -d 'Project id or directory instead of the cwd (see `rtok graph projects`)' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l no-redact -d 'Keep absolute paths, the home directory and the user name'
+complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -l transparent -d 'SVG and PNG without a background'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from export" -s h -l help -d 'Print help'
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from affected" -l since -d 'Diff against this ref' -r
 complete -c rtok -n "__fish_rtok_using_subcommand graph; and __fish_seen_subcommand_from affected" -l project -d 'Project id or directory instead of the cwd (see `rtok graph projects`)' -r

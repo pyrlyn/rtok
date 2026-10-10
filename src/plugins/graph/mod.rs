@@ -33,6 +33,7 @@ pub mod blast;
 pub mod capability;
 pub mod cochange;
 pub mod diff;
+pub mod draw;
 pub mod drill;
 pub mod events;
 pub mod export;

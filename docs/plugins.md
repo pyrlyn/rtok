@@ -63,3 +63,15 @@ Absolute paths, the home directory and the user name are redacted unless `--no-r
 redacts); source text is never included, file and symbol names are. A call whose name has more than eight definitions
 draws no edge. `--from FILE` shows a saved export without reading or writing the
 registry or the index.
+
+### Pictures
+
+`rtok graph export --format svg` draws the same export as a picture, and `--format png` rasterises that picture
+(`-o FILE` is required, `--scale 1` to `4` is the multiple of the SVG size). The picture is a function of the export
+alone, so `--from FILE` draws a saved export exactly as the live scope. Projects are panels, symbols are dots on a
+spiral (the best connected in the middle; circle: function, square: type, diamond: module), a solid arrow is a call
+within a project, a dashed one a call across projects, and a thick line a project link. At most 200 nodes are drawn;
+the footer says how many are hidden, and the JSON always has all of them. The footer also names each project with its
+backend and `indexed_at`, the scope, the rtok version, the export time and, when a project could not answer, a
+PARTIAL marker. A PNG needs a font installed on the machine; without one the command says so instead of drawing no
+text. MCP `graph_export` stays JSON.

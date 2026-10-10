@@ -658,7 +658,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "graph export",
-        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.31",
+        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.40 and the TUI an action in T329.41",
     ),
     (
         "graph projects",
