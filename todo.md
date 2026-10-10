@@ -21,7 +21,6 @@
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 - T329.19. Graph health score per project
-- T329.21. Project badges in the graph page lists
 - T329.28. Graph page: live camera, 3D live view and the remaining live displays
 - T329.29. Graph page: Compare mode and the remaining diff reports
 - T356. Never index `$HOME` or `/` as a graph root

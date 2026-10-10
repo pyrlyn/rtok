@@ -3071,6 +3071,16 @@ Deviations: a link refusal (a missing project, an unknown id) shows as the serve
 
 Status: done 2026-10-03 · Model: Claude Code / sonnet
 
+## T329.21 — Project badges in the graph page lists
+
+The last piece of the original T329.12. The lists on the graph page (pending files, dead symbols) were read for the working directory's project only, so there was nothing to badge. `graph_page_text` (`src/model/mod.rs`) now resolves the cwd's scope (`scope::resolve`); with linked projects the pending files come from `scope::pending_page_paths` and the dead rows from `scope::dead_page_rows` (the T329.5 `dead_by_project`, which now takes the row source, so the page reads the stores as they stand and never re-walks a tree), each row headed `[project] ` like `graph dead` prints it, a skipped project as a note line. A scope of one keeps the text byte for byte. `parseGraph` splits the prefix into `project`; `Graph.tsx` shows it with the existing `Pill` in the pending list and as a `project` column of the dead table, only when a row has one. The TUI shows the page text verbatim (D27), so it gets the `[project] ` prefix with no second code path.
+
+Check: Rust test `page_rows_name_the_project_and_read_the_stores_without_indexing`, Vitest `text.test.ts` and `pagesRest.test.tsx` (badges from two projects; a lone project has no badge column), story `Pages/More` `GraphScoped`; `just check`, `just spa-test`, `just js`, `just spa-typecheck`, `just spa-stories`, `just spa-e2e`.
+
+Deviations: `rows`, `files`, `watch` and `indexed_at` stay those of the working directory's project; only the two lists span the scope. A path that itself starts with `[name] ` would read as a badge.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T48.7 — aider host
 
 **T48.7 aider host** · P3, 2/5 · `src/agents/aider/{mod.rs,README.md}` (new), `src/agents/mod.rs`, `src/config/mod.rs`, `config/default.toml`, `docs/config.md`, `README.md`, `site/content/docs/commands.md`, `tests/agents_install.rs`, `tests/agent_remove.rs`, `tests/common/agents.rs`, `tests/trycmd/config-show.stdout`

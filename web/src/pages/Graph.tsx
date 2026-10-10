@@ -83,10 +83,26 @@ export function Graph() {
     );
 }
 
+/** Names the project a row came from; absent for a lone project, whose page needs no badge. */
+function ProjectBadge({ project }: { project: string | null }) {
+    return project === null ? null : <Pill tone="info">{project}</Pill>;
+}
+
 function GraphBody({ view: v }: { view: GraphView }) {
     const wide = useMinWidth(768);
+    const scoped = v.dead.some((r) => r.project !== null);
     const full = useMemo<Column<DeadSymbol>[]>(
         () => [
+            ...(scoped
+                ? [
+                      {
+                          id: "project",
+                          header: "project",
+                          width: "120px",
+                          cell: (r: DeadSymbol) => <ProjectBadge project={r.project} />,
+                      },
+                  ]
+                : []),
             { id: "symbol", header: "symbol", cell: (r) => <b>{r.name}</b> },
             { id: "kind", header: "kind", width: "88px", cell: (r) => <Pill>{r.kind}</Pill> },
             {
@@ -100,9 +116,13 @@ function GraphBody({ view: v }: { view: GraphView }) {
                 ),
             },
         ],
-        [],
+        [scoped],
     );
-    const columns = responsive(full, wide, ["symbol", "location"]);
+    const columns = responsive(
+        full,
+        wide,
+        scoped ? ["project", "symbol", "location"] : ["symbol", "location"],
+    );
     return (
         <>
             <p className="truncate text-2xs text-fg-subtle">
@@ -131,9 +151,13 @@ function GraphBody({ view: v }: { view: GraphView }) {
                     ) : (
                         <ul className="flex flex-col divide-y divide-border/60 text-xs">
                             {v.pending.map((p) => (
-                                <li key={p} className="flex items-center gap-2 py-2">
+                                <li
+                                    key={`${p.project}:${p.path}`}
+                                    className="flex items-center gap-2 py-2"
+                                >
                                     <Pill tone="warn">pending</Pill>
-                                    <span className="truncate">{p}</span>
+                                    <ProjectBadge project={p.project} />
+                                    <span className="truncate">{p.path}</span>
                                 </li>
                             ))}
                         </ul>
@@ -144,7 +168,7 @@ function GraphBody({ view: v }: { view: GraphView }) {
                         label="dead symbols"
                         rows={v.dead}
                         columns={columns}
-                        getRowId={(r) => `${r.path}:${r.line}:${r.name}`}
+                        getRowId={(r) => `${r.project}:${r.path}:${r.line}:${r.name}`}
                         empty={<Empty title="No unreferenced definitions" />}
                     />
                     {v.deadNote && <p className="text-2xs text-fg-subtle">{v.deadNote}</p>}
