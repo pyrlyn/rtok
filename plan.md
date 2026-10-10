@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
-| T329.43 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -825,12 +824,6 @@ Check: maximising either part fills the page and restores; under 900 px the metr
 What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
-
-### T329.43. Graph page: returned counts for explore, outline, impact by path and graph_diff
-
-What is left of T329.36. It counts what `symbol`, `callers` and `impact` by name return; `explore`, `outline`, `impact` by `path` (the affected files) and `graph_diff` leave `symbols_returned`, `files_touched` and `projects_hit` NULL because their backends (`TagsExplore`, `scope::outline`, `scope::affected_path`, `diff.rs`) do not call `tally::hit` yet. Done means: each of them records the files and projects of the rows it lists (and the resolved query tokens as symbols for `explore`), `events::Call::end` stops gating the counts on symbols asked, and the numbers equal the answer's listing.
-
-Check: Rust tests on the T329.36 two-project fixture assert the counts against the answer text of `explore`, `outline`, `impact` by path and `graph_diff`; the folds agree; `just check`.
 
 ### T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 

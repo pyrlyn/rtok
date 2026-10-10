@@ -87,6 +87,27 @@ impl Diff {
             && self.not_analysed.is_empty()
     }
 
+    /// T329.43: the files of the rows `render_part` lists. The caller sites quoted under a
+    /// changed symbol are context, cut at `CALLERS_SHOWN`, and are not rows of the diff.
+    fn tally(&self, root: &Path) {
+        if self.is_empty() {
+            return;
+        }
+        let moved = self.moved.iter().flat_map(|(a, b)| [&a.path, &b.path]);
+        let paths = self
+            .changed
+            .iter()
+            .map(|c| &c.new.path)
+            .chain(self.added.iter().map(|d| &d.path))
+            .chain(self.removed.iter().map(|d| &d.path))
+            .chain(self.renamed.iter().map(|(_, b)| &b.path))
+            .chain(moved)
+            .chain(self.edges_added.iter().map(|e| &e.0))
+            .chain(self.edges_removed.iter().map(|e| &e.0))
+            .chain(self.not_analysed.iter().map(|(path, _)| path));
+        super::tally::hit(root, "", paths);
+    }
+
     /// Symbols whose callers matter to a reviewer: what changed, vanished or changed name.
     fn touched(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self.changed.iter().map(|c| c.new.name.as_str()).collect();
@@ -1040,6 +1061,7 @@ fn gather(
     let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
     let mut parts = Vec::new();
     for (m, diff) in done {
+        diff.tally(&m.root);
         let mut found = HashMap::new();
         for name in diff.touched() {
             if !found.contains_key(name) {
@@ -1421,6 +1443,31 @@ mod tests {
         assert!(out.contains("1 moved"), "{out}");
         assert!(out.contains("function helper  a.rs -> b.rs"), "{out}");
         assert!(out.contains("0 added · 0 removed"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T329.43: the counts are the files of the diff's own rows. The caller site `[a] lib.rs` under
+    /// the changed symbol is context and not counted; a clean tree leaves zeros, not NULL.
+    #[test]
+    fn the_diff_counts_the_files_of_the_rows_it_lists() {
+        let (rt, dir, scope) = linked("t32943-diff");
+        let counted = || {
+            crate::plugins::graph::tally::arm();
+            let answer = call(&rt, &json!({}), &scope).unwrap();
+            let got = crate::plugins::graph::tally::take();
+            (answer, (got.symbols, got.files, got.projects))
+        };
+        let (answer, got) = counted();
+        assert!(answer.contains("no graph changes"), "{answer}");
+        assert_eq!(got, (0, 0, 0));
+
+        fs::write(dir.join("b/lib.rs"), "fn shared(x: i32) {}\n").unwrap();
+        fs::write(dir.join("a/new.rs"), "fn fresh() {}\n").unwrap();
+        let (answer, got) = counted();
+        assert!(answer.contains("[signature] 1 callers"), "{answer}");
+        assert!(answer.contains("function fresh  new.rs:1"), "{answer}");
+        assert!(answer.contains("[a] lib.rs a_caller d1"), "{answer}");
+        assert_eq!(got, (0, 2, 2), "b/lib.rs and a/new.rs");
         let _ = fs::remove_dir_all(dir);
     }
 

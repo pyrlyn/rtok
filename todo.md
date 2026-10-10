@@ -20,7 +20,6 @@
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
-- T329.43. Graph page: returned counts for explore, outline, impact by path and graph_diff
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root
