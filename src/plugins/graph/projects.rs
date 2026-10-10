@@ -34,8 +34,8 @@ pub struct ProjectIndex {
 /// One outgoing link of a project.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ProjectLink {
-    pub(super) to: i32,
-    name: String,
+    pub to: i32,
+    pub name: String,
     pub(super) kind: LinkKind,
     pub(super) reason: Option<String>,
 }
@@ -43,13 +43,13 @@ pub struct ProjectLink {
 /// One registry row as `graph projects` prints it and the `/ws` snapshot carries it.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ProjectRow {
-    pub(super) id: i32,
-    name: String,
+    pub id: i32,
+    pub name: String,
     pub(super) root: String,
     pub(super) origin: Origin,
-    selected: bool,
-    missing: bool,
-    pub(super) state: &'static str,
+    pub selected: bool,
+    pub missing: bool,
+    pub state: &'static str,
     created_at: i64,
     last_used_at: i64,
     pub(super) index: Option<ProjectIndex>,
@@ -66,7 +66,7 @@ pub struct ProjectRow {
     /// every member is still on its first index.
     #[serde(skip_serializing_if = "Option::is_none")]
     scope_health: Option<u8>,
-    pub(super) links: Vec<ProjectLink>,
+    pub links: Vec<ProjectLink>,
 }
 
 fn link_rows(store: &Store, from: i32) -> Result<Vec<ProjectLink>> {
