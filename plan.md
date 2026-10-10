@@ -46,12 +46,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
-| T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
-| T329.24 | todo | P3 | 2 | 0% | |
 | T329.25 | todo | P3 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
+| T329.29 | todo | P3 | 4 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -832,17 +831,18 @@ Symbols requested and returned per call are not in the T329.15 events; if the di
 
 Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
 
+### T329.29. Graph page: Compare mode and the remaining diff reports
+
+The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (needs T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
+
 ### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 
 T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
 
-### T329.18. Graph diff: compare before and after a change
-
-T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14 and T329.22.
-
-Check: a signature change in B shows in `rtok graph diff --from HEAD` from A with A's affected call sites; the working tree is untouched; a rename is a rename; an unknown ref errors; `graph_diff` returns a capped summary with a paging id; `just check`.
 
 ### T329.19. Graph health score per project
 
@@ -856,11 +856,6 @@ The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a p
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
 
-### T329.24. Graph page: show each project's capability record
-
-Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
-
-Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
 
 ### T329.25. Graph page: alert badges, toasts and the alerts list
 

@@ -1466,6 +1466,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('impact', 'impact', [CompletionResultType]::ParameterValue, 'Symbol impact or call paths to a target')
             [CompletionResult]::new('projects', 'projects', [CompletionResultType]::ParameterValue, 'The project registry: list, add, remove, select')
             [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)')
+            [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers')
             [CompletionResult]::new('affected', 'affected', [CompletionResultType]::ParameterValue, 'Tests that reach files changed in git (`git diff --name-only`)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -1594,6 +1595,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;graph;diff' {
+            [CompletionResult]::new('--from', '--from', [CompletionResultType]::ParameterName, 'Compare from this git ref')
+            [CompletionResult]::new('--to', '--to', [CompletionResultType]::ParameterName, 'Compare to this git ref; `working` is the working tree')
+            [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Project id or directory instead of the cwd (see `rtok graph projects`)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text answer (whole, not capped)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;graph;affected' {
             [CompletionResult]::new('--since', '--since', [CompletionResultType]::ParameterName, 'Diff against this ref')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Project id or directory instead of the cwd (see `rtok graph projects`)')
@@ -1611,6 +1622,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('impact', 'impact', [CompletionResultType]::ParameterValue, 'Symbol impact or call paths to a target')
             [CompletionResult]::new('projects', 'projects', [CompletionResultType]::ParameterValue, 'The project registry: list, add, remove, select')
             [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)')
+            [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers')
             [CompletionResult]::new('affected', 'affected', [CompletionResultType]::ParameterValue, 'Tests that reach files changed in git (`git diff --name-only`)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -1651,6 +1663,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;graph;help;review' {
+            break
+        }
+        'rtok;graph;help;diff' {
             break
         }
         'rtok;graph;help;affected' {
@@ -2222,6 +2237,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('impact', 'impact', [CompletionResultType]::ParameterValue, 'Symbol impact or call paths to a target')
             [CompletionResult]::new('projects', 'projects', [CompletionResultType]::ParameterValue, 'The project registry: list, add, remove, select')
             [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Risk-ranked reading list for a git diff (files, untested defs, line ranges)')
+            [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'What a change did to the graph: symbols changed, added, removed, renamed or moved, with callers')
             [CompletionResult]::new('affected', 'affected', [CompletionResultType]::ParameterValue, 'Tests that reach files changed in git (`git diff --name-only`)')
             break
         }
@@ -2261,6 +2277,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;graph;review' {
+            break
+        }
+        'rtok;help;graph;diff' {
             break
         }
         'rtok;help;graph;affected' {

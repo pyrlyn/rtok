@@ -65,7 +65,7 @@ pub fn resolve(store: &Store, project: Option<&str>, cwd: &Path) -> Result<Vec<M
 
 /// Runs `f` for each member. A failure in the first member is the caller's error; a linked
 /// project that cannot answer is skipped with a note, so one broken link never hides the rest.
-fn fan_out<T>(
+pub(super) fn fan_out<T>(
     scope: &[Member],
     mut f: impl FnMut(&Member) -> Result<T>,
 ) -> Result<(Vec<(&Member, T)>, String)> {
@@ -178,7 +178,7 @@ fn label(m: &Member) -> String {
     format!("[{}] ", m.name)
 }
 
-fn walkable(m: &Member) -> Result<()> {
+pub(super) fn walkable(m: &Member) -> Result<()> {
     crate::plugins::read::walk_root_ok(&m.root)
 }
 

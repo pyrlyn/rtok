@@ -2988,6 +2988,14 @@ Deviations: the side panel (path and line, signature, callers and callees, edito
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.18 — Graph diff: compare before and after a change
+
+T329 §8e core: `rtok graph diff [--from REF] [--to REF|working] [--project ID] [--json]` and MCP `graph_diff` (the sixth graph tool). The old side is read straight from the git object database (`git ls-tree -r` plus one `git cat-file --batch`), parsed with the index's own tags extractor into in-memory rows; nothing is written and the working tree and the user's index are never touched. Definitions are matched by `(path, name, kind)`; the report lists changed (signature or body hash), removed, renamed (same kind and body once the name is masked, only when unique), moved (same name, kind and body in another path), added, and call edges added and removed. Changed and removed symbols list their callers from the current index through the scope walk (`impact_walk_roots`), so a change in B shows A's call sites. The answer goes through `cap`: the cut line carries an archive id and `expand <id>` pages the rest. An unknown ref is an error naming it. `DefRow` gained `content_hash` and the byte range. The page's Compare mode and the remaining §8e reports are T329.29.
+
+Check: unit tests in `src/plugins/graph/diff.rs` (a signature change in a linked project lists its callers and leaves the tree untouched, body change, rename, ambiguous rename stays remove plus add, moved and untracked file, added and removed, two revisions, errors, cap with archive id paging, json); trycmd `graph diff --help`; `surface_parity`, `config_coverage`, `graph_lsp_gate`; `just check`.
+
+Deviations: the old side is held in memory instead of a temporary index, so there is no temp store to clean up. The MCP surface is now six tools and the description budget went from 150 to 160 tokens (`graph_diff` does not fit in fewer); `README.md`, `docs/comparison.md`, `docs/lsp.md` and `skills/rtok/SKILL.md` still say five tools. The task is over the 500-line cap (about 690 non-test lines in `diff.rs`, plus wiring); `--from-export`, project links, a per-project `--from`, the "changed, not analysed" listing and the page's Compare mode are T329.29.
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:
@@ -8888,6 +8896,23 @@ Deviations: The page display is split into T329.24. The first server timeout dow
 
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
+
+## T329.24 — Graph page: show each project's capability record
+
+The Projects panel of the Graph page shows `ProjectRow.backend` (T329.11, already in `/ws` and `snapshot.gen.ts`).
+
+- Selector: a `lsp` or `tags` pill after the index-state pill on every row that has a record; its title carries the detail line and the exact stamps. A row without a record shows nothing, as the list stays one line per project.
+- Header: a "graph backend" line for the selected project: the pill (green for `lsp`, amber for `tags` with a reason, grey for `tags` without one), then "<language> server answers" or the reason the project fell back, "checked <age>" and, when the health check will retry, "retries at HH:MM". A project without a record says "no record yet: a graph request under lsp or auto makes one".
+- Logic: `backendOf(p, now)` in `projectLogic.ts` builds the tone, label, line and title once for both places; `now` is a parameter, as in `ago`.
+- Fixtures: the `?sample` server has three projects now: rtok on LSP, ketch on tags with a reason and a retry time, notes without a record.
+- Tests: a Vitest case for the three records on the header, the selector list expectation updated, and stories `BackendLsp`, `BackendTagsWithReason`, `BackendNoRecord` (axe runs on them in `just spa-stories`).
+- Docs: a "Graph backend" bullet in "The graph page" of `docs/commands.md` (en, ru, uk).
+
+Result: `just js`, `just spa-typecheck`, Vitest (`--project unit`, 34 files), `just spa-stories`, `just spa-e2e` and `just check` pass.
+
+Deviations: the record holds the language and a `server` flag, not a server name, so the header names the language ("rust server answers") instead of the binary. A project without a record is stated in the header (the task text said "nothing"; the creator asked for it to be said plainly) and the selector row stays bare. The TUI has no projects page (`src/tui` does not render `ProjectRow`; only the `/ws` model carries it), so there was nothing to mirror.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
 ### T329.17. Graph alerts: linked project down or unreachable
 

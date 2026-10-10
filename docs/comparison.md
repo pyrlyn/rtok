@@ -98,8 +98,8 @@ the graph surface; the other rows are the 2026-09-09 probe.
 
 That column is not a one-off: it is re-sent on every request of every session. Two of those
 servers together cost more per turn than rtok's entire injection budget. `graph` answers
-`symbol` / `callers` / `impact` / `outline` / `explore` in 127 description tokens
-(`cargo nextest run -p rtok graph_surface`, 2026-09-18).
+`symbol` / `callers` / `impact` / `outline` / `explore` / `graph_diff` in 155 description tokens
+(`cargo nextest run -p rtok graph_surface`, 2026-10-10).
 
 The trade is real, though, and §5 states it: serena resolves references that rtok's
 tree-sitter tags index misses.

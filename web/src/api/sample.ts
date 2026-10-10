@@ -182,9 +182,31 @@ export const sampleSnapshot: Snapshot = {
   projects: [
     project(1, "rtok", {
       selected: true,
+      backend: {
+        backend: "lsp",
+        checked_at: 1_790_000_000,
+        config: "auto",
+        language: "rust",
+        next_probe_at: null,
+        reason: null,
+        server: true,
+      },
       links: [{ kind: "manual", name: "ketch", reason: "shared store", to: 2 }],
     }),
-    project(2, "ketch", { state: "stale", index: null }),
+    project(2, "ketch", {
+      state: "stale",
+      index: null,
+      backend: {
+        backend: "tags",
+        checked_at: 1_790_000_000,
+        config: "auto",
+        language: "rust",
+        next_probe_at: 1_790_000_300,
+        reason: "rust-analyzer is not installed",
+        server: false,
+      },
+    }),
+    project(3, "notes"),
   ],
   hosts: hostsText,
   junk: sampleJunkCard,
