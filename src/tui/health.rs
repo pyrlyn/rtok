@@ -155,7 +155,9 @@ mod tests {
                 crossterm::event::KeyModifiers::NONE,
             );
         }
-        let mut terminal = ratatui::Terminal::new(TestBackend::new(128, 24)).unwrap();
+        // Taller than the shared 24-row screen: the live calls pane (T480) takes half the page,
+        // and every fixture row has to fit above it.
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(128, 40)).unwrap();
         terminal.draw(|f| draw(f, &app)).unwrap();
         let buf = terminal.backend().buffer().clone();
         let text = (0..buf.area.height)
