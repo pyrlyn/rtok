@@ -496,7 +496,11 @@ mod tests {
     #[test]
     fn every_graph_key_in_the_table_is_handled() {
         let mut live = LiveCalls::new(std::path::PathBuf::new());
-        for (_, key, _) in KEYS.iter().filter(|(p, _, _)| *p == "graph") {
+        // The Graph page also lists the project keys (T476); the pane's rows all name the calls.
+        let pane = KEYS
+            .iter()
+            .filter(|(p, _, d)| *p == "graph" && d.contains("calls"));
+        for (_, key, _) in pane {
             let c = key.chars().next().unwrap();
             assert!(
                 live.key(KeyCode::Char(c)),
