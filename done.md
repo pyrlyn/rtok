@@ -8849,6 +8849,19 @@ Result: `rtok agents install mimo` registers `mcp.rtok` (local argv shape, ident
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T520. MiMo Code: link the rtok plugin and honour `mimocode.jsonc`
+
+Creator request 2026-10-10. The `mimo` host (T186) was MCP-only because `@mimo-ai/plugin` was undocumented. It is published now (0.1.15, same `tool.execute.before` / `tool.execute.after` / `shell.env` hooks as OpenCode) and MiMo loads every `{plugin,plugins}/*.{ts,js}` from its config directories, so the host links `plugins/opencode/rtok.ts` to `<mimocode config dir>/plugins/rtok.ts` through `HostPlugin`, the way Kilo does (D21: the MCP entry and the plugin are two capabilities, no second path to one). A fresh MiMo creates `mimocode.jsonc`, not `mimocode.json`, so a home that holds only the `.jsonc` gets `mcp.rtok` written into it through `agents/jsonc.rs` (comments and every other byte kept).
+
+Check: install links the plugin into a temp MiMo config dir and remove unlinks it; a `.jsonc`-only home gets `mcp.rtok` with its comments intact; `.json` is kept when both exist; a dry run changes nothing; `just check`.
+
+Result: `mimo` declares `PLUGIN` (`HostPlugin`, `default_install: true`, dest from `opencode::plugin_dest_beside`, shared with Kilo), `plugin` is `Support::Yes`, `plugin_surfaces` is `[Cli]`, `hooks` stays `No` (reason as Kilo's), `markers` include the link, and `plugin_install.rs` probes it. `mimo::config_path` picks `mimocode.jsonc` when `mimocode.json` is absent and the `.jsonc` exists (MiMo merges `config.json`, `mimocode.json`, `mimocode.jsonc` in that order and writes a starter `.jsonc` itself, research.md §15.4); both present keeps `mimocode.json`; another file name is used as it is. The `.jsonc` edit goes through new `jsonc::upsert_entry` / `jsonc::remove_entry`, lifted out of Zed's `register_mcp` / `unregister_mcp` (Zed now calls them; its output is unchanged). `rtok doctor`'s MCP status and `mcp ping` read the resolved file. `docs/agents.md` (and the ru/uk copies) blessed, README and research.md §15.4 updated with the primary sources and 2026-10-10 check date. MiMo Desktop stays open as T521. `tests/singleton.rs` (D21) counts `mimo` with `opencode` and `kilo`: the linked plugin ships no MCP server, so the MCP entry and the plugin are not two paths to one tool. `tests/trycmd/report-md.toml` regenerated (hooks and plugin lines of `mimo`).
+
+Check run: `just check` (full gate, `.config/nextest.toml` is a shared input) green: fmt, clippy `-D warnings`, jscpd 1.82 % of lines (budget 2 %), oxlint, pytest 32 passed, nextest 3308 passed, 8 skipped (704 s).
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T245. One tool call is processed once
 
 Runtime half of the same request: a host may fire two events for one call (Cursor: `afterMCPExecution` and `postToolUse`; Claude Code with both the plugin and settings-file hooks), and each processing adds a `Measurement` row and an archive entry, so savings double-count (D3).

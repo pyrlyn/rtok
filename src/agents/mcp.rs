@@ -229,7 +229,7 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
         }
         "kilo" => (s.kilo.config_path.clone(), "mcp"),
         "kimi" => (kimi::mcp_path(cfg), SERVERS),
-        "mimo" => (s.mimo.config_path.clone(), "mcp"),
+        "mimo" => (super::mimo::config_path(cfg), "mcp"),
         "omp" => (s.omp.mcp_path.clone(), SERVERS),
         "opencode" if desktop => (opencode::desktop_path(), "mcp"),
         "opencode" => (s.opencode.config_path.clone(), "mcp"),

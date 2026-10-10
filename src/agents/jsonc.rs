@@ -16,6 +16,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde_json::Value;
 
+use crate::config::Config;
+
 /// Parse JSONC (comments, trailing commas) into a `Value`. Validation/lookup only — the
 /// surgical editor below works on spans of the original text, never this parsed copy.
 pub fn parse(raw: &str) -> Result<Value> {
@@ -425,6 +427,61 @@ pub fn remove_member(
         body = excise_member(&body, cks, cve);
     }
     Ok((body, true))
+}
+
+/// [`upsert_member`] on a host's JSONC file, written under the run's `apply` gates. `report`
+/// words the outcome, because each host prints its own line shape; the document is parsed
+/// back before it is written, so a malformed result never reaches the file.
+pub(crate) fn upsert_entry(
+    cfg: &Config,
+    path: &Path,
+    top_key: &str,
+    name: &str,
+    entry: &Value,
+    report: impl FnOnce(Upsert) -> String,
+) -> Result<String> {
+    let raw = read_or_empty(path)?;
+    let (body, edit) = upsert_member(&raw, path, top_key, name, entry)?;
+    parse(&body).with_context(|| path.display().to_string())?;
+    let report = match edit {
+        Upsert::NoChange => rtok_agent_sdk::NO_CHANGES.to_string(),
+        edit => report(edit),
+    };
+    rtok_agent_sdk::write(&super::apply(cfg), path, &body, &report)?;
+    Ok(report)
+}
+
+/// [`remove_member`] on a host's JSONC file, but only as far as rtok wrote it:
+/// [`rtok_agent_sdk::judge_owned`] (T246, T246.5) leaves an entry that does not run the rtok
+/// binary, or one the user changed from `ours`, unless `--yes` says remove. A malformed
+/// document is left for [`remove_member`] to error on.
+pub(crate) fn remove_entry(
+    cfg: &Config,
+    path: &Path,
+    top_key: &str,
+    name: &str,
+    ours: &Value,
+) -> Result<String> {
+    let raw = read_or_empty(path)?;
+    if let Ok(root) = parse(&raw)
+        && let Some(have) = root.get(top_key).and_then(|t| t.get(name))
+    {
+        let at = format!("{top_key}.{name} in {}", path.display());
+        if let Some(leave) =
+            rtok_agent_sdk::judge_owned(&super::apply(cfg), &at, have, ours, super::is_rtok_bin)
+        {
+            return Ok(leave);
+        }
+    }
+    let (body, removed) = remove_member(&raw, path, top_key, name)?;
+    parse(&body).with_context(|| path.display().to_string())?;
+    let report = if removed {
+        format!("- {top_key}.{name}")
+    } else {
+        rtok_agent_sdk::NO_CHANGES.to_string()
+    };
+    rtok_agent_sdk::write(&super::apply(cfg), path, &body, &report)?;
+    Ok(report)
 }
 
 /// One step of a path into a JSONC document.
