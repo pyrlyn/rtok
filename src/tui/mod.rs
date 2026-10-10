@@ -14,6 +14,7 @@
 mod app;
 mod doctor_fix;
 mod health;
+mod junk_clear;
 mod live_calls;
 mod projects;
 mod theme;
