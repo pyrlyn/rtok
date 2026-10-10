@@ -233,6 +233,6 @@ describe("alert badges", () => {
   });
 
   test("the tooltip says alert in words", () => {
-    expect(nodeTip(buildScene(rows, opts).nodes[1]!)).toBe("B · ok · alert");
+    expect(nodeTip(buildScene(rows, opts).nodes[1]!).split("\n")[0]).toBe("B · ok · alert");
   });
 });

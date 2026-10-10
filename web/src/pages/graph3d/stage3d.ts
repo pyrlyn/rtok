@@ -25,12 +25,14 @@ import {
   Sprite,
   SpriteMaterial,
   SphereGeometry,
+  TorusGeometry,
   Vector2,
   Vector3,
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { disposeObject } from "./dispose";
+import { HEALTH_ROLE } from "./health";
 import { sphereOf } from "./live/camera";
 import { accentOf, type LiveState } from "./live/lit";
 import {
@@ -62,6 +64,8 @@ interface NodeObj {
   ring?: Mesh;
   /** The red marker of an alert: a small sphere on the node's upper right. */
   badge?: Mesh;
+  /** The health ring (T329.30): turned to face the camera every frame. */
+  health?: Mesh;
   label: Sprite;
 }
 
@@ -84,6 +88,7 @@ export class Stage implements ViewApi {
   };
   private cone = new ConeGeometry(1, 1, 12);
   private cylinder = new CylinderGeometry(1, 1, 1, 6, 1, true);
+  private torus = new TorusGeometry(1, 0.06, 6, 48);
   private nodes = new Map<number, NodeObj>();
   private edges: SceneEdge[] = [];
   private lines?: InstancedMesh;
@@ -192,8 +197,26 @@ export class Stage implements ViewApi {
         badge = new Mesh(this.sphere, new MeshBasicMaterial({ color: alert }));
         badge.scale.setScalar(Math.max(2, node.radius * 0.45));
       }
-      this.group.add(mesh, label, ...(ring ? [ring] : []), ...(badge ? [badge] : []));
-      this.nodes.set(node.id, { node, mesh, ring, badge, label });
+      let health: Mesh | undefined;
+      if (node.health) {
+        health = new Mesh(
+          this.torus,
+          new MeshBasicMaterial({
+            color: resolveRole(HEALTH_ROLE[node.health.level], style, fg),
+            transparent: node.dim,
+            opacity: node.dim ? 0.3 : 1,
+          }),
+        );
+        health.scale.setScalar(node.radius * 1.3);
+      }
+      this.group.add(
+        mesh,
+        label,
+        ...(ring ? [ring] : []),
+        ...(badge ? [badge] : []),
+        ...(health ? [health] : []),
+      );
+      this.nodes.set(node.id, { node, mesh, ring, badge, health, label });
     }
     this.edges = scene.edges.filter((e) => this.nodes.has(e.from) && this.nodes.has(e.to));
     this.owner = this.edges.flatMap((e, i) => Array<number>(e.dashed ? DASHES : 1).fill(i));
@@ -228,7 +251,12 @@ export class Stage implements ViewApi {
       this.group.remove(c);
       disposeObject(
         c,
-        new Set<BufferGeometry>([...Object.values(this.shapes), this.cone, this.cylinder]),
+        new Set<BufferGeometry>([
+          ...Object.values(this.shapes),
+          this.cone,
+          this.cylinder,
+          this.torus,
+        ]),
       );
     }
     this.nodes.clear();
@@ -245,6 +273,7 @@ export class Stage implements ViewApi {
       if (!p) continue;
       o.mesh.position.set(...p);
       o.ring?.position.set(...p);
+      o.health?.position.set(...p);
       const nudge = o.node.radius * 0.8;
       o.badge?.position.set(p[0] + nudge, p[1] + nudge, p[2]);
       o.label.position.set(p[0], p[1] + o.node.radius + 5, p[2]);
@@ -559,6 +588,7 @@ export class Stage implements ViewApi {
     }
     for (const o of this.nodes.values()) {
       o.label.visible = this.camera.position.distanceTo(o.mesh.position) < LABEL_FAR;
+      o.health?.quaternion.copy(this.camera.quaternion);
     }
     this.updateHover();
     this.renderer.render(this.three, this.camera);
@@ -587,6 +617,7 @@ export class Stage implements ViewApi {
     for (const g of Object.values(this.shapes)) g.dispose();
     this.cone.dispose();
     this.cylinder.dispose();
+    this.torus.dispose();
     this.renderer.dispose();
     // Dropping the context now returns GPU memory without waiting for the garbage collector.
     this.renderer.forceContextLoss();
