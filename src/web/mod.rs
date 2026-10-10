@@ -461,6 +461,23 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
                 .clone();
             return Some(diff_reply(&cfg, diff));
         }
+        Ok(ClientMessage::Export { export }) => {
+            let cfg = state
+                .cfg
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            return Some(export_reply(&cfg, &export));
+        }
+        Ok(ClientMessage::Import { import }) => return Some(import_reply(import)),
+        Err(_) if v.get("export").is_some() => {
+            return Some(message_frame(
+                "export needs a project, a level and a format",
+            ));
+        }
+        Err(_) if v.get("import").is_some() => {
+            return Some(message_frame("import needs a name and the file's text"));
+        }
         Err(_) if v.get("project").is_some() => {
             return Some(message_frame("unknown project request"));
         }
@@ -559,6 +576,41 @@ fn diff_reply(cfg: &Config, req: model::DiffRequest) -> String {
 
 #[cfg(not(feature = "graph"))]
 fn diff_reply(_cfg: &Config, req: model::DiffRequest) -> String {
+    match req {}
+}
+
+/// T329.40: the Export menu's download, from the one function `rtok graph export` runs.
+#[cfg(feature = "graph")]
+fn export_reply(cfg: &Config, req: &model::ExportRequest) -> String {
+    let made = crate::plugin::Runtime::open(cfg.clone(), "web-export")
+        .and_then(|rt| crate::plugins::graph::export::page_file(&rt, req));
+    match made {
+        Ok(file) => ServerFrame::Export { file }.to_json(),
+        Err(e) => message_frame(&format!("{e:#}")),
+    }
+}
+
+#[cfg(not(feature = "graph"))]
+fn export_reply(_cfg: &Config, req: &model::ExportRequest) -> String {
+    match *req {}
+}
+
+/// T329.40: the read-only import view. It only parses the text the page read, so no runtime is
+/// opened and neither the registry nor the index is touched.
+#[cfg(feature = "graph")]
+fn import_reply(req: model::ImportRequest) -> String {
+    match crate::plugins::graph::export::parse(&req.text, &req.name) {
+        Ok(export) => ServerFrame::Imported {
+            name: req.name,
+            export,
+        }
+        .to_json(),
+        Err(e) => message_frame(&format!("{e:#}")),
+    }
+}
+
+#[cfg(not(feature = "graph"))]
+fn import_reply(req: model::ImportRequest) -> String {
     match req {}
 }
 

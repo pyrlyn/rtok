@@ -75,3 +75,14 @@ the footer says how many are hidden, and the JSON always has all of them. The fo
 backend and `indexed_at`, the scope, the rtok version, the export time and, when a project could not answer, a
 PARTIAL marker. A PNG needs a font installed on the machine; without one the command says so instead of drawing no
 text. MCP `graph_export` stays JSON.
+
+### On the Graph page
+
+The Graph page has an Export button and a file picker, "open an export". The button opens a panel that says the
+file contains file names and symbol names (never source text) and that the home directory, the user name and
+absolute paths are replaced, then offers the overview, the open project's symbol graph and, with a function in focus,
+the subgraph around it, as JSON, SVG or PNG. The server writes the file with the function `rtok graph export` calls,
+so the JSON is the CLI's, byte for byte but for `exported_at`; the page only saves it. An image of the live frame is
+not part of this menu. The picker sends a saved JSON export as text to the server, which checks it like
+`export::read` and returns it: the page shows it read-only under "viewing export from FILE" and writes nothing to
+the registry or the index. `rtok tui` gets the same actions in T329.41.

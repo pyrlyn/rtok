@@ -10,12 +10,10 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 
 | ID | Priority | Kind | Status | Where | Fix |
 | --- | --- | --- | --- | --- | --- |
-| T460 | P2 | bug | suspected | `src/plugins/read/hook.rs:154-164` | `same_path` compares case-sensitively (`a == b`, then `Path::ends_with`). Case-fold or canonicalize on Windows. |
 | T462 | P2 | dead code | confirmed | `src/plugins/guard/mod.rs:464` | `guard::check_json` has no callers; the CLI uses `guard::check` (`src/cli.rs:2393`). Remove it. |
-| T464 | P2 | move | suspected | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates-packages `file-backup` | Depend on the published `file-backup` once its behaviour is confirmed to match (that crate has open hardlink and symlink bugs of its own). |
-| T465 | P2 | move | suspected | `tools/dist-generate.sh`, `tools/release.sh` → `pyrlyn/ci` | Fold the shared release steps into `pyrlyn/ci` if the copies in the other repos really match (not diffed). |
-| T466 | P2 | move | suspected | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Used four times in `ci.yml`; share it from `pyrlyn/ci` so other repos can reuse it. |
-| T467 | P2 | move | confirmed | `src/store/` (`mod.rs` is 5,275 lines) → `crates/rtok-store` | Issue #628 (P2 on GitHub): architecture work for incremental builds, not a bug. |
+| T464 | P2 | move | compared | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates-packages `file-backup` | Not a drop-in (checked 2026-10-10): rtok writes to a `_backup/` folder, keeps N generations (`prune_backups`, `stale_backups`) and dedups against any file there; `file-backup` 0.1.1 writes beside the file and never prunes. The creator chose to extend `file-backup` first (crates-packages roadmap T12, with its T4 symlink fix, which the open crates-packages PR #34 also touches), then depend on it here. |
+| T465 | P2 | move | compared | `tools/dist-generate.sh`, `tools/release.sh` → `pyrlyn/ci` | Not shared copies (diffed 2026-10-10): `dist-generate.sh` differs from ketch's and swarfr's in 239 and 102 lines; `release.sh` differs from ketch, cox, runa and swarfr in 130, 121, 63 and 75 lines. Nothing to fold until the repos agree on one release flow; no move without a new creator OK. |
+| T466 | P2 | move | compared | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Only rtok uses it (`ci.yml`, `graph-review.yml`; checked 2026-10-10 across `apps/` and `packages/`). `pyrlyn/ci` already ships `setup-rust` (mise-pinned Rust and `rust-cache`); sharing would mean folding the toolchain cache into it. No move without a new creator OK. |
 | T468 | P3 | dead code | confirmed | `src/plugins/toon/mod.rs:212` | `toon::decode` is test-only. Put it under `cfg(test)` if release builds should not carry it. |
 | T469 | P3 | dead code | confirmed | `crates/rtok-agent-sdk/src/lib.rs:1086` | `copy_dir` is dead on Unix. Gate it with `cfg(not(unix))`. |
 | T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
@@ -42,11 +40,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.5 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
 | T500 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
-| T329.40 | todo | P3 | 4 | 0% | |
 | T329.48 | todo | P3 | 2 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -821,12 +817,6 @@ Check: the sparklines match the store buckets; an outside-scope call is marked; 
 What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
-
-### T329.40. Graph page: Export menu and read-only import view
-
-The page half of T329 §8c, left over from T329.31: the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; an image of the live frame only for part 2; the dialog says that file and symbol names are included) that downloads the same JSON, SVG and PNG the CLI writes (one function behind both, no second drawing code), and the page opening an exported JSON read-only with the banner "viewing export from ..." (the importer is `export::read`; nothing is written to the registry or the index). Depends on T329.31 and T329.14.
-
-Check: the page exports the JSON the CLI writes (byte-equal without `exported_at`) and imports it back; an imported file is read-only and shows the banner; the dialog names the file and symbol names; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.48. TUI: one panel shell for compare and export
 

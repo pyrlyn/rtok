@@ -89,6 +89,7 @@ Project programs and direct packages from the manifests.
 | arbitrary | local | https://crates.io/crates/arbitrary | `fuzz/`: structured fuzz inputs (argv, hook/rules bodies) |
 | assert_cmd | local | https://crates.io/crates/assert_cmd | CLI e2e tests |
 | axum | local | https://crates.io/crates/axum | Rust dependency |
+| base64 | local | https://crates.io/crates/base64 | T329.40: the graph page receives a PNG export inside a text frame |
 | clap | local | https://crates.io/crates/clap | CLI |
 | clap_complete | local | https://crates.io/crates/clap_complete | `rtok completions` shell scripts (T53.2) |
 | clap_mangen | local | https://crates.io/crates/clap_mangen | `rtok man` roff page (T53.2) |

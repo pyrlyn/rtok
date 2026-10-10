@@ -19,8 +19,12 @@ import { Search } from "../../ui/Search";
 import { CHANGE_MARK, CHANGE_TONE, CHANGES, type Change } from "./compare";
 
 /** A saved export is read whole into the page and sent as text, so a very large one is refused here. */
-export const EXPORT_MAX = 16 << 20;
+const EXPORT_MAX = 16 << 20;
 const CALLERS_SHOWN = 5;
+
+/** Why a file is refused before it is read, or null; sync so the page shows it in the same tick. */
+export const tooLarge = (file: File): string | null =>
+    file.size > EXPORT_MAX ? `${file.name} is larger than ${EXPORT_MAX >> 20} MiB` : null;
 
 /**
  * Compare mode's state and its request (T329.35). The old side is a ref typed here (sent on Enter,
@@ -39,12 +43,9 @@ export function useCompare(project: string, version: readonly unknown[]) {
     const q = useDiff(request, [version, saved?.name, saved?.text.length]);
     const pick = async (file: File | undefined) => {
         if (!file) return;
-        if (file.size > EXPORT_MAX) {
-            setRefused(`${file.name} is larger than ${EXPORT_MAX >> 20} MiB`);
-            return;
-        }
-        setRefused(null);
-        setSaved({ name: file.name, text: await file.text() });
+        const refusal = tooLarge(file);
+        setRefused(refusal);
+        if (!refusal) setSaved({ name: file.name, text: await file.text() });
     };
     return {
         on,
@@ -67,7 +68,7 @@ export const projectOf = (r: DiffReport | undefined, name: string): DiffProject 
     r?.projects.find((p) => p.project === name) ??
     (r?.projects.length === 1 ? r.projects[0] : undefined);
 
-function Section({
+export function Section({
     title,
     count,
     children,
@@ -85,7 +86,7 @@ function Section({
     );
 }
 
-const Row = ({ children }: { children: ReactNode }) => (
+export const Row = ({ children }: { children: ReactNode }) => (
     <li className="flex flex-wrap items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs">
         {children}
     </li>
