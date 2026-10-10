@@ -54,7 +54,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.23 | todo | P2 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.7 | todo | P3 | 3 | 0% | |
+| T330.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -1060,6 +1060,8 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows the junk list as plain text today (the item lines of T330.6 included). This task turns it into a `junk` card (per agent, per kind, sizes and the "Freed by `clear`" lines) and adds the "clear safe junk" button: it runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does (a `ClientMessage` plan/apply pair, `src/web/protocol.rs`, regenerated schema and types, a story and a Vitest). The `rtok tui` counterpart of the button is T479 (D27 as amended by T346: write actions on both surfaces, same guards). Depends on T330.6.
 
 Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
+
+Execution plan: (1) `src/agents/junk_web.rs` (the doctor/web.rs pattern): `JunkCard` (per agent, per kind, sizes, "Freed by `clear`" lines) built from `junk::Report` for a new `Snapshot.junk` field, the plan filter (every agent's `safe` kinds, never `--include review`/named kinds), and `plan` / `apply` over `junk_clear::run_with` (`apply` takes the paths the page showed, so nothing unseen goes). `junk_clear::Planned` and `Cleared` get `JsonSchema` and are the frame payloads. (2) `src/web/protocol.rs`: `ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }`, `ServerFrame::JunkPlan` / `JunkCleared`; `src/web/mod.rs` dispatch beside `doctor_reply`, off the executor like the other writes. (3) `src/model/mod.rs`: the junk cache carries the text and the card; `Snapshot.junk`. (4) Regenerate schema and TS. (5) SPA: `JunkCard.tsx` on `Hosts.tsx`, `junkState.ts` reducer (idle, planning, confirming, applying, done), `api/ws.ts` frames, `api/query.tsx` `junkPlan` / `junkApply`; Vitest, story, e2e (seeded stale `rtok.log.N` in the throwaway home, aged past the one-minute settle). (6) Docs `docs/agents.md` (en, ru, uk). Verify: the gates in the task statement; tests use temp homes only.
 
 
 
