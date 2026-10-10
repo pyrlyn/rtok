@@ -791,31 +791,62 @@ const GRAPH_DEAD_CAP: usize = 200;
 /// graph status` prints) plus `graph::dead_candidates` (the same rows `rtok graph
 /// dead --json` prints, minus the `index_for` walk `--json` runs first), capped for
 /// display. Opens its own store handle like [`doctor`] — a few count queries plus a
-/// scan of the store's dead candidates, not a re-index. `None` when the `graph`
-/// feature is off (build-min) or either read failed.
+/// scan of the store's dead candidates, not a re-index. With linked projects (T329.21) the
+/// pending and dead rows of the whole scope are listed, each headed `[project] `; the TUI shows
+/// this text verbatim (D27), so it gets the same prefix. `None` when the `graph` feature is off
+/// (build-min) or either read failed.
 #[cfg(feature = "graph")]
 fn graph_page_text(cfg: &Config) -> Option<String> {
-    use crate::plugins::graph::{dead_candidates, status};
+    use crate::plugins::graph::{dead_candidates, scope, status};
 
     let rt = crate::plugin::Runtime::open(cfg.clone(), "web-graph").ok()?;
     let ctx = crate::plugin::Ctx::new(&rt);
     let root = std::env::current_dir().ok()?;
-    let health = status::collect(&ctx, &root).ok()?;
+    let mut health = status::collect(&ctx, &root).ok()?;
+    // T329.21: with linked projects each row names its project; a scope of one keeps the old
+    // text, so a lone project's page has no badge to repeat.
+    let members = scope::resolve(&rt.store, None, &root).unwrap_or_default();
+    let linked = members.len() > 1;
+    if linked {
+        health.pending = scope::pending_page_paths(&ctx, &members);
+    }
     let mut out = status::format_table(&health);
     out.push_str("\ndead symbols\n");
     // T230: reads the store as it stands, no `index_for` walk — cheap per tick.
-    match dead_candidates(&ctx, &root) {
-        Ok(rows) if rows.is_empty() => out.push_str(" none\n"),
-        Ok(rows) => {
+    let found = if linked {
+        scope::dead_page_rows(&ctx, &members)
+            .map(|(rows, notes)| (rows.into_iter().map(|(p, r)| (Some(p), r)).collect(), notes))
+    } else {
+        dead_candidates(&ctx, &root).map(|rows| {
+            (
+                rows.into_iter().map(|r| (None, r)).collect::<Vec<_>>(),
+                String::new(),
+            )
+        })
+    };
+    match found {
+        Ok((rows, notes)) => {
+            if rows.is_empty() {
+                out.push_str(" none\n");
+            }
             let total = rows.len();
-            for r in rows.iter().take(GRAPH_DEAD_CAP) {
-                out.push_str(&format!(" {}:{} {} {}\n", r.path, r.line, r.kind, r.name));
+            for (project, r) in rows.iter().take(GRAPH_DEAD_CAP) {
+                let tag = project
+                    .as_ref()
+                    .map_or_else(String::new, |p| format!("[{p}] "));
+                out.push_str(&format!(
+                    " {tag}{}:{} {} {}\n",
+                    r.path, r.line, r.kind, r.name
+                ));
             }
             if total > GRAPH_DEAD_CAP {
                 out.push_str(&format!(
                     " … {} more, capped at {GRAPH_DEAD_CAP} — `rtok graph dead --json` has the rest\n",
                     total - GRAPH_DEAD_CAP
                 ));
+            }
+            for note in notes.lines() {
+                out.push_str(&format!(" {note}\n"));
             }
         }
         Err(e) => out.push_str(&format!(" dead scan failed: {e}\n")),

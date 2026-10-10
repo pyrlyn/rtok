@@ -160,17 +160,30 @@ export function parseStats(text: string): StatsView {
 // -- graph
 
 export interface DeadSymbol {
+  /** The project of a row, set once the lists span a project and its links (T329.21). */
+  project: string | null;
   path: string;
   line: string;
   kind: string;
   name: string;
 }
 
+export interface PendingFile {
+  project: string | null;
+  path: string;
+}
+
+/** Lists of several projects head each row `[name] `; a lone project's rows carry no prefix. */
+function splitProject(text: string): { project: string | null; rest: string } {
+  const m = /^\[([^\]]+)\] (.*)$/.exec(text);
+  return m ? { project: m[1]!, rest: m[2]! } : { project: null, rest: text };
+}
+
 export interface GraphView {
   root: string;
   rows: number | null;
   files: number | null;
-  pending: string[];
+  pending: PendingFile[];
   watch: boolean;
   indexedAt: string;
   dead: DeadSymbol[];
@@ -194,13 +207,14 @@ export function parseGraph(text: string): GraphView {
   const watch = get("watch") === "true";
   const indexedAt = get("indexed_at");
 
-  const pending: string[] = [];
+  const pending: PendingFile[] = [];
   const iPending = L.findIndex((l) => l.startsWith("pending "));
   if (iPending >= 0) {
     used.add(iPending);
     for (let i = iPending + 1; (L[i] ?? "").startsWith("  "); i++) {
       used.add(i);
-      pending.push((L[i] ?? "").trim());
+      const { project, rest } = splitProject((L[i] ?? "").trim());
+      pending.push({ project, path: rest });
     }
   }
 
@@ -211,10 +225,11 @@ export function parseGraph(text: string): GraphView {
     used.add(iDead);
     for (let i = iDead + 1; i < L.length; i++) {
       const l = L[i] ?? "";
-      const m = /^ (\S+):(\d+) (\S+) (.+)$/.exec(l);
-      if (m) {
+      const { project, rest } = splitProject(l.slice(1));
+      const m = /^(\S+):(\d+) (\S+) (.+)$/.exec(rest);
+      if (l.startsWith(" ") && m) {
         used.add(i);
-        dead.push({ path: m[1]!, line: m[2]!, kind: m[3]!, name: m[4]! });
+        dead.push({ project, path: m[1]!, line: m[2]!, kind: m[3]!, name: m[4]! });
       } else if (l.trim() === "none") {
         used.add(i);
       } else if (/^ (…|dead scan failed)/.test(l)) {
