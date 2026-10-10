@@ -43,7 +43,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.5 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
 | T500 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
