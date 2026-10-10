@@ -3009,6 +3009,18 @@ Check: `camera.test.ts` (box and sphere maths, easing), `camera2d.test.tsx` (the
 
 Deviations: split at claim time. Maximise buttons, the collapsed metrics strip, running labels, count-up, sparklines and the scope marks are T329.32; latency, symbols, files, projects and fallback counters are T329.33; caller names, store-wide totals and the `live_*` config keys are T329.34. The Three.js camera has no unit test of its own (it needs a GL context); its maths is tested through `sphereOf`, the held ids through `data-framed`, and the picture by the story and Playwright. A TUI counterpart is not planned yet (D27).
 
+## T480 — TUI: live graph calls panel
+
+T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26.
+
+Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
+
+Check result (2026-10-10): `just check` green on this commit: nextest `Summary [ 376.962s] 3194 tests run: 3194 passed, 8 skipped` (run with `NEXTEST_TEST_THREADS=4`, since the machine ran at load 16 and unrelated timing tests failed one per run at the default); fmt, clippy `-D warnings`, oxlint, pytest and jscpd clean; `live_calls` tests 5/5 (the end-to-end test writes calls until the reader is armed and one arrives, with a 30 s bound, instead of sleeping), `surface_parity` 17/17; no `web/` file touched, so the SPA gates did not apply
+
+How it was built: the shared half is T483 (`Reader` in `src/web/live.rs`, the Rust `CallsStore` in `src/web/calls_store.rs`); the pane is `src/tui/live_calls.rs`: a reader thread on `Reader`, started on the first look at the Graph tab, folding into `CallsStore`. Keys, all in `KEYS`: `f` freeze, `w` window, `a`/`t`/`o` caller, tool and project filters. A freeze keeps a copy of the store for display while the live one keeps folding, so unfreezing shows every held call. The totals equal the page's because both fold the same batches with a fold held to `callsStore.ts` by T483's tests; making the server send the totals so the page drops its own fold is T484.
+
+Deviations: split from the first draft, which was about 600 lines of code; the shared half became T483. The pane omits what the page shows beyond the brief: the running-call list with elapsed seconds (running tools are named in the KPI line), `since open` counts from the first look at the Graph tab, as the page's counts from subscription, and the feed has no scrolling beyond the rows that fit.
+
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
 ## T329.33 — Graph page: call metrics from the events (symbols returned, files touched and projects with hits split to T329.36)
@@ -3045,6 +3057,22 @@ T329 §8e core: `rtok graph diff [--from REF] [--to REF|working] [--project ID] 
 Check: unit tests in `src/plugins/graph/diff.rs` (a signature change in a linked project lists its callers and leaves the tree untouched, body change, rename, ambiguous rename stays remove plus add, moved and untracked file, added and removed, two revisions, errors, cap with archive id paging, json); trycmd `graph diff --help`; `surface_parity`, `config_coverage`, `graph_lsp_gate`; `just check`.
 
 Deviations: the old side is held in memory instead of a temporary index, so there is no temp store to clean up. The MCP surface is now six tools and the description budget went from 150 to 160 tokens (`graph_diff` does not fit in fewer); `README.md`, `docs/comparison.md`, `docs/lsp.md` and `skills/rtok/SKILL.md` still say five tools. The task is over the 500-line cap (about 690 non-test lines in `diff.rs`, plus wiring); `--from-export`, project links, a per-project `--from`, the "changed, not analysed" listing and the page's Compare mode are T329.29.
+
+## T329.29 — Graph diff: `--from` per project, `--from-export`, link changes and unread files (page split to T329.35)
+
+T329 §8e, the rest of the backend after T329.18 (the page's Compare mode did not fit the 500-line cap together with it and is T329.35; its TUI counterpart is T485). `rtok graph diff` and MCP `graph_diff` gained:
+
+- `--from PROJECT:REF` (repeatable; a project name, id or directory, the colon is safe because a git ref holds none): that project is compared from its own ref and the others from the plain `--from` (default `HEAD`). A text whose left side names no project of the scope stays one ref, so `@{yesterday 10:00}` works and a typo is named by the unknown-ref error. MCP `from` takes a string or a list.
+- `--from-export FILE` (CLI only; MCP never takes a path a model chose): the old side is a saved `rtok graph export --level symbols` read by `export::read`. It lists symbols added and removed by `(path, name, kind)` and, through `export::collect` at the overview level, the registry links added and removed by project names. It does not list changes or edges, because an export keeps no signatures and its edges drop ambiguous calls (`Src::Names` makes `diff_sides` skip them), and it says so in a note. An overview export compares links only, a focus export is refused, a project the export lacks is skipped with a note, and `--from`/`--to` with it is an error. Links cannot be compared with a git ref: the registry keeps no history.
+- `changed, not analysed`: a file git reports as different that the project does not exclude and that no grammar read (no grammar for its extension, not UTF-8, or the grammar failed on the old side or a second revision) is listed with the reason; excluded files are not. A parse failure of a file on the working side is not seen, because that side is the index.
+
+Reused: `export::read` and `export::collect`, `projects::resolve`, `fan_out`, the `Matcher` ignore rules (`is_excluded`, `has_supported_ext` made `pub(super)`), `working_side`/`diff_sides`/`cap`. Docs in en, ru, uk (`docs/commands.md`), the graph plugin README and AGENTS.
+
+Check: unit tests in `src/plugins/graph/diff.rs` (a ref for one project by name and by id leaves the others on the shared ref, a second shared ref is refused, no-grammar/not-parsed/excluded files, an export lists added and removed symbols and a removed link and not a signature change, an overview export compares links only, `--from` with an export and a missing file are errors); trycmd snapshots (`graph diff --help`, completions, `mcp.toml`), `config_coverage`, `surface_parity`, `graph_lsp_gate`; `just check`.
+
+Result: `just check` passed (fmt, clippy `-D warnings`, jscpd, `cargo nextest run --workspace`: 3204 passed, 8 skipped). Two load flakes on earlier runs (`agents_install the_agent_alias_prints_what_agents_prints`, `mcp mcp_with_watcher_exits_on_stdin_eof`) passed alone and on the rerun. No web/src change, so the SPA gates were not needed.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
 ## T329.23 — Graph drill-down: side panel and search
 
