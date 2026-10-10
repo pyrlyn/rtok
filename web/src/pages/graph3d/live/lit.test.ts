@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 import { project } from "../../../api/sampleRows";
 import { buildScene, type Scene } from "../scene";
 import { done, NOW, running, view } from "./callsFixtures";
-import { accentOf, FOCUS_MS, liveState, MAX_ACCENTS } from "./lit";
+import { accentOf, FOCUS_MS, foldedCounters, liveState, MAX_ACCENTS } from "./lit";
 
 const overview = buildScene([project(1, "rtok"), project(2, "ketch")], {
   query: "",
@@ -93,5 +93,74 @@ describe("what the camera frames", () => {
     expect(liveState(overview, both, NOW).focus).toEqual(
       [idOf("rtok"), idOf("ketch")].sort((a, b) => a - b),
     );
+  });
+});
+
+describe("calls outside the scope", () => {
+  const scope = new Set(["rtok"]);
+
+  test("a call on a project outside the scope lights nothing and frames nothing", () => {
+    const outside = live(running("a", { project: "ketch" }));
+    const s = liveState(overview, outside, NOW, { scope });
+    expect([s.lit.size, s.focus]).toEqual([0, []]);
+    const past = ended(done("a", 10, 4, { project: "ketch" }));
+    expect(liveState(overview, past, NOW, { scope }).lit.size).toBe(0);
+  });
+
+  test("a call inside the scope still lights, and no scope means every project is inside", () => {
+    expect(liveState(overview, live(running("a")), NOW, { scope }).lit.has(idOf("rtok"))).toBe(
+      true,
+    );
+    const other = live(running("a", { project: "ketch" }));
+    expect(liveState(overview, other, NOW, { scope: null }).lit.has(idOf("ketch"))).toBe(true);
+  });
+});
+
+describe("calls on folded nodes", () => {
+  const drilled: Scene = {
+    ...overview,
+    label: "symbols of rtok",
+    nodes: overview.nodes.map((n, i) => ({
+      ...n,
+      label: i ? "store.rs" : "main.rs",
+      root: i ? "src/store.rs" : "src/main.rs",
+    })),
+  };
+  const lit = (target: string, more: number) => {
+    const s = liveState(drilled, live(running("a", { target })), NOW, { more });
+    return { s, counters: foldedCounters(drilled, s, more) };
+  };
+
+  test("a path inside a drawn file counts on that file, not on the group", () => {
+    const { s, counters } = lit("src/store.rs/open", 5);
+    expect(counters).toEqual([{ label: "store.rs", calls: 1 }]);
+    expect(s.group).toBe(0);
+    // Counting is not lighting: the folded node has no ring of its own to put on the file.
+    expect(s.lit.get(drilled.nodes[1]!.id)?.accents).toEqual([]);
+  });
+
+  test("a target no drawn node holds counts on the +N more group", () => {
+    expect(lit("hidden_fn", 7).counters).toEqual([{ label: "+7 more", calls: 1 }]);
+  });
+
+  test("without folded nodes an unknown target is nothing, and a drawn one is not folded", () => {
+    expect(lit("hidden_fn", 0).counters).toEqual([]);
+    const drawn = lit("main.rs", 5);
+    expect(drawn.counters).toEqual([]);
+    expect(drawn.s.lit.get(drilled.nodes[0]!.id)?.accents).toEqual([0]);
+  });
+
+  test("finished calls count within the heat window, largest first", () => {
+    const rows = [
+      done("a", 1, 1, { target: "x" }),
+      done("b", 1, 1, { target: "y" }),
+      done("c", 1, 1, { target: "src/main.rs" }),
+    ];
+    const s = liveState(drilled, ended(...rows), NOW, { more: 2 });
+    expect(foldedCounters(drilled, s, 2)).toEqual([
+      { label: "+2 more", calls: 2 },
+      { label: "main.rs", calls: 1 },
+    ]);
+    expect(liveState(drilled, ended(...rows), NOW + 300_001, { more: 2 }).group).toBe(0);
   });
 });

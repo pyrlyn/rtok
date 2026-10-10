@@ -642,6 +642,7 @@ export interface WindowView {
    */
   latency: Latency | null;
   projects_hit: number;
+  spark: Spark;
   symbols: number;
   symbols_returned: number;
   /**
@@ -656,6 +657,21 @@ export interface WindowView {
 export interface Latency {
   p50: number;
   p95: number;
+}
+/**
+ * Calls and tokens saved per slot over a window, oldest first. Summed from the same buckets as
+ * the window totals, so the slots add up to them.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Spark".
+ */
+export interface Spark {
+  calls: number[];
+  saved: number[];
+  /**
+   * What the slots cover. "since open" reads the buckets, which are kept for 15 minutes only.
+   */
+  span_ms: number;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
