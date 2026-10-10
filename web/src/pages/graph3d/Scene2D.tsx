@@ -10,7 +10,7 @@ import {
     useRef,
     useState,
 } from "react";
-import type { Scene } from "./scene";
+import { edgeHow, type Scene, type SceneNode } from "./scene";
 import type { Positions, Vec3 } from "./useLayout";
 import type { ViewApi, ViewEvents } from "./webgl";
 
@@ -42,8 +42,25 @@ function fitBox(scene: Scene, map: Map<number, Vec3>): Box {
     return { x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + 2 * PAD, h: y1 - y0 + 2 * PAD };
 }
 
+/** One mark per shape, so a file, a type and a function read apart without colour. */
+function Mark({ n }: { n: SceneNode }) {
+    const r = n.radius;
+    const paint = {
+        // `style`, not attributes: only CSS resolves the role's `var()`.
+        style: { fill: n.hollow ? "none" : n.color, stroke: n.color },
+        strokeWidth: n.hollow ? 1.5 : 0,
+        strokeDasharray: n.hollow ? "3 2" : undefined,
+    };
+    if (n.shape === "cube") return <rect x={-r} y={-r} width={2 * r} height={2 * r} {...paint} />;
+    if (n.shape === "octahedron") {
+        const d = r * 1.3;
+        return <polygon points={`0,${-d} ${d},0 0,${d} ${-d},0`} {...paint} />;
+    }
+    return <circle r={r} {...paint} />;
+}
+
 /** The same scene flat: SVG over the layout's x and y. Pan by dragging, zoom with the wheel. */
-export default function Scene2D({ scene, positions, api, select, menu, hover }: View2DProps) {
+export default function Scene2D({ scene, positions, api, select, menu, hover, open }: View2DProps) {
     const [, redraw] = useReducer((n: number) => n + 1, 0);
     // `null` follows the layout: the box fits whatever is drawn.
     const [manual, setManual] = useState<Box | null>(null);
@@ -105,7 +122,7 @@ export default function Scene2D({ scene, positions, api, select, menu, hover }: 
             ref={svg}
             data-testid="graph-2d"
             role="group"
-            aria-label="2D graph of the registered projects"
+            aria-label={`2D graph of the ${scene.label}`}
             viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}
             className="size-full min-h-72 touch-none text-fg"
             onWheel={onWheel}
@@ -137,7 +154,7 @@ export default function Scene2D({ scene, positions, api, select, menu, hover }: 
                 const to = byId.get(e.to)!;
                 const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
                 const k = (len - to.radius - 3) / len;
-                const how = e.kind === "auto" ? `auto${e.reason ? `: ${e.reason}` : ""}` : "manual";
+                const how = edgeHow(e);
                 return (
                     <line
                         key={e.id}
@@ -176,11 +193,11 @@ export default function Scene2D({ scene, positions, api, select, menu, hover }: 
                         aria-label={`${n.label}, ${n.state}${n.selected ? ", selected" : ""}`}
                         aria-pressed={n.selected}
                         opacity={n.dim ? 0.35 : 1}
-                        className="cursor-pointer outline-none focus-visible:[&>circle:first-child]:stroke-accent"
+                        className="cursor-pointer outline-none focus-visible:[&>:first-child]:stroke-accent"
                         data-testid="node-2d"
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => select(n.id)}
-                        onDoubleClick={() => api.current?.focus(n.id)}
+                        onDoubleClick={() => (open ? open(n.id) : api.current?.focus(n.id))}
                         onKeyDown={(e) =>
                             (e.key === "Enter" || e.key === " ") &&
                             (e.preventDefault(), select(n.id))
@@ -194,13 +211,7 @@ export default function Scene2D({ scene, positions, api, select, menu, hover }: 
                         }
                         onPointerLeave={() => hover(null)}
                     >
-                        <circle
-                            r={n.radius}
-                            // `style`, not attributes: only CSS resolves the role's `var()`.
-                            style={{ fill: n.hollow ? "none" : n.color, stroke: n.color }}
-                            strokeWidth={n.hollow ? 1.5 : 0}
-                            strokeDasharray={n.hollow ? "3 2" : undefined}
-                        />
+                        <Mark n={n} />
                         {n.selected && (
                             <circle
                                 r={n.radius * 1.5}

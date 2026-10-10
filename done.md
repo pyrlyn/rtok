@@ -2958,7 +2958,25 @@ Check: `drill` unit tests on a temp store (files with a call summed to 2, an exp
 
 Deviations: the page half (breadcrumb, URL state, expand and focus on the canvas, side panel, search box, "+N more" control, live re-request under `watch`, docs) is T329.22, because the two together were over the 500-line cap. The text-mode banner and the dead-symbol toggle are not here: only the tags backend answers today (T329.9), and the toggle needs the scoped dead list on the page. A file with parse errors is not marked (the index keeps no parse status); `stale` marks files changed since the last index run.
 
+
 Status: done 2026-10-09 · Model: Claude Code / sonnet-5.5
+
+## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
+
+T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.
+
+- Transport: `parseFrame` accepts the `graph` frame; `Api.drill` sends the request and settles on the frame of that project (the frame names its project, not the request, so replies match by project, in order within one), on the same queue the doctor requests use. `useDrill` keeps the previous frame on screen while a new one is in flight and re-asks when the project's index numbers (rows, files, pending, `indexed_at`) move, so `watch` edits change nodes and edges in place without resetting the layout or the zoom.
+- State: the drill-down state (project, expanded files, focus, depth) lives in the URL (`p`, `x`, `f`, `d`), validated in the `/graph` route's `validateSearch` (`drillState.ts`); every step is a history entry, so the back button returns, and the breadcrumb (`All projects / rtok / src/plugins/graph`) leads back up.
+- View: "Open" on the level-1 node menu and double-click drill into a project. `drillScene.ts` maps the frame to the existing `Scene` (stable numeric ids, directories as layout groups, a shape per kind: file cube, type octahedron, function sphere, project colour); `SceneView` (extracted from `ProjectsOverview`) is the shared 2D/3D/list switch, WebGL fallback and tooltip, so level 1 and level 2 share one view. A click selects, a second click on a file expands it, on a function focuses it (depth chips 1 to 4), on an `external` node opens the owning project with that symbol focused.
+- States: "+N more" raises `limit` by 500, a status line while a request is in flight, the "Not indexed yet" empty state (with the `rtok graph index` command), a notice for a missing directory, a "partial" banner, a warning pill on `stale` nodes in the list.
+- Fixtures: `sampleDrill` answers `graph` on the `?sample` server (rtok, ketch with a call across the link, and a 600-file project) so the stories and tests need no backend.
+- Docs: "The graph page" section in `docs/commands.md` (en, ru, uk).
+
+Check: Vitest for the frame parsing, the request queue and the keep-previous behaviour, the URL state and the breadcrumb, the frame-to-scene mapping, and the view (expand, focus, external hop, "+N more", states, back); ten stories on the sample server (open, expand, focus and depth, external hop, "+N more" on the 600-file fixture, empty and missing states, both themes, axe, one WebGL story); `just spa-stories`, `just spa-e2e`; `just check`.
+
+Deviations: the side panel (path and line, signature, callers and callees, editor link) and the search box with its hits are T329.23, because with them the task was over the 500-line cap. There is no "Index now" button: the protocol has no index action, so the empty state shows the command. The text-mode banner waits for T329.9 (only the tags backend answers today). The level-1 move into `SceneView` is moved code, which is why the diff is larger than the net count.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
 ## T329.7 — Reference discovery from manifests (Cargo, npm, Go, Python, submodules)
 
