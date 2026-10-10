@@ -87,6 +87,18 @@ describe("parseFrame", () => {
     });
   });
 
+  test("call events keep their batch and refuse a frame without one", () => {
+    const batch = {
+      events: [],
+      omitted: 0,
+      summary: { starts: 0, ends: 0, failed: 0, est_before: 0, est_after: 0 },
+      head: 7,
+    };
+    expect(parseFrame(JSON.stringify({ type: "calls", batch }))).toEqual({ type: "calls", batch });
+    expect(parseFrame('{"type":"calls"}')).toBeNull();
+    expect(parseFrame('{"type":"calls","batch":{"events":[]}}')).toBeNull();
+  });
+
   test.each([
     ["malformed JSON", "{nope"],
     ["binary payload", new ArrayBuffer(2)],

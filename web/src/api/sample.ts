@@ -327,6 +327,10 @@ export const connectSample: Connect = (handlers) => {
         );
         return true;
       }
+      if ("calls" in message) {
+        // The sample has no other process to watch; the stream starts with the live graph (T329.26).
+        return true;
+      }
       if ("graph" in message) {
         // The drill-down page and its sample frames land with T329.22.
         later(() => handlers.onFrame({ type: "message", text: "no sample drill-down yet" }));

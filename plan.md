@@ -45,7 +45,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.10 | todo | P3 | 3 | 0% | |
-| T329.15 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.17 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
@@ -827,21 +826,6 @@ T329 §6a mode 3 and "when no mode works": word-boundary definition and mention 
 
 Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
 
-
-### T329.15. Graph live data path: call events on `/ws` from every process
-
-Data half of T329 §8b (split on 2026-10-10: the card was over the size budget; the display moved to T329.26). Every graph tool call, from any rtok process, writes a start event, one progress event and an end event through the store; `rtok web` reads them incrementally and pushes them on `/ws`, so an MCP `callers` call made by another process reaches the page within one second. The end event carries the values of the same `Measurement` rows `rtok stats` reads. Delivery is bounded and coalesced, so a 500-call burst cannot flood the socket. Payloads carry ids, symbol names, paths and numbers, never source text. Depends on T329.13, T329.14.
-
-Execution plan:
-
-- Store (`crates/rtok-store`): migration `0040_graph_events` (an append-only table, capped to the newest 5000 rows on insert) with `schema.rs`, `schema_snapshot.txt` and a `graph_events.rs` module: `insert_graph_event`, `graph_events_after(cursor, limit)`, `graph_event_head`, `measurement_head` and `graph_measurements_after(session, id)`. Diesel only.
-- Writer (`src/plugins/graph/events.rs`): `track` wraps the MCP graph arm in `src/mcp.rs` (serve and `--call`): start, a progress event once the scope is resolved, end with the answer's backend, ok or error, elapsed ms and the `graph` measurement rows the call wrote. Every write is fail open (`let _ =`), runs in the MCP/CLI process, never in the hook.
-- Reader (`src/web/live.rs`): one poller per `rtok web`, started by the first subscriber and stopped with the last; every 250 ms it reads `id > cursor` (no table scan), folds a burst into one `CallBatch` frame (a call's start and progress dropped when its end is in the batch, at most 100 events, the rest counted in `omitted` and still summed in `summary`) and broadcasts it through a bounded channel. No replay: a socket sees events written after it subscribed.
-- Protocol (`src/web/protocol.rs`): client message `{"calls":{"subscribe":bool}}`, server frame `{"type":"calls",...}`; regenerate `web/src/api/ws.schema.json` and `snapshot.gen.ts`; typed `calls` case in `parseFrame`.
-- Docs: the graph page and `/ws` sections of `docs/` in en, ru and uk.
-- Tests: a call written through the store API a second process uses reaches a `/ws` client within one second and equals its `Measurement` rows and `rtok stats`; a 500-call burst arrives coalesced; a new server or socket does not replay old events.
-
-Check: an MCP `callers` call from another process reaches a `/ws` client within one second, and its end event equals the `Measurement` rows and `rtok stats`; a 500-call burst is delivered coalesced and bounded without blocking; a restart or reconnect replays nothing; `just check`, `just spa-typecheck`, `just spa-stories`, `just spa-e2e`, `just js`.
 
 ### T329.26. Graph page: two-part UI with the read-only live graph and live metrics
 
