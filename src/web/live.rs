@@ -59,6 +59,15 @@ pub struct CallSummary {
     /// Sums of the `samples` of the end events: the `Measurement` columns `rtok stats` adds up.
     pub est_before: i64,
     pub est_after: i64,
+    /// `lsp_fallback` rows of the ended calls: each is one answer the tags index gave after the
+    /// language server could not.
+    pub fallbacks: u32,
+    /// Rows with a `ref_id`: answers cut at `max_tokens`.
+    pub caps: u32,
+    /// Symbols the ended calls asked for.
+    pub symbols: u32,
+    /// Ended calls whose scope held more than one project.
+    pub crossed: u32,
 }
 
 /// Folds `events` (oldest first) into a frame, or `None` when there are none.
@@ -77,9 +86,13 @@ pub fn coalesce(events: Vec<GraphEvent>) -> Option<CallBatch> {
             EventPhase::End => {
                 summary.ends += 1;
                 summary.failed += u32::from(!e.ok);
+                summary.symbols += e.symbols.unwrap_or(0);
+                summary.crossed += u32::from(e.total.is_some_and(|t| t > 1));
                 for s in &e.samples {
                     summary.est_before += i64::from(s.est_before);
                     summary.est_after += i64::from(s.est_after);
+                    summary.fallbacks += u32::from(s.kind == "lsp_fallback");
+                    summary.caps += u32::from(s.ref_id.is_some());
                 }
             }
         }
@@ -229,14 +242,21 @@ mod tests {
     #[test]
     fn an_ended_call_is_listed_once_and_still_counted() {
         let mut end = ev(3, "a", EventPhase::End);
-        end.samples = vec![MeasurementSample {
+        let row = |kind: &str, before, after, ref_id: Option<&str>| MeasurementSample {
             id: 1,
-            kind: "cap".into(),
+            kind: kind.into(),
             before_bytes: 9,
             after_bytes: 3,
-            est_before: 10,
-            est_after: 4,
-        }];
+            est_before: before,
+            est_after: after,
+            ref_id: ref_id.map(Into::into),
+        };
+        end.samples = vec![
+            row("cap", 10, 4, Some("ab")),
+            row("lsp_fallback", 0, 0, None),
+        ];
+        end.symbols = Some(3);
+        end.total = Some(2);
         let b = coalesce(vec![
             ev(1, "a", EventPhase::Start),
             ev(2, "a", EventPhase::Progress),
@@ -259,6 +279,10 @@ mod tests {
                 failed: 0,
                 est_before: 10,
                 est_after: 4,
+                fallbacks: 1,
+                caps: 1,
+                symbols: 3,
+                crossed: 1,
             }
         );
     }

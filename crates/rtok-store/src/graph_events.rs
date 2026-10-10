@@ -59,6 +59,10 @@ pub struct MeasurementSample {
     pub after_bytes: i64,
     pub est_before: i32,
     pub est_after: i32,
+    /// Set when the row's answer was cut and archived: how a page tells a cap hit from an
+    /// `explore` row that only stands for several smaller calls. Absent in rows written before T329.33.
+    #[serde(default)]
+    pub ref_id: Option<String>,
 }
 
 /// One event of a graph call. `call` ties a call's events together; `ts_ms`, `id` and the
@@ -86,6 +90,8 @@ pub struct GraphEvent {
     pub answer_tokens: Option<u32>,
     /// The call's `graph` measurement rows (end events); empty when the answer was not shortened.
     pub samples: Vec<MeasurementSample>,
+    /// Symbols the call asked for (every event); `None` for a tool that takes none.
+    pub symbols: Option<u32>,
 }
 
 impl GraphEvent {
@@ -120,6 +126,7 @@ struct Row {
     total: Option<i32>,
     answer_tokens: Option<i32>,
     rows_json: Option<String>,
+    symbols: Option<i32>,
 }
 
 impl Row {
@@ -146,6 +153,7 @@ impl Row {
                 .rows_json
                 .and_then(|j| serde_json::from_str(&j).ok())
                 .unwrap_or_default(),
+            symbols: unsigned(self.symbols),
         })
     }
 }
@@ -188,6 +196,7 @@ impl Store {
                 graph_events::total.eq(int(e.total)),
                 graph_events::answer_tokens.eq(int(e.answer_tokens)),
                 graph_events::rows_json.eq(rows_json),
+                graph_events::symbols.eq(int(e.symbols)),
             ))
             .returning(graph_events::id)
             .get_result(&mut *conn)?;
@@ -271,13 +280,16 @@ mod tests {
             after_bytes: 4,
             est_before: 5,
             est_after: 2,
+            ref_id: Some("ab".into()),
         }];
+        end.symbols = Some(3);
         let b = s.insert_graph_event(&end).unwrap();
         assert_eq!(s.graph_event_head().unwrap(), b);
         let all = s.graph_events_after(0, 10).unwrap();
         assert_eq!(all.iter().map(|e| e.id).collect::<Vec<_>>(), [a, b]);
         assert_eq!(all[1].samples, end.samples);
         assert_eq!(all[1].answer_tokens, Some(7));
+        assert_eq!((all[0].symbols, all[1].symbols), (None, Some(3)));
         assert!(s.graph_events_after(b, 10).unwrap().is_empty());
         assert_eq!(s.graph_events_after(0, 1).unwrap().len(), 1);
     }

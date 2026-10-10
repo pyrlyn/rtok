@@ -6,13 +6,15 @@ import { Chip } from "../../../ui/Chip";
 import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
 import { compact, fmt, pct } from "../../format";
-import { type CallsStore, windowTotals, WINDOWS, type WindowId } from "./callsStore";
+import { type CallsStore, latency, windowTotals, WINDOWS, type WindowId } from "./callsStore";
 
 const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
+const millis = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 /**
  * The numbers come from `summary` and the `Measurement` samples of the end events, which are the
  * rows `rtok stats` adds up, so a window here equals `rtok stats` over the same calls.
+ * Latency is the exception: a percentile cannot be summed, so it is measured on the calls a batch lists.
  */
 export function LiveMetrics({
     store,
@@ -34,6 +36,7 @@ export function LiveMetrics({
 }) {
     const t = windowTotals(store, window, now);
     const saved = t.before - t.after;
+    const lat = latency(t);
     const tools = Object.entries(t.tools).sort((a, b) => b[1].calls - a[1].calls);
     const top = Math.max(1, ...tools.map(([, v]) => v.calls));
     const listed = Object.values(t.backends).reduce((n, v) => n + v, 0);
@@ -75,6 +78,22 @@ export function LiveMetrics({
                     value={fmt(t.calls)}
                     tone={t.failed ? "warn" : "default"}
                     sub={`${fmt(t.failed)} failed`}
+                />
+                <Kpi
+                    label="latency p50"
+                    value={lat ? millis(lat.p50) : "-"}
+                    sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
+                />
+                <Kpi
+                    label="symbols asked"
+                    value={fmt(t.symbols)}
+                    sub={`${fmt(t.crossed)} across projects`}
+                />
+                <Kpi
+                    label="fallbacks"
+                    value={fmt(t.fallbacks)}
+                    tone={t.fallbacks ? "warn" : "default"}
+                    sub={`${fmt(t.caps)} capped`}
                 />
                 <Kpi label="tokens sent" value={compact(t.after)} />
                 <Kpi label="without rtok" value={compact(t.before)} />
