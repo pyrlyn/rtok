@@ -47,7 +47,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
-| T329.19 | todo | P3 | 3 | 0% | |
+| T329.19 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
 | T329.25 | todo | P3 | 2 | 0% | |
@@ -851,6 +851,8 @@ Check: a signature change in B shows in `rtok graph diff --from HEAD` from A wit
 T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes (the missing-server fix reads "install the server; it is picked up within one health-check interval, or restart"), the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
 
 Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback under `auto` reads 0.6 on the backend component, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; `just check`.
+
+Execution plan: (1) a child module `src/plugins/graph/health/score.rs` of `health.rs`, reusing `reach`, the mirrored alerts and `capability::mirrored` (no new probe, no second check): `score(rt, project) -> Score` with `score: Option<u8>` (none while the first index is running), the three components (0 to 1) and `reasons`, each with a `fix`; (2) `ProjectRow.health` in `rtok graph projects` (a `health` column) and `--json`, and in `/ws` (`ws.schema.json` blessed, `snapshot.gen.ts` regenerated); (3) the scope's lowest score and the MCP health note: `health::notice` adds one line when it is under 80; (4) `rtok doctor` lists every project under 80 with its reasons (`graph_health` in `--json`); (5) docs `docs/lsp.md` and `docs/plugins.md` (en, ru, uk) and the plugin `AGENTS.md`; (6) tests on fixture projects with fake probes, then `just check`. The page display of the score (ring, hover breakdown) is a separate subtask.
 
 ### T329.21. Project badges in the graph page lists
 
