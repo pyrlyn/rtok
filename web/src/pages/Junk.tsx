@@ -66,7 +66,8 @@ function Totals({ card }: { card: JunkCard }) {
                                 <span className="w-24 shrink-0">{k.kind}</span>
                                 <Pill tone={k.class === "safe" ? "ok" : "muted"}>{k.class}</Pill>
                                 <span>
-                                    {k.items} {k.items === 1 ? "item" : "items"}, {bytes(k.size_bytes)}
+                                    {k.items} {k.items === 1 ? "item" : "items"},{" "}
+                                    {bytes(k.size_bytes)}
                                 </span>
                             </li>
                         ))}
@@ -168,14 +169,16 @@ function Plan({ plan }: { plan: Cleared }) {
                         <span className="font-semibold">
                             {g.agent} {g.kind}
                         </span>
-                        : {g.items.length} {g.items.length === 1 ? "item" : "items"}, {bytes(g.bytes)}{" "}
-                        planned
+                        : {g.items.length} {g.items.length === 1 ? "item" : "items"},{" "}
+                        {bytes(g.bytes)} planned
                     </summary>
                     <ul className="mt-1 flex flex-col gap-1 text-fg-muted">
                         {g.items.map((i) => (
                             <li key={i.path} className="break-all">
                                 {i.path} · {bytes(i.bytes)} · {i.reason}
-                                {!i.planned && <span className="text-warn-fg"> · kept: {i.note}</span>}
+                                {!i.planned && (
+                                    <span className="text-warn-fg"> · kept: {i.note}</span>
+                                )}
                             </li>
                         ))}
                     </ul>

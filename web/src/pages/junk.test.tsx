@@ -110,13 +110,9 @@ describe("junk card", () => {
             "/home/u/.claude/cache",
         ]);
 
-        act(() =>
-            w.frame({ type: "junkcleared", cleared: mockJunk().apply(apply.junk.paths) }),
-        );
+        act(() => w.frame({ type: "junkcleared", cleared: mockJunk().apply(apply.junk.paths) }));
         await waitFor(() =>
-            expect(junk.getByRole("status").textContent).toBe(
-                "Freed 313.0 MB of 313.0 MB planned",
-            ),
+            expect(junk.getByRole("status").textContent).toBe("Freed 313.0 MB of 313.0 MB planned"),
         );
     });
 
