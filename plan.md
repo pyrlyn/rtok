@@ -90,7 +90,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
-| T476 | todo | P3 | 2 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T479 | todo | P3 | 2 | 0% | |
 | T481 | todo | P3 | 2 | 0% | |
@@ -1185,15 +1184,9 @@ Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the opera
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
-### T476. TUI: select, link and unlink projects on the graph page
-
-The web graph page already selects, links and unlinks projects (`ClientMessage::Project`, `project_write` in `src/web/mod.rs`, which calls `plugins::graph::projects::run`), and the TUI graph page cannot. D27 (amended 2026-10-10, T346) requires every write action on one UI surface to have its counterpart on the other. Done means: the TUI graph page selects a project and links or unlinks a pair with keys listed in `KEYS` (`src/tui/app.rs`), calling the same `plugins::graph::projects::run` actions as the web and the `rtok graph projects` commands; it shows the plan first and writes only after a confirm key; the outcome shows on the status line like the plugin toggle's (T15.4).
-
-Check: a TUI test with a `TestBackend` drives the keys on a fixture registry and the registry equals what the CLI commands write; declining the confirm writes nothing; the key hints render from `KEYS`; `tests/surface_parity.rs` lists project select/link/unlink on both surfaces; `just check`.
-
 ### T477. TUI: re-index and remove projects (counterpart of the web actions)
 
-T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (the TUI project keys). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
+T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
 
 Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
 

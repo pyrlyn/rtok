@@ -17,7 +17,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, Clear, Paragraph, Row, Sparkline, Table, Tabs, Wrap};
+use ratatui::widgets::{Cell, Clear, Paragraph, Row, Sparkline, Table, TableState, Tabs, Wrap};
 
 use super::app::{App, keys_for};
 use super::theme::{self, ACCENT, ERR, OK, WARN};
@@ -182,7 +182,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "logs" => frame.render_widget(logs_text(app), area),
         "skills" => render_skills(frame, app, area),
         "stats" => frame.render_widget(stats(app), area),
-        "graph" => frame.render_widget(graph_page(app), area),
+        "graph" => render_graph(frame, app, area),
         "hosts" => frame.render_widget(hosts_page(app), area),
         "config" => frame.render_widget(config_page(app), area),
         "services" => frame.render_widget(services_page(app), area),
@@ -446,6 +446,54 @@ fn stats(app: &App) -> Paragraph<'static> {
         return empty("stats did not answer this tick — `rtok stats` has the details");
     };
     Paragraph::new(text.clone())
+}
+
+/// The Graph page: the project registry with its keys (T476) above the index health text.
+/// With no registered project there is nothing for the keys to act on, so only the text shows.
+fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
+    let (rows, state) = app.projects();
+    if rows.is_empty() {
+        return frame.render_widget(graph_page(app), area);
+    }
+    // Seven rows and the header: the table scrolls to the cursor beyond that.
+    let height = (rows.len() as u16 + 1).min(8);
+    let [table, note, hints, text] = Layout::vertical([
+        Constraint::Length(height),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+    ])
+    .areas(area);
+    let body = rows.iter().map(|p| {
+        Row::new(vec![
+            Cell::from(if p.selected { "*" } else { "" }),
+            Cell::from(p.id.to_string()),
+            Cell::from(p.name.clone()),
+            Cell::from(p.state),
+            Cell::from(p.links.len().to_string()),
+        ])
+    });
+    let widths = [
+        Constraint::Length(1),
+        Constraint::Length(4),
+        Constraint::Min(16),
+        Constraint::Length(12),
+        Constraint::Length(5),
+    ];
+    let mut cursor = TableState::default().with_selected(Some(state.cursor(&rows)));
+    frame.render_stateful_widget(
+        Table::new(body, widths)
+            .header(theme::header(["", "id", "project", "state", "links"]))
+            .row_highlight_style(theme::selected()),
+        table,
+        &mut cursor,
+    );
+    frame.render_widget(
+        Paragraph::new(Line::styled(state.note(&rows), Style::new().fg(WARN))),
+        note,
+    );
+    frame.render_widget(Paragraph::new(status_line("graph", "")), hints);
+    frame.render_widget(graph_page(app), text);
 }
 
 /// The model's Graph page (T230), verbatim: `rtok graph status`'s index health plus
@@ -965,7 +1013,7 @@ fn footer_line() -> Line<'static> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::config::Config;
     use crate::plugin::{Measurement, Runtime};
@@ -980,7 +1028,7 @@ mod tests {
     /// so `hosts` fell off screen and `shell_paints_the_model_tabs_hints_and_tick`
     /// failed on this file, not on a rendering bug — a little headroom for the next
     /// page too.
-    fn screen(app: &App) -> String {
+    pub(in crate::tui) fn screen(app: &App) -> String {
         // T228 widened the tab bar to 11 tabs, T229/T232 to 13 — narrower widths clip the
         // last one off the pane's border before its text ever hits the buffer.
         let mut terminal = ratatui::Terminal::new(TestBackend::new(128, 24)).unwrap();
