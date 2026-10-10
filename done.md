@@ -2971,6 +2971,16 @@ Deviations: the display (splitter, live canvas, metric displays, freeze, window 
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.26 — Graph page: live call store, metric displays and feed (canvas and splitter split to T329.27)
+
+Display half of T329 §8b, split from T329.15, minus the canvas. The graph page gets a "live graph calls" panel under the explorer that draws the `{"type":"calls"}` frames T329.15 puts on `/ws`. `Api.calls` (`web/src/api/query.tsx`) subscribes with `{"calls":{"subscribe":true}}` when the first listener registers, unsubscribes with the last, and sends the subscription again after a reconnect; `useCallStream` ties it to a mounted component. `live/callsStore.ts` is a pure store: running calls, a 200-row feed (newest first, a late end replaces an "interrupted" mark), one bucket per batch for the 1, 5, 15 minute and "since open" windows (summed from the batch `summary` and the end events' `Measurement` samples, so a 500-call burst cut to 100 listed events still counts every call and equals `rtok stats`), per-tool and per-backend counts (from the listed events), an interrupted sweep after two minutes, and the agent/tool/project filters (the "caller" is the session id, the only identity the events carry). `useCalls` paints once per animation frame and freezes: the store keeps folding while the picture is held, a "N held" count shows, and unfreezing catches up with every call. `LiveMetrics` (running, calls and failures, tokens sent, without rtok, saved, per-tool bars, backend shares, window chips, Freeze) and `CallFeed` (`DataTable`, failed rows red) reuse `Kpi`, `Chip`, `Select`, `Pill` and `DataTable`. Empty state "Waiting for graph calls". Documented in `docs/commands.md` and its ru and uk copies.
+
+Check: `callsStore.test.ts` (fold, burst totals, feed cap, windows, interrupted, filters), `live.test.tsx` (subscription, waiting state, running then finished call, red failed row, freeze and unfreeze keep exact totals, window selector, 500-call burst), `query.test.ts` (subscribe, share, unsubscribe, resubscribe on reconnect), stories `Pages/Live graph calls` (axe), a Playwright test in which `rtok mcp` in a second process makes a `callers` call and the row reaches the page; `just check`, `just spa-typecheck`, `just spa-stories`, `just spa-e2e`, `just js`.
+
+Deviations: over the 500-line cap, so split at claim time and again while implementing. The read-only canvas, the splitter and the hide toggle are T329.27; the camera, the 3D live view and the remaining displays (latency, symbols requested and returned, sparklines, count-up, config keys) are T329.28. "Since open" counts from the moment the page subscribed, because the stream has no replay; reading the window from the store is T329.28. The per-tool bars and backend shares cover the events a frame lists (a burst frame lists 100), while the call, failure and token totals are exact. A TUI counterpart does not exist yet (D27).
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.
@@ -3050,6 +3060,16 @@ Check: `ws_project_select_link_and_unlink_reach_the_next_snapshot_and_a_bad_id_i
 Deviations: a link refusal (a missing project, an unknown id) shows as the server message under the selector, not next to the link controls. Project badges in the lists are the new card T329.21, because no list is scoped by project before T329.4 and T329.5. The two-tab sync of links is covered like the selection, by a pushed snapshot; real browsers are T310.10.
 
 Status: done 2026-10-03 · Model: Claude Code / sonnet
+
+## T329.21 — Project badges in the graph page lists
+
+The last piece of the original T329.12. The lists on the graph page (pending files, dead symbols) were read for the working directory's project only, so there was nothing to badge. `graph_page_text` (`src/model/mod.rs`) now resolves the cwd's scope (`scope::resolve`); with linked projects the pending files come from `scope::pending_page_paths` and the dead rows from `scope::dead_page_rows` (the T329.5 `dead_by_project`, which now takes the row source, so the page reads the stores as they stand and never re-walks a tree), each row headed `[project] ` like `graph dead` prints it, a skipped project as a note line. A scope of one keeps the text byte for byte. `parseGraph` splits the prefix into `project`; `Graph.tsx` shows it with the existing `Pill` in the pending list and as a `project` column of the dead table, only when a row has one. The TUI shows the page text verbatim (D27), so it gets the `[project] ` prefix with no second code path.
+
+Check: Rust test `page_rows_name_the_project_and_read_the_stores_without_indexing`, Vitest `text.test.ts` and `pagesRest.test.tsx` (badges from two projects; a lone project has no badge column), story `Pages/More` `GraphScoped`; `just check`, `just spa-test`, `just js`, `just spa-typecheck`, `just spa-stories`, `just spa-e2e`.
+
+Deviations: `rows`, `files`, `watch` and `indexed_at` stay those of the working directory's project; only the two lists span the scope. A path that itself starts with `[name] ` would read as a badge.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
 ## T48.7 — aider host
 
@@ -8926,6 +8946,16 @@ Deviations: The retry of a broken server is the capability probe (binary on `PAT
 
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
+
+### T329.19. Graph health score per project
+
+T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes (the missing-server fix reads "install the server; it is picked up within one health-check interval, or restart"), the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
+
+Check: a fully indexed A with LSP and intact links scores 100; 30% of files pending drops it below 80 with the reason; tree-sitter fallback under `auto` reads 0.6 on the backend component, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; `just check`.
+
+Done: new `src/plugins/graph/health/score.rs`, a child module of `health.rs`, so it reuses `reach`, the mirrored alerts and the mirrored capability record and adds no second check, probe or spawn. `of(rt, project, status)` gives `Score { score, level, components, reasons }`: freshness 40 (1 with nothing pending; otherwise the lower of `1 - share/20%` and `1 - age/24 h`), backend 30 (1 for `tags`/`text` and for a language with no server; under `auto` and `lsp` with a failed record 0.6 on the tree-sitter fallback, 0.3 on text search under `auto` when nothing is indexed, 0 when nothing answers) and links 30 (the share of links whose target is present, reachable per its alerts and indexed; a manifest reference with a `link broken` alert counts as a link that is not; no links is 1). Every reason has a fix: `run \`rtok graph index <root>\``, the missing-server text exactly as the plan has it ("install the server; it is picked up within one health-check interval, or restart"), "the health check retries the server on a backoff; or restart" for a server that broke, `rtok graph projects unlink`, or `remove` for a missing project (score 0, level `missing`). A project on its first index has `score` absent and level `indexing`. `scope_lowest` is the lowest score of a project's scope (not an average); `cached` recomputes a project's score at most once a second. `ProjectRow` gained `health` and `scope_health` (`rtok graph projects` has `health` and `scope` columns and `--json` the objects; `/ws` carries both: `ws.schema.json` blessed, `snapshot.gen.ts` regenerated, `sampleRows.ts` has a `health`). `health::notice` appends `notice: graph health 60 for a: 3 files pending (30%); results may be incomplete` when the scope's lowest score is under 80, and `rtok doctor` prints a `graph health` section with every such project and its reasons and fixes (`graph_health` in `--json`). `docs/lsp.md` has a "Health score" section (en, ru, uk); the plugin `AGENTS.md` has the invariant.
+
+Deviations: The ring, hover breakdown and scope score on the page are not done: they are T329.30 (the data is in `/ws`), and the TUI shows no score yet, so a TUI parity task is needed for D27 as amended by T346. The health note is silenced by `alerts = false` (no new key), and it leaves out a project that an alert line already names, and any broken-link reason while the scope has an alert, so one problem is not said twice. "Recent query failures" are the `down` flag of the capability record (set when a request found the server dead), not a separate counter. The text fallback is told from the tree-sitter one by whether the index holds rows, since walking the project for a grammar on every snapshot would break the no-walk rule. Tests (fixture projects, fake probes, no language server): `health::score::tests` (a fully indexed project with a working server and a link scores 100; 3 of 10 files pending scores 60 with the reason and fix; 1 of 20 pending scores 90; the tree-sitter fallback reads 0.6 and the default `tags` 1; a broken server names the retry; a missing link target, an unindexed target and a broken manifest path lower the links component; a missing project scores 0 and a first index has no score; the scope shows the lowest score; the notice and the `rtok doctor` section; a project an alert names is not said twice) and the existing `health::tests`, whose recovery assertion now allows the health line of the still unindexed `c`.
 
 ### T329.25. Graph page: alert badges, toasts and the alerts list
 

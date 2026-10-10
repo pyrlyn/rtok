@@ -5,6 +5,7 @@
 import { describe, expect, test } from "vitest";
 import {
   configText,
+  graphScopedText,
   graphText,
   hostsText,
   servicesText,
@@ -101,8 +102,12 @@ describe("graph", () => {
       true,
       "2026-09-27 18:12:40",
     ]);
-    expect(v.pending).toEqual(["src/web/model.rs", "src/tui/view.rs"]);
+    expect(v.pending).toEqual([
+      { project: null, path: "src/web/model.rs" },
+      { project: null, path: "src/tui/view.rs" },
+    ]);
     expect(v.dead[0]).toEqual({
+      project: null,
       path: "src/render.rs",
       line: "212",
       kind: "function",
@@ -110,6 +115,20 @@ describe("graph", () => {
     });
     expect(v.deadNote).toContain("195 more");
     expect(v.other).toEqual([]);
+  });
+
+  test("rows of a project and its links carry their project", () => {
+    const v = parseGraph(graphScopedText);
+    expect(v.pending).toEqual([
+      { project: "rtok", path: "src/web/model.rs" },
+      { project: "ketch", path: "src/lib.rs" },
+    ]);
+    expect(v.dead.map((d) => [d.project, d.path, d.name])).toEqual([
+      ["rtok", "src/render.rs", "pad_right"],
+      ["ketch", "src/queue.rs", "LegacyRow"],
+    ]);
+    // A skip note is a line of the page, not a symbol.
+    expect(v.other).toEqual([" [ketch] skipped: root is gone"]);
   });
 
   test("`none` and a failed scan are not symbols", () => {

@@ -53,6 +53,7 @@ export const call = (id: number, over: Partial<CallRow> = {}): CallRow => ({
 
 export const project = (id: number, name: string, over: Partial<ProjectRow> = {}): ProjectRow => ({
   created_at: 1,
+  health: { components: { backend: 1, freshness: 1, links: 1 }, level: "good", score: 100 },
   id,
   index: { files: 12, indexed_at: 1, pending: 0, rows: 340, watch: "off" },
   last_used_at: 1,
