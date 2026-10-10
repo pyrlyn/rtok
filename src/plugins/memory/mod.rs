@@ -1498,6 +1498,26 @@ mod tests {
     }
 
     #[test]
+    fn a_call_delivered_again_after_the_dedup_window_is_observed_once() {
+        use rtok_plugin_sdk::PostToolUse;
+        let mut cx = crate::plugin::Runtime::in_memory("t501-obs").unwrap();
+        cx.once = Some("PostToolUse:toolu_t501".into());
+        let ev = PostToolUse {
+            tool_name: "Bash",
+            tool_input: &json!({"command": "cargo test"}),
+            tool_response: &json!("ok"),
+        };
+        assert!(Memory.post_tool(&ev, &Ctx::new(&cx)).is_none());
+        // A slow host re-delivers the call long after the narrative window closed (T501).
+        cx.store.set_observation_ts("t501-obs", 0).unwrap();
+        assert!(Memory.post_tool(&ev, &Ctx::new(&cx)).is_none());
+        let hits = cx.store.search_observations(None, "cargo", 5).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        let rows = cx.store.list_measurements("memory").unwrap();
+        assert_eq!(rows.iter().filter(|r| r.kind == "observe").count(), 1);
+    }
+
+    #[test]
     fn pre_compact_names_a_note_and_stays_empty_without_one() {
         let empty = crate::plugin::Runtime::in_memory("t454-compact-empty").unwrap();
         assert!(compact_context(&Ctx::new(&empty)).is_none());
