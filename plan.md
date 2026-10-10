@@ -45,11 +45,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
-| T329.16 | todo | P3 | 3 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
-| T329.27 | todo | P3 | 3 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
+| T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -816,32 +815,23 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
 
-### T329.27. Graph page: read-only live canvas and splitter
-
-Canvas half of T329 §8b, split from T329.26 (which shipped the call store, the metric displays, the window selector, freeze and the feed as a panel under the explorer). Places the explorer and the live graph side by side with a splitter (drag, arrow keys, double-click resets to 50/50, a remembered "Hide live graph" toggle that also drops the `{"calls":{"subscribe":true}}` subscription, stacked under 900 px) and draws the call events on a read-only canvas: same layout and colours as part 1 at the level part 1 shows (overview, or the drilled project via `useDrill` with the same request), no pointer or keyboard input and a default cursor, a ring per running call in one of eight accents with a "busy" count beyond eight, a heat halo over 5 minutes, a red ring on a failed call, and the "Waiting for graph calls" dimming of the static picture. The 2D canvas only (`Scene2D` gets a read-only `live` prop; a call lights the project node on the overview and the node named like its target in the drill-down).
-
-A full implementation of this card is on the local branch `t329.26-full-wip`; the display files `live/lit.ts`, `live/LiveGraph.tsx` and `live/Split.tsx` and the `Scene2D` changes are the part to bring over. Depends on T329.26, T329.14.
-
-Check: an MCP `callers` call from another process lights the node within one second; the live canvas ignores input (wheel, pointer, keys); the splitter keeps its position and the hidden state across a reload and stops the subscription; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
-
 ### T329.28. Graph page: live camera, 3D live view and the remaining live displays
 
-Remainder of T329 §8b after T329.27: the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of since the page opened, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.27.
+Remainder of T329 §8b after T329.27 (which shipped the read-only 2D live canvas: `Scene2D`'s `live` prop, `live/lit.ts` for the lit state, `live/LiveGraph.tsx` and the splitter): the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of since the page opened, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.27.
 
 Check: the live canvas frames a running call and eases back to an overview in 2D and 3D; the latency and symbol counters match the events; the config keys are read and documented; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.29. Graph page: Compare mode and the remaining diff reports
 
-The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (needs T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
+The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (the reader is `export::read` from T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
 
 Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
+### T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 
-T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
+The rest of T329 §8c after T329.16 (split at claim time: the backend half fills the 500-line cap). T329.16 ships the `rtok.graph.v1` schema file, JSON export with redaction, `rtok graph export`, MCP `graph_export` and a read-only importer (`export::read`, `rtok graph export --from FILE`). Here: `--format json|svg|png` on `rtok graph export`; SVG drawn from the `Export` type of `src/plugins/graph/export.rs` (so a saved file draws the same picture), at most about 200 drawn nodes with the footer "N nodes hidden" while the JSON keeps every node, a legend (project colours, node shapes, edge styles) and a footer (project names, scope, backend per project, `indexed_at`, rtok version, export time, partial marker); PNG at 1x, 2x and 4x (transparent or theme background) rasterised from that SVG with a maintained crate (check `rust.md`: `resvg`) and `--scale N --transparent`; the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; image of the live frame only for part 2; the dialog says that file and symbol names are included); and the page opening an exported JSON read-only with the banner "viewing export from ...". D27: anything the command prints is a page on web and tui, so the TUI gets the same export action. Docs in en, ru, uk. Depends on T329.16, T329.14.
 
-Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
-
+Check: SVG, and PNG exports at 1x, 2x and 4x, of A's scope open and match; the page exports and imports the same JSON the CLI writes; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.30. Graph page: health ring and breakdown per project
 

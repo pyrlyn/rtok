@@ -48,3 +48,22 @@ cargo build --no-default-features --features cmd,read
 | `PLAN.md` | власний план збирання плагіна |
 
 Як написати власний: [створення плагінів](plugin-authoring.md).
+
+## Формат експорту графа
+
+`rtok graph export` і MCP-інструмент `graph_export` видають один JSON-документ, `"schema": "rtok.graph.v1"`, описаний
+файлом [`docs/schemas/rtok.graph.v1.schema.json`](../schemas/rtok.graph.v1.schema.json) (він генерується з типів Rust і
+перевіряється тестом). Ключі верхнього рівня:
+
+| Ключ | Містить |
+|------|---------|
+| `projects` | `id`, `name`, `root`, `origin`, `backend` (`tags`, `lsp` або `text`), `health` (`ok`, `stale`, `not indexed`, `missing`), `indexed_at` |
+| `links` | `from`, `to`, `kind` (`manual` або `auto`), `reason`, `references` (посилання-виклики з `from` у `to`) |
+| `nodes` | `id`, `project`, `kind`, `name`, `path` (відносно проєкту), `line`; порожній на рівні `overview` |
+| `edges` | `from`, `to` (id вузлів), `kind` |
+| `meta` | `scope`, `level` (`overview`, `symbols` або `focus`), `focus`, `depth`, `exported_at`, `rtok_version`, `redacted`, `partial`, `notes` |
+
+Абсолютні шляхи, домашній каталог і ім'я користувача приховуються, якщо не вказано `--no-redact` (`graph_export`
+приховує завжди); вихідний текст не включається ніколи, імена файлів і символів включаються. Виклик, чия назва має
+більше восьми визначень, ребра не малює. `--from FILE` показує збережений експорт, не
+читаючи й не змінюючи реєстр та індекс.

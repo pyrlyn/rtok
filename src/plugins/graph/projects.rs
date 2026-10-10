@@ -28,7 +28,7 @@ pub struct ProjectIndex {
     files: i64,
     pending: usize,
     watch: String,
-    indexed_at: Option<i64>,
+    pub(super) indexed_at: Option<i64>,
 }
 
 /// One outgoing link of a project.
@@ -36,8 +36,8 @@ pub struct ProjectIndex {
 pub struct ProjectLink {
     pub to: i32,
     pub name: String,
-    kind: LinkKind,
-    reason: Option<String>,
+    pub(super) kind: LinkKind,
+    pub(super) reason: Option<String>,
 }
 
 /// One registry row as `graph projects` prints it and the `/ws` snapshot carries it.
@@ -45,18 +45,18 @@ pub struct ProjectLink {
 pub struct ProjectRow {
     pub id: i32,
     pub name: String,
-    root: String,
-    origin: Origin,
+    pub(super) root: String,
+    pub(super) origin: Origin,
     pub selected: bool,
     pub missing: bool,
     pub state: &'static str,
     created_at: i64,
     last_used_at: i64,
-    index: Option<ProjectIndex>,
+    pub(super) index: Option<ProjectIndex>,
     /// Which graph mode works here, as the last process to answer for it recorded (T329.11);
     /// absent until a request under `lsp` or `auto` has checked.
     #[serde(skip_serializing_if = "Option::is_none")]
-    backend: Option<Capability>,
+    pub(super) backend: Option<Capability>,
     /// What the health check raised for this project (T329.17); absent while nothing is wrong.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     alerts: Vec<health::Alert>,
@@ -89,7 +89,7 @@ fn link_rows(store: &Store, from: i32) -> Result<Vec<ProjectLink>> {
     Ok(out)
 }
 
-fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
+pub(super) fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
     let cx = &Ctx::new(rt);
     let missing = p.missing();
     let status = if missing {

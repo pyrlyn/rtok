@@ -657,6 +657,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
     ),
     (
+        "graph export",
+        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.31",
+    ),
+    (
         "graph projects",
         "the registry's list and actions; the Graph page gets the selector in T329.12",
     ),

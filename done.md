@@ -2981,6 +2981,16 @@ Deviations: over the 500-line cap, so split at claim time and again while implem
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.27 — Graph page: read-only live canvas and splitter
+
+Canvas half of T329 §8b, split from T329.26. The graph page now puts the explorer and a read-only live graph side by side (`live/Split.tsx`: a draggable bar with arrow keys, double-click for 50/50, both remembered in `localStorage` through the guarded `readStored` and `writeStored`; stacked under 900 px, where the bar is not drawn). A "Hide live graph" chip hides the live part; the part is not rendered while hidden, so `useCallStream` unsubscribes and the page sends `{"calls":{"subscribe":false}}`, and a reload keeps it hidden without subscribing. `live/LiveGraph.tsx` draws the level the explorer shows: the registered projects, or the drilled project through `useDrill` with the request `drillRequest(state, limit)` that `DrillView` now shares (one reply serves both parts). `Scene2D` takes an optional `live` prop: with it the SVG attaches no handler, has `pointer-events-none` and `aria-hidden` nodes, keeps the default cursor, and each node carries the call state from `live/lit.ts` (`liveState`: a ring per running call in one of eight accents, four hues with the second four dashed; a heat halo over 5 minutes; a red ring for 5 seconds after a failed call; running calls beyond eight are one "busy: N more" count). A call lights the project node on the overview and the node named like its target in the drill-down. Until the first call the picture is dimmed and reads "Waiting for graph calls"; freeze holds the canvas along with the metrics.
+
+Check: `lit.test.ts` (accents, busy count, heat fading, failure flash, interrupted calls, overview versus drill keys), `live.test.tsx` (rings and halo rendered, busy count, canvas without handlers, split keys, clamping, remount and no-storage cases, hide stops the stream), stories `Pages/Live graph` (axe), and Playwright: an MCP `callers` call from another process lights the node within a second, the canvas ignores wheel, pointer and keys, the split and hidden state survive a reload and hiding sends the unsubscribe, the 900 px stacking, and a 500-call burst leaves the page responsive. `Rtok.mcp` gained a repeat count and `Rtok.addProject` registers the throwaway home.
+
+Deviations: the part-1 drill-down alert badge shows on the live canvas too (test id `alert-live`), because the live picture uses the same scene colours. `GraphDrill.stories` lowered its 3D pixel threshold from 200 to 50 because the explorer is half as wide beside the live graph. The camera, the 3D live canvas and the remaining displays stay in T329.28.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.
@@ -8959,6 +8969,18 @@ Deviations: The retry of a broken server is the capability probe (binary on `PAT
 
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
+
+### T329.16. Graph export: JSON, `rtok graph export`, MCP `graph_export`
+
+T329 §8c, backend half (SVG, PNG, the page's Export menu and the page's import view moved to T329.31; the image code did not fit the 500-line cap): the `rtok.graph.v1` JSON schema file, JSON export with redaction by default (`--no-redact`), `rtok graph export` and MCP `graph_export` returning the same JSON, and a read-only importer (`rtok graph export --from FILE`). Depends on T329.14 and T329.22.
+
+Check: the JSON export of A's scope opens; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
+
+Done: new `src/plugins/graph/export.rs`. One `Export` type (`projects`, `links`, `nodes`, `edges`, `meta`) is built from `projects::row` (now `pub(super)`, with the fields it reads) and the store's definition and reference scans, so the registry, capability record and health come from the code `rtok graph projects` uses. A node is a definition (`project:path:line:name`); an edge joins the caller's definition to each definition of the called name, preferring the caller's own project, and is dropped past eight same-named candidates because a wrong edge misleads more than a missing one. A link's `references` counts the call references that cross it. Levels: `overview` (projects and links), `symbols` (everything) and `focus` (`--focus SYMBOL --depth N`, callers and callees within N calls, an unknown symbol is an error). Redaction (default, always on for MCP) turns the home directory into `~`, a path segment equal to the user name into `<user>`, and an absolute root outside home into `.../name`. `read` validates the schema id and never touches the store; `--from FILE` re-emits a saved export, which is also the reader `--from-export` of T329.29 will use. The schema file `docs/schemas/rtok.graph.v1.schema.json` is generated from the types by schemars and guarded by `committed_schema_is_current` (`RTOK_BLESS=1` rewrites it). MCP `graph_export` is the seventh graph tool: compact JSON through the graph cap (a long one archives with an `expand <id>`), surface 165 description tokens, gate raised from 160 to 170. Docs in en, ru, uk (`docs/commands.md`, the "Graph export format" section of `docs/plugins.md`, the tool count in `README.md` and `docs/comparison.md`, `src/plugins/graph/README.md`, `AGENTS.md`).
+
+Result: `just check` (it ran the full gate because `.config/nextest.toml` differs from the merge base): fmt, clippy `-D warnings`, jscpd, `cargo nextest run --workspace`: 3171 passed. Unit tests in `export.rs`: the JSON validates against the schema file for `overview` and `symbols` (and a wrong schema id does not), symbols cross projects and the link counts the calls, focus and its error, redaction of home, user name and absolute roots, redaction on by default and off with `--no-redact`, CLI and MCP give equal JSON (without `exported_at`), and an import writes nothing to the registry, the index or the file.
+
+Deviations: the task text had SVG and PNG here; they are T329.31 (new), with the page's Export menu and import view and the TUI action (D27). New dev-dependency `jsonschema` (default features off, offline) validates the output against the committed schema file; its rows are in `toolchain.md` and already in `rust.md`. `meta.filters` of the §8c list is omitted: there are no filters before the page's Export menu. `health` carries the project's state (`ok`, `stale`, `not indexed`, `missing`) until T329.19 adds the score.
 
 ### T329.19. Graph health score per project
 
