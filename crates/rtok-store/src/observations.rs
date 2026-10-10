@@ -18,6 +18,17 @@ impl Store {
     /// Insert one observation and its file links. `Ok(None)` when the same session already
     /// stored this narrative in the last [`DEDUP_SECS`] seconds.
     pub fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
+        self.insert_observation_once(obs, None)
+    }
+
+    /// [`Store::insert_observation`] for one delivery of a hook call: a `once` key (the call,
+    /// e.g. `PostToolUse:<tool_use_id>`) already stored is `Ok(None)` too. The narrative
+    /// window alone let a re-delivery later than [`DEDUP_SECS`] store the call twice (T501).
+    pub fn insert_observation_once(
+        &self,
+        obs: &NewObservation<'_>,
+        once: Option<&str>,
+    ) -> Result<Option<i32>> {
         let mut conn = self.lock()?;
         let now = i64::try_from(unix_now()).unwrap_or(i64::MAX);
         let existing: Option<i32> = sql_ext::RecentObservationDup {
@@ -31,7 +42,7 @@ impl Store {
             return Ok(None);
         }
         let id = conn.transaction(|conn| {
-            let id: i32 = diesel::insert_into(observations::table)
+            let Some(id) = diesel::insert_into(observations::table)
                 .values((
                     observations::session_id.eq(obs.session_id),
                     observations::project.eq(obs.project),
@@ -39,9 +50,16 @@ impl Store {
                     observations::title.eq(obs.title),
                     observations::narrative.eq(obs.narrative),
                     observations::dedup.eq(obs.dedup),
+                    observations::call_key.eq(once),
                 ))
+                .on_conflict(observations::call_key)
+                .do_nothing()
                 .returning(observations::id)
-                .get_result(conn)?;
+                .get_result::<i32>(conn)
+                .optional()?
+            else {
+                return Ok(None);
+            };
             let rows: Vec<_> = obs
                 .files
                 .iter()
@@ -57,9 +75,19 @@ impl Store {
                     .values(&rows)
                     .execute(conn)?;
             }
-            Ok::<i32, diesel::result::Error>(id)
+            Ok::<Option<i32>, diesel::result::Error>(Some(id))
         })?;
-        Ok(Some(id))
+        Ok(id)
+    }
+
+    /// Test helper: stamp every observation of `session` at `ts`.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn set_observation_ts(&self, session: &str, ts: i64) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(observations::table.filter(observations::session_id.eq(session)))
+            .set(observations::ts.eq(ts))
+            .execute(&mut *conn)?;
+        Ok(())
     }
 
     /// FTS over titles and narratives. An empty query returns no hits.

@@ -550,7 +550,9 @@ impl Notes for Runtime {
     }
 
     fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
-        self.store.insert_observation(obs).map_err(Into::into)
+        self.store
+            .insert_observation_once(obs, self.once.as_deref())
+            .map_err(Into::into)
     }
 
     fn search_observations(
