@@ -9022,6 +9022,16 @@ Result: new `src/agents/junk_items.rs` holds the one item row (`kind`, `class`, 
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+### T330.7. Junk: web card with a "clear safe junk" button
+
+Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows a `junk` card (per agent, per kind, sizes, the "Freed by `clear`" lines) and a "Clear safe junk" button that runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does. The `rtok tui` counterpart is T479.
+
+Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
+
+Result: new `src/agents/junk_web.rs` holds `JunkCard` (built from `junk::Report`, exposed as `Snapshot.junk`) and `plan` / `apply` over the new `junk_clear::run_in(cfg, report, filter, yes, only)`, the same function `rtok agents junk clear` runs, so the class gate and the per-item re-check (symlink, protected files, 60 s settle, agent running) are shared. The filter names rtok and every host agent with no kinds, so it clears each agent's `safe` kinds (the "Freed by `clear`" number); a bare `clear` on the CLI stays rtok-only (T182). `/ws` gets `ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }` and the frames `ServerFrame::JunkPlan` / `JunkCleared` (both carry `Cleared`); `apply` deletes only the paths the page showed and confirmed, then the junk cache is dropped so the card does not show pre-clear sizes. SPA: `Junk.tsx` with a `junkState.ts` reducer (idle, planning, ready, confirming, applying, done, error), `junkPlan` / `junkApply` in `api/query.tsx` (120 s timeout), sample data and mock for `sample.ts`. Tests: Rust unit tests in `junk_web.rs` and `protocol.rs`, `tests/web_e2e.rs` (seeded stale `rtok.log.N`), 8 Vitest tests, four stories (one with a play function), a Playwright e2e on a throwaway home; `surface_parity` treats `junk` as a non-page snapshot key. Docs: `docs/agents.md` Junk section, en, ru, uk. Known limit: a junk refresh already running when `apply` finishes can still write pre-clear sizes into the cache for up to its 5 min TTL.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ### T342. Investigate: T330 build/cache clearing vs T152 tagged-cache rules
 
 In the plan, T330 (branch `docs/plan-agents-junk`, ~line 689, from PR #541 (T330), not merged yet) makes `build` (`target/`, `dist/`, ...) in agent worktrees a `safe` kind cleared by default with no age rule, skips only "`temp`, `locks`, `swap`, `index`" for a running agent (~line 796), and clears caches by "keeping the top folder ... and keeping any `CACHEDIR.TAG`". Done task T152 (done.md:5229-5233) clears the same tagged caches only when idle ("`--idle`", default 24h), "Never the cache of the worktree the command runs from unless its path is given explicitly", and deletes "one cache root at a time with `remove_dir_all`". These contradict each other because two commands would delete the same `target/` directories under incompatible safety rules: T330 would clear a live agent's fresh build cache that T152 deliberately keeps.

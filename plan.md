@@ -54,7 +54,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.23 | todo | P2 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
-| T330.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -1055,16 +1054,6 @@ Check: fixture home under a temp dir, `HOME`/`XDG_*`/`LOCALAPPDATA` pointed at i
 - `--trash` moves items to the platform trash (tested on macOS and Linux CI).
 - `just check`.
 
-### T330.7. Junk: web card with a "clear safe junk" button
-
-Split from T330.6 (size cap). Part of T330. The Hosts page of `rtok web` shows the junk list as plain text today (the item lines of T330.6 included). This task turns it into a `junk` card (per agent, per kind, sizes and the "Freed by `clear`" lines) and adds the "clear safe junk" button: it runs the dry run over `/ws`, shows the plan, and deletes only after a confirmation, as the `doctor` checklist does (a `ClientMessage` plan/apply pair, `src/web/protocol.rs`, regenerated schema and types, a story and a Vitest). The `rtok tui` counterpart of the button is T479 (D27 as amended by T346: write actions on both surfaces, same guards). Depends on T330.6.
-
-Check: Vitest and a story for the card; an e2e that plans without writing and applies only on the confirmed message; `just spa-stories`, `just spa-e2e`, `just check`.
-
-Execution plan: (1) `src/agents/junk_web.rs` (the doctor/web.rs pattern): `JunkCard` (per agent, per kind, sizes, "Freed by `clear`" lines) built from `junk::Report` for a new `Snapshot.junk` field, the plan filter (every agent's `safe` kinds, never `--include review`/named kinds), and `plan` / `apply` over `junk_clear::run_with` (`apply` takes the paths the page showed, so nothing unseen goes). `junk_clear::Planned` and `Cleared` get `JsonSchema` and are the frame payloads. (2) `src/web/protocol.rs`: `ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }`, `ServerFrame::JunkPlan` / `JunkCleared`; `src/web/mod.rs` dispatch beside `doctor_reply`, off the executor like the other writes. (3) `src/model/mod.rs`: the junk cache carries the text and the card; `Snapshot.junk`. (4) Regenerate schema and TS. (5) SPA: `JunkCard.tsx` on `Hosts.tsx`, `junkState.ts` reducer (idle, planning, confirming, applying, done), `api/ws.ts` frames, `api/query.tsx` `junkPlan` / `junkApply`; Vitest, story, e2e (seeded stale `rtok.log.N` in the throwaway home, aged past the one-minute settle). (6) Docs `docs/agents.md` (en, ru, uk). Verify: the gates in the task statement; tests use temp homes only.
-
-
-
 ### T356. Never index `$HOME` or `/` as a graph root
 
 Found 2026-10-02 (T352 research): `symbols` holds 617,319 rows (~120 MB plus indexes) under the root `/Users/listepo` — `.config/amp/plugins`, `.cursor/extensions`, `.grok/bundled`, `go/pkg/mod`, `.motive/node_modules`. The graph root is the `rtok mcp` process cwd (`std::env::current_dir()` in `src/plugins/graph/mod.rs`), so a server launched in the home directory (no `roots/list` answer yet, or a host without roots) walks the whole home on its first `symbol`/`callers`/`explore` call, and the rows never leave: `delete_symbols_missing` runs only when that same root is re-indexed.
@@ -1429,7 +1418,7 @@ Check: a TUI test with a fixture home: the plan equals the web's plan for the sa
 
 ### T479. TUI: clear safe junk with plan and confirm
 
-T330.7 adds a "clear safe junk" button to the web hosts page that runs the `rtok agents junk clear` dry run, shows it and asks for confirmation; D27 (amended 2026-10-10, T346) requires the same action in the TUI. Depends on T330.7. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
+T330.7 shipped the web button (`ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }`, frames `ServerFrame::JunkPlan` / `JunkCleared`, both carrying `junk_clear::Cleared`; `agents::junk_web::{plan, apply, JunkCard}` over `junk_clear::run_in`, with the filter naming every agent's `safe` kinds and `apply` taking only the paths the plan showed; `Snapshot.junk` is the card data); D27 (amended 2026-10-10, T346) requires the same action in the TUI, so reuse `junk_web::plan` / `apply`, do not add a second path. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
 
 Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
 

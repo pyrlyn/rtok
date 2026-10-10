@@ -34,7 +34,7 @@ use tokio::sync::{broadcast, watch};
 
 use crate::config::{Config, validate};
 use crate::plugins::Registry;
-use protocol::{ClientMessage, DoctorAction, DoctorRequest, ServerFrame};
+use protocol::{ClientMessage, DoctorAction, DoctorRequest, JunkAction, JunkRequest, ServerFrame};
 
 /// Builds one snapshot frame from a config. Production always uses [`frame`]; tests can
 /// substitute a slower or instrumented builder to exercise T206's build coalescing (a real
@@ -428,6 +428,7 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
         // Handled by the socket loop, which owns the subscription; a stray one here is a no-op.
         Ok(ClientMessage::Calls { .. }) => return None,
         Ok(ClientMessage::Doctor { doctor }) => return Some(doctor_reply(state, &doctor)),
+        Ok(ClientMessage::Junk { junk }) => return Some(junk_reply(state, &junk)),
         Ok(ClientMessage::Graph { graph }) => {
             let cfg = state
                 .cfg
@@ -447,6 +448,9 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
         }
         Err(_) if v.get("calls").is_some() => {
             return Some(message_frame("calls needs a subscribe flag"));
+        }
+        Err(_) if v.get("junk").is_some() => {
+            return Some(message_frame("junk needs an action"));
         }
         Err(_) if v.get("doctor").is_some() => {
             return Some(message_frame("doctor needs an action and a selection"));
@@ -538,6 +542,28 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
         }
         .to_json()
     })
+}
+
+/// T330.7: "clear safe junk" for the Hosts page. The upgrade's origin guard covers it like `set`;
+/// only `apply` removes, through the same plan, re-checks and refusals as `agents junk clear`.
+fn junk_reply(state: &DashState, r: &JunkRequest) -> String {
+    let cfg = state
+        .cfg
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    let report = crate::agents::junk::report(&cfg);
+    match r.action {
+        JunkAction::Plan => ServerFrame::JunkPlan {
+            plan: crate::agents::junk_web::plan(&cfg, &report),
+        },
+        JunkAction::Apply => {
+            let cleared = crate::agents::junk_web::apply(&cfg, &report, &r.paths);
+            crate::model::forget_junk();
+            ServerFrame::JunkCleared { cleared }
+        }
+    }
+    .to_json()
 }
 
 /// `plugins.<id>.enabled` for a catalogue id (D23: Registry, not a second list).
