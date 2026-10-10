@@ -34,6 +34,14 @@ Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
 
 Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
 
+### T468. `toon::decode` is test-only
+
+Cloud review finding (2026-10-08): `decode` in `src/plugins/toon/mod.rs` is called only from the module's tests, and carried `#[allow(dead_code)]`. It, `decode_cell` and `unescape_quoted_cell` (used only by `decode_cell`) now sit under `#[cfg(test)]`; the three allows are gone, so a release build no longer compiles them. `decode` stays as the round-trip oracle the plugin's AGENTS.md requires.
+
+Callers: `decode` in the two round-trip tests of the same module; nothing in `tests/`, `benches/`, `examples/`, other crates or docs.
+
+Check: `just fmt-check`, `just lint` (clippy `-D warnings` on the lib and its test build), `cargo nextest run -p rtok -E 'test(toon) | test(plan)'`.
+
 ### T504. Read hook: case-insensitive path match on Windows
 
 Cloud review finding of 2026-10-08, filed as T460 in the findings table (an id the done `mem_pack` task already holds). `same_path` in `src/plugins/read/hook.rs` compared with `==` and `Path::ends_with`, so `C:\Repo\Src\Main.rs` and `c:\repo\src\main.rs` (or a relative `src\main.rs` against it) were different files on Windows and the "edited just now" window missed the write. The same copy sat in `src/measure/stats.rs`. Both now call `crate::fs::same_spelling`, built on the shared `rtok_store::same_path` plus the new `rtok_store::path_ends_with` (whole components, ASCII case folded on Windows only, empty suffix matches nothing). macOS stays case-sensitive: the shared helpers fold on Windows only, and a case-sensitive APFS volume would otherwise merge two real files.
