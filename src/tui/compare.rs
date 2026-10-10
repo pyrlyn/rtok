@@ -7,189 +7,88 @@
 //! `diff` request and `rtok graph diff --json` already run, so the counts, the callers and the
 //! row cap are theirs. This module is the typed input, the background run and the rendering of the
 //! typed report with the web panel's wording and marks (`+ − ~ →`), so colour is never the only
-//! cue. The panel replaces the page body while it is open, as the doctor checklist does.
-
-use std::sync::mpsc;
+//! cue. The panel replaces the page body while it is open, as the doctor checklist does; the
+//! stage, the keys and the layout are [`super::panel`]'s.
 
 use crossterm::event::KeyCode;
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
-use ratatui::widgets::{Paragraph, Wrap};
 
+use super::panel::{self, Answer, Panel, Stage, error_lines};
 use super::theme;
-use super::view::status_line;
 use crate::config::Config;
 
-/// Rows one PageUp or PageDown moves.
-const PAGE: u16 = 10;
+pub(super) type Compare = Panel<Typed>;
 
-type Answer = Result<Vec<Line<'static>>, String>;
-
-enum Stage {
-    Closed,
-    Typing,
-    /// The diff is computing off the key loop; Esc drops the receiver and with it the answer.
-    Running(mpsc::Receiver<Answer>),
-    Shown(Vec<Line<'static>>),
-}
-
-pub(super) struct Compare {
-    stage: Stage,
+#[derive(Default)]
+pub(super) struct Typed {
     input: String,
     /// The registry id handed to the diff, and the name the panel calls it by.
     project: (String, String),
-    scroll: u16,
 }
 
-impl Default for Compare {
-    fn default() -> Self {
-        Self {
-            stage: Stage::Closed,
-            input: String::new(),
-            project: (String::new(), String::new()),
-            scroll: 0,
-        }
-    }
-}
+impl panel::View for Typed {
+    type Ask = ();
+    const LABEL: &'static str = "compare";
 
-fn error_lines(e: &str) -> Vec<Line<'static>> {
-    vec![theme::banner('✕', e, theme::ERR)]
-}
-
-impl Compare {
-    pub(super) fn is_open(&self) -> bool {
-        !matches!(self.stage, Stage::Closed)
+    fn open(&mut self, code: KeyCode, target: Option<(i32, &str)>) -> Option<Stage<()>> {
+        (code == KeyCode::Char('c')).then(|| {
+            self.input.clear();
+            match target {
+                Some((id, name)) => {
+                    self.project = (id.to_string(), name.to_owned());
+                    Stage::Prompt(())
+                }
+                None => Stage::Shown(error_lines("no project to compare")),
+            }
+        })
     }
 
-    /// Whether keys go to the input line, ahead of the shell's own (`?`, `r`, `q`).
-    pub(super) fn typing(&self) -> bool {
-        matches!(self.stage, Stage::Typing)
-    }
-
-    /// `target` is the registry row under the cursor (id, name). Returns whether the panel took
-    /// the key; the shell keeps its own tab, quit and digit keys while the panel is up.
-    pub(super) fn key(
+    fn prompt(
         &mut self,
+        (): (),
         code: KeyCode,
-        target: Option<(i32, &str)>,
         cfg: &Config,
         background: bool,
-    ) -> bool {
-        if self.is_open()
-            && !matches!(self.stage, Stage::Typing)
-            && matches!(
-                code,
-                KeyCode::Left | KeyCode::Right | KeyCode::Char('q' | '1'..='9')
-            )
-        {
-            return false;
-        }
-        match &mut self.stage {
-            Stage::Closed if code == KeyCode::Char('c') => self.open(target),
-            Stage::Closed => return false,
-            Stage::Typing => match code {
-                KeyCode::Esc => self.stage = Stage::Closed,
-                KeyCode::Enter => self.run(cfg, background),
-                KeyCode::Backspace => {
-                    self.input.pop();
-                }
-                KeyCode::Char(c) => self.input.push(c),
-                _ => {}
-            },
-            Stage::Running(_) if code == KeyCode::Esc => self.stage = Stage::Closed,
-            Stage::Running(_) => {}
-            Stage::Shown(lines) => {
-                let last = u16::try_from(lines.len().saturating_sub(1)).unwrap_or(u16::MAX);
-                match code {
-                    KeyCode::Esc => self.stage = Stage::Closed,
-                    KeyCode::Char('c') => self.open(target),
-                    KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
-                    KeyCode::Down => self.scroll = self.scroll.saturating_add(1).min(last),
-                    KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(PAGE),
-                    KeyCode::PageDown => self.scroll = self.scroll.saturating_add(PAGE).min(last),
-                    KeyCode::Home => self.scroll = 0,
-                    _ => {}
-                }
+    ) -> Option<Stage<()>> {
+        match code {
+            KeyCode::Esc => return Some(Stage::Closed),
+            KeyCode::Enter => {
+                let (cfg, project, input) =
+                    (cfg.clone(), self.project.0.clone(), self.input.clone());
+                return Some(Stage::run(Self::LABEL, background, move || {
+                    body::answer(&cfg, &project, &input)
+                }));
             }
+            _ => panel::edit(&mut self.input, code),
         }
-        true
+        None
     }
 
-    fn open(&mut self, target: Option<(i32, &str)>) {
-        self.scroll = 0;
-        self.input.clear();
-        self.stage = match target {
-            Some((id, name)) => {
-                self.project = (id.to_string(), name.to_owned());
-                Stage::Typing
-            }
-            None => Stage::Shown(error_lines("no project to compare")),
-        };
-    }
-
-    fn run(&mut self, cfg: &Config, background: bool) {
-        let (cfg, project, input) = (cfg.clone(), self.project.0.clone(), self.input.clone());
-        if !background {
-            self.stage = Stage::Shown(
-                body::answer(&cfg, &project, &input).unwrap_or_else(|e| error_lines(&e)),
-            );
-            return;
-        }
-        let (tx, rx) = mpsc::channel();
-        let spawned = std::thread::Builder::new()
-            .name("rtok-tui-compare".into())
-            .spawn(move || tx.send(body::answer(&cfg, &project, &input)));
-        self.stage = match spawned {
-            Ok(_) => Stage::Running(rx),
-            Err(e) => Stage::Shown(error_lines(&format!("compare did not start: {e}"))),
-        };
-    }
-
-    /// Takes a finished run, if any. Called by the loop between keys.
-    pub(super) fn poll(&mut self) {
-        let Stage::Running(rx) = &self.stage else {
-            return;
-        };
-        self.stage = match rx.try_recv() {
-            Ok(answer) => Stage::Shown(answer.unwrap_or_else(|e| error_lines(&e))),
-            Err(mpsc::TryRecvError::Empty) => return,
-            Err(mpsc::TryRecvError::Disconnected) => {
-                Stage::Shown(error_lines("compare stopped without an answer"))
-            }
-        };
-    }
-
-    /// Draws the panel over `area`; `false` when it is closed and the page draws itself.
-    pub(super) fn render(&self, frame: &mut Frame, area: Rect) -> bool {
-        let lines = match &self.stage {
-            Stage::Closed => return false,
-            Stage::Typing => vec![
-                Line::from(format!("compare {} with: {}▏", self.project.1, self.input)),
-                Line::styled(
-                    "a ref, refs or PROJECT:REF separated by spaces, or the path of a saved export; empty is HEAD",
-                    theme::muted(),
-                ),
-            ],
-            Stage::Running(_) => vec![Line::styled(
-                format!("comparing {} …", self.project.1),
+    fn prompt_lines(&self, (): ()) -> Vec<Line<'static>> {
+        vec![
+            Line::from(format!("compare {} with: {}▏", self.project.1, self.input)),
+            Line::styled(
+                "a ref, refs or PROJECT:REF separated by spaces, or the path of a saved export; empty is HEAD",
                 theme::muted(),
-            )],
-            Stage::Shown(lines) => lines.clone(),
-        };
-        let [text, hints] =
-            Layout::vertical([Constraint::Min(0), Constraint::Length(2)]).areas(area);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .wrap(Wrap { trim: false })
-                .scroll((self.scroll, 0)),
-            text,
-        );
-        frame.render_widget(
-            Paragraph::new(status_line("compare", "")).wrap(Wrap { trim: true }),
-            hints,
-        );
-        true
+            ),
+        ]
+    }
+
+    fn running_lines(&self) -> Vec<Line<'static>> {
+        vec![Line::styled(
+            format!("comparing {} …", self.project.1),
+            theme::muted(),
+        )]
+    }
+}
+
+#[cfg(not(feature = "graph"))]
+mod body {
+    use super::Answer;
+    use crate::config::Config;
+
+    pub(super) fn answer(_: &Config, _: &str, _: &str) -> Answer {
+        super::panel::no_graph()
     }
 }
 
@@ -404,23 +303,12 @@ mod body {
     }
 }
 
-#[cfg(not(feature = "graph"))]
-mod body {
-    use super::Answer;
-    use crate::config::Config;
-
-    pub(super) fn answer(_: &Config, _: &str, _: &str) -> Answer {
-        Err("the graph feature is not built in".into())
-    }
-}
-
 #[cfg(all(test, feature = "graph"))]
 mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
     use crossterm::event::KeyModifiers;
-    use ratatui::backend::TestBackend;
 
     use super::*;
     use crate::model::DiffReport;
@@ -428,8 +316,10 @@ mod tests {
     use crate::plugins::graph::diff::{self, Query};
     use crate::plugins::graph::{export, scope};
     use crate::store::Origin;
-    use crate::tui::app::{App, tests::config};
-    use crate::tui::view;
+    use crate::tui::app::{
+        App,
+        tests::{config, render},
+    };
 
     const OLD: &str = "fn keep() {}\nfn changed() {\n    one();\n}\nfn gone() {\n    bye();\n}\nfn helper() {\n    work();\n}\nfn caller() {\n    changed();\n    gone();\n}\n";
     const NEW: &str = "fn keep() {}\nfn changed() {\n    two();\n}\nfn extra() {\n    hello();\n    world();\n}\nfn caller() {\n    changed();\n}\n";
@@ -483,18 +373,6 @@ mod tests {
         type_text(app, "c");
         type_text(app, text);
         app.key(KeyCode::Enter, KeyModifiers::NONE);
-    }
-
-    fn render(app: &App, width: u16) -> String {
-        let mut terminal = ratatui::Terminal::new(TestBackend::new(width, 40)).unwrap();
-        terminal.draw(|frame| view::draw(frame, app)).unwrap();
-        let buffer = terminal.backend().buffer().clone();
-        buffer
-            .content()
-            .chunks(usize::from(width))
-            .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 
     fn report(cfg: &Config, from: &[String]) -> DiffReport {

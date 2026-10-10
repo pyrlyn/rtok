@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.53 | todo | P3 | 2 | 0% | |
 | T500 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
-| T329.48 | todo | P3 | 2 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -833,12 +832,6 @@ Check: the sparklines match the store buckets; an outside-scope call is marked; 
 What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
-
-### T329.48. TUI: one panel shell for compare and export
-
-`src/tui/compare.rs` (T485) and `src/tui/exporter.rs` (T329.41) repeat the same panel plumbing: the stage enum with a background `Running(mpsc::Receiver)`, `poll`, the thread spawn, scroll keys, the pass-through of the shell's `Left`/`Right`/`q`/digit keys and the two-row layout with the hints line (jscpd lists them as clones). Extract one shared module under `src/tui/` and make both views use it; the keys, texts and behaviour stay as they are.
-
-Check: both views' tests pass unchanged; jscpd lists no clone between the two files; `just check`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 
