@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   connectionKey,
   createApi,
+  DOCTOR_TIMEOUT_MS,
   pausedKey,
   snapshotKey,
   WRITE_TIMEOUT_MS,
@@ -14,7 +15,7 @@ import {
 } from "./query";
 import { connectSample, isSampleRequested, sampleSnapshot } from "./sample";
 import type { Snapshot } from "./snapshot.gen";
-import type { Connect, Connection, Handlers } from "./ws";
+import type { Connect, Connection, Frame, Handlers } from "./ws";
 
 // A scripted connection: the test plays the server by calling the captured handlers.
 function scripted() {
@@ -334,5 +335,57 @@ describe("doctor requests", () => {
     const done = await api.doctorApply({ keep: [], toggled: [] });
     expect(done).toMatchObject({ code: 0 });
     expect(done.text).toContain("2 entries removed");
+  });
+});
+
+describe("drill requests", () => {
+  const request = { project: "1", expand: [], focus: null, depth: null, limit: null, query: "" };
+  const frame = (project: number) =>
+    ({ type: "graph", graph: { project, nodes: [], edges: [] } }) as unknown as Frame;
+
+  test("a frame settles the request of its own project, whatever the order", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const one = api.drill(request);
+    const two = api.drill({ ...request, project: "2" });
+    expect(s.sent).toHaveLength(2);
+    s.server().onFrame(frame(2));
+    s.server().onFrame(frame(1));
+    await expect(two).resolves.toMatchObject({ project: 2 });
+    await expect(one).resolves.toMatchObject({ project: 1 });
+  });
+
+  test("two requests for one project are answered in the order asked", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const first = api.drill(request);
+    const second = api.drill({ ...request, limit: 1000 });
+    s.server().onFrame({ type: "graph", graph: { project: 1, more: 7 } } as unknown as Frame);
+    s.server().onFrame({ type: "graph", graph: { project: 1, more: 0 } } as unknown as Frame);
+    await expect(first).resolves.toMatchObject({ more: 7 });
+    await expect(second).resolves.toMatchObject({ more: 0 });
+  });
+
+  test("a refusal fails the request, and so does a missing link", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const refused = api.drill(request);
+    s.server().onFrame({ type: "message", text: "unknown project 1" });
+    await expect(refused).rejects.toThrow("unknown project");
+    s.setOpen(false);
+    await expect(api.drill(request)).rejects.toThrow("not connected");
+  });
+
+  test("a request nobody answers times out and leaves the queue", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const lost = expect(api.drill(request)).rejects.toThrow("graph timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await lost;
   });
 });

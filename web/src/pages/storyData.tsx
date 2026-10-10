@@ -24,12 +24,20 @@ export const serve =
     };
 
 // The panels link to other pages, so they need a router above them even when it has one route.
-function Harness({ connect, children }: { connect: Connect; children: ReactNode }) {
+function Harness({
+    connect,
+    path,
+    children,
+}: {
+    connect: Connect;
+    path: string;
+    children: ReactNode;
+}) {
     const router = useMemo(
         () =>
             createRouter({
                 routeTree: createRootRoute({ component: () => children }),
-                history: createMemoryHistory({ initialEntries: ["/"] }),
+                history: createMemoryHistory({ initialEntries: [path] }),
             }),
         // The story element is fixed for the life of the harness.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,10 +50,11 @@ function Harness({ connect, children }: { connect: Connect; children: ReactNode 
     );
 }
 
+/** `path` is where the story's history starts, for a page whose state lives in the URL. */
 export const withData =
-    (connect: Connect): Decorator =>
+    (connect: Connect, path = "/"): Decorator =>
     (Story) => (
-        <Harness connect={connect}>
+        <Harness connect={connect} path={path}>
             <Story />
         </Harness>
     );

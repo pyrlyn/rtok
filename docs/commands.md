@@ -32,6 +32,28 @@ build never blocks the host.
 | `rtok task create\|list\|show\|status\|next\|ready\|claim\|release\|dep\|priority\|sync\|init` | the project's plan in its `[tasks]` adapter; `claim` takes a ready task, `dep` records a blocker, `sync` raises the id counters and reports drift |
 | `rtok bench` | A/B two host configurations on fixed tasks |
 
+## The graph page
+
+The Graph page of `rtok dashboard` draws the code graph in two levels, as a 3D scene, a flat 2D
+scene, or a plain list (the choice is remembered; without WebGL the page shows 2D and says why).
+
+- **All projects.** One node per registered project, a line per link. Right-click a node for
+  Select, Open, Fly to and Copy path; double-click opens the project.
+- **One project.** Files are cubes, types and modules octahedra, functions spheres, each in its
+  project's colour, grouped by directory. Click a node to select it; click the selected file to
+  expand its definitions, or the selected function to focus it (its callers and callees, one to
+  four calls deep, set with the depth buttons). A call into a linked project ends at an outlined
+  node in that project's colour, and clicking it opens that project with the symbol focused.
+  `+N more` raises the node cap by 500. A `⚠` marks a file changed since the last index run, and a
+  banner says the picture is partial while any file is.
+- **Where you are is in the address.** The project, the expanded files, the focus and the depth
+  are in the page's URL, so every step is a history entry, the breadcrumb (`All projects / rtok /
+  src/plugins/graph`) climbs back, and a copied link opens the same view.
+- **Index states.** A project that has not been indexed shows the command to run
+  (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
+  is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
+  updates in place without moving the scene.
+
 ## Every flag is a config key
 
 There is no flag that cannot be made permanent. `rtok proxy --port 8791` and

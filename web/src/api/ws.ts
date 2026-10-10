@@ -4,7 +4,15 @@
 
 // Typed client for the `/ws` contract (T310.2). Transport-agnostic on purpose: the socket
 // constructor and timers are injectable so Vitest drives it without a server or a browser.
-import type { CallBatch, ClientMessage, Fixed, Plan, ServerFrame, Snapshot } from "./snapshot.gen";
+import type {
+  CallBatch,
+  ClientMessage,
+  DrillGraph,
+  Fixed,
+  Plan,
+  ServerFrame,
+  Snapshot,
+} from "./snapshot.gen";
 
 export type ConnectionState = "connecting" | "open" | "closed";
 
@@ -81,6 +89,12 @@ export function parseFrame(raw: unknown): Frame | null {
       const batch = v.batch as Record<string, unknown> | null;
       return batch && Array.isArray(batch.events) && typeof batch.head === "number"
         ? { type: "calls", batch: batch as unknown as CallBatch }
+        : null;
+    }
+    case "graph": {
+      const g = v.graph as Record<string, unknown> | null;
+      return g && Array.isArray(g.nodes) && Array.isArray(g.edges) && typeof g.project === "number"
+        ? { type: "graph", graph: g as unknown as DrillGraph }
         : null;
     }
     case "snapshot":

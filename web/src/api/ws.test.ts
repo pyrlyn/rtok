@@ -99,6 +99,14 @@ describe("parseFrame", () => {
     expect(parseFrame('{"type":"calls","batch":{"events":[]}}')).toBeNull();
   });
 
+  test("a graph frame needs its project and both lists", () => {
+    const graph = { project: 3, name: "rtok", root: "/r", state: "ok", nodes: [], edges: [] };
+    expect(parseFrame(JSON.stringify({ type: "graph", graph }))).toEqual({ type: "graph", graph });
+    expect(parseFrame('{"type":"graph","graph":null}')).toBeNull();
+    expect(parseFrame('{"type":"graph","graph":{"project":"3","nodes":[],"edges":[]}}')).toBeNull();
+    expect(parseFrame('{"type":"graph","graph":{"project":3,"nodes":[]}}')).toBeNull();
+  });
+
   test.each([
     ["malformed JSON", "{nope"],
     ["binary payload", new ArrayBuffer(2)],
