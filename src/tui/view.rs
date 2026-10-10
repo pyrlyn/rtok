@@ -175,7 +175,10 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "plugins" => render_plugins(frame, app, area),
         "calls" => render_calls(frame, app, area),
         "sessions" => render_sessions(frame, app, area),
-        "doctor" => frame.render_widget(doctor(app), area),
+        "doctor" => frame.render_widget(
+            app.doctor_fix().paragraph().unwrap_or_else(|| doctor(app)),
+            area,
+        ),
         "logs" => frame.render_widget(logs_text(app), area),
         "skills" => render_skills(frame, app, area),
         "stats" => frame.render_widget(stats(app), area),
@@ -1131,6 +1134,38 @@ pub(super) mod tests {
             }
             assert!(screen.contains(line), "line `{line}` is on screen");
         }
+    }
+
+    /// T478: `f` on the Doctor tab swaps the report for the fix checklist, Esc closes it
+    /// before it can quit, and a declined confirm leaves the fixture machine untouched.
+    #[cfg(unix)]
+    #[test]
+    fn doctor_tab_fix_checklist_replaces_the_report_and_esc_closes_it_first() {
+        use crate::tui::doctor_fix::tests::engine_on;
+        let m = std::rc::Rc::new(crate::doctor::fix::tests::machine(
+            crate::doctor::fix::tests::BROKEN,
+        ));
+        let mut app = App::new(&config());
+        app.set_doctor_engine(engine_on(&m));
+        while app.page() != "doctor" {
+            app.key(KeyCode::Right, KeyModifiers::NONE);
+        }
+        let none = KeyModifiers::NONE;
+        assert!(!app.key(KeyCode::Char('f'), none));
+        let shown = screen(&app);
+        assert!(shown.contains("doctor --fix checklist"), "{shown}");
+        assert!(shown.contains("broken-hook"), "{shown}");
+        assert!(!app.key(KeyCode::Enter, none));
+        assert!(screen(&app).contains("y = apply"));
+        assert!(
+            !app.key(KeyCode::Char('q'), none),
+            "q declines, it does not quit"
+        );
+        assert!(!app.key(KeyCode::Esc, none), "Esc closes the checklist");
+        assert!(app.doctor_fix().paragraph().is_none());
+        assert!(app.key(KeyCode::Esc, none), "the next Esc quits");
+        let settings = crate::doctor::fix::tests::text(&m, crate::doctor::fix::tests::SETTINGS);
+        assert_eq!(settings, crate::doctor::fix::tests::BROKEN);
     }
 
     /// T358.5: the Usage tab shows the snapshot's `agent_usage.text`, the CLI's own screen.

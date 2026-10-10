@@ -92,7 +92,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
-| T478 | todo | P3 | 3 | 0% | |
 | T479 | todo | P3 | 2 | 0% | |
 | T481 | todo | P3 | 2 | 0% | |
 | T480 | todo | P3 | 3 | 0% | |
@@ -1200,12 +1199,6 @@ Check: `agents install` and `agents update` show one spinner per host on a TTY a
 T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
 
 Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
-
-### T478. TUI: doctor fix with plan and confirm
-
-The web doctor page plans and applies the `doctor --fix` checklist (`ClientMessage::Doctor`, `crate::doctor::web::plan` and `apply`), and the TUI doctor tab is read-only. D27 (amended 2026-10-10, T346) requires the counterpart in the TUI, including T331's "Fix selected" action. Done means: the TUI doctor tab lets the user select checklist items, shows the dry-run plan from `doctor::web::plan`, and calls `doctor::web::apply` only after a confirm key, with the same selection rules and guards as the web and `rtok doctor --fix`; the result shows per item.
-
-Check: a TUI test with a fixture home: the plan equals the web's plan for the same selection, apply writes exactly what `rtok doctor --fix` writes, declining the confirm writes nothing, host config files stay byte-for-byte except our entry; `tests/surface_parity.rs` lists doctor fix on both surfaces; `just check`.
 
 ### T479. TUI: clear safe junk with plan and confirm
 

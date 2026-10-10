@@ -145,6 +145,26 @@ pub fn apply(cfg: &Config, p: &Probes, w: &dyn Writer, o: &Opts, sel: &Selection
     }
 }
 
+/// What every UI asks of the engine: all kinds, all hosts, the configured backup depth. The web
+/// page and the TUI share it so neither can drift from `doctor --fix`.
+pub fn default_opts(cfg: &Config) -> Opts<'static> {
+    Opts {
+        keep: cfg.setup.backup_files as usize,
+        agent: None,
+        kinds: &fix::KINDS,
+    }
+}
+
+/// [`plan`] on this machine.
+pub fn plan_here(cfg: &Config, sel: &Selection) -> Plan {
+    fix::on_this_machine(|p, w| plan(cfg, p, w, &default_opts(cfg), sel))
+}
+
+/// [`apply`] on this machine.
+pub fn apply_here(cfg: &Config, sel: &Selection) -> Fixed {
+    fix::on_this_machine(|p, w| apply(cfg, p, w, &default_opts(cfg), sel))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

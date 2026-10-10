@@ -522,7 +522,7 @@ pub fn interactive(
 }
 
 #[cfg(test)]
-pub(in crate::doctor) mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::doctor::probe::{Env, Fs, PathKind, Which};
     use proptest::prelude::*;
@@ -532,8 +532,8 @@ pub(in crate::doctor) mod tests {
 
     /// An in-memory machine whose files the `Writer` side can change.
     #[derive(Default)]
-    pub(in crate::doctor) struct Machine {
-        pub(in crate::doctor) files: RefCell<BTreeMap<PathBuf, String>>,
+    pub(crate) struct Machine {
+        pub(crate) files: RefCell<BTreeMap<PathBuf, String>>,
         fail_backup: bool,
         fail_write: bool,
         /// Rewrites the file when it is read for the `race_at`-th time (an editor saving in
@@ -541,7 +541,7 @@ pub(in crate::doctor) mod tests {
         race: RefCell<Option<(PathBuf, String)>>,
         race_at: Cell<usize>,
         reads: RefCell<usize>,
-        pub(in crate::doctor) backups: RefCell<Vec<PathBuf>>,
+        pub(crate) backups: RefCell<Vec<PathBuf>>,
     }
 
     impl Fs for Machine {
@@ -605,9 +605,9 @@ pub(in crate::doctor) mod tests {
         }
     }
 
-    pub(in crate::doctor) const SETTINGS: &str = "/h/.claude/settings.json";
+    pub(crate) const SETTINGS: &str = "/h/.claude/settings.json";
 
-    pub(in crate::doctor) fn cfg() -> Config {
+    pub(crate) fn cfg() -> Config {
         let mut c = Config::default();
         c.doctor.settings_path = SETTINGS.into();
         c.setup.claude.settings_path = SETTINGS.into();
@@ -618,7 +618,7 @@ pub(in crate::doctor) mod tests {
         c
     }
 
-    pub(in crate::doctor) fn machine(settings: &str) -> Machine {
+    pub(crate) fn machine(settings: &str) -> Machine {
         let m = Machine::default();
         m.files
             .borrow_mut()
@@ -645,11 +645,11 @@ pub(in crate::doctor) mod tests {
         fix_for(&cfg(), &probes, m, apply, 3, None, only)
     }
 
-    pub(in crate::doctor) fn put(m: &Machine, path: &str, body: &str) {
+    pub(crate) fn put(m: &Machine, path: &str, body: &str) {
         m.files.borrow_mut().insert(path.into(), body.into());
     }
 
-    pub(in crate::doctor) fn text(m: &Machine, path: &str) -> String {
+    pub(crate) fn text(m: &Machine, path: &str) -> String {
         m.files
             .borrow()
             .get(Path::new(path))
@@ -658,13 +658,13 @@ pub(in crate::doctor) mod tests {
     }
 
     /// The same valid hook in the user's and in the project's settings.
-    pub(in crate::doctor) const USER_DUP: &str = r#"{
+    pub(crate) const USER_DUP: &str = r#"{
   // mine
   "theme": "dark",
   "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/h/.claude/settings.json"}]}]}
 }
 "#;
-    pub(in crate::doctor) const PROJECT_DUP: &str = r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/h/.claude/settings.json"}]}]}}"#;
+    pub(crate) const PROJECT_DUP: &str = r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/h/.claude/settings.json"}]}]}}"#;
 
     #[cfg(unix)] // POSIX paths and command words
     #[test]
@@ -825,7 +825,7 @@ pub(in crate::doctor) mod tests {
         (text, script)
     }
 
-    pub(in crate::doctor) const BROKEN: &str =
+    pub(crate) const BROKEN: &str =
         r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/h/gone/old.sh"}]}]}}"#;
 
     #[cfg(unix)]
