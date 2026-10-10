@@ -91,7 +91,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
-| T479 | todo | P3 | 2 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
 | T485 | todo | P3 | 3 | 0% | |
 
@@ -1188,12 +1187,6 @@ Check: `agents install` and `agents update` show one spinner per host on a TTY a
 T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
 
 Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
-
-### T479. TUI: clear safe junk with plan and confirm
-
-T330.7 shipped the web button (`ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }`, frames `ServerFrame::JunkPlan` / `JunkCleared`, both carrying `junk_clear::Cleared`; `agents::junk_web::{plan, apply, JunkCard}` over `junk_clear::run_in`, with the filter naming every agent's `safe` kinds and `apply` taking only the paths the plan showed; `Snapshot.junk` is the card data); D27 (amended 2026-10-10, T346) requires the same action in the TUI, so reuse `junk_web::plan` / `apply`, do not add a second path. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
-
-Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
 
 ### T484. Web live panel reads the server's calls totals
 

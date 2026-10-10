@@ -9303,6 +9303,16 @@ Result: new `src/agents/junk_web.rs` holds `JunkCard` (built from `junk::Report`
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+### T479. TUI: clear safe junk with plan and confirm
+
+T330.7 shipped the web button (`ClientMessage::Junk { junk: JunkRequest { action: plan|apply, paths } }`, frames `ServerFrame::JunkPlan` / `JunkCleared`, both carrying `junk_clear::Cleared`; `agents::junk_web::{plan, apply, JunkCard}` over `junk_clear::run_in`, with the filter naming every agent's `safe` kinds and `apply` taking only the paths the plan showed; `Snapshot.junk` is the card data); D27 (amended 2026-10-10, T346) requires the same action in the TUI, so reuse `junk_web::plan` / `apply`, do not add a second path. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
+
+Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
+
+Result: new `src/tui/junk_clear.rs`: on the Hosts tab `c` takes a report and shows `junk_web::plan`'s dry run through `junk_clear::to_text` (the CLI's own text: per agent and kind, sizes, space to free); `y` takes a fresh report and calls `junk_web::apply` with only the paths the plan showed, then `model::forget_junk()` and a model re-read, and shows "Freed X of Y planned"; any other key declines and writes nothing. The scan is injected (`Engine`) so tests read a fixture home. KEYS gets the `hosts` rows (`c`, `y`, `n/Esc`); `tests/surface_parity.rs::clear_safe_junk_exists_on_both_surfaces` pins both surfaces to `junk_web::plan`/`apply` and the keys; `docs/agents.md` (en, ru, uk) describe the TUI keys. Tests: the plan equals `run_in`'s dry run with the CLI filter, declining by `n`, Esc and `q` leaves the tree (length and mtime) unchanged, confirm removes exactly the safe rtok log and keeps a `review`-kind Claude log, `y` without a plan does nothing. Gates: `just check` green, 3229 tests run: 3229 passed (8 skipped); `tests/surface_parity.rs` 21 passed before the new test, clippy `-D warnings` clean.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
 Split into T330.1 to T330.7 (one PR each); this card stays the spec and the epic.

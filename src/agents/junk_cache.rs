@@ -178,7 +178,7 @@ pub(super) fn tagged(dir: &Path) {
 
 /// Every file under `dir` last modified `secs` ago.
 #[cfg(test)]
-pub(super) fn age_files(dir: &Path, secs: u64) {
+pub(crate) fn age_files(dir: &Path, secs: u64) {
     let when = SystemTime::now() - Duration::from_secs(secs);
     for e in std::fs::read_dir(dir).unwrap().flatten() {
         if e.file_type().unwrap().is_dir() {

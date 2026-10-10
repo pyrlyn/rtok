@@ -184,7 +184,12 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "skills" => render_skills(frame, app, area),
         "stats" => frame.render_widget(stats(app), area),
         "graph" => render_graph(frame, app, area),
-        "hosts" => frame.render_widget(hosts_page(app), area),
+        "hosts" => frame.render_widget(
+            app.junk()
+                .paragraph(app.cfg())
+                .unwrap_or_else(|| hosts_page(app)),
+            area,
+        ),
         "config" => frame.render_widget(config_page(app), area),
         "services" => frame.render_widget(services_page(app), area),
         "worktrees" => frame.render_widget(worktrees_page(app), area),
