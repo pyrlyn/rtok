@@ -26,6 +26,7 @@
 - T329.19. Graph health score per project
 - T329.21. Project badges in the graph page lists
 - T329.24. Graph page: show each project's capability record
+- T329.25. Graph page: alert badges, toasts and the alerts list
 - T329.22. Graph page level 2: the drill-down view (SPA)
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.6. Junk: item breakdown, `doctor` line, web card
