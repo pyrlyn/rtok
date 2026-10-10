@@ -96,6 +96,40 @@ export const ExternalNodeOpensTheLinkedProject: Story = {
     },
 };
 
+export const SelectReadPanelAndSearch: Story = {
+    decorators: [viewing("2d"), withData(drillServer(snapshot()), at(1, ["src/store.rs"]))],
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(await nodeNamed(canvas, /^open_store, function/));
+        const panel = within(await canvas.findByRole("complementary", { name: "node details" }));
+        await expect(panel.getByText("fn open_store()")).toBeVisible();
+        await expect(panel.getByRole("link", { name: "Open in editor" })).toHaveAttribute(
+            "href",
+            "vscode://file/work/rtok/src/store.rs:5",
+        );
+        await expect(panel.getByRole("region", { name: "callees" })).toBeVisible();
+
+        await userEvent.type(
+            canvas.getByRole("searchbox", { name: "search symbols" }),
+            "open{Enter}",
+        );
+        const hits = within(await panel.findByRole("list", { name: "search hits" }, READY));
+        await expect(hits.getAllByRole("button")).toHaveLength(2);
+        // The hit in the linked project opens it with the symbol focused.
+        await userEvent.click(hits.getByRole("button", { name: /^open_index/ }));
+        const crumbs = within(await canvas.findByRole("navigation", { name: "breadcrumb" }));
+        await expect(await crumbs.findByText("src/lib.rs", undefined, READY)).toBeVisible();
+        // The project changed, so the page drew a new panel.
+        const opened = within(await canvas.findByRole("complementary", { name: "node details" }));
+        await expect(await opened.findByText("fn open_index()", undefined, READY)).toBeVisible();
+    },
+};
+
+export const SelectReadPanelAndSearchLight: Story = {
+    ...SelectReadPanelAndSearch,
+    globals: { theme: "light" },
+};
+
 export const MoreOnALargeProject: Story = {
     decorators: [viewing("2d"), withData(drillServer(snapshot()), at(3))],
     play: async ({ canvasElement }) => {

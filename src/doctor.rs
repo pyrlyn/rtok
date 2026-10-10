@@ -70,6 +70,12 @@ pub struct Report {
     #[serde(skip)]
     #[schemars(skip)]
     pub config_notes: Vec<String>,
+    /// What `rtok agents junk clear` would free by default (T330.6). Text only, and set by the
+    /// `rtok doctor` command alone: sizing every agent's folders takes seconds, far too slow
+    /// for the dashboard's snapshot.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub junk_bytes: Option<u64>,
     /// Advice for enabling `[proxy.tools_rewrite]` when applicable (T59.5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools_rewrite_advice: Option<String>,
@@ -78,6 +84,11 @@ pub struct Report {
     /// Hooks that lead nowhere or cannot be checked (T331.1); the list later detectors extend.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problems: Vec<hooks::Problem>,
+    /// What the graph health check raised for linked projects: missing, unreachable, backend
+    /// down, link broken (T329.17). Read from the store the checking processes write.
+    #[cfg(feature = "graph")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graph_alerts: Vec<crate::plugins::graph::health::Alert>,
 }
 
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -233,6 +244,13 @@ impl Report {
             )),
             None => out.push_str("read-share no data\n"),
         };
+        #[cfg(feature = "graph")]
+        if !self.graph_alerts.is_empty() {
+            out.push_str("graph alerts\n");
+            for line in crate::plugins::graph::health::texts(&self.graph_alerts) {
+                out.push_str(&format!("  {line}\n"));
+            }
+        }
         out.push_str("agents\n");
         for a in &self.agents {
             out.push_str(&format!("  {} ({})\n", a.host, a.kind));
@@ -314,6 +332,16 @@ impl Report {
                 ));
             }
         }
+        if let Some(bytes) = self.junk_bytes {
+            out.push_str(&format!(
+                "junk\n  reclaimable: {}",
+                crate::bytes::human_bytes(bytes)
+            ));
+            if bytes > JUNK_HINT_BYTES {
+                out.push_str(" (run `rtok agents junk list`)");
+            }
+            out.push('\n');
+        }
         if !self.config_notes.is_empty() {
             out.push_str("config\n");
             for note in &self.config_notes {
@@ -323,6 +351,9 @@ impl Report {
         out
     }
 }
+
+/// Above this much reclaimable junk the doctor line points at `rtok agents junk list`.
+const JUNK_HINT_BYTES: u64 = 1 << 30;
 
 /// Whether Claude Code defers MCP tools (T388).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, schemars::JsonSchema)]
@@ -568,6 +599,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
         },
         tools_rewrite_advice: tools_rewrite_adv,
         config_notes: config_notes(cfg),
+        junk_bytes: None,
         // File reads only: no `--version` probe, so the 2 s dashboard tick stays cheap.
         agents: crate::agents::HOSTS
             .iter()
@@ -581,7 +613,20 @@ pub fn page(cfg: &Config) -> Result<Report> {
             })
             .collect(),
         problems: checks(cfg),
+        #[cfg(feature = "graph")]
+        graph_alerts: graph_alerts(cfg),
     })
+}
+
+/// Fails open: a store that cannot be read shows no alerts.
+#[cfg(feature = "graph")]
+fn graph_alerts(cfg: &Config) -> Vec<crate::plugins::graph::health::Alert> {
+    if !cfg.plugins.graph.alerts {
+        return Vec::new();
+    }
+    crate::plugin::Runtime::open(cfg.clone(), "doctor")
+        .map(|rt| crate::plugins::graph::health::all(&rt))
+        .unwrap_or_default()
 }
 
 /// Notes for keys the user file sets away from the current default. Empty when this
@@ -1623,6 +1668,9 @@ pub(crate) fn report_fixture() -> Report {
         agents: Vec::new(),
         problems: Vec::new(),
         config_notes: Vec::new(),
+        #[cfg(feature = "graph")]
+        graph_alerts: Vec::new(),
+        junk_bytes: None,
     }
 }
 

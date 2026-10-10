@@ -1234,8 +1234,9 @@ section! {
         body_lines: u32 = 40,
         auto_index: bool = true,
         auto_add_projects: bool = true,
-        /// T329.9: `tags` (default), `lsp` (language server, tags when it cannot answer) or `auto`
-        /// (server first, tags second, per project and language). `text` arrives with T329.10.
+        /// T329.9: `tags` (default), `lsp` (language server, tags when it cannot answer), `auto`
+        /// (server first, tags second, text search when no grammar parses the project, per project
+        /// and language) or `text` (T329.10: plain in-process text search only).
         backend: String = s("tags"),
         /// T329.9: how long one language-server wait (an initializing or still-indexing server)
         /// may take before the request falls back to tags.
@@ -1251,6 +1252,12 @@ section! {
         reference_depth: u32 = 3,
         /// T329.8: the most projects references may add to the registry.
         max_auto_projects: u32 = 20,
+        /// T329.17: raise an alert when a project in the scope goes missing, unreachable, loses its
+        /// working backend or has a manifest reference that points nowhere.
+        alerts: bool = true,
+        /// T329.17: seconds between the health checks of a process that hosts graph (`rtok mcp`,
+        /// `rtok web`); 0 turns the check off.
+        health_check_interval_s: u32 = 60,
         exclude: Vec<String> = vec![],
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),
@@ -2141,14 +2148,14 @@ bogus = true
         assert_eq!(cfg.plugins.graph.backend, "lsp");
     }
 
-    /// T329.9: `auto` and the per-language table parse, the timeout defaults to 10 s, and a
-    /// backend the graph cannot honour (`text`, until T329.10) is refused by validation.
+    /// T329.9: `auto` and the per-language table parse, the timeout defaults to 40 s, `text`
+    /// (T329.10) is accepted, and a backend the graph does not know is refused by validation.
     #[test]
     fn graph_auto_backend_keys() {
         let g = Config::default().plugins.graph;
         assert_eq!((g.lsp_timeout_ms, g.backend_by_language.len()), (40_000, 0));
         let toml = "[plugins.graph]\nbackend = \"auto\"\nlsp_timeout_ms = 500\n\
-                    [plugins.graph.backend_by_language]\ngo = \"tags\"\n";
+                    [plugins.graph.backend_by_language]\ngo = \"tags\"\njava = \"text\"\n";
         let cfg = parse(toml).unwrap();
         assert_eq!(cfg.plugins.graph.backend, "auto");
         assert_eq!(cfg.plugins.graph.lsp_timeout_ms, 500);
@@ -2158,9 +2165,11 @@ bogus = true
         let path = dir.join("c.toml");
         std::fs::write(&path, toml).unwrap();
         assert!(validate::issues(&path).unwrap().is_empty());
+        std::fs::write(&path, "[plugins.graph]\nbackend = \"text\"\n").unwrap();
+        assert!(validate::issues(&path).unwrap().is_empty());
         for bad in [
-            "[plugins.graph]\nbackend = \"text\"\n",
-            "[plugins.graph.backend_by_language]\ngo = \"text\"\n",
+            "[plugins.graph]\nbackend = \"grep\"\n",
+            "[plugins.graph.backend_by_language]\ngo = \"rg\"\n",
         ] {
             std::fs::write(&path, bad).unwrap();
             let errs = validate::issues(&path).unwrap();

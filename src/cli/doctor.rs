@@ -127,6 +127,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
             if json {
                 print_json(&report)?;
             } else {
+                report.junk_bytes = Some(crate::agents::junk::report(&cfg).freed_default_bytes);
                 print!("{}", report.to_console());
             }
 

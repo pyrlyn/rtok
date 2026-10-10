@@ -108,6 +108,11 @@ export type EventPhase = "start" | "progress" | "end";
  */
 export type ModuleState = "installed" | "not_installed" | "not_supported";
 /**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Kind".
+ */
+export type Kind = "missing" | "unreachable" | "backend_down" | "link_broken";
+/**
  * Whether Claude Code defers MCP tools (T388).
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -729,6 +734,11 @@ export interface Report {
   agents: AgentModules[];
   auto_compact_window: string | null;
   bash_max_output_length: string | null;
+  /**
+   * What the graph health check raised for linked projects: missing, unreachable, backend
+   * down, link broken (T329.17). Read from the store the checking processes write.
+   */
+  graph_alerts?: Alert[];
   hooks_by_event: {
     [k: string]: number;
   };
@@ -799,6 +809,23 @@ export interface ModuleRow {
   name: string;
   note: string;
   state: ModuleState;
+}
+/**
+ * One raised alert, as stored and as `rtok graph projects --json` and `rtok doctor --json`
+ * print it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Alert".
+ */
+export interface Alert {
+  detail: string;
+  kind: Kind;
+  project: string;
+  root: string;
+  /**
+   * Unix seconds of the check that raised it.
+   */
+  since: number;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -1018,6 +1045,10 @@ export interface Stats {
  */
 export interface ProjectRow {
   /**
+   * What the health check raised for this project (T329.17); absent while nothing is wrong.
+   */
+  alerts?: Alert[];
+  /**
    * Which graph mode works here, as the last process to answer for it recorded (T329.11);
    * absent until a request under `lsp` or `auto` has checked.
    */
@@ -1047,6 +1078,11 @@ export interface Capability {
    * The `backend` value the record was made under; another value makes it stale.
    */
   config: string;
+  /**
+   * The server was installed and working, then broke. Unlike a server that was never there,
+   * this is what the health check raises "backend down" for.
+   */
+  down?: boolean;
   /**
    * The project's language when it has a marker file.
    */

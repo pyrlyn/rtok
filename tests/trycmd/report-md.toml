@@ -154,6 +154,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.docs.max_tokens | 800 | default |
 | plugins.docs.query_limit | 5 | default |
 | plugins.docs.snippet_chars | 400 | default |
+| plugins.graph.alerts | true | default |
 | plugins.graph.auto_add_projects | true | default |
 | plugins.graph.auto_index | true | default |
 | plugins.graph.auto_link_references | true | default |
@@ -161,6 +162,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.graph.body_lines | 40 | default |
 | plugins.graph.enabled | true | default |
 | plugins.graph.exclude | [] | default |
+| plugins.graph.health_check_interval_s | 60 | default |
 | plugins.graph.impact_tokens | 1500 | default |
 | plugins.graph.include | [] | default |
 | plugins.graph.lsp_timeout_ms | 40000 | default |
@@ -417,7 +419,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-371 keys.
+373 keys.
 
 ## Doctor
 
