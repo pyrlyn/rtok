@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::live::CallBatch;
 use super::model::{DrillGraph, DrillRequest, Snapshot};
+use crate::agents::junk_clear::Cleared;
 use crate::doctor::web::{Fixed, Plan, Selection};
 
 /// Committed schema, relative to the repository root.
@@ -29,6 +30,11 @@ pub enum ServerFrame {
     DoctorPlan { plan: Plan },
     /// What a confirmed `doctor` apply did.
     DoctorFixed { fixed: Fixed },
+    /// The dry run of "clear safe junk" (T330.7): what `agents junk clear` would remove for every
+    /// agent; nothing was removed.
+    JunkPlan { plan: Cleared },
+    /// What a confirmed junk apply removed.
+    JunkCleared { cleared: Cleared },
     /// The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).
     Graph { graph: DrillGraph },
     /// What the graph tools did since the last frame (T329.15): sent only after
@@ -54,6 +60,8 @@ pub enum ClientMessage {
     Project { project: ProjectRequest },
     /// The `doctor --fix` checklist: plan it, or write it once the user confirmed.
     Doctor { doctor: DoctorRequest },
+    /// "Clear safe junk" on the Hosts page: plan it, or remove once the user confirmed.
+    Junk { junk: JunkRequest },
     /// The inside of one project for the graph page's level 2 (T329.14); read-only.
     Graph { graph: DrillRequest },
     /// Start or stop the graph call events (T329.15); the page subscribes while the live
@@ -102,6 +110,24 @@ pub struct DoctorRequest {
     pub action: DoctorAction,
     #[serde(default)]
     pub selection: Selection,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum JunkAction {
+    /// Return the dry run; nothing is removed.
+    Plan,
+    /// Remove the confirmed paths: the page sends this only after its confirmation.
+    Apply,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct JunkRequest {
+    pub action: JunkAction,
+    /// For `apply`: the paths of the plan the user was shown. A planned item not named here
+    /// stays, so nothing that appeared since the plan goes unseen.
+    #[serde(default)]
+    pub paths: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -184,6 +210,18 @@ mod tests {
             serde_json::from_str(r#"{"graph":{"project":"1","expand":["a.rs"]}}"#).unwrap();
         assert!(matches!(m, ClientMessage::Graph { .. }));
         assert!(serde_json::from_str::<ClientMessage>(r#"{"graph":{}}"#).is_err());
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"junk":{"action":"apply","paths":["/a"]}}"#).unwrap();
+        assert!(matches!(
+            m,
+            ClientMessage::Junk { junk: JunkRequest { action: JunkAction::Apply, paths } } if paths == ["/a"]
+        ));
+        let m: ClientMessage = serde_json::from_str(r#"{"junk":{"action":"plan"}}"#).unwrap();
+        assert!(matches!(
+            m,
+            ClientMessage::Junk { junk: JunkRequest { action: JunkAction::Plan, paths } } if paths.is_empty()
+        ));
+        assert!(serde_json::from_str::<ClientMessage>(r#"{"junk":{"action":"all"}}"#).is_err());
     }
 
     #[test]

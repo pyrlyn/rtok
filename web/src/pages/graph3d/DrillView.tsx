@@ -14,6 +14,7 @@ import { Pill } from "../../ui/Pill";
 import { Result } from "../../ui/Result";
 import { Search } from "../../ui/Search";
 import { Spinner } from "../../ui/Spinner";
+import { alertedIds } from "./alerts";
 import { Hits, NodeDetails } from "./DrillPanel";
 import { drillScene, emptyScene } from "./drillScene";
 import {
@@ -46,10 +47,13 @@ function NodeList({
     graph,
     select,
     selected,
+    alerted,
 }: {
     graph: DrillGraph;
     select(id: string): void;
     selected: string | null;
+    /** Projects with an alert: their outlines say so in words, as the canvas badge is colour. */
+    alerted: ReadonlySet<number>;
 }) {
     return (
         <ul aria-label="symbol graph" className="flex max-h-[28rem] flex-col gap-1 overflow-auto">
@@ -64,6 +68,9 @@ function NodeList({
                         <b className="truncate">{n.label}</b>
                         <Pill>{n.kind}</Pill>
                         {n.stale && <Pill tone="warn">stale</Pill>}
+                        {n.kind === "external" && alerted.has(n.project) && (
+                            <Pill tone="fail">alert</Pill>
+                        )}
                         <span className="ml-auto truncate text-2xs text-fg-subtle">{n.path}</span>
                     </button>
                 </li>
@@ -111,6 +118,7 @@ export function DrillView({
     );
     const graph = q.data;
     const roots = new Map(rows.map((r) => [r.id, r.root]));
+    const alerted = alertedIds(rows);
     // With nothing picked, the panel follows the focus, so a hit that was just opened is the one shown.
     const focused =
         state.focus &&
@@ -124,7 +132,12 @@ export function DrillView({
     const shown = graph?.nodes.find((n) => n.id === selected) ?? focused ?? undefined;
     const scene = useStableScene(
         graph?.state === "ok"
-            ? drillScene(graph, { idOf, roots, selected: shown?.id ?? null })
+            ? drillScene(graph, {
+                  idOf,
+                  roots,
+                  selected: shown?.id ?? null,
+                  alerted,
+              })
             : emptyScene,
     );
 
@@ -210,6 +223,7 @@ export function DrillView({
                                     graph={graph}
                                     select={click}
                                     selected={shown?.id ?? null}
+                                    alerted={alerted}
                                 />
                             }
                             toolbar={

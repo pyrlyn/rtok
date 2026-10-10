@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { mockMachine } from "../src/api/sampleDoctor";
 import type { Selection } from "../src/api/snapshot.gen";
 import { PAGES } from "../src/pages";
 import { expect, test } from "./fixtures";
-import { ARCHIVED_MARKER } from "./rtok";
+import { ARCHIVED_MARKER, STALE_LOGS } from "./rtok";
 
 // `PAGES` mirrors `model::pages()`; `tests/surface_parity.rs` pins the two together, so this
 // loop covers every page the server knows.
@@ -143,6 +143,45 @@ test("doctor apply keeps its spinner until the answer and drops it after", async
   release();
   await expect(fix.getByRole("status")).toContainText("entries");
   await expect(fix.locator("[aria-busy]")).toHaveCount(0);
+});
+
+test("clear safe junk plans without deleting and deletes only on the confirmed message", async ({
+  page,
+  rtok,
+}) => {
+  const sent: { junk?: { action: string; paths: string[] } }[] = [];
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      sent.push(JSON.parse(String(message)));
+      server.send(message);
+    });
+  });
+  const stale = STALE_LOGS.map((name) => rtok.logPath(name));
+  await page.goto("/#/hosts");
+  const junk = page.getByRole("region", { name: "junk", exact: true });
+
+  await junk.getByRole("button", { name: "Clear safe junk" }).click();
+  const plan = junk.getByRole("region", { name: "junk plan" });
+  await expect(plan).toContainText("rtok log");
+  await expect(plan).toContainText("nothing changed");
+  expect(stale.every((p) => existsSync(p))).toBe(true);
+  expect(sent.filter((m) => m.junk?.action === "apply")).toHaveLength(0);
+
+  // Cancelling sends nothing and deletes nothing.
+  await junk.getByRole("button", { name: "Clear 2 items" }).click();
+  await junk.getByRole("button", { name: "Cancel" }).click();
+  expect(sent.filter((m) => m.junk?.action === "apply")).toHaveLength(0);
+  expect(stale.every((p) => existsSync(p))).toBe(true);
+
+  await junk.getByRole("button", { name: "Clear safe junk" }).click();
+  await junk.getByRole("button", { name: "Clear 2 items" }).click();
+  await junk.getByRole("button", { name: "Confirm" }).click();
+  await expect(junk.getByRole("status")).toContainText("Freed");
+  expect(stale.some((p) => existsSync(p))).toBe(false);
+  const applies = sent.filter((m) => m.junk?.action === "apply");
+  expect(applies).toHaveLength(1);
+  expect(applies[0]?.junk?.paths.sort()).toEqual(stale.sort());
 });
 
 test("expand returns the archived payload of a call", async ({ page }) => {

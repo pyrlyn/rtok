@@ -32,7 +32,9 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { disposeObject } from "./dispose";
 import {
+  ALERT_ROLE,
   edgeHow,
+  nodeTip,
   resolveRole,
   type Scene,
   type SceneEdge,
@@ -56,6 +58,8 @@ interface NodeObj {
   node: SceneNode;
   mesh: Mesh;
   ring?: Mesh;
+  /** The red marker of an alert: a small sphere on the node's upper right. */
+  badge?: Mesh;
   label: Sprite;
 }
 
@@ -146,6 +150,7 @@ export class Stage implements ViewApi {
     const fg = style.color || "gray";
     const subtle = style.getPropertyValue("--pyr-fg-subtle").trim() || fg;
     const accent = style.getPropertyValue("--pyr-accent-fg").trim() || fg;
+    const alert = resolveRole(ALERT_ROLE, style, "red");
     for (const node of scene.nodes) {
       const color = new Color(resolveRole(node.color, style, fg));
       const material = new MeshStandardMaterial({
@@ -165,13 +170,20 @@ export class Stage implements ViewApi {
         ring = new Mesh(this.sphere, new MeshBasicMaterial({ color: accent, wireframe: true }));
         ring.scale.setScalar(node.radius * 1.5);
       }
-      this.group.add(mesh, label, ...(ring ? [ring] : []));
-      this.nodes.set(node.id, { node, mesh, ring, label });
+      let badge: Mesh | undefined;
+      if (node.alert) {
+        badge = new Mesh(this.sphere, new MeshBasicMaterial({ color: alert }));
+        badge.scale.setScalar(Math.max(2, node.radius * 0.45));
+      }
+      this.group.add(mesh, label, ...(ring ? [ring] : []), ...(badge ? [badge] : []));
+      this.nodes.set(node.id, { node, mesh, ring, badge, label });
     }
     this.edges = scene.edges.filter((e) => this.nodes.has(e.from) && this.nodes.has(e.to));
     this.owner = this.edges.flatMap((e, i) => Array<number>(e.dashed ? DASHES : 1).fill(i));
     const tint = (e: SceneEdge) =>
-      new Color(e.inScope ? accent : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
+      e.alert
+        ? new Color(alert)
+        : new Color(e.inScope ? accent : subtle).multiplyScalar(e.inScope ? 1 : 0.6);
     const lineMat = new MeshBasicMaterial({ color: 0xffffff });
     this.lines = new InstancedMesh(this.cylinder, lineMat, Math.max(1, this.owner.length));
     this.heads = new InstancedMesh(
@@ -214,6 +226,8 @@ export class Stage implements ViewApi {
       if (!p) continue;
       o.mesh.position.set(...p);
       o.ring?.position.set(...p);
+      const nudge = o.node.radius * 0.8;
+      o.badge?.position.set(p[0] + nudge, p[1] + nudge, p[2]);
       o.label.position.set(p[0], p[1] + o.node.radius + 5, p[2]);
     }
     const a = new Vector3();
@@ -398,7 +412,7 @@ export class Stage implements ViewApi {
     const hit = this.pick({ clientX: h.x, clientY: h.y });
     if (hit.node !== undefined) {
       const n = this.nodes.get(hit.node)!.node;
-      this.events.hover({ text: `${n.label} · ${n.state}`, x: h.x, y: h.y });
+      this.events.hover({ text: nodeTip(n), x: h.x, y: h.y });
     } else if (hit.edge) {
       const names = (id: number) => this.nodes.get(id)?.node.label ?? String(id);
       this.events.hover({

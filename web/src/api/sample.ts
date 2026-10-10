@@ -5,9 +5,10 @@
 // Offline data source (`?sample`) and the snapshot fixture shared by Storybook, Vitest and
 // offline e2e. Typed as `Snapshot`, so a schema change breaks `tsc` here instead of drifting.
 import type { Connect, Connection } from "./ws";
-import { call, plugin, project, stats } from "./sampleRows";
+import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
+import { mockJunk, sampleJunkCard } from "./sampleJunk";
 import { drillReply } from "./sampleDrill";
 import type { Report, Snapshot } from "./snapshot.gen";
 // The text pages have no live source offline, so `?sample` shows the same made-up text the
@@ -204,10 +205,33 @@ export const sampleSnapshot: Snapshot = {
         reason: "rust-analyzer is not installed",
         server: false,
       },
+      links: [
+        { kind: "manual", name: "docs-site", reason: null, to: 3 },
+        ...[4, 5, 6].map((to) => ({
+          kind: "auto" as const,
+          name: `share-${to - 3}`,
+          reason: "shared deps",
+          to,
+        })),
+      ],
     }),
-    project(3, "notes"),
+    // One project whose directory is gone, and three on one share that stopped answering: the
+    // page shows the second as a single grouped alert.
+    project(3, "docs-site", {
+      index: null,
+      missing: true,
+      state: "missing",
+      alerts: [alertRow("missing", "docs-site", "the directory no longer exists")],
+    }),
+    ...[1, 2, 3].map((n) =>
+      project(n + 3, `share-${n}`, {
+        alerts: [alertRow("unreachable", `share-${n}`, "/Volumes/share did not answer in 2 s")],
+      }),
+    ),
+    project(7, "notes"),
   ],
   hosts: hostsText,
+  junk: sampleJunkCard,
   logs: [
     "rtok hook PostToolUse ok 4 ms",
     "2026-10-02 12:03:20 ERROR hook/PreToolUse: plugin shell panicked: index not built",
@@ -311,6 +335,7 @@ export const isSampleRequested = (search: string): boolean =>
 export const connectSample: Connect = (handlers) => {
   let snapshot = structuredClone(sampleSnapshot);
   const machine = mockMachine();
+  const junk = mockJunk();
   let stopped = false;
   // Frames land on a microtask so callers can register a reply handler after `send`.
   const later = (fn: () => void) =>
@@ -347,6 +372,15 @@ export const connectSample: Connect = (handlers) => {
           action === "plan"
             ? handlers.onFrame({ type: "doctorplan", plan: machine.plan(selection) })
             : handlers.onFrame({ type: "doctorfixed", fixed: machine.apply(selection) }),
+        );
+        return true;
+      }
+      if ("junk" in message) {
+        const { action, paths } = message.junk;
+        later(() =>
+          action === "plan"
+            ? handlers.onFrame({ type: "junkplan", plan: junk.plan() })
+            : handlers.onFrame({ type: "junkcleared", cleared: junk.apply(paths) }),
         );
         return true;
       }

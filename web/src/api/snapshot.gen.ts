@@ -21,6 +21,9 @@ export type ClientMessage =
       doctor: DoctorRequest;
     }
   | {
+      junk: JunkRequest;
+    }
+  | {
       graph: DrillRequest;
     }
   | {
@@ -56,6 +59,11 @@ export type ProjectRequest =
  */
 export type DoctorAction = "plan" | "apply";
 /**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "JunkAction".
+ */
+export type JunkAction = "plan" | "apply";
+/**
  * A frame the server pushes besides the [`Snapshot`] itself.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -78,6 +86,14 @@ export type ServerFrame =
   | {
       fixed: Fixed;
       type: "doctorfixed";
+    }
+  | {
+      plan: Cleared;
+      type: "junkplan";
+    }
+  | {
+      cleared: Cleared;
+      type: "junkcleared";
     }
   | {
       graph: DrillGraph;
@@ -198,6 +214,18 @@ export interface Ref {
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "JunkRequest".
+ */
+export interface JunkRequest {
+  action: JunkAction;
+  /**
+   * For `apply`: the paths of the plan the user was shown. A planned item not named here
+   * stays, so nothing that appeared since the plan goes unseen.
+   */
+  paths: string[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "DrillRequest".
  */
 export interface DrillRequest {
@@ -293,6 +321,49 @@ export interface Fixed {
    */
   code: number;
   text: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Cleared".
+ */
+export interface Cleared {
+  freed_bytes: number;
+  items: Planned[];
+  planned_bytes: number;
+  yes: boolean;
+}
+/**
+ * One item of the plan and what happened to it.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Planned".
+ */
+export interface Planned {
+  /**
+   * `clear` (removed, or would be on a dry run) or `skip`.
+   */
+  action: string;
+  agent: string;
+  bytes: number;
+  /**
+   * Planned and not removed: the re-check refused it or the removal failed.
+   */
+  failed: boolean;
+  kind: string;
+  /**
+   * Unix seconds of the newest file in it; `None` when unreadable (T330.6).
+   */
+  last_used: number | null;
+  note: string;
+  path: string;
+  /**
+   * In the plan: false for an item left at planning time (a running agent's).
+   */
+  planned: boolean;
+  /**
+   * Why it is junk, as `list` says it.
+   */
+  reason: string;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -501,6 +572,11 @@ export interface Snapshot {
    * renders the last known text, or "probing hosts…" before the first one lands.
    */
   hosts: string;
+  /**
+   * The Hosts page's junk card (T330.7): the numbers of the `junk` section of `hosts`, as data
+   * ([`junk_page`] reads the one cached report). `None` while the first measurement runs.
+   */
+  junk: JunkCard | null;
   /**
    * Logs page (T15.7): the last `[log] lines` log lines, newest first — the same
    * selection `rtok logs` screens ([`Model::log_lines`], T15.11). Riding the snapshot
@@ -1042,6 +1118,50 @@ export interface SkillRow {
    * Listed but never invoked in the window (only when data exists).
    */
   warn_never: boolean;
+}
+/**
+ * The `junk` card of the Hosts page.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "JunkCard".
+ */
+export interface JunkCard {
+  agents: CardAgent[];
+  freed_default_bytes: number;
+  freed_review_bytes: number;
+  total_bytes: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "CardAgent".
+ */
+export interface CardAgent {
+  /**
+   * "Freed by `clear`".
+   */
+  freed_default_bytes: number;
+  /**
+   * "Freed with `--include review`".
+   */
+  freed_review_bytes: number;
+  kinds: CardKind[];
+  name: string;
+  total_bytes: number;
+}
+/**
+ * One junk kind under an agent.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "CardKind".
+ */
+export interface CardKind {
+  /**
+   * `safe`, `review`, `explicit` or `never` (the T330 classes).
+   */
+  class: string;
+  items: number;
+  kind: string;
+  size_bytes: number;
 }
 /**
  * A plugin's page: its manifest, the static copy it contributes through

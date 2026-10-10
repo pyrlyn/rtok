@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { describe, expect, test } from "vitest";
-import { project } from "../../api/sampleRows";
+import { alertRow, project } from "../../api/sampleRows";
 import type { LinkKind, ProjectRow } from "../../api/snapshot.gen";
 import { Layout } from "./layout";
 import { layoutInput } from "./layout";
@@ -11,6 +11,7 @@ import {
   buildScene,
   CLUSTER_ABOVE,
   colorOf,
+  nodeTip,
   resolveRole,
   EDGE_WIDTH,
   radiusOf,
@@ -202,5 +203,36 @@ describe("layout", () => {
     };
     const [c0, c1] = [centre(0) as number[], centre(1) as number[]];
     expect(Math.hypot(c0[0]! - c1[0]!, c0[1]! - c1[1]!, c0[2]! - c1[2]!)).toBeGreaterThan(100);
+  });
+});
+
+describe("alert badges", () => {
+  const rows = [
+    project(1, "A", { selected: true, links: [link(2), link(3)] }),
+    project(2, "B", { alerts: [alertRow("unreachable", "B", "share gone")] }),
+    project(3, "C"),
+  ];
+
+  test("the alerted project and the edge into it are marked, nothing else is", () => {
+    const s = buildScene(rows, opts);
+    expect(s.nodes.map((n) => [n.label, n.alert ?? false])).toEqual([
+      ["A", false],
+      ["B", true],
+      ["C", false],
+    ]);
+    expect(s.edges.map((e) => [e.to, e.alert ?? false])).toEqual([
+      [2, true],
+      [3, false],
+    ]);
+  });
+
+  test("a snapshot that raises an alert changes the scene, so the views redraw", () => {
+    const clean = rows.map((p) => ({ ...p, alerts: [] }));
+    expect(signature(buildScene(rows, opts))).not.toBe(signature(buildScene(clean, opts)));
+    expect(topology(buildScene(rows, opts))).toBe(topology(buildScene(clean, opts)));
+  });
+
+  test("the tooltip says alert in words", () => {
+    expect(nodeTip(buildScene(rows, opts).nodes[1]!)).toBe("B · ok · alert");
   });
 });
