@@ -328,6 +328,10 @@ export const connectSample: Connect = (handlers) => {
         );
         return true;
       }
+      if ("calls" in message) {
+        // The sample has no other process to watch; the stream starts with the live graph (T329.26).
+        return true;
+      }
       if ("graph" in message) {
         const { graph } = message;
         later(() => handlers.onFrame(drillReply(graph, snapshot.projects ?? [])));

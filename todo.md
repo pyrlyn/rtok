@@ -19,7 +19,6 @@
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.10. Graph text-search backend (rg/grep) including `ssh://` roots
-- T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 - T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 - T329.17. Graph alerts: linked project down or unreachable
 - T329.18. Graph diff: compare before and after a change
@@ -27,6 +26,7 @@
 - T329.21. Project badges in the graph page lists
 - T329.24. Graph page: show each project's capability record
 - T329.23. Graph drill-down: side panel and search
+- T329.26. Graph page: two-part UI with the read-only live graph and live metrics
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T356. Never index `$HOME` or `/` as a graph root
