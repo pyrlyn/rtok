@@ -181,11 +181,29 @@ export const sampleSnapshot: Snapshot = {
   projects: [
     project(1, "rtok", {
       selected: true,
+      backend: {
+        backend: "lsp",
+        checked_at: 1_790_000_000,
+        config: "auto",
+        language: "rust",
+        next_probe_at: null,
+        reason: null,
+        server: true,
+      },
       links: [{ kind: "manual", name: "ketch", reason: "shared store", to: 2 }],
     }),
     project(2, "ketch", {
       state: "stale",
       index: null,
+      backend: {
+        backend: "tags",
+        checked_at: 1_790_000_000,
+        config: "auto",
+        language: "rust",
+        next_probe_at: 1_790_000_300,
+        reason: "rust-analyzer is not installed",
+        server: false,
+      },
       links: [
         { kind: "manual", name: "docs-site", reason: null, to: 3 },
         ...[4, 5, 6].map((to) => ({
@@ -209,6 +227,7 @@ export const sampleSnapshot: Snapshot = {
         alerts: [alertRow("unreachable", `share-${n}`, "/Volumes/share did not answer in 2 s")],
       }),
     ),
+    project(7, "notes"),
   ],
   hosts: hostsText,
   logs: [

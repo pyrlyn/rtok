@@ -67,6 +67,10 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   ("share-1, share-2, share-3 unreachable since 14:02 (3 projects)"). A toast appears when a
   snapshot raises an alert or clears one, and goes away after a few seconds or on Dismiss; alerts
   that were already up when the page opened are listed but not toasted.
+- **Graph backend.** Each project in the list carries `lsp` or `tags`, and the selected project's
+  header says why: the language whose server answers, or the reason the project fell back to tags,
+  when it was last checked and when the health check retries. A project nobody has asked yet says
+  it has no record.
 
 ## Every flag is a config key
 

@@ -49,7 +49,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
-| T329.24 | todo | P3 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.7 | todo | P3 | 3 | 0% | |
@@ -857,11 +856,6 @@ The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a p
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
 
-### T329.24. Graph page: show each project's capability record
-
-Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
-
-Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
