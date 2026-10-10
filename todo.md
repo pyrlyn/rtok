@@ -69,5 +69,4 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T479. TUI: clear safe junk with plan and confirm
-- T481. TUI: graph health score per project
 - T480. TUI: live graph calls panel

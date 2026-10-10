@@ -238,6 +238,16 @@ fn links(rt: &Runtime, cx: &Ctx, p: &Project) -> (f64, Vec<Reason>) {
     (value, why)
 }
 
+/// The band of a score. The one place the 80 and 50 cut-offs live, so a surface that holds a
+/// bare number (the scope's lowest) colours it as the server colours a project.
+pub fn level_of(score: u8) -> Level {
+    match score {
+        s if s >= NOTICE_BELOW => Level::Good,
+        s if s >= WARN_BELOW => Level::Warn,
+        _ => Level::Bad,
+    }
+}
+
 /// The score of one project from its index status.
 pub fn of(rt: &Runtime, p: &Project, st: &GraphStatus) -> Score {
     if p.missing() {
@@ -257,11 +267,7 @@ pub fn of(rt: &Runtime, p: &Project, st: &GraphStatus) -> Score {
         );
         (None, Level::Indexing, vec![why])
     } else {
-        let level = match total {
-            t if t >= NOTICE_BELOW => Level::Good,
-            t if t >= WARN_BELOW => Level::Warn,
-            _ => Level::Bad,
-        };
+        let level = level_of(total);
         let reasons = fresh_why
             .into_iter()
             .chain(back_why)

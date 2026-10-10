@@ -289,6 +289,37 @@ fn project_writes_exist_on_both_surfaces() {
     );
 }
 
+/// T481 (D27): the graph health score is on the Graph page of both surfaces, from the one
+/// `ProjectRow.health` and `scope_health` the registry carries. Both colour a project by the
+/// server's `level`; only the scope's bare number is banded locally, the web by `levelOf` and the
+/// TUI by `score::level_of`. A surface that drops the score, its breakdown or the scope fails here.
+#[test]
+fn graph_health_score_exists_on_both_surfaces() {
+    let web = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/health.ts"
+    ));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/health.rs"));
+    let projects = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/projects.rs"));
+    assert!(
+        web.contains("levelOf") && web.contains("s.level"),
+        "the web page colours by the server's level"
+    );
+    for needle in [
+        "p.health.level",
+        "p.scope_health",
+        "h.components",
+        "h.reasons",
+        "level_of",
+    ] {
+        assert!(tui.contains(needle), "the TUI graph page lacks {needle}");
+    }
+    assert!(
+        projects.contains("p.health.clone()") && projects.contains("p.scope_health"),
+        "the TUI reads the snapshot's rows, not a second store read"
+    );
+}
+
 /// T231: both surfaces render the Hosts page — `agents list`'s blocks, kind,
 /// version, installed surfaces, config path — from the same model accessor, so
 /// `agents list`/`agents info` can leave EXEMPT for COMMAND_PAGES.

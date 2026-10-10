@@ -13,6 +13,7 @@
 
 mod app;
 mod doctor_fix;
+mod health;
 mod projects;
 mod theme;
 mod view;
