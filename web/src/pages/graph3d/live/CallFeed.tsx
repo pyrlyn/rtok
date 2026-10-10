@@ -8,7 +8,8 @@ import { type Column, DataTable } from "../../../ui/DataTable";
 import { Pill } from "../../../ui/Pill";
 import { Select } from "../../../ui/Select";
 import { compact, hms } from "../../format";
-import { distinct, type Finished, type FeedFilter, filterFeed } from "./callsStore";
+import type { Finished } from "../../../api/snapshot.gen";
+import { distinct, type FeedFilter, filterFeed } from "./feedFilter";
 
 const none: FeedFilter = { session: "", tool: "", project: "" };
 

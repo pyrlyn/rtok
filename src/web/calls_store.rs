@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T480: the live calls panel's aggregation in Rust, for `rtok tui`. It is a port of
-//! `web/src/pages/graph3d/live/callsStore.ts` (T329.26): same fold, same windows, same
-//! interrupt sweep, same filters. The web computes in the browser and the server does not
-//! send totals, so the port is held to that file by its tests, which repeat the cases of
-//! `callsStore.test.ts` with the same numbers. Totals come from the batch `summary`, which
-//! counts every event of a poll, so they equal what `rtok stats` sums over the same calls.
+//! The live calls aggregation (T329.26, ported to Rust by T480 and made the only one by T484):
+//! `rtok web` folds each poll's batch here and sends the totals in the `calls` frame
+//! (`calls_view.rs`), and `rtok tui` folds the same batches with the same store, so both
+//! surfaces show one computation. Totals come from the batch `summary`, which counts every
+//! event of a poll, so they equal what `rtok stats` sums over the same calls.
 
 use std::collections::{BTreeMap, HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use schemars::JsonSchema;
+use serde::Serialize;
 
 use super::live::CallBatch;
 use crate::store::{EventPhase, GraphEvent};
@@ -29,7 +32,7 @@ pub const WINDOWS: [(&str, i64); 4] = [
     ("since open", i64::MAX),
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Running {
     pub call: String,
     pub tool: String,
@@ -40,7 +43,7 @@ pub struct Running {
     pub at: i64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub struct Finished {
     pub call: String,
     pub tool: String,
@@ -86,6 +89,13 @@ pub struct Totals {
     /// Milliseconds of the listed calls, oldest first and at most [`LATENCY_KEEP`]: a burst
     /// cut to its newest 100 events is measured on those.
     pub ms: Vec<f64>,
+}
+
+/// The poller's and the panes' clock, in epoch milliseconds.
+pub fn clock_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// The value at rank `ceil(p * n)`: a latency that was really measured, not an interpolation.
@@ -299,7 +309,7 @@ pub fn distinct<'a>(
     v
 }
 
-/// Fixtures shared with the TUI pane's tests: the cases of `callsFixtures.ts`.
+/// Fixtures shared with the TUI pane's and the view's tests.
 #[cfg(test)]
 pub(crate) mod fixtures {
     use super::*;
@@ -410,8 +420,7 @@ mod tests {
         );
     }
 
-    /// Same events and numbers as `callsStore.test.ts`, "counts fallbacks, caps, symbols, projects
-    /// and latency percentiles".
+    /// Fallbacks, caps, symbols, projects and latency percentiles, counted from the events.
     #[test]
     fn metrics_are_counted_from_the_events_and_the_percentiles_are_measured_latencies() {
         let sample = |kind: &str, ref_id: Option<&str>| MeasurementSample {

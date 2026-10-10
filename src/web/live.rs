@@ -5,14 +5,16 @@
 //! T329.15: graph call events on `/ws`. Any rtok process appends events to the store
 //! (`plugins::graph::events`); this module is the one reader in `rtok web`. A poller runs only
 //! while a socket is subscribed, reads `id > cursor` every [`POLL`], folds what it found into
-//! one [`CallBatch`] and broadcasts it, so the work and the traffic per second are bounded
-//! however many calls arrive.
+//! one [`CallBatch`], adds that to its [`CallsStore`] and publishes the store's [`CallsView`]
+//! when it changed (T484), so the work and the traffic per second are bounded however many calls
+//! arrive and every page shows the totals `rtok tui` computes.
 //!
 //! [`Reader`] is that one reader without the async: `rtok tui` drives it from a thread, so both
 //! surfaces fold the same rows through the same cursor and [`coalesce`].
 //!
-//! No replay: a socket sees the events written after it subscribed. A page that wants the
-//! past (a window total, a reconnect) reads the store through the snapshot, not this stream.
+//! No replay: the totals cover the events written after the first socket subscribed, and a
+//! socket that subscribes later starts from the totals so far. A page that wants the past
+//! reads the store through the snapshot, not this stream.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -21,8 +23,10 @@ use std::time::Duration;
 
 use schemars::JsonSchema;
 use serde::Serialize;
-use tokio::sync::broadcast;
+use tokio::sync::watch;
 
+use super::calls_store::{CallsStore, clock_ms};
+use super::calls_view::CallsView;
 use super::protocol::ServerFrame;
 use crate::config::Config;
 use crate::store::{EventPhase, GraphEvent, Store};
@@ -34,8 +38,6 @@ pub const POLL: Duration = Duration::from_millis(250);
 const FETCH: i64 = 2000;
 /// Events one frame lists; the rest of a burst is counted in `omitted` and in `summary`.
 pub const MAX_EVENTS: usize = 100;
-/// Frames a slow socket may fall behind before it skips the oldest.
-const BACKLOG: usize = 16;
 
 /// What one poll found, as one frame. `summary` counts every event of the poll (including
 /// the ones left out of `events`), so a page that adds summaries up never undercounts a burst.
@@ -121,39 +123,44 @@ pub fn coalesce(events: Vec<GraphEvent>) -> Option<CallBatch> {
 
 /// The poller and its fan-out. One per [`super::DashState`].
 pub struct LiveCalls {
-    tx: broadcast::Sender<Arc<str>>,
+    /// The newest `calls` frame as JSON. A watch, not a queue: every socket reads the current
+    /// state first and then each change, and one that is slow skips frames instead of lagging.
+    tx: watch::Sender<Arc<str>>,
     running: AtomicBool,
+}
+
+fn frame_of(view: CallsView) -> Arc<str> {
+    Arc::from(ServerFrame::Calls { calls: view }.to_json())
 }
 
 impl LiveCalls {
     pub(super) fn new() -> Self {
+        let idle = frame_of(CallsView::of(&CallsStore::default(), clock_ms()));
         Self {
-            tx: broadcast::channel(BACKLOG).0,
+            tx: watch::channel(idle).0,
             running: AtomicBool::new(false),
         }
     }
 
-    /// Frames (`ServerFrame::Calls` as JSON) from now on, and the first one: an empty batch
-    /// whose `head` is the newest event id at subscription, which tells the page the stream
-    /// is armed. The first subscriber starts the poller; it stops when the last receiver is
-    /// dropped. Must run inside the tokio runtime.
+    /// The receiver and the frame to send first: the totals so far, or empty ones when this
+    /// subscriber starts the poller. The first subscriber starts the poller; it stops when the
+    /// last receiver is dropped. Must run inside the tokio runtime.
     pub async fn subscribe(
         self: &Arc<Self>,
         cfg: &Config,
-    ) -> (broadcast::Receiver<Arc<str>>, Arc<str>) {
+    ) -> (watch::Receiver<Arc<str>>, Arc<str>) {
         // Receiver first: a frame the poller sends while the store opens is not lost.
-        let rx = self.tx.subscribe();
+        let mut rx = self.tx.subscribe();
         let db_path = cfg.core.db_path.clone();
         let reader = open_reader(db_path.clone()).await;
-        let head = reader.as_ref().map_or(0, Reader::head);
         if !self.running.swap(true, Ordering::AcqRel) {
+            // A fresh poller counts from now: the totals of an earlier one do not carry over.
+            self.tx
+                .send_replace(frame_of(CallsView::of(&CallsStore::default(), clock_ms())));
             tokio::spawn(poll(self.clone(), db_path, reader));
         }
-        let armed = CallBatch {
-            head,
-            ..CallBatch::default()
-        };
-        (rx, Arc::from(ServerFrame::Calls { batch: armed }.to_json()))
+        let first = rx.borrow_and_update().clone();
+        (rx, first)
     }
 }
 
@@ -170,11 +177,6 @@ impl Reader {
         let store = Store::open(path).ok()?;
         let cursor = store.graph_event_head().ok()?;
         Some(Self { store, cursor })
-    }
-
-    /// The newest event id read so far.
-    pub fn head(&self) -> i64 {
-        self.cursor
     }
 
     /// What was written since the last call, folded; `None` when nothing was, or the read
@@ -195,6 +197,8 @@ async fn open_reader(path: std::path::PathBuf) -> Option<Reader> {
 }
 
 async fn poll(live: Arc<LiveCalls>, db_path: std::path::PathBuf, mut reader: Option<Reader>) {
+    let mut store = CallsStore::default();
+    let mut sent = CallsView::of(&store, clock_ms());
     loop {
         tokio::time::sleep(POLL).await;
         if live.tx.receiver_count() == 0 {
@@ -221,13 +225,19 @@ async fn poll(live: Arc<LiveCalls>, db_path: std::path::PathBuf, mut reader: Opt
         else {
             continue;
         };
-        if let Some(batch) = batch {
-            // No receiver is not an error: the last socket just left.
-            let _ = live
-                .tx
-                .send(Arc::from(ServerFrame::Calls { batch }.to_json()));
-        }
         reader = Some(r);
+        let now = clock_ms();
+        if let Some(batch) = batch {
+            store.fold(&batch, now);
+        }
+        store.sweep(now);
+        let view = CallsView::of(&store, now);
+        // The clock moving is not a change: the page keeps time between frames.
+        sent.now = now;
+        if view != sent {
+            live.tx.send_replace(frame_of(view.clone()));
+            sent = view;
+        }
     }
 }
 
@@ -324,6 +334,5 @@ mod tests {
             (b.summary.starts, b.summary.ends, b.summary.failed),
             (500, 500, 50)
         );
-        assert!(ServerFrame::Calls { batch: b }.to_json().len() < 100_000);
     }
 }

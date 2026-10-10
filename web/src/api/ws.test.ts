@@ -87,16 +87,11 @@ describe("parseFrame", () => {
     });
   });
 
-  test("call events keep their batch and refuse a frame without one", () => {
-    const batch = {
-      events: [],
-      omitted: 0,
-      summary: { starts: 0, ends: 0, failed: 0, est_before: 0, est_after: 0 },
-      head: 7,
-    };
-    expect(parseFrame(JSON.stringify({ type: "calls", batch }))).toEqual({ type: "calls", batch });
+  test("a calls frame keeps its view and refuses a frame without one", () => {
+    const calls = { now: 7, running: [], feed: [], windows: [] };
+    expect(parseFrame(JSON.stringify({ type: "calls", calls }))).toEqual({ type: "calls", calls });
     expect(parseFrame('{"type":"calls"}')).toBeNull();
-    expect(parseFrame('{"type":"calls","batch":{"events":[]}}')).toBeNull();
+    expect(parseFrame('{"type":"calls","calls":{"feed":[]}}')).toBeNull();
   });
 
   test("a diff frame carries the project it answers and its project reports", () => {

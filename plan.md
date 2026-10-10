@@ -90,7 +90,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
-| T484 | todo | P3 | 3 | 0% | |
 
 
 
@@ -1172,12 +1171,6 @@ Check: `agents install` and `agents update` show one spinner per host on a TTY a
 T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
 
 Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
-
-### T484. Web live panel reads the server's calls totals
-
-T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
-
-Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
 
 ## Reference
 

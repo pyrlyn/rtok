@@ -8,7 +8,6 @@ import type { ProjectRow } from "../../../api/snapshot.gen";
 import { Panel } from "../../../ui/Panel";
 import type { DrillState } from "../drillState";
 import { CallFeed } from "./CallFeed";
-import type { WindowId } from "./callsStore";
 import { LiveGraph } from "./LiveGraph";
 import { LiveMetrics } from "./LiveMetrics";
 import { useCalls } from "./useCalls";
@@ -19,13 +18,14 @@ import { useCalls } from "./useCalls";
  */
 export function LiveSection({ rows, drill }: { rows: ProjectRow[]; drill: DrillState | null }) {
     const calls = useCalls();
-    const [window, setWindow] = useState<WindowId>("5m");
+    // The chips are the server's windows in its order; "5 min" is the second.
+    const [window, setWindow] = useState(1);
     const connection = useConnection();
     return (
         <Panel title="live graph" hint={connection === "open" ? "read-only" : "reconnecting"}>
-            <LiveGraph rows={rows} drill={drill} store={calls.store} now={calls.now} />
+            <LiveGraph rows={rows} drill={drill} store={calls.view} now={calls.now} />
             <LiveMetrics
-                store={calls.store}
+                view={calls.view}
                 now={calls.now}
                 window={window}
                 onWindow={setWindow}
@@ -33,7 +33,7 @@ export function LiveSection({ rows, drill }: { rows: ProjectRow[]; drill: DrillS
                 pending={calls.pending}
                 onFreeze={calls.freeze}
             />
-            <CallFeed feed={calls.store.feed} />
+            <CallFeed feed={calls.view.feed} />
         </Panel>
     );
 }

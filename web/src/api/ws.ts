@@ -5,7 +5,7 @@
 // Typed client for the `/ws` contract (T310.2). Transport-agnostic on purpose: the socket
 // constructor and timers are injectable so Vitest drives it without a server or a browser.
 import type {
-  CallBatch,
+  CallsView,
   Cleared,
   ClientMessage,
   DiffReport,
@@ -100,9 +100,9 @@ export function parseFrame(raw: unknown): Frame | null {
         : null;
     }
     case "calls": {
-      const batch = v.batch as Record<string, unknown> | null;
-      return batch && Array.isArray(batch.events) && typeof batch.head === "number"
-        ? { type: "calls", batch: batch as unknown as CallBatch }
+      const calls = v.calls as Record<string, unknown> | null;
+      return calls && Array.isArray(calls.windows) && typeof calls.now === "number"
+        ? { type: "calls", calls: calls as unknown as CallsView }
         : null;
     }
     case "graph": {
