@@ -1423,6 +1423,40 @@ ships no plugin and `hooks`/`plugin` are both `Support::No` (creator instruction
 the plugin package). MiMo Desktop is confirmed to exist (early access, "powered by MiMo Code
 as its core engine") but no separate config path is documented, so no Desktop variant ships.
 
+**Update 2026-10-10 (T520): the plugin package and `mimocode.jsonc`.** The v1 gap above is closed;
+everything below was checked on 2026-10-10 against primary sources.
+
+- Plugin package: `@mimo-ai/plugin` 0.1.15 is on npm, published 2026-09-22
+  (https://registry.npmjs.org/@mimo-ai%2fplugin), from
+  https://github.com/XiaomiMiMo/MiMo-Code/tree/main/packages/plugin. Its `Hooks`
+  (`packages/plugin/src/index.ts`) has `tool.execute.before` (output `{args, cancel?,
+  cancelReason?}`), `tool.execute.after` (output `{title, output, metadata}`), `shell.env`,
+  `experimental.session.compacting` (output `{context, prompt?}`) and
+  `experimental.chat.system.transform` (output `{system}`), the same names and shapes
+  `plugins/opencode/rtok.ts` uses.
+- Loader: `packages/cli/src/config/plugin.ts` scans each config directory with
+  `Glob.scan("{plugin,plugins}/*.{ts,js}")` (symlinks followed), as OpenCode and Kilo do; file
+  hooks (`{hook,hooks}/*.{js,ts}`, `packages/cli/src/plugin/index.ts`) are a separate mechanism
+  and unused. `readV1Plugin` (`packages/cli/src/plugin/shared.ts`) takes a default export object
+  with a `server()` function, and a plugin loaded from a file path must export an `id`
+  (`resolvePluginId`), so `export default { id: "rtok", server }` fits. `rtok.ts` imports only
+  `node:child_process`. `ConfigPaths.directories` (`packages/cli/src/config/paths.ts`) lists the
+  global config dir first, and `packages/cli/src/config/config.ts` runs `ConfigPlugin.load(dir)`
+  for every directory it returns, outside the `.mimocode`-suffix check that only gates the
+  config files, so `~/.config/mimocode/plugins/rtok.ts` is loaded. rtok's tests link the file
+  there without running MiMo (no real agents).
+- Config files: the global directory takes `config.json`, `mimocode.json` and `mimocode.jsonc`,
+  "merged in that order (later overrides earlier)" (https://mimo.xiaomi.com/mimocode/config-overrides);
+  `packages/cli/src/config/config.ts` (`loadGlobal`) reads them in that order and, when none of
+  the three exists, creates a starter `mimocode.jsonc`. So `.jsonc` wins a conflict with `.json`,
+  and a fresh MiMo has only a `.jsonc`. https://mimo.xiaomi.com/mimocode/config-files names only
+  `mimocode.json` and says the format is JSON / JSONC. rtok edits `mimocode.jsonc` when
+  `mimocode.json` is absent; when both exist it keeps writing `mimocode.json`, which MiMo merges
+  under the `.jsonc` (a conflicting `mcp.rtok` in the `.jsonc` would still win).
+- MiMo Desktop: still no documented config path. A third-party README
+  (https://github.com/akaradje/mimo-desktop, **unverified**) says Desktop reads
+  `~/.config/mimocode/mimocode.jsonc`; T521 waits for a read-only probe on the creator's machine.
+
 ## 16. Token savings beyond the shipped surface (2026-09-21)
 
 Creator request: what else can save LLM tokens in an agent product like rtok (AirTalk), after inventorying what already ships. Sources: `plan.md` plugin catalogue, `ideas.md`, §§2/4/6/9–15 of this file, and the in-tree plugins under `src/plugins/`. Vendor % claims stay claims unless marked *measured*.

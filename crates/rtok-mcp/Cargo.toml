@@ -10,6 +10,8 @@ license = "MIT"
 
 [dependencies]
 anyhow = { workspace = true }
+# `runs_bin`: the one "does this entry run rtok" walk, instead of a second copy here (T463).
+rtok-agent-sdk = { version = "0.0.1", path = "../rtok-agent-sdk" }
 serde_json = { workspace = true }
 # `cst`: lossless edit (comments, formatting) of a JSONC document; `serde_json`: read a CST
 # node back out as a `serde_json::Value` to compare against the entry rtok wants (T277 config.rs).

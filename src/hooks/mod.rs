@@ -571,6 +571,15 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
                     None,
                 );
             }
+            // T289.5: a worktree a post-create script left without an agent goes to the first
+            // session that starts inside it.
+            if let (Some(id), Some(cwd)) = (agent.as_deref(), cx.cwd.as_deref()) {
+                let _ = crate::worktree::claim::complete_pending(
+                    &cx.store,
+                    std::path::Path::new(cwd),
+                    id,
+                );
+            }
             // T428: memory recall, the handoff and `inject` each record a measurement; one
             // commit for the three instead of one lock wait each.
             cx.defer_measurements();

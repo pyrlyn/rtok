@@ -401,6 +401,41 @@ fn call_metrics_exist_on_both_surfaces() {
     }
 }
 
+/// T329.32 (D27): the live extras that fit a terminal exist on the page first, and T500 brings them
+/// to the TUI pane. The series is already shared (`CallsStore::spark`), so the pane only draws it.
+/// The pane assertions below are the recorded gap: T500 turns them into the same checks the page
+/// gets, with the wording the page chose.
+#[test]
+fn live_extras_are_on_the_page_and_wait_for_the_tui() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let read = |rel: &str| std::fs::read_to_string(format!("{root}/{rel}")).expect(rel);
+    let page = [
+        "web/src/pages/graph3d/live/LiveMetrics.tsx",
+        "web/src/pages/graph3d/live/CallFeed.tsx",
+        "web/src/pages/graph3d/live/LiveGraph.tsx",
+    ]
+    .map(read)
+    .join("\n");
+    let pane = read("src/tui/live_calls.rs");
+    let pane = pane.split("#[cfg(test)]\nmod tests").next().unwrap();
+    for (wording, tui_pending) in [
+        ("over the last", "spark("),
+        ("outside scope", "outside scope"),
+        ("folded calls", "folded calls"),
+    ] {
+        assert!(page.contains(wording), "the page shows `{wording}`");
+        assert!(
+            !pane.contains(tui_pending),
+            "the TUI pane has `{tui_pending}` now: T500 moves `{wording}` into a both-surface check"
+        );
+    }
+    let view = read("src/web/calls_view.rs");
+    assert!(
+        view.contains("store.spark("),
+        "the frame's sparklines are the store's series"
+    );
+}
+
 /// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page
 /// of both surfaces, each through the one `graph projects` function — the web by
 /// `ClientMessage::Project`, the TUI by keys over the same `ProjectRequest` and

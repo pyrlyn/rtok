@@ -3726,6 +3726,37 @@
         "agent_usage"
       ]
     },
+    "Spark": {
+      "description": "Calls and tokens saved per slot over a window, oldest first. Summed from the same buckets as\nthe window totals, so the slots add up to them.",
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "saved": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "span_ms": {
+          "description": "What the slots cover. \"since start\" reads the buckets, which are kept for 15 minutes only.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "span_ms",
+        "calls",
+        "saved"
+      ]
+    },
     "Stats": {
       "description": "The shared stats widget: `usage` rows for the overview, `Measurement` rows per plugin.",
       "type": "object",
@@ -4034,6 +4065,9 @@
           "format": "uint64",
           "minimum": 0
         },
+        "spark": {
+          "$ref": "#/$defs/Spark"
+        },
         "symbols": {
           "type": "integer",
           "format": "uint64",
@@ -4067,7 +4101,8 @@
         "symbols_returned",
         "files_touched",
         "projects_hit",
-        "latency"
+        "latency",
+        "spark"
       ]
     }
   }

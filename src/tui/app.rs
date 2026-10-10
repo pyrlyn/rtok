@@ -881,6 +881,22 @@ pub(super) mod tests {
         crate::testutil::config_file_in(&crate::testutil::tmp_dir("tui"))
     }
 
+    /// The screen of `app` as text, `width` columns and 40 rows.
+    pub(in crate::tui) fn render(app: &App, width: u16) -> String {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 40)).unwrap();
+        terminal
+            .draw(|frame| crate::tui::view::draw(frame, app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        buffer
+            .content()
+            .chunks(usize::from(width))
+            .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// The Plugins tab with the row cursor on `id` — where the T15.4 toggle tests
     /// start. `[tui] tab` picks the page (T15.8), so the helper says which tab it
     /// means rather than counting pages; a model without the row fails the test.

@@ -14,10 +14,10 @@
 
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::{Value, json};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply, jsonc};
+use super::{Agent, Kind, Mode, Support, Variant, jsonc};
 use crate::config::Config;
 
 const NAME: &str = "rtok";
@@ -116,48 +116,34 @@ fn has_rtok(raw: &str) -> bool {
 
 /// Add `context_servers.rtok`, or report no changes. Missing or blank files start as `{}`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let path = &cfg.setup.zed.config_path;
-    let raw = jsonc::read_or_empty(path)?;
-    let (body, edit) = jsonc::upsert_member(&raw, path, "context_servers", NAME, &want_entry())?;
-    // Never write a document we cannot read back: "a malformed file is never overwritten"
-    // applies to our own output too.
-    jsonc::parse(&body).with_context(|| path.display().to_string())?;
-    let report = match edit {
-        jsonc::Upsert::NoChange => rtok_agent_sdk::NO_CHANGES.into(),
-        jsonc::Upsert::Added => format!("+ context_servers.{NAME}: {}", summary()),
-        jsonc::Upsert::Replaced => format!("~ context_servers.{NAME}: {}", summary()),
-    };
-    rtok_agent_sdk::write(&apply(cfg), path, &body, &report)?;
-    Ok(report)
+    jsonc::upsert_entry(
+        cfg,
+        &cfg.setup.zed.config_path,
+        "context_servers",
+        NAME,
+        &want_entry(),
+        |edit| {
+            let mark = if edit == jsonc::Upsert::Added {
+                '+'
+            } else {
+                '~'
+            };
+            format!("{mark} context_servers.{NAME}: {}", summary())
+        },
+    )
 }
 
-/// Drop `context_servers.rtok`, keeping every comment and foreign server — but only as far as
-/// rtok wrote it: [`rtok_agent_sdk::judge_owned`] (T246, T246.5) leaves an entry that does not
-/// run the rtok binary, or one the user changed from [`want_entry`] unless `--yes` says remove.
-/// A malformed document is left for [`jsonc::remove_member`] to error on, as before. An object
-/// left with no entries and no comments goes with it; a comment-only object stays.
+/// Drop `context_servers.rtok`, keeping every comment and foreign server, as far as rtok wrote
+/// it (T246, T246.5, see [`jsonc::remove_entry`]). An object left with no entries and no
+/// comments goes with it; a comment-only object stays.
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    let path = &cfg.setup.zed.config_path;
-    let raw = jsonc::read_or_empty(path)?;
-    if let Ok(root) = jsonc::parse(&raw)
-        && let Some(have) = root.pointer("/context_servers/rtok")
-    {
-        let at = format!("context_servers.{NAME} in {}", path.display());
-        if let Some(leave) =
-            rtok_agent_sdk::judge_owned(&apply(cfg), &at, have, &want_entry(), super::is_rtok_bin)
-        {
-            return Ok(leave);
-        }
-    }
-    let (body, removed) = jsonc::remove_member(&raw, path, "context_servers", NAME)?;
-    jsonc::parse(&body).with_context(|| path.display().to_string())?;
-    let report = if removed {
-        format!("- context_servers.{NAME}")
-    } else {
-        rtok_agent_sdk::NO_CHANGES.into()
-    };
-    rtok_agent_sdk::write(&apply(cfg), path, &body, &report)?;
-    Ok(report)
+    jsonc::remove_entry(
+        cfg,
+        &cfg.setup.zed.config_path,
+        "context_servers",
+        NAME,
+        &want_entry(),
+    )
 }
 
 /// `tests/agent_remove.rs` strips comments before parsing what `remove` left behind.

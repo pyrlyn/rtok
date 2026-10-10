@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use super::calls_store::{CallsStore, Finished, Running, Totals, WINDOWS};
+use super::calls_store::{CallsStore, Finished, Running, Spark, Totals, WINDOWS};
 
 /// The state of the live calls panel at `now`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, JsonSchema)]
@@ -48,6 +48,7 @@ pub struct WindowView {
     pub projects_hit: u64,
     /// `None` before any call in the window has ended.
     pub latency: Option<Latency>,
+    pub spark: Spark,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
@@ -64,7 +65,7 @@ pub struct Latency {
 }
 
 impl WindowView {
-    fn of(label: &str, t: &Totals) -> Self {
+    fn of(label: &str, t: &Totals, spark: Spark) -> Self {
         let mut tools: Vec<ToolView> = t
             .tools
             .iter()
@@ -92,6 +93,7 @@ impl WindowView {
             files_touched: t.files_touched,
             projects_hit: t.projects_hit,
             latency: t.latency().map(|(p50, p95)| Latency { p50, p95 }),
+            spark,
         }
     }
 }
@@ -106,7 +108,9 @@ impl CallsView {
             windows: WINDOWS
                 .iter()
                 .enumerate()
-                .map(|(i, (label, _))| WindowView::of(label, &store.window_totals(i, now)))
+                .map(|(i, (label, _))| {
+                    WindowView::of(label, &store.window_totals(i, now), store.spark(i, now))
+                })
                 .collect(),
         }
     }
@@ -172,5 +176,10 @@ mod tests {
         assert_eq!(v["windows"][1]["label"], "5 min");
         assert_eq!(v["windows"][1]["symbols_returned"], 0);
         assert!(v["windows"][1]["latency"].is_null());
+        assert_eq!(v["windows"][1]["spark"]["span_ms"], 300_000);
+        assert_eq!(
+            v["windows"][1]["spark"]["calls"].as_array().unwrap().len(),
+            30
+        );
     }
 }

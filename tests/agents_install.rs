@@ -18,7 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// `(host, extra setup flags, the file whose backups we count)`; pi links a directory and
-/// edits no file, so it has nothing to back up. claude, cursor, opencode, kilo, pi and
+/// edits no file, so it has nothing to back up. claude, cursor, opencode, kilo, mimo, pi and
 /// zcode install their plugin by default (T139, T164); `--yes` is kept here only so
 /// `already installed` needs the link regardless of a future default change.
 fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)> {
@@ -100,9 +100,11 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
             vec!["--yes"],
             Some(home.join(".codewhale/config.toml")),
         ),
+        // T520: the plugin links by default, so `.config/mimocode/plugins/rtok.ts` is the
+        // second thing install writes beside `mimocode.json`.
         (
             "mimo",
-            vec![],
+            vec!["--yes"],
             Some(home.join(".config/mimocode/mimocode.json")),
         ),
         // Desktop links the plugin on `--yes` (no `default_install`); nothing file-backed.
@@ -537,5 +539,38 @@ fn backup_files_caps_copies_and_a_no_change_run_prunes_nothing() {
     let after = backups(&file);
     assert_eq!(after.len(), 1, "{after:?}");
     assert!(fs::read_to_string(&after[0]).unwrap().contains("# edited"));
+    let _ = fs::remove_dir_all(home);
+}
+
+/// T520: MiMo writes `mimocode.jsonc` itself, so a home that holds only that file gets the MCP
+/// entry in it, with its comments and every other byte kept, and the plugin link beside it;
+/// remove takes both back and leaves the user's text as it was.
+#[test]
+fn mimo_edits_a_lone_mimocode_jsonc_and_links_the_plugin() {
+    let home = tmp("mimo-jsonc");
+    let cfg = write_cfg(&home);
+    let dir = home.join(".config/mimocode");
+    let jsonc = dir.join("mimocode.jsonc");
+    let mine = "{\n  // mine\n  \"theme\": \"dark\", // inline\n}\n";
+    fs::write(&jsonc, mine).unwrap();
+
+    let first = rtok(&setup_args("mimo", &[]), &cfg, &home);
+    assert!(first.contains("mcp.rtok"), "{first}");
+    assert!(!dir.join("mimocode.json").exists(), "{first}");
+    let body = fs::read_to_string(&jsonc).unwrap();
+    assert!(body.starts_with(&mine[..mine.len() - 2]), "{body}");
+    assert!(body.contains("\"rtok\""), "{body}");
+    assert!(dir.join("plugins/rtok.ts").exists(), "{first}");
+    let second = rtok(&setup_args("mimo", &[]), &cfg, &home);
+    assert!(second.contains("already installed"), "{second}");
+
+    rtok(&["agents", "remove", "mimo"], &cfg, &home);
+    let left = fs::read_to_string(&jsonc).unwrap();
+    assert!(
+        left.contains("// mine") && left.contains("// inline"),
+        "{left}"
+    );
+    assert!(!left.contains("rtok"), "{left}");
+    assert!(dir.join("plugins/rtok.ts").symlink_metadata().is_err());
     let _ = fs::remove_dir_all(home);
 }

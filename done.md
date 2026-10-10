@@ -34,6 +34,28 @@ Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
 
 Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
 
+### T468. `toon::decode` is test-only
+
+Cloud review finding (2026-10-08): `decode` in `src/plugins/toon/mod.rs` is called only from the module's tests, and carried `#[allow(dead_code)]`. It, `decode_cell` and `unescape_quoted_cell` (used only by `decode_cell`) now sit under `#[cfg(test)]`; the three allows are gone, so a release build no longer compiles them. `decode` stays as the round-trip oracle the plugin's AGENTS.md requires.
+
+Callers: `decode` in the two round-trip tests of the same module; nothing in `tests/`, `benches/`, `examples/`, other crates or docs.
+
+Check: `just fmt-check`, `just lint` (clippy `-D warnings` on the lib and its test build), `cargo nextest run -p rtok -E 'test(toon) | test(plan)'`.
+
+### T469. `copy_dir` is not dead on Unix
+
+Cloud review finding (2026-10-08): `copy_dir` in `crates/rtok-agent-sdk/src/lib.rs` carried `#[allow(dead_code)]` and was said to be dead on Unix, to be gated with `cfg(not(unix))`. The claim was wrong: `copy_dir` is reached on every target through `copy_owned_with` and `copy_owned`, which `SkillPlan::Copy` calls when a skill is installed as an owned copy. Gating it would break that path on Unix. Only the stale allow was removed; clippy `-D warnings` on the crate reports no dead code without it.
+
+Check: `cargo fmt --check`, `cargo clippy -p rtok-agent-sdk --all-targets -- -D warnings`, `cargo test -p rtok-agent-sdk`.
+
+### T504. Read hook: case-insensitive path match on Windows
+
+Cloud review finding of 2026-10-08, filed as T460 in the findings table (an id the done `mem_pack` task already holds). `same_path` in `src/plugins/read/hook.rs` compared with `==` and `Path::ends_with`, so `C:\Repo\Src\Main.rs` and `c:\repo\src\main.rs` (or a relative `src\main.rs` against it) were different files on Windows and the "edited just now" window missed the write. The same copy sat in `src/measure/stats.rs`. Both now call `crate::fs::same_spelling`, built on the shared `rtok_store::same_path` plus the new `rtok_store::path_ends_with` (whole components, ASCII case folded on Windows only, empty suffix matches nothing). macOS stays case-sensitive: the shared helpers fold on Windows only, and a case-sensitive APFS volume would otherwise merge two real files.
+
+Check: `paths::tests::suffix_match_folds_ascii_case_only_when_asked` (the fold flag is a parameter, so the Windows branch runs on every platform; it fails when folding is switched off), `plugins::read::hook::tests::same_path_follows_the_platform_case_rule` (asserts the fold on Windows and none elsewhere); `just fmt-check`, `just lint`.
+
+Result: 2026-10-10. Hook and stats tests pass; no new dependency.
+
 ### T460. Budgeted `mem_pack` for memory notes
 
 The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
@@ -53,6 +75,14 @@ Check: a declared length above `rtok_hook::MAX_FRAME` is `Framing::Raw` of the h
 Result: `just check` against `6f8e4147`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 551 passed.
 Status: done 2026-10-09
 Model: Cursor / grok 4.7
+
+### T463. rtok-mcp uses the sdk's rtok-binary walk instead of `runs_rtok`
+
+Cloud review finding (2026-10-08): `crates/rtok-mcp/src/ops.rs` carried `runs_rtok`, a weaker copy of `rtok_agent_sdk::runs_bin`: it matched only `rtok`, `*/rtok` and `*\rtok.exe`, so `rtok.exe`, `RTOK.EXE` and the running binary's own path were "not rtok's". Deleted it; `not_removable` calls `rtok_agent_sdk::runs_bin`. The binary check (`is_rtok_bin`) lives in the `rtok` crate, which `rtok-mcp` cannot depend on, so `ops::apply` takes it as `is_bin: fn(&str) -> bool`, the same shape `judge_owned` and `unregister_owned` already use. `rtok-mcp` gains the path dependency `rtok-agent-sdk`.
+
+Callers: none outside `ops.rs` tests (`apply` is unused until T277 wires hosts); the tests pass a test-local `is_rtok_bin`. Their expectations did not change.
+
+Check: grep for `runs_rtok` over the repo found only `ops.rs`; `just fmt-check`, `just lint`, `cargo nextest run -p rtok-mcp -p rtok-agent-sdk` and `-p rtok -E "test(plan)"`.
 
 ### T461. Windows resident exit condition matches Unix
 
@@ -76,6 +106,16 @@ Result: see the commit; `just check` green.
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
 
+### T467. Move `src/store/` into `crates/rtok-store`
+
+Cloud review finding (2026-10-08, issue #628): `src/store/mod.rs` was 5,275 lines and belonged in `crates/rtok-store`. Already done before the review was triaged: #907 (#628) extracted the SQLite store into `rtok-store`, and #910 (#631) stopped it writing the terminal. `src/store/mod.rs` is now a 120-line re-export with the housekeeping warning hand-off to `stdio::stderr`. Nothing left to move.
+
+Check: `wc -l src/store/mod.rs` (120 at `26fe6c18`); `git log -- src/store/mod.rs`.
+
+Result: closed without code; the findings row leaves `plan.md`.
+Status: done 2026-10-10
+Model: Claude Code / opus-5.5
+
 ### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
 
 `strip_wrap` only removed `rtok run -- `, so a sub-agent rewrite (`rtok run --agent <id> -- '…'`) still had stem `rtok`. `cache_key` was `None`, and PostToolUse treated that read-only command as a mutation and cleared every `bash` and `read` guard key.
@@ -87,6 +127,12 @@ Check: `agent_wrap_matches_the_inner_command_and_keeps_other_keys` and the `--ag
 Result: `just check` against `61d491aa`: fmt, clippy `-D warnings`, `build-min`, jscpd 1.84% (under 2%), test-changed 506 passed.
 Status: done 2026-10-09
 Model: Cursor / grok 4.7
+
+### T462. Drop the uncalled `guard::check_json`
+
+Cloud review finding (2026-10-08): `guard::check_json` in `src/plugins/guard/mod.rs` has no callers; the CLI (`rtok guard check`) calls `guard::check`. Removed it; its imports were all shared with the rest of the module.
+
+Check: grep for `check_json` over `src`, `tests`, `crates`, `docs`, `benches`, `examples` found only the definition; `just fmt-check`, `just lint`, `cargo nextest run -p rtok -E 'test(guard) | test(plan)'`.
 
 ### T474. Symbol byte spans, a recoverable cut body, and id lookup
 
@@ -3070,6 +3116,16 @@ First slice of what was left of T329 §8b after T329.27; the card was too big fo
 Check: `camera.test.ts` (box and sphere maths, easing), `camera2d.test.tsx` (the 2D camera jumps with reduced motion, eases otherwise, retargets mid-flight, follows a moving layout), `lit.test.ts` (focus), `live.test.tsx` (the viewBox narrows for a running call and returns once it is old; the 2D/3D switch is remembered and 3D without WebGL falls back with a notice), stories `Pages/Live graph` (axe; 2D frames a running call; the 3D canvas draws, takes no input and holds the node, dark and light), Playwright (the 2D camera frames a call from another process and returns to the overview; the 3D canvas takes no input and holds the call; the earlier live tests ask for 2D). `just spa-typecheck`, `just spa-test` (394), `just js`, `just spa-stories` (214), `just spa-e2e` (30), `just check`.
 
 Deviations: split at claim time. Maximise buttons, the collapsed metrics strip, running labels, count-up, sparklines and the scope marks are T329.32; latency, symbols, files, projects and fallback counters are T329.33; caller names, store-wide totals and the `live_*` config keys are T329.34. The Three.js camera has no unit test of its own (it needs a GL context); its maths is tested through `sphereOf`, the held ids through `data-framed`, and the picture by the story and Playwright. A TUI counterpart is not planned yet (D27).
+
+## T329.32 — Graph page: live sparklines, outside-scope mark and folded-call counter
+
+Slice of what was left of T329 §8b after T329.28 that only draws what the page already has. The card did not fit the 500-line cap, so the rest became T329.50 (running labels with elapsed counters), T329.51 (maximise buttons), T329.52 (metrics strip under 900 px) and T329.53 (count-up); T500 is the TUI counterpart of this slice and its card names the wording.
+
+Sparklines: `CallsStore::spark(window, now)` (`src/web/calls_store.rs`) spreads the store's per-batch buckets over `SPARK_SLOTS` = 30 equal slots ending at `now` (calls and tokens saved per slot, oldest first; a bucket exactly one span old is the first slot; "since open" covers the 15 minutes the buckets keep) and `WindowView` carries it as `spark` (`calls_view.rs`, `ws.schema.json` and `snapshot.gen.ts` regenerated). The "calls" and "saved" cards of `LiveMetrics` show it with the shared `Sparkline`, named "calls over the last N min" and "tokens saved over the last N min". Outside scope: `live/scope.ts` takes the scope (the drilled project, else the selected one, plus everything its links reach, through `scopeOf`; no such project means no scope); a feed row for a project outside it carries an "outside scope" pill, and `liveState` no longer lights or frames such a call (running or finished). Folded calls: in the one-project view, when the cap left nodes out (`graph.more`), a call of the last 5 minutes whose target matches no drawn node counts on the drawn node whose path equals or is a directory prefix of the target, else on the "+N more" group; the canvas lists them as `{label} · {n} folded` under "folded calls" (2D and 3D) and the 2D node carries `+n`. Docs in en, ru and uk. Reused: `scopeOf`, `Sparkline`/`Kpi`/`Pill`, the store buckets and window totals, `liveState`. Existing stories and a camera test that lit a project outside the selected scope now use one inside it.
+
+Check: `a_sparkline_spreads_the_buckets_over_equal_slots_and_adds_up_to_the_window` (slots sum to the window's calls and saved tokens), `scope.test.ts`, `lit.test.ts` (outside scope lights nothing, folded counters), `live.test.tsx` (sparklines named for the span, the pill, the "+N more" counter on the 600-file project), stories `OutsideScope`, `Sparklines`, `FoldedCalls` (axe). `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records that the TUI pane waits for T500.
+
+Check result (2026-10-10): `just check` green, nextest `Summary [227.799s] 3301 tests run: 3301 passed (1 slow), 8 skipped`; `just spa-typecheck` clean; `just spa-test` 48 files, 427 tests passed; `just js` oxlint and oxfmt clean; `just spa-stories` 34 files, 228 tests passed; `just spa-e2e` 30 passed, 2 failed (`a 500-call burst leaves the page responsive` timed out in `rtok mcp` and `Compare against a saved export` hit the 30 s test timeout, both with load average about 20 and neither touching the code of this change).
 
 ## T480 — TUI: live graph calls panel
 
@@ -8849,6 +8905,19 @@ Result: `rtok agents install mimo` registers `mcp.rtok` (local argv shape, ident
 Status: done 2026-09-24
 Model: Claude Code / claude-sonnet-5 (code), claude-opus-5-5 (review)
 
+### T520. MiMo Code: link the rtok plugin and honour `mimocode.jsonc`
+
+Creator request 2026-10-10. The `mimo` host (T186) was MCP-only because `@mimo-ai/plugin` was undocumented. It is published now (0.1.15, same `tool.execute.before` / `tool.execute.after` / `shell.env` hooks as OpenCode) and MiMo loads every `{plugin,plugins}/*.{ts,js}` from its config directories, so the host links `plugins/opencode/rtok.ts` to `<mimocode config dir>/plugins/rtok.ts` through `HostPlugin`, the way Kilo does (D21: the MCP entry and the plugin are two capabilities, no second path to one). A fresh MiMo creates `mimocode.jsonc`, not `mimocode.json`, so a home that holds only the `.jsonc` gets `mcp.rtok` written into it through `agents/jsonc.rs` (comments and every other byte kept).
+
+Check: install links the plugin into a temp MiMo config dir and remove unlinks it; a `.jsonc`-only home gets `mcp.rtok` with its comments intact; `.json` is kept when both exist; a dry run changes nothing; `just check`.
+
+Result: `mimo` declares `PLUGIN` (`HostPlugin`, `default_install: true`, dest from `opencode::plugin_dest_beside`, shared with Kilo), `plugin` is `Support::Yes`, `plugin_surfaces` is `[Cli]`, `hooks` stays `No` (reason as Kilo's), `markers` include the link, and `plugin_install.rs` probes it. `mimo::config_path` picks `mimocode.jsonc` when `mimocode.json` is absent and the `.jsonc` exists (MiMo merges `config.json`, `mimocode.json`, `mimocode.jsonc` in that order and writes a starter `.jsonc` itself, research.md §15.4); both present keeps `mimocode.json`; another file name is used as it is. The `.jsonc` edit goes through new `jsonc::upsert_entry` / `jsonc::remove_entry`, lifted out of Zed's `register_mcp` / `unregister_mcp` (Zed now calls them; its output is unchanged). `rtok doctor`'s MCP status and `mcp ping` read the resolved file. `docs/agents.md` (and the ru/uk copies) blessed, README and research.md §15.4 updated with the primary sources and 2026-10-10 check date. MiMo Desktop stays open as T521. `tests/singleton.rs` (D21) counts `mimo` with `opencode` and `kilo`: the linked plugin ships no MCP server, so the MCP entry and the plugin are not two paths to one tool. `tests/trycmd/report-md.toml` regenerated (hooks and plugin lines of `mimo`).
+
+Check run: `just check` (full gate, `.config/nextest.toml` is a shared input) green: fmt, clippy `-D warnings`, jscpd 1.82 % of lines (budget 2 %), oxlint, pytest 32 passed, nextest 3308 passed, 8 skipped (704 s).
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T245. One tool call is processed once
 
 Runtime half of the same request: a host may fire two events for one call (Cursor: `afterMCPExecution` and `postToolUse`; Claude Code with both the plugin and settings-file hooks), and each processing adds a `Measurement` row and an archive entry, so savings double-count (D3).
@@ -9211,6 +9280,16 @@ Done: on the Graph page `e` opens a form (format json, svg or png; level overvie
 Result: `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd, cargo nextest 3279 passed and 8 skipped, min-feature build); the new `tui::exporter` tests (7) cover the bytes against the command's for json, svg and png, redaction default and switch, the typed keys, a failed write, the read-only view (file bytes and directory listing unchanged) and the background run. jscpd lists the shared panel plumbing with `src/tui/compare.rs` as clones without failing the gate; T329.48 extracts it.
 
 Deviations: the form has no `--focus`, `--scale` or `--transparent` (the command's defaults apply); a focused subgraph needs a symbol and belongs to the page's Export menu (T329.40). The page's half of the parity check lands with T329.40. A PNG test compares the signature and size with the command's PNG, not every byte: the picture's footer carries the export time to the second and a PNG render takes longer than a second under load; JSON and SVG are compared byte for byte.
+
+### T329.48. TUI: one panel shell for compare and export
+
+`src/tui/compare.rs` (T485) and `src/tui/exporter.rs` (T329.41) repeat the same panel plumbing: the stage enum with a background `Running(mpsc::Receiver)`, `poll`, the thread spawn, scroll keys, the pass-through of the shell's `Left`/`Right`/`q`/digit keys and the two-row layout with the hints line (jscpd lists them as clones). Extract one shared module under `src/tui/` and make both views use it; the keys, texts and behaviour stay as they are.
+
+Check: both views' tests pass unchanged; jscpd lists no clone between the two files; `just check`.
+
+Done: new `src/tui/panel.rs` holds the generic `Panel<V: View>` (stage, scroll, `key`, `poll`, `render`, `is_open`, `typing`), `Stage<A>` with `Stage::run` (the thread and the in-line run for tests), the `View` trait (the opening keys, the field keys, the prompt and running text) and the shared `edit`, `error_lines` and `no_graph`. `compare.rs` is `Compare = Panel<Typed>` and `exporter.rs` is `Exporter = Panel<Export>`; each keeps only its fields, its texts and its `body`. The test helper `render` moved to `tui::app::tests`; the views' tests and their assertions are unchanged.
+
+Result: jscpd lists no clone between `src/tui/compare.rs` and `src/tui/exporter.rs` (the one remaining compare clone is with `plugins/graph/diff.rs`, older); `cargo test -p rtok --lib tui::` 76 passed; `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd 334 clones, 1.74%, none between the two views; cargo nextest 3299 passed and 8 skipped; min-feature build).
 
 ### T329.19. Graph health score per project
 
@@ -10578,6 +10657,14 @@ Check: install/remove e2e per host that changes only our entry.
 Result (2026-10-10, Claude Code / sonnet-5.5): `rtok agents install|uninstall <host> --project` (`src/agents/post_create.rs`; hosts `cursor`, `kilo`, `windsurf`, `devin`, any other is refused) edits the git root's project files. Cursor gets one command in each array-valued `setup-worktree*` list (a script-path value is reported, not edited, and a missing file gets `setup-worktree`). Devin and Windsurf get one `post_setup_worktree` entry in the file the host reads today (`.devin/hooks.json`, or a legacy `.windsurf/hooks.json` that still defines hooks, so a new file never switches legacy hooks off). Kilo gets a marked block right after the shebang of `.kilo/setup-script` (or the `.sh` it would otherwise shadow), run in a subshell. JSON goes through the new `jsonc::push_item`/`pull_items` (byte-span edits), so install then uninstall restores the file byte-for-byte and a file we created goes away; no `_backup` folders because these files are committed. File shapes and sources are in `research.md` §26. `adopt` with no agent (the post-create script has none) now binds the one live agent of the pool's host whose cwd is the repository (`claim::bind_unattended`; the directory comparison is the new `fs::same_dir`, which `agents::link::resolve` now uses too), and fails naming the problem when there is none or several. Reused: `agents::command`, `rtok_agent_sdk::{Apply, write}`, `jsonc` helpers, `hook_resolver`, `claim::bind`, the T283.1 cwd rule. Tests: `tests/agents_post_create.rs` (8), `jsonc` unit tests (3), `tests/worktree.rs` adopt binding with seeded agent rows. Check: `just check` green, 3268 tests passed, 8 skipped (nextest); trycmd and completion snapshots, `config_coverage` (`setup.project` allow-listed) and `module_graph` updated or satisfied.
 
 Deviations: the creator's "none or several: a claim with no agent completed later" half is split into T289.5 (store table, migration, hook step; it would have put T289.3 over the 500-line limit). T289.5 is the next free id under T289.
+
+### T289.5. Pending claim for `rtok worktree adopt` from a post-create script when no single agent matches
+
+Split from T289.3 (500-line limit). Done means: when `adopt` runs with no agent (a host's post-create script) and no live agent of the pool's host, or several, has the repository as cwd, it stores a claim with no agent and no git lock, and the next `worktree_adopt` (MCP or CLI) or `SessionStart` hook for a session whose cwd is inside that worktree completes it (creator decision 2026-10-10). Today `adopt` fails with a message that names the missing or ambiguous agents.
+
+Check: adopt with zero and with two seeded agents stores the claim; `worktree_adopt` and the hook complete it; a gc run does not treat a pending claim as an orphan.
+
+Result (2026-10-10, Claude Code / sonnet-5.5): `claim::bind_unattended` now parks the claim when zero or several live agents of the pool's host work in the repository: a row in the new `worktree_pending` table (migration 0045; `Store::add_pending_worktree`, `pending_worktrees`, `take_pending_worktree`), no agent, no git lock, the project auto-added, `Adopted.pending` (`"pending": true` in `--json`, a stderr note on the CLI). A separate table instead of a nullable `worktree_claims.agent_id`: that column is NOT NULL (relaxing it needs a SQLite table rebuild) and four readers assume every open claim names an agent. `claim::remember` (so `adopt` by CLI or MCP `worktree_adopt`, and `worktree add`) takes the pending row of the worktree it binds; `claim::complete_pending` is the `SessionStart` hook step: the deepest pending worktree around the session's cwd goes to that session's agent with the stored task, with no git call and every error ignored. `worktree remove` drops the parked row; `gc::Policy.pending` holds a parked worktree like a live agent's (a finished task still goes once idle). Docs updated in en, ru and uk; the `adopt` help text is unchanged. Tests: store (2), `gc::decide` (3 cases), `tests/worktree_pending.rs` (zero and two seeded agents park, one binds, the hook and an explicit `adopt` complete, `gc` keeps), `tests/worktree.rs` adjusted. Gates (focused, the disk was too tight for `just check`): `just fmt-check` and `just lint` clean; nextest on the touched binaries (`worktree` 375, `worktree_pending`, `agents_worktrees`, `agents_post_create`, `surface_parity`, `docs_structure`, `hook_fail_open`, `hooks::` and `worktree::gc`) all passed; `rtok-store` lib 173 passed.
 
 ### T290. Docs, skill and one cross-host test for agents and worktrees
 

@@ -39,6 +39,9 @@ pub struct Policy<'a> {
     pub now: SystemTime,
     /// Live rtok agents (T282): a worktree bound to one is never removed (T285).
     pub live: std::collections::HashSet<String>,
+    /// Worktrees a post-create script adopted before any agent took them (T289.5): no agent
+    /// to ask yet, so they are held like a live agent's.
+    pub pending: Vec<PathBuf>,
 }
 
 impl Policy<'_> {
@@ -70,6 +73,11 @@ pub fn decide(
         let short: String = agent.chars().take(8).collect();
         format!("agent {short} is live")
     });
+    let pending = || {
+        let dir = crate::fs::canon(&record.path);
+        p.pending.iter().any(|d| crate::fs::same_path(&dir, d))
+    };
+    let live = live.or_else(|| pending().then(|| "pending claim, no agent has taken it".into()));
     let held = record.held_against(p.owner);
     let owner = || {
         let owner = record.owner().map(|o| o.owner);
@@ -321,6 +329,7 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
+            pending: Vec::new(),
         };
         let asked = std::cell::Cell::new(None);
         let walk = |within| {
@@ -358,6 +367,7 @@ mod tests {
             stale_lock: Duration::ZERO,
             now: at(1_000),
             live: Default::default(),
+            pending: Vec::new(),
         };
         let verdict = decide(&entry, |_| None, false, &policy);
         assert_eq!(verdict, Verdict::Keep(format!("locked by {ME}")));
@@ -398,8 +408,45 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
+            pending: Vec::new(),
         };
         let got = label(decide(&entry, |_| modified.map(at), false, &policy));
         assert_eq!(got, want);
+    }
+
+    /// T289.5: a worktree a post-create script parked for the next agent is not an orphan: it is
+    /// kept, and goes only once its finished task has been idle.
+    #[rstest]
+    #[case::unfinished(false, Some(0), "keep:pending claim, no agent has taken it")]
+    #[case::finished_busy(true, Some(990), "keep:pending claim, no agent has taken it")]
+    #[case::finished_idle(true, Some(0), "finished:pending claim, no agent has taken it")]
+    fn a_pending_claim_is_not_an_orphan(
+        #[case] done: bool,
+        #[case] modified: Option<u64>,
+        #[case] want: &str,
+    ) {
+        let record = Record {
+            path: "/w/parked".into(),
+            branch: Some("t1".into()),
+            ..Record::default()
+        };
+        let entry = Entry {
+            record,
+            state: State::Merged,
+            merged: true,
+            done,
+        };
+        let policy = Policy {
+            owner: Some(ME),
+            idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
+            now: at(1_000),
+            live: Default::default(),
+            pending: vec!["/w/parked".into()],
+        };
+        assert_eq!(
+            label(decide(&entry, |_| modified.map(at), false, &policy)),
+            want
+        );
     }
 }

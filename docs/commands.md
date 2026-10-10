@@ -110,6 +110,13 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   after two minutes as interrupted. `[plugins.graph]` `live_heat_window_s` (300), `live_max_events_per_s` (50;
   call events a second the panel lists, the counters still count every call) and `live_feed_rows` (200)
   are read when the live part starts.
+  The "calls" card and the "saved" card each carry a sparkline of the server's 30 slots over the
+  chosen window (the last 15 minutes for "since start"), from the same buckets the totals add up,
+  named "calls over the last 5 min" and "tokens saved over the last 5 min". When the page has a
+  scope (the drilled project, else the selected one, with everything its links reach), a feed row
+  for a project outside it carries an "outside scope" mark and does not light the canvas. In the
+  one-project view, when the 500-node cap folded nodes away, a call on one of them counts under
+  "folded calls" on the drawn file whose path holds its target, else on the "+N more" group.
 - **Alerts.** When the health check (see [LSP backend](lsp.md#health-check-and-alerts)) raises an alert for a
   project, its node carries a red badge in both levels (a red marker in 3D, and the word `alert` in
   the list and the tooltip), and so does every link into it and every outlined symbol of that
