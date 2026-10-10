@@ -123,8 +123,38 @@ page) show it under `backend`: `backend` (`lsp` or `tags`), `language`, `server`
 seconds; the earliest a health check retries a failed record). Changing `backend` or
 `backend_by_language` re-checks only the projects whose value changed. A new process uses a record
 another process wrote until `next_probe_at`, then checks for itself, so restarting rtok after installing
-the server picks it up. Nothing re-checks a running process yet; that is the background health check
-(T329.17).
+the server picks it up. Requests never re-check; the health check below does.
+
+## Health check and alerts
+
+Every process that hosts graph (`rtok mcp`, `rtok web`) runs a light check every
+`[plugins.graph] health_check_interval_s` (60 s; `0` turns it off) over the projects of its scope. It is
+the only code that looks again. Each round it checks that the project root exists, that the manifest
+references of the project point at directories that exist, and the capability record. A server installed
+since the record was made is picked up in that round. A server that broke is tried again after 60 s, then
+120 s, doubling up to 15 minutes; the retry is the same check as the first one (the binary is on `PATH`),
+so the next request is the trial, and a server that fails it is dropped again and the wait keeps growing.
+Only the record the process holds is retried, so an `rtok web` page never overrides an `rtok mcp` session.
+
+A problem raises an alert once two checks in a row have seen it, and an alert clears after two good
+checks, so a brief unmount does not flap (`[plugins.graph] alerts = false` turns alerts off):
+
+| Alert | Raised when |
+| --- | --- |
+| `missing` | the root was deleted or moved (its parent still exists) |
+| `unreachable` | the root or its parent is gone (an unmounted disk), errors, or does not answer a `stat` in 2 s |
+| `backend down` | the language server worked, then broke, and the project answers from tags |
+| `link broken` | a manifest reference (Cargo path, npm `file:`, go `replace`, Python path) names a directory that does not exist |
+
+Alerts of the same kind raised together read as one line ("b, c missing since 14:02 (2 projects)"), and a
+project linked only through others names the chain ("a to b to c: c missing"). A server that is simply not
+installed is not an alert. A project removed from the registry never alerts. When a missing or
+unreachable project returns and the alert clears, it is indexed again.
+
+Alerts are mirrored into the store, so they show in `rtok doctor` (a `graph alerts` section and
+`graph_alerts` in `--json`), in `rtok graph projects --json` (`alerts` per project) and as a `notice:`
+line at the head of a graph tool answer whose scope contains the project ("notice: b missing since 14:02
+(directory does not exist); results exclude b").
 
 ## Without the server
 

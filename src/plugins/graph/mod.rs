@@ -34,6 +34,7 @@ pub mod capability;
 pub mod cochange;
 pub mod drill;
 pub mod follow;
+pub mod health;
 pub mod index;
 pub mod lsp;
 pub mod projects;

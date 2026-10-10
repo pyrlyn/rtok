@@ -78,6 +78,11 @@ pub struct Report {
     /// Hooks that lead nowhere or cannot be checked (T331.1); the list later detectors extend.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problems: Vec<hooks::Problem>,
+    /// What the graph health check raised for linked projects: missing, unreachable, backend
+    /// down, link broken (T329.17). Read from the store the checking processes write.
+    #[cfg(feature = "graph")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graph_alerts: Vec<crate::plugins::graph::health::Alert>,
 }
 
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -233,6 +238,13 @@ impl Report {
             )),
             None => out.push_str("read-share no data\n"),
         };
+        #[cfg(feature = "graph")]
+        if !self.graph_alerts.is_empty() {
+            out.push_str("graph alerts\n");
+            for line in crate::plugins::graph::health::texts(&self.graph_alerts) {
+                out.push_str(&format!("  {line}\n"));
+            }
+        }
         out.push_str("agents\n");
         for a in &self.agents {
             out.push_str(&format!("  {} ({})\n", a.host, a.kind));
@@ -581,7 +593,20 @@ pub fn page(cfg: &Config) -> Result<Report> {
             })
             .collect(),
         problems: checks(cfg),
+        #[cfg(feature = "graph")]
+        graph_alerts: graph_alerts(cfg),
     })
+}
+
+/// Fails open: a store that cannot be read shows no alerts.
+#[cfg(feature = "graph")]
+fn graph_alerts(cfg: &Config) -> Vec<crate::plugins::graph::health::Alert> {
+    if !cfg.plugins.graph.alerts {
+        return Vec::new();
+    }
+    crate::plugin::Runtime::open(cfg.clone(), "doctor")
+        .map(|rt| crate::plugins::graph::health::all(&rt))
+        .unwrap_or_default()
 }
 
 /// Notes for keys the user file sets away from the current default. Empty when this
@@ -1623,6 +1648,8 @@ pub(crate) fn report_fixture() -> Report {
         agents: Vec::new(),
         problems: Vec::new(),
         config_notes: Vec::new(),
+        #[cfg(feature = "graph")]
+        graph_alerts: Vec::new(),
     }
 }
 

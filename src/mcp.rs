@@ -86,6 +86,12 @@ pub fn run(cfg: &Config) -> Result<()> {
         if let Some(root) = &watch_root {
             s.spawn(|| crate::plugins::graph::watch::run_scope(&server.cx, root, &stop));
         }
+        // T329.17: the health check of the project's scope; the only code that re-probes.
+        #[cfg(feature = "graph")]
+        if let Ok(root) = std::env::current_dir() {
+            let (cx, stop) = (&server.cx, &stop);
+            s.spawn(move || crate::plugins::graph::health::run(cx, Some(&root), stop));
+        }
         // T329.8: register, link and index what the project's manifests reference, off the
         // request path so `initialize` and the first tool call are not delayed. Detached with its
         // own connection: EOF must not wait for up to `max_auto_projects` indexes, and a cut-off
@@ -757,7 +763,14 @@ fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
             let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
             let scope =
                 crate::plugins::graph::scope::resolve(&cx.store, args["project"].as_str(), &cwd)?;
-            crate::plugins::graph::call(&crate::plugin::Ctx::new(cx), name, args, &scope)
+            let answer =
+                crate::plugins::graph::call(&crate::plugin::Ctx::new(cx), name, args, &scope)?;
+            // T329.17: a project of the scope that is down is said in the answer being read.
+            let notice = crate::plugins::graph::health::notice(cx, args["project"].as_str(), &cwd);
+            Ok(match notice {
+                Some(n) => n + &answer,
+                None => answer,
+            })
         }
         _ => Err(unknown_tool(name)),
     }

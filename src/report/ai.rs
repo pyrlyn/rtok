@@ -425,6 +425,8 @@ mod tests {
                 agents: vec![],
                 problems: vec![],
                 config_notes: vec![],
+                #[cfg(feature = "graph")]
+                graph_alerts: vec![],
             },
             recommendations: vec![
                 crate::report::Recommendation {

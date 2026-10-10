@@ -118,6 +118,36 @@
         "modules"
       ]
     },
+    "Alert": {
+      "description": "One raised alert, as stored and as `rtok graph projects --json` and `rtok doctor --json`\nprint it.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/Kind"
+        },
+        "project": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "since": {
+          "description": "Unix seconds of the check that raised it.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "kind",
+        "project",
+        "root",
+        "since",
+        "detail"
+      ]
+    },
     "CallRow": {
       "description": "One `calls` row as the Calls page serves it ([`Store::recent_calls`], T15.5): the\nledger's own columns plus the slugs its ids point at and — when the call is one\nthat recorded usage — the newest `usage` row linked to it. One query's output, so\nno renderer can re-derive a field differently (D27); `api` `None` means no usage\nrow is linked (a hook, MCP call or plugin run carries none).",
       "type": "object",
@@ -264,6 +294,10 @@
         "config": {
           "description": "The `backend` value the record was made under; another value makes it stale.",
           "type": "string"
+        },
+        "down": {
+          "description": "The server was installed and working, then broke. Unlike a server that was never there,\nthis is what the health check raises \"backend down\" for.",
+          "type": "boolean"
         },
         "language": {
           "description": "The project's language when it has a marker file.",
@@ -802,6 +836,15 @@
         "can_keep"
       ]
     },
+    "Kind": {
+      "type": "string",
+      "enum": [
+        "missing",
+        "unreachable",
+        "backend_down",
+        "link_broken"
+      ]
+    },
     "LinkKind": {
       "type": "string",
       "enum": [
@@ -1302,6 +1345,13 @@
       "description": "One registry row as `graph projects` prints it and the `/ws` snapshot carries it.",
       "type": "object",
       "properties": {
+        "alerts": {
+          "description": "What the health check raised for this project (T329.17); absent while nothing is wrong.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Alert"
+          }
+        },
         "backend": {
           "description": "Which graph mode works here, as the last process to answer for it recorded (T329.11);\nabsent until a request under `lsp` or `auto` has checked.",
           "anyOf": [
@@ -1443,6 +1493,13 @@
             "string",
             "null"
           ]
+        },
+        "graph_alerts": {
+          "description": "What the graph health check raised for linked projects: missing, unreachable, backend\ndown, link broken (T329.17). Read from the store the checking processes write.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Alert"
+          }
         },
         "hooks_by_event": {
           "type": "object",

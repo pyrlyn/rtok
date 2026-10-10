@@ -168,12 +168,31 @@ pub async fn serve(cfg: Config) -> Result<()> {
         eprintln!("{msg}");
         crate::log::append(&cfg, "warn", "web", "spa", &msg);
     }
-    axum::serve(
+    #[cfg(feature = "graph")]
+    let health = health_check(&cfg);
+    let served = axum::serve(
         listener,
         app_with_assets(Arc::new(DashState::new(cfg)), assets),
     )
     .await
-    .context("dashboard server")
+    .context("dashboard server");
+    #[cfg(feature = "graph")]
+    health.store(true, std::sync::atomic::Ordering::Relaxed);
+    served
+}
+
+/// T329.17: `rtok web` hosts graph, so it runs the health check too, over every registered
+/// project. Its own thread and store handle: the check must never wait on a page request.
+#[cfg(feature = "graph")]
+fn health_check(cfg: &Config) -> Arc<std::sync::atomic::AtomicBool> {
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (cfg, flag) = (cfg.clone(), Arc::clone(&stop));
+    std::thread::spawn(move || {
+        if let Ok(rt) = crate::plugin::Runtime::open(cfg, "web-health") {
+            crate::plugins::graph::health::run(&rt, None, &flag);
+        }
+    });
+    stop
 }
 
 /// The router with the SPA embedded in this binary; tests and callers that must not read the

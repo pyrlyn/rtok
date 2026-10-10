@@ -47,7 +47,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.10 | todo | P3 | 3 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
-| T329.17 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
@@ -839,14 +838,6 @@ Check: an MCP `callers` call from another process lights the node within one sec
 T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14.
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
-
-### T329.17. Graph alerts: linked project down or unreachable
-
-T329 §8d, backend half (the page badges and toasts are T329.25; the optional T288 push is skipped): alert states, the two-check rule, the 60 s background check, `rtok doctor` and `rtok graph projects --json`, notices in MCP answers. Adds `alerts` and `health_check_interval_s`. Owns the tiered re-probe loop (cheap checks every interval; server restart only on change or on a capped backoff from 60 s) in every process that hosts graph (`rtok mcp`, `rtok web`), and the clearing of backend-down and unreachable alerts after two good checks (T337 decided). Depends on T329.11, T329.12.
-
-Execution plan: new `src/plugins/graph/health.rs` (alert kinds missing, unreachable, backend down, link broken; a tracker that raises after two bad checks and clears after two good ones; a tick that takes the clock and the probe as arguments; a loop around it with the interval; alerts mirrored per project in `plugin_state`; the grouped text; the MCP notice). Wire the loop into `src/mcp.rs` and `src/web/mod.rs`, the notice into the MCP graph tools, `alert` into `ProjectRow`, a `graph_alerts` list into the doctor `Report`, the two keys into `rtok-config` (default.toml, lib.rs, trycmd goldens) and the docs (en, ru, uk); regenerate `ws.schema.json` and `snapshot.gen.ts`. Verify with fake clock and fake probe tests, `just check`.
-
-Check: renaming B's directory raises "B missing" after two checks in `rtok doctor`, in `--json` and in an MCP `callers` notice; restoring clears it; backend-down clears on recovery without a restart; a broken manifest path raises "link broken"; several at once group into one alert; `just check`.
 
 ### T329.18. Graph diff: compare before and after a change
 
