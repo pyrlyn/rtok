@@ -40,7 +40,7 @@ pub(super) enum WorktreeCmd {
     /// Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
     /// pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With
     /// no agent (a post-create script) the one live agent of that host in the repository takes
-    /// it
+    /// it; with none or several the claim waits for the next agent that adopts or starts there
     Adopt {
         /// The worktree, or a directory inside it; defaults to the current directory
         path: Option<PathBuf>,

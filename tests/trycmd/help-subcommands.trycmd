@@ -1194,7 +1194,8 @@ Commands:
           yours
   adopt   Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a
           pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With
-          no agent (a post-create script) the one live agent of that host in the repository takes it
+          no agent (a post-create script) the one live agent of that host in the repository takes
+          it; with none or several the claim waits for the next agent that adopts or starts there
   remove  Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
           merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless
           the task is finished (merged, clean, with commits of its own)
@@ -1296,7 +1297,8 @@ Options:
 $ rtok worktree adopt --help
 Bind the worktree you are in (made by a host's own tool) to your agent. A worktree in a pool its
 host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a
-post-create script) the one live agent of that host in the repository takes it
+post-create script) the one live agent of that host in the repository takes it; with none or several
+the claim waits for the next agent that adopts or starts there
 
 Usage: rtok worktree adopt [OPTIONS] [PATH]
 
