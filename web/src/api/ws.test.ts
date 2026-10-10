@@ -99,6 +99,15 @@ describe("parseFrame", () => {
     expect(parseFrame('{"type":"calls","batch":{"events":[]}}')).toBeNull();
   });
 
+  test("a diff frame carries the project it answers and its project reports", () => {
+    const diff = { from: "HEAD", to: "working", projects: [], links_added: [], links_removed: [] };
+    const frame = { type: "diff", project: "3", diff };
+    expect(parseFrame(JSON.stringify(frame))).toEqual(frame);
+    expect(parseFrame('{"type":"diff","project":3,"diff":{"projects":[]}}')).toBeNull();
+    expect(parseFrame('{"type":"diff","project":"3","diff":{}}')).toBeNull();
+    expect(parseFrame('{"type":"diff","project":"3","diff":null}')).toBeNull();
+  });
+
   test("a graph frame needs its project and both lists", () => {
     const graph = { project: 3, name: "rtok", root: "/r", state: "ok", nodes: [], edges: [] };
     expect(parseFrame(JSON.stringify({ type: "graph", graph }))).toEqual({ type: "graph", graph });

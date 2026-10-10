@@ -3064,6 +3064,14 @@ Result: `just check` passed (fmt, clippy `-D warnings`, jscpd, `cargo nextest ru
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.42 — Graph diff over `/ws`: the typed report and the export as text (split from T329.35)
+
+The server half of T329.35, split at review because the whole change was over the 500-line cap; the Compare panel stays T329.35. `rtok graph diff --json` now prints a typed `DiffReport` built by `diff::report`, and `run` renders its text from the same `gather`. `/ws` gets `ClientMessage::Diff { diff: DiffRequest }`, answered by `ServerFrame::Diff { project, diff: DiffReport }` from the new `diff::page`, which resolves the scope with the registry and calls `diff::report`; each list is cut at 500 rows with a `more` count. `ws.schema.json` and `snapshot.gen.ts` are regenerated; `web/src/api/ws.ts` parses the `diff` frame, and the sample server (`sampleDiff.ts`) answers it for stories and tests.
+
+Trust boundary: `--from-export` stays CLI-only, because the websocket is reachable by anything on localhost and a model must not choose a path rtok reads. A page sends the export's text in `DiffRequest.export { name, text }`, and the server parses it with the new `export::parse`, which `export::read` now delegates to, so the size, JSON, schema-id and shape checks are the same. A request that names a path as the export text is rejected as "is not a graph export". A ref goes through the existing `resolve_rev`, which refuses empty and `-`-prefixed refs.
+
+Check: Rust tests in `src/plugins/graph/diff.rs` assert the page report equals `--json` for the same query, the row cap, and the path-as-text refusal; `ws.test.ts` parses the frame; `committed_schema_is_current`; `just check` and the web gates.
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:

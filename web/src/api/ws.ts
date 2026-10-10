@@ -8,6 +8,7 @@ import type {
   CallBatch,
   Cleared,
   ClientMessage,
+  DiffReport,
   DrillGraph,
   Fixed,
   Plan,
@@ -108,6 +109,12 @@ export function parseFrame(raw: unknown): Frame | null {
       const g = v.graph as Record<string, unknown> | null;
       return g && Array.isArray(g.nodes) && Array.isArray(g.edges) && typeof g.project === "number"
         ? { type: "graph", graph: g as unknown as DrillGraph }
+        : null;
+    }
+    case "diff": {
+      const d = v.diff as Record<string, unknown> | null;
+      return d && Array.isArray(d.projects) && typeof v.project === "string"
+        ? { type: "diff", project: v.project, diff: d as unknown as DiffReport }
         : null;
     }
     case "snapshot":
