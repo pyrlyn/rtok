@@ -146,22 +146,7 @@ fn edits_path(v: &serde_json::Value, path: &str) -> bool {
         .and_then(|i| i.get("file_path").or_else(|| i.get("path")))
         .and_then(|p| p.as_str())
         .unwrap_or("");
-    same_path(edited, path)
-}
-
-/// Exact match, or relative-vs-absolute (`src/main.rs` vs `/repo/src/main.rs`).
-/// Component-aware: `/repo/main.rs` must not match `ain.rs`.
-fn same_path(a: &str, b: &str) -> bool {
-    let (a, b) = (a.trim(), b.trim());
-    if a.is_empty() || b.is_empty() {
-        return false;
-    }
-    if a == b {
-        return true;
-    }
-    let a_path = std::path::Path::new(a);
-    let b_path = std::path::Path::new(b);
-    a_path.ends_with(b_path) || b_path.ends_with(a_path)
+    crate::fs::same_spelling(edited, path)
 }
 
 #[cfg(test)]
@@ -469,9 +454,30 @@ mod tests {
 
     #[test]
     fn same_path_rejects_suffix_false_positive() {
+        use crate::fs::same_spelling as same_path;
         assert!(!same_path("/repo/main.rs", "ain.rs"));
         assert!(same_path("/repo/src/main.rs", "src/main.rs"));
         assert!(same_path("src/main.rs", "/repo/src/main.rs"));
+        assert!(!same_path("", "src/main.rs"));
+    }
+
+    /// T504: a Windows tool call can spell the drive and folders in another case than the
+    /// path the hook was asked about; on case-sensitive hosts they stay different files.
+    #[test]
+    fn same_path_follows_the_platform_case_rule() {
+        let folds = cfg!(windows);
+        assert_eq!(
+            crate::fs::same_spelling(r"C:\Repo\Src\Main.rs", r"c:\repo\src\main.rs"),
+            folds
+        );
+        assert_eq!(
+            crate::fs::same_spelling("/Repo/Src/Main.rs", "/repo/src/main.rs"),
+            folds
+        );
+        assert_eq!(
+            crate::fs::same_spelling("/Repo/Src/Main.rs", "src/MAIN.rs"),
+            folds
+        );
     }
 
     /// A hook body the store could not keep (above `core.call_io_inline_bytes`, no archive
