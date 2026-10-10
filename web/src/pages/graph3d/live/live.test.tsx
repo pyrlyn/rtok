@@ -58,6 +58,41 @@ describe("live graph", () => {
         expect(screen.getByText("75%")).toBeTruthy();
     });
 
+    test("the metrics show latency, symbols, projects, fallbacks and caps counted from the events", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        const row = (kind: string, ref_id: string | null) => ({
+            id: 1,
+            kind,
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id,
+        });
+        act(() =>
+            w.frame({
+                type: "calls",
+                batch: batch([
+                    end("a", 0, 0, {
+                        ms: 40,
+                        symbols: 2,
+                        total: 2,
+                        samples: [row("lsp_fallback", null)],
+                    }),
+                    end("b", 0, 0, { ms: 1500, symbols: 1, total: 1, samples: [row("cap", "ab")] }),
+                ]),
+            }),
+        );
+        const card = async (label: string) =>
+            (await screen.findByText(label)).parentElement?.textContent;
+        await waitFor(async () => expect(await card("latency p50")).toContain("40 ms"));
+        expect(await card("latency p50")).toContain("p95 1.5 s");
+        expect(await card("symbols asked")).toContain("31 across projects");
+        expect(await card("fallbacks")).toContain("11 capped");
+    });
+
     test("a failed call is red in the feed", async () => {
         const w = wire(snap);
         mount(w.connect, "/graph");

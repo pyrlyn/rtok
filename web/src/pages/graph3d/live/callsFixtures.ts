@@ -17,6 +17,7 @@ export const event = (over: Partial<GraphEvent> = {}): GraphEvent => ({
   project: "rtok",
   samples: [],
   session: "session-abcdef",
+  symbols: null,
   target: "open_index",
   tool: "callers",
   total: null,
@@ -39,6 +40,7 @@ export const end = (call: string, before: number, after: number, over: Partial<G
         after_bytes: 0,
         est_before: before,
         est_after: after,
+        ref_id: null,
       },
     ],
     ...over,
@@ -47,6 +49,7 @@ export const end = (call: string, before: number, after: number, over: Partial<G
 /** A batch whose summary counts exactly the events it lists, plus `omitted` ends of 10 to 4 tokens. */
 export function batch(events: GraphEvent[], omitted = 0): CallBatch {
   const ends = events.filter((e) => e.phase === "end");
+  const samples = ends.flatMap((e) => e.samples);
   return {
     events,
     head: events.length,
@@ -60,6 +63,10 @@ export function batch(events: GraphEvent[], omitted = 0): CallBatch {
         omitted * 10,
       est_after:
         ends.reduce((n, e) => n + e.samples.reduce((m, s) => m + s.est_after, 0), 0) + omitted * 4,
+      fallbacks: samples.filter((s) => s.kind === "lsp_fallback").length,
+      caps: samples.filter((s) => s.ref_id).length,
+      symbols: ends.reduce((n, e) => n + (e.symbols ?? 0), 0),
+      crossed: ends.filter((e) => (e.total ?? 0) > 1).length,
     },
   };
 }

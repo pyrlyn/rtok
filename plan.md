@@ -46,7 +46,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
-| T329.33 | todo | P3 | 4 | 0% | |
+| T329.36 | todo | P3 | 4 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
@@ -96,6 +96,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T481 | todo | P3 | 2 | 0% | |
 | T480 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
+| T486 | todo | P3 | 2 | 0% | |
 
 
 
@@ -823,11 +824,11 @@ What is left of T329 §8b after T329.28 that only draws what the page already ha
 
 Check: maximising either part fills the page and restores; under 900 px the metrics collapse to a strip that expands; a running call shows its label and elapsed counter; the numbers count up (and jump with `prefers-reduced-motion`); the sparklines match the store buckets; a call outside the scope is marked; folded targets count on their nearest visible ancestor; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.33. Graph page: call metrics from the events (latency, symbols, files, projects, fallbacks)
+### T329.36. Graph page: counts taken from the answer (symbols returned, files touched, projects with hits)
 
-What is left of T329 §8b after T329.28 that needs data the events do not carry yet: latency p50 and p95, symbols requested and returned (they have to be added to the T329.15 events first), files touched, projects crossed, and the fallbacks and cap counters. The numbers must match the `graph_events` rows and the `Measurement` rows (`rtok stats`).
+What is left of T329.33. The events now carry what a call asked for (symbols, projects in scope), its latency, and the fallback and cap rows, but not what it returned: symbols returned, files touched and the projects whose index held a hit. They must come from the graph backends (LSP, tags, text) as counts they already know while building the answer, not from parsing the answer text, which mixes code bodies with result lines. Done means: the end event of a graph call carries the three counts (a Diesel migration like `0041_graph_event_symbols`), `CallSummary` sums them, the fold in `callsStore.ts` and `calls_store.rs` totals them, and the live metrics show "symbols returned of asked", "files touched" and "projects with hits". The numbers must equal what the call's answer lists.
 
-Check: the latency and symbol counters match the events of a fixture burst and `rtok stats`; files touched and projects crossed match the call's answer; fallbacks and cap counters match the events; Vitest, stories (axe), Playwright, Rust tests for the event change; `just check`.
+Check: Rust tests on a fixture project with two linked projects (a name defined in one, a name defined in none, a caller in a second file) assert the three counts against the answer text of `symbol`, `callers` and `impact`; the two folds agree on the same numbers; Vitest, stories (axe), Playwright; `just check`.
 
 ### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 
@@ -1220,6 +1221,12 @@ Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane'
 T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
 
 Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
+
+### T486. TUI: live calls pane shows call metrics
+
+T329.33 added call metrics to the web live panel and to the shared fold in `src/web/calls_store.rs`: latency p50 and p95 (`Totals::latency`), symbols asked, calls across several projects, fallbacks and capped answers. D27 requires the TUI live calls pane (T480) to show the same numbers. Depends on T480 and T329.33. Done means: the pane shows the five figures from `Totals` for the selected window, with the same wording as the web panel.
+
+Check: a TUI test with a `TestBackend` feeds the fixture batch of `calls_store.rs` (`metrics_are_counted_from_the_events_and_the_percentiles_are_measured_latencies`) and the pane shows 30 ms and 100 ms, 3 symbols, 1 across projects, 1 fallback, 1 capped; `tests/surface_parity.rs` lists the metrics on both surfaces; `just check`.
 
 ## Reference
 

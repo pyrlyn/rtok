@@ -32,6 +32,7 @@ pub struct Call<'a> {
     /// Repeated on every event: a page that folds a call into its end still names the call.
     target: Option<String>,
     project: Option<String>,
+    symbols: Option<u32>,
 }
 
 impl<'a> Call<'a> {
@@ -50,6 +51,7 @@ impl<'a> Call<'a> {
             total: None,
             target: target(args),
             project: project(args),
+            symbols: symbols(args),
         };
         call.write(&call.event(EventPhase::Start));
         call
@@ -94,6 +96,7 @@ impl<'a> Call<'a> {
         let mut e = GraphEvent::new(&self.key, phase, &self.cx.session, &self.tool);
         e.target.clone_from(&self.target);
         e.project.clone_from(&self.project);
+        e.symbols = self.symbols;
         e
     }
 
@@ -119,6 +122,17 @@ fn target(args: &Value) -> Option<String> {
     .flatten()
     .find(|s| !s.is_empty())
     .map(str::to_string)
+}
+
+/// Symbols asked for, counted from the arguments so a name the index does not know still
+/// counts. `None` when the tool takes none.
+fn symbols(args: &Value) -> Option<u32> {
+    let named = super::symbol_arg_names(args)
+        .iter()
+        .filter(|n| !n.is_empty())
+        .count();
+    let by_id = usize::from(args["id"].as_str().is_some_and(|id| !id.is_empty()));
+    u32::try_from(named + by_id).ok().filter(|n| *n > 0)
 }
 
 fn project(args: &Value) -> Option<String> {
@@ -155,6 +169,14 @@ mod tests {
     }
 
     #[test]
+    fn symbols_counts_the_names_and_the_id_asked() {
+        assert_eq!(symbols(&json!({"names":["a","","b"]})), Some(2));
+        assert_eq!(symbols(&json!({"name":"f"})), Some(1));
+        assert_eq!(symbols(&json!({"id":"x::f#function@1"})), Some(1));
+        assert_eq!(symbols(&json!({"query":"q","path":"a.rs"})), None);
+    }
+
+    #[test]
     fn backend_reads_the_answer_header() {
         assert_eq!(backend("(lsp)\nx").as_deref(), Some("lsp"));
         assert_eq!(backend("(tags; lsp: down)\nx").as_deref(), Some("tags"));
@@ -167,7 +189,7 @@ mod tests {
     #[test]
     fn a_call_writes_three_events_with_its_own_rows() {
         let cx = Runtime::in_memory("mcp-1").unwrap();
-        let mut call = Call::start(&cx, "callers", &json!({"name":"f"}));
+        let mut call = Call::start(&cx, "symbol", &json!({"names":["f","g"]}));
         call.progress(2);
         let row = |kind| rtok_plugin_sdk::Measurement {
             plugin: "graph",
@@ -176,7 +198,7 @@ mod tests {
             after_bytes: 10,
             est_before: 12,
             est_after: 3,
-            ref_id: None,
+            ref_id: Some("ab".into()),
             call_id: None,
         };
         cx.record(&row("cap")).unwrap();
@@ -194,11 +216,57 @@ mod tests {
         assert_eq!((end.done, end.total), (Some(2), Some(2)));
         assert_eq!(end.samples.len(), 1);
         assert_eq!(end.samples[0].est_before, 12);
+        assert_eq!(end.samples[0].ref_id.as_deref(), Some("ab"));
+        assert!(
+            ev.iter().all(|e| e.symbols == Some(2)),
+            "every event says what was asked"
+        );
         assert_eq!(ev[0].target.as_deref(), Some("f"));
         assert_eq!(
             end.target, ev[0].target,
             "a folded call still names its symbol"
         );
+    }
+
+    /// The page's counters are read off the events, so they have to equal what the ledger
+    /// (`rtok stats`) holds for the same call: one `lsp_fallback` row and one cut answer.
+    #[test]
+    fn the_summary_counts_the_rows_the_ledger_holds_for_the_call() {
+        let cx = Runtime::in_memory("mcp-1").unwrap();
+        let mut call = Call::start(&cx, "callers", &json!({"name":"f"}));
+        call.progress(2);
+        let row = |kind, ref_id: Option<&str>| rtok_plugin_sdk::Measurement {
+            plugin: "graph",
+            kind,
+            before_bytes: 40,
+            after_bytes: 10,
+            est_before: 12,
+            est_after: 3,
+            ref_id: ref_id.map(Into::into),
+            call_id: None,
+        };
+        cx.record(&row("lsp_fallback", None)).unwrap();
+        cx.record(&row("cap", Some("ab"))).unwrap();
+        cx.record(&row("tags.callers", None)).unwrap();
+        call.end(&Ok("(tags; lsp: down)\na.rs:1 f".to_string()));
+        let events = cx.store.graph_events_after(0, 10).unwrap();
+        let summary = crate::web::live::coalesce(events).unwrap().summary;
+        let ledger = cx.store.graph_measurements_after("mcp-1", 0).unwrap();
+        let of = |kind: &str| ledger.iter().filter(|r| r.kind == kind).count() as u32;
+        assert_eq!(
+            (summary.fallbacks, summary.caps),
+            (of("lsp_fallback"), of("cap"))
+        );
+        assert_eq!(
+            (summary.fallbacks, summary.caps, summary.symbols),
+            (1, 1, 1)
+        );
+        assert_eq!(summary.crossed, 1, "a scope of two projects crosses");
+        let tokens = |f: fn(&crate::store::MeasurementSample) -> i32| -> i64 {
+            ledger.iter().map(|r| i64::from(f(r))).sum()
+        };
+        assert_eq!(summary.est_before, tokens(|r| r.est_before));
+        assert_eq!(summary.est_after, tokens(|r| r.est_after));
     }
 
     #[test]

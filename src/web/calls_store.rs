@@ -18,6 +18,8 @@ pub const FEED_ROWS: usize = 200;
 /// A call with no end this long after its start is shown as interrupted: its process is gone.
 pub const INTERRUPT_MS: i64 = 120_000;
 const LONGEST_BUCKET_MS: i64 = 900_000;
+/// Latencies kept for the percentiles: "since open" would otherwise grow with every call.
+pub const LATENCY_KEEP: usize = 1000;
 
 /// The window chips of the page; the last one is "since open" and reads the running total.
 pub const WINDOWS: [(&str, i64); 4] = [
@@ -61,7 +63,7 @@ pub struct ToolTotals {
     pub saved: i64,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Totals {
     pub calls: u64,
     pub failed: u64,
@@ -71,14 +73,42 @@ pub struct Totals {
     /// calls; `calls` is exact.
     pub tools: BTreeMap<String, ToolTotals>,
     pub backends: BTreeMap<String, u64>,
+    /// `lsp_fallback` rows, answers cut at `max_tokens`, symbols asked and calls over several
+    /// projects: all four come from the batch `summary`, so they are exact under a burst.
+    pub fallbacks: u64,
+    pub caps: u64,
+    pub symbols: u64,
+    pub crossed: u64,
+    /// Milliseconds of the listed calls, oldest first and at most [`LATENCY_KEEP`]: a burst
+    /// cut to its newest 100 events is measured on those.
+    pub ms: Vec<f64>,
+}
+
+/// The value at rank `ceil(p * n)`: a latency that was really measured, not an interpolation.
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    let rank = (p * sorted.len() as f64).ceil() as usize;
+    sorted[rank.clamp(1, sorted.len()) - 1]
 }
 
 impl Totals {
+    /// Median and 95th percentile of the kept latencies, `None` before any call has ended.
+    pub fn latency(&self) -> Option<(f64, f64)> {
+        let mut v = self.ms.clone();
+        v.sort_by(f64::total_cmp);
+        (!v.is_empty()).then(|| (percentile(&v, 0.5), percentile(&v, 0.95)))
+    }
+
     fn add(&mut self, from: &Totals) {
         self.calls += from.calls;
         self.failed += from.failed;
         self.before += from.before;
         self.after += from.after;
+        self.fallbacks += from.fallbacks;
+        self.caps += from.caps;
+        self.symbols += from.symbols;
+        self.crossed += from.crossed;
+        self.ms.extend_from_slice(&from.ms);
+        self.ms.drain(..self.ms.len().saturating_sub(LATENCY_KEEP));
         for (tool, t) in &from.tools {
             let own = self.tools.entry(tool.clone()).or_default();
             own.calls += t.calls;
@@ -157,6 +187,10 @@ impl CallsStore {
             failed: u64::from(batch.summary.failed),
             before: batch.summary.est_before,
             after: batch.summary.est_after,
+            fallbacks: u64::from(batch.summary.fallbacks),
+            caps: u64::from(batch.summary.caps),
+            symbols: u64::from(batch.summary.symbols),
+            crossed: u64::from(batch.summary.crossed),
             ..Totals::default()
         };
         let rows: Vec<Finished> = ends.iter().map(|e| ended(e, now)).collect();
@@ -167,6 +201,7 @@ impl CallsStore {
             if let Some(b) = &row.backend {
                 *bucket.backends.entry(b.clone()).or_default() += 1;
             }
+            bucket.ms.extend(row.ms);
         }
         self.all.add(&bucket);
         // A late end for a call already marked interrupted replaces the mark.
@@ -282,6 +317,7 @@ pub(crate) mod fixtures {
             after_bytes: 0,
             est_before: before,
             est_after: after,
+            ref_id: None,
         }];
         e
     }
@@ -298,6 +334,12 @@ pub(crate) mod fixtures {
                 .map(|s| i64::from(f(s)))
                 .sum()
         };
+        let count = |f: fn(&MeasurementSample) -> bool| -> u32 {
+            ends.iter()
+                .flat_map(|e| &e.samples)
+                .filter(|s| f(s))
+                .count() as u32
+        };
         CallBatch {
             head: events.len() as i64,
             omitted,
@@ -310,6 +352,13 @@ pub(crate) mod fixtures {
                 failed: ends.iter().filter(|e| !e.ok).count() as u32,
                 est_before: sum(|s| s.est_before) + i64::from(omitted) * 10,
                 est_after: sum(|s| s.est_after) + i64::from(omitted) * 4,
+                fallbacks: count(|s| s.kind == "lsp_fallback"),
+                caps: count(|s| s.ref_id.is_some()),
+                symbols: ends.iter().filter_map(|e| e.symbols).sum(),
+                crossed: ends
+                    .iter()
+                    .filter(|e| e.total.is_some_and(|t| t > 1))
+                    .count() as u32,
             },
             events,
         }
@@ -320,6 +369,7 @@ pub(crate) mod fixtures {
 mod tests {
     use super::fixtures::{T, batch, end, event};
     use super::*;
+    use crate::store::MeasurementSample;
 
     fn folded(store: &mut CallsStore, events: Vec<GraphEvent>, now: i64) {
         store.fold(&batch(events, 0), now);
@@ -345,6 +395,59 @@ mod tests {
                 saved: 70
             }
         );
+    }
+
+    /// Same events and numbers as `callsStore.test.ts`, "counts fallbacks, caps, symbols, projects
+    /// and latency percentiles".
+    #[test]
+    fn metrics_are_counted_from_the_events_and_the_percentiles_are_measured_latencies() {
+        let sample = |kind: &str, ref_id: Option<&str>| MeasurementSample {
+            id: 1,
+            kind: kind.into(),
+            before_bytes: 0,
+            after_bytes: 0,
+            est_before: 0,
+            est_after: 0,
+            ref_id: ref_id.map(Into::into),
+        };
+        let timed = |call: &str, ms: f64| {
+            let mut e = end(call, 0, 0);
+            e.ms = Some(ms);
+            e.samples.clear();
+            e
+        };
+        let mut a = timed("a", 10.0);
+        a.symbols = Some(2);
+        a.total = Some(3);
+        a.samples = vec![sample("lsp_fallback", None)];
+        let mut b = timed("b", 20.0);
+        b.symbols = Some(1);
+        b.total = Some(1);
+        b.samples = vec![sample("cap", Some("ab")), sample("explore", None)];
+        let events = vec![a, b, timed("c", 30.0), timed("d", 40.0), timed("e", 100.0)];
+        let mut s = CallsStore::default();
+        folded(&mut s, events, T);
+        let t = s.window_totals(0, T);
+        assert_eq!(
+            (t.fallbacks, t.caps, t.symbols, t.crossed),
+            (1, 1, 3, 1),
+            "a row with no ref_id is not a cap"
+        );
+        assert_eq!(t.latency(), Some((30.0, 100.0)));
+        assert_eq!(s.all.latency(), t.latency());
+        assert_eq!(CallsStore::default().all.latency(), None);
+    }
+
+    #[test]
+    fn the_latencies_kept_are_the_newest_ones() {
+        let mut s = CallsStore::default();
+        for i in 0..LATENCY_KEEP + 5 {
+            let mut e = end(&format!("c{i}"), 0, 0);
+            e.ms = Some(i as f64);
+            folded(&mut s, vec![e], T + i as i64);
+        }
+        assert_eq!(s.all.ms.len(), LATENCY_KEEP);
+        assert_eq!(s.all.ms[0], 5.0);
     }
 
     #[test]
