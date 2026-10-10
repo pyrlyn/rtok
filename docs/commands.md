@@ -83,3 +83,25 @@ counts.
 
 `rtok bench` runs two host configurations over the fixed task set in `bench/tasks.toml` and
 compares them.
+
+## Graph call events
+
+`rtok dashboard` streams what the graph tools are doing. Every `symbol`, `callers`, `impact`,
+`outline` and `explore` call, in any rtok process (an MCP server, `rtok mcp --call`), appends a
+start, a progress and an end event to the store. The dashboard reads new events every 250 ms and
+pushes them on `/ws` as `{"type":"calls"}` frames, so a call made by another process shows up
+within a second (`tests/web_live.rs` pins both). A page asks for the frames with
+`{"calls":{"subscribe":true}}` and stops them with `false`; nothing is read while no socket is
+subscribed.
+
+An end event names the tool, symbol, project and backend (`lsp`, `tags` or `text`, read from the
+answer's header and empty for a fixed mode), the elapsed time, the answer's estimated tokens and
+the `graph` measurement rows the call wrote (`samples`: kind, bytes and estimated tokens before
+and after). Those are the rows `rtok stats --plugin graph` lists. A failed call ends with
+`ok: false` and its error. Events carry names, paths and numbers, never source text.
+
+A frame holds at most 100 events. A burst folds a finished call's start and progress into its end,
+and the frame's `summary` counts every call of the poll, so totals do not drop events. Nothing is
+replayed: a socket sees the events written after it subscribed (the first frame is empty and
+carries the newest event id), and a window total is read from the store. The store keeps the
+newest 5000 events.

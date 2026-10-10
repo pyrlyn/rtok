@@ -447,6 +447,28 @@ diesel::table! {
     }
 }
 
+// 0040 (T329.15): graph call events; `rows_json` is the call's `measurements` rows as JSON.
+diesel::table! {
+    graph_events (id) {
+        id -> BigInt,
+        ts_ms -> BigInt,
+        call -> Text,
+        phase -> Text,
+        session -> Text,
+        tool -> Text,
+        target -> Nullable<Text>,
+        project -> Nullable<Text>,
+        backend -> Nullable<Text>,
+        ok -> Integer,
+        error -> Nullable<Text>,
+        ms -> Nullable<Double>,
+        done -> Nullable<Integer>,
+        total -> Nullable<Integer>,
+        answer_tokens -> Nullable<Integer>,
+        rows_json -> Nullable<Text>,
+    }
+}
+
 diesel::joinable!(archive_decisions -> archive (archive_id));
 diesel::joinable!(models -> providers (provider_id));
 diesel::joinable!(sessions -> hosts (host_id));
@@ -500,4 +522,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     project_links,
     task_counters,
     task_claims,
+    graph_events,
 );

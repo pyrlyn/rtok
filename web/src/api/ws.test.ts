@@ -87,6 +87,18 @@ describe("parseFrame", () => {
     });
   });
 
+  test("call events keep their batch and refuse a frame without one", () => {
+    const batch = {
+      events: [],
+      omitted: 0,
+      summary: { starts: 0, ends: 0, failed: 0, est_before: 0, est_after: 0 },
+      head: 7,
+    };
+    expect(parseFrame(JSON.stringify({ type: "calls", batch }))).toEqual({ type: "calls", batch });
+    expect(parseFrame('{"type":"calls"}')).toBeNull();
+    expect(parseFrame('{"type":"calls","batch":{"events":[]}}')).toBeNull();
+  });
+
   test("a graph frame needs its project and both lists", () => {
     const graph = { project: 3, name: "rtok", root: "/r", state: "ok", nodes: [], edges: [] };
     expect(parseFrame(JSON.stringify({ type: "graph", graph }))).toEqual({ type: "graph", graph });
