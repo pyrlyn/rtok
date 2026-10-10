@@ -92,6 +92,11 @@ pub struct GraphEvent {
     pub samples: Vec<MeasurementSample>,
     /// Symbols the call asked for (every event); `None` for a tool that takes none.
     pub symbols: Option<u32>,
+    /// What the answer returned, counted by the backends (end events of `symbol`, `callers` and
+    /// `impact` by name): asked symbols it lists, distinct files of its rows, projects with a row.
+    pub symbols_returned: Option<u32>,
+    pub files_touched: Option<u32>,
+    pub projects_hit: Option<u32>,
 }
 
 impl GraphEvent {
@@ -127,6 +132,9 @@ struct Row {
     answer_tokens: Option<i32>,
     rows_json: Option<String>,
     symbols: Option<i32>,
+    symbols_returned: Option<i32>,
+    files_touched: Option<i32>,
+    projects_hit: Option<i32>,
 }
 
 impl Row {
@@ -154,6 +162,9 @@ impl Row {
                 .and_then(|j| serde_json::from_str(&j).ok())
                 .unwrap_or_default(),
             symbols: unsigned(self.symbols),
+            symbols_returned: unsigned(self.symbols_returned),
+            files_touched: unsigned(self.files_touched),
+            projects_hit: unsigned(self.projects_hit),
         })
     }
 }
@@ -197,6 +208,9 @@ impl Store {
                 graph_events::answer_tokens.eq(int(e.answer_tokens)),
                 graph_events::rows_json.eq(rows_json),
                 graph_events::symbols.eq(int(e.symbols)),
+                graph_events::symbols_returned.eq(int(e.symbols_returned)),
+                graph_events::files_touched.eq(int(e.files_touched)),
+                graph_events::projects_hit.eq(int(e.projects_hit)),
             ))
             .returning(graph_events::id)
             .get_result(&mut *conn)?;
@@ -283,6 +297,7 @@ mod tests {
             ref_id: Some("ab".into()),
         }];
         end.symbols = Some(3);
+        (end.symbols_returned, end.files_touched, end.projects_hit) = (Some(2), Some(5), Some(1));
         let b = s.insert_graph_event(&end).unwrap();
         assert_eq!(s.graph_event_head().unwrap(), b);
         let all = s.graph_events_after(0, 10).unwrap();
@@ -290,6 +305,15 @@ mod tests {
         assert_eq!(all[1].samples, end.samples);
         assert_eq!(all[1].answer_tokens, Some(7));
         assert_eq!((all[0].symbols, all[1].symbols), (None, Some(3)));
+        assert_eq!(
+            (
+                all[0].files_touched,
+                all[1].symbols_returned,
+                all[1].files_touched,
+                all[1].projects_hit
+            ),
+            (None, Some(2), Some(5), Some(1))
+        );
         assert!(s.graph_events_after(b, 10).unwrap().is_empty());
         assert_eq!(s.graph_events_after(0, 1).unwrap().len(), 1);
     }

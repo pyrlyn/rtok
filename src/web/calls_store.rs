@@ -79,6 +79,10 @@ pub struct Totals {
     pub caps: u64,
     pub symbols: u64,
     pub crossed: u64,
+    /// What the graph backends counted in the answers (T329.36), from the batch `summary` too.
+    pub symbols_returned: u64,
+    pub files_touched: u64,
+    pub projects_hit: u64,
     /// Milliseconds of the listed calls, oldest first and at most [`LATENCY_KEEP`]: a burst
     /// cut to its newest 100 events is measured on those.
     pub ms: Vec<f64>,
@@ -107,6 +111,9 @@ impl Totals {
         self.caps += from.caps;
         self.symbols += from.symbols;
         self.crossed += from.crossed;
+        self.symbols_returned += from.symbols_returned;
+        self.files_touched += from.files_touched;
+        self.projects_hit += from.projects_hit;
         self.ms.extend_from_slice(&from.ms);
         self.ms.drain(..self.ms.len().saturating_sub(LATENCY_KEEP));
         for (tool, t) in &from.tools {
@@ -191,6 +198,9 @@ impl CallsStore {
             caps: u64::from(batch.summary.caps),
             symbols: u64::from(batch.summary.symbols),
             crossed: u64::from(batch.summary.crossed),
+            symbols_returned: u64::from(batch.summary.symbols_returned),
+            files_touched: u64::from(batch.summary.files_touched),
+            projects_hit: u64::from(batch.summary.projects_hit),
             ..Totals::default()
         };
         let rows: Vec<Finished> = ends.iter().map(|e| ended(e, now)).collect();
@@ -355,6 +365,9 @@ pub(crate) mod fixtures {
                 fallbacks: count(|s| s.kind == "lsp_fallback"),
                 caps: count(|s| s.ref_id.is_some()),
                 symbols: ends.iter().filter_map(|e| e.symbols).sum(),
+                symbols_returned: ends.iter().filter_map(|e| e.symbols_returned).sum(),
+                files_touched: ends.iter().filter_map(|e| e.files_touched).sum(),
+                projects_hit: ends.iter().filter_map(|e| e.projects_hit).sum(),
                 crossed: ends
                     .iter()
                     .filter(|e| e.total.is_some_and(|t| t > 1))
@@ -419,10 +432,12 @@ mod tests {
         let mut a = timed("a", 10.0);
         a.symbols = Some(2);
         a.total = Some(3);
+        (a.symbols_returned, a.files_touched, a.projects_hit) = (Some(1), Some(4), Some(2));
         a.samples = vec![sample("lsp_fallback", None)];
         let mut b = timed("b", 20.0);
         b.symbols = Some(1);
         b.total = Some(1);
+        (b.symbols_returned, b.files_touched, b.projects_hit) = (Some(1), Some(2), Some(1));
         b.samples = vec![sample("cap", Some("ab")), sample("explore", None)];
         let events = vec![a, b, timed("c", 30.0), timed("d", 40.0), timed("e", 100.0)];
         let mut s = CallsStore::default();
@@ -432,6 +447,11 @@ mod tests {
             (t.fallbacks, t.caps, t.symbols, t.crossed),
             (1, 1, 3, 1),
             "a row with no ref_id is not a cap"
+        );
+        assert_eq!(
+            (t.symbols_returned, t.files_touched, t.projects_hit),
+            (2, 6, 3),
+            "a call that does not count adds nothing"
         );
         assert_eq!(t.latency(), Some((30.0, 100.0)));
         assert_eq!(s.all.latency(), t.latency());

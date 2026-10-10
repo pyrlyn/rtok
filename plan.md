@@ -46,7 +46,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
-| T329.36 | todo | P3 | 4 | 0% | |
+| T329.43 | todo | P3 | 3 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
 | T329.35 | todo | P3 | 4 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
@@ -96,6 +96,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T484 | todo | P3 | 3 | 0% | |
 | T485 | todo | P3 | 3 | 0% | |
 | T486 | todo | P3 | 2 | 0% | |
+| T487 | todo | P3 | 2 | 0% | |
 
 
 
@@ -823,12 +824,6 @@ What is left of T329 §8b after T329.28 that only draws what the page already ha
 
 Check: maximising either part fills the page and restores; under 900 px the metrics collapse to a strip that expands; a running call shows its label and elapsed counter; the numbers count up (and jump with `prefers-reduced-motion`); the sparklines match the store buckets; a call outside the scope is marked; folded targets count on their nearest visible ancestor; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.36. Graph page: counts taken from the answer (symbols returned, files touched, projects with hits)
-
-What is left of T329.33. The events now carry what a call asked for (symbols, projects in scope), its latency, and the fallback and cap rows, but not what it returned: symbols returned, files touched and the projects whose index held a hit. They must come from the graph backends (LSP, tags, text) as counts they already know while building the answer, not from parsing the answer text, which mixes code bodies with result lines. Done means: the end event of a graph call carries the three counts (a Diesel migration like `0041_graph_event_symbols`), `CallSummary` sums them, the fold in `callsStore.ts` and `calls_store.rs` totals them, and the live metrics show "symbols returned of asked", "files touched" and "projects with hits". The numbers must equal what the call's answer lists.
-
-Check: Rust tests on a fixture project with two linked projects (a name defined in one, a name defined in none, a caller in a second file) assert the three counts against the answer text of `symbol`, `callers` and `impact`; the two folds agree on the same numbers; Vitest, stories (axe), Playwright; `just check`.
-
 ### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 
 What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
@@ -840,6 +835,12 @@ Check: the caller column shows the agent and host for a session of each known ho
 The page half of T329 §8e, split from T329.29 at claim time (the backend half filled its own cap). T329.29 shipped `--from PROJECT:REF`, `--from-export FILE`, the registry link diff (against an export only) and the `changed, not analysed` listing in `src/plugins/graph/diff.rs`; `diff::run` with `Query { json: true, .. }` already returns every row. Here: a "Compare" mode in part 1 that colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel (including `changed, not analysed`) and leaves the live graph unaffected. The page asks the server for the diff over `/ws` (a new `ClientMessage` and `ServerFrame` in `src/web/protocol.rs`, answered by `diff::run` on the same revisions the CLI takes, with the cap), never recomputes it, and can open a saved export as the old side (the file is read by the server from a path the user typed, never from a model). The schema file `web/src/api/ws.schema.json` and `snapshot.gen.ts` are regenerated. D27: the TUI counterpart is T485. Docs in en, ru, uk. Depends on T329.29, T329.22.
 
 Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`; `just check`.
+
+### T329.43. Graph page: returned counts for explore, outline, impact by path and graph_diff
+
+What is left of T329.36. It counts what `symbol`, `callers` and `impact` by name return; `explore`, `outline`, `impact` by `path` (the affected files) and `graph_diff` leave `symbols_returned`, `files_touched` and `projects_hit` NULL because their backends (`TagsExplore`, `scope::outline`, `scope::affected_path`, `diff.rs`) do not call `tally::hit` yet. Done means: each of them records the files and projects of the rows it lists (and the resolved query tokens as symbols for `explore`), `events::Call::end` stops gating the counts on symbols asked, and the numbers equal the answer's listing.
+
+Check: Rust tests on the T329.36 two-project fixture assert the counts against the answer text of `explore`, `outline`, `impact` by path and `graph_diff`; the folds agree; `just check`.
 
 ### T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 
@@ -1220,6 +1221,12 @@ Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed,
 T329.33 added call metrics to the web live panel and to the shared fold in `src/web/calls_store.rs`: latency p50 and p95 (`Totals::latency`), symbols asked, calls across several projects, fallbacks and capped answers. D27 requires the TUI live calls pane (T480) to show the same numbers. Depends on T480 and T329.33. Done means: the pane shows the five figures from `Totals` for the selected window, with the same wording as the web panel.
 
 Check: a TUI test with a `TestBackend` feeds the fixture batch of `calls_store.rs` (`metrics_are_counted_from_the_events_and_the_percentiles_are_measured_latencies`) and the pane shows 30 ms and 100 ms, 3 symbols, 1 across projects, 1 fallback, 1 capped; `tests/surface_parity.rs` lists the metrics on both surfaces; `just check`.
+
+### T487. TUI: live calls pane shows the counts taken from the answer
+
+T329.36 added `symbols_returned`, `files_touched` and `projects_hit` to `Totals` in `src/web/calls_store.rs` (summed from the batch `summary`) and the web live metrics show "symbols returned of asked", "files touched" and "projects with hits". D27 requires the TUI live calls pane (T480, T486) to show the same three figures with the same wording. Depends on T486 and T329.36. Done means: the pane shows `symbols_returned` of `symbols`, `files_touched` and `projects_hit` for the selected window next to the figures T486 adds.
+
+Check: a TUI test with a `TestBackend` feeds the fixture batch of `calls_store.rs` (`metrics_are_counted_from_the_events_and_the_percentiles_are_measured_latencies`) and the pane shows "2 of 3", 6 files and 3 projects; `tests/surface_parity.rs` lists the three figures on both surfaces; `just check`.
 
 ## Reference
 

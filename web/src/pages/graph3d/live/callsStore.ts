@@ -60,6 +60,10 @@ export interface Totals {
   caps: number;
   symbols: number;
   crossed: number;
+  /** What the graph backends counted in the answers (T329.36): asked symbols listed, files touched and projects with a row, summed per call. */
+  symbolsReturned: number;
+  filesTouched: number;
+  projectsHit: number;
   /** Milliseconds of the listed calls, oldest first, at most `LATENCY_KEEP`: a burst cut to its newest 100 events is measured on those. */
   ms: number[];
 }
@@ -84,6 +88,9 @@ const noTotals = (): Totals => ({
   caps: 0,
   symbols: 0,
   crossed: 0,
+  symbolsReturned: 0,
+  filesTouched: 0,
+  projectsHit: 0,
   ms: [],
 });
 
@@ -98,6 +105,9 @@ function add(into: Totals, from: Totals) {
   into.caps += from.caps;
   into.symbols += from.symbols;
   into.crossed += from.crossed;
+  into.symbolsReturned += from.symbolsReturned;
+  into.filesTouched += from.filesTouched;
+  into.projectsHit += from.projectsHit;
   into.ms.push(...from.ms);
   into.ms.splice(0, Math.max(0, into.ms.length - LATENCY_KEEP));
   for (const [tool, t] of Object.entries(from.tools)) {
@@ -160,6 +170,9 @@ export function fold(store: CallsStore, batch: CallBatch, now: number): CallsSto
     caps: batch.summary.caps,
     symbols: batch.summary.symbols,
     crossed: batch.summary.crossed,
+    symbolsReturned: batch.summary.symbols_returned,
+    filesTouched: batch.summary.files_touched,
+    projectsHit: batch.summary.projects_hit,
     ms: ends.flatMap((e) => (e.ms === null ? [] : [e.ms])),
   };
   for (const [i, e] of ends.entries()) {

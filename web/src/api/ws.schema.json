@@ -353,6 +353,16 @@
           "format": "uint32",
           "minimum": 0
         },
+        "files_touched": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "projects_hit": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "starts": {
           "type": "integer",
           "format": "uint32",
@@ -360,6 +370,12 @@
         },
         "symbols": {
           "description": "Symbols the ended calls asked for.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "symbols_returned": {
+          "description": "What the ended calls returned, counted by the graph backends (T329.36): asked symbols\nthe answers list, distinct files per call and projects with a row per call.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0
@@ -374,7 +390,10 @@
         "fallbacks",
         "caps",
         "symbols",
-        "crossed"
+        "crossed",
+        "symbols_returned",
+        "files_touched",
+        "projects_hit"
       ]
     },
     "CallsRequest": {
@@ -1028,6 +1047,14 @@
             "null"
           ]
         },
+        "files_touched": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "id": {
           "type": "integer",
           "format": "int64"
@@ -1052,6 +1079,14 @@
             "null"
           ]
         },
+        "projects_hit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "samples": {
           "description": "The call's `graph` measurement rows (end events); empty when the answer was not shortened.",
           "type": "array",
@@ -1064,6 +1099,15 @@
         },
         "symbols": {
           "description": "Symbols the call asked for (every event); `None` for a tool that takes none.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "symbols_returned": {
+          "description": "What the answer returned, counted by the backends (end events of `symbol`, `callers` and\n`impact` by name): asked symbols it lists, distinct files of its rows, projects with a row.",
           "type": [
             "integer",
             "null"
@@ -1110,7 +1154,10 @@
         "total",
         "answer_tokens",
         "samples",
-        "symbols"
+        "symbols",
+        "symbols_returned",
+        "files_touched",
+        "projects_hit"
       ]
     },
     "InstructionRow": {

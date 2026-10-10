@@ -78,10 +78,21 @@ describe("live graph", () => {
                     end("a", 0, 0, {
                         ms: 40,
                         symbols: 2,
+                        symbols_returned: 1,
+                        files_touched: 3,
+                        projects_hit: 2,
                         total: 2,
                         samples: [row("lsp_fallback", null)],
                     }),
-                    end("b", 0, 0, { ms: 1500, symbols: 1, total: 1, samples: [row("cap", "ab")] }),
+                    end("b", 0, 0, {
+                        ms: 1500,
+                        symbols: 1,
+                        symbols_returned: 1,
+                        files_touched: 2,
+                        projects_hit: 1,
+                        total: 1,
+                        samples: [row("cap", "ab")],
+                    }),
                 ]),
             }),
         );
@@ -89,7 +100,10 @@ describe("live graph", () => {
             (await screen.findByText(label)).parentElement?.textContent;
         await waitFor(async () => expect(await card("latency p50")).toContain("40 ms"));
         expect(await card("latency p50")).toContain("p95 1.5 s");
-        expect(await card("symbols asked")).toContain("31 across projects");
+        expect(await card("symbols returned")).toContain("2 of 3");
+        expect(await card("symbols returned")).toContain("1 across projects");
+        expect(await card("files touched")).toBe("files touched5");
+        expect(await card("projects with hits")).toBe("projects with hits3");
         expect(await card("fallbacks")).toContain("11 capped");
     });
 

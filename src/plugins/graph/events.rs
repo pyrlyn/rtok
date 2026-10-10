@@ -42,6 +42,8 @@ impl<'a> Call<'a> {
             cx.session,
             CALLS.fetch_add(1, Ordering::Relaxed) + 1
         );
+        // T329.36: the backends count what they return into this call's record.
+        super::tally::arm();
         let call = Self {
             cx,
             key,
@@ -73,11 +75,19 @@ impl<'a> Call<'a> {
         let mut e = self.event(EventPhase::End);
         e.ms = Some(self.started.elapsed().as_secs_f64() * 1000.0);
         e.total = self.total;
+        let found = super::tally::take();
         match result {
             Ok(text) => {
                 e.done = self.total;
                 e.backend = backend(text);
                 e.answer_tokens = Some(self.cx.estimate(text, Class::Json));
+                // Only a call about named symbols is counted: `explore`, `outline` and a path
+                // `impact` do not feed the tally, and a zero there would read as "found nothing".
+                if self.symbols.is_some() {
+                    e.symbols_returned = Some(found.symbols);
+                    e.files_touched = Some(found.files);
+                    e.projects_hit = Some(found.projects);
+                }
             }
             Err(err) => {
                 e.ok = false;
@@ -226,6 +236,30 @@ mod tests {
             end.target, ev[0].target,
             "a folded call still names its symbol"
         );
+    }
+
+    /// What the backends tally during the call lands on its end event, for a call about named
+    /// symbols only; a call about a query or a path stays NULL instead of reading as zero.
+    #[test]
+    fn the_end_event_carries_what_the_backends_counted() {
+        let cx = Runtime::in_memory("mcp-1").unwrap();
+        let root = std::path::Path::new("/p");
+        let call = Call::start(&cx, "callers", &json!({"name":"f"}));
+        super::super::tally::hit(root, "f", ["a.rs", "b.rs"]);
+        call.end(&Ok("a.rs ×1\nb.rs ×1\n".to_string()));
+        let call = Call::start(&cx, "explore", &json!({"query":"f"}));
+        super::super::tally::hit(root, "f", ["a.rs"]);
+        call.end(&Ok("x".to_string()));
+        let ends: Vec<_> = cx
+            .store
+            .graph_events_after(0, 10)
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.phase == EventPhase::End)
+            .collect();
+        let counts = |e: &GraphEvent| (e.symbols_returned, e.files_touched, e.projects_hit);
+        assert_eq!(counts(&ends[0]), (Some(1), Some(2), Some(1)));
+        assert_eq!(counts(&ends[1]), (None, None, None));
     }
 
     /// The page's counters are read off the events, so they have to equal what the ledger

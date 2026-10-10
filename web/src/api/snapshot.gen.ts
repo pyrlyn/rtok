@@ -479,6 +479,7 @@ export interface GraphEvent {
    */
   done: number | null;
   error: string | null;
+  files_touched: number | null;
   id: number;
   /**
    * Elapsed milliseconds (end events).
@@ -487,6 +488,7 @@ export interface GraphEvent {
   ok: boolean;
   phase: EventPhase;
   project: string | null;
+  projects_hit: number | null;
   /**
    * The call's `graph` measurement rows (end events); empty when the answer was not shortened.
    */
@@ -496,6 +498,11 @@ export interface GraphEvent {
    * Symbols the call asked for (every event); `None` for a tool that takes none.
    */
   symbols: number | null;
+  /**
+   * What the answer returned, counted by the backends (end events of `symbol`, `callers` and
+   * `impact` by name): asked symbols it lists, distinct files of its rows, projects with a row.
+   */
+  symbols_returned: number | null;
   target: string | null;
   tool: string;
   total: number | null;
@@ -546,11 +553,18 @@ export interface CallSummary {
    * language server could not.
    */
   fallbacks: number;
+  files_touched: number;
+  projects_hit: number;
   starts: number;
   /**
    * Symbols the ended calls asked for.
    */
   symbols: number;
+  /**
+   * What the ended calls returned, counted by the graph backends (T329.36): asked symbols
+   * the answers list, distinct files per call and projects with a row per call.
+   */
+  symbols_returned: number;
 }
 /**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface
