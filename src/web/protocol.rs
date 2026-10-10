@@ -10,6 +10,7 @@ use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
 
+use super::live::CallBatch;
 use super::model::{DrillGraph, DrillRequest, Snapshot};
 use crate::doctor::web::{Fixed, Plan, Selection};
 
@@ -30,6 +31,9 @@ pub enum ServerFrame {
     DoctorFixed { fixed: Fixed },
     /// The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).
     Graph { graph: DrillGraph },
+    /// What the graph tools did since the last frame (T329.15): sent only after
+    /// [`ClientMessage::Calls`] subscribed, at most four times a second.
+    Calls { batch: CallBatch },
 }
 
 impl ServerFrame {
@@ -52,6 +56,14 @@ pub enum ClientMessage {
     Doctor { doctor: DoctorRequest },
     /// The inside of one project for the graph page's level 2 (T329.14); read-only.
     Graph { graph: DrillRequest },
+    /// Start or stop the graph call events (T329.15); the page subscribes while the live
+    /// graph is visible, so a hidden one costs nothing.
+    Calls { calls: CallsRequest },
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct CallsRequest {
+    pub subscribe: bool,
 }
 
 /// The registry writes the graph page offers; `<project>` is an id or a

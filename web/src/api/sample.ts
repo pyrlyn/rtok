@@ -8,6 +8,7 @@ import type { Connect, Connection } from "./ws";
 import { call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
+import { drillReply } from "./sampleDrill";
 import type { Report, Snapshot } from "./snapshot.gen";
 // The text pages have no live source offline, so `?sample` shows the same made-up text the
 // page stories use; every value is sample data.
@@ -327,9 +328,13 @@ export const connectSample: Connect = (handlers) => {
         );
         return true;
       }
+      if ("calls" in message) {
+        // The sample has no other process to watch; the stream starts with the live graph (T329.26).
+        return true;
+      }
       if ("graph" in message) {
-        // The drill-down page and its sample frames land with T329.22.
-        later(() => handlers.onFrame({ type: "message", text: "no sample drill-down yet" }));
+        const { graph } = message;
+        later(() => handlers.onFrame(drillReply(graph, snapshot.projects ?? [])));
         return true;
       }
       const { key, value } = message.set;

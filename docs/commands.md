@@ -32,6 +32,28 @@ build never blocks the host.
 | `rtok task create\|list\|show\|status\|next\|ready\|claim\|release\|dep\|priority\|sync\|init` | the project's plan in its `[tasks]` adapter; `claim` takes a ready task, `dep` records a blocker, `sync` raises the id counters and reports drift |
 | `rtok bench` | A/B two host configurations on fixed tasks |
 
+## The graph page
+
+The Graph page of `rtok dashboard` draws the code graph in two levels, as a 3D scene, a flat 2D
+scene, or a plain list (the choice is remembered; without WebGL the page shows 2D and says why).
+
+- **All projects.** One node per registered project, a line per link. Right-click a node for
+  Select, Open, Fly to and Copy path; double-click opens the project.
+- **One project.** Files are cubes, types and modules octahedra, functions spheres, each in its
+  project's colour, grouped by directory. Click a node to select it; click the selected file to
+  expand its definitions, or the selected function to focus it (its callers and callees, one to
+  four calls deep, set with the depth buttons). A call into a linked project ends at an outlined
+  node in that project's colour, and clicking it opens that project with the symbol focused.
+  `+N more` raises the node cap by 500. A `⚠` marks a file changed since the last index run, and a
+  banner says the picture is partial while any file is.
+- **Where you are is in the address.** The project, the expanded files, the focus and the depth
+  are in the page's URL, so every step is a history entry, the breadcrumb (`All projects / rtok /
+  src/plugins/graph`) climbs back, and a copied link opens the same view.
+- **Index states.** A project that has not been indexed shows the command to run
+  (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
+  is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
+  updates in place without moving the scene.
+
 ## Every flag is a config key
 
 There is no flag that cannot be made permanent. `rtok proxy --port 8791` and
@@ -54,3 +76,25 @@ counts.
 
 `rtok bench` runs two host configurations over the fixed task set in `bench/tasks.toml` and
 compares them.
+
+## Graph call events
+
+`rtok dashboard` streams what the graph tools are doing. Every `symbol`, `callers`, `impact`,
+`outline` and `explore` call, in any rtok process (an MCP server, `rtok mcp --call`), appends a
+start, a progress and an end event to the store. The dashboard reads new events every 250 ms and
+pushes them on `/ws` as `{"type":"calls"}` frames, so a call made by another process shows up
+within a second (`tests/web_live.rs` pins both). A page asks for the frames with
+`{"calls":{"subscribe":true}}` and stops them with `false`; nothing is read while no socket is
+subscribed.
+
+An end event names the tool, symbol, project and backend (`lsp`, `tags` or `text`, read from the
+answer's header and empty for a fixed mode), the elapsed time, the answer's estimated tokens and
+the `graph` measurement rows the call wrote (`samples`: kind, bytes and estimated tokens before
+and after). Those are the rows `rtok stats --plugin graph` lists. A failed call ends with
+`ok: false` and its error. Events carry names, paths and numbers, never source text.
+
+A frame holds at most 100 events. A burst folds a finished call's start and progress into its end,
+and the frame's `summary` counts every call of the poll, so totals do not drop events. Nothing is
+replayed: a socket sees the events written after it subscribed (the first frame is empty and
+carries the newest event id), and a window total is read from the store. The store keeps the
+newest 5000 events.

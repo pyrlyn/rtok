@@ -118,6 +118,39 @@
         "modules"
       ]
     },
+    "CallBatch": {
+      "description": "What one poll found, as one frame. `summary` counts every event of the poll (including\nthe ones left out of `events`), so a page that adds summaries up never undercounts a burst.",
+      "type": "object",
+      "properties": {
+        "events": {
+          "description": "Newest last. A call's start and progress events are left out when its end is in the\nbatch, since the end carries the same call and tool.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphEvent"
+          }
+        },
+        "head": {
+          "description": "The newest event id the batch covers.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "omitted": {
+          "description": "Events cut because the batch held more than [`MAX_EVENTS`] (the oldest go first).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "summary": {
+          "$ref": "#/$defs/CallSummary"
+        }
+      },
+      "required": [
+        "events",
+        "omitted",
+        "summary",
+        "head"
+      ]
+    },
     "CallRow": {
       "description": "One `calls` row as the Calls page serves it ([`Store::recent_calls`], T15.5): the\nledger's own columns plus the slugs its ids point at and — when the call is one\nthat recorded usage — the newest `usage` row linked to it. One query's output, so\nno renderer can re-derive a field differently (D27); `api` `None` means no usage\nrow is linked (a hook, MCP call or plugin run carries none).",
       "type": "object",
@@ -250,6 +283,53 @@
         "output"
       ]
     },
+    "CallSummary": {
+      "type": "object",
+      "properties": {
+        "ends": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "est_after": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "est_before": {
+          "description": "Sums of the `samples` of the end events: the `Measurement` columns `rtok stats` adds up.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "failed": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "starts": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "starts",
+        "ends",
+        "failed",
+        "est_before",
+        "est_after"
+      ]
+    },
+    "CallsRequest": {
+      "type": "object",
+      "properties": {
+        "subscribe": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "subscribe"
+      ]
+    },
     "Capability": {
       "description": "One project's record, as stored and as `rtok graph projects --json` prints it.",
       "type": "object",
@@ -371,6 +451,18 @@
           },
           "required": [
             "graph"
+          ]
+        },
+        {
+          "description": "Start or stop the graph call events (T329.15); the page subscribes while the live\ngraph is visible, so a hidden one costs nothing.",
+          "type": "object",
+          "properties": {
+            "calls": {
+              "$ref": "#/$defs/CallsRequest"
+            }
+          },
+          "required": [
+            "calls"
           ]
         }
       ]
@@ -671,6 +763,14 @@
         "query"
       ]
     },
+    "EventPhase": {
+      "type": "string",
+      "enum": [
+        "start",
+        "progress",
+        "end"
+      ]
+    },
     "Fixed": {
       "type": "object",
       "properties": {
@@ -686,6 +786,119 @@
       "required": [
         "text",
         "code"
+      ]
+    },
+    "GraphEvent": {
+      "description": "One event of a graph call. `call` ties a call's events together; `ts_ms`, `id` and the\nclipping of free text are the store's, so a writer leaves `id` and `ts_ms` at zero.",
+      "type": "object",
+      "properties": {
+        "answer_tokens": {
+          "description": "Estimated tokens of the answer the caller received (end events).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "backend": {
+          "description": "`lsp`, `tags` or `text`: the backend that answered (end events).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "call": {
+          "type": "string"
+        },
+        "done": {
+          "description": "Scope members done and in total (progress and end events).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ms": {
+          "description": "Elapsed milliseconds (end events).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "phase": {
+          "$ref": "#/$defs/EventPhase"
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "samples": {
+          "description": "The call's `graph` measurement rows (end events); empty when the answer was not shortened.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MeasurementSample"
+          }
+        },
+        "session": {
+          "type": "string"
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "type": "string"
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "ts_ms": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "id",
+        "ts_ms",
+        "call",
+        "phase",
+        "session",
+        "tool",
+        "target",
+        "project",
+        "backend",
+        "ok",
+        "error",
+        "ms",
+        "done",
+        "total",
+        "answer_tokens",
+        "samples"
       ]
     },
     "InstructionRow": {
@@ -807,6 +1020,43 @@
       "enum": [
         "manual",
         "auto"
+      ]
+    },
+    "MeasurementSample": {
+      "description": "One `measurements` row of the call, with the columns `rtok stats` sums. Copied from the\ntable at the call's end, so a page that adds these up gets the report's numbers.",
+      "type": "object",
+      "properties": {
+        "after_bytes": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "before_bytes": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "est_after": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "est_before": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "before_bytes",
+        "after_bytes",
+        "est_before",
+        "est_after"
       ]
     },
     "ModelRow": {
@@ -1775,6 +2025,23 @@
           "required": [
             "type",
             "graph"
+          ]
+        },
+        {
+          "description": "What the graph tools did since the last frame (T329.15): sent only after\n[`ClientMessage::Calls`] subscribed, at most four times a second.",
+          "type": "object",
+          "properties": {
+            "batch": {
+              "$ref": "#/$defs/CallBatch"
+            },
+            "type": {
+              "type": "string",
+              "const": "calls"
+            }
+          },
+          "required": [
+            "type",
+            "batch"
           ]
         }
       ]

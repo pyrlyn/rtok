@@ -29,6 +29,9 @@ pub use task_id::{MAX_DEPTH, MAX_PREFIX, TaskId, check_prefix};
 // Agent registry (T282, D34): one row per host session rtok sees, one per sub-agent.
 mod agents;
 pub use agents::{AgentDetail, AgentRow, idle_secs};
+// Graph call events the web page streams (T329.15).
+mod graph_events;
+pub use graph_events::{EventPhase, GraphEvent, MeasurementSample};
 // Messages between agents and the user (T287).
 mod messages;
 pub use messages::{Message, short_agent_id};

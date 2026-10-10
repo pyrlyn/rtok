@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo } from "react";
 import { Empty } from "../states";
 import { DataTable, type Column } from "../ui/DataTable";
@@ -11,14 +12,21 @@ import { Pill } from "../ui/Pill";
 import { fmt } from "./format";
 import { OtherLines, responsive, TextPage, useMinWidth, WithSnapshot } from "./parts";
 import { Projects } from "./Projects";
+import { drillSearch, type DrillState, openProject, parseDrill } from "./graph3d/drillState";
 import { parseGraph, type DeadSymbol, type GraphView } from "./text";
 
 // The overview, its force layout and Three.js load only when the graph page opens.
 const ProjectsOverview = lazy(() =>
     import("./graph3d/ProjectsOverview").then((m) => ({ default: m.ProjectsOverview })),
 );
+const DrillView = lazy(() => import("./graph3d/DrillView").then((m) => ({ default: m.DrillView })));
 
 export function Graph() {
+    // The drill-down lives in the URL (T329.22): each step is a history entry, so Back climbs out.
+    const drill = parseDrill(useSearch({ strict: false }) as Record<string, unknown>);
+    const navigate = useNavigate();
+    const go = (next: DrillState | null) =>
+        void navigate({ search: ((prev: object) => ({ ...prev, ...drillSearch(next) })) as never });
     return (
         <WithSnapshot>
             {(snap) => (
@@ -26,7 +34,20 @@ export function Graph() {
                     {snap.projects && <Projects rows={snap.projects} />}
                     {snap.projects && snap.projects.length > 0 && (
                         <Suspense fallback={null}>
-                            <ProjectsOverview rows={snap.projects} />
+                            {drill ? (
+                                // Another project is a new picture: the layout and zoom start over.
+                                <DrillView
+                                    key={drill.project}
+                                    state={drill}
+                                    rows={snap.projects}
+                                    go={go}
+                                />
+                            ) : (
+                                <ProjectsOverview
+                                    rows={snap.projects}
+                                    onOpen={(id) => go(openProject(id))}
+                                />
+                            )}
                         </Suspense>
                     )}
                     <TextPage

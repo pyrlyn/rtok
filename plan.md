@@ -51,7 +51,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
-| T329.22 | todo | P2 | 4 | 0% | |
+| T329.23 | todo | P2 | 2 | 0% | |
+| T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -503,7 +504,7 @@ Ivan, 2026-10-01: in the web UI's graph tab, the graph is built for a project th
 
 Today the graph plugin (`src/plugins/graph/`) always works on one root: the process's current directory. The index is keyed by that root (`index::canon(root)` in `src/store/symbols.rs`), and the MCP tools `symbol`, `callers`, `impact`, `outline` and `explore`, plus `dead` and `affected`, only see that root. The graph page shows the same single root (`root .`). There is no way to pick another project and no way to follow a call into a dependency's source.
 
-Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13 and T329.20 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. T337, which gated T329.11/T329.17, is settled (requests never re-probe; the health check does); T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
+Split (2026-10-03, complexity 5): one subtask = one PR, T329.1 to T329.21 in dependency order (T329.1 to T329.3, T329.6, T329.12, T329.13, T329.14, T329.20 and T329.22 are already in `done.md`). This card stays the specification; each subtask reads the section it names and updates `docs/` (en, ru, uk) for its own part. T337, which gated T329.11/T329.17, is settled (requests never re-probe; the health check does); T334, which gated T329.9, is settled (`tags` stays the default, `auto` is opt-in); T336, which gated T329.4, is settled (the cwd, not the web selection).
 
 #### Terms
 
@@ -820,15 +821,23 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
 
-### T329.15. Graph page: two-part UI with the read-only live graph and live metrics
+### T329.26. Graph page: two-part UI with the read-only live graph and live metrics
 
-T329 §8b: the explorer and the read-only live graph side by side with a splitter, the start/end/progress call events on `/ws` from every process through the store, the live canvas and its metric displays (values from the same `Measurement` rows as `rtok stats`), freeze, window selector and the call feed. Over the size budget on its own; split into data path and display when claimed. Depends on T329.13, T329.14.
+Display half of T329 §8b, split from T329.15 on 2026-10-10 (the data path stayed there). Draws the call events T329.15 puts on `/ws` (`{"type":"calls"}` frames, `CallBatch` in `web/src/api/ws.schema.json`, subscribed with `{"calls":{"subscribe":true}}` only while part 2 is visible):
 
-Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; `just check`.
+- the explorer and the read-only live graph side by side with a splitter (stacked on narrow screens);
+- the live canvas: same layout and colours, no pointer or keyboard input, default cursor, an automatic camera that frames the running call and eases back to an overview, running labels, a heat glow, up to 8 concurrent accents and a "busy" pulse beyond that;
+- the metric displays (now running, tokens sent, without rtok and saved, backend shares, caps, per-tool bars) from the `rows` the events carry, equal to `rtok stats`;
+- freeze and unfreeze that keep exact totals, the 1, 5 and 15 minute and "since start" window selector recomputed from the store, and the call feed (200 rows, filters by agent, tool and project, failed rows in red, interrupted rows marked after a timeout);
+- the empty state "Waiting for graph calls", a rendering batched per animation frame, and the docs in en, ru, uk.
+
+Symbols requested and returned per call are not in the T329.15 events; if the display needs them, add them to the event first. Depends on T329.15, T329.14.
+
+Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 
-T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14.
+T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
 
@@ -840,7 +849,7 @@ Check: renaming B's directory raises "B missing" after two checks on the page, i
 
 ### T329.18. Graph diff: compare before and after a change
 
-T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14.
+T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14 and T329.22.
 
 Check: a signature change in B shows in `rtok graph diff --from HEAD` from A with A's affected call sites; the working tree is untouched; a rename is a rename; an unknown ref errors; `graph_diff` returns a capped summary with a paging id; `just check`.
 
@@ -862,21 +871,16 @@ Split from T329.11 (the size cap and the web checks): the Projects page of the S
 
 Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
 
-### T329.22. Graph page level 2: the drill-down view (SPA)
+### T329.23. Graph drill-down: side panel and search
 
-The page half of T329.14 (split on 2026-10-09: the data path alone was over the 500-line cap). T329 §8a level 2, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added (`src/plugins/graph/drill.rs`, schema in `web/src/api/ws.schema.json`):
+The rest of T329.22 (split on 2026-10-10: the view, URL state, shapes, "+N more", states and live re-request shipped in T329.22; these two parts did not fit its 500-line cap). T329 §8a level 2 on top of `DrillView` (`web/src/pages/graph3d/DrillView.tsx`):
 
-- "Open" on the level-1 node menu (and double-click) drills into a project. The drill-down state (project, expanded files, focus, depth) is carried in the URL, each step is a history entry, and a breadcrumb (`All projects / rtok / src/plugins/graph`) leads back up, so the browser back button returns.
-- The frame is mapped to the existing `Scene` so `useLayout` (positions kept across updates), `Scene2D`, `Scene3D` and the list view are reused, with a shape per node kind (file cube, type octahedron, function sphere) and the project colour; directories become layout groups. A node click selects, a second click on a file expands it, on a function focuses it (callers and callees to `depth`, 1 to 4).
-- A call into a linked project ends at an `external` node in that project's colour; clicking it opens that project with the target symbol focused.
-- Side panel: path and line, signature, callers and callees from the edges, an editor link (`vscode://file/<root>/<path>:<line>`). Search box: sends `query`, lists `hits` (the scope's projects named), and a hit focuses its symbol.
-- "+N more" when `more > 0` raises `limit` by 500; a spinner while the frame is in flight; the "Index now" empty state for `not indexed`, a hollow notice for `missing`, a "partial" banner when `partial`, and a warning marker on `stale` nodes.
-- Live updates: the page asks again when the project's index numbers in the snapshot move (rows, files, pending, `indexed_at`), so edits under `watch` change nodes and edges in place without resetting the layout or the zoom.
-- Docs for the graph page in `docs/` (en, ru, uk); the text-mode banner waits for T329.9 (no backend other than tags answers yet).
+- Side panel for the selected node: path and line, signature, callers and callees from the frame's edges, and an editor link (`vscode://file/<root>/<path>:<line>`; for an `external` node the root of the project that owns it).
+- Search box: Enter sends the request's `query`, the frame's `hits` are listed (the scope's projects named), and a hit focuses its symbol, or opens the other project with that symbol focused.
 
-Depends on T329.14, T329.13.
+Depends on T329.22.
 
-Check: Vitest for the frame-to-scene mapping, the URL state and the breadcrumb; stories with the sample server (open A, expand a file, click the external node, "+N more" on a 600-node fixture, both themes, axe); `just spa-stories`, `just spa-e2e`; `just check`.
+Check: Vitest for the panel contents and the editor link (including an external node) and for the search request; a story on the sample server (select a function, read the panel, search, click a hit in another project; both themes, axe); `just spa-stories`, `just check`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 

@@ -39,6 +39,9 @@
   `outline` does not. `worktree add` copies symbol rows from the main checkout.
 - `drill.rs` (T329.14) answers the graph page's level 2 over `/ws` (`{"graph": ...}`); it reads the
   `symbol_graph.rs` scans only, so a name defined in more than 3 files draws no edge.
+- `events.rs` (T329.15) writes the start, progress and end events of an MCP graph call to `graph_events`
+  (fail open, never in a hook); `src/web/live.rs` is the one reader. The end event copies the call's
+  `graph` `measurements` rows, so the page cannot show a number `rtok stats` does not. No source text.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and
