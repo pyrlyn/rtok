@@ -574,6 +574,19 @@ Check: no `revert-on-failure` left in `.github/`; the PR's pipeline passes (acti
 
 Result: job and its comments removed; the `ci` caller runs with `contents: read` and `actions: write`.
 
+### T503. Deterministic WebGL click story on the graph overview
+
+Status: done 2026-10-10
+Model: Claude Code / claude-opus-5-5
+
+`src/pages/GraphOverview.stories.tsx > Webgl Draws And Click Selects` fails intermittently in `ci / spa` (main pipeline run 38044250038 on a docs-only merge; PR run 38046303471, job 114196564243): after ~11 s, `Unable to find an element with the text: ketch`, and the header DOM still shows `rtok`, so the click on ketch's sphere missed. (The `chart renderer unavailable ... 'dpr'` lines in those logs come from the jsdom `unit` project, where echarts gets no canvas; they are unrelated.) Cause: the play function took two equal rounded `screenOf(2)` samples (50 ms apart, or back to back on a DOM mutation) as "the layout stopped". A cooling d3 layout still drifts the node 3–5 px after that, enough to miss its small sphere. Locally, a 3 s pause after that point and a click at the old target fails every time, and a click at the current position passes.
+
+Plan: `Positions` gains `settled` (set from the layout worker's `Frame.settled`, cleared when a new topology is pushed); `Stage.frame` marks its canvas `data-settled` once the drawn frame shows a resting layout and no camera flight; the story waits for that attribute instead of the two-sample heuristic, then aims at `screenOf(2)`. Files: `web/src/pages/graph3d/useLayout.ts`, `stage3d.ts`, `live/camera2d.test.tsx` (fake `Positions`), `web/src/pages/GraphOverview.stories.tsx`.
+
+Check: the story passes with a 3 s pause before the click and with the layout worker slowed to 60 ms per step; full `vitest --project storybook` green several times, also under 16 busy-loop processes with SwiftShader WebGL; `just js`, `just spa-test`, `tsc --noEmit`.
+
+Result: the story waits for `data-settled` on the 3D canvas; under the old heuristic a 3 s pause before the click failed 2/2 runs, with the fix it passed 3/3 with that pause and the slowed worker; full storybook project 225/225 in 3 runs under load with SwiftShader and 2 runs on the GPU; `useLayout.test.ts` covers `subscribe` and `settled` (it fails without the reset on new topology); `just js`, `just spa-test` and `tsc --noEmit` green.
+
 ### T252. `surface_parity` web test reads the real `~/.claude` history
 
 Creator request 2026-09-24. `tests/surface_parity.rs::web_serves_exactly_the_pages_the_model_offers` built its `Config` with `load_from(tempdir)` only, so `doctor.*`, `stats.transcripts_dir` and `stats.codex_dir` stayed at this machine's real `~/.claude*` and `~/.codex/sessions`: every snapshot parsed the creator's whole JSONL history (~80 s locally, 180 s timeout under load, non-hermetic). The same leak hid in `web_doctor_instruction_audit_matches_cli_order` (19 s: `rtok doctor` scans `stats.transcripts_dir`), `tests/web.rs::ws_set_accepts_plugin_enabled` (67 s: a web `set` reloads `config.toml`, dropping the in-memory redirects `tests/web.rs` had copied three times), `tests/graph_model.rs::graph_page_matches_dead_json_on_the_fixture_index` (75 s: a snapshot on a bare `load_from`) and in `tests/stats_model.rs` (fixture transcripts, but `doctor.*` still real).

@@ -162,18 +162,11 @@ export const WebglDrawsAndClickSelects: StoryObj = {
 
         const probe = (globalThis as { __probe?: { current: ViewApi | null } }).__probe!;
         // ketch is not selected in the sample registry; a click on its sphere selects it.
-        // Until the layout and the camera fit stop, the click can land where the sphere was.
-        let last = "";
-        const target = await waitFor(() => {
-            const at = probe.current?.screenOf(2);
-            if (!at) throw new Error("layout not ready");
-            const spot = `${Math.round(at.x)},${Math.round(at.y)}`;
-            if (spot !== last) {
-                last = spot;
-                throw new Error("layout still moving");
-            }
-            return at;
-        }, READY);
+        // The sphere is small on screen, and a cooling layout drifts it past its edge after two
+        // equal samples: only the stage's resting signal says where it stays.
+        await waitFor(() => expect(gl).toHaveAttribute("data-settled"), READY);
+        const target = probe.current?.screenOf(2);
+        if (!target) throw new Error("ketch has no position on a settled layout");
         const coords = { clientX: target.x, clientY: target.y };
         await userEvent.pointer([
             { keys: "[MouseLeft>]", target: gl, coords },
