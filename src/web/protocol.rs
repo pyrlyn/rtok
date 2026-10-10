@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
 use serde::{Deserialize, Serialize};
 
-use super::model::Snapshot;
+use super::model::{DrillGraph, DrillRequest, Snapshot};
 use crate::doctor::web::{Fixed, Plan, Selection};
 
 /// Committed schema, relative to the repository root.
@@ -28,6 +28,8 @@ pub enum ServerFrame {
     DoctorPlan { plan: Plan },
     /// What a confirmed `doctor` apply did.
     DoctorFixed { fixed: Fixed },
+    /// The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).
+    Graph { graph: DrillGraph },
 }
 
 impl ServerFrame {
@@ -48,6 +50,8 @@ pub enum ClientMessage {
     Project { project: ProjectRequest },
     /// The `doctor --fix` checklist: plan it, or write it once the user confirmed.
     Doctor { doctor: DoctorRequest },
+    /// The inside of one project for the graph page's level 2 (T329.14); read-only.
+    Graph { graph: DrillRequest },
 }
 
 /// The registry writes the graph page offers; `<project>` is an id or a
@@ -164,6 +168,10 @@ mod tests {
             }
         ));
         assert!(serde_json::from_str::<ClientMessage>(r#"{"project":{"action":"drop"}}"#).is_err());
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"graph":{"project":"1","expand":["a.rs"]}}"#).unwrap();
+        assert!(matches!(m, ClientMessage::Graph { .. }));
+        assert!(serde_json::from_str::<ClientMessage>(r#"{"graph":{}}"#).is_err());
     }
 
     #[test]

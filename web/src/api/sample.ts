@@ -327,6 +327,11 @@ export const connectSample: Connect = (handlers) => {
         );
         return true;
       }
+      if ("graph" in message) {
+        // The drill-down page and its sample frames land with T329.22.
+        later(() => handlers.onFrame({ type: "message", text: "no sample drill-down yet" }));
+        return true;
+      }
       const { key, value } = message.set;
       const id = /^plugins\.([^.]+)\.enabled$/.exec(key)?.[1];
       const plugin = snapshot.plugins.find((p) => p.id === id);

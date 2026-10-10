@@ -163,6 +163,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.graph.exclude | [] | default |
 | plugins.graph.impact_tokens | 1500 | default |
 | plugins.graph.include | [] | default |
+| plugins.graph.lsp_timeout_ms | 40000 | default |
 | plugins.graph.map_rank | refs | default |
 | plugins.graph.map_tokens | 0 | default |
 | plugins.graph.max_auto_projects | 20 | default |
@@ -416,7 +417,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-370 keys.
+371 keys.
 
 ## Doctor
 
