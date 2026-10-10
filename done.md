@@ -76,6 +76,16 @@ Result: see the commit; `just check` green.
 Status: done 2026-10-09
 Model: Claude Code / sonnet-5.5
 
+### T467. Move `src/store/` into `crates/rtok-store`
+
+Cloud review finding (2026-10-08, issue #628): `src/store/mod.rs` was 5,275 lines and belonged in `crates/rtok-store`. Already done before the review was triaged: #907 (#628) extracted the SQLite store into `rtok-store`, and #910 (#631) stopped it writing the terminal. `src/store/mod.rs` is now a 120-line re-export with the housekeeping warning hand-off to `stdio::stderr`. Nothing left to move.
+
+Check: `wc -l src/store/mod.rs` (120 at `26fe6c18`); `git log -- src/store/mod.rs`.
+
+Result: closed without code; the findings row leaves `plan.md`.
+Status: done 2026-10-10
+Model: Claude Code / opus-5.5
+
 ### T457. Sub-agent `rtok run --agent <id>` wraps keep guard keys
 
 `strip_wrap` only removed `rtok run -- `, so a sub-agent rewrite (`rtok run --agent <id> -- '…'`) still had stem `rtok`. `cache_key` was `None`, and PostToolUse treated that read-only command as a mutation and cleared every `bash` and `read` guard key.
