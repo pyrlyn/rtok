@@ -46,6 +46,22 @@ fn migration_is_idempotent() {
     let _: i64 = usage::table.count().get_result(&mut *conn).unwrap();
 }
 
+/// Diesel keys a migration by the number before the first `_`, so two branches that both
+/// took the next number merge into one migration and the other one never runs (0043, T501).
+/// The directory is read, not the embedded list, because embedding already lost the second.
+#[test]
+fn every_migration_has_its_own_number() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let mut seen = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+        let number = name.split('_').next().unwrap().to_owned();
+        if let Some(other) = seen.insert(number.clone(), name.clone()) {
+            panic!("{other} and {name} share the number {number}; renumber the newer one");
+        }
+    }
+}
+
 /// A database that already recorded `NNNN.sql` in `schema_migrations` must not run those
 /// files again when Diesel's version table is empty.
 #[test]
