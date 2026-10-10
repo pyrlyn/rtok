@@ -101,6 +101,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T477 | todo | P3 | 3 | 0% | |
 | T478 | todo | P3 | 3 | 0% | |
 | T479 | todo | P3 | 2 | 0% | |
+| T480 | todo | P3 | 3 | 0% | |
 
 
 
@@ -1437,6 +1438,12 @@ Check: a TUI test with a fixture home: the plan equals the web's plan for the sa
 T330.6 adds a "clear safe junk" button to the web hosts page that runs the `rtok agents junk clear` dry run, shows it and asks for confirmation; D27 (amended 2026-10-10, T346) requires the same action in the TUI. Depends on T330.6. Done means: the TUI hosts page has a clear-safe-junk key that calls the same function as `rtok agents junk clear`, shows the dry-run plan (per agent and kind, sizes, space freed) and deletes only after a confirm key (`clear --yes` semantics, re-check before each delete), then shows "Freed X of Y planned".
 
 Check: a TUI test on the T330 fixture home: the plan equals `clear`'s dry run, confirm removes exactly the safe items and no others, declining changes no file (tree hash before equals after); `tests/surface_parity.rs` lists the action on both surfaces; `just check`.
+
+### T480. TUI: live graph calls panel
+
+T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26.
+
+Check: a TUI test with a `TestBackend` feeds a fixture event batch and the pane's totals equal the web store's for the same batch; freeze holds the picture and unfreeze shows every held call; `tests/surface_parity.rs` lists the live calls view on both surfaces; `just check`.
 
 ## Reference
 

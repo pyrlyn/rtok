@@ -79,3 +79,4 @@
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T478. TUI: doctor fix with plan and confirm
 - T479. TUI: clear safe junk with plan and confirm
+- T480. TUI: live graph calls panel
