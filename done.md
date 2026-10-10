@@ -3033,6 +3033,24 @@ Deviations: split at claim time. Symbols returned, files touched and the project
 
 Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
 
+## T329.36 — Graph page: counts taken from the answer (symbols returned, files touched, projects with hits)
+
+What was left of T329.33: what a graph call returned, not only what it asked. The end event of a `symbol`, `callers` or `impact` call by name or id now carries three counts. "Symbols returned" counts the asked symbols the answer lists at least once, so it never exceeds symbols asked; a name defined nowhere, or that nothing calls, is not returned. "Files touched" counts the distinct files of the listed rows. "Projects with hits" counts the scope members that contributed a row. Each is the backend's finding before the token cap, so a cut answer still reports everything the archive holds. `explore`, `outline`, `impact` by path, `graph_diff` and failed calls stay NULL, so a missing count never reads as zero (T329.43).
+
+The counts come from the backends where they hold structured rows, never from the answer text. The new `src/plugins/graph/tally.rs` is a thread-local record: `events::Call::start` arms it and `Call::end` drains it, so the CLI and the hooks, which call the same backends, record nothing. The record is filled by `tally::hit` in the tags paths of `mod.rs` (`symbol_tags`, `symbol_by_id`, `callers_tags`, `impact_tags`), in the multi-project paths of `scope.rs` (through `walk_rows`), in `lsp.rs` and in `text.rs`. `door` rewinds the record when the tags answer replaces a failed or empty LSP answer, so nothing counts twice. Migration `0042_graph_event_returned` adds `symbols_returned`, `files_touched` and `projects_hit` to `graph_events`. `CallSummary`, the Rust fold in `src/web/calls_store.rs` and `callsStore.ts` sum them. `LiveMetrics` shows "symbols returned N of M" (with the calls across projects), "files touched" and "projects with hits". `ws.schema.json` and `snapshot.gen.ts` are regenerated, and the docs are updated in en, ru and uk. The TUI pane counterpart is T487.
+
+Check: `the_counts_equal_what_the_answer_lists` (two linked projects: a name defined in one, a name defined nowhere, callers in two projects) asserts the counts against the answer text of `symbol`, `callers` and `impact`; `single_project_counts_equal_the_listing`, `a_failed_server_leaves_no_count_behind`, `the_text_backend_counts_what_it_lists` and `the_end_event_carries_what_the_backends_counted` cover the rest; the two folds agree on 2 symbols returned, 6 files and 3 projects.
+
+Result: `just check` 3233 passed, 8 skipped; `just spa-typecheck` and `just js` clean; `just spa-test` 408 passed (a first run under load timed out 4 tests, which pass on rerun); `just spa-stories` 220 passed; `just spa-e2e` 29 passed, and "clear safe junk", a load flake, passes alone.
+
+Limitations: the real LSP counting in `lsp.rs` has no test, because it needs a server. `impact` with `to` counts the symbol and the project but no files, because a call chain names no file.
+
+## T487 — TUI: live calls pane shows the counts taken from the answer
+
+The D27 counterpart of T329.36, done in the same change, because T486's parity test pins the web wording and T329.36 changed it. The pane's metrics line now reads "symbols returned N of M (K across projects)" in place of "symbols asked", and a line of its own shows "files touched" and "projects with hits", all read from the same `Totals` (`symbols_returned`, `files_touched`, `projects_hit`) as the web `LiveMetrics`. The tool bars yield one more row (`height - 11`), so the feed keeps its rows on a 24-row screen.
+
+Check: `the_pane_shows_the_call_metrics_with_the_web_wording` feeds the `calls_store.rs` fixture events with returned counts and the pane shows "symbols returned 2 of 3 (1 across projects)" and "files touched 6  projects with hits 3"; `the_metrics_line_leaves_the_feed_its_rows_at_24_rows` stays green; `tests/surface_parity.rs::call_metrics_exist_on_both_surfaces` lists the new labels and fields on both surfaces; `just check`.
+
 ## T329.22 — Graph page level 2: the drill-down view (SPA; side panel and search split to T329.23)
 
 T329 §8a level 2 on the page, drawn from the `{"graph": ...}` message and `DrillGraph` frame T329.14 added.

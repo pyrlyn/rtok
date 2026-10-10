@@ -68,6 +68,11 @@ pub struct CallSummary {
     pub symbols: u32,
     /// Ended calls whose scope held more than one project.
     pub crossed: u32,
+    /// What the ended calls returned, counted by the graph backends (T329.36): asked symbols
+    /// the answers list, distinct files per call and projects with a row per call.
+    pub symbols_returned: u32,
+    pub files_touched: u32,
+    pub projects_hit: u32,
 }
 
 /// Folds `events` (oldest first) into a frame, or `None` when there are none.
@@ -88,6 +93,9 @@ pub fn coalesce(events: Vec<GraphEvent>) -> Option<CallBatch> {
                 summary.failed += u32::from(!e.ok);
                 summary.symbols += e.symbols.unwrap_or(0);
                 summary.crossed += u32::from(e.total.is_some_and(|t| t > 1));
+                summary.symbols_returned += e.symbols_returned.unwrap_or(0);
+                summary.files_touched += e.files_touched.unwrap_or(0);
+                summary.projects_hit += e.projects_hit.unwrap_or(0);
                 for s in &e.samples {
                     summary.est_before += i64::from(s.est_before);
                     summary.est_after += i64::from(s.est_after);
@@ -256,6 +264,9 @@ mod tests {
             row("lsp_fallback", 0, 0, None),
         ];
         end.symbols = Some(3);
+        end.symbols_returned = Some(2);
+        end.files_touched = Some(4);
+        end.projects_hit = Some(2);
         end.total = Some(2);
         let b = coalesce(vec![
             ev(1, "a", EventPhase::Start),
@@ -283,6 +294,9 @@ mod tests {
                 caps: 1,
                 symbols: 3,
                 crossed: 1,
+                symbols_returned: 2,
+                files_touched: 4,
+                projects_hit: 2,
             }
         );
     }

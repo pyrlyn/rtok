@@ -687,6 +687,7 @@ fn symbol_text(
             if !filter.path_ok(&d.path) || !filter.kind_ok(kind) {
                 continue;
             }
+            super::tally::hit(&s.root, name, [d.path.as_str()]);
             out.push_str(&format!(
                 "{}\n",
                 super::def_head(&d.path, name, kind, d.line)
@@ -777,6 +778,7 @@ pub(crate) fn callers(cx: &Ctx, root: &Path, name: &str, filter: &super::Filter)
             if !filter.path_ok(&path) {
                 continue;
             }
+            super::tally::hit(&s.root, name, [path.as_str()]);
             let scope = if scope.is_empty() {
                 String::new()
             } else {
@@ -862,6 +864,7 @@ pub(crate) fn impact(
                     format!("no path from {name} to {target} within depth {depth}"),
                 );
             }
+            super::tally::hit(&s.root, name, std::iter::empty::<&str>());
             return finish(
                 cx,
                 "impact",
@@ -881,6 +884,9 @@ pub(crate) fn impact(
                 t0,
                 format!("nothing reaches {name}{}", filter.scope_note()),
             );
+        }
+        for (_, path, _) in &rows {
+            super::tally::hit(&s.root, name, [path.as_str()]);
         }
         finish(cx, "impact", t0, super::impact_lines_text(&rows))
     })

@@ -18,6 +18,9 @@ export const event = (over: Partial<GraphEvent> = {}): GraphEvent => ({
   samples: [],
   session: "session-abcdef",
   symbols: null,
+  symbols_returned: null,
+  files_touched: null,
+  projects_hit: null,
   target: "open_index",
   tool: "callers",
   total: null,
@@ -67,6 +70,9 @@ export function batch(events: GraphEvent[], omitted = 0): CallBatch {
       caps: samples.filter((s) => s.ref_id).length,
       symbols: ends.reduce((n, e) => n + (e.symbols ?? 0), 0),
       crossed: ends.filter((e) => (e.total ?? 0) > 1).length,
+      symbols_returned: ends.reduce((n, e) => n + (e.symbols_returned ?? 0), 0),
+      files_touched: ends.reduce((n, e) => n + (e.files_touched ?? 0), 0),
+      projects_hit: ends.reduce((n, e) => n + (e.projects_hit ?? 0), 0),
     },
   };
 }

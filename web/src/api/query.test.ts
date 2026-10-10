@@ -440,6 +440,9 @@ describe("call stream", () => {
           caps: 0,
           symbols: 0,
           crossed: 0,
+          symbols_returned: 0,
+          files_touched: 0,
+          projects_hit: 0,
         },
       },
     }) as Frame;
