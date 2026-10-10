@@ -8846,6 +8846,19 @@ Deviations: A mixed `auto` scope does not walk links through the tags index (a s
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
 
+### T329.10. Graph text-search backend (in-process)
+
+T329 §6a mode 3 and "when no mode works": word-boundary definition and mention searches in process with `ignore` and `regex`, the crates behind the `search` tool (T4.5; D6/D18, no spawned program), `dead` reported as not available; `ssh://` roots are out of scope (I-118), `text.*` Measurement kinds. Depends on T329.9.
+
+Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
+
+Done: `plugins/graph/text.rs` answers `symbol`, `callers`, `impact` (one level), `outline` and `explore` by regex over the project's files, in process. The walk is the `search` tool's: `read::search::text_files` (the size gate and UTF-8 filter, extracted from `search` and now shared by both) over the graph `Matcher` walker, so `.gitignore`, the graph's `include`/`exclude` and `plugins.read.search_max_bytes` apply. A definition is a keyword (`fn`, `def`, `function`, `func`, `class`, `struct`, `enum`, `trait`, `interface`, `type` and a few more, with an optional Go receiver) followed by the whole-word name; a mention is any other line with the whole word. `symbol` prints `path:line kind` and the definition line (no body, a text search cannot find its end); `callers` and `impact` print one row per file; `explore` reuses `assemble_explore` through a `TextExplore` with no call paths. Every answer is headed `(text)` and one that lists hits ends with a "may include comments, strings and same-named symbols" line. `backend = "text"` (and `backend_by_language`) pins it; `auto` uses it when the project has no language server and no file a grammar parses. `mod.rs` gets `Mode::Text` and the `text_or` door in front of `lsp_or_tags`; `scope.rs` answers a scope per project when any member is text. `dead` prints "not available in text mode" (CLI, and a line per text member over a scope), as do the `to` chains of `impact`. A root that cannot be read gives `no graph backend available: <reason>`. Each text answer records a `text.<tool>` `Measurement` row (time, like the `tags.*` rows); no saving is claimed, so none is recorded beyond the existing `cap` row. `rtok-config` accepts `text` in both keys; `lsp.rs` names `java`, `ruby`, `php`, `elixir` and `swift` by their marker files so `backend_by_language` can pin them. `docs/lsp.md` has a "Text search" section and `docs/config.md` the key text, in en, ru and uk; the config-init golden follows.
+
+Deviations: the Graph page's dead-symbol list reads the store directly (`dead_candidates`), so for a text project it is empty rather than saying "not available"; the page banner is the page tasks' (T329.22). `outline` prints `line kind name` rather than the tags `map` shape. The `no process` test is a source-level scan (`tests/deps.rs`) of `text.rs` and `search.rs`, because the repo has no spawn seam to count; `ssh://` roots stay out (I-118).
+
+Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
 ### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
 
 T329 §6b: a per-project (and language) record of which mode works, in memory for the hot path and mirrored into the store so the CLI, web and `rtok doctor` see it; single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page with `checked_at` and `next_probe_at`. Exposes a `reprobe(project)` entry point for the §8d health check (T329.17); requests never call it. T337 is decided: requests never re-probe. Depends on T329.9.

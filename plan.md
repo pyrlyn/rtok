@@ -44,7 +44,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.10 | todo | P3 | 3 | 0% | |
+| T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.17 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
@@ -819,12 +819,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Diff: changing a function signature in B and running `rtok graph diff --from HEAD` from A reports the change and lists A's affected call sites; the working tree is untouched by building the old side; a rename is reported as a rename; an unknown ref errors clearly; MCP `graph_diff` returns a capped summary with a paging id.
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
-
-### T329.10. Graph text-search backend (in-process)
-
-T329 §6a mode 3 and "when no mode works": word-boundary definition and mention searches in process with `ignore` and `regex`, the crates behind the `search` tool (T4.5; D6/D18, no spawned program), `dead` reported as not available; `ssh://` roots are out of scope (I-118), `text.*` Measurement kinds. Depends on T329.9.
-
-Check: a project in a language with no grammar answers from text search, tagged text, with `dead` not available; no `rg`, `grep` or `ssh` process is spawned (a test asserts it); `just check`.
 
 
 ### T329.26. Graph page: two-part UI with the read-only live graph and live metrics
