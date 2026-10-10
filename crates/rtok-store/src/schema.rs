@@ -391,7 +391,7 @@ diesel::table! {
     }
 }
 
-// 0044 (T289.5): an adopted worktree no single agent could be named for yet.
+// 0045 (T289.5): an adopted worktree no single agent could be named for yet.
 diesel::table! {
     worktree_pending (path) {
         path -> Text,
