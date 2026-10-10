@@ -237,8 +237,8 @@ rtok graph index .
 indexed 5 files · 551 rows · 0 skipped · 5 read
 ```
 
-The agent then reaches it over MCP as `symbol`, `callers`, `impact`, `outline`, `explore` and
-`graph_diff` — six tools whose descriptions cost 155 tokens, in place of a grep-and-read chain. Each takes an
+The agent then reaches it over MCP as `symbol`, `callers`, `impact`, `outline`, `explore`,
+`graph_diff` and `graph_export` — seven tools whose descriptions cost 165 tokens, in place of a grep-and-read chain. Each takes an
 optional `project` (id or directory); without it a call answers for the working directory's
 project and the projects it links to (`rtok graph projects link`). Definition
 lookups are exact (recall and precision 1.000 over a hand-labelled set); reference lookups

@@ -19,12 +19,12 @@
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
-- T329.16. Graph export: PNG, SVG, JSON, `rtok graph export`, MCP `graph_export`
 - T329.30. Graph page: health ring and breakdown per project
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 - T329.33. Graph page: call metrics from the events (latency, symbols, files, projects, fallbacks)
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 - T329.29. Graph page: Compare mode and the remaining diff reports
+- T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
@@ -70,7 +70,6 @@
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T476. TUI: select, link and unlink projects on the graph page
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T479. TUI: clear safe junk with plan and confirm
 - T481. TUI: graph health score per project

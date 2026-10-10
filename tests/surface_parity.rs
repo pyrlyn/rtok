@@ -256,6 +256,39 @@ fn graph_page_exists_on_both_surfaces() {
     );
 }
 
+/// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page
+/// of both surfaces, each through the one `graph projects` function — the web by
+/// `ClientMessage::Project`, the TUI by keys over the same `ProjectRequest` and
+/// `web::project_write`. A write added to one without the other fails here by name.
+#[test]
+fn project_writes_exist_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/projects.rs"));
+    for (verb, key, desc) in [
+        ("Select", "s", "select project"),
+        ("Link", "l", "link to…"),
+        ("Unlink", "u", "unlink from…"),
+    ] {
+        assert!(
+            web.contains(&format!("R::{verb}")),
+            "the web page does not write project {verb}"
+        );
+        assert!(
+            tui.contains(&format!("ProjectRequest::{verb}")),
+            "the TUI graph page does not write project {verb}"
+        );
+        assert!(
+            app.contains(&format!("(\"graph\", \"{key}\", \"{desc}\")")),
+            "the TUI's KEYS table has no graph key for project {verb}"
+        );
+    }
+    assert!(
+        app.contains("crate::web::project_write"),
+        "the TUI writes through the web page's function, not a second one"
+    );
+}
+
 /// T231: both surfaces render the Hosts page — `agents list`'s blocks, kind,
 /// version, installed surfaces, config path — from the same model accessor, so
 /// `agents list`/`agents info` can leave EXEMPT for COMMAND_PAGES.
@@ -622,6 +655,10 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "graph diff",
         "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
+    ),
+    (
+        "graph export",
+        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.31",
     ),
     (
         "graph projects",

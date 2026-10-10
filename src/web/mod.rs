@@ -493,7 +493,7 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
 }
 
 #[cfg(feature = "graph")]
-fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<()> {
+pub(crate) fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<String> {
     use crate::plugins::graph::projects::{Action, run};
     use protocol::ProjectRequest as R;
     let rt = crate::plugin::Runtime::open(cfg.clone(), "web-projects")?;
@@ -511,11 +511,11 @@ fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<()> {
             both,
         },
     };
-    run(&rt, action, false).map(|_| ())
+    run(&rt, action, false)
 }
 
 #[cfg(not(feature = "graph"))]
-fn project_write(_cfg: &Config, _req: protocol::ProjectRequest) -> Result<()> {
+pub(crate) fn project_write(_cfg: &Config, _req: protocol::ProjectRequest) -> Result<String> {
     anyhow::bail!("the graph feature is not built in")
 }
 
