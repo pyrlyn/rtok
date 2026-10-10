@@ -50,7 +50,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
 | T329.24 | todo | P3 | 2 | 0% | |
-| T329.25 | todo | P3 | 2 | 0% | |
+| T329.25 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.7 | todo | P3 | 3 | 0% | |
@@ -869,6 +869,14 @@ Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason 
 The page half of T329.17 (split at claim time: the backend alone fills the 500-line cap). T329 §8d "Where alerts show": a red badge on the project node and on the link edges to it (levels 1 and 2), a toast when an alert is raised or recovers, and an alerts list on the graph page. The data is `ProjectRow.alert` (the `Alert` objects T329.17 puts into `/ws` and `web/src/api/snapshot.gen.ts`), already grouped by kind. Depends on T329.17.
 
 Check: Vitest and a story (axe) for a project with a "missing" alert, a grouped alert of three projects and a recovered one (toast); `just check`, `just spa-stories` and `just spa-e2e`.
+
+Execution plan:
+
+1. `graph3d/alerts.ts` (pure): group the `alerts` of every `ProjectRow` by kind (one line per kind, the earliest `since`, the project names; the wording of `health.rs`), `alertedIds` for the scene, `diffAlerts(prev, next)` for raised and recovered keyed by root and kind.
+2. Scene: `SceneNode.alert` and `SceneEdge.alert` (an edge whose target is alerted), filled by `buildScene` (level 1) and by `drillScene` for external nodes of an alerted linked project (level 2). `Scene2D` draws a red badge on the node and a red edge, `stage3d.ts` a red marker and tint; `ProjectList` and the tooltips say "alert".
+3. `ui/Toasts.tsx` (no toast component exists): a polite live region, auto-dismiss, a dismiss button. `graph3d/GraphAlerts.tsx` holds the alerts list panel and feeds the toasts from consecutive snapshots (no toast for the first snapshot). `Graph.tsx` gets one line.
+4. Sample data: a project with a "missing" alert and three projects with one grouped alert.
+5. Tests: Vitest for grouping, diff and scene flags; page test with `wire` pushing snapshots (raise, recover); stories (axe) for missing, grouped and recovered. Docs: graph page section of `docs/commands.md`, ru, uk. Gates: `just check`, `spa-typecheck`, `spa-stories`, `spa-e2e`, `js`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
