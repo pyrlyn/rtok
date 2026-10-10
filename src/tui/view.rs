@@ -63,7 +63,12 @@ pub(super) fn draw(frame: &mut Frame, app: &App) {
 /// The `?` overlay (T60.8): the global keys plus the current page's, generated from
 /// [`super::app::keys_for`] — never a hand-written list. Centred, over a cleared box.
 fn render_help(frame: &mut Frame, app: &App) {
-    let rows = keys_for(app.page());
+    let page = if app.page() == "graph" && app.compare().is_open() {
+        "compare"
+    } else {
+        app.page()
+    };
+    let rows = keys_for(page);
     let lines: Vec<Line<'static>> = rows
         .iter()
         .map(|(k, d)| {
@@ -73,7 +78,7 @@ fn render_help(frame: &mut Frame, app: &App) {
             ])
         })
         .collect();
-    let title = format!("keys — {}", app.page());
+    let title = format!("keys — {page}");
     let width = lines
         .iter()
         .map(Line::width)
@@ -183,6 +188,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "logs" => frame.render_widget(logs_text(app), area),
         "skills" => render_skills(frame, app, area),
         "stats" => frame.render_widget(stats(app), area),
+        "graph" if app.compare().render(frame, area) => {}
         "graph" => render_graph(frame, app, area),
         "hosts" => frame.render_widget(
             app.junk()
@@ -410,7 +416,7 @@ fn plugins_status_line(app: &App) -> Line<'static> {
 }
 
 /// A page's status row: its key hints, then a note (a filter, a toggle's outcome).
-fn status_line(page: &str, note: &str) -> Line<'static> {
+pub(super) fn status_line(page: &str, note: &str) -> Line<'static> {
     let page_keys: Vec<_> = keys_for(page)
         .into_iter()
         .filter(|(k, _)| !keys_for("").iter().any(|(g, _)| g == k))
@@ -458,8 +464,8 @@ fn stats(app: &App) -> Paragraph<'static> {
 /// the live calls pane (T480, D27) below. With no registered project there is nothing for the
 /// keys to act on, so only the text and the pane show.
 fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
-    // The pane takes a bit over half the body, capped, so the index health stays readable.
-    let live = (area.height * 55 / 100).min(18);
+    // The pane takes half the body, capped, so the index health stays readable.
+    let live = (area.height / 2).min(18);
     let [area, calls] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
     app.live().render(frame, calls);
@@ -470,12 +476,13 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     // Seven rows and the header: the table scrolls to the cursor beyond that.
     let height = (rows.len() as u16 + 1).min(8);
     let detail = health::detail(&rows[state.cursor(&rows)]);
-    // Two hint lines: the project keys (T476) and the live pane's (T480) overflow one at 128 columns.
+    // Three hint lines: the project keys (T476), the live pane's (T480) and compare's (T485)
+    // overflow two at 128 columns.
     let [table, breakdown, note, hints, text] = Layout::vertical([
         Constraint::Length(height),
         Constraint::Length(detail.len() as u16),
         Constraint::Length(1),
-        Constraint::Length(2),
+        Constraint::Length(3),
         Constraint::Min(0),
     ])
     .areas(area);

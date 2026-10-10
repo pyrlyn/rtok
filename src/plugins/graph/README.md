@@ -67,3 +67,4 @@ T329.29 gave `graph diff` a `--from` per project (`PROJECT:REF`), `--from-export
 registry links against a saved export; CLI only), and the `changed, not analysed` listing.
 T329.35 put the same report on the web graph page (Compare mode): `diff::page` answers the `/ws` `diff` request with
 `DiffReport`, the typed shape `--json` prints; the old side is a ref or the text of a saved export the page read itself.
+T485 added the same view to `rtok tui` (Graph tab, `c`): a typed ref, `PROJECT:REF` list or saved-export path goes through `diff::page_of`, the core `page` shares, and the panel uses the web panel's marks and sections.
