@@ -3045,6 +3045,14 @@ Result: `just check` 3233 passed, 8 skipped; `just spa-typecheck` and `just js` 
 
 Limitations: the real LSP counting in `lsp.rs` has no test, because it needs a server. `impact` with `to` counts the symbol and the project but no files, because a call chain names no file.
 
+## T329.43 — Graph page: returned counts for explore, outline, impact by path and graph_diff
+
+What was left of T329.36. The end event of `explore`, `outline`, `impact` by path and `graph_diff` now carries `symbols_returned`, `files_touched` and `projects_hit` like `symbol`, `callers` and `impact` by name, counted by the backends from their structured rows and before the token cap. `events::Call::end` no longer gates on symbols asked: it counts the tools listed in `events::COUNTED`, so a call that finds nothing reads 0 and `graph_export`, which tallies nothing, stays NULL; failed calls stay NULL. `explore` asks one symbol per identifier of its question and returns the tokens that resolved to a definition the answer prints; `tally::rename` credits each definition's rows (`TagsExplore::defs`, `TextExplore::defs`, the LSP defs) to the token that resolved it, so symbols returned never exceeds symbols asked, and what `impact1` recorded is rewound because the `impact:` lines print a count and no file. Names the full-text fallback found keep their files and projects and credit no symbol. `outline` counts its one file once the tags map, the LSP document symbols or the text scan has rows. `impact` by path counts the affected test files per project (`affected_from_paths`, `scope::affected`). `graph_diff` counts the files of the diff's own rows (changed, added, removed, renamed, moved, edges, not analysed) per project in `gather`; the caller sites quoted under a changed symbol are context and are not counted. The web and TUI wording ("symbols returned N of M", "files touched", "projects with hits") needs nothing new, so both surfaces stay in step; `docs/commands.md` (en, ru, uk) and `src/plugins/graph/AGENTS.md` name the new tools.
+
+Check: `explore_outline_and_path_impact_count_what_they_list` (the T329.36 two-project fixture plus a test file in two projects) asserts the counts against the answer text of `explore` (2 of 3 tokens, 2 files, 2 projects), `outline` (1 file, 1 project), `impact` by path (2 test files, 2 projects) and the empty answers (0, 0, 0); `the_diff_counts_the_files_of_the_rows_it_lists` covers `graph_diff` (0 on a clean tree; 2 files, 2 projects after a change in b and a new file in a); `rename_credits_the_rows_since_the_mark_to_one_symbol`, `symbols_counts_the_names_and_the_id_asked` and `the_end_event_carries_what_the_backends_counted` cover the rest; the folds are the ones T329.36 tested.
+
+Result: `just check` 3248 passed, 8 skipped (no `web/src` change, so no web gates).
+
 ## T487 — TUI: live calls pane shows the counts taken from the answer
 
 The D27 counterpart of T329.36, done in the same change, because T486's parity test pins the web wording and T329.36 changed it. The pane's metrics line now reads "symbols returned N of M (K across projects)" in place of "symbols asked", and a line of its own shows "files touched" and "projects with hits", all read from the same `Totals` (`symbols_returned`, `files_touched`, `projects_hit`) as the web `LiveMetrics`. The tool bars yield one more row (`height - 11`), so the feed keeps its rows on a 24-row screen.
@@ -10808,6 +10816,19 @@ Check: findings with sources and dates in `research.md`; the T441 card adjusted 
 Result: `research.md` §35. Corrections to the card: Backlog.md (v1.53.0) and Taskmaster (0.43.1) lock id allocation per repository, beads (v1.3.1) uses hash ids and already syncs GitHub and GitLab, so "nobody has collision-free ids" was wrong; what rtok would add is one per-project counter shared by every checkout, worktree and host on the machine. Settled: the allocator is a Diesel table in the existing store (WAL + `exclusive_transaction`); subtask depth 2 fits GitHub sub-issues (100 per parent) and GitLab issue → task (every tier, parent link through GraphQL only); GitLab native Status and scoped labels are Premium, so Free swaps a plain `status::` label; won't-do is native on both; GitHub's 500 content-creating requests/hour paces bulk writes; remote collision checks list by label, not search. New open question for the creator in §12: build rtok's own core or adopt beads/Backlog.md.
 
 Status: done 2026-10-07
+Model: Claude Code / claude-opus-5-5
+
+### T405. Task-board extras for the agent task tools
+
+Promoted from I-112 (Ivan, 2026-10-04). From `research.md` §28.4 F8, F9, F11, F19, F20: a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20).
+
+Depends on I-103 (the task tools) and the creator's §28.5 decisions (source of truth, plugin vs separate crate, handoff file on the task branch) — ask before claiming. Split into one sub-task per item when claiming.
+
+Check: each sub-task carries its own Check.
+
+Result: folded into T441 by the creator's decision of 2026-10-10: T441 (own task core, approved 2026-10-07) supersedes I-103 and the §28.5 questions, so the five items became milestone 13 (T441.13) of the T441 card. No code.
+
+Status: closed 2026-10-10
 Model: Claude Code / claude-opus-5-5
 
 ### T436. Operation icons and a spinner on every wait, the way ketch draws them

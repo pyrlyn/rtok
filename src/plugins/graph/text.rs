@@ -261,7 +261,7 @@ fn impact_rows(found: &Scan) -> String {
 }
 
 /// `outline`: the definition keywords found in one file, `line kind name`.
-pub(crate) fn outline(cx: &Ctx, abs: &Path) -> Result<String> {
+pub(crate) fn outline(cx: &Ctx, root: &Path, abs: &Path) -> Result<String> {
     let max = cx
         .plugin_config::<crate::config::Read>("read")
         .search_max_bytes;
@@ -284,6 +284,7 @@ pub(crate) fn outline(cx: &Ctx, abs: &Path) -> Result<String> {
     if rows.is_empty() {
         return Ok(format!("no definitions in {}", abs.display()));
     }
+    super::tally::hit(root, "", [abs.to_string_lossy()]);
     Ok(with_caveat(rows))
 }
 
@@ -327,7 +328,12 @@ impl ExploreParts for TextExplore<'_> {
     }
 
     fn defs(&mut self, name: &str) -> Result<String> {
-        Ok(defs_text(&self.scan(name)?.defs))
+        let root = self.root;
+        let found = self.scan(name)?;
+        if !found.defs.is_empty() {
+            super::tally::hit(root, name, found.defs.iter().map(|d| d.path.as_str()));
+        }
+        Ok(defs_text(&found.defs))
     }
 
     fn paths(&mut self, _a: &str, _b: &str) -> Result<Vec<String>> {
@@ -428,7 +434,7 @@ mod tests {
     fn outline_lists_definition_keywords() {
         let (cx, dir) = pinned("t32910-outline");
         seed(&dir);
-        let out = outline(&Ctx::new(&cx), &dir.join("a.zig")).unwrap();
+        let out = outline(&Ctx::new(&cx), &dir, &dir.join("a.zig")).unwrap();
         assert!(
             out.starts_with("1 const std\n2 function alpha\n5 function beta\n"),
             "{out}"

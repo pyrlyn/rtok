@@ -17,6 +17,16 @@ use crate::plugin::Runtime;
 use crate::store::{EventPhase, GraphEvent};
 use crate::tokens::Class;
 
+/// The tools whose backends call `tally::hit` for every row they list.
+const COUNTED: [&str; 6] = [
+    "symbol",
+    "callers",
+    "impact",
+    "outline",
+    "explore",
+    "graph_diff",
+];
+
 static CALLS: AtomicU64 = AtomicU64::new(0);
 
 /// One call being tracked. [`Call::start`] writes the start event; [`Call::end`] writes the
@@ -81,9 +91,9 @@ impl<'a> Call<'a> {
                 e.done = self.total;
                 e.backend = backend(text);
                 e.answer_tokens = Some(self.cx.estimate(text, Class::Json));
-                // Only a call about named symbols is counted: `explore`, `outline` and a path
-                // `impact` do not feed the tally, and a zero there would read as "found nothing".
-                if self.symbols.is_some() {
+                // A tool whose backends never tally (`graph_export`) stays NULL: a zero there
+                // would read as "found nothing".
+                if COUNTED.contains(&self.tool.as_str()) {
                     e.symbols_returned = Some(found.symbols);
                     e.files_touched = Some(found.files);
                     e.projects_hit = Some(found.projects);
@@ -142,7 +152,13 @@ fn symbols(args: &Value) -> Option<u32> {
         .filter(|n| !n.is_empty())
         .count();
     let by_id = usize::from(args["id"].as_str().is_some_and(|id| !id.is_empty()));
-    u32::try_from(named + by_id).ok().filter(|n| *n > 0)
+    // `explore` asks one symbol per identifier of its question.
+    let tokens = args["query"]
+        .as_str()
+        .map_or(0, |q| super::explore_tokens(q).len());
+    u32::try_from(named + by_id + tokens)
+        .ok()
+        .filter(|n| *n > 0)
 }
 
 fn project(args: &Value) -> Option<String> {
@@ -183,7 +199,10 @@ mod tests {
         assert_eq!(symbols(&json!({"names":["a","","b"]})), Some(2));
         assert_eq!(symbols(&json!({"name":"f"})), Some(1));
         assert_eq!(symbols(&json!({"id":"x::f#function@1"})), Some(1));
-        assert_eq!(symbols(&json!({"query":"q","path":"a.rs"})), None);
+        assert_eq!(symbols(&json!({"path":"a.rs"})), None);
+        // `explore` asks one symbol per identifier of its question.
+        assert_eq!(symbols(&json!({"query":"how does f call g, f"})), Some(5));
+        assert_eq!(symbols(&json!({"query":"?"})), None);
     }
 
     #[test]
@@ -247,9 +266,12 @@ mod tests {
         let call = Call::start(&cx, "callers", &json!({"name":"f"}));
         super::super::tally::hit(root, "f", ["a.rs", "b.rs"]);
         call.end(&Ok("a.rs ×1\nb.rs ×1\n".to_string()));
-        let call = Call::start(&cx, "explore", &json!({"query":"f"}));
+        // A tool that never tallies stays NULL; one that tallies and finds nothing is zero.
+        let call = Call::start(&cx, "graph_export", &json!({}));
         super::super::tally::hit(root, "f", ["a.rs"]);
         call.end(&Ok("x".to_string()));
+        let call = Call::start(&cx, "explore", &json!({"query":"f"}));
+        call.end(&Ok("no symbols resolved".to_string()));
         let ends: Vec<_> = cx
             .store
             .graph_events_after(0, 10)
@@ -260,6 +282,7 @@ mod tests {
         let counts = |e: &GraphEvent| (e.symbols_returned, e.files_touched, e.projects_hit);
         assert_eq!(counts(&ends[0]), (Some(1), Some(2), Some(1)));
         assert_eq!(counts(&ends[1]), (None, None, None));
+        assert_eq!(counts(&ends[2]), (Some(0), Some(0), Some(0)));
     }
 
     /// The page's counters are read off the events, so they have to equal what the ledger
