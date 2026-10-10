@@ -506,6 +506,8 @@
 # auto_link_references = true           # follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 # reference_depth = 3                   # reference levels followed from the project (A -> B is 1); reaching it is shown and logged
 # max_auto_projects = 20                # most projects references may add to the registry; reaching it is shown and logged
+# alerts = true                         # alert when a project in the scope is missing, unreachable, has its backend down or a broken manifest link; shown by rtok doctor, graph projects and graph answers
+# health_check_interval_s = 60          # seconds between health checks in rtok mcp and rtok web (an alert needs two in a row); 0 = off
 # exclude    = []                       # gitignore-style paths dropped from the walk
 # include    = []                       # gitignore-style paths forced back in
 # extensions = {}                       # ext = "grammar" remap for custom suffixes

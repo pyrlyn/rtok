@@ -46,10 +46,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
-| T329.17 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
+| T329.25 | todo | P3 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.7 | todo | P3 | 3 | 0% | |
@@ -839,12 +839,6 @@ T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default 
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
 
-### T329.17. Graph alerts: linked project down or unreachable
-
-T329 §8d: alert states, the two-check rule, the 60 s background check, the page badges and toasts, `rtok doctor`, notices in MCP answers, optional T288 push. Adds `alerts` and `health_check_interval_s`. Owns the tiered re-probe loop (cheap checks every interval; server restart only on change or on a capped backoff from 60 s) in every process that hosts graph, and the clearing of backend-down and unreachable alerts after two good checks (T337 decided). Depends on T329.11, T329.12.
-
-Check: renaming B's directory raises "B missing" after two checks on the page, in `rtok doctor`, in `--json` and in an MCP `callers` notice; restoring clears it and re-indexes; backend-down clears on recovery without a restart; a broken manifest path raises "link broken"; several at once group into one alert; `just check`.
-
 ### T329.18. Graph diff: compare before and after a change
 
 T329 §8e: `rtok graph diff`, MCP `graph_diff`, the Compare mode on the page; the old side is indexed from the git object database into a temporary index. Depends on T329.5, T329.14 and T329.22.
@@ -863,6 +857,12 @@ The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a p
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
 
+
+### T329.25. Graph page: alert badges, toasts and the alerts list
+
+The page half of T329.17 (split at claim time: the backend alone fills the 500-line cap). T329 §8d "Where alerts show": a red badge on the project node and on the link edges to it (levels 1 and 2), a toast when an alert is raised or recovers, and an alerts list on the graph page. The data is `ProjectRow.alert` (the `Alert` objects T329.17 puts into `/ws` and `web/src/api/snapshot.gen.ts`), already grouped by kind. Depends on T329.17.
+
+Check: Vitest and a story (axe) for a project with a "missing" alert, a grouped alert of three projects and a recovered one (toast); `just check`, `just spa-stories` and `just spa-e2e`.
 
 ### T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 

@@ -556,6 +556,8 @@ watch      = "off"                    # off | notify: background re-index inside
 auto_link_references = true           # T329.8: follow references in manifests (Cargo path, npm file:/link:, go replace, Python path, submodules) into other directories, register and auto-link them
 reference_depth = 3                   # T329.8: reference levels followed from the project (A -> B is 1); reaching it is shown and logged
 max_auto_projects = 20                # T329.8: most projects references may add to the registry; reaching it is shown and logged
+alerts = true                         # T329.17: alert when a project in the scope is missing, unreachable, has its backend down or a broken manifest link; shown by rtok doctor, graph projects and graph answers
+health_check_interval_s = 60          # T329.17: seconds between health checks in rtok mcp and rtok web (an alert needs two in a row); 0 = off
 
 [plugins.toon]
 enabled  = true
