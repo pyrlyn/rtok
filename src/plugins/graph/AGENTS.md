@@ -33,6 +33,8 @@
   and capped together. `symbol` / `callers` / `impact` / `explore` prepend
   `index <oldsha> head <newsha>` when the stored HEAD differs (full hex, no timestamp).
   `outline` does not. `worktree add` copies symbol rows from the main checkout.
+- `drill.rs` (T329.14) answers the graph page's level 2 over `/ws` (`{"graph": ...}`); it reads the
+  `symbol_graph.rs` scans only, so a name defined in more than 3 files draws no edge.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and

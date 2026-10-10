@@ -19,6 +19,9 @@ export type ClientMessage =
     }
   | {
       doctor: DoctorRequest;
+    }
+  | {
+      graph: DrillRequest;
     };
 /**
  * The registry writes the graph page offers; `<project>` is an id or a
@@ -72,7 +75,21 @@ export type ServerFrame =
   | {
       fixed: Fixed;
       type: "doctorfixed";
+    }
+  | {
+      graph: DrillGraph;
+      type: "graph";
     };
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillEdgeKind".
+ */
+export type DrillEdgeKind = "contains" | "calls" | "implements" | "imports";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillNodeKind".
+ */
+export type DrillNodeKind = ("file" | "type" | "module" | "function") | "external";
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ModuleState".
@@ -154,6 +171,41 @@ export interface Ref {
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillRequest".
+ */
+export interface DrillRequest {
+  depth: number | null;
+  /**
+   * Files shown as their definitions.
+   */
+  expand: string[];
+  /**
+   * A symbol shown with its callers and callees.
+   */
+  focus: DrillFocus | null;
+  /**
+   * Nodes shown before "+N more"; the page raises it on a click.
+   */
+  limit: number | null;
+  /**
+   * An id or a root path, as in `rtok graph projects`.
+   */
+  project: string;
+  /**
+   * Finds symbols in the project and its scope.
+   */
+  query: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillFocus".
+ */
+export interface DrillFocus {
+  name: string;
+  path: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "Plan".
  */
 export interface Plan {
@@ -207,6 +259,75 @@ export interface Fixed {
    */
   code: number;
   text: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillGraph".
+ */
+export interface DrillGraph {
+  edges: DrillEdge[];
+  hits: DrillHit[];
+  /**
+   * Nodes left out by the cap.
+   */
+  more: number;
+  name: string;
+  nodes: DrillNode[];
+  /**
+   * Some files changed since the last index run, so the picture lags the tree.
+   */
+  partial: boolean;
+  project: number;
+  root: string;
+  /**
+   * `ok`, `not indexed` or `missing`.
+   */
+  state: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillEdge".
+ */
+export interface DrillEdge {
+  count: number;
+  from: string;
+  kind: DrillEdgeKind;
+  to: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillHit".
+ */
+export interface DrillHit {
+  kind: string;
+  line: number;
+  name: string;
+  path: string;
+  project: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "DrillNode".
+ */
+export interface DrillNode {
+  id: string;
+  kind: DrillNodeKind;
+  label: string;
+  line: number;
+  path: string;
+  /**
+   * The project that owns the node: the one asked for, or the linked one for `external`.
+   */
+  project: number;
+  signature: string;
+  /**
+   * The file changed since the last index run.
+   */
+  stale: boolean;
+  /**
+   * Edge count through the node; the page sizes it by this.
+   */
+  weight: number;
 }
 /**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface

@@ -361,11 +361,22 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
         }
         Ok(ClientMessage::Set { set }) => set,
         Ok(ClientMessage::Doctor { doctor }) => return Some(doctor_reply(state, &doctor)),
+        Ok(ClientMessage::Graph { graph }) => {
+            let cfg = state
+                .cfg
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            return Some(graph_reply(&cfg, &graph));
+        }
         Err(_) if v.get("project").is_some() => {
             return Some(message_frame("unknown project request"));
         }
         Err(_) if v.get("set").is_some() => {
             return Some(message_frame("set needs a string key and a bool value"));
+        }
+        Err(_) if v.get("graph").is_some() => {
+            return Some(message_frame("graph needs a project"));
         }
         Err(_) if v.get("doctor").is_some() => {
             return Some(message_frame("doctor needs an action and a selection"));
@@ -413,6 +424,23 @@ fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<()> {
 #[cfg(not(feature = "graph"))]
 fn project_write(_cfg: &Config, _req: protocol::ProjectRequest) -> Result<()> {
     anyhow::bail!("the graph feature is not built in")
+}
+
+/// T329.14: one project's drill-down. Read-only, so unlike a registry write it needs no refusal
+/// path beyond the error line.
+#[cfg(feature = "graph")]
+fn graph_reply(cfg: &Config, req: &model::DrillRequest) -> String {
+    let drilled = crate::plugin::Runtime::open(cfg.clone(), "web-drill")
+        .and_then(|rt| crate::plugins::graph::drill::run(&rt, req));
+    match drilled {
+        Ok(graph) => ServerFrame::Graph { graph }.to_json(),
+        Err(e) => message_frame(&format!("{e:#}")),
+    }
+}
+
+#[cfg(not(feature = "graph"))]
+fn graph_reply(_cfg: &Config, req: &model::DrillRequest) -> String {
+    match *req {}
 }
 
 /// T331.12: the `doctor --fix` checklist for the page. The upgrade's origin guard covers it like
