@@ -47,6 +47,24 @@ export const graphText = [
   "",
 ].join("\n");
 
+/** The same page for a project and its linked ones: every pending and dead row says where it came from. */
+export const graphScopedText = [
+  "root ~/GitHub/listepo/apps/rtok",
+  "rows 48213",
+  "files 612",
+  "pending 2",
+  "  [rtok] src/web/model.rs",
+  "  [ketch] src/lib.rs",
+  "watch true",
+  "indexed_at 2026-09-27 18:12:40",
+  "",
+  "dead symbols",
+  " [rtok] src/render.rs:212 function pad_right",
+  " [ketch] src/queue.rs:41 struct LegacyRow",
+  " [ketch] skipped: root is gone",
+  "",
+].join("\n");
+
 export const hostsText = [
   "CLI: Claude Code",
   "  app     /opt/homebrew/bin/claude (2.1.4)",

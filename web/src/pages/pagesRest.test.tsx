@@ -15,7 +15,7 @@ import { costTotals } from "./Stats";
 import { responsive } from "./parts";
 import { mount, serving } from "./testHelpers";
 import { parseStats } from "./text";
-import { skillRows, statsText } from "./textFixtures";
+import { graphScopedText, skillRows, statsText } from "./textFixtures";
 import { baseName } from "./Worktrees";
 
 afterEach(cleanup);
@@ -133,6 +133,22 @@ describe("graph", () => {
         expect(screen.getByText("src/web/model.rs")).toBeTruthy();
         expect(screen.getByText(/195 more/)).toBeTruthy();
         expect(rowsOf("dead symbols")).toHaveLength(3);
+    });
+
+    test("badges every pending and dead row with its project once the lists are scoped", async () => {
+        mount(serving({ ...richSnapshot, graph: graphScopedText }), "/graph");
+        expect(await screen.findByText("pad_right")).toBeTruthy();
+        const dead = rowsOf("dead symbols").map((r) => r.textContent);
+        expect(dead[0]).toContain("rtok");
+        expect(dead[1]).toContain("ketch");
+        const pending = screen.getByText("src/lib.rs").closest("li")!;
+        expect(within(pending).getByText("ketch")).toBeTruthy();
+    });
+
+    test("a lone project's rows carry no badge", async () => {
+        mount(serving(richSnapshot), "/graph");
+        await screen.findByText("pad_right");
+        expect(screen.queryByRole("columnheader", { name: "project" })).toBeNull();
     });
 
     test("null means the feature is off, not an error alert", async () => {

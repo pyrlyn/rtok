@@ -561,7 +561,11 @@ type DeadByProject<'a> = Vec<(&'a Member, Vec<DeadRow>)>;
 /// `dead` rows of each project of the scope. A definition no project in the scope references is
 /// dead; one only a linked project references stays live, as `callers` counts that project's call
 /// sites. The rows stay per project, so a symbol is still reported where it is defined.
-fn dead_by_project<'a>(cx: &Ctx, scope: &'a [Member]) -> Result<(DeadByProject<'a>, String)> {
+fn dead_by_project<'a>(
+    cx: &Ctx,
+    scope: &'a [Member],
+    rows_of: fn(&Ctx, &Path) -> Result<Vec<DeadRow>>,
+) -> Result<(DeadByProject<'a>, String)> {
     // A text-mode project has no reference edges to judge by, so it says so and lists nothing.
     let texty: Vec<&Member> = scope
         .iter()
@@ -572,7 +576,7 @@ fn dead_by_project<'a>(cx: &Ctx, scope: &'a [Member]) -> Result<(DeadByProject<'
         if texty.iter().any(|t| t.root == m.root) {
             return Ok(Vec::new());
         }
-        super::dead_rows(cx, &m.root)
+        rows_of(cx, &m.root)
     })?;
     for m in texty {
         notes.push_str(&format!("{}dead: {}\n", label(m), text::UNAVAILABLE));
@@ -600,6 +604,33 @@ fn dead_by_project<'a>(cx: &Ctx, scope: &'a [Member]) -> Result<(DeadByProject<'
     Ok((done, notes))
 }
 
+/// The Graph page's dead rows over a scope of several projects, each with the project it belongs
+/// to, read from the stores as they stand: a 2 s tick must not re-walk any tree. The second part
+/// is the skip notes, one per line.
+pub fn dead_page_rows(cx: &Ctx, scope: &[Member]) -> Result<(Vec<(String, DeadRow)>, String)> {
+    let (done, notes) = dead_by_project(cx, scope, super::dead_candidates)?;
+    let rows = done
+        .into_iter()
+        .flat_map(|(m, rows)| rows.into_iter().map(move |r| (m.name.clone(), r)))
+        .collect();
+    Ok((rows, notes))
+}
+
+/// Pending files of every project of a scope, each headed `[project] `, for the Graph page. A
+/// project whose set cannot be read adds nothing, so one broken link never hides the rest.
+pub fn pending_page_paths(cx: &Ctx, scope: &[Member]) -> Vec<String> {
+    scope
+        .iter()
+        .flat_map(|m| {
+            let tag = label(m);
+            super::pending_paths(cx, &m.root)
+                .unwrap_or_default()
+                .into_iter()
+                .map(move |p| format!("{tag}{p}"))
+        })
+        .collect()
+}
+
 /// `graph dead --json` over the scope: a scope of one prints the plain rows, several add the
 /// `project` each row belongs to. Uncapped, like the single-project form.
 pub fn dead_json(cx: &Ctx, scope: &[Member]) -> Result<String> {
@@ -609,7 +640,7 @@ pub fn dead_json(cx: &Ctx, scope: &[Member]) -> Result<String> {
             cx, &one.root,
         )?)?);
     }
-    let (done, _) = dead_by_project(cx, scope)?;
+    let (done, _) = dead_by_project(cx, scope, super::dead_rows)?;
     let rows: Vec<_> = done
         .iter()
         .flat_map(|(m, rows)| {
@@ -628,7 +659,7 @@ pub fn dead(cx: &Ctx, scope: &[Member]) -> Result<String> {
         walkable(one)?;
         return super::dead(cx, &one.root);
     }
-    let (done, notes) = dead_by_project(cx, scope)?;
+    let (done, notes) = dead_by_project(cx, scope, super::dead_rows)?;
     let mut body = String::new();
     for (m, rows) in &done {
         for r in rows {
@@ -1110,6 +1141,32 @@ mod tests {
         let one = &scope_at(&cx, &dir, "a", a.to_str())[..1];
         let rows: serde_json::Value = serde_json::from_str(&dead_json(&ctx, one).unwrap()).unwrap();
         assert!(rows[0].get("project").is_none(), "{rows}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn page_rows_name_the_project_and_read_the_stores_without_indexing() {
+        let (cx, dir) = dead_world("t32921-page");
+        let ctx = Ctx::new(&cx);
+        let scope = scope_at(&cx, &dir, "a", None);
+        // Nothing is indexed yet: the page reads what the stores hold and does not walk the tree.
+        assert!(dead_page_rows(&ctx, &scope).unwrap().0.is_empty());
+        dead(&ctx, &scope).unwrap();
+        let (rows, notes) = dead_page_rows(&ctx, &scope).unwrap();
+        let named: Vec<_> = rows
+            .iter()
+            .map(|(p, r)| (p.as_str(), r.name.as_str()))
+            .collect();
+        assert_eq!(named, [("a", "a_top"), ("b", "b_dead")]);
+        assert_eq!(notes, "");
+        assert!(pending_page_paths(&ctx, &scope).is_empty());
+        // An edit after the index waits under the project it belongs to.
+        fs::write(
+            dir.join("b").join("lib.rs"),
+            "fn b_only() {}\nfn b_dead() {}\nfn b_new() {}\n",
+        )
+        .unwrap();
+        assert_eq!(pending_page_paths(&ctx, &scope), ["[b] lib.rs"]);
         let _ = fs::remove_dir_all(dir);
     }
 

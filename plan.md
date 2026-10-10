@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
-| T329.21 | todo | P3 | 2 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
 | T329.27 | todo | P3 | 3 | 0% | |
 | T329.28 | todo | P3 | 4 | 0% | |
@@ -844,13 +843,6 @@ Check: a signature change shows amber on the page and in its side panel, a remov
 T329 §8c, including the `rtok.graph.v1` JSON schema file, redaction by default and read-only import. Depends on T329.14 and T329.22.
 
 Check: PNG, SVG and JSON exports of A's scope open; the JSON validates against the schema file; paths and the user name are redacted by default; `rtok graph export` and `graph_export` give the same JSON; import is read-only; `just check`.
-
-
-### T329.21. Project badges in the graph page lists
-
-The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a project badge on every row of the graph page lists (dead symbols, pending files), shown once those lists are scoped to the selected project and its linked projects, so a row says which project it came from. Depends on T329.4, T329.5, T329.20.
-
-Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
 
 
 ### T329.30. Graph page: health ring and breakdown per project
