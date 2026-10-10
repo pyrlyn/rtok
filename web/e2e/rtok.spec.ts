@@ -441,3 +441,58 @@ test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {
     timeout: 2000,
   });
 });
+
+test("Compare colours a changed, an added and a removed function and lists them, live graph running", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  const id = rtok.addGitProject(
+    "lib.rs",
+    'fn kept() {}\nfn gone() {\n    println!("one");\n    println!("two");\n}\n',
+  );
+  rtok.editProject("lib.rs", "fn kept(x: i32) {}\nfn fresh() {\n    loop {}\n}\n");
+  rtok.indexProject(id);
+  const files = encodeURIComponent(JSON.stringify(["lib.rs"]));
+  await page.goto(`/#/graph?p=${id}&x=${files}`);
+  await page.getByRole("button", { name: "Compare" }).click();
+
+  const side = page.getByRole("region", { name: "compare" });
+  await expect(side.getByText("~ 1 changed")).toBeVisible();
+  await expect(side.getByText("+ 1 added")).toBeVisible();
+  await expect(side.getByText("− 1 removed")).toBeVisible();
+  const graph = page.getByTestId("graph-2d");
+  // The colour is a brand role and the label says the same in words, so both are checked.
+  const node = (label: string) => graph.locator("[data-testid=node-2d]", { hasText: label });
+  await expect(graph.getByLabel(/^~ kept, function · changed/)).toBeVisible();
+  await expect(graph.getByLabel(/^\+ fresh, function · added/)).toBeVisible();
+  await expect(graph.getByLabel(/^− gone, function · removed/)).toBeVisible();
+  await expect(node("~ kept").locator("circle").first()).toHaveCSS("fill", /rgb/);
+  await expect(side.getByRole("region", { name: "changed" })).toContainText("signature");
+
+  // Compare leaves part 2 alone: the read-only live graph is still there.
+  await expect(page.getByTestId("graph-live")).toBeVisible();
+});
+
+test("Compare against a saved export sends its text and lists the symbols that appeared", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  const id = rtok.addGitProject("lib.rs", "fn kept() {}\n");
+  rtok.indexProject(id);
+  const saved = rtok.exportSymbols(id);
+  rtok.editProject("lib.rs", "fn kept() {}\nfn fresh() {}\n");
+  rtok.indexProject(id);
+  await page.goto(`/#/graph?p=${id}`);
+  await page.getByRole("button", { name: "Compare" }).click();
+  await page.getByLabel("saved export").setInputFiles({
+    name: "before.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(saved),
+  });
+  const side = page.getByRole("region", { name: "compare" });
+  await expect(side.getByText(/vs export before\.json/)).toBeVisible();
+  await expect(side.getByText("+ 1 added")).toBeVisible();
+  await expect(side.getByText(/only added and removed symbols/)).toBeVisible();
+});

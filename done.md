@@ -3082,6 +3082,24 @@ Trust boundary: `--from-export` stays CLI-only, because the websocket is reachab
 
 Check: Rust tests in `src/plugins/graph/diff.rs` assert the page report equals `--json` for the same query, the row cap, and the path-as-text refusal; `ws.test.ts` parses the frame; `committed_schema_is_current`; `just check` and the web gates.
 
+## T329.35 — Graph page: Compare mode
+
+The page half of T329 §8e (split from T329.29 at claim time). Part 1 of the graph page, in the per-project drill-down, gets a "Compare" chip. It colours the nodes and the edges by what changed (added green, removed red, changed amber, moved blue; every colour is a brand role, so both themes and the 3D stage take their own value), and each node label and list row also carries a mark (`+ − ~ →`) and the change word, so colour is never the only cue. A side panel lists the change counts, the changed (signature or body, with callers), removed, renamed, moved and added symbols, the edges added and removed, the links added and removed, `changed, not analysed` with the reason, the cut-off count and the notes. The live graph (part 2) is a separate component and is untouched; Compare is local state of the drill-down.
+
+The page never recomputes the diff: it asks over `/ws` with the `ClientMessage::Diff` / `ServerFrame::Diff` pair that T329.42 added, which `diff::page` answers with the same typed `DiffReport` the CLI's `--json` prints. The old side is a ref or `PROJECT:REF` typed in the panel (sent on Enter), or a saved export.
+
+Trust boundary: the page never sends a path. The browser's file picker reads the export and sends its text (T329.42's `DiffRequest.export`), and a file over 16 MiB is refused in the page before it is sent.
+
+Reused: `diff::{Query, Part, compute, compute_saved, links_between, cap}` and the `--json` shape (now the typed `DiffReport`), `export::read`'s checks (`parse`), `scope::resolve`, the drill-down machinery (`askDoctor` queue, `useDrill`'s keepPreviousData pattern, `drillVersion`, `drillScene`, `Scene2D`, `stage3d`/`resolveRole`), `Pill`, `Result`, `Search`, `Button`, and the sample/`drillServer` stand-ins for stories and `?sample`. Docs in en, ru, uk (`docs/commands.md`), the graph README and AGENTS. T485 (the TUI counterpart) now names `diff::report` as the single path.
+
+Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue (Vitest `compare.test.ts`, `Compare.test.tsx`, stories `GraphCompare` in both themes with axe); the live graph keeps running (Playwright asserts `graph-live` is still shown); a diff against a saved export works (Vitest, story `AgainstASavedExport`, Playwright with a real `rtok graph export`); Rust tests for the typed report, the export-as-text refusal and the cap; `committed_schema_is_current`.
+
+Result: `just spa-typecheck` passed; `just spa-test` 46 files, 420 tests passed; `just js` passed; `just spa-stories` 34 files, 225 tests passed; `just spa-e2e` 32 passed (earlier runs failed on the load flakes "clear safe junk plans..." and "config page renders from the live snapshot", both passed in the other runs; the two new Compare tests first failed because the project was not yet indexed and because the edited function matched as a rename, and were fixed). `just check`: fmt, clippy `-D warnings` and jscpd passed; `cargo nextest run --workspace --no-fail-fast` 3216 passed, 8 skipped. Two load flakes stopped earlier fail-fast runs, `commands_e2e doctor_reports_the_chain` (passed alone in 93 s) and `agents_install the_agent_alias_prints_what_agents_prints` (passed on the full rerun); `committed_schema_is_current` failed once because the staged schema had been compacted by the formatter, and was regenerated.
+
+Split at review: the server half (typed report, `/ws` pair, `export::parse`, the frame parser and the sample stand-in) shipped first as T329.42, so this entry is the panel and the colouring. Limitations: an edge is coloured only where both call ends are drawn as symbols (an expanded file or a focus); the panel lists every edge either way. A removed symbol is drawn as a ghost only in an expanded file; elsewhere its file node shows removed or changed. The panel shows the current project's entry; a linked project's entry is not drawn, only the links added and removed.
+
+Status: done 2026-10-10 · Model: Claude Code / sonnet-5.5
+
 ## T329.23 — Graph drill-down: side panel and search
 
 The rest of T329.22 (split on 2026-10-10 because the view and these two parts did not fit one 500-line cap). T329 §8a level 2 on top of `DrillView`:

@@ -142,6 +142,52 @@ export class Rtok {
     return this.run(["graph", "projects", "add", this.home], "");
   }
 
+  /** A registered git project holding `file` as committed; `editProject` then gives Compare a change. Returns its registry id. */
+  addGitProject(file: string, before: string): number {
+    const dir = join(this.home, "proj");
+    mkdirSync(dir);
+    const git = (...args: string[]) => {
+      const out = spawnSync("git", args, {
+        cwd: dir,
+        env: {
+          ...this.env(),
+          GIT_AUTHOR_NAME: "e2e",
+          GIT_AUTHOR_EMAIL: "e2e@example.com",
+          GIT_COMMITTER_NAME: "e2e",
+          GIT_COMMITTER_EMAIL: "e2e@example.com",
+        },
+        encoding: "utf8",
+      });
+      if (out.status !== 0) throw new Error(`git ${args.join(" ")}: ${out.stderr}`);
+    };
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(dir, file), before);
+    git("add", "-A");
+    git("commit", "-q", "-m", "before");
+    this.run(["graph", "projects", "add", dir], "");
+    const rows = JSON.parse(this.run(["graph", "projects", "--json"], "")) as {
+      id: number;
+      root: string;
+    }[];
+    const row = rows.find((r) => r.root.endsWith("/proj"));
+    if (!row) throw new Error("the git project was not registered");
+    return row.id;
+  }
+
+  /** The page draws the index, so a project must be indexed after each edit. */
+  indexProject(id: number) {
+    this.run(["graph", "index", "--project", String(id)], "");
+  }
+
+  editProject(file: string, text: string) {
+    writeFileSync(join(this.home, "proj", file), text);
+  }
+
+  /** What the page's file picker would be given: a symbols-level export of the project as it is now. */
+  exportSymbols(id: number): string {
+    return this.run(["graph", "export", "--level", "symbols", "--project", String(id)], "");
+  }
+
   async start() {
     if (this.child) throw new Error("rtok web is already running");
     const child = spawn(BIN, ["web", "--host", "127.0.0.1", "--port", String(this.port)], {

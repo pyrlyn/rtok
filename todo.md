@@ -22,7 +22,6 @@
 - T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 - T329.36. Graph page: counts taken from the answer (symbols returned, files touched, projects with hits)
 - T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
-- T329.35. Graph page: Compare mode
 - T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
