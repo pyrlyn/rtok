@@ -96,7 +96,9 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   per-tool bars and backend shares, over the last 1, 5 or 15 minutes or since the page opened.
   Totals come from each frame's `summary` and the `graph` measurement rows, so a window equals
   `rtok stats` over the same calls (the per-tool bars and backend shares cover the calls a frame
-  lists). "Freeze" holds the picture and counts what arrives meanwhile; "Unfreeze" catches up
+  lists). The page also counts symbols asked (and how many calls crossed more than one project),
+  `lsp_fallback` rows and answers cut at `max_tokens`, exactly, from `summary`; latency (median
+  and 95th percentile) is measured on the calls frames list, the newest 1000. "Freeze" holds the picture and counts what arrives meanwhile; "Unfreeze" catches up
   with every call. The feed keeps the newest 200 finished calls, can be filtered by caller (the
   session id), tool and project, shows failed calls in red and marks a call that never ended
   after two minutes as interrupted.

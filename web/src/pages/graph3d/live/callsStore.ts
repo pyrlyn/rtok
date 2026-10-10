@@ -16,6 +16,8 @@ export const WINDOWS = [
 ] as const;
 export type WindowId = (typeof WINDOWS)[number]["id"];
 const LONGEST_BUCKET_MS = 900_000;
+/** Latencies kept for the percentiles: "since open" would otherwise grow with every call. */
+export const LATENCY_KEEP = 1000;
 
 export interface Running {
   call: string;
@@ -53,6 +55,13 @@ export interface Totals {
   /** Counted from the events a batch lists, so under a burst the bars cover the listed calls; `calls` is exact. */
   tools: Record<string, { calls: number; saved: number }>;
   backends: Record<string, number>;
+  /** `lsp_fallback` rows, answers cut at `max_tokens`, symbols asked and calls over several projects: from the batch `summary`, so exact under a burst. */
+  fallbacks: number;
+  caps: number;
+  symbols: number;
+  crossed: number;
+  /** Milliseconds of the listed calls, oldest first, at most `LATENCY_KEEP`: a burst cut to its newest 100 events is measured on those. */
+  ms: number[];
 }
 
 export interface CallsStore {
@@ -71,6 +80,11 @@ const noTotals = (): Totals => ({
   after: 0,
   tools: {},
   backends: {},
+  fallbacks: 0,
+  caps: 0,
+  symbols: 0,
+  crossed: 0,
+  ms: [],
 });
 
 export const emptyStore: CallsStore = { running: [], feed: [], buckets: [], all: noTotals() };
@@ -80,6 +94,12 @@ function add(into: Totals, from: Totals) {
   into.failed += from.failed;
   into.before += from.before;
   into.after += from.after;
+  into.fallbacks += from.fallbacks;
+  into.caps += from.caps;
+  into.symbols += from.symbols;
+  into.crossed += from.crossed;
+  into.ms.push(...from.ms);
+  into.ms.splice(0, Math.max(0, into.ms.length - LATENCY_KEEP));
   for (const [tool, t] of Object.entries(from.tools)) {
     const own = (into.tools[tool] ??= { calls: 0, saved: 0 });
     own.calls += t.calls;
@@ -136,6 +156,11 @@ export function fold(store: CallsStore, batch: CallBatch, now: number): CallsSto
     after: batch.summary.est_after,
     tools: {},
     backends: {},
+    fallbacks: batch.summary.fallbacks,
+    caps: batch.summary.caps,
+    symbols: batch.summary.symbols,
+    crossed: batch.summary.crossed,
+    ms: ends.flatMap((e) => (e.ms === null ? [] : [e.ms])),
   };
   for (const [i, e] of ends.entries()) {
     const t = (bucket.tools[e.tool] ??= { calls: 0, saved: 0 });
@@ -154,6 +179,17 @@ export function fold(store: CallsStore, batch: CallBatch, now: number): CallsSto
     ),
     all,
   };
+}
+
+/** The value at rank `ceil(p * n)`: a latency that was really measured, not an interpolation. */
+const percentile = (sorted: number[], p: number) =>
+  sorted[Math.min(sorted.length, Math.max(1, Math.ceil(p * sorted.length))) - 1]!;
+
+/** Median and 95th percentile of the kept latencies, `null` before any call has ended. */
+export function latency(t: Totals): { p50: number; p95: number } | null {
+  if (!t.ms.length) return null;
+  const sorted = [...t.ms].sort((a, b) => a - b);
+  return { p50: percentile(sorted, 0.5), p95: percentile(sorted, 0.95) };
 }
 
 /** Moves a call that never ended into the feed, marked, so it stops counting as running. */

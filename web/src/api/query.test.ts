@@ -430,7 +430,17 @@ describe("call stream", () => {
         events: [],
         head,
         omitted: 0,
-        summary: { starts: 0, ends: 0, failed: 0, est_before: 0, est_after: 0 },
+        summary: {
+          starts: 0,
+          ends: 0,
+          failed: 0,
+          est_before: 0,
+          est_after: 0,
+          fallbacks: 0,
+          caps: 0,
+          symbols: 0,
+          crossed: 0,
+        },
       },
     }) as Frame;
 
