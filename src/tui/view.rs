@@ -463,10 +463,11 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     }
     // Seven rows and the header: the table scrolls to the cursor beyond that.
     let height = (rows.len() as u16 + 1).min(8);
+    // Two hint lines: the project keys (T476) and the live pane's (T480) overflow one at 128 columns.
     let [table, note, hints, text] = Layout::vertical([
         Constraint::Length(height),
         Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(2),
         Constraint::Min(0),
     ])
     .areas(area);
@@ -498,7 +499,10 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
         Paragraph::new(Line::styled(state.note(&rows), Style::new().fg(WARN))),
         note,
     );
-    frame.render_widget(Paragraph::new(status_line("graph", "")), hints);
+    frame.render_widget(
+        Paragraph::new(status_line("graph", "")).wrap(Wrap { trim: true }),
+        hints,
+    );
     frame.render_widget(graph_page(app), text);
 }
 
