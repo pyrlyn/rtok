@@ -46,6 +46,32 @@ pub fn same_path(a: &Path, b: &Path) -> bool {
     cfg!(windows) && components_eq_ci(a, b)
 }
 
+/// `suffix` names the trailing components of `path` (`src/a.rs` in `/repo/src/a.rs`), whole
+/// components only. On Windows the comparison is ASCII-case-insensitive.
+pub fn path_ends_with(path: &Path, suffix: &Path) -> bool {
+    ends_with(path, suffix, cfg!(windows))
+}
+
+fn ends_with(path: &Path, suffix: &Path, fold: bool) -> bool {
+    // `Path::ends_with("")` is true; an empty suffix names nothing.
+    if suffix.as_os_str().is_empty() {
+        return false;
+    }
+    if path.ends_with(suffix) {
+        return true;
+    }
+    if !fold {
+        return false;
+    }
+    let path_c: Vec<_> = path.components().collect();
+    let suf_c: Vec<_> = suffix.components().collect();
+    suf_c.len() <= path_c.len()
+        && path_c[path_c.len() - suf_c.len()..]
+            .iter()
+            .zip(&suf_c)
+            .all(|(p, s)| components_match(*p, *s))
+}
+
 /// `path` with `prefix` removed. On Windows, ASCII case and a `\\?\` prefix still match.
 pub fn strip_prefix(path: &Path, prefix: &Path) -> Option<PathBuf> {
     let path = dunce::simplified(path);
@@ -101,4 +127,23 @@ fn components_eq_ci(a: &Path, b: &Path) -> bool {
     let a: Vec<_> = a.components().collect();
     let b: Vec<_> = b.components().collect();
     a.len() == b.len() && a.iter().zip(&b).all(|(x, y)| components_match(*x, *y))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `fold` is a parameter so the Windows branch is exercised on every CI platform.
+    #[test]
+    fn suffix_match_folds_ascii_case_only_when_asked() {
+        let abs = Path::new("/Repo/Src/Main.rs");
+        let rel = Path::new("src/main.rs");
+        assert!(ends_with(abs, rel, true));
+        assert!(!ends_with(abs, rel, false));
+        assert!(ends_with(abs, Path::new("Src/Main.rs"), false));
+        // Whole components: a partial file name never matches, folded or not.
+        assert!(!ends_with(abs, Path::new("ain.rs"), true));
+        assert!(!ends_with(abs, Path::new(""), true));
+        assert!(!ends_with(rel, abs, true));
+    }
 }

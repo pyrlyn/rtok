@@ -1753,15 +1753,7 @@ pub(crate) fn tool_path(input: &Value) -> Option<&str> {
         .filter(|p| !p.is_empty())
 }
 
-/// Exact match, or relative-vs-absolute (`src/a.rs` vs `/repo/src/a.rs`).
-pub(crate) fn same_path(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
-    }
-    let a = Path::new(a);
-    let b = Path::new(b);
-    a.ends_with(b) || b.ends_with(a)
-}
+pub(crate) use crate::fs::same_spelling as same_path;
 
 pub(crate) fn pct(part: u64, whole: u64) -> f64 {
     if whole == 0 {

@@ -34,6 +34,14 @@ Check: `llms_txt_map_lists_links_and_skips_fences`; `just check`.
 
 Result: map of a fixture `llms.txt` lists the two real links and omits the fenced one; `doc.md` has no `link ` rows.
 
+### T504. Read hook: case-insensitive path match on Windows
+
+Cloud review finding of 2026-10-08, filed as T460 in the findings table (an id the done `mem_pack` task already holds). `same_path` in `src/plugins/read/hook.rs` compared with `==` and `Path::ends_with`, so `C:\Repo\Src\Main.rs` and `c:\repo\src\main.rs` (or a relative `src\main.rs` against it) were different files on Windows and the "edited just now" window missed the write. The same copy sat in `src/measure/stats.rs`. Both now call `crate::fs::same_spelling`, built on the shared `rtok_store::same_path` plus the new `rtok_store::path_ends_with` (whole components, ASCII case folded on Windows only, empty suffix matches nothing). macOS stays case-sensitive: the shared helpers fold on Windows only, and a case-sensitive APFS volume would otherwise merge two real files.
+
+Check: `paths::tests::suffix_match_folds_ascii_case_only_when_asked` (the fold flag is a parameter, so the Windows branch runs on every platform; it fails when folding is switched off), `plugins::read::hook::tests::same_path_follows_the_platform_case_rule` (asserts the fold on Windows and none elsewhere); `just fmt-check`, `just lint`.
+
+Result: 2026-10-10. Hook and stats tests pass; no new dependency.
+
 ### T460. Budgeted `mem_pack` for memory notes
 
 The open plan.md row T460 is a different bug (Windows path compare). This record is the `mem_pack` work on this branch.
