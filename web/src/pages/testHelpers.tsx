@@ -32,14 +32,21 @@ export function wire(first: Snapshot) {
         sent,
         push: (snapshot: Snapshot) => push({ type: "snapshot", snapshot }),
         message: (text: string) => push({ type: "message", text }),
+        frame: (f: Frame) => push(f),
     };
 }
 
 export function mount(connect: Connect, path: string) {
+    return mountRouted(connect, path).view;
+}
+
+/** `mount` plus the router, for a test that reads the URL or steps through history. */
+export function mountRouted(connect: Connect, path: string) {
     const router = createAppRouter(createMemoryHistory({ initialEntries: [path] }));
-    return render(
+    const view = render(
         <DataProvider connect={connect}>
             <RouterProvider router={router} />
         </DataProvider>,
     );
+    return { view, router };
 }

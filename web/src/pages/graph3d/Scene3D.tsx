@@ -22,6 +22,7 @@ export default function Scene3D({
     positions,
     api,
     select,
+    open,
     menu,
     hover,
     onUnavailable,
@@ -29,8 +30,8 @@ export default function Scene3D({
     const host = useRef<HTMLDivElement>(null);
     const stage = useRef<Stage | null>(null);
     // The stage is created once; handlers it calls always see the latest props.
-    const events = useRef({ select, menu, hover, onUnavailable });
-    events.current = { select, menu, hover, onUnavailable };
+    const events = useRef({ select, open, menu, hover, onUnavailable });
+    events.current = { select, open, menu, hover, onUnavailable };
 
     useEffect(() => {
         let made: Stage;
@@ -39,6 +40,7 @@ export default function Scene3D({
                 host.current!,
                 {
                     select: (id) => events.current.select(id),
+                    ...(events.current.open && { open: (id) => events.current.open?.(id) }),
                     menu: (id, x, y) => events.current.menu(id, x, y),
                     hover: (h) => events.current.hover(h),
                 },

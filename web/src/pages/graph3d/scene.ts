@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import type { LinkKind, Origin, ProjectRow } from "../../api/snapshot.gen";
+import type { DrillEdgeKind, LinkKind, Origin, ProjectRow } from "../../api/snapshot.gen";
 
 /** Above this many projects the layout groups them by origin (T329 §8a). */
 export const CLUSTER_ABOVE = 50;
@@ -15,6 +15,9 @@ export const EDGE_WIDTH = 2;
 
 export const ORIGINS: Origin[] = ["manual", "session", "worktree", "mcp", "reference"];
 
+/** Registry projects are spheres; the drill-down tells files (cubes) and types (octahedra) apart. */
+export type Shape = "sphere" | "cube" | "octahedron";
+
 export interface SceneNode {
   id: number;
   label: string;
@@ -22,6 +25,7 @@ export interface SceneNode {
   /** CSS colour (a brand role), stable per root so a project keeps its colour across sessions. */
   color: string;
   radius: number;
+  shape: Shape;
   state: string;
   origin: Origin;
   /** Drawn hollow and never opened: the directory is gone. */
@@ -38,7 +42,7 @@ export interface SceneEdge {
   id: string;
   from: number;
   to: number;
-  kind: LinkKind;
+  kind: LinkKind | DrillEdgeKind;
   dashed: boolean;
   width: number;
   reason: string | null;
@@ -58,8 +62,17 @@ export interface Scene {
   edges: SceneEdge[];
   counts: SceneCounts;
   clustered: boolean;
-  /** The origins present, in `ORIGINS` order; a clustered node's `group` indexes this. */
-  groups: Origin[];
+  /** The origins present, in `ORIGINS` order (directories in the drill-down); a clustered node's `group` indexes this. */
+  groups: string[];
+  /** What the canvas is a picture of, for assistive technology. */
+  label: string;
+}
+
+/** What an edge says on hover: how it was made for a link, the kind and the call count for a drill edge. */
+export function edgeHow(e: SceneEdge): string {
+  if (e.kind === "manual") return "manual";
+  if (e.kind === "auto") return `auto${e.reason ? `: ${e.reason}` : ""}`;
+  return e.reason ? `${e.kind} ${e.reason}` : e.kind;
 }
 
 export interface SceneOptions {
@@ -135,6 +148,7 @@ export function buildScene(rows: ProjectRow[], opts: SceneOptions): Scene {
     root: p.root,
     color: colorOf(p.root),
     radius: radiusOf(p.index?.rows),
+    shape: "sphere",
     state: p.state,
     origin: p.origin,
     hollow: p.missing,
@@ -172,6 +186,7 @@ export function buildScene(rows: ProjectRow[], opts: SceneOptions): Scene {
     edges,
     clustered,
     groups,
+    label: "registered projects",
     counts: {
       total: rows.length,
       inScope: scope.size,
