@@ -350,21 +350,30 @@ fn redact(e: &mut Export, home: Option<&Path>) {
     let home = home
         .and_then(Path::to_str)
         .filter(|h| h.len() > 1)
-        .and_then(|h| regex::Regex::new(&format!(r"{}(/|\s|$)", regex::escape(h))).ok());
+        .and_then(|h| regex::Regex::new(&format!(r"{}([/\\\s]|$)", regex::escape(h))).ok());
+    // Both separators on every platform: an export made on one system is read on another.
     let text = |s: &str| {
         let s = home
             .as_ref()
             .map_or_else(|| s.to_string(), |h| h.replace_all(s, "~$1").into_owned());
-        s.split('/')
-            .map(|seg| if Some(seg) == user { "<user>" } else { seg })
-            .collect::<Vec<_>>()
-            .join("/")
+        s.split_inclusive(['/', '\\'])
+            .map(|piece| {
+                let seg = piece.trim_end_matches(['/', '\\']);
+                if Some(seg) == user {
+                    format!("<user>{}", &piece[seg.len()..])
+                } else {
+                    piece.to_string()
+                }
+            })
+            .collect::<String>()
     };
     for p in &mut e.projects {
         let root = text(&p.root);
         p.root = match Path::new(&root)
             .file_name()
-            .filter(|_| Path::new(&root).is_absolute())
+            // `has_root`, not `is_absolute`: `/Volumes/x` has no drive on Windows yet is no less
+            // a full path.
+            .filter(|_| Path::new(&root).has_root())
         {
             Some(name) => format!("\u{2026}/{}", name.to_string_lossy()),
             None => root,
