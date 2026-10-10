@@ -131,6 +131,24 @@ A text answer records a `text.symbol | text.callers | text.impact | text.outline
 measurement row (the time spent, not a saving). A project whose root cannot be read is dropped with
 `no graph backend available: <reason>`.
 
+## Checked once
+
+Under `lsp` and `auto` (T329.11) rtok checks each project once: the marker file, the server binary on
+`PATH`, and the first request that starts the server. The result is the project's record, and later
+requests use it without looking again. A missing server is not searched for on every call, and a server
+that broke (it died, closed its pipe or timed out) is not restarted on every call; it is dropped from
+that project's answers once, with the reason, and the project answers from tags. A server's error reply
+to one request is not a break. Concurrent first requests share one check.
+
+The record is kept in memory and mirrored into the store, so `rtok graph projects --json` (and the web
+page) show it under `backend`: `backend` (`lsp` or `tags`), `language`, `server` (the language has one),
+`reason`, `config` (the `backend` value it was made under), `checked_at` and `next_probe_at` (unix
+seconds; the earliest a health check retries a failed record). Changing `backend` or
+`backend_by_language` re-checks only the projects whose value changed. A new process uses a record
+another process wrote until `next_probe_at`, then checks for itself, so restarting rtok after installing
+the server picks it up. Nothing re-checks a running process yet; that is the background health check
+(T329.17).
+
 ## Without the server
 
 `backend = "lsp"` does not fail when the server cannot answer. When the binary

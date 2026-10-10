@@ -17,11 +17,11 @@ use rtok_plugin_sdk::{Class, Ctx};
 use super::Mode;
 use super::{
     DeadRow, ExploreParts, Filter, Hits, Tag, TagsExplore, ambiguous_banner, assemble_explore,
-    blast, callers_filtered, cap, cap_kind, changed_starts, defs_text, flag_ambiguous,
-    format_affected, git_changed_files, impact_filtered, impact_lines_text, impact_walk_roots,
-    index, index_for, is_test_path, lsp, lsp_none_answer, mode_of, outline_in, projects, rel_of,
-    reverse_call_chain, stale_banner, symbol_filtered, tests_json, text, via_of, with_stale,
-    without_mode_line,
+    backend_name, blast, callers_filtered, cap, cap_kind, capability, changed_starts, defs_text,
+    flag_ambiguous, format_affected, git_changed_files, impact_filtered, impact_lines_text,
+    impact_walk_roots, index, index_for, is_test_path, lsp, lsp_none_answer, mode_of, outline_in,
+    projects, rel_of, reverse_call_chain, stale_banner, symbol_filtered, tests_json, text, via_of,
+    with_stale, without_mode_line,
 };
 use crate::store::Store;
 
@@ -112,9 +112,14 @@ enum Plan {
 }
 
 fn plan(cx: &Ctx, scope: &[Member]) -> Plan {
-    if scope.iter().any(|m| {
-        text::applies(cx, &m.root) || (mode_of(cx, &m.root) == Mode::Auto && lsp::usable(&m.root))
-    }) {
+    let usable = |m: &Member| {
+        let name = backend_name(cx, &m.root);
+        Mode::named(&name) == Mode::Auto && capability::server_ready(cx, &m.root, &name, lsp::probe)
+    };
+    if scope
+        .iter()
+        .any(|m| text::applies(cx, &m.root) || usable(m))
+    {
         Plan::PerProject
     } else if mode_of(cx, &scope[0].root) == Mode::Lsp {
         Plan::LspFirst

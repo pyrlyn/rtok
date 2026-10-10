@@ -30,6 +30,7 @@ use rtok_plugin_sdk::{
 };
 
 pub mod blast;
+pub mod capability;
 pub mod cochange;
 pub mod drill;
 pub mod follow;
@@ -228,22 +229,34 @@ pub(crate) enum Mode {
     Text,
 }
 
-/// The mode of the project at `root`: its language's `backend_by_language` entry, else `backend`.
-/// A value the config schema refuses reads as `Tags`, the safe answer.
-pub(crate) fn mode_of(cx: &Ctx, root: &Path) -> Mode {
+/// The `backend` value that governs the project at `root`: its language's
+/// `backend_by_language` entry, else `backend`. A capability record is made under this value.
+pub(crate) fn backend_name(cx: &Ctx, root: &Path) -> String {
     let cfg = cx.plugin_config::<crate::config::Graph>("graph");
     // Only a config with overrides pays for the language lookup, so the default path stays stat-free.
-    let named = (!cfg.backend_by_language.is_empty())
+    (!cfg.backend_by_language.is_empty())
         .then(|| lsp::language_of(root))
         .flatten()
         .and_then(|lang| cfg.backend_by_language.get(lang))
-        .unwrap_or(&cfg.backend);
-    match named.as_str() {
-        "lsp" => Mode::Lsp,
-        "auto" => Mode::Auto,
-        "text" => Mode::Text,
-        _ => Mode::Tags,
+        .unwrap_or(&cfg.backend)
+        .clone()
+}
+
+impl Mode {
+    /// A value the config schema refuses reads as `Tags`, the safe answer.
+    fn named(name: &str) -> Self {
+        match name {
+            "lsp" => Mode::Lsp,
+            "auto" => Mode::Auto,
+            "text" => Mode::Text,
+            _ => Mode::Tags,
+        }
     }
+}
+
+/// The mode of the project at `root`.
+pub(crate) fn mode_of(cx: &Ctx, root: &Path) -> Mode {
+    Mode::named(&backend_name(cx, root))
 }
 
 /// The text after the line that names the mode (`(lsp)`, `(text)`, `(tags)`, `(tags; lsp: <reason>)`).
@@ -327,14 +340,15 @@ fn text_or(
     Ok(out)
 }
 
-/// T376, T329.9: the one door the five tools take. `Lsp` and `Auto` try the language server;
-/// a server that is missing, not ready or dead (`Err`), or one that answers "nothing" for a
-/// name the tags index knows, gives the tags answer headed `(tags; lsp: <reason>)`, so the
-/// caller sees which backend spoke and why. `Auto` also heads an LSP answer `(lsp)`, goes
-/// straight to tags (`(tags)`) for a language with no server, and records a `tags.<tool>`
-/// row for every tags answer. `names` are the identifiers the tags index is asked about;
-/// empty means any empty LSP answer falls back. No retry: a dead server is restarted by
-/// `lsp::with_session` on the next call, not here.
+/// T376, T329.9, T329.11: the one door the five tools take. `Lsp` and `Auto` ask the project's
+/// capability record (`capability`) whether the language server answers: it is checked on the
+/// first request only, and a server that is missing, not ready or dead gives the tags answer
+/// headed `(tags; lsp: <reason>)`, so the caller sees which backend spoke and why. So does one
+/// that answers "nothing" for a name the tags index knows. `Auto` also heads an LSP answer
+/// `(lsp)`, goes straight to tags (`(tags)`) for a language with no server, and records a
+/// `tags.<tool>` row for every tags answer. `names` are the identifiers the tags index is asked
+/// about; empty means any empty LSP answer falls back. No retry: a server that broke is not
+/// asked again until the record is replaced.
 fn lsp_or_tags(
     cx: &Ctx,
     root: &Path,
@@ -343,7 +357,21 @@ fn lsp_or_tags(
     lsp: impl FnOnce() -> Result<String>,
     tags: impl FnOnce() -> Result<String>,
 ) -> Result<String> {
-    let mode = mode_of(cx, root);
+    door(cx, root, tool, names, lsp::probe, lsp, tags)
+}
+
+/// [`lsp_or_tags`] with the capability probe passed in, so a test can count it.
+fn door(
+    cx: &Ctx,
+    root: &Path,
+    tool: &'static str,
+    names: &[&str],
+    probe: impl FnOnce(&Path) -> capability::Probe,
+    lsp: impl FnOnce() -> Result<String>,
+    tags: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+    let name = backend_name(cx, root);
+    let mode = Mode::named(&name);
     // `Text` never gets here: `text_or` answers it first.
     if matches!(mode, Mode::Tags | Mode::Text) {
         return tags();
@@ -354,29 +382,24 @@ fn lsp_or_tags(
         cx.plugin_config::<crate::config::Graph>("graph")
             .lsp_timeout_ms,
     ));
-    if auto && !lsp::has_server(root) {
-        let out = format!("(tags)\n{}", tags()?);
-        record_mode_row(cx, tags_kind(tool), t0, &out);
-        return Ok(out);
-    }
     let said = |text: String| {
         if auto { format!("(lsp)\n{text}") } else { text }
     };
-    let reason: String = match lsp() {
-        Ok(text) if !lsp_none_answer(&text) => return Ok(said(text)),
-        Ok(text) => {
+    let reason: String = match capability::ask(cx, root, &name, probe, lsp) {
+        capability::Asked::Tags(rec) if auto && !rec.server => {
+            let out = format!("(tags)\n{}", tags()?);
+            record_mode_row(cx, tags_kind(tool), t0, &out);
+            return Ok(out);
+        }
+        capability::Asked::Tags(rec) => rec.reason.unwrap_or_default(),
+        capability::Asked::Lsp(Ok(text)) if !lsp_none_answer(&text) => return Ok(said(text)),
+        capability::Asked::Lsp(Ok(text)) => {
             if !names.is_empty() && !tags_know(cx, root, names)? {
                 return Ok(said(text));
             }
             "empty answer".to_string()
         }
-        Err(e) => format!("{e:#}")
-            .lines()
-            .next()
-            .unwrap_or_default()
-            .chars()
-            .take(120)
-            .collect(),
+        capability::Asked::Lsp(Err(e)) => capability::reason_of(&e),
     };
     // Every server error already starts with "lsp: "; the header says it once under `auto`.
     let shown = match (auto, reason.strip_prefix("lsp: ")) {
@@ -2692,6 +2715,18 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// The door with a probe that always finds the server, so the closures are the server.
+    fn served(
+        cx: &Ctx,
+        root: &Path,
+        tool: &'static str,
+        names: &[&str],
+        lsp: impl FnOnce() -> Result<String>,
+        tags: impl FnOnce() -> Result<String>,
+    ) -> Result<String> {
+        door(cx, root, tool, names, |_| Ok(()), lsp, tags)
+    }
+
     /// T376: an empty LSP answer falls back only for a name the tags index has, and the
     /// default backend never adds the prefix.
     #[test]
@@ -2702,7 +2737,7 @@ mod tests {
         fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
         let ctx = Ctx::new(&cx);
         let tags = || Ok("tags answer".to_string());
-        let known = lsp_or_tags(
+        let known = served(
             &ctx,
             &dir,
             "symbol",
@@ -2712,7 +2747,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(known, "(tags; lsp: empty answer)\ntags answer");
-        let unknown = lsp_or_tags(
+        let unknown = served(
             &ctx,
             &dir,
             "symbol",
@@ -2722,7 +2757,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(unknown, "no definition of zzz");
-        let real = lsp_or_tags(
+        let real = served(
             &ctx,
             &dir,
             "symbol",
@@ -2733,7 +2768,7 @@ mod tests {
         .unwrap();
         assert_eq!(real, "a.rs:1 function");
         let (plain, dir2) = crate::testutil::runtime("t376-plain");
-        let out = lsp_or_tags(
+        let out = served(
             &Ctx::new(&plain),
             &dir2,
             "symbol",
@@ -2779,21 +2814,26 @@ mod tests {
         let (cx, dir) = auto_runtime("t3299-auto", &[]);
         let ctx = Ctx::new(&cx);
         let tags = || Ok("tags answer".to_string());
-        let ask = |lsp: Result<String>| lsp_or_tags(&ctx, &dir, "symbol", &["alpha"], || lsp, tags);
+        // One project per question: a project's mode is checked once (T329.11).
+        let ask = |n: usize, lsp: Result<String>| {
+            let project = dir.join(format!("p{n}"));
+            fs::create_dir_all(&project).unwrap();
+            fs::write(project.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+            served(&ctx, &project, "symbol", &["alpha"], || lsp, tags)
+        };
         // No marker file: nothing to ask, and the server closure is never run.
         let none = lsp_or_tags(&ctx, &dir, "symbol", &["alpha"], || panic!("lsp"), tags);
         assert_eq!(none.unwrap(), "(tags)\ntags answer");
-        fs::write(dir.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
         assert_eq!(
-            ask(Ok("a.rs:1 function".into())).unwrap(),
+            ask(1, Ok("a.rs:1 function".into())).unwrap(),
             "(lsp)\na.rs:1 function"
         );
         assert_eq!(
-            ask(Err(anyhow::anyhow!("lsp: rust-analyzer not on PATH"))).unwrap(),
+            ask(2, Err(anyhow::anyhow!("lsp: rust-analyzer not on PATH"))).unwrap(),
             "(tags; lsp: rust-analyzer not on PATH)\ntags answer"
         );
         // A crash while a request is open: the notice names how the server ended.
-        let died = ask(Err(anyhow::anyhow!("lsp: eof; exited signal: 9"))).unwrap();
+        let died = ask(3, Err(anyhow::anyhow!("lsp: eof; exited signal: 9"))).unwrap();
         assert_eq!(died, "(tags; lsp: eof; exited signal: 9)\ntags answer");
         assert_eq!(
             kinds(&cx),
@@ -2816,7 +2856,7 @@ mod tests {
         let ctx = Ctx::new(&cx);
         fs::write(dir.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
         assert_eq!(mode_of(&ctx, &dir), Mode::Tags);
-        let out = lsp_or_tags(
+        let out = served(
             &ctx,
             &dir,
             "symbol",
@@ -2835,7 +2875,7 @@ mod tests {
         let (mut c, dir2) = crate::testutil::config("t3299-lsp-plain");
         c.plugins.graph.backend = "lsp".into();
         let cx = crate::plugin::Runtime::open(c, "t3299-lsp-plain").unwrap();
-        let ok = lsp_or_tags(
+        let ok = served(
             &Ctx::new(&cx),
             &dir2,
             "symbol",

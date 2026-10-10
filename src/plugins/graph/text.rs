@@ -18,7 +18,7 @@ use regex::Regex;
 use rtok_plugin_sdk::Ctx;
 
 use super::walk::Matcher;
-use super::{ExploreParts, Filter, Mode, lsp, mode_of};
+use super::{ExploreParts, Filter, Mode, backend_name, capability, lsp, mode_of};
 use crate::plugins::read::search::text_files;
 
 /// What `dead` and the `to` chains of `impact` print instead of a guess.
@@ -58,11 +58,15 @@ const KEYWORDS: &[(&str, &str)] = &[
 ];
 
 /// Whether the text backend answers for the project at `root`: pinned with `text`, or `auto`
-/// with nothing better, meaning no language server for its language and no file a grammar parses.
+/// with nothing better, meaning no ready language server (the capability record, so checked once
+/// per project, T329.11) and no file a grammar parses.
 pub(crate) fn applies(cx: &Ctx, root: &Path) -> bool {
     match mode_of(cx, root) {
         Mode::Text => true,
-        Mode::Auto => !lsp::has_server(root) && !has_grammar(cx, root),
+        Mode::Auto => {
+            !capability::server_ready(cx, root, &backend_name(cx, root), lsp::probe)
+                && !has_grammar(cx, root)
+        }
         Mode::Tags | Mode::Lsp => false,
     }
 }

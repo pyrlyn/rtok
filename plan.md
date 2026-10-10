@@ -44,13 +44,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T289.3 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.11 | todo | P2 | 3 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.17 | todo | P3 | 3 | 0% | |
 | T329.18 | todo | P3 | 4 | 0% | |
 | T329.19 | todo | P3 | 3 | 0% | |
 | T329.21 | todo | P3 | 2 | 0% | |
+| T329.24 | todo | P3 | 2 | 0% | |
 | T329.22 | todo | P2 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
@@ -819,11 +819,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.11. Graph capability cache: one probe per project on the request path; re-checks only from the health check
-
-T329 §6b: a per-project (and language) record of which mode works, in memory for the hot path and mirrored into the store so the CLI, web and `rtok doctor` see it; single-flight first probes, downgrade once on failure, cleared for the affected projects when `backend` config changes, shown by `rtok graph projects --json` and the page with `checked_at` and `next_probe_at`. Exposes a `reprobe(project)` entry point for the §8d health check (T329.17); requests never call it. T337 is decided: requests never re-probe. Depends on T329.9.
-
-Check: a test counts probes, 100 requests after the first run zero lookups or spawns; a `reprobe` after installing the server picks it up while 100 requests still run zero probes; a `backend` change re-checks only affected projects; concurrent first requests run one check; a second process reads the mirrored record; `just check`.
 
 ### T329.15. Graph page: two-part UI with the read-only live graph and live metrics
 
@@ -860,6 +855,12 @@ Check: a fully indexed A with LSP and intact links scores 100; 30% of files pend
 The last piece of the original T329.12 (split out of T329.20 on 2026-10-03): a project badge on every row of the graph page lists (dead symbols, pending files), shown once those lists are scoped to the selected project and its linked projects, so a row says which project it came from. Depends on T329.4, T329.5, T329.20.
 
 Check: Vitest and a story for a scoped list with badges from two projects; `just check`.
+
+### T329.24. Graph page: show each project's capability record
+
+Split from T329.11 (the size cap and the web checks): the Projects page of the SPA shows `ProjectRow.backend` (T329.11, already in `/ws` and `web/src/api/snapshot.gen.ts`) as a small tag next to the project badge: LSP or tags, with the reason, `checked_at` and `next_probe_at` in its title, and nothing for a project that has no record yet. Depends on T329.11.
+
+Check: Vitest and a story (axe) for a project on LSP, one on tags with a reason and one without a record; `just check` and `just spa-stories`.
 
 ### T329.22. Graph page level 2: the drill-down view (SPA)
 
