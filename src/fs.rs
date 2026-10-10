@@ -63,7 +63,20 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
 
 // Path identity lives in `rtok-store` so the store and the host share one definition
 // (Windows case, `\\?\`). Re-exported here at the old paths.
-pub(crate) use rtok_store::{canon, is_unwalkable_root, path_starts_with, same_path, strip_prefix};
+pub(crate) use rtok_store::{
+    canon, is_unwalkable_root, path_ends_with, path_starts_with, same_path, strip_prefix,
+};
+
+/// Two spellings of one tool-call path: equal, or one is the other's trailing components
+/// (`src/main.rs` vs `/repo/src/main.rs`, whole components only), with Windows case folding
+/// from the shared helpers. Blank paths match nothing.
+pub(crate) fn same_spelling(a: &str, b: &str) -> bool {
+    let (a, b) = (Path::new(a.trim()), Path::new(b.trim()));
+    if a.as_os_str().is_empty() || b.as_os_str().is_empty() {
+        return false;
+    }
+    same_path(a, b) || path_ends_with(a, b) || path_ends_with(b, a)
+}
 
 /// Whether two spellings name one directory (`/var` vs `/private/var`, `RUNNER~1`, `\\?\`). A
 /// path that no longer resolves matches only itself, so an ended session's row never links.

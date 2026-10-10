@@ -30,6 +30,12 @@ export type ClientMessage =
       diff: DiffRequest;
     }
   | {
+      export: ExportRequest;
+    }
+  | {
+      import: ImportRequest;
+    }
+  | {
       calls: CallsRequest;
     };
 /**
@@ -66,6 +72,16 @@ export type DoctorAction = "plan" | "apply";
  * via the `definition` "JunkAction".
  */
 export type JunkAction = "plan" | "apply";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Format".
+ */
+export type Format = "json" | "svg" | "png";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Level2".
+ */
+export type Level2 = "overview" | "symbols";
 /**
  * A frame the server pushes besides the [`Snapshot`] itself.
  *
@@ -106,6 +122,15 @@ export type ServerFrame =
       diff: DiffReport;
       project: string;
       type: "diff";
+    }
+  | {
+      file: ExportFile;
+      type: "export";
+    }
+  | {
+      export: Export;
+      name: string;
+      type: "imported";
     }
   | {
       calls: CallsView;
@@ -297,6 +322,45 @@ export interface DiffExport {
   /**
    * The file's content.
    */
+  text: string;
+}
+/**
+ * A download from the graph page's Export menu (T329.40): the file `rtok graph export` writes for
+ * the same arguments.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ExportRequest".
+ */
+export interface ExportRequest {
+  depth: number | null;
+  /**
+   * A symbol name; it wins over `level`, as `--focus` does.
+   */
+  focus: string | null;
+  format: Format;
+  level: Level2;
+  /**
+   * An id or a root path, as in `rtok graph projects`.
+   */
+  project: string;
+  /**
+   * PNG only: 1 to 4 times the SVG size.
+   */
+  scale: number | null;
+  transparent: boolean;
+}
+/**
+ * A saved JSON export the page read itself, to show read-only. Like Compare mode, it never names
+ * a path: the websocket answers anything on localhost, so the file arrives as its text.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ImportRequest".
+ */
+export interface ImportRequest {
+  /**
+   * The file's name, for the banner and the errors.
+   */
+  name: string;
   text: string;
 }
 /**
@@ -563,6 +627,119 @@ export interface DiffMove {
 export interface DiffUnread {
   path: string;
   reason: string;
+}
+/**
+ * A finished download. The bytes travel as base64 because a PNG is not text and the frame is.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ExportFile".
+ */
+export interface ExportFile {
+  data: string;
+  mime: string;
+  name: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Export".
+ */
+export interface Export {
+  edges: Edge[];
+  links: Link[];
+  meta: Meta;
+  /**
+   * Empty at the `overview` level.
+   */
+  nodes: Node[];
+  projects: Proj[];
+  schema: "rtok.graph.v1";
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Edge".
+ */
+export interface Edge {
+  from: string;
+  kind: string;
+  to: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Link".
+ */
+export interface Link {
+  from: number;
+  kind: string;
+  reason?: string | null;
+  /**
+   * Call references from `from` into `to` found in the indexes.
+   */
+  references: number;
+  to: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Meta".
+ */
+export interface Meta {
+  depth?: number | null;
+  exported_at: number;
+  focus?: string | null;
+  /**
+   * `overview`, `symbols` or `focus`.
+   */
+  level: string;
+  notes: string[];
+  /**
+   * A project was still indexing, not indexed, or could not answer.
+   */
+  partial: boolean;
+  redacted: boolean;
+  rtok_version: string;
+  /**
+   * Project names of the scope.
+   */
+  scope: string[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Node".
+ */
+export interface Node {
+  id: string;
+  kind: string;
+  line: number;
+  name: string;
+  /**
+   * Relative to the project root.
+   */
+  path: string;
+  project: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Proj".
+ */
+export interface Proj {
+  /**
+   * `tags`, `lsp` or `text`: the mode that answers for the project.
+   */
+  backend: string;
+  /**
+   * `ok`, `stale`, `not indexed`, `missing` or `unknown`.
+   */
+  health: string;
+  /**
+   * 0 for a directory that is not in the registry.
+   */
+  id: number;
+  indexed_at?: number | null;
+  name: string;
+  origin: string;
+  /**
+   * `~/...` under the home directory, `.../name` elsewhere, unless redaction is off.
+   */
+  root: string;
 }
 /**
  * The state of the live calls panel at `now`.
