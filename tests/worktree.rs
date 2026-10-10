@@ -1755,3 +1755,68 @@ fn mcp_worktree_adopt_binds_a_host_made_worktree_for_the_linked_agent() {
         "{claims:?}"
     );
 }
+
+/// T289.3: `adopt` from a post-create script has no agent. The one live agent of the pool's host
+/// whose cwd is the repository takes the worktree; none, two, or a lone agent of another host
+/// bind nothing and say so, and a pool without a post-create script still needs an agent.
+#[test]
+fn adopt_without_an_agent_binds_the_one_live_agent_of_the_pools_host() {
+    let tmp = rtok::testutil::tmp_dir("worktree-adopt-unattended");
+    run(&tmp, &["init", "-q", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    let (store, _) = agents(&tmp, &[]);
+    let cwd = work.to_str().unwrap();
+    let host = |name: &str| store.host_id(name).unwrap().unwrap();
+    let wt = |name: &str| tmp.join(".cursor/worktrees/work").join(name);
+    for (branch, dir) in [
+        ("t7-none", wt("none")),
+        ("t7-one", wt("one")),
+        ("t7-two", wt("two")),
+        ("t9-k", tmp.join(".kilo/worktrees/t9-k")),
+        ("t8-x", tmp.join("elsewhere")),
+    ] {
+        run(
+            &work,
+            &["worktree", "add", "-q", "-b", branch, dir.to_str().unwrap()],
+        );
+    }
+    let adopt = |dir: &Path| rtok_as(&tmp, dir, None, &["worktree", "adopt"], b"");
+    let refused = |dir: &Path, why: &str| {
+        let out = adopt(dir);
+        assert!(!out.status.success());
+        let err = String::from_utf8_lossy(&out.stderr).to_string();
+        assert!(err.contains(why), "{err}");
+    };
+
+    refused(&wt("none"), "no live cursor agent");
+    let mine = store
+        .register_agent(host("cursor"), "cur-1", None, Some(cwd), None)
+        .unwrap();
+    // Another cursor agent elsewhere, and a Claude one in the repository, do not count.
+    store
+        .register_agent(host("cursor"), "cur-away", None, Some("/elsewhere"), None)
+        .unwrap();
+    store
+        .register_agent(host("claude"), "cl-1", None, Some(cwd), None)
+        .unwrap();
+
+    let out = adopt(&wt("one"));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        store.open_worktree_claims().unwrap(),
+        [(stored_claim_path(&wt("one")), mine)]
+    );
+    refused(&tmp.join(".kilo/worktrees/t9-k"), "no live kilo agent");
+    refused(&tmp.join("elsewhere"), "no agent to bind");
+
+    store
+        .register_agent(host("cursor"), "cur-2", None, Some(cwd), None)
+        .unwrap();
+    refused(&wt("two"), "2 live cursor agents");
+    assert_eq!(store.open_worktree_claims().unwrap().len(), 1);
+}

@@ -139,6 +139,41 @@ pub struct Adopted {
     pub branch: Option<String>,
 }
 
+/// The main checkout and the linked worktree that holds `path`. The deepest one wins: an
+/// agent's cwd may be a subdirectory of it.
+fn linked(path: &Path) -> Result<(PathBuf, super::Record)> {
+    let real = |p: &Path| crate::fs::canon(p);
+    let target = real(path);
+    let worktrees = git::list(&target)?;
+    let main = worktrees
+        .first()
+        .context("git lists no worktree")?
+        .path
+        .clone();
+    let Some(record) = worktrees
+        .into_iter()
+        .skip(1)
+        .filter(|r| crate::fs::path_starts_with(&target, &real(&r.path)))
+        .max_by_key(|r| real(&r.path).components().count())
+    else {
+        bail!("{} is not a linked worktree", path.display());
+    };
+    Ok((main, record))
+}
+
+/// `task`, else the old lock's, else the branch's first `-` segment.
+fn task_of(path: &Path, task: Option<&str>, record: &super::Record) -> Result<String> {
+    match (task, record.owner(), record.branch.as_deref()) {
+        (Some(task), ..) => Ok(task.to_string()),
+        (None, Some(o), _) => Ok(o.task),
+        (None, None, Some(branch)) => Ok(branch.split('-').next().unwrap_or(branch).to_string()),
+        (None, None, None) => bail!(
+            "{}: no lock and no branch to name its task; name it with --task (MCP: `task`)",
+            path.display()
+        ),
+    }
+}
+
 /// `rtok worktree claim` / `adopt` and MCP `worktree_adopt`: bind the linked worktree that
 /// holds `path` to `agent` when it has no lock or the lock is already theirs. The task is
 /// `task`, else the old lock's, else the branch's first `-` segment. With `spare_evicting` a
@@ -150,35 +185,14 @@ pub fn run(
     task: Option<&str>,
     spare_evicting: bool,
 ) -> Result<Adopted> {
-    let real = |p: &Path| crate::fs::canon(p);
-    let target = real(path);
-    let worktrees = git::list(&target)?;
-    let main = &worktrees.first().context("git lists no worktree")?.path;
-    // The deepest worktree holding the path: an agent's cwd may be a subdirectory of it.
-    let Some(record) = worktrees
-        .iter()
-        .skip(1)
-        .filter(|r| crate::fs::path_starts_with(&target, &real(&r.path)))
-        .max_by_key(|r| real(&r.path).components().count())
-    else {
-        bail!("{} is not a linked worktree", path.display());
-    };
+    let (main, record) = linked(path)?;
     if !record.claimable_by(owner, agent) {
         let held = record
             .owner()
             .map_or("an unknown owner".into(), |o| o.reason());
         bail!("{} is locked by {held}; not taken", path.display());
     }
-    let old = record.owner();
-    let task = match (task, &old, record.branch.as_deref()) {
-        (Some(task), ..) => task.to_string(),
-        (None, Some(o), _) => o.task.clone(),
-        (None, None, Some(branch)) => branch.split('-').next().unwrap_or(branch).to_string(),
-        (None, None, None) => bail!(
-            "{}: no lock and no branch to name its task; name it with --task (MCP: `task`)",
-            path.display()
-        ),
-    };
+    let task = task_of(path, task, &record)?;
     let reason = Owner {
         owner: owner.into(),
         task: task.clone(),
@@ -194,13 +208,13 @@ pub fn run(
     let locked = !(spare_evicting && origin::evicts(origin));
     if locked {
         if let Some(old) = &record.locked {
-            git::unlock(main, &record.path)?;
-            if let Err(e) = git::lock(main, &record.path, &reason) {
-                git::lock(main, &record.path, old)?;
+            git::unlock(&main, &record.path)?;
+            if let Err(e) = git::lock(&main, &record.path, &reason) {
+                git::lock(&main, &record.path, old)?;
                 return Err(e);
             }
         } else {
-            git::lock(main, &record.path, &reason)?;
+            git::lock(&main, &record.path, &reason)?;
         }
     }
     Ok(Adopted {
@@ -227,4 +241,55 @@ pub fn bind(
     remember(store, &done.path, &agent.id, &done.task);
     register_project(store, auto_add, &done.path, done.branch.as_deref());
     Ok(done)
+}
+
+/// `adopt` with no agent to name, as from a host's post-create script (T289.3): the one live
+/// agent of the pool's host working in the repository takes the worktree. Several or none are
+/// an error rather than a guess, which would hand the worktree to another agent.
+pub fn bind_unattended(
+    store: &Store,
+    (path, task): (&Path, Option<&str>),
+    idle: &str,
+    auto_add: bool,
+) -> Result<Adopted> {
+    let (main, record) = linked(path)?;
+    let hosts = origin::hosts(origin::of(&record.path));
+    // Only a pool whose host runs a post-create script has a caller without a session; for any
+    // other worktree a missing agent is still the user's mistake.
+    if hosts.is_empty() {
+        bail!("no agent to bind: pass --agent or set RTOK_AGENT_ID");
+    }
+    let repo = main.to_string_lossy();
+    let host_ids: Vec<i32> = hosts
+        .iter()
+        .filter_map(|h| store.host_id(h).ok().flatten())
+        .collect();
+    // The cwd rule of `agents::link::resolve` (T283.1); only top-level sessions, since a
+    // sub-agent shares its parent's cwd and would make every repository ambiguous.
+    let mut here: Vec<_> = store
+        .live_agents(idle)?
+        .into_iter()
+        .filter(|a| host_ids.contains(&a.host_id) && a.parent_key.is_empty())
+        .filter(|a| {
+            a.cwd
+                .as_deref()
+                .is_some_and(|c| crate::fs::same_dir(c, &repo))
+        })
+        .collect();
+    match here.len() {
+        1 => {
+            let agent = store
+                .agent_detail(&here.remove(0).id)?
+                .context("the live agent vanished")?;
+            bind(Some(store), path, &agent, None, task, true, auto_add)
+        }
+        0 => bail!(
+            "no live {} agent works in {repo}; pass --agent or set RTOK_AGENT_ID",
+            hosts.join("/")
+        ),
+        n => bail!(
+            "{n} live {} agents work in {repo}; pass --agent to name one",
+            hosts.join("/")
+        ),
+    }
 }

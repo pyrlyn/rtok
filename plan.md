@@ -42,7 +42,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T283 | in progress | P1 | 3 | 60% | Claude Code / sonnet-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
-| T289.3 | todo | P2 | 3 | 0% | |
+| T289.5 | todo | P2 | 3 | 0% | |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.32 | todo | P3 | 3 | 0% | |
@@ -477,17 +477,12 @@ Execution (2026-10-03, Claude Code / sonnet-5): split into four PRs, each at mos
 - `adopt` is `claim` with three differences: the path defaults to the caller's worktree (cwd), `--task` names the task when the branch cannot (a detached HEAD such as Codex's `thread-N`; the directory name is the last fallback), and a worktree in a pool whose host evicts by itself (Cursor, Windsurf/Devin, Codex) gets **no git lock**, only the claim row. Reason: the card says to confirm per host whether a locked worktree breaks the host's eviction, and that needs a live run on each host (the creator's probe, like T281); until it is confirmed, a lock could stop Cursor's cap of 25 from evicting, so the safe choice is the store-only claim. `worktree list` and `gc` already read an unlocked worktree's claim row (T285), so a live agent's adopted worktree is still never collected. Flip the pool table once a host is confirmed.
 - The origin of a worktree is derived from its path (`~/.cursor/worktrees/`, `~/.windsurf/worktrees/`, `<repo>/.claude/worktrees/`, `<repo>/.kilo/worktrees/`, `$CODEX_HOME/worktrees`, `~/conductor/workspaces/`; else `rtok` under `[worktree] root`, else `other`), so no migration. The `worktree list` table already has a `source` column (source bytes), so the new field is named `origin` in the table and in `--json`.
 
-### T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 
-Done means: rtok's entry is written into `.cursor/worktrees.json` (`setup-worktree*`), `.kilo/setup-script` and Devin/Windsurf's `post_setup_worktree` hook config, our entry only and the rest of each file byte-for-byte (host-config rule), and removal takes it out; the entry runs `rtok worktree adopt`.
+### T289.5. Pending claim for `rtok worktree adopt` from a post-create script when no single agent matches
 
-Check: install/remove e2e per host that changes only our entry.
+Split from T289.3 (500-line limit). Done means: when `adopt` runs with no agent (a host's post-create script) and no live agent of the pool's host, or several, has the repository as cwd, it stores a claim with no agent and no git lock, and the next `worktree_adopt` (MCP or CLI) or `SessionStart` hook for a session whose cwd is inside that worktree completes it (creator decision 2026-10-10). Today `adopt` fails with a message that names the missing or ambiguous agents.
 
-Open questions (2026-10-03, Claude Code / sonnet-5); 1 is decided, 2 and 3 are settled from primary sources at claim time:
-1. Creator decision 2026-10-10: bind the one live agent of that host whose cwd is the repository (T283.1 rule); when none or several match, write a claim with no agent that the next `worktree_adopt` or hook in that worktree completes. The question was: A post-create script runs outside the session: no `RTOK_AGENT_ID`, no session id. `adopt` today refuses without an agent. Whom does it bind? Candidate: the one live agent of that host whose cwd is the repository (T283.1 rule, ambiguous binds nothing), else a claim with no agent that the next `worktree_adopt` or hook in that worktree completes.
-2. The host-config formats must come from primary sources before any writer: the `.cursor/worktrees.json` shape (`setup-worktree*` values), where Devin/Windsurf read `post_setup_worktree` (project vs user `hooks.json`), and Kilo's `.kilo/setup-script` is a plain script, so "our entry only" needs a marked block. `research.md` §26 names the keys but not the exact file shapes.
-3. Whether a git lock breaks a host's own eviction is still the T281 live probe; the scripts must go through `adopt`, which already skips the lock in evicting pools.
-
+Check: adopt with zero and with two seeded agents stores the claim; `worktree_adopt` and the hook complete it; a gc run does not treat a pending claim as an orphan. Design draft (store table `worktree_pending`, migration, `claim::complete_pending`, hook step) was written during T289.3 and dropped from it.
 
 ### T329. Graph page: project selector, auto-added projects and linked projects (epic)
 

@@ -71,9 +71,6 @@ pub fn adopt(
     owner: Option<String>,
 ) -> Result<Adopted> {
     let store = opened(cfg);
-    let Some(agent) = claim::caller(store.as_ref(), agent)? else {
-        bail!("no agent to bind: pass --agent or set RTOK_AGENT_ID");
-    };
     let cwd;
     let path = match path {
         Some(path) => path,
@@ -81,6 +78,17 @@ pub fn adopt(
             cwd = std::env::current_dir()?;
             &cwd
         }
+    };
+    let Some(agent) = claim::caller(store.as_ref(), agent)? else {
+        let Some(store) = store.as_ref() else {
+            bail!("no agent to bind: pass --agent or set RTOK_AGENT_ID");
+        };
+        return claim::bind_unattended(
+            store,
+            (path, task),
+            &cfg.agents.idle,
+            cfg.plugins.graph.auto_add_projects,
+        );
     };
     claim::bind(
         store.as_ref(),

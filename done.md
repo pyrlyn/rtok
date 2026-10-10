@@ -10449,6 +10449,16 @@ Check: the skill's gate tests.
 
 Result (2026-10-03, Claude Code / sonnet-5): `skills/worktrees/SKILL.md` names the hosts whose own worktrees an agent binds (Cursor, Codex, Kilo, Devin, Grok Build, MiMo, omp, Antigravity) with MCP `worktree_adopt` or `rtok worktree adopt --task`, and the skill's list line mentions `origin`. The skill body had to stay under its 2048-byte limit, so the surrounding prose was tightened. The command-and-flag gate in `tests/skill.rs` now requires `rtok worktree adopt`.
 
+### T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
+
+Done means: rtok's entry is written into `.cursor/worktrees.json` (`setup-worktree*`), `.kilo/setup-script` and Devin/Windsurf's `post_setup_worktree` hook config, our entry only and the rest of each file byte-for-byte (host-config rule), and removal takes it out; the entry runs `rtok worktree adopt`.
+
+Check: install/remove e2e per host that changes only our entry.
+
+Result (2026-10-10, Claude Code / sonnet-5.5): `rtok agents install|uninstall <host> --project` (`src/agents/post_create.rs`; hosts `cursor`, `kilo`, `windsurf`, `devin`, any other is refused) edits the git root's project files. Cursor gets one command in each array-valued `setup-worktree*` list (a script-path value is reported, not edited, and a missing file gets `setup-worktree`). Devin and Windsurf get one `post_setup_worktree` entry in the file the host reads today (`.devin/hooks.json`, or a legacy `.windsurf/hooks.json` that still defines hooks, so a new file never switches legacy hooks off). Kilo gets a marked block right after the shebang of `.kilo/setup-script` (or the `.sh` it would otherwise shadow), run in a subshell. JSON goes through the new `jsonc::push_item`/`pull_items` (byte-span edits), so install then uninstall restores the file byte-for-byte and a file we created goes away; no `_backup` folders because these files are committed. File shapes and sources are in `research.md` §26. `adopt` with no agent (the post-create script has none) now binds the one live agent of the pool's host whose cwd is the repository (`claim::bind_unattended`; the directory comparison is the new `fs::same_dir`, which `agents::link::resolve` now uses too), and fails naming the problem when there is none or several. Reused: `agents::command`, `rtok_agent_sdk::{Apply, write}`, `jsonc` helpers, `hook_resolver`, `claim::bind`, the T283.1 cwd rule. Tests: `tests/agents_post_create.rs` (8), `jsonc` unit tests (3), `tests/worktree.rs` adopt binding with seeded agent rows. Check: `just check` green, 3268 tests passed, 8 skipped (nextest); trycmd and completion snapshots, `config_coverage` (`setup.project` allow-listed) and `module_graph` updated or satisfied.
+
+Deviations: the creator's "none or several: a claim with no agent completed later" half is split into T289.5 (store table, migration, hook step; it would have put T289.3 over the 500-line limit). T289.5 is the next free id under T289.
+
 ### T290. Docs, skill and one cross-host test for agents and worktrees
 
 Depends on T282–T289 (lands last; T159 may land after it and adds its own rows).

@@ -49,7 +49,7 @@ A host that creates worktrees in its own pool (Cursor, Codex, Windsurf and Devin
 - Cursor, Codex and Windsurf/Devin delete worktrees themselves to stay under a cap (about 25, 15 and 20). Whether a git lock survives that is not confirmed, so adopting there records the claim in rtok's store only and writes no lock.
 - Every other origin gets the same v2 lock as `worktree_add`.
 - A worktree locked by someone else is never taken.
-- Running `adopt` from a post-create script of the host (Cursor `.cursor/worktrees.json`, Kilo `.kilo/setup-script`, Windsurf and Devin `post_setup_worktree`) is **pending T289.3**. Until then the agent adopts through the skill below.
+- Running `adopt` from a post-create script of the host (Cursor `.cursor/worktrees.json`, Kilo `.kilo/setup-script`, Windsurf and Devin `post_setup_worktree`) is set up by `rtok agents install <host> --project` (hosts `cursor`, `kilo`, `windsurf`, `devin`), which adds one entry to the project's own file and touches nothing else; `rtok agents uninstall <host> --project` takes it out. With no agent named, `adopt` binds the one live agent of the pool's host whose working directory is the repository, and fails when there is none or several (a claim completed later is T289.5). The agent can always adopt through the skill below.
 
 The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for new work, `worktree_adopt` for a worktree the host made, `worktree_remove` when merged.
 
@@ -60,11 +60,11 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | Host | Hooks | Agent row from | Native worktrees | Adopting a host-made worktree |
 | --- | --- | --- | --- | --- |
 | `claude` | yes | hooks | `.claude/worktrees/<name>`; `WorktreeCreate`/`WorktreeRemove` can replace the default (rtok redirect pending T159) | `worktree_adopt` |
-| `cursor` | yes | hooks | `~/.cursor/worktrees/`, cap 25 | `worktree_adopt`; post-create script: pending T289.3 |
+| `cursor` | yes | hooks | `~/.cursor/worktrees/`, cap 25 | `worktree_adopt`; post-create script: `agents install --project` |
 | `codex` | yes | hooks | `$CODEX_HOME/worktrees`, keeps 15 | `worktree_adopt` |
-| `windsurf` | no | MCP | `~/.windsurf/worktrees/<repo>`, cap about 20 | `worktree_adopt`; post-create script: pending T289.3 |
-| `devin` | yes | hooks | shares Windsurf's pool | `worktree_adopt`; post-create script: pending T289.3 |
-| `kilo` | no | MCP | `.kilo/worktrees/` | `worktree_adopt`; post-create script: pending T289.3 |
+| `windsurf` | no | MCP | `~/.windsurf/worktrees/<repo>`, cap about 20 | `worktree_adopt`; post-create script: `agents install --project` |
+| `devin` | yes | hooks | shares Windsurf's pool | `worktree_adopt`; post-create script: `agents install --project` |
+| `kilo` | no | MCP | `.kilo/worktrees/` | `worktree_adopt`; post-create script: `agents install --project` |
 | `grok` | no | MCP (`GROK_SESSION_ID`) | `--parallel` sub-agent worktrees, path unverified | `worktree_adopt` |
 | `mimo` | no | MCP | `auto_worktree` and orchestrator mode | `worktree_adopt` |
 | `omp` | no | MCP | per-task isolation | `worktree_adopt` |
