@@ -169,9 +169,14 @@ pub static PLUGIN: HostPlugin = HostPlugin {
 
 /// Plugin dest: `<config dir>/plugins/rtok.ts` — OpenCode loads every `*.ts` there.
 pub fn plugin_dest(cfg: &Config) -> PathBuf {
-    cfg.setup
-        .opencode
-        .config_path
+    plugin_dest_beside(&cfg.setup.opencode.config_path)
+}
+
+/// [`plugin_dest`] for a fork of OpenCode (Kilo, MiMo Code) that loads the same
+/// `{plugin,plugins}/*.ts` from its own config dir, so each fork names its config file and
+/// shares this one path rule.
+pub fn plugin_dest_beside(config_file: &Path) -> PathBuf {
+    config_file
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join("plugins")

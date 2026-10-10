@@ -84,6 +84,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
+| T521 | todo | P2 | 2 | 0% | |
 
 
 
@@ -824,6 +825,12 @@ D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane 
 Depends on the T329.32 slice (done): the series is `CallsStore::spark(window, now)` in `src/web/calls_store.rs` (a `Spark { span_ms, calls, saved }` of `SPARK_SLOTS` = 30 slots, oldest first; "since open" covers the last 15 minutes, all the buckets keep). The page names the sparklines "calls over the last N min" and "tokens saved over the last N min" (N = `span_ms` in minutes) and puts them on its "calls" and "saved" cards. The "outside scope" mark is the text `outside scope` beside the project of a feed row whose project is not among the scope's project names; the scope is the project the page is drilled into, else the selected one, plus everything its links reach, and with no such project nothing is outside; a call with no project is never outside (the page's rule is `web/src/pages/graph3d/live/scope.ts`; the TUI needs its Rust equivalent over the registry rows, reusing `scopeOf` logic if one exists in Rust). The folded counter applies only in the one-project view when the cap left nodes out (`more` > 0): a call of the last 5 minutes (running or finished, not interrupted, in scope) whose target matches no drawn node counts on the drawn node whose path equals or is a directory prefix of the target (longest first), else on the "+N more" group; the page lists these as `{label} · {n} folded` under "folded calls". `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records the gap: it asserts the TUI pane lacks the wording, so T500 must turn it into a both-surface check.
 
 Check: the sparklines match the store buckets; an outside-scope call is marked; folded targets count on their nearest visible ancestor; `tests/surface_parity.rs` lists each item on both surfaces; `just check`.
+
+### T521. MiMo Desktop variant of the `mimo` host
+
+Split from T520. No documented config path for MiMo Desktop (early access); a third-party README (https://github.com/akaradje/mimo-desktop, unverified) says Desktop reads `~/.config/mimocode/mimocode.jsonc`. Waits for the creator's run of the read-only probe `scratchpad/mimo-desktop-probe/run.sh`; done = a Desktop variant (detection plus the same config family or its own) with tests.
+
+Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
 
 ### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
 

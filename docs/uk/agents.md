@@ -48,7 +48,7 @@ lang: uk
 | [`cline`](https://github.com/pyrlyn/rtok/blob/main/src/agents/cline/README.md) | Cline for VS Code | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`gemini`](https://github.com/pyrlyn/rtok/blob/main/src/agents/gemini/README.md) | Gemini CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codewhale`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codewhale/README.md) | CodeWhale | CLI | yes | yes | — | — | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
-| [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Code | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Code | CLI | — | yes | — | yes | measure, cmd, read, json_tree (off), archive, guard, memory, graph, toon, docs (off) |
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity CLI | CLI | — | — | — | `--yes` | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity | Desktop | — | — | — | `--yes` | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`devin`](https://github.com/pyrlyn/rtok/blob/main/src/agents/devin/README.md) | Devin CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |

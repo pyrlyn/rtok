@@ -148,7 +148,7 @@ pub static PLUGIN: HostPlugin = HostPlugin {
 
 /// Plugin dest: `<kilo config dir>/plugins/rtok.ts` — Kilo loads `{plugin,plugins}/*.{ts,js}`.
 pub fn plugin_dest(cfg: &Config) -> PathBuf {
-    opencode::plugin_dest(&as_opencode(cfg))
+    opencode::plugin_dest_beside(&cfg.setup.kilo.config_path)
 }
 
 #[cfg(test)]

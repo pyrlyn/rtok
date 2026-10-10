@@ -44,6 +44,7 @@ pub(crate) fn install_probe(
             Source::Local,
         ),
         "kilo" => linked_probe(super::kilo::PLUGIN.path(cfg), Source::Local),
+        "mimo" => linked_probe(super::mimo::PLUGIN.path(cfg), Source::Local),
         "pi" => linked_probe(super::pi::PLUGIN.path(cfg), Source::Local),
         "omp" => linked_probe(super::omp::PLUGIN.path(cfg), Source::Local),
         "zcode" => linked_probe(super::zcode::PLUGIN.path(cfg), Source::Local),

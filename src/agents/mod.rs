@@ -1217,7 +1217,7 @@ pub(crate) fn register_local_mcp(
     )
 }
 
-fn local_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
+pub(crate) fn local_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
     let [sub, flag, id] = mcp_args(host);
     json!({"type": "local", "command": [cmd, sub, flag, id], "enabled": true})
 }
