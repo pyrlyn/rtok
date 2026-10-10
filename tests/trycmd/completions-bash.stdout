@@ -2941,13 +2941,17 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__diff)
-            opts="-h --from --to --json --project --config --help"
+            opts="-h --from --from-export --to --json --project --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --from)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --from-export)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

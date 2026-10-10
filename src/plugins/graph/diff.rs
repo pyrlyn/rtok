@@ -18,6 +18,8 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use rtok_plugin_sdk::Ctx;
 use serde_json::{Value, json};
 
+use super::export::{self, Export};
+use super::projects;
 use super::scope::{Member, fan_out, walkable};
 use super::walk::Matcher;
 use super::{git_stdout_result, impact_walk_roots, index, index_for};
@@ -37,11 +39,19 @@ const RENAME_CANDIDATES: usize = 400;
 const BATCH: usize = 128;
 
 pub struct Query<'a> {
-    pub from: &'a str,
+    /// `REF` for every project, `PROJECT:REF` for one (a git ref never holds a colon); none is
+    /// `HEAD`.
+    pub from: &'a [String],
     /// `None` is the working tree.
     pub to: Option<&'a str>,
     pub json: bool,
+    /// A saved `symbols` export as the old side instead of a revision (CLI only: an MCP caller
+    /// must not make rtok read a path a model chose).
+    pub export: Option<&'a Path>,
 }
+
+/// A link of the registry, by project names because an export's ids belong to another registry.
+type LinkKey = (String, String, String);
 
 type Edge = (String, String, String);
 
@@ -59,6 +69,8 @@ pub struct Diff {
     pub renamed: Vec<(DefRow, DefRow)>,
     pub edges_added: Vec<Edge>,
     pub edges_removed: Vec<Edge>,
+    /// Files that differ but no grammar read, with why.
+    pub not_analysed: Vec<(String, &'static str)>,
 }
 
 impl Diff {
@@ -70,6 +82,7 @@ impl Diff {
             && self.renamed.is_empty()
             && self.edges_added.is_empty()
             && self.edges_removed.is_empty()
+            && self.not_analysed.is_empty()
     }
 
     /// Symbols whose callers matter to a reviewer: what changed, vanished or changed name.
@@ -90,9 +103,13 @@ struct Side {
     refs: Vec<RefGroup>,
     src: Src,
     cache: HashMap<String, Vec<u8>>,
+    /// Files present on this side that were not UTF-8 or that the grammar failed on.
+    unread: Vec<String>,
 }
 
 enum Src {
+    /// A saved export: names and places only, so no signature, hash or body to compare.
+    Names,
     Disk(PathBuf),
     Git {
         root: PathBuf,
@@ -104,6 +121,7 @@ impl Side {
     fn body(&mut self, d: &DefRow) -> Option<String> {
         if !self.cache.contains_key(&d.path) {
             let bytes = match &self.src {
+                Src::Names => return None,
                 Src::Disk(root) => std::fs::read(root.join(&d.path)).ok()?,
                 Src::Git { root, oids } => {
                     let oid = oids.get(&d.path)?;
@@ -226,26 +244,27 @@ fn each_blob(
 
 /// The files `paths` names in `rev`, extracted as the index extracts a file on disk.
 fn git_side(
-    cx: &Ctx,
+    matcher: &Matcher,
     root: &Path,
     tree: HashMap<String, String>,
     paths: &BTreeSet<String>,
 ) -> Result<Side> {
-    let matcher = Matcher::new(root, &cx.plugin_config::<crate::config::Graph>("graph"));
     let entries: Vec<(String, String)> = paths
         .iter()
         .filter(|p| matcher.indexable(&root.join(p)))
         .filter_map(|p| Some((p.clone(), tree.get(p)?.clone())))
         .collect();
-    let (mut defs, mut groups) = (
+    let (mut defs, mut groups, mut unread) = (
         Vec::new(),
         BTreeMap::<(String, String, String, String), i64>::new(),
+        Vec::new(),
     );
     each_blob(root, &entries, |path, bytes| {
-        let Ok(src) = String::from_utf8(bytes) else {
-            return;
-        };
-        let Some(rows) = index::rows_of(&root.join(path), &src, matcher.extensions()) else {
+        let rows = String::from_utf8(bytes)
+            .ok()
+            .and_then(|src| index::rows_of(&root.join(path), &src, matcher.extensions()));
+        let Some(rows) = rows else {
+            unread.push(path.to_string());
             return;
         };
         for r in rows.into_iter().filter(|r| !r.name.is_empty()) {
@@ -287,6 +306,7 @@ fn git_side(
             oids,
         },
         cache: HashMap::new(),
+        unread,
     })
 }
 
@@ -370,6 +390,8 @@ fn diff_sides(old: &mut Side, new: &mut Side) -> Diff {
     let mut d = Diff::default();
     let (old_box, new_box) = (containers(&old.defs), containers(&new.defs));
     let (go, gn) = (group(&old.defs), group(&new.defs));
+    // A saved export has no signatures or hashes, so it can say what appeared and vanished only.
+    let blind = matches!(old.src, Src::Names);
     let keys: BTreeSet<_> = go.keys().chain(gn.keys()).copied().collect();
     for k in keys {
         let (o, n) = (
@@ -379,6 +401,9 @@ fn diff_sides(old: &mut Side, new: &mut Side) -> Diff {
         for i in 0..o.len().max(n.len()) {
             match (o.get(i), n.get(i)) {
                 (Some(&a), Some(&b)) => {
+                    if blind {
+                        continue;
+                    }
                     let (a_def, b_def) = (&old.defs[a], &new.defs[b]);
                     let hashes = !a_def.content_hash.is_empty() && !b_def.content_hash.is_empty();
                     let own_body = !old_box[a] && !new_box[b] && hashes;
@@ -464,22 +489,200 @@ fn working_side(
         refs,
         src: Src::Disk(root.to_path_buf()),
         cache: HashMap::new(),
+        unread: Vec::new(),
     })
 }
 
-/// One project's diff.
-fn compute(rt: &Runtime, cx: &Ctx, root: &Path, q: &Query) -> Result<Diff> {
-    let from = resolve_rev(root, q.from)?;
-    let to = q.to.map(|t| resolve_rev(root, t)).transpose()?;
+/// One project's diff between revisions.
+fn compute(rt: &Runtime, cx: &Ctx, root: &Path, rev: &str, to: Option<&str>) -> Result<Diff> {
+    let from = resolve_rev(root, rev)?;
+    let to = to.map(|t| resolve_rev(root, t)).transpose()?;
     index_for(cx, root)?;
+    let matcher = Matcher::new(root, &cx.plugin_config::<crate::config::Graph>("graph"));
     let old_tree = tree_oids(root, &from)?;
     let mut paths = changed_paths(root, &from, to.as_deref())?;
+    // Taken before untracked files join `paths`: only what git reports as different can be a
+    // file nobody read.
+    let listed = paths.clone();
     let mut new = match &to {
         None => working_side(rt, root, &old_tree, &mut paths)?,
-        Some(rev) => git_side(cx, root, tree_oids(root, rev)?, &paths)?,
+        Some(rev) => git_side(&matcher, root, tree_oids(root, rev)?, &paths)?,
     };
-    let mut old = git_side(cx, root, old_tree, &paths)?;
+    let mut old = git_side(&matcher, root, old_tree, &paths)?;
+    // The working side is the index, which keeps no record of a file it could not read.
+    let unreadable_now: Vec<&str> = listed
+        .iter()
+        .filter(|_| to.is_none())
+        .filter(|p| std::fs::read(root.join(p)).is_ok_and(|b| std::str::from_utf8(&b).is_err()))
+        .map(String::as_str)
+        .collect();
+    let unread: HashSet<&str> = old
+        .unread
+        .iter()
+        .chain(&new.unread)
+        .map(String::as_str)
+        .chain(unreadable_now)
+        .collect();
+    let not_analysed = listed
+        .iter()
+        .filter(|p| !matcher.is_excluded(&root.join(p)))
+        .filter_map(|p| {
+            if !matcher.has_supported_ext(Path::new(p)) {
+                Some((p.clone(), "no grammar"))
+            } else {
+                unread
+                    .contains(p.as_str())
+                    .then(|| (p.clone(), "not parsed"))
+            }
+        })
+        .collect();
+    let mut d = diff_sides(&mut old, &mut new);
+    d.not_analysed = not_analysed;
+    Ok(d)
+}
+
+/// One project against a saved export: what appeared and vanished by `(path, name, kind)`. The
+/// export keeps no signatures and its edges are between symbols whose ambiguous calls were
+/// dropped, so a change and an edge cannot be told from the export alone and are not reported.
+fn compute_saved(rt: &Runtime, cx: &Ctx, m: &Member, e: &Export) -> Result<Diff> {
+    if e.meta.level == "overview" {
+        return Ok(Diff::default());
+    }
+    let ids: HashSet<i32> = e
+        .projects
+        .iter()
+        .filter(|p| p.name == m.name)
+        .map(|p| p.id)
+        .collect();
+    if ids.is_empty() {
+        bail!("{} is not in the export", m.name);
+    }
+    index_for(cx, &m.root)?;
+    let defs = e
+        .nodes
+        .iter()
+        .filter(|n| ids.contains(&n.project))
+        .map(|n| DefRow {
+            path: n.path.clone(),
+            name: n.name.clone(),
+            kind: n.kind.clone(),
+            line: n.line,
+            end_line: n.line,
+            signature: String::new(),
+            content_hash: String::new(),
+            start_byte: 0,
+            end_byte: 0,
+        })
+        .collect();
+    let mut old = Side {
+        defs,
+        refs: Vec::new(),
+        src: Src::Names,
+        cache: HashMap::new(),
+        unread: Vec::new(),
+    };
+    let mut new = working_side(rt, &m.root, &HashMap::new(), &mut BTreeSet::new())?;
+    new.refs.clear();
     Ok(diff_sides(&mut old, &mut new))
+}
+
+/// Registry links of `old` that the current registry lacks, and the other way round, over the
+/// projects both sides name; a link to a project only one side has says nothing about the link.
+fn links_between(
+    rt: &Runtime,
+    scope: &[Member],
+    old: &Export,
+) -> Result<(Vec<LinkKey>, Vec<LinkKey>)> {
+    let now = export::collect(
+        rt,
+        scope,
+        &export::Query {
+            level: export::Level::Overview,
+            focus: None,
+            depth: 2,
+            redact: false,
+            pretty: false,
+            from: None,
+        },
+    )?;
+    let keys = |e: &Export| -> BTreeSet<LinkKey> {
+        let name = |id: i32| {
+            e.projects
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.name.clone())
+        };
+        e.links
+            .iter()
+            .filter_map(|l| Some((name(l.from)?, name(l.to)?, l.kind.clone())))
+            .collect()
+    };
+    let (before, after) = (keys(old), keys(&now));
+    let known = |names: &HashSet<&str>, l: &LinkKey| {
+        names.contains(l.0.as_str()) && names.contains(l.1.as_str())
+    };
+    let both: HashSet<&str> = old
+        .projects
+        .iter()
+        .map(|p| p.name.as_str())
+        .filter(|n| now.projects.iter().any(|p| p.name == *n))
+        .collect();
+    Ok((
+        after
+            .iter()
+            .filter(|l| !before.contains(*l) && known(&both, l))
+            .cloned()
+            .collect(),
+        before
+            .iter()
+            .filter(|l| !after.contains(*l) && known(&both, l))
+            .cloned()
+            .collect(),
+    ))
+}
+
+/// The revision each project is compared from: its own `PROJECT:REF`, else the shared `REF`.
+struct Refs<'a> {
+    shared: &'a str,
+    own: Vec<(&'a str, &'a str)>,
+}
+
+impl<'a> Refs<'a> {
+    fn parse(rt: &Runtime, scope: &[Member], specs: &'a [String]) -> Result<Self> {
+        let mut shared = None;
+        let mut own = Vec::new();
+        for spec in specs {
+            // A name that no project of the scope answers to leaves the whole text a ref, so a
+            // reflog date such as `@{yesterday 10:00}` still works and a typo is named by the
+            // unknown-ref error.
+            match spec.rsplit_once(':') {
+                Some((who, rev)) if scope.iter().any(|m| answers(rt, who, m)) => {
+                    own.push((who, rev));
+                }
+                _ if shared.is_some() => bail!("--from names a ref for the other projects twice"),
+                _ => shared = Some(spec.as_str()),
+            }
+        }
+        Ok(Self {
+            shared: shared.unwrap_or("HEAD"),
+            own,
+        })
+    }
+
+    fn of(&self, rt: &Runtime, m: &Member) -> &'a str {
+        self.own
+            .iter()
+            .rev()
+            .find(|(who, _)| answers(rt, who, m))
+            .map_or(self.shared, |(_, rev)| rev)
+    }
+}
+
+/// `who` is the member's name, or an id or directory `rtok graph projects` knows for its root.
+fn answers(rt: &Runtime, who: &str, m: &Member) -> bool {
+    who == m.name
+        || projects::resolve(&rt.store, who)
+            .is_ok_and(|p| index::canon(Path::new(&p.root)) == index::canon(&m.root))
 }
 
 /// Callers of `name` in the current indexes of the whole scope, so a change in B lists A's call
@@ -502,6 +705,8 @@ fn callers(cx: &Ctx, keys: &[&str], labels: &[String], name: &str) -> Result<Vec
 
 struct Part {
     name: String,
+    /// The revision this project was compared from.
+    rev: String,
     diff: Diff,
     callers: HashMap<String, Vec<String>>,
 }
@@ -541,6 +746,9 @@ fn render_part(out: &mut String, p: &Part, tag: &str) {
         d.edges_added.len(),
         d.edges_removed.len()
     );
+    if !d.not_analysed.is_empty() {
+        let _ = writeln!(out, "{tag}{} changed, not analysed", d.not_analysed.len());
+    }
     let callers = |name: &str| p.callers.get(name).map_or(&[][..], Vec::as_slice);
     let mut changed: Vec<&Changed> = d.changed.iter().collect();
     changed.sort_by_key(|c| std::cmp::Reverse(callers(&c.new.name).len()));
@@ -576,6 +784,20 @@ fn render_part(out: &mut String, p: &Part, tag: &str) {
     listed(out, "added", &d.added, def_text);
     listed(out, "edges added", &d.edges_added, edge_text);
     listed(out, "edges removed", &d.edges_removed, edge_text);
+    listed(
+        out,
+        "changed, not analysed",
+        &d.not_analysed,
+        |(path, why)| format!("{path}  ({why})"),
+    );
+}
+
+fn link_text((from, to, kind): &LinkKey) -> String {
+    format!("{from} -> {to} ({kind})")
+}
+
+fn link_json((from, to, kind): &LinkKey) -> Value {
+    json!({"from": from, "to": to, "kind": kind})
 }
 
 fn def_json(d: &DefRow) -> Value {
@@ -591,6 +813,7 @@ fn part_json(p: &Part) -> Value {
     let callers = |name: &str| p.callers.get(name).cloned().unwrap_or_default();
     json!({
         "project": p.name,
+        "from": p.rev,
         "changed": d.changed.iter().map(|c| {
             let mut v = def_json(&c.new);
             v["signature_changed"] = json!(c.old.signature != c.new.signature);
@@ -611,6 +834,9 @@ fn part_json(p: &Part) -> Value {
             .collect::<Vec<_>>(),
         "edges_added": d.edges_added.iter().map(edge_json).collect::<Vec<_>>(),
         "edges_removed": d.edges_removed.iter().map(edge_json).collect::<Vec<_>>(),
+        "not_analysed": d.not_analysed.iter()
+            .map(|(path, why)| json!({"path": path, "reason": why}))
+            .collect::<Vec<_>>(),
     })
 }
 
@@ -619,10 +845,43 @@ fn part_json(p: &Part) -> Value {
 /// cap, so a long one ends in `N more, expand <id>` with the rest archived; `--json` is whole.
 pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
     let cx = Ctx::new(rt);
-    let (done, notes) = fan_out(scope, |m| {
+    let saved = match q.export {
+        Some(path) => {
+            if q.to.is_some() || !q.from.is_empty() {
+                bail!("a saved export is compared with the working tree; drop --from and --to");
+            }
+            let e = export::read(path)?;
+            if e.meta.level == "focus" {
+                bail!(
+                    "{} holds a part of the graph; export with --level symbols to compare",
+                    path.display()
+                );
+            }
+            Some(e)
+        }
+        None => None,
+    };
+    let refs = Refs::parse(rt, scope, q.from)?;
+    let (done, mut notes) = fan_out(scope, |m| {
         walkable(m)?;
-        compute(rt, &cx, &m.root, q)
+        let diff = match &saved {
+            Some(e) => compute_saved(rt, &cx, m, e)?,
+            None => compute(rt, &cx, &m.root, refs.of(rt, m), q.to)?,
+        };
+        Ok(diff)
     })?;
+    let links = saved
+        .as_ref()
+        .map(|e| links_between(rt, scope, e))
+        .transpose()?
+        .unwrap_or_default();
+    if let Some(e) = &saved {
+        notes.push_str(&if e.meta.level == "overview" {
+            "note: the export has no symbols (made with --level overview); only links are compared\n".to_string()
+        } else {
+            "note: against an export only added and removed symbols are listed; changes and edges need a revision\n".to_string()
+        });
+    }
     let labels: Vec<String> = done
         .iter()
         .map(|(m, _)| {
@@ -645,20 +904,29 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
         }
         parts.push(Part {
             name: m.name.clone(),
+            rev: refs.of(rt, m).to_string(),
             diff,
             callers: found,
         });
     }
     let to = q.to.unwrap_or("working");
+    let from = q.export.map_or_else(
+        || refs.shared.to_string(),
+        |p| format!("export {}", p.display()),
+    );
     if q.json {
         let projects: Vec<Value> = parts.iter().map(part_json).collect();
         return Ok(format!(
             "{}\n",
-            json!({"from": q.from, "to": to, "projects": projects})
+            json!({
+                "from": from, "to": to, "projects": projects,
+                "links_added": links.0.iter().map(link_json).collect::<Vec<_>>(),
+                "links_removed": links.1.iter().map(link_json).collect::<Vec<_>>(),
+            })
         ));
     }
-    let mut body = format!("graph diff {} -> {to} (tags)\n", q.from);
-    if parts.iter().all(|p| p.diff.is_empty()) {
+    let mut body = format!("graph diff {from} -> {to} (tags)\n");
+    if parts.iter().all(|p| p.diff.is_empty()) && links.0.is_empty() && links.1.is_empty() {
         body.push_str("no graph changes\n");
     }
     for (p, label) in parts
@@ -666,22 +934,46 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
         .zip(&labels)
         .filter(|(p, _)| !p.diff.is_empty())
     {
-        render_part(&mut body, p, label);
+        // A project compared from its own ref says so; the shared one is in the title.
+        let tag = if saved.is_none() && p.rev != refs.shared {
+            format!("[{} from {}] ", p.name, p.rev)
+        } else {
+            label.clone()
+        };
+        render_part(&mut body, p, &tag);
     }
+    let mut tail = String::new();
+    listed(&mut tail, "links added", &links.0, link_text);
+    listed(&mut tail, "links removed", &links.1, link_text);
+    body.push_str(&tail);
     super::cap(&cx, format!("{notes}{body}"))
 }
 
-/// MCP `graph_diff`: `from` (default `HEAD`), `to` (default the working tree).
+/// MCP `graph_diff`: `from` (a ref, or a list mixing refs and `project:ref`; default `HEAD`), `to` (default the working tree).
 pub fn call(rt: &Runtime, args: &Value, scope: &[Member]) -> Result<String> {
     let arg = |k: &str| args[k].as_str().filter(|s| !s.is_empty());
     let to = arg("to").filter(|t| *t != "working");
+    let from: Vec<String> = match &args["from"] {
+        Value::Array(list) => list
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(String::from)
+            .collect(),
+        other => other
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .into_iter()
+            .collect(),
+    };
     run(
         rt,
         scope,
         &Query {
-            from: arg("from").unwrap_or("HEAD"),
+            from: &from,
             to,
             json: false,
+            export: None,
         },
     )
 }
@@ -719,6 +1011,7 @@ mod tests {
         let root = dir.join(name);
         fs::create_dir_all(&root).unwrap();
         for (path, src) in files {
+            fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
             fs::write(root.join(path), src).unwrap();
         }
         git(&root, &["init", "-q", "-b", "main"]);
@@ -738,9 +1031,10 @@ mod tests {
             rt,
             scope,
             &Query {
-                from,
+                from: &[from.to_string()],
                 to,
                 json: false,
+                export: None,
             },
         )
     }
@@ -983,9 +1277,10 @@ mod tests {
             &rt,
             &scope,
             &Query {
-                from: "HEAD",
+                from: &[],
                 to: None,
                 json: true,
+                export: None,
             },
         )
         .unwrap();
@@ -999,6 +1294,167 @@ mod tests {
         assert_eq!(b["changed"][0]["name"], "shared");
         assert_eq!(b["changed"][0]["signature_changed"], true);
         assert_eq!(b["changed"][0]["callers"][0], "[a] lib.rs a_caller d1");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    fn run_from(rt: &Runtime, scope: &[Member], from: &[&str]) -> Result<String> {
+        let from: Vec<String> = from.iter().map(|f| f.to_string()).collect();
+        run(
+            rt,
+            scope,
+            &Query {
+                from: &from,
+                to: None,
+                json: false,
+                export: None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_ref_for_one_project_leaves_the_others_on_the_shared_ref() {
+        let (rt, dir, scope) = linked("t32929-from");
+        let b = dir.join("b");
+        fs::write(b.join("lib.rs"), "fn shared(x: i32) {}\n").unwrap();
+        commit(&b);
+        let same = run_from(&rt, &scope, &["HEAD"]).unwrap();
+        assert!(same.contains("no graph changes"), "{same}");
+        let out = run_from(&rt, &scope, &["b:HEAD~1"]).unwrap();
+        assert!(out.starts_with("graph diff HEAD -> working"), "{out}");
+        assert!(out.contains("[b from HEAD~1] 1 changed"), "{out}");
+        assert!(!out.contains("[a] 1 changed"), "{out}");
+        // The same project by its registry id, and a second shared ref is refused.
+        let id = rt
+            .store
+            .project_by_root(&b)
+            .unwrap()
+            .unwrap()
+            .id
+            .to_string();
+        let by_id = run_from(&rt, &scope, &[&format!("{id}:HEAD~1")]).unwrap();
+        assert!(by_id.contains("[b from HEAD~1] 1 changed"), "{by_id}");
+        let err = run_from(&rt, &scope, &["HEAD", "main"])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("twice"), "{err}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn files_no_grammar_reads_are_listed_as_changed_and_not_analysed() {
+        let (mut rt, dir) = cx("t32929-unread");
+        rt.config.plugins.graph.exclude = vec!["vendor/".into()];
+        let root = project(
+            &dir,
+            "p",
+            &[
+                ("lib.rs", "fn f() {}\n"),
+                ("notes.md", "one\n"),
+                ("bad.rs", "fn g() {}\n"),
+                ("vendor/x.md", "one\n"),
+            ],
+        );
+        fs::write(root.join("notes.md"), "two\n").unwrap();
+        fs::write(root.join("vendor/x.md"), "two\n").unwrap();
+        fs::write(root.join("bad.rs"), [0xff, 0xfe, 0x00]).unwrap();
+        let out = ask(&rt, &solo(&root), "HEAD", None).unwrap();
+        assert!(out.contains("2 changed, not analysed"), "{out}");
+        assert!(out.contains("  notes.md  (no grammar)"), "{out}");
+        assert!(out.contains("  bad.rs  (not parsed)"), "{out}");
+        assert!(!out.contains("vendor"), "{out}");
+        assert!(!out.contains("no graph changes"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// An export of `scope` at the symbols level, written to `dir/saved.json`.
+    fn save(rt: &Runtime, scope: &[Member], dir: &Path, level: export::Level) -> PathBuf {
+        let text = export::run(
+            rt,
+            scope,
+            &export::Query {
+                level,
+                focus: None,
+                depth: 2,
+                redact: false,
+                pretty: false,
+                from: None,
+            },
+        )
+        .unwrap();
+        let path = dir.join("saved.json");
+        fs::write(&path, text).unwrap();
+        path
+    }
+
+    fn against(rt: &Runtime, scope: &[Member], file: &Path) -> Result<String> {
+        run(
+            rt,
+            scope,
+            &Query {
+                from: &[],
+                to: None,
+                json: false,
+                export: Some(file),
+            },
+        )
+    }
+
+    #[test]
+    fn a_saved_export_lists_what_appeared_and_vanished_and_the_links() {
+        let (rt, dir, scope) = linked("t32929-export");
+        let file = save(&rt, &scope, &dir, export::Level::Symbols);
+        let same = against(&rt, &scope, &file).unwrap();
+        assert!(same.contains("no graph changes"), "{same}");
+        // A signature change is invisible to an export, a new and a removed function are not.
+        fs::write(
+            dir.join("b/lib.rs"),
+            "fn shared(x: i32) {}\nfn fresh() {}\n",
+        )
+        .unwrap();
+        fs::write(dir.join("a/lib.rs"), "fn other() {}\n").unwrap();
+        let ids: Vec<i32> = scope
+            .iter()
+            .map(|m| rt.store.project_by_root(&m.root).unwrap().unwrap().id)
+            .collect();
+        rt.store.unlink_projects(ids[0], ids[1]).unwrap();
+        let out = against(&rt, &scope, &file).unwrap();
+        assert!(out.contains("graph diff export "), "{out}");
+        assert!(out.contains("note: against an export"), "{out}");
+        assert!(out.contains("added (1)\n  function fresh"), "{out}");
+        assert!(out.contains("removed (1)\n  function a_caller"), "{out}");
+        assert!(out.contains("added (1)\n  function other"), "{out}");
+        assert!(!out.contains("changed ("), "{out}");
+        assert!(
+            out.contains("links removed (1)\n  a -> b (manual)"),
+            "{out}"
+        );
+        assert!(!out.contains("links added"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_export_that_cannot_be_compared_says_why() {
+        let (rt, dir, scope) = linked("t32929-export-errors");
+        let overview = save(&rt, &scope, &dir, export::Level::Overview);
+        let out = against(&rt, &scope, &overview).unwrap();
+        assert!(out.contains("only links are compared"), "{out}");
+        assert!(out.contains("no graph changes"), "{out}");
+        let symbols = save(&rt, &scope, &dir, export::Level::Symbols);
+        let both = run(
+            &rt,
+            &scope,
+            &Query {
+                from: &["HEAD".to_string()],
+                to: None,
+                json: false,
+                export: Some(&symbols),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(both.contains("drop --from and --to"), "{both}");
+        let missing = against(&rt, &scope, &dir.join("none.json")).unwrap_err();
+        assert!(format!("{missing:#}").contains("none.json"), "{missing:#}");
         let _ = fs::remove_dir_all(dir);
     }
 }

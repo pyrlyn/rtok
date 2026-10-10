@@ -118,7 +118,7 @@ impl Plugin for Graph {
             ToolDef {
                 name: "graph_diff",
                 description: "Symbols changed between git refs, with callers.",
-                input_schema: json!({"type":"object","properties":{"from":{"type":"string","description":"ref, default HEAD"},"to":{"type":"string","description":"ref or working (default)"},"project":{"type":"string"}}}),
+                input_schema: json!({"type":"object","properties":{"from":{"type":["string","array"],"description":"ref, default HEAD; project:ref for one project; a list for several"},"to":{"type":"string","description":"ref or working (default)"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "graph_export",

@@ -945,12 +945,17 @@ What a change did to the graph: symbols changed, added, removed, renamed or move
 Usage: rtok graph diff [OPTIONS]
 
 Options:
-      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --from <FROM>        Compare from this git ref [default: HEAD]
-      --to <TO>            Compare to this git ref; `working` is the working tree [default: working]
-      --json               JSON instead of the text answer (whole, not capped)
-      --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
-  -h, --help               Print help
+      --config <PATH>              User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --from <FROM>                Compare from this git ref (default HEAD); `PROJECT:REF` sets it
+                                   for one project, repeat for more
+      --from-export <FROM_EXPORT>  Compare from a saved `rtok graph export --level symbols` file
+                                   instead of a revision
+      --to <TO>                    Compare to this git ref; `working` is the working tree [default:
+                                   working]
+      --json                       JSON instead of the text answer (whole, not capped)
+      --project <PROJECT>          Project id or directory instead of the cwd (see `rtok graph
+                                   projects`)
+  -h, --help                       Print help
 
 $ rtok graph export --help
 The graph as `rtok.graph.v1` JSON, with home, user name and absolute paths redacted

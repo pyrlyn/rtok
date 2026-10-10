@@ -2074,7 +2074,8 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (diff)
 _arguments "${_arguments_options[@]}" : /
-'--from=[Compare from this git ref]:FROM:_default' /
+'*--from=[Compare from this git ref (default HEAD); /`PROJECT/:REF/` sets it for one project, repeat for more]:FROM:_default' /
+'(--from --to)--from-export=[Compare from a saved /`rtok graph export --level symbols/` file instead of a revision]:FROM_EXPORT:_files' /
 '--to=[Compare to this git ref; /`working/` is the working tree]:TO:_default' /
 '--project=[Project id or directory instead of the cwd (see /`rtok graph projects/`)]:PROJECT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
