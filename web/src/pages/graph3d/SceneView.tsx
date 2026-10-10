@@ -34,7 +34,7 @@ export function readView(): View {
     return "3d";
 }
 
-function saveView(v: View) {
+export function saveView(v: View) {
     try {
         localStorage.setItem(VIEW_KEY, v);
     } catch {

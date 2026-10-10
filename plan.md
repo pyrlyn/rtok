@@ -47,7 +47,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.15 | todo | P3 | 5 | 0% | |
 | T329.16 | todo | P3 | 3 | 0% | |
 | T329.30 | todo | P3 | 2 | 0% | |
-| T329.28 | todo | P3 | 4 | 0% | |
+| T329.32 | todo | P3 | 3 | 0% | |
+| T329.33 | todo | P3 | 4 | 0% | |
+| T329.34 | todo | P3 | 3 | 0% | |
 | T329.29 | todo | P3 | 4 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -816,11 +818,23 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
 
-### T329.28. Graph page: live camera, 3D live view and the remaining live displays
+### T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
 
-Remainder of T329 §8b after T329.27 (which shipped the read-only 2D live canvas: `Scene2D`'s `live` prop, `live/lit.ts` for the lit state, `live/LiveGraph.tsx` and the splitter): the automatic camera that frames the running call and eases back to an overview (2D and 3D), the 3D live canvas (Three.js stage: read-only, heat glow, accents), maximise buttons and the collapsed metrics strip under 900 px, running labels with counters, count-up animation, sparklines, latency p50 and p95, symbols requested and returned (needs them added to the T329.15 events first), files touched and projects crossed, fallbacks and cap counters, the "outside scope" mark and the nearest-visible-ancestor counter, a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of since the page opened, `[plugins.graph] live_*` config keys with `docs/config.md`. A TUI counterpart is not planned yet (D27); ask the creator for a task. Depends on T329.27.
+What is left of T329 §8b after T329.28 that only draws what the page already has: maximise buttons for the live canvas and for part 1, the collapsed metrics strip under 900 px, running labels with counters, count-up animation of the numbers, sparklines, the "outside scope" mark on a call that crosses out of the scope, and the nearest-visible-ancestor counter for calls whose target is folded into a "+N more" group. A TUI counterpart is not planned yet (D27); ask the creator for a task.
 
-Check: the live canvas frames a running call and eases back to an overview in 2D and 3D; the latency and symbol counters match the events; the config keys are read and documented; Vitest, stories (axe) and Playwright; `just check`.
+Check: maximising either part fills the page and restores; under 900 px the metrics collapse to a strip that expands; a running call shows its label and elapsed counter; the numbers count up (and jump with `prefers-reduced-motion`); the sparklines match the store buckets; a call outside the scope is marked; folded targets count on their nearest visible ancestor; Vitest, stories (axe) and Playwright; `just check`.
+
+### T329.33. Graph page: call metrics from the events (latency, symbols, files, projects, fallbacks)
+
+What is left of T329 §8b after T329.28 that needs data the events do not carry yet: latency p50 and p95, symbols requested and returned (they have to be added to the T329.15 events first), files touched, projects crossed, and the fallbacks and cap counters. The numbers must match the `graph_events` rows and the `Measurement` rows (`rtok stats`).
+
+Check: the latency and symbol counters match the events of a fixture burst and `rtok stats`; files touched and projects crossed match the call's answer; fallbacks and cap counters match the events; Vitest, stories (axe), Playwright, Rust tests for the event change; `just check`.
+
+### T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
+
+What is left of T329 §8b after T329.28 that needs the store or the config: a caller column that names the agent and host instead of the session id (the events carry only the session), "since `rtok web` started" read from the store instead of "since the page opened", and the `[plugins.graph] live_*` config keys read by the live part and documented in `docs/config.md` (en, ru, uk), through the one config module and types (T238).
+
+Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
 
 ### T329.29. Graph page: Compare mode and the remaining diff reports
 

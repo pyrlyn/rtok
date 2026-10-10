@@ -10,9 +10,11 @@ import {
     useRef,
     useState,
 } from "react";
+import { type Box, boxAround } from "./live/camera";
 import { accentOf, type Lit, type LiveState } from "./live/lit";
+import { useEasedBox } from "./live/useEasedBox";
 import { ALERT_ROLE, edgeHow, nodeTip, type Scene, type SceneNode } from "./scene";
-import type { Positions, Vec3 } from "./useLayout";
+import type { Positions } from "./useLayout";
 import type { ViewApi, ViewEvents } from "./webgl";
 
 export interface View2DProps extends ViewEvents {
@@ -21,28 +23,6 @@ export interface View2DProps extends ViewEvents {
     api: RefObject<ViewApi | null>;
     /** The read-only live picture (T329 §8b): it takes no input, and the nodes carry the call state. */
     live?: LiveState;
-}
-
-interface Box {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-}
-
-const PAD = 30;
-
-function fitBox(scene: Scene, map: Map<number, Vec3>): Box {
-    const pts = scene.nodes.flatMap((n) => {
-        const p = map.get(n.id);
-        return p ? [{ p, r: n.radius }] : [];
-    });
-    if (!pts.length) return { x: -100, y: -100, w: 200, h: 200 };
-    const x0 = Math.min(...pts.map(({ p, r }) => p[0] - r));
-    const x1 = Math.max(...pts.map(({ p, r }) => p[0] + r));
-    const y0 = Math.min(...pts.map(({ p, r }) => p[1] - r));
-    const y1 = Math.max(...pts.map(({ p, r }) => p[1] + r));
-    return { x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + 2 * PAD, h: y1 - y0 + 2 * PAD };
 }
 
 function Arrow({ id, fill }: { id: string; fill: string }) {
@@ -154,8 +134,10 @@ export default function Scene2D({
 
     const at = (id: number) => positions.map.get(id);
     const byId = new Map(scene.nodes.map((n) => [n.id, n]));
-    const fitted = fitBox(scene, positions.map);
-    const box = manual ?? fitted;
+    // The live picture is never panned by hand: the camera frames the running calls, or the whole.
+    const focus = live?.focus;
+    const wanted = manual ?? boxAround(scene, positions.map, focus);
+    const box = useEasedBox(wanted, focus?.join(",") ?? "", readOnly);
 
     useImperativeHandle(api, () => ({
         fit: () => setManual(null),

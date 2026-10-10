@@ -12,6 +12,7 @@ import { richSnapshot } from "../../fixtures";
 import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
 import { batch, end, event } from "./callsFixtures";
+import { FOCUS_MS } from "./lit";
 import { HIDE_KEY, SPLIT_KEY } from "./Split";
 
 const snap: Snapshot = {
@@ -23,7 +24,12 @@ beforeEach(() => {
     localStorage.clear();
     localStorage.setItem(VIEW_KEY, "list");
 });
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
+const noop = () => {};
 
 const canvas = () => screen.findByTestId("graph-live");
 const calls = (sent: unknown[]) =>
@@ -102,6 +108,47 @@ describe("live graph", () => {
         act(() => w.frame({ type: "calls", batch: batch(many) }));
         expect(await screen.findByText("busy: 2 more")).toBeTruthy();
         expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(8);
+    });
+
+    test("the camera frames a running call and returns to the whole when the call is old", async () => {
+        vi.stubGlobal("matchMedia", (q: string) => ({
+            matches: q.includes("reduce"),
+            addEventListener: noop,
+            removeEventListener: noop,
+        }));
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        const svg = await canvas();
+        await waitFor(() =>
+            expect(svg.querySelectorAll("[data-testid=node-live]")).toHaveLength(2),
+        );
+        // The layout is still settling in a test, so the whole is judged by its height, not its exact box.
+        const height = () => Number(svg.getAttribute("viewBox")!.split(" ")[3]);
+        await waitFor(() => expect(height()).toBeGreaterThan(140));
+        act(() =>
+            w.frame({ type: "calls", batch: batch([event({ call: "a", project: "ketch" })]) }),
+        );
+        await waitFor(() => expect(height()).toBe(140));
+        act(() =>
+            w.frame({ type: "calls", batch: batch([end("a", 10, 4, { project: "ketch" })]) }),
+        );
+        // The call has ended; the next one-second tick finds it older than the hold.
+        const real = Date.now();
+        vi.spyOn(Date, "now").mockReturnValue(real + FOCUS_MS + 2000);
+        await waitFor(() => expect(height()).toBeGreaterThan(140), { timeout: 3000 });
+    });
+
+    test("the 2D/3D switch is remembered; 3D without WebGL says so and still shows 2D", async () => {
+        mount(wire(snap).connect, "/graph");
+        await canvas();
+        const view = within(screen.getByRole("group", { name: "live view" }));
+        fireEvent.click(view.getByRole("button", { name: "3D" }));
+        expect(localStorage.getItem(VIEW_KEY)).toBe("3d");
+        expect(await screen.findByText(/3D unavailable \(WebGL is not available/)).toBeTruthy();
+        expect(screen.getByTestId("graph-live")).toBeTruthy();
+        fireEvent.click(view.getByRole("button", { name: "2D" }));
+        expect(localStorage.getItem(VIEW_KEY)).toBe("2d");
+        expect(screen.queryByText(/3D unavailable/)).toBeNull();
     });
 
     test("freeze holds the picture while the totals keep counting, and unfreeze catches up", async () => {
