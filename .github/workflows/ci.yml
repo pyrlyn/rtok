@@ -130,10 +130,12 @@ jobs:
       # T310.9: build.rs embeds web/dist, so build the SPA before cargo; without it the binary
       # carries the "UI not built" page and the SPA-serving tests only see the placeholder.
       - run: just spa-install spa-build
-      - run: just test
-      # T310.10: the Playwright e2e drives the target/debug/rtok that `just test` just built with the
+      # The suite itself runs in `build-tests` + `test` below (archive, 2 shards per OS); this job
+      # keeps what needs the real binary: the Playwright e2e and the examples.
+      - run: mise exec -- cargo build -q
+      # T310.10: the Playwright e2e drives the target/debug/rtok that `cargo build` just built with the
       # SPA embedded. In the `spa` job it would need its own Rust toolchain and a cold cargo build;
-      # here the binary and the cargo cache are already warm, and only Chromium is added.
+      # here the cargo cache is already warm, and only Chromium is added.
       - if: runner.os == 'Linux'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -142,6 +144,98 @@ jobs:
       - if: runner.os == 'Linux'
         run: just spa-browsers spa-e2e-run
       - run: just example
+      - if: failure() && github.event_name == 'pull_request'
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
+  # Unix test binaries are built once per OS and archived (`cargo nextest archive`); the `test`
+  # shards below only download the archive and run their partition. Archive and run share one
+  # runner OS and target. build.rs embeds web/dist, so the SPA is built first, as in `check`.
+  build-tests:
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+      - run: just spa-install spa-build
+      - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nextest-archive-${{ matrix.os }}
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+      - if: failure() && github.event_name == 'pull_request'
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
+  # The suite, split over 2 shards per OS (nextest `--partition count:i/n`) from the archive.
+  test:
+    needs: build-tests
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        partition: [1, 2]
+        partitions: [2]
+    name: test (${{ matrix.os }}, ${{ matrix.partition }}/${{ matrix.partitions }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      # The host plugin tests (vitest) run on Linux only; keep vitest's cacheDir warm as in `check`.
+      - if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/vitest
+          key: vitest-${{ runner.os }}-${{ hashFiles('mise.toml', 'vitest.config.mjs', 'plugins/**/*.ts') }}
+          restore-keys: vitest-${{ runner.os }}-
+      - uses: actions/download-artifact@v8
+        with:
+          name: nextest-archive-${{ matrix.os }}
+      - run: >-
+          mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
+          --workspace-remap .
+          --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
