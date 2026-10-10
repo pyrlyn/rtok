@@ -397,6 +397,81 @@ fn project_writes_exist_on_both_surfaces() {
     );
 }
 
+/// T485 (D27): the compare view is on the Graph page of both surfaces, from the one `diff::page`
+/// core (the page's `diff` request, the TUI's typed ref or export path), with the same change marks
+/// and section names. A surface that grows its own diff, or whose marks drift, fails here.
+#[test]
+fn graph_compare_exists_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let panel = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/ComparePanel.tsx"
+    ));
+    let marks = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/compare.ts"
+    ));
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/compare.rs"));
+    // The view's own tests build fixtures and call `diff::page_of` to check the answer; only the
+    // code above them counts.
+    let tui = tui.split("#[cfg(all(test").next().unwrap();
+    assert!(
+        web.contains("graph::diff::page(") && tui.contains("diff::page_of("),
+        "both surfaces ask the one diff::page core"
+    );
+    assert!(
+        !tui.contains("diff::report(") && !tui.contains("Store::open"),
+        "the TUI view recomputes nothing"
+    );
+    for (name, mark) in [
+        ("added", "+"),
+        ("removed", "−"),
+        ("changed", "~"),
+        ("moved", "→"),
+    ] {
+        assert!(
+            marks.contains(&format!("{name}: \"{mark}\"")),
+            "the web panel has no `{mark}` mark for {name}"
+        );
+        assert!(
+            tui.contains(&format!("const {}: &str = \"{mark}\"", name.to_uppercase())),
+            "the TUI view has no `{mark}` mark for {name}"
+        );
+    }
+    for section in [
+        "changed",
+        "removed",
+        "renamed",
+        "moved",
+        "added",
+        "edges added",
+        "edges removed",
+        "links added",
+        "links removed",
+        "changed, not analysed",
+    ] {
+        let title = format!("\"{section}\"");
+        let web_title = format!("title=\"{section}\"");
+        // `edges ${c}` and `links ${c}` are one template over "added" and "removed".
+        let templated = section
+            .split_once(' ')
+            .is_some_and(|(head, _)| panel.contains(&format!("`{head} ${{c}}`")));
+        assert!(
+            panel.contains(&web_title) || templated,
+            "the web panel has no `{section}` section"
+        );
+        assert!(
+            tui.contains(&title),
+            "the TUI view has no `{section}` section"
+        );
+    }
+    assert!(
+        app.contains("(\"graph\", \"c\", \"compare\")"),
+        "the TUI's KEYS table documents the compare key"
+    );
+}
+
 /// T481 (D27): the graph health score is on the Graph page of both surfaces, from the one
 /// `ProjectRow.health` and `scope_health` the registry carries. Both colour a project by the
 /// server's `level`; only the scope's bare number is banded locally, the web by `levelOf` and the
@@ -793,7 +868,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ("graph review", "need a diff; CLI only"),
     (
         "graph diff",
-        "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.35",
+        "needs two revisions; CLI/MCP only, the page and the TUI have the compare view (T329.35, T485)",
     ),
     (
         "graph export",

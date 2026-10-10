@@ -92,7 +92,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T484 | todo | P3 | 3 | 0% | |
-| T485 | todo | P3 | 3 | 0% | |
 
 
 
@@ -1193,12 +1192,6 @@ Check: a TUI test on a fixture project: re-index brings a stale project to index
 T480 and T483 ported the live calls fold (`callsStore.ts`, T329.26) to Rust (`src/web/calls_store.rs`), so the page and `rtok tui` now run two implementations of the same computation. Done means: the server folds each poll's batches with `calls_store.rs` and sends the totals (running calls, window totals, per-tool and backend counts, the feed) in the `calls` frame, and the page drops its own fold in `web/src/pages/graph3d/live/callsStore.ts` and renders what the frame carries, so web and TUI share one computation. Freeze and unfreeze keep exact totals, as now. Depends on T483.
 
 Check: the Vitest tests of the live panel and the Playwright test show the same totals as before; `just check`, `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
-
-### T485. TUI: graph diff and compare view
-
-T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 (done) puts the same report on the web graph page as Compare mode, through `diff::report` (the typed `DiffReport` that `--json` and the `/ws` frame share). D27 (amended 2026-10-10, T346) requires the TUI to show it too. Done means: the TUI graph page has a compare view that calls `diff::report` (no second diff path; the page's `diff::page` only adds the registry scope and the row cap) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
-
-Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed, a removed, an added and a moved symbol; `tests/surface_parity.rs` lists the compare view on both surfaces; `just check`.
 
 ## Reference
 
