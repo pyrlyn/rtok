@@ -346,9 +346,15 @@ pub fn collect(rt: &Runtime, scope: &[Member], q: &Query) -> Result<Export> {
 /// the project would read as the person too.
 fn redact(e: &mut Export, home: Option<&Path>) {
     let user = home.and_then(Path::file_name).and_then(|n| n.to_str());
-    let home = home.and_then(Path::to_str).filter(|h| h.len() > 1);
+    // Only a whole path component is home: `/Users/al` must not turn `/Users/alice` into `~ice`.
+    let home = home
+        .and_then(Path::to_str)
+        .filter(|h| h.len() > 1)
+        .and_then(|h| regex::Regex::new(&format!(r"{}(/|\s|$)", regex::escape(h))).ok());
     let text = |s: &str| {
-        let s = home.map_or_else(|| s.to_string(), |h| s.replace(h, "~"));
+        let s = home
+            .as_ref()
+            .map_or_else(|| s.to_string(), |h| h.replace_all(s, "~$1").into_owned());
         s.split('/')
             .map(|seg| if Some(seg) == user { "<user>" } else { seg })
             .collect::<Vec<_>>()
@@ -367,6 +373,16 @@ fn redact(e: &mut Export, home: Option<&Path>) {
     }
     for l in &mut e.links {
         l.reason = l.reason.as_deref().map(&text);
+    }
+    // Node paths are relative, but a folder named after the user inside the project gives the
+    // person away just the same, and the id carries the path.
+    for n in &mut e.nodes {
+        n.path = text(&n.path);
+        n.id = text(&n.id);
+    }
+    for edge in &mut e.edges {
+        edge.from = text(&edge.from);
+        edge.to = text(&edge.to);
     }
     e.meta.notes = e.meta.notes.iter().map(|n| text(n)).collect();
     e.meta.redacted = true;
@@ -605,11 +621,28 @@ mod tests {
             root: "/Volumes/disk/other".into(),
             ..bare("").projects.remove(0)
         });
-        e.meta.notes = vec!["see /Users/alice/x".into()];
+        e.meta.notes = vec!["see /Users/alice/x".into(), "/Users/alicex/y".into()];
+        e.nodes.push(Node {
+            id: "1:alice/lib.rs:1:f".into(),
+            project: 1,
+            kind: "function".into(),
+            name: "f".into(),
+            path: "alice/lib.rs".into(),
+            line: 1,
+        });
+        e.edges.push(Edge {
+            from: "1:alice/lib.rs:1:f".into(),
+            to: "1:alice/lib.rs:1:f".into(),
+            kind: "call".into(),
+        });
         redact(&mut e, Some(Path::new("/Users/alice")));
         assert_eq!(e.projects[0].root, "~/work/<user>/p");
         assert_eq!(e.projects[1].root, "\u{2026}/other");
-        assert_eq!(e.meta.notes, ["see ~/x"]);
+        // A sibling whose name only starts with the user's is not home.
+        assert_eq!(e.meta.notes, ["see ~/x", "/Users/alicex/y"]);
+        e.meta.notes.pop();
+        assert_eq!(e.nodes[0].path, "<user>/lib.rs");
+        assert_eq!(e.edges[0].from, e.nodes[0].id);
         assert!(e.meta.redacted);
         let text = serde_json::to_string(&e).unwrap();
         assert!(
