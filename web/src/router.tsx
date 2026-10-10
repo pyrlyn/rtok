@@ -26,6 +26,7 @@ import { Stats } from "./pages/Stats";
 import { Usage } from "./pages/Usage";
 import { Worktrees } from "./pages/Worktrees";
 import { PAGES, type Page } from "./pages";
+import { drillSearch, parseDrill } from "./pages/graph3d/drillState";
 import { NotFound, Shell } from "./Shell";
 import { validateTableSearch } from "./tableSearch";
 
@@ -62,9 +63,11 @@ const pageRoutes = PAGES.map((page) =>
         // The palette opens a page on one row (`?id=`); kept a string even when it looks numeric.
         // The list pages add their filters, search text and sort (T414.10), which are untrusted
         // like any link, so they are validated here and not only where a page reads them.
-        validateSearch: (s: Record<string, unknown>): Record<string, string | undefined> => ({
+        // The graph page also carries its drill-down state (T329.22).
+        validateSearch: (s: Record<string, unknown>): Record<string, unknown> => ({
             ...(s.id == null ? {} : { id: String(s.id) }),
             ...validateTableSearch(page.id, s),
+            ...(page.id === "graph" ? drillSearch(parseDrill(s)) : {}),
         }),
     }),
 );

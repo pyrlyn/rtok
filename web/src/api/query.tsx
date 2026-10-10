@@ -6,6 +6,7 @@
 // lives in the query cache (written by `setQueryData`, never fetched) and every page reads
 // it through `useSnapshot`.
 import {
+    keepPreviousData,
     QueryClient,
     QueryClientProvider,
     skipToken,
@@ -16,6 +17,8 @@ import {
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type {
     ClientMessage,
+    DrillGraph,
+    DrillRequest,
     Fixed,
     Plan,
     ProjectRequest,
@@ -46,6 +49,7 @@ export interface Api {
     project(request: ProjectRequest): Promise<void>;
     doctorPlan(selection: Selection): Promise<Plan>;
     doctorApply(selection: Selection): Promise<Fixed>;
+    drill(request: DrillRequest): Promise<DrillGraph>;
 }
 
 // `set` and `project` get no reply of their own: the server answers a write with the next
@@ -62,10 +66,13 @@ interface PendingExpand {
 }
 
 // The server answers doctor requests in the order it received them, on one socket, so the
-// queue is matched by the kind of frame it waits for.
+// queue is matched by the kind of frame it waits for. A graph frame names its project and
+// not the request, and the server answers those off the executor, so `key` (the project)
+// is what ties it back; within one project the order holds.
 interface PendingDoctor {
-    kind: "doctorplan" | "doctorfixed";
-    resolve(frame: Plan | Fixed): void;
+    kind: "doctorplan" | "doctorfixed" | "graph";
+    key?: string;
+    resolve(frame: Plan | Fixed | DrillGraph): void;
     reject(error: Error): void;
 }
 
@@ -132,20 +139,26 @@ export function createApi(
         for (const p of done) p.resolve();
     };
 
-    const settleDoctor = (kind: PendingDoctor["kind"], frame: Plan | Fixed) => {
-        const i = pendingDoctor.findIndex((p) => p.kind === kind);
+    const settleDoctor = (
+        kind: PendingDoctor["kind"],
+        frame: Plan | Fixed | DrillGraph,
+        key?: string,
+    ) => {
+        const i = pendingDoctor.findIndex((p) => p.kind === kind && p.key === key);
         if (i < 0) return;
         const [entry] = pendingDoctor.splice(i, 1);
         entry?.resolve(frame);
     };
 
-    const askDoctor = <T extends Plan | Fixed>(
+    const askDoctor = <T extends Plan | Fixed | DrillGraph>(
         kind: PendingDoctor["kind"],
         message: ClientMessage,
+        key?: string,
     ) =>
         new Promise<T>((resolve, reject) => {
             const entry: PendingDoctor = {
                 kind,
+                key,
                 resolve: (frame) => {
                     clearTimeout(timer);
                     resolve(frame as T);
@@ -157,7 +170,7 @@ export function createApi(
             };
             const timer = setTimeout(() => {
                 pendingDoctor = pendingDoctor.filter((p) => p !== entry);
-                reject(new Error(`doctor ${kind} timed out`));
+                reject(new Error(`${kind} timed out`));
             }, DOCTOR_TIMEOUT_MS);
             pendingDoctor.push(entry);
             if (!connection?.send(message)) {
@@ -189,6 +202,9 @@ export function createApi(
                 return;
             case "doctorfixed":
                 settleDoctor("doctorfixed", frame.fixed);
+                return;
+            case "graph":
+                settleDoctor("graph", frame.graph, String(frame.graph.project));
                 return;
             case "message":
                 // The server's refusals do not name the request they answer, so a message fails
@@ -256,6 +272,8 @@ export function createApi(
             askDoctor<Plan>("doctorplan", { doctor: { action: "plan", selection } }),
         doctorApply: (selection) =>
             askDoctor<Fixed>("doctorfixed", { doctor: { action: "apply", selection } }),
+        // `request.project` is the registry id as text, which is what the frame carries back.
+        drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
     };
 }
 
@@ -326,6 +344,22 @@ export function useProjectMutation() {
 
 export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {
     return useApi();
+}
+
+/**
+ * One drill-down frame (T329.22). `version` is whatever should make the page ask again, such as
+ * the project's index numbers; the last frame stays on screen meanwhile so the layout and the
+ * zoom survive an update.
+ */
+export function useDrill(request: DrillRequest, version: readonly unknown[]) {
+    const api = useApi();
+    return useQuery({
+        queryKey: ["drill", request, version],
+        queryFn: () => api.drill(request),
+        placeholderData: keepPreviousData,
+        staleTime: Infinity,
+        retry: false,
+    });
 }
 
 export function useExpandMutation() {

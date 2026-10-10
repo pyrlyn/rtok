@@ -43,6 +43,8 @@ export interface Hover {
 
 export interface ViewEvents {
   select(id: number): void;
+  /** Double-click: the overview opens the project; without it the view flies to the node. */
+  open?(id: number): void;
   menu(id: number, x: number, y: number): void;
   hover(h: Hover | null): void;
 }
