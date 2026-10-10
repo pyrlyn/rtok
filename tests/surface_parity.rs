@@ -477,6 +477,34 @@ fn graph_compare_exists_on_both_surfaces() {
     );
 }
 
+/// T329.41 (D27): the TUI exports the graph with the function `rtok graph export -o` ends in, and
+/// views a saved file with the importer the CLI's `--from` uses, so the three cannot write or read
+/// different things. The page's Export menu is T329.40's; its half of this check lands with it.
+#[test]
+fn graph_export_tui_shares_the_cli_writer_and_reader() {
+    let Surfaces { app, .. } = SURFACES;
+    let cli = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cli/graph.rs"));
+    let tui = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/exporter.rs"));
+    // The view's own tests call `export::render` to compute what the command writes.
+    let tui = tui.split("#[cfg(all(test").next().unwrap();
+    assert!(
+        cli.contains("export::write(") && tui.contains("export::write("),
+        "the command and the TUI write through export::write"
+    );
+    assert!(
+        tui.contains("export::read(")
+            && !tui.contains("fs::write(")
+            && !tui.contains("Store::open"),
+        "the saved-export view reads with export::read and writes nothing"
+    );
+    for key in [
+        "(\"graph\", \"e\", \"export graph\")",
+        "(\"graph\", \"v\", \"view saved export\")",
+    ] {
+        assert!(app.contains(key), "the TUI's KEYS table lacks {key}");
+    }
+}
+
 /// T481 (D27): the graph health score is on the Graph page of both surfaces, from the one
 /// `ProjectRow.health` and `scope_health` the registry carries. Both colour a project by the
 /// server's `level`; only the scope's bare number is banded locally, the web by `levelOf` and the
@@ -877,7 +905,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "graph export",
-        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.40 and the TUI an action in T329.41",
+        "needs a scope and a file; CLI/MCP only, the TUI has the export key and the saved-export view (T329.41), the page gets the Export menu in T329.40",
     ),
     (
         "graph projects",

@@ -9127,6 +9127,18 @@ Result: `just check` on the final tree: fmt, clippy `-D warnings` and jscpd pass
 
 Deviations: `--theme light|dark` is not there (one light palette; `--transparent` is the only background choice), because the line cap left no room and the card did not ask for the flag by name. The Export menu on the page and the import view are T329.40, the TUI action T329.41 (D27). The PNG is refused on a machine with no fonts instead of being drawn without text. `--scale` takes 1 to 4, not only 1, 2 and 4.
 
+### T329.41. TUI: graph export action
+
+D27 for T329.31 and T329.40: anything the command prints is a page on web and tui, so `rtok tui` gets a graph export key that calls the same function as `rtok graph export` (formats json, svg and png, the same 200-node cap and redaction default, written to a file the user names) and an open-a-saved-export view that is read-only. Depends on T329.31.
+
+Check: the key writes the same bytes as the CLI for json, svg and png; redaction is on unless the user turns it off; the saved-export view writes nothing; TUI tests; `just check`.
+
+Done: on the Graph page `e` opens a form (format json, svg or png; level overview or symbols; redact on or off; the file to write) for the project under the cursor, and `v` asks for the path of a saved export and shows it read-only (banner, projects, links, the first 40 nodes). New `src/tui/exporter.rs`; `export::write` in `src/plugins/graph/export.rs` is `render` plus the file write, and `rtok graph export -o` now ends in it too, so the key and the command share the call, the defaults (redaction on, scale 1, opaque background, pretty JSON, the 200-node cap of the picture) and the bytes. The view opens the file with `export::read`, the importer of `--from`, and opens neither the registry nor the index. Runs off the key loop like compare. KEYS table, help overlay and `docs/commands.md` (en, ru, uk) list the keys; `tests/surface_parity.rs` pins that the command and the TUI use `export::write` and that the view only reads.
+
+Result: `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd, cargo nextest 3279 passed and 8 skipped, min-feature build); the new `tui::exporter` tests (7) cover the bytes against the command's for json, svg and png, redaction default and switch, the typed keys, a failed write, the read-only view (file bytes and directory listing unchanged) and the background run. jscpd lists the shared panel plumbing with `src/tui/compare.rs` as clones without failing the gate; T329.48 extracts it.
+
+Deviations: the form has no `--focus`, `--scale` or `--transparent` (the command's defaults apply); a focused subgraph needs a symbol and belongs to the page's Export menu (T329.40). The page's half of the parity check lands with T329.40. A PNG test compares the signature and size with the command's PNG, not every byte: the picture's footer carries the export time to the second and a PNG render takes longer than a second under load; JSON and SVG are compared byte for byte.
+
 ### T329.19. Graph health score per project
 
 T329 §8f: the 0 to 100 score with freshness, backend and link components, reasons and fixes (the missing-server fix reads "install the server; it is picked up within one health-check interval, or restart"), the scope's lowest score, the MCP health note and the `rtok doctor` list. Depends on T329.11.
