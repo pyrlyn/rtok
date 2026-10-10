@@ -14,6 +14,7 @@ import type {
   Snapshot,
 } from "./snapshot.gen";
 import { diffReply } from "./sampleDiff";
+import { exportAnswer } from "./sampleExport";
 import type { Connect, Frame } from "./ws";
 
 type Def = [name: string, kind: "function" | "type", line: number, calls: string[]];
@@ -197,6 +198,8 @@ export const drillServer =
           queueMicrotask(() => h.onFrame(drillReply(m.graph, snapshot.projects ?? [])));
         if ("diff" in m)
           queueMicrotask(() => h.onFrame(diffReply(m.diff, snapshot.projects ?? [])));
+        const exported = exportAnswer(m, snapshot.projects ?? []);
+        if (exported) queueMicrotask(() => h.onFrame(exported));
         return true;
       },
       close() {},

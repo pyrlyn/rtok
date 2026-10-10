@@ -491,9 +491,46 @@ fn graph_compare_exists_on_both_surfaces() {
     );
 }
 
+/// T329.40 (D27, web half; the TUI half is the test below): the Graph page's Export menu asks the
+/// server for the file, which calls the one `render` behind `rtok graph export`, and opens a saved
+/// file through `export::parse`. A page that draws or serialises the graph itself fails here.
+#[test]
+fn graph_export_page_asks_the_one_render() {
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let export = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/plugins/graph/export.rs"
+    ));
+    let cli = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cli/graph.rs"));
+    let menu = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/ExportMenu.tsx"
+    ));
+    assert!(
+        web.contains("graph::export::page_file(") && web.contains("graph::export::parse("),
+        "the websocket makes a file with page_file and opens one with parse"
+    );
+    assert!(
+        export.contains("let bytes = render(") && cli.contains("export::render("),
+        "page_file and the CLI both call render"
+    );
+    for needle in [
+        "File names and symbol names are included",
+        "api.exportGraph",
+        "api.importGraph",
+        "download(",
+    ] {
+        assert!(menu.contains(needle), "the Export menu lacks `{needle}`");
+    }
+    assert!(
+        !menu.contains("<svg") && !menu.contains("toDataURL"),
+        "the page saves the server's file; it draws no second picture"
+    );
+}
+
 /// T329.41 (D27): the TUI exports the graph with the function `rtok graph export -o` ends in, and
 /// views a saved file with the importer the CLI's `--from` uses, so the three cannot write or read
-/// different things. The page's Export menu is T329.40's; its half of this check lands with it.
+/// different things. The page's half is the test above.
 #[test]
 fn graph_export_tui_shares_the_cli_writer_and_reader() {
     let Surfaces { app, .. } = SURFACES;
@@ -919,7 +956,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "graph export",
-        "needs a scope and a file; CLI/MCP only, the TUI has the export key and the saved-export view (T329.41), the page gets the Export menu in T329.40",
+        "needs a scope and a file; CLI/MCP, the TUI has the export key and the saved-export view (T329.41), and the Graph page's Export menu (T329.40) asks the same render over /ws",
     ),
     (
         "graph projects",

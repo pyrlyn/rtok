@@ -10,6 +10,7 @@ import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
 import { mockJunk, sampleJunkCard } from "./sampleJunk";
 import { diffReply } from "./sampleDiff";
+import { exportAnswer } from "./sampleExport";
 import { drillReply } from "./sampleDrill";
 import type { Report, Snapshot } from "./snapshot.gen";
 // The text pages have no live source offline, so `?sample` shows the same made-up text the
@@ -397,6 +398,11 @@ export const connectSample: Connect = (handlers) => {
       if ("graph" in message) {
         const { graph } = message;
         later(() => handlers.onFrame(drillReply(graph, snapshot.projects ?? [])));
+        return true;
+      }
+      if ("export" in message || "import" in message) {
+        const answer = exportAnswer(message, snapshot.projects ?? []);
+        if (answer) later(() => handlers.onFrame(answer));
         return true;
       }
       const { key, value } = message.set;

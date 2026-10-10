@@ -496,3 +496,41 @@ test("Compare against a saved export sends its text and lists the symbols that a
   await expect(side.getByText("+ 1 added")).toBeVisible();
   await expect(side.getByText(/only added and removed symbols/)).toBeVisible();
 });
+
+test("Export downloads the JSON the CLI writes, and the page opens it back read-only", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  const id = rtok.addGitProject("lib.rs", "fn kept() {}\nfn caller() {\n    kept();\n}\n");
+  rtok.indexProject(id);
+  await page.goto(`/#/graph?p=${id}`);
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const options = page.getByRole("group", { name: "export options" });
+  await expect(options.getByText(/File names and symbol names are included/)).toBeVisible();
+  await options.getByRole("radio", { name: /Symbol graph of/ }).check();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    options.getByRole("button", { name: "Download" }).click(),
+  ]);
+  const text = readFileSync(await download.path(), "utf8");
+
+  // Equal to the byte but for the two times, which move with each run.
+  const stable = (s: string) => s.replace(/\s*"(exported_at|indexed_at)": \d+,?/g, "");
+  expect(stable(text)).toBe(stable(rtok.exportSymbols(id)));
+  expect(download.suggestedFilename()).toBe("rtok-graph-proj-symbols.json");
+
+  await page.getByLabel("open an export").setInputFiles({
+    name: "mine.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(text),
+  });
+  await expect(page.getByText("viewing export from mine.json")).toBeVisible();
+  const symbols = page.getByRole("region", { name: "symbols", exact: true });
+  await expect(symbols).toContainText("caller");
+  await expect(symbols).toContainText("kept");
+  // Read-only: the live pictures give way, and only closing the file is offered.
+  await expect(page.getByTestId("graph-live")).toHaveCount(0);
+  await page.getByRole("button", { name: "Close export" }).click();
+  await expect(page.getByText(/viewing export from/)).toHaveCount(0);
+});
