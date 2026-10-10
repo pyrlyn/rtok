@@ -63,7 +63,7 @@
   T329.35: `report` builds the typed `DiffReport` (what `--json` prints and the web `diff` frame carries; a change to it
   regenerates `web/src/api/ws.schema.json`); `page` is the websocket entry. The websocket takes export TEXT (`export::parse`),
   never a path, because anything on localhost can send a message; rows are capped per list (`PAGE_ROWS`).
-- `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured).
+- `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured). `draw.rs` (T329.31) draws an `Export` as SVG and rasterises it to PNG (`resvg`); it reads nothing but the `Export`, so a saved file draws the same picture, and the MCP tool stays JSON.
   One `Export` (the `rtok.graph.v1` types, schema committed at `docs/schemas/rtok.graph.v1.schema.json` and checked
   by `committed_schema_is_current`) is built from `projects::row` and the store's def/ref scans, or read back by
   `export::read`; every output is a function of it, so the import never touches the registry or the index. Redaction is on by default and always on for MCP. A change to an export type is a schema

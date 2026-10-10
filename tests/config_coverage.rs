@@ -169,6 +169,10 @@ const ALLOW_KEYS: &[&str] = &[
     "graph.export.from",
     "graph.export.output",
     "graph.export.project",
+    // `graph export --format/--scale/--transparent` (T329.31): the shape of one picture.
+    "graph.export.format",
+    "graph.export.scale",
+    "graph.export.transparent",
     // `task create|list|status` (T441.5): what one task is and which rows one call shows;
     // `[tasks]` holds the adapter and the prefix, which `task init` writes.
     "task.create.description",

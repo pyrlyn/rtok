@@ -109,7 +109,7 @@ inject = []
 guard = []
 memory = []
 docs = []
-graph = ["read"]
+graph = ["read", "dep:resvg"]
 toon = []
 wasm-host = ["dep:wasmi"]
 compress = []
@@ -203,6 +203,7 @@ uuid = { workspace = true } # T282: the rtok agent id (D34, random so short pref
 humantime = { workspace = true } # T282 review: [agents] idle parsing, replacing a hand-rolled duplicate of measure::stats::parse_since
 trash = { version = "5.2.9", default-features = false, features = ["coinit_apartmentthreaded"] } # T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin; chrono (metadata listing only) left off
 jiff = "0.2" # T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger
+resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts"], optional = true } # T329.31: `rtok graph export --format png` rasterises the drawn SVG; pure Rust, no raster-images/memmap-fonts
 
 [dev-dependencies]
 rtok-store = { path = "crates/rtok-store", features = ["test-util"] } # store test helpers; off the library build

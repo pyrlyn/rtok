@@ -2975,7 +2975,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__export)
-            opts="-o -h --level --focus --depth --no-redact --from --output --project --config --help"
+            opts="-o -h --level --focus --depth --no-redact --from --format --scale --transparent --output --project --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2994,6 +2994,14 @@ _rtok() {
                     return 0
                     ;;
                 --from)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "json svg png" -- "${cur}"))
+                    return 0
+                    ;;
+                --scale)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

@@ -970,6 +970,11 @@ Options:
       --depth <DEPTH>      Calls to follow from `--focus` [default: 2]
       --no-redact          Keep absolute paths, the home directory and the user name
       --from <FROM>        Show a saved export instead of the live graph (read-only)
+      --format <FORMAT>    `json` is the data, `svg` a picture of it (the 200 best connected nodes),
+                           `png` that picture rasterised (needs `--output`) [default: json]
+                           [possible values: json, svg, png]
+      --scale <SCALE>      PNG size: 1 to 4 times the SVG size
+      --transparent        SVG and PNG without a background
   -o, --output <OUTPUT>    Write to this file instead of stdout
       --project <PROJECT>  Project id or directory instead of the cwd (see `rtok graph projects`)
   -h, --help               Print help

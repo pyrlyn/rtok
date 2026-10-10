@@ -20,7 +20,7 @@ use serde_json::Value;
 
 use super::capability::Chosen;
 use super::scope::{Member, fan_out, walkable};
-use super::{index, index_for, projects, text};
+use super::{draw, index, index_for, projects, text};
 use crate::plugin::Runtime;
 use crate::store::{DefRow, RefGroup};
 
@@ -449,7 +449,9 @@ pub fn schema_json() -> String {
     out
 }
 
-pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
+/// The export every format is a view of: collected from the scope or read from a saved file, then
+/// redacted, so a picture never shows more than the JSON would.
+fn build(rt: &Runtime, scope: &[Member], q: &Query) -> Result<Export> {
     let mut e = match q.from {
         Some(path) => read(path)?,
         None => collect(rt, scope, q)?,
@@ -457,6 +459,36 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
     if q.redact {
         redact(&mut e, std::env::home_dir().as_deref());
     }
+    Ok(e)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Format {
+    Json,
+    Svg,
+    Png,
+}
+
+/// How `render` turns the export into bytes; the JSON ignores the rest.
+pub struct Image {
+    pub format: Format,
+    pub transparent: bool,
+    pub scale: u32,
+}
+
+pub fn render(rt: &Runtime, scope: &[Member], q: &Query, img: &Image) -> Result<Vec<u8>> {
+    if img.format == Format::Json {
+        return Ok(run(rt, scope, q)?.into_bytes());
+    }
+    let svg = draw::svg(&build(rt, scope, q)?, img.transparent);
+    match img.format {
+        Format::Png => draw::png(&svg, img.scale),
+        _ => Ok(svg.into_bytes()),
+    }
+}
+
+pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
+    let e = build(rt, scope, q)?;
     let mut out = if q.pretty {
         serde_json::to_string_pretty(&e)?
     } else {
