@@ -35,6 +35,7 @@ pub mod cochange;
 pub mod diff;
 pub mod drill;
 pub mod events;
+pub mod export;
 pub mod follow;
 pub mod health;
 pub mod index;
@@ -118,6 +119,11 @@ impl Plugin for Graph {
                 name: "graph_diff",
                 description: "Symbols changed between git refs, with callers.",
                 input_schema: json!({"type":"object","properties":{"from":{"type":"string","description":"ref, default HEAD"},"to":{"type":"string","description":"ref or working (default)"},"project":{"type":"string"}}}),
+            },
+            ToolDef {
+                name: "graph_export",
+                description: "The graph as redacted rtok.graph.v1 JSON.",
+                input_schema: json!({"type":"object","properties":{"level":{"type":"string","description":"overview (default) or symbols"},"focus":{"type":"string","description":"symbol; with depth"},"depth":{"type":"integer"},"project":{"type":"string"}}}),
             },
         ]
     }
@@ -2571,13 +2577,13 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// Gate P8b: each description ≤ 60 tokens, the whole surface ≤ 160 (150 for the five tools of T68.1;
-    /// `graph_diff`, T329.18, is the sixth and cannot be said in fewer than about 28).
+    /// Gate P8b: each description ≤ 60 tokens, the whole surface ≤ 170 (150 for the five tools of T68.1;
+    /// `graph_diff`, T329.18, is the sixth at about 28, `graph_export`, T329.16, the seventh at about 10).
     #[test]
-    fn graph_surface_is_six_tools_under_budget() {
+    fn graph_surface_is_seven_tools_under_budget() {
         let (cx, dir) = cx("surface");
         let tools = Graph.mcp_tools();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 7);
         let est = |d: &str| crate::tokens::estimate(d, Class::Prose, &cx.config.estimator);
         let n: u32 = tools.iter().map(|t| est(t.description)).sum();
         // stderr, not `println!`: the library denies print macros, and this gate is a count.
@@ -2587,7 +2593,7 @@ mod tests {
             "graph surface: {} tools, {n} description tokens",
             tools.len()
         );
-        assert!(n <= 160, "graph descriptions are {n} tokens");
+        assert!(n <= 170, "graph descriptions are {n} tokens");
         for t in &tools {
             assert!(
                 est(t.description) <= 60,

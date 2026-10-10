@@ -189,6 +189,33 @@ fn sessions_live_filter_exists_on_both_surfaces() {
     );
 }
 
+/// T478 (D27): the doctor `--fix` checklist is a write action on both surfaces, and both reach
+/// the engine through the same `doctor::web` pair, so neither has a second code path.
+#[test]
+fn doctor_fix_exists_on_both_surfaces() {
+    let Surfaces { app, .. } = SURFACES;
+    let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/web/mod.rs"));
+    let tui = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/doctor_fix.rs"
+    ));
+    assert!(
+        web.contains("ClientMessage::Doctor")
+            && web.contains("web::plan_here")
+            && web.contains("web::apply_here"),
+        "the web page plans and applies through doctor::web"
+    );
+    assert!(
+        tui.contains("web::plan_here") && tui.contains("web::apply_here"),
+        "the TUI plans and applies through the same pair"
+    );
+    assert!(
+        app.contains("(\"doctor\", \"f\", \"fix checklist\")")
+            && app.contains("(\"doctor\", \"Enter/y\", \"apply selected (confirm)\")"),
+        "the TUI's KEYS table lists the doctor fix keys"
+    );
+}
+
 /// T227: both surfaces render the Stats page from the same model accessor — `rtok
 /// stats --price`'s table plus `rtok stats --cache`'s table, D27's one page for two
 /// commands.
@@ -595,6 +622,10 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "graph diff",
         "needs two revisions; CLI/MCP only, the page gets Compare mode in T329.29",
+    ),
+    (
+        "graph export",
+        "needs a scope and a file; CLI/MCP only, the page gets the Export menu in T329.31",
     ),
     (
         "graph projects",

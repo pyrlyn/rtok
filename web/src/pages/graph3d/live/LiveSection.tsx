@@ -4,25 +4,26 @@
 
 import { useState } from "react";
 import { useConnection } from "../../../api/query";
+import type { ProjectRow } from "../../../api/snapshot.gen";
 import { Panel } from "../../../ui/Panel";
+import type { DrillState } from "../drillState";
 import { CallFeed } from "./CallFeed";
 import type { WindowId } from "./callsStore";
+import { LiveGraph } from "./LiveGraph";
 import { LiveMetrics } from "./LiveMetrics";
 import { useCalls } from "./useCalls";
 
 /**
- * What the graph tools are doing right now (T329 §8b). It exists only while the page shows it,
- * and the call stream is subscribed only while it exists: a page that does not show it asks the
- * server for nothing.
+ * Part 2 of the graph page (T329 §8b). It exists only while visible, and the call stream is
+ * subscribed only while it exists: a hidden live graph asks the server for nothing.
  */
-export function LiveSection() {
+export function LiveSection({ rows, drill }: { rows: ProjectRow[]; drill: DrillState | null }) {
     const calls = useCalls();
     const [window, setWindow] = useState<WindowId>("5m");
     const connection = useConnection();
-    const idle = calls.store.all.calls === 0 && calls.store.running.length === 0;
     return (
-        <Panel title="live graph calls" hint={connection === "open" ? "read-only" : "reconnecting"}>
-            {idle && <p className="text-xs text-fg-muted">Waiting for graph calls</p>}
+        <Panel title="live graph" hint={connection === "open" ? "read-only" : "reconnecting"}>
+            <LiveGraph rows={rows} drill={drill} store={calls.store} now={calls.now} />
             <LiveMetrics
                 store={calls.store}
                 now={calls.now}

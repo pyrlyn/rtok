@@ -27,6 +27,7 @@ build never blocks the host.
 | `rtok graph impact <name> [--all] [--project <id\|dir>]` | what breaks if a symbol changes (files grouped and cut at `plugins.graph.impact_tokens`; `--all` prints every row), over the project and the projects it links to; `dead` and `affected` run over that scope too (a symbol only a linked project calls is not dead; `git diff` is read in every project, tests are listed per project); `index` and `status` take `--project` too. One answer, one cap; with `watch` on, `rtok mcp` watches every project of the scope |
 | `rtok graph review [--since <ref>\|--staged] [--json] [--project <id\|dir>]` | risk-ranked reading list for a git diff: each changed file's score, the definitions no test reaches, and the line ranges to read |
 | `rtok graph diff [--from <ref>] [--to <ref>\|working] [--json] [--project <id\|dir>]` | what a change did to the graph, MCP `graph_diff`: symbols changed (signature or body), added, removed, renamed or moved, and call edges added or removed, each changed or removed symbol with its callers from the project and the projects it links to. The old side is read from git's object database (no checkout, the working tree is not touched); `--from` defaults to `HEAD`, `--to` to the working tree. A renamed symbol is shown only when exactly one removed and one added definition share its body; the text is cut at `plugins.graph.max_tokens` with an `expand <id>` for the rest, `--json` is whole |
+| `rtok graph export [--level overview\|symbols] [--focus <symbol> [--depth N]] [--no-redact] [--from <file>] [-o <file>] [--project <id\|dir>]` | the graph as a file, MCP `graph_export` (JSON): `rtok.graph.v1` JSON (projects, links, symbols, calls; schema in `docs/schemas/`, format in [plugins](plugins.md#graph-export-format)). `overview` is projects and links, `symbols` adds every symbol and call, `--focus` keeps the symbols within `--depth` calls of one. Home, user name and absolute paths are redacted unless `--no-redact`; `--from` shows a saved export and touches neither the registry nor the index |
 | `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
 | `rtok memory import <file>` | import notes as JSONL, deduped by body hash |
 | `rtok otel flush\|status` | export the ledgers over OTLP/HTTP, or report the watermarks |
@@ -61,9 +62,17 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
   is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
   updates in place without moving the scene.
-- **Live graph calls.** Below the explorer the page lists what the graph tools are doing, from the
-  calls arriving on `/ws` (it subscribes while the page is open, and until the first call it
-  shows "Waiting for graph calls"). Running calls, calls and failures, tokens sent, tokens without rtok and saved,
+- **Live graph.** Beside the explorer (stacked under 900 px) a second, read-only picture shows what
+  the graph tools are doing, from the calls arriving on `/ws`. It draws the level the explorer
+  shows with the same layout and colours: the registered projects, or the drilled project. It
+  takes no input (no pointer, wheel or keys, and the cursor stays the default arrow). A call lights
+  the project node on the overview, or the node named like its target in the one-project view: a
+  ring per running call in one of eight accents, a halo for calls over the last 5 minutes and a
+  red ring on a failed call; beyond eight running calls a "busy" count says how many more. Until
+  the first call the picture is dimmed and reads "Waiting for graph calls". A bar between the two
+  parts resizes them (drag, arrow keys, double-click for 50/50) and is remembered; "Hide live
+  graph" hides the picture and ends the `/ws` subscription, and is remembered too. The page
+  subscribes only while the live graph is shown. Below it: running calls, calls and failures, tokens sent, tokens without rtok and saved,
   per-tool bars and backend shares, over the last 1, 5 or 15 minutes or since the page opened.
   Totals come from each frame's `summary` and the `graph` measurement rows, so a window equals
   `rtok stats` over the same calls (the per-tool bars and backend shares cover the calls a frame

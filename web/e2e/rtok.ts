@@ -113,8 +113,8 @@ export class Rtok {
     if (!reply.includes('"isError":false')) throw new Error("fixture mem_save failed");
   }
 
-  /** One tool call through `rtok mcp` on stdio, the way another process of the same store would make it. */
-  mcp(name: string, args: Record<string, unknown>) {
+  /** Tool calls through `rtok mcp` on stdio, the way another process of the same store would make them. */
+  mcp(name: string, args: Record<string, unknown>, times = 1) {
     const rpc = [
       {
         jsonrpc: "2.0",
@@ -127,17 +127,19 @@ export class Rtok {
         },
       },
       { jsonrpc: "2.0", method: "notifications/initialized" },
-      {
+      ...Array.from({ length: times }, (_, i) => ({
         jsonrpc: "2.0",
-        id: 2,
+        id: 2 + i,
         method: "tools/call",
-        params: {
-          name,
-          arguments: args,
-        },
-      },
+        params: { name, arguments: args },
+      })),
     ];
     return this.run(["mcp"], rpc.map((m) => JSON.stringify(m)).join("\n"));
+  }
+
+  /** Registers the throwaway home as a graph project, so the graph page has a picture to light. */
+  addProject() {
+    return this.run(["graph", "projects", "add", this.home], "");
   }
 
   async start() {
