@@ -386,29 +386,28 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             } else {
                 crate::plugins::graph::scope::resolve(&cx.store, project.as_deref(), &root)?
             };
-            let bytes = export::render(
-                &cx,
-                &scope,
-                &export::Query {
-                    level,
-                    focus: focus.as_deref(),
-                    depth,
-                    redact: !no_redact,
-                    pretty: true,
-                    from: from.as_deref(),
-                },
-                &export::Image {
-                    format,
-                    transparent,
-                    scale: scale.unwrap_or(1),
-                },
-            )?;
+            let q = export::Query {
+                level,
+                focus: focus.as_deref(),
+                depth,
+                redact: !no_redact,
+                pretty: true,
+                from: from.as_deref(),
+            };
+            let img = export::Image {
+                format,
+                transparent,
+                scale: scale.unwrap_or(1),
+            };
             match output {
                 Some(file) => {
-                    std::fs::write(&file, &bytes)?;
-                    println!("wrote {} bytes to {}", bytes.len(), file.display());
+                    let n = export::write(&cx, &scope, &q, &img, &file)?;
+                    println!("wrote {n} bytes to {}", file.display());
                 }
-                None => print!("{}", String::from_utf8_lossy(&bytes)),
+                None => print!(
+                    "{}",
+                    String::from_utf8_lossy(&export::render(&cx, &scope, &q, &img)?)
+                ),
             }
         }
         GraphCmd::Affected {

@@ -14,6 +14,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 
 use super::compare::Compare;
 use super::doctor_fix::{DoctorFix, Engine, Keyed};
+use super::exporter::Exporter;
 use super::junk_clear::{self, JunkClear};
 use super::live_calls::LiveCalls;
 use super::projects::{self, Key};
@@ -68,6 +69,14 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("compare", "↑/↓ PgUp/PgDn", "scroll"),
     ("compare", "c", "compare again"),
     ("compare", "Esc", "close"),
+    ("graph", "e", "export graph"),
+    ("graph", "v", "view saved export"),
+    ("export", "↑/↓", "choose field"),
+    ("export", "Space", "change format, level, redact"),
+    ("export", "type", "file to write, or export to view"),
+    ("export", "Enter", "write / view"),
+    ("export", "↑/↓ PgUp/PgDn", "scroll result"),
+    ("export", "Esc", "close"),
 ];
 
 /// The key rows for one page: globals first, then the page's own.
@@ -112,6 +121,8 @@ pub struct App {
     projects: projects::ProjectsState,
     /// The Graph page's compare view (T485).
     compare: Compare,
+    /// The Graph page's export form and saved-export view (T329.41).
+    exporter: Exporter,
     /// Whether the `?` help overlay is up (T60.8).
     help: bool,
     /// The running TUI's model reader: a snapshot parses transcripts and probes the
@@ -240,6 +251,7 @@ impl App {
             config: ConfigState::default(),
             projects: projects::ProjectsState::default(),
             compare: Compare::default(),
+            exporter: Exporter::default(),
             help: false,
             worker: None,
             requested: 0,
@@ -343,6 +355,7 @@ impl App {
     pub fn poll(&mut self) {
         self.live.poll(self.page() == "graph");
         self.compare.poll();
+        self.exporter.poll();
         let Some(latest) = self.worker.as_ref().and_then(|w| w.rx.try_iter().last()) else {
             return;
         };
@@ -521,6 +534,23 @@ impl App {
         &self.compare
     }
 
+    /// The Graph page's export form (T329.41); one panel is open at a time, so a key goes to
+    /// compare or to this, never both.
+    fn exporter_key(&mut self, code: KeyCode) -> bool {
+        if self.compare.is_open() {
+            return false;
+        }
+        let rows = projects::entries(&self.snapshot);
+        let cursor = self.projects.cursor(&rows);
+        let target = rows.get(cursor).map(|e| (e.id, e.name.as_str()));
+        self.exporter
+            .key(code, target, &self.cfg, self.worker.is_some())
+    }
+
+    pub(super) fn exporter(&self) -> &Exporter {
+        &self.exporter
+    }
+
     /// The Graph page's registry rows and the state its keys keep (T476).
     pub(super) fn projects(&self) -> (Vec<projects::Entry>, &projects::ProjectsState) {
         (projects::entries(&self.snapshot), &self.projects)
@@ -689,6 +719,9 @@ impl App {
         if self.page() == "graph" && self.compare.typing() && self.compare_key(code) {
             return false;
         }
+        if self.page() == "graph" && self.exporter.typing() && self.exporter_key(code) {
+            return false;
+        }
         // T60.8: `?` toggles the help overlay and `r` re-reads the model before the
         // next tick; both are global.
         if code == KeyCode::Char('?') {
@@ -711,7 +744,10 @@ impl App {
         if self.page() == "config" && self.config_key(code) {
             return false;
         }
-        if self.page() == "graph" && self.compare_key(code) {
+        if self.page() == "graph" && self.exporter_key(code) {
+            return false;
+        }
+        if self.page() == "graph" && !self.exporter.is_open() && self.compare_key(code) {
             return false;
         }
         if self.page() == "graph" && self.graph_key(code) {
