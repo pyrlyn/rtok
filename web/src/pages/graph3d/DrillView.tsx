@@ -15,6 +15,8 @@ import { Result } from "../../ui/Result";
 import { Search } from "../../ui/Search";
 import { Spinner } from "../../ui/Spinner";
 import { alertedIds } from "./alerts";
+import { type Change, CHANGE_TONE, markGraph } from "./compare";
+import { ComparePanel, projectOf, useCompare } from "./ComparePanel";
 import { Hits, NodeDetails } from "./DrillPanel";
 import { drillScene, emptyScene } from "./drillScene";
 import {
@@ -50,10 +52,13 @@ function NodeList({
     select,
     selected,
     alerted,
+    changes,
 }: {
     graph: DrillGraph;
     select(id: string): void;
     selected: string | null;
+    /** Compare mode: the change of each node, in words as well as colour. */
+    changes: ReadonlyMap<string, Change>;
     /** Projects with an alert: their outlines say so in words, as the canvas badge is colour. */
     alerted: ReadonlySet<number>;
 }) {
@@ -69,6 +74,9 @@ function NodeList({
                     >
                         <b className="truncate">{n.label}</b>
                         <Pill>{n.kind}</Pill>
+                        {changes.has(n.id) && (
+                            <Pill tone={CHANGE_TONE[changes.get(n.id)!]}>{changes.get(n.id)}</Pill>
+                        )}
                         {n.stale && <Pill tone="warn">stale</Pill>}
                         {n.kind === "external" && alerted.has(n.project) && (
                             <Pill tone="fail">alert</Pill>
@@ -106,7 +114,14 @@ export function DrillView({
     const idOf = (id: string) => ids.get(id) ?? (ids.set(id, ids.size + 1), ids.size);
 
     const q = useDrill(drillRequest(state, limit, asked), drillVersion(row));
-    const graph = q.data;
+    const compare = useCompare(state.project, drillVersion(row));
+    const live = q.data;
+    // The page's own frame is never edited: Compare lays ghosts and colours over a copy.
+    const diffed = compare.on
+        ? projectOf(compare.q.data, live?.name ?? row?.name ?? "")
+        : undefined;
+    const marked = live && markGraph(live, diffed, state.expand);
+    const graph = marked?.graph;
     const roots = new Map(rows.map((r) => [r.id, r.root]));
     const alerted = alertedIds(rows);
     // With nothing picked, the panel follows the focus, so a hit that was just opened is the one shown.
@@ -127,6 +142,7 @@ export function DrillView({
                   roots,
                   selected: shown?.id ?? null,
                   alerted,
+                  changes: marked,
               })
             : emptyScene,
     );
@@ -214,6 +230,7 @@ export function DrillView({
                                     select={click}
                                     selected={shown?.id ?? null}
                                     alerted={alerted}
+                                    changes={marked!.nodes}
                                 />
                             }
                             toolbar={
@@ -227,6 +244,9 @@ export function DrillView({
                                             onEnter={() => setAsked(typed.trim())}
                                         />
                                     </div>
+                                    <Chip pressed={compare.on} onPressedChange={compare.setOn}>
+                                        Compare
+                                    </Chip>
                                     {state.focus && (
                                         <div
                                             role="group"
@@ -278,6 +298,7 @@ export function DrillView({
                                 <Hits hits={graph.hits} names={names} pick={pick} />
                             </section>
                         )}
+                        {compare.on && <ComparePanel c={compare} name={graph.name} />}
                         <NodeDetails
                             graph={graph}
                             node={shown}

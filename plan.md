@@ -48,7 +48,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.32 | todo | P3 | 3 | 0% | |
 | T329.33 | todo | P3 | 4 | 0% | |
 | T329.34 | todo | P3 | 3 | 0% | |
-| T329.35 | todo | P3 | 4 | 0% | |
 | T329.31 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -836,12 +835,6 @@ What is left of T329 §8b after T329.28 that needs the store or the config: a ca
 
 Check: the caller column shows the agent and host for a session of each known host and the session id otherwise; the "since `rtok web` started" totals equal the store's sums after a page reload; the config keys are read, validated and documented; Vitest, stories (axe), Playwright, Rust tests; `just check`.
 
-### T329.35. Graph page: Compare mode
-
-The page half of T329 §8e, split from T329.29 at claim time (the backend half filled its own cap). T329.29 shipped `--from PROJECT:REF`, `--from-export FILE`, the registry link diff (against an export only) and the `changed, not analysed` listing in `src/plugins/graph/diff.rs`; `diff::run` with `Query { json: true, .. }` already returns every row. Here: a "Compare" mode in part 1 that colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel (including `changed, not analysed`) and leaves the live graph unaffected. The page asks the server for the diff over `/ws` (a new `ClientMessage` and `ServerFrame` in `src/web/protocol.rs`, answered by `diff::run` on the same revisions the CLI takes, with the cap), never recomputes it, and can open a saved export as the old side (the file is read by the server from a path the user typed, never from a model). The schema file `web/src/api/ws.schema.json` and `snapshot.gen.ts` are regenerated. D27: the TUI counterpart is T485. Docs in en, ru, uk. Depends on T329.29, T329.22.
-
-Check: a signature change shows amber on the page and in its side panel, a removed function red, an added one green, a moved one blue; the live graph keeps running; a diff against a saved export works; Vitest, stories (axe) and Playwright; `just spa-typecheck`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`; `just check`.
-
 ### T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 
 The rest of T329 §8c after T329.16 (split at claim time: the backend half fills the 500-line cap). T329.16 ships the `rtok.graph.v1` schema file, JSON export with redaction, `rtok graph export`, MCP `graph_export` and a read-only importer (`export::read`, `rtok graph export --from FILE`). Here: `--format json|svg|png` on `rtok graph export`; SVG drawn from the `Export` type of `src/plugins/graph/export.rs` (so a saved file draws the same picture), at most about 200 drawn nodes with the footer "N nodes hidden" while the JSON keeps every node, a legend (project colours, node shapes, edge styles) and a footer (project names, scope, backend per project, `indexed_at`, rtok version, export time, partial marker); PNG at 1x, 2x and 4x (transparent or theme background) rasterised from that SVG with a maintained crate (check `rust.md`: `resvg`) and `--scale N --transparent`; the "Export" menu on the Graph page (overview, current drill-down, focused subgraph; image of the live frame only for part 2; the dialog says that file and symbol names are included); and the page opening an exported JSON read-only with the banner "viewing export from ...". D27: anything the command prints is a page on web and tui, so the TUI gets the same export action. Docs in en, ru, uk. Depends on T329.16, T329.14.
@@ -1224,7 +1217,7 @@ Check: the Vitest tests of the live panel and the Playwright test show the same 
 
 ### T485. TUI: graph diff and compare view
 
-T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 puts the same report on the web graph page as Compare mode. D27 (amended 2026-10-10, T346) requires the TUI to show it too. Depends on T329.35. Done means: the TUI graph page has a compare view that calls `diff::run` (no second diff path) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
+T329.18 and T329.29 print `rtok graph diff` (changed, added, removed, renamed and moved symbols, edges, links, `changed, not analysed`); T329.35 (done) puts the same report on the web graph page as Compare mode, through `diff::report` (the typed `DiffReport` that `--json` and the `/ws` frame share). D27 (amended 2026-10-10, T346) requires the TUI to show it too. Done means: the TUI graph page has a compare view that calls `diff::report` (no second diff path; the page's `diff::page` only adds the registry scope and the row cap) for a ref, a `PROJECT:REF` list or a saved export typed by the user, lists changed, removed, added, moved and renamed symbols with their callers, the links added and removed and the `changed, not analysed` files, and gives the same counts as the CLI and the web panel.
 
 Check: a TUI render test on a fixture diff at 100 and 60 columns with a changed, a removed, an added and a moved symbol; `tests/surface_parity.rs` lists the compare view on both surfaces; `just check`.
 

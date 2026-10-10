@@ -56,6 +56,8 @@ export interface SceneEdge {
   inScope: boolean;
   /** The project it points to has an alert, so the edge is the one that leads into the problem. */
   alert?: boolean;
+  /** A brand role that overrides the default stroke, such as the colour of a change in Compare mode (T329.35). */
+  tone?: string;
 }
 
 export interface SceneCounts {

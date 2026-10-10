@@ -62,6 +62,21 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   (`rtok graph index --project <id>`) and fills in once it is; a project whose directory is gone
   is drawn hollow and cannot be opened. While `watch` re-indexes, the page asks again and
   updates in place without moving the scene.
+- **Compare.** The Compare button in the one-project toolbar asks the server for the same report
+  as `rtok graph diff` (nothing is recomputed in the page) and colours the picture: added green
+  `+`, removed red `−` (drawn as an outlined ghost in an expanded file, since the working tree no
+  longer has it), changed amber `~`, moved blue `→`; a file takes the one change of its symbols,
+  several kinds make it changed, and an added or removed call is a green or a dashed red line.
+  Every change also has its mark in the label and its word in the tooltip and the list, so colour
+  is never the only cue. The side panel gives the counts, the changed (signature or body) and
+  removed symbols with their callers, renamed, moved and added symbols, call edges, links
+  added and removed, and `changed, not analysed` files. The old side is `HEAD`, a ref or
+  `PROJECT:REF` typed in the box (sent on Enter), or a saved `rtok graph export --level symbols`
+  chosen with the file picker: the page reads the file itself and sends its text, never a path, so
+  nothing on `/ws` can make rtok open a file. Against an export only added and removed symbols and
+  links are listed. Each list is cut at 500 rows per project (the panel says how many more;
+  `rtok graph diff` has them all). The live graph keeps running; turning Compare off puts the
+  picture back.
 - **Live graph.** Beside the explorer (stacked under 900 px) a second, read-only picture shows what
   the graph tools are doing, from the calls arriving on `/ws`. It draws the level the explorer
   shows with the same layout and colours: the registered projects, or the drilled project. It

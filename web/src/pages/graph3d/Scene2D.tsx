@@ -155,6 +155,8 @@ export default function Scene2D({
 
     const at = (id: number) => positions.map.get(id);
     const byId = new Map(scene.nodes.map((n) => [n.id, n]));
+    // An arrowhead takes its colour from a marker, so each tone in use gets one.
+    const tones = [...new Set(scene.edges.flatMap((e) => (e.tone ? [e.tone] : [])))];
     // The live picture is never panned by hand: the camera frames the running calls, or the whole.
     const focus = live?.focus;
     const wanted = manual ?? boxAround(scene, positions.map, focus);
@@ -232,6 +234,9 @@ export default function Scene2D({
             <defs>
                 <Arrow id="arrow-2d" fill="currentColor" />
                 <Arrow id="arrow-2d-alert" fill={ALERT_ROLE} />
+                {tones.map((t, i) => (
+                    <Arrow key={t} id={`arrow-2d-tone${i}`} fill={t} />
+                ))}
             </defs>
             {scene.edges.map((e) => {
                 const a = at(e.from);
@@ -248,11 +253,11 @@ export default function Scene2D({
                         y1={a[1]}
                         x2={a[0] + (b[0] - a[0]) * k}
                         y2={a[1] + (b[1] - a[1]) * k}
-                        stroke={e.alert ? ALERT_ROLE : "currentColor"}
+                        stroke={e.alert ? ALERT_ROLE : (e.tone ?? "currentColor")}
                         strokeWidth={e.width * 0.5}
                         strokeDasharray={e.dashed ? "4 3" : undefined}
                         opacity={e.inScope ? 0.8 : 0.3}
-                        markerEnd={`url(#arrow-2d${e.alert ? "-alert" : ""})`}
+                        markerEnd={`url(#arrow-2d${e.alert ? "-alert" : e.tone ? `-tone${tones.indexOf(e.tone)}` : ""})`}
                         data-testid={readOnly ? "edge-live" : "edge-2d"}
                         onPointerEnter={(ev) =>
                             hover({
