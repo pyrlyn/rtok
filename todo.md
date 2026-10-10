@@ -26,7 +26,7 @@
 - T329.24. Graph page: show each project's capability record
 - T329.23. Graph drill-down: side panel and search
 - T329.26. Graph page: two-part UI with the read-only live graph and live metrics
-- T329.27. Graph page: Compare mode and the remaining diff reports
+- T329.29. Graph page: Compare mode and the remaining diff reports
 - T330. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 - T330.6. Junk: item breakdown, `doctor` line, web card
 - T356. Never index `$HOME` or `/` as a graph root

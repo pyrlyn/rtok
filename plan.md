@@ -52,7 +52,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.24 | todo | P3 | 2 | 0% | |
 | T329.23 | todo | P2 | 2 | 0% | |
 | T329.26 | todo | P3 | 4 | 0% | |
-| T329.27 | todo | P3 | 4 | 0% | |
+| T329.29 | todo | P3 | 4 | 0% | |
 | T330 | todo | P2 | 4 | 0% | |
 | T330.6 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
@@ -841,7 +841,7 @@ Symbols requested and returned per call are not in the T329.15 events; if the di
 
 Check: an MCP `callers` call from another process lights the node within one second and adds a feed row equal to its `Measurement` row and `rtok stats`; the live canvas ignores input; freeze and unfreeze keep exact totals; a 500-call burst keeps the page responsive; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.27. Graph page: Compare mode and the remaining diff reports
+### T329.29. Graph page: Compare mode and the remaining diff reports
 
 The rest of T329 §8e after T329.18 (core `rtok graph diff` and MCP `graph_diff`). Page: a "Compare" mode in part 1 colours nodes and edges (added green, removed red, changed amber, moved blue), lists the changes in a side panel and leaves the live graph unaffected; the page asks the same diff the CLI computes. Also: `--from-export FILE` (needs T329.16), project links added and removed, a `--from` per project, and the "changed, not analysed" listing for binary or unparsed files. Docs in en, ru, uk. Depends on T329.18, T329.22 and T329.16.
 
