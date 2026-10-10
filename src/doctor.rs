@@ -89,6 +89,11 @@ pub struct Report {
     #[cfg(feature = "graph")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub graph_alerts: Vec<crate::plugins::graph::health::Alert>,
+    /// Projects whose graph health score is under 80, weakest first, with reasons and fixes
+    /// (T329.19).
+    #[cfg(feature = "graph")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graph_health: Vec<crate::plugins::graph::health::score::Weak>,
 }
 
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -248,6 +253,13 @@ impl Report {
         if !self.graph_alerts.is_empty() {
             out.push_str("graph alerts\n");
             for line in crate::plugins::graph::health::texts(&self.graph_alerts) {
+                out.push_str(&format!("  {line}\n"));
+            }
+        }
+        #[cfg(feature = "graph")]
+        if !self.graph_health.is_empty() {
+            out.push_str("graph health\n");
+            for line in crate::plugins::graph::health::score::texts(&self.graph_health) {
                 out.push_str(&format!("  {line}\n"));
             }
         }
@@ -615,6 +627,8 @@ pub fn page(cfg: &Config) -> Result<Report> {
         problems: checks(cfg),
         #[cfg(feature = "graph")]
         graph_alerts: graph_alerts(cfg),
+        #[cfg(feature = "graph")]
+        graph_health: graph_health(cfg),
     })
 }
 
@@ -626,6 +640,14 @@ fn graph_alerts(cfg: &Config) -> Vec<crate::plugins::graph::health::Alert> {
     }
     crate::plugin::Runtime::open(cfg.clone(), "doctor")
         .map(|rt| crate::plugins::graph::health::all(&rt))
+        .unwrap_or_default()
+}
+
+/// Fails open like [`graph_alerts`].
+#[cfg(feature = "graph")]
+fn graph_health(cfg: &Config) -> Vec<crate::plugins::graph::health::score::Weak> {
+    crate::plugin::Runtime::open(cfg.clone(), "doctor")
+        .map(|rt| crate::plugins::graph::health::score::weak(&rt))
         .unwrap_or_default()
 }
 
@@ -1670,6 +1692,8 @@ pub(crate) fn report_fixture() -> Report {
         config_notes: Vec::new(),
         #[cfg(feature = "graph")]
         graph_alerts: Vec::new(),
+        #[cfg(feature = "graph")]
+        graph_health: Vec::new(),
         junk_bytes: None,
     }
 }

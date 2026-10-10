@@ -42,6 +42,10 @@
 - `events.rs` (T329.15) writes the start, progress and end events of an MCP graph call to `graph_events`
   (fail open, never in a hook); `src/web/live.rs` is the one reader. The end event copies the call's
   `graph` `measurements` rows, so the page cannot show a number `rtok stats` does not. No source text.
+- `health/score.rs` (T329.19) scores a project 0 to 100 (freshness 40, backend 30, links 30) from the
+  index status, the mirrored capability record and the mirrored alerts only: it never probes, spawns or
+  walks files, and recomputes at most once a second per project. The missing-server fix text is fixed by
+  the plan; a project an alert names is left out of the health notice.
 - `diff.rs` (T329.18) answers `rtok graph diff` and MCP `graph_diff`, the sixth tool (the surface gate is 160
   tokens, not 150). The old side is read from git's object database (`ls-tree`, one `cat-file --batch`), parsed
   by `index::rows_of` and kept in memory: no checkout, no second store, no write. Only files git reports as

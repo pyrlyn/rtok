@@ -4,6 +4,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
+import { expect, within } from "storybook/test";
 import { Config } from "./Config";
 import { richSnapshot } from "./fixtures";
 import { Graph } from "./Graph";
@@ -12,6 +13,7 @@ import { Services } from "./Services";
 import { Skills } from "./Skills";
 import { Stats } from "./Stats";
 import { serve, withData } from "./storyData";
+import { graphScopedText } from "./textFixtures";
 import { Worktrees } from "./Worktrees";
 
 const rich = serve(richSnapshot);
@@ -50,6 +52,16 @@ export const StatsUnanswered = page(() => <Stats />, unanswered);
 
 export const GraphDefault = page(() => <Graph />);
 export const GraphLight = light(GraphDefault);
+// A project and its linked project: every pending and dead row carries a project badge (T329.21).
+export const GraphScoped: StoryObj = {
+    ...page(() => <Graph />, serve({ ...richSnapshot, graph: graphScopedText })),
+    play: async ({ canvasElement }) => {
+        const table = await within(canvasElement).findByRole("table", { name: "dead symbols" });
+        const [rtok, ketch] = within(table).getAllByRole("row").slice(1);
+        await expect(within(rtok!).getByText("rtok")).toBeVisible();
+        await expect(within(ketch!).getByText("ketch")).toBeVisible();
+    },
+};
 export const GraphOff = page(() => <Graph />, unanswered);
 
 export const HostsDefault = page(() => <Hosts />);

@@ -14,6 +14,7 @@ use serde::Serialize;
 use rtok_plugin_sdk::Ctx;
 
 use super::capability::{self, Capability};
+use super::health::score::{self, Score};
 use super::{health, index, status};
 use crate::plugin::Runtime;
 use crate::render::{Col, table};
@@ -59,6 +60,12 @@ pub struct ProjectRow {
     /// What the health check raised for this project (T329.17); absent while nothing is wrong.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     alerts: Vec<health::Alert>,
+    /// The 0 to 100 health score with its components, reasons and fixes (T329.19).
+    health: Score,
+    /// The lowest score in this project's scope (itself and what it links to); absent while
+    /// every member is still on its first index.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scope_health: Option<u8>,
     pub(super) links: Vec<ProjectLink>,
 }
 
@@ -85,18 +92,24 @@ fn link_rows(store: &Store, from: i32) -> Result<Vec<ProjectLink>> {
 pub(super) fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
     let cx = &Ctx::new(rt);
     let missing = p.missing();
-    let index = if missing {
+    let status = if missing {
         None
     } else {
-        let s = status::collect(cx, Path::new(&p.root))?;
-        Some(ProjectIndex {
-            rows: s.rows,
-            files: s.files,
-            pending: s.pending.len(),
-            watch: s.watch,
-            indexed_at: s.indexed_at,
-        })
+        Some(status::collect(cx, Path::new(&p.root))?)
     };
+    let health = status
+        .as_ref()
+        .map_or_else(|| score::missing(&p), |st| score::of(rt, &p, st));
+    let scope_health = health::reach(&rt.store, &p)
+        .ok()
+        .and_then(|reached| score::scope_lowest(rt, &reached, &health));
+    let index = status.map(|s| ProjectIndex {
+        rows: s.rows,
+        files: s.files,
+        pending: s.pending.len(),
+        watch: s.watch,
+        indexed_at: s.indexed_at,
+    });
     let state = match &index {
         None => "missing",
         Some(i) if i.indexed_at.is_none() && i.rows == 0 => "not indexed",
@@ -120,6 +133,8 @@ pub(super) fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
         index,
         backend,
         alerts,
+        health,
+        scope_health,
         links: link_rows(&rt.store, p.id)?,
     })
 }
@@ -141,10 +156,13 @@ fn render(rows: &[ProjectRow], json: bool) -> Result<String> {
         Col::right(5),
         Col::right(7),
         Col::right(5),
+        Col::right(6),
+        Col::right(5),
         Col::left(4),
     ];
     let head = [
-        "", "id", "name", "origin", "state", "rows", "files", "pending", "links", "root",
+        "", "id", "name", "origin", "state", "rows", "files", "pending", "links", "health",
+        "scope", "root",
     ];
     let mut cells = vec![head.map(String::from).to_vec()];
     for r in rows {
@@ -159,6 +177,8 @@ fn render(rows: &[ProjectRow], json: bool) -> Result<String> {
             n(|i| i.files.to_string()),
             n(|i| i.pending.to_string()),
             r.links.len().to_string(),
+            r.health.score.map_or("-".into(), |n| n.to_string()),
+            r.scope_health.map_or("-".into(), |n| n.to_string()),
             r.root.clone(),
         ]);
     }

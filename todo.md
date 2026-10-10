@@ -19,8 +19,7 @@
 - T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.15. Graph page: two-part UI with the read-only live graph and live metrics
-- T329.19. Graph health score per project
-- T329.21. Project badges in the graph page lists
+- T329.30. Graph page: health ring and breakdown per project
 - T329.27. Graph page: read-only live canvas and splitter
 - T329.28. Graph page: live camera, 3D live view and the remaining live displays
 - T329.29. Graph page: Compare mode and the remaining diff reports
@@ -74,4 +73,5 @@
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T478. TUI: doctor fix with plan and confirm
 - T479. TUI: clear safe junk with plan and confirm
+- T481. TUI: graph health score per project
 - T480. TUI: live graph calls panel
