@@ -115,6 +115,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T565 | todo | P2 | 3 | 0% | |
 | T566 | todo | P2 | 2 | 0% | |
 | T567 | todo | P2 | 2 | 0% | |
+| T569 | todo | P2 | 3 | 0% | |
+| T570 | todo | P2 | 2 | 0% | |
+| T571 | todo | P2 | 2 | 0% | |
 
 
 
@@ -476,6 +479,42 @@ Execution plan:
 3. Cover multiple positives/negatives, overlapping patterns, nested exclusions and root-package inclusion; keep behavior of other manifest formats explicit.
 
 Check: excluded members contribute neither references nor missing-reference warnings/auto-projects, included members still resolve, and `just check` passes.
+
+### T569. Preserve each host file's undo bytes across backup deduplication and pruning
+
+Confirmed with actual SDK functions: [backup_at](crates/rtok-agent-sdk/src/lib.rs#L181) skips a copy if any file in the shared _backup directory has identical bytes, regardless of basename. [prune_backups](crates/rtok-agent-sdk/src/lib.rs#L103) subsequently prunes generations of one basename without knowing other files depend on that copy. Create A.json and B.json with the same original text; with backup_files=1, write A1 to A, B1 to B, then A2 to A. B's backup was skipped, and the final A write removes the only copy of B's original bytes. T72 intentionally introduced basename-agnostic dedup and T249 per-basename pruning, but neither tracks this interaction.
+
+Execution plan:
+
+1. Add the two-file/three-write fixture using SDK write with backup enabled and a retention cap of 1; assert both files retain their required undo content.
+2. Make deduplication and retention share an ownership model. Prefer independent per-basename backup identity unless cross-file ownership is explicitly tracked; never treat a foreign file's prunable copy as sufficient protection.
+3. Cover repeated same-content writes, different basenames, same-second suffixes, lowered caps and cleanup via stale_backups; preserve intentional no-op behavior without losing another file's recovery bytes.
+
+Check: pruning A cannot delete B's only required undo content; repeated installs remain idempotent, the retention cap remains well-defined per file, and `just check` passes. The isolated fixture exercised real SDK backup/write/prune functions against scratch files.
+
+### T570. Fail SDK writes on symlink cycles instead of replacing a link
+
+Confirmed on Unix with actual SDK functions: [link_target](crates/rtok-agent-sdk/src/lib.rs#L327) stops after 40 unsuccessful resolution attempts and returns the still-unresolved symlink. [write](crates/rtok-agent-sdk/src/lib.rs#L309) then calls [write_atomic](crates/rtok-agent-sdk/src/lib.rs#L352), whose rename replaces that symlink with a regular file. For cycle-a -> cycle-b -> cycle-a, write with backups enabled succeeds, replaces cycle-a, and makes cycle-b point to the new content; backup was skipped because exists() follows the cycle and returns false. This violates the SDK promise to preserve dotfile-manager symlinks. Existing dangling-link support does not cover loops.
+
+Execution plan:
+
+1. Add self-loop and two-link-cycle scratch fixtures; assert SDK write returns an error and preserves every link target byte-for-byte.
+2. Return a Result from target resolution and reject cycles, exhausted hop limits and unresolved non-missing-path errors before atomic replacement; distinguish a supported dangling target from an unresolved link.
+3. Cover valid relative/absolute link chains, a dangling final target with an existing parent, a missing target parent, dry-run and backup-enabled writes. Do not weaken valid dotfile-manager support.
+
+Check: cyclic or over-limit chains never become regular files and produce a clear error, supported acyclic targets still update without replacing their links, and `just check` passes. The destructive behavior was reproduced only on isolated Unix fixtures.
+
+### T571. Redact graph-export scope metadata and suggested download names
+
+Confirmed by the actual redaction helper: [collect](src/plugins/graph/export.rs#L335) copies member names into meta.scope, but [redact](src/plugins/graph/export.rs#L351) rewrites projects[].name without touching meta.scope. With home /Users/alice and project alias alice, the default export reports `projects[0].name = <user>` and meta.redacted = true while meta.scope still contains alice. The page's [download name](src/plugins/graph/export.rs#L587) independently uses the original scope name, yielding rtok-graph-alice-overview.json even when export contents are redacted. T329.16/T329.40 promise default redaction and downloads but do not track these remaining copies.
+
+Execution plan:
+
+1. Add the username-as-project-alias fixture and assert the complete serialized redacted export contains no original alias; add a page-file assertion for its suggested download name.
+2. Apply the same redaction policy to scope labels and derive the download name from a redacted display identity. Keep IDs, edges and non-sensitive names stable.
+3. Cover CLI default output, MCP, page downloads, saved-export re-rendering and explicit CLI no-redact; verify JSON and image metadata use consistent labels.
+
+Check: neither redacted payload metadata nor the suggested filename exposes the username alias, explicit no-redact retains its documented behavior, and `just check` passes. The scope leak was reproduced with the actual helper; the filename leak is source-confirmed and its end-to-end page regression belongs to this fix.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

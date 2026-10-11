@@ -31,6 +31,9 @@
 - T565. Include serialized metadata and separators in mem_pack's budget
 - T566. Preserve leading dots in memory note-file mentions
 - T567. Apply negative pnpm workspace patterns before reading members
+- T569. Preserve each host file's undo bytes across backup deduplication and pruning
+- T570. Fail SDK writes on symlink cycles instead of replacing a link
+- T571. Redact graph-export scope metadata and suggested download names
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
