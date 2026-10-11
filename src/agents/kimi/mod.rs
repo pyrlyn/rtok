@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::NO_CHANGES;
-use serde_json::{Value, json};
+use rtok_mcp::spec::{EntryShape, Format as McpFormat, McpSpec};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, value};
 
 use super::claude::{is_ours, show};
@@ -199,27 +199,26 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
     Ok(report)
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("kimi")})
+/// `mcpServers.rtok = {command, args}` in `mcp.json` — Kimi's documented shape carries no
+/// `type` — as `rtok_mcp` reads it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::host_spec(
+        "kimi",
+        mcp_path(cfg),
+        "mcpServers",
+        McpFormat::Json,
+        EntryShape::Command,
+    )
 }
 
-/// `mcpServers.rtok = {command, args}` in `mcp.json` — Kimi's documented shape carries no `type`.
+/// Write the entry into `mcp.json`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &mcp_path(cfg),
-        "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "kimi"),
-    )
+    super::mcp::install(cfg, &mcp_spec(cfg))
 }
 
 /// Drop `mcpServers.rtok` from `mcp.json`, unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(cfg, &mcp_path(cfg), "mcpServers", NAME, &mcp_entry("rtok"))
+    super::mcp::remove(cfg, &mcp_spec(cfg))
 }
 
 /// An absent file is an empty document; an unreadable one is an error (never overwrite a
@@ -372,6 +371,7 @@ fn strip_ours(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     /// Shared fixture (the T86 tests below reuse it).
     fn cfg(name: &str, dry: bool) -> (Config, PathBuf) {
