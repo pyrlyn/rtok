@@ -35,10 +35,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T283 | in progress | P1 | 3 | 60% | Claude Code / sonnet-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
-| T329 | todo | P2 | 5 | 0% | |
-| T329.50 | todo | P3 | 3 | 0% | |
-| T329.52 | todo | P3 | 2 | 0% | |
-| T329.53 | todo | P3 | 2 | 0% | |
+| T329 | in progress | P2 | 5 | 95% | Claude Code / claude-opus-5-5 |
+| T329.50 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T329.52 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T329.53 | in progress | P3 | 2 | 90% | Claude Code / claude-opus-5-5 |
 | T500 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -46,7 +46,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T378 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.9 | todo | P3 | 5 | 10% | |
+| T385.9 | in progress | P3 | 5 | 10% | Claude Code / claude-opus-5-5 |
+| T385.9.1 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
+| T385.9.2 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
+| T385.9.3 | todo | P3 | 2 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -793,17 +796,23 @@ Left over from T329.32. Each running call gets a small floating label next to it
 
 Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
 
+Plan: (1) a label layer in the 2D and 3D live canvases fed by the running calls the metrics list already has (tool name, start time); (2) elapsed counter ticking off one shared timer, fade a few seconds after the call ends, "+N more" labels the node holding the count, none outside the scope; (3) Vitest, stories with axe, a Playwright case; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
 ### T329.52. Graph page: metrics collapsed to a strip under 900 px
 
 Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
 
 Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
 
+Plan: (1) under 900 px the live metrics render as a one-line strip (running, calls, saved) with an expand/collapse toggle, unchanged at 900 px and above; (2) Vitest, stories with axe at 375 and 1280 px, a Playwright case at 375 px; web gates and `just check`.
+
 ### T329.53. Graph page: count-up animation of the live numbers
 
 Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
 
 Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
+
+Plan: MiMo's commit `418fb2e35` (CountUp in `web/src/pages/graph3d/live/`) carried onto this branch; verify with the web gates and `just check`, add the done entry.
 
 ### T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
 
