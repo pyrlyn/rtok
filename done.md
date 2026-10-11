@@ -11451,3 +11451,16 @@ Result: `upsert_note` records the previous title and body in `note_versions` ins
 
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
+
+### T522. `read` and `expand` accept the line ranges agents sent this week
+
+Accept the 25 line-range spellings agents sent 2026-10-03..10 (spaces around `-`, `:`, `[a, b]`, `a b`, `<br>`, mid-quotes around a separator, `_`); a trailing `<br>` with no second number is that one line; anything that is not one or two positive lines still fails with `invalid line range`.
+
+Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
+
+Result: `parse_range` in `src/expand.rs` (shared by `read` and `expand`) folds those spellings into the existing `a[-b]` grammar via `normalize_range`: surrounding `[…]` stripped, `:`/`_`/`,`/whitespace/`<br>` collapse to `-`, interior quotes next to a separator dropped, trailing `<br>` marks one line. T172 quote-strip and T353 `a, b` unchanged. Cases come from the real 25 `invalid line range` rows in `~/.rtok/errors.log`.
+
+Check result: `just check` green — 3330 passed, 8 skipped, including `parse_range_accepts_the_logged_spellings` (all 25 logged strings), `parse_range_trailing_br_is_one_line_not_to_end`, `parse_range_still_rejects_non_lines`, and the existing quote/comma/malformed/start-past-end tests.
+
+Status: done 2026-10-11
+Model: MiMo / mimo
