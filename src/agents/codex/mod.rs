@@ -25,10 +25,13 @@ const NAME: &str = "rtok";
 
 /// Server-wide approval in `[mcp_servers.rtok]` (T528). Without it Codex asks before every
 /// rtok call, and where nobody can answer (code mode, `approval_policy = "never"`) the call
-/// fails. codex-cli 0.162.1 accepts `auto|prompt|writes|approve` and refuses the whole
-/// config on any other value, so the value is a constant, never user input.
+/// fails. `"writes"` skips the ask only for tools whose `readOnlyHint` is true (`mcp::to_tool`)
+/// and keeps it for the ones that change worktrees, tasks, notes or messages (openai/codex
+/// `codex-rs/core/src/mcp_tool_call.rs` `requires_mcp_tool_approval_for_mode`, 78a19f5,
+/// 2026-10-08). codex-cli 0.162.1 refuses the whole config on a value outside
+/// `auto|prompt|writes|approve`, so the value is a constant, never user input.
 const APPROVAL_KEY: &str = "default_tools_approval_mode";
-const APPROVAL: &str = "approve";
+const APPROVAL: &str = "writes";
 
 const COMPACT: &[(&str, &str)] = &[("PreCompact", ""), ("PostCompact", "")];
 
@@ -681,7 +684,7 @@ mod tests {
         );
         assert_eq!(
             parsed["mcp_servers"]["rtok"][APPROVAL_KEY].as_str(),
-            Some("approve")
+            Some("writes")
         );
         assert!(
             super::super::is_rtok_bin(
@@ -711,14 +714,14 @@ mod tests {
         .unwrap();
         assert_eq!(
             run(&c, false).unwrap(),
-            "+ [mcp_servers.rtok] default_tools_approval_mode = \"approve\""
+            "+ [mcp_servers.rtok] default_tools_approval_mode = \"writes\""
         );
         assert_eq!(run(&c, false).unwrap(), NO_CHANGES);
         let raw = fs::read_to_string(&path).unwrap();
         let parsed: DocumentMut = raw.parse().unwrap();
         assert_eq!(
             parsed["mcp_servers"]["rtok"][APPROVAL_KEY].as_str(),
-            Some("approve"),
+            Some("writes"),
             "{raw}"
         );
         assert_eq!(
