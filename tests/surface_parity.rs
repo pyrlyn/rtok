@@ -935,6 +935,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "raises the store's id counters to the adapter's highest ids; agents get that for free, since task_create seeds first (T441.12)",
     ),
     (
+        "task export",
+        "a human's one-way mirror of the disk tasks into an issue tracker; it writes to a third party, so no agent tool (T441.13.5)",
+    ),
+    (
         "task ready",
         "reads the project's adapter, not the store snapshot (T442)",
     ),

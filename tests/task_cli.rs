@@ -335,3 +335,19 @@ fn conflict_and_parallel_markers_are_symmetric_and_flag_ready() {
         assert!(!ok && !err.is_empty(), "{args:?}: {err}");
     }
 }
+
+#[test]
+fn export_mirrors_the_disk_adapter_only_and_names_the_backends() {
+    let sb = Sandbox::new("export");
+    // A github-adapter checkout is refused before any token lookup or request.
+    std::fs::write(
+        sb.file(".rtok.toml"),
+        "[tasks]\nadapter = \"github\"\nprefix = \"E\"\n",
+    )
+    .unwrap();
+    let (ok, _, err) = sb.task(&["export", "github", "--dry-run"]);
+    assert!(!ok && err.contains("mirrors the disk adapter"), "{err}");
+
+    let (ok, _, err) = sb.task(&["export", "jira"]);
+    assert!(!ok && err.contains("invalid value"), "{err}");
+}

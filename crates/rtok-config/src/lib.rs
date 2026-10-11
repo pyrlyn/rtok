@@ -989,6 +989,22 @@ section! {
         disk: TasksDisk = TasksDisk::default(),
         github: TasksGithub = TasksGithub::default(),
         gitlab: TasksGitlab = TasksGitlab::default(),
+        export: TasksExport = TasksExport::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export]` — where `rtok task export` mirrors the disk tasks (T441.13.5).
+    TasksExport {
+        github: TasksExportGithub = TasksExportGithub::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export.github]` — the repository whose issues mirror the tasks.
+    TasksExportGithub {
+        /// `owner/name`. Empty: `[tasks.github] repo`, else the `origin` remote.
+        repo: String = String::new(),
     }
 }
 

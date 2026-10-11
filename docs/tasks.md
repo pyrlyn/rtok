@@ -71,7 +71,19 @@ Why the task exists and what done means.
 | `rtok task conflict <id> <other> [--remove] [--json]` | the two tasks touch the same files, so they should not run at once. Symmetric: both files are written. `task ready` marks a task whose partner is in progress, and still lists it. Stored as `rtok:conflicts:<id>` labels on GitHub and GitLab |
 | `rtok task parallel <id> [--off] [--json]` | mark a task safe to run beside any other task. Stored as the `rtok:parallel` label on GitHub and GitLab |
 
+| `rtok task export github [--dry-run] [--json]` | mirror the disk tasks one way into GitHub Issues (see [Export](#export)) |
+
 Without `--json` the commands print text. With `--json` they print the task as JSON.
+
+## Export
+
+`rtok task export <backend>` copies the disk tasks into an issue tracker so people who live there can see the plan. It works from the disk adapter only; the task files stay the source of truth, and rtok never reads an issue back into a task. Edits made on the tracker are overwritten on the next run.
+
+- **GitHub** (`github`): one issue per task in `[tasks.export.github] repo` (else `[tasks.github] repo`, else the `origin` remote). The issue is written the way the `github` adapter writes it: title `<id>. <title>`, labels `rtok` and `rtok:<id>`, and the claim labels (`rtok:owner:…`, `rtok:needs:…`, `rtok:p:…`, `rtok:in-progress`). A subtask is linked as a sub-issue of its parent. Token: `GH_TOKEN`, `GITHUB_TOKEN`, else `gh auth token`.
+- A task with no issue gets one. A task whose title, description, status, priority, assignee or blockers differ from its issue updates the issue. `done` closes the issue as `completed`, `closed` as `not_planned`, and a task that is active again reopens it. Issues without an `rtok:<id>` label are never touched, and an issue whose task is gone is left as it is.
+- A finished task with no issue is not exported (old history stays out of the tracker), unless an active subtask hangs under it.
+- The run is idempotent: a second run against the same state sends no write. `--dry-run` reads the tracker, prints the planned creates, updates, closes and reopens, and sends nothing. `--json` prints the same plan as JSON.
+- Writes are paced at one per second. A failure stops the run with the backend, the task and the request URL in the error; the writes before it stay, and the next run continues from there.
 
 ## Task board
 

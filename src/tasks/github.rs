@@ -182,6 +182,48 @@ impl GithubAdapter {
             .into_iter()
             .find(|i| i.task_id().as_ref() == Some(id)))
     }
+
+    /// The `save` write. `text` also rewrites title and body: the exporter (T441.13.5) owns
+    /// them, while a claim must not clobber what people edited on the issue.
+    pub(super) fn patch(&self, task: &Task, text: bool) -> Result<Task> {
+        let issue = self
+            .find(&task.id)?
+            .with_context(|| format!("github tasks: no task {} in {}", task.id, self.repo))?;
+        for label in meta::managed_for(task) {
+            if label.len() > LABEL_MAX {
+                bail!("github tasks: label {label:?} is longer than {LABEL_MAX} characters");
+            }
+        }
+        let names: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
+        let mut labels = meta::merge_labels(&names, task);
+        labels.retain(|label| label != IN_PROGRESS);
+        if task.status == Status::InProgress {
+            labels.push(IN_PROGRESS.to_string());
+        }
+        let mut body = json!({
+            "labels": labels,
+            "state": if task.status.is_active() { "open" } else { "closed" },
+        });
+        if text {
+            body["title"] = json!(issue_title(&task.id, &task.title));
+            body["body"] = json!(task.description);
+        }
+        let reason = match task.status {
+            Status::Done => Some("completed"),
+            Status::Closed => Some("not_planned"),
+            _ if issue.state == "closed" => Some("reopened"),
+            _ => None,
+        };
+        if let Some(reason) = reason {
+            body["state_reason"] = json!(reason);
+        }
+        let path = format!("/repos/{}/issues/{}", self.repo, issue.number);
+        let updated: Issue = self.http.send(Method::PATCH, &path, &body)?;
+        self.sync_project(&task.id, &updated, task.status);
+        updated
+            .into_task()
+            .with_context(|| format!("github tasks: {} lost its label", task.id))
+    }
 }
 
 impl TaskAdapter for GithubAdapter {
@@ -293,39 +335,7 @@ impl TaskAdapter for GithubAdapter {
     /// Assignee, blockers and priority. Not compare-and-set: two callers can both PATCH, and
     /// the last write wins. `claim` refuses a live foreign assignee before this runs.
     fn save(&self, task: &Task) -> Result<Task> {
-        let issue = self
-            .find(&task.id)?
-            .with_context(|| format!("github tasks: no task {} in {}", task.id, self.repo))?;
-        for label in meta::managed_for(task) {
-            if label.len() > LABEL_MAX {
-                bail!("github tasks: label {label:?} is longer than {LABEL_MAX} characters");
-            }
-        }
-        let names: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
-        let mut labels = meta::merge_labels(&names, task);
-        labels.retain(|label| label != IN_PROGRESS);
-        if task.status == Status::InProgress {
-            labels.push(IN_PROGRESS.to_string());
-        }
-        let mut body = json!({
-            "labels": labels,
-            "state": if task.status.is_active() { "open" } else { "closed" },
-        });
-        let reason = match task.status {
-            Status::Done => Some("completed"),
-            Status::Closed => Some("not_planned"),
-            _ if issue.state == "closed" => Some("reopened"),
-            _ => None,
-        };
-        if let Some(reason) = reason {
-            body["state_reason"] = json!(reason);
-        }
-        let path = format!("/repos/{}/issues/{}", self.repo, issue.number);
-        let updated: Issue = self.http.send(Method::PATCH, &path, &body)?;
-        self.sync_project(&task.id, &updated, task.status);
-        updated
-            .into_task()
-            .with_context(|| format!("github tasks: {} lost its label", task.id))
+        self.patch(task, false)
     }
 
     fn stores_markers(&self) -> bool {

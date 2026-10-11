@@ -469,6 +469,9 @@ project = 0                           # номер Projects v2 владельц�
 url = "https://gitlab.com"            # https базовый URL; задайте для своего инстанса; токен: GITLAB_TOKEN, GITLAB_ACCESS_TOKEN, GL_TOKEN, иначе glab
 project = ""                          # group/name или числовой id; пусто: remote origin
 
+[tasks.export.github]                 # `rtok task export github`: односторонне отразить задачи с диска в GitHub Issues
+repo = ""                             # owner/name; пусто: [tasks.github] repo, иначе remote origin
+
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
 endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
@@ -882,6 +885,7 @@ color = false   # RTOK_UI_COLOR=false
 | `agents whoami` | — | читает `RTOK_AGENT_ID` и разрешает его через хранилище (T283); нет ключа, нет `setup.*` (`--json` — строка «чтение») |
 | `worktree whoami` | — | читает `RTOK_AGENT_ID` и `[worktree] root` (T411); собственного ключа нет (`--json` — строка «чтение») |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: записываются в `.rtok.toml` этой копии репозитория (T441.5) |
+| `task export` | `--dry-run`, `--json` | `tasks.export.github.repo` (T441.13.5); `--dry-run` — на один вызов (без ключа) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | для одного вызова (без ключа): какая задача и какие строки показать; адаптер и префикс выбирает `[tasks]` |
 | `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--items`, `--sort`, `--min-size`, `--yes` | на один вызов (без ключа): что один запуск показывает или удаляет; `--session-days` это `agents.junk.stale_session_days` на один запуск; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` без флага |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, а также `.dirs.<host>` без флага (`--unpriced` выбирает вид одного вызова, `--json` — строка «чтение») |

@@ -152,6 +152,19 @@ pub(super) enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Mirror the disk tasks one way into an issue tracker; the files stay the source of truth.
+    /// A second run with nothing changed sends no write.
+    Export {
+        /// Where to mirror the tasks
+        #[arg(value_parser = crate::tasks::export::BACKENDS)]
+        backend: String,
+        /// Print the planned creates, updates and closes and send nothing
+        #[arg(long)]
+        dry_run: bool,
+        /// JSON instead of the text
+        #[arg(long)]
+        json: bool,
+    },
     /// Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks
     Init {
         /// disk, github or gitlab (default: disk, or what the file already says)
@@ -257,6 +270,18 @@ pub(super) fn run(action: TaskCmd, config_file: Option<&std::path::Path>) -> Res
                 print_json(&report)?;
             } else {
                 print!("{}", crate::tasks::sync::text(&report));
+            }
+        }
+        TaskCmd::Export {
+            backend,
+            dry_run,
+            json,
+        } => {
+            let report = crate::tasks::ops::export(&cfg, &cwd, &backend, dry_run)?;
+            if json {
+                print_json(&report)?;
+            } else {
+                print!("{}", crate::tasks::export::render(&report));
             }
         }
         TaskCmd::Next { json } => {
