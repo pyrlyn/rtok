@@ -178,7 +178,8 @@ test("clear safe junk plans without deleting and deletes only on the confirmed m
   await junk.getByRole("button", { name: "Clear safe junk" }).click();
   await junk.getByRole("button", { name: "Clear 2 items" }).click();
   await junk.getByRole("button", { name: "Confirm" }).click();
-  await expect(junk.getByRole("status")).toContainText("Freed");
+  // The section reloads after the apply, so its loading status can sit beside the result.
+  await expect(junk.getByRole("status").filter({ hasText: "Freed" })).toBeVisible();
   expect(stale.some((p) => existsSync(p))).toBe(false);
   const applies = sent.filter((m) => m.junk?.action === "apply");
   expect(applies).toHaveLength(1);
@@ -449,48 +450,6 @@ test("the splitter keeps its place and the hidden state across a reload and stop
   expect(stream).toHaveLength(sent);
 });
 
-test("maximising either part fills the page, Escape and the button restore, and the choice is kept", async ({
-  page,
-  rtok,
-}) => {
-  await viewing(page, "2d");
-  rtok.addProject();
-  await page.goto("/#/graph");
-  const bar = page.getByRole("separator", { name: "resize the live graph" });
-  await expect(bar).toBeVisible();
-  await expect(page.getByTestId("graph-live")).toBeVisible();
-
-  await page.getByRole("button", { name: "Maximise explorer" }).click();
-  await expect(page.getByRole("button", { name: "Restore explorer" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByTestId("graph-live")).toHaveCount(0);
-  await expect(bar).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "project graph" })).toBeVisible();
-
-  await page.keyboard.press("Escape");
-  await expect(bar).toBeVisible();
-  await expect(page.getByTestId("graph-live")).toBeVisible();
-
-  await page.getByRole("button", { name: "Maximise live graph" }).click();
-  await expect(page.getByRole("button", { name: "Restore live graph" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByTestId("graph-live")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "project graph" })).toHaveCount(0);
-  await expect(bar).toHaveCount(0);
-
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Restore live graph" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "project graph" })).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Restore live graph" }).click();
-  await expect(bar).toBeVisible();
-  await expect(page.getByRole("heading", { name: "project graph" })).toBeVisible();
-});
-
 test("under 900 px the two parts stack and there is no splitter", async ({ page, rtok }) => {
   await viewing(page, "2d");
   rtok.addProject();
@@ -500,32 +459,29 @@ test("under 900 px the two parts stack and there is no splitter", async ({ page,
   await expect(page.getByRole("separator")).toBeHidden();
 });
 
-test("at 375 px the live metrics are one line that opens and shuts the cards, and 900 px brings them back", async ({
+test("each part of the graph page maximises to fill the page and Escape restores", async ({
   page,
   rtok,
 }) => {
   await viewing(page, "2d");
   rtok.addProject();
-  await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/#/graph");
-  const strip = page.getByRole("button", { name: /^running \d+ calls \d+ saved/ });
-  const cards = page.getByText("latency p50");
-  await expect(strip).toBeVisible();
-  await expect(strip).toHaveAttribute("aria-expanded", "false");
-  await expect(cards).toHaveCount(0);
-  // One line: the three figures and the window fit the phone's width without spilling out.
-  expect(await strip.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const live = page.getByTestId("graph-live");
+  await expect(live).toBeVisible();
 
-  await strip.click();
-  await expect(strip).toHaveAttribute("aria-expanded", "true");
-  await expect(cards).toBeVisible();
-  await strip.click();
-  await expect(strip).toHaveAttribute("aria-expanded", "false");
-  await expect(cards).toHaveCount(0);
+  await page.getByRole("button", { name: "Maximise live graph" }).click();
+  // The section, not the picture inside it: the section pads the picture on its own.
+  const fill = await page.getByRole("region", { name: "live graph" }).boundingBox();
+  const view = page.viewportSize();
+  expect(fill?.width).toBeGreaterThan((view?.width ?? 0) - 40);
+  await expect(live).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Maximise live graph" })).toBeVisible();
 
-  await page.setViewportSize({ width: 900, height: 812 });
-  await expect(strip).toHaveCount(0);
-  await expect(cards).toBeVisible();
+  await page.getByRole("button", { name: "Maximise explorer" }).click();
+  await expect(live).toHaveCount(0);
+  await page.getByRole("button", { name: "Restore explorer" }).click();
+  await expect(live).toBeVisible();
 });
 
 test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {

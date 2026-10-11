@@ -401,12 +401,11 @@ fn call_metrics_exist_on_both_surfaces() {
     }
 }
 
-/// T329.32 (D27): the live extras that fit a terminal exist on the page first, and T500 brings them
-/// to the TUI pane. The series is already shared (`CallsStore::spark`), so the pane only draws it.
-/// The pane assertions below are the recorded gap: T500 turns them into the same checks the page
-/// gets, with the wording the page chose.
+/// T329.32 and T500 (D27): the live extras that fit a terminal are on both surfaces, the sparklines,
+/// the `outside scope` mark and the folded-call counter. The series and the counter are the
+/// store's (`CallsStore::spark`, `folded_counters`), so the pane only draws them.
 #[test]
-fn live_extras_are_on_the_page_and_wait_for_the_tui() {
+fn live_extras_are_on_the_page_and_in_the_tui() {
     let root = env!("CARGO_MANIFEST_DIR");
     let read = |rel: &str| std::fs::read_to_string(format!("{root}/{rel}")).expect(rel);
     let page = [
@@ -418,17 +417,34 @@ fn live_extras_are_on_the_page_and_wait_for_the_tui() {
     .join("\n");
     let pane = read("src/tui/live_calls.rs");
     let pane = pane.split("#[cfg(test)]\nmod tests").next().unwrap();
-    for (wording, tui_pending) in [
-        ("over the last", "spark("),
-        ("outside scope", "outside scope"),
-        ("folded calls", "folded calls"),
+    let store = read("src/web/calls_store.rs");
+    // The wording is shared: the TUI takes it from the store's constants and functions, so each
+    // item is on the page as text and on the pane as a call into the same code.
+    for (wording, shared, tui_call) in [
+        ("over the last", "pub fn spark_label(", "spark_label("),
+        (
+            "outside scope",
+            "pub const OUTSIDE_SCOPE: &str = \"outside scope\"",
+            "OUTSIDE_SCOPE",
+        ),
+        (
+            "folded calls",
+            "pub fn folded_counters(",
+            "folded_counters(",
+        ),
     ] {
         assert!(page.contains(wording), "the page shows `{wording}`");
+        assert!(store.contains(shared), "the store defines `{shared}`");
         assert!(
-            !pane.contains(tui_pending),
-            "the TUI pane has `{tui_pending}` now: T500 moves `{wording}` into a both-surface check"
+            pane.contains(tui_call),
+            "the TUI pane uses `{tui_call}` for `{wording}`"
         );
     }
+    assert!(
+        pane.contains("folded calls"),
+        "the TUI names the counter like the page"
+    );
+    assert!(pane.contains(".spark("), "the TUI draws the store's series");
     let view = read("src/web/calls_view.rs");
     assert!(
         view.contains("store.spark("),

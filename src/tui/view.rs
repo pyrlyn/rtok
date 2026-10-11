@@ -24,6 +24,7 @@ use super::health;
 use super::theme::{self, ACCENT, ERR, OK, WARN};
 use crate::model::{self, PluginPage};
 use crate::store::CallRow;
+use crate::web::calls_store::{ScopeRow, scope_names};
 
 /// One screen: header · [alert] · framed body with the tabs in its top border · footer,
 /// with the `?` overlay on top when it is open (T60.8). The alert row stays up for the
@@ -471,8 +472,19 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     let live = (area.height / 2).min(18);
     let [area, calls] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
-    app.live().render(frame, calls);
     let (rows, state) = app.projects();
+    let scope_rows: Vec<_> = rows
+        .iter()
+        .map(|r| ScopeRow {
+            id: r.id,
+            name: &r.name,
+            selected: r.selected,
+            links: r.links.iter().map(|l| l.0).collect(),
+        })
+        .collect();
+    // The Graph tab has no drill-down, so the scope is the selected project's.
+    app.live()
+        .render(frame, calls, scope_names(&scope_rows, None).as_ref());
     if rows.is_empty() {
         return frame.render_widget(graph_page(app), area);
     }

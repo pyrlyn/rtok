@@ -2,20 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { useId, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { CallsView, WindowView } from "../../../api/snapshot.gen";
 import { Chip } from "../../../ui/Chip";
+import { CountUp } from "../../../ui/CountUp";
 import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
 import { Sparkline } from "../../../ui/Sparkline";
 import { compact, fmt, millis, pct, seconds } from "../../format";
-import { useMinWidth } from "../../parts";
-import { CountUp } from "./CountUp";
-import { MetricsStrip } from "./MetricsStrip";
+import { MetricsFold } from "./MetricsFold";
 import { emptyWindow } from "./useCalls";
-
-/** The width where part 2 sits beside part 1 (`Split`); below it the metrics fold to a strip. */
-export const STRIP_BELOW_PX = 900;
 
 const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
 
@@ -50,33 +46,15 @@ function Trend({
  * same calls, and `rtok tui` shows the same figures. Latency is the exception: a percentile cannot
  * be summed, so it is measured on the calls a batch lists.
  */
-export function LiveMetrics(props: Props) {
-    const { view, window, frozen } = props;
-    const wide = useMinWidth(STRIP_BELOW_PX);
-    // The choice outlives the window chips and the freeze, which re-render this.
-    const [open, setOpen] = useState(false);
-    const body = useId();
-    const t = view.windows[window] ?? emptyWindow;
-    return (
-        <div className="flex flex-col gap-2">
-            {!wide && (
-                <MetricsStrip
-                    running={<CountUp value={view.running.length} />}
-                    calls={<CountUp value={t.calls} />}
-                    saved={<CountUp value={t.before - t.after} format={compact} />}
-                    window={t.label}
-                    frozen={frozen}
-                    open={open}
-                    onToggle={() => setOpen(!open)}
-                    controls={body}
-                />
-            )}
-            {(wide || open) && <MetricsCards id={body} {...props} />}
-        </div>
-    );
-}
-
-interface Props {
+export function LiveMetrics({
+    view,
+    now,
+    window,
+    onWindow,
+    frozen,
+    pending,
+    onFreeze,
+}: {
     view: CallsView;
     now: number;
     /** Index into the server's windows. */
@@ -86,25 +64,14 @@ interface Props {
     /** Calls that arrived while the picture was held. */
     pending: number;
     onFreeze(on: boolean): void;
-}
-
-function MetricsCards({
-    id,
-    view,
-    now,
-    window,
-    onWindow,
-    frozen,
-    pending,
-    onFreeze,
-}: Props & { id: string }) {
+}) {
     const t = view.windows[window] ?? emptyWindow;
     const saved = t.before - t.after;
     const lat = t.latency;
     const top = Math.max(1, ...t.tools.map((v) => v.calls));
     const listed = Object.values(t.backends).reduce((n, v) => n + v, 0);
     return (
-        <div id={id} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
                 <div role="group" aria-label="window" className="flex gap-1">
                     {view.windows.map((w, i) => (
@@ -128,51 +95,70 @@ function MetricsCards({
                     </Chip>
                 </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-                <Kpi
-                    label="running"
-                    value={<CountUp value={view.running.length} />}
-                    sub={view.running.length ? view.running.map((r) => r.tool).join(", ") : "idle"}
-                />
-                <Kpi
-                    label="calls"
-                    value={<CountUp value={t.calls} />}
-                    tone={t.failed ? "warn" : "default"}
-                    sub={`${fmt(t.failed)} failed`}
-                    viz={<Trend spark={t.spark} values={t.spark.calls} what="calls" />}
-                />
-                <Kpi
-                    label="latency p50"
-                    value={lat ? <CountUp value={lat.p50} format={millis} /> : "-"}
-                    sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
-                />
-                <Kpi
-                    label="symbols returned"
-                    value={
-                        <>
-                            <CountUp value={t.symbols_returned} /> of <CountUp value={t.symbols} />
-                        </>
-                    }
-                    sub={`${fmt(t.crossed)} across projects`}
-                />
-                <Kpi label="files touched" value={<CountUp value={t.files_touched} />} />
-                <Kpi label="projects with hits" value={<CountUp value={t.projects_hit} />} />
-                <Kpi
-                    label="fallbacks"
-                    value={<CountUp value={t.fallbacks} />}
-                    tone={t.fallbacks ? "warn" : "default"}
-                    sub={`${fmt(t.caps)} capped`}
-                />
-                <Kpi label="tokens sent" value={<CountUp value={t.after} format={compact} />} />
-                <Kpi label="without rtok" value={<CountUp value={t.before} format={compact} />} />
-                <Kpi
-                    label="saved"
-                    value={<CountUp value={saved} format={compact} />}
-                    tone="saved"
-                    sub={t.before ? pct(saved / t.before, 0) : "-"}
-                    viz={<Trend spark={t.spark} values={t.spark.saved} what="tokens saved" />}
-                />
-            </div>
+            <MetricsFold
+                strip={
+                    <>
+                        <span>{fmt(view.running.length)} running</span>
+                        <span>{fmt(t.calls)} calls</span>
+                        <span className="text-delta-fg">{compact(saved)} saved</span>
+                    </>
+                }
+            >
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+                    <Kpi
+                        label="running"
+                        value={fmt(view.running.length)}
+                        sub={
+                            view.running.length
+                                ? view.running.map((r) => r.tool).join(", ")
+                                : "idle"
+                        }
+                    />
+                    <Kpi
+                        label="calls"
+                        value={<CountUp value={t.calls} format={fmt} />}
+                        tone={t.failed ? "warn" : "default"}
+                        sub={`${fmt(t.failed)} failed`}
+                        viz={<Trend spark={t.spark} values={t.spark.calls} what="calls" />}
+                    />
+                    <Kpi
+                        label="latency p50"
+                        value={lat ? millis(lat.p50) : "-"}
+                        sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
+                    />
+                    <Kpi
+                        label="symbols returned"
+                        value={`${fmt(t.symbols_returned)} of ${fmt(t.symbols)}`}
+                        sub={`${fmt(t.crossed)} across projects`}
+                    />
+                    <Kpi
+                        label="files touched"
+                        value={<CountUp value={t.files_touched} format={fmt} />}
+                    />
+                    <Kpi
+                        label="projects with hits"
+                        value={<CountUp value={t.projects_hit} format={fmt} />}
+                    />
+                    <Kpi
+                        label="fallbacks"
+                        value={<CountUp value={t.fallbacks} format={fmt} />}
+                        tone={t.fallbacks ? "warn" : "default"}
+                        sub={`${fmt(t.caps)} capped`}
+                    />
+                    <Kpi label="tokens sent" value={<CountUp value={t.after} format={compact} />} />
+                    <Kpi
+                        label="without rtok"
+                        value={<CountUp value={t.before} format={compact} />}
+                    />
+                    <Kpi
+                        label="saved"
+                        value={<CountUp value={saved} format={compact} />}
+                        tone="saved"
+                        sub={t.before ? pct(saved / t.before, 0) : "-"}
+                        viz={<Trend spark={t.spark} values={t.spark.saved} what="tokens saved" />}
+                    />
+                </div>
+            </MetricsFold>
             {view.running.length > 0 && (
                 <ul aria-label="running calls" className="flex flex-col gap-1 text-xs">
                     {view.running.map((r) => (

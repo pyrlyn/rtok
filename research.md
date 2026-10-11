@@ -2703,3 +2703,51 @@ Both ideas were last judged before the thinking page and the tool search page of
 - Verdict: **I-85 dropped**, no measured saving left on the traffic we can see.
 
 **Limits.** Signature length is a proxy for billed tokens (two fits, above). The replay assumption is an upper bound for hosts other than Claude Code. The cost model uses list-price ratios, not the invoice. Cursor and Codex sessions are not in the transcripts. Commands: Python 3 scripts reading the transcripts (parent-chain walk, `-I` mode), `sqlite3` on a file copy of `rtok.db` for the empty `usage` table; no change to rtok code.
+
+## 38. Local draft, cloud verify (T404, checked 2026-10-11)
+
+Question (§16.3 #10): can a local model draft output that the cloud model only verifies, so the cloud emits fewer output tokens? Desk research only: no code, no bench, nothing measured here. Primary sources are the vendor pages named in each row, fetched 2026-10-11; "inference" marks a step that follows from those sources but that no page states.
+
+### 38.1 Can a host or proxy hand the cloud model a draft?
+
+| Fact | Source (checked 2026-10-11) |
+| --- | --- |
+| Anthropic Messages API: a last message with role `assistant` is a **prefill** and the answer continues from it, but "on models that don't support prefill" such a request returns 400. | https://platform.claude.com/docs/en/api/messages, `messages` parameter |
+| Prefill is **not supported on Claude 4.6 and later models** (and Mythos Preview). A prefilled last assistant message returns 400 `invalid_request_error`: "This model does not support assistant message prefill. The conversation must end with a user message." Suggested replacements: structured outputs, system-prompt instructions, `output_config.format`. | https://platform.claude.com/docs/en/api/errors, "Prefill not supported" |
+| The current models on the pricing page (Fable 5.1, Mythos 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5) are all later than 4.6, so **prefill is unavailable on every current Claude model**. Inference from the two rows above plus the model list in the migration index (https://platform.claude.com/docs/en/about-claude/models/migration-guide). | same |
+| OpenAI Predicted Outputs: `prediction` parameter on Chat Completions, only `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`; unsupported with `tools`, `max_completion_tokens`, `n` > 1, `logprobs`. Predicted tokens absent from the final answer "are still charged at completion token rates", so a bad draft raises the bill. | https://developers.openai.com/api/docs/guides/predicted-outputs |
+| Gemini text-generation guide: no prefill, speculative-decoding or predicted-output feature documented (absence on that page only, not a statement that none exists). | https://ai.google.dev/gemini-api/docs/text-generation |
+| Claude Code, Codex and other hosts as injection points: not researched from their own docs here. Inference: a proxy only rewrites a request the host built, so on a current Claude model it cannot append an assistant prefill (400 above), and on OpenAI it cannot attach `prediction` to a request that carries `tools`, which every coding-agent turn does. | inference |
+
+Consequence: the "pre-filled draft" mechanism that makes draft-and-verify cheap is gone on Anthropic and unusable with tools on OpenAI. What remains is to put the draft in the **user** turn and ask the model to confirm or correct it.
+
+### 38.2 Is there a draft worth sending? Where the output tokens go
+
+§2 and §16.3 #1 already measured this workload: 96 % of assistant output is tool input (the code and edit arguments the model writes), and `new_string` is 2.2x `old_string`. A local draft would have to be that new code. Prefill-style text continuation cannot carry a `tool_use` block in any case (inference: prefill is text-only in the API reference above), so only a user-turn draft is possible, and the cloud model then has to re-emit the accepted draft as its own tool call: **an accepted draft still costs the full output tokens of the tool call**. Confirming "yes" saves nothing when the useful output is the edit itself. The saving exists only for prose answers the model could end with "accepted as written", and §2 puts the cost in tool input, not prose.
+
+### 38.3 Local draft speed (Apple Silicon)
+
+Generation speed is memory-bandwidth bound. Source: llama.cpp's own benchmark thread, LLaMA 7B (6.74 B parameters), tg128, batch 1, build 8e672ef (https://github.com/ggml-org/llama.cpp/discussions/4167, checked 2026-10-11):
+
+| Chip | Q4_0 | Q8_0 | F16 |
+| --- | --- | --- | --- |
+| M3 Max 40 GPU cores (400 GB/s) | 66.3 t/s | 42.8 | 25.1 |
+| M4 Max 40 GPU cores (546 GB/s) | 83.1 t/s | 54.1 | 31.6 |
+| M3 Ultra 80 cores (800 GB/s) | 92.1 t/s | 63.9 | 39.8 |
+
+So a 7 B model at Q4 drafts about 65 to 90 tokens/s on a Max-class chip; that is fast enough that speed is not the blocker. The numbers are a 2023-era base model on a plain generation test: they say nothing about draft **quality** for code against current Claude models. No coding pass rate for any local model was found or measured. MLX also ships speculative decoding (`--draft-model`, `--num-draft-tokens`, default 3; same tokenizer required: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/generate.py), but that is a local-only trick where the *big* model is also local; it does not apply to a cloud verifier, which exposes no draft-token interface in the pages above.
+
+### 38.4 What verification costs
+
+Prices per MTok (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-11; OpenAI: https://developers.openai.com/api/docs/pricing, same date): Fable 5.1 input $10, output $50, cache read $0.25; OpenAI gpt-5 input $1.25, output $10. Output is 5x input on Fable 5.1 (§2 p_out = 5 p_in) and 8x on gpt-5.
+
+Idealised model (inference, not measured). A task has D output tokens when written by the cloud model alone: cost = D x p_out. With a draft in the user turn: the draft is fresh input (no cache hit, it was never seen), so D x p_in; the model answers with the verdict V (small); on reject it writes the D tokens itself, probability 1 - a. Cost = D p_in + V p_out + (1 - a) D p_out. Break-even at p_out = 5 p_in is a > 0.2 + V/D with zero thinking tokens and an accept that costs only V. If the accepted draft must be re-emitted as a tool call (37.2), the accept path also costs D p_out and the saving is **zero or negative** (the draft input is pure extra cost). Adding the reasoning tokens a thinking model spends checking a draft, and the extra turns of a rejected draft, raises the required `a` further; the sources give no figure for either, so none is claimed.
+
+Also: wrong-draft anchoring (the verifier accepts plausible code it would not have written) is a quality risk; no primary source measures it for these models, so it stays unquantified.
+
+### 38.5 Verdict
+
+**Close T404 with this finding; do not build.** (1) The one API mechanism built for this, assistant prefill, is removed on every current Claude model, and OpenAI's equivalent excludes tool calls, so a proxy cannot inject a draft where it matters. (2) The output that dominates cost is tool-call input, which prefill could not carry and which the cloud model must re-emit even after accepting a draft. (3) Local drafting speed is adequate (about 65 to 90 t/s for 7 B at Q4 on Max-class chips), but speed was never the constraint.
+
+Reopen only if a bench could show **cost per passed task falling with the pass rate held**: that needs a host path that lets a verifier accept a draft without re-emitting it (for example a new prefill-like or edit-by-reference API, or a draft delivered as a tool result the model can apply by id), plus a local model whose measured accept rate `a` on this workload clears the break-even in 37.4 with thinking tokens included. Neither exists in the sources checked today. Reliability: every row above is a vendor page or the repository's own file, fetched 2026-10-11; the llama.cpp thread is community-run but primary for its own numbers. No blog or forum fact is used. The break-even is arithmetic on published prices, not a measurement.
+

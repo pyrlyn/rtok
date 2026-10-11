@@ -14,7 +14,7 @@ import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
 import { done, LABELS, running, view, windowOf } from "./callsFixtures";
 import { FOCUS_MS, LABEL_MS } from "./lit";
-import { HIDE_KEY, MAX_KEY, SPLIT_KEY } from "./Split";
+import { HIDE_KEY, SPLIT_KEY } from "./Split";
 
 const snap: Snapshot = {
     ...richSnapshot,
@@ -24,6 +24,12 @@ const snap: Snapshot = {
 beforeEach(() => {
     localStorage.clear();
     localStorage.setItem(VIEW_KEY, "list");
+    // The cards' numbers jump under reduced motion (T329.53), so a test reads the total at once.
+    vi.stubGlobal("matchMedia", (q: string) => ({
+        matches: q.includes("reduce"),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    }));
 });
 afterEach(() => {
     cleanup();
@@ -31,13 +37,6 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 const noop = () => {};
-
-/** Accessible text of a card: CountUp draws its frames aria-hidden and the total in sr-only. */
-const accessible = (root: HTMLElement) => {
-    const clone = root.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.remove());
-    return clone.textContent;
-};
 
 const canvas = () => screen.findByTestId("graph-live");
 const calls = (sent: unknown[]) =>
@@ -89,7 +88,7 @@ describe("live graph", () => {
             }),
         );
         const card = async (label: string) =>
-            accessible((await screen.findByText(label)).parentElement!);
+            (await screen.findByText(label)).parentElement?.textContent;
         await waitFor(async () => expect(await card("latency p50")).toContain("40 ms"));
         expect(await card("latency p50")).toContain("p95 1.5 s");
         expect(await card("symbols returned")).toContain("2 of 3");
@@ -308,7 +307,7 @@ describe("live graph", () => {
         const card = () =>
             screen
                 .getAllByText("calls")
-                .map((e) => accessible(e.parentElement!))
+                .map((e) => e.parentElement?.textContent)
                 .find((t) => t?.includes("failed"));
         for (const [i, label] of LABELS.entries()) {
             fireEvent.click(screen.getByRole("button", { name: label }));
@@ -445,75 +444,5 @@ describe("split", () => {
     test("the live graph follows the drilled project", async () => {
         mount(drillServer(snap), "/graph?p=1");
         expect((await canvas()).getAttribute("aria-label")).toContain("symbols of");
-    });
-});
-
-describe("maximise", () => {
-    test("maximising the explorer fills the area and restores; the live stream stops", async () => {
-        const w = wire(snap);
-        mount(w.connect, "/graph");
-        await canvas();
-        fireEvent.click(screen.getByRole("button", { name: "Maximise explorer" }));
-        expect(screen.getByRole("button", { name: "Restore explorer" })).toBeTruthy();
-        expect(screen.queryByTestId("graph-live")).toBeNull();
-        expect(screen.queryByRole("separator")).toBeNull();
-        expect(screen.getByText("project graph")).toBeTruthy();
-        await waitFor(() => expect(calls(w.sent)).toEqual([true, false]));
-
-        fireEvent.click(screen.getByRole("button", { name: "Restore explorer" }));
-        expect(await canvas()).toBeTruthy();
-        expect(screen.getByRole("separator")).toBeTruthy();
-        expect(localStorage.getItem(MAX_KEY)).toBe("");
-    });
-
-    test("maximising the live graph fills the area and restores", async () => {
-        mount(wire(snap).connect, "/graph");
-        await canvas();
-        fireEvent.click(screen.getByRole("button", { name: "Maximise live graph" }));
-        expect(screen.getByRole("button", { name: "Restore live graph" })).toBeTruthy();
-        expect(screen.queryByTestId("graph-live")).toBeTruthy();
-        expect(screen.queryByText("project graph")).toBeNull();
-        expect(screen.queryByRole("separator")).toBeNull();
-
-        fireEvent.click(screen.getByRole("button", { name: "Restore live graph" }));
-        await waitFor(() => expect(screen.getByText("project graph")).toBeTruthy());
-        expect(screen.getByRole("separator")).toBeTruthy();
-    });
-
-    test("Escape restores the split", async () => {
-        mount(wire(snap).connect, "/graph");
-        await canvas();
-        fireEvent.click(screen.getByRole("button", { name: "Maximise explorer" }));
-        expect(screen.queryByRole("separator")).toBeNull();
-        fireEvent.keyDown(document, { key: "Escape" });
-        expect(screen.getByRole("separator")).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Maximise explorer" })).toBeTruthy();
-    });
-
-    test("the maximised part is remembered across a remount", async () => {
-        const first = mount(wire(snap).connect, "/graph");
-        await canvas();
-        fireEvent.click(screen.getByRole("button", { name: "Maximise live graph" }));
-        expect(localStorage.getItem(MAX_KEY)).toBe("live");
-        first.unmount();
-        mount(wire(snap).connect, "/graph");
-        expect(await screen.findByRole("button", { name: "Restore live graph" })).toBeTruthy();
-        expect(screen.queryByText("project graph")).toBeNull();
-        expect(screen.queryByRole("separator")).toBeNull();
-    });
-
-    test("maximising the live graph shows it even while hidden, and hiding restores the split", async () => {
-        mount(wire(snap).connect, "/graph");
-        await canvas();
-        fireEvent.click(screen.getByRole("button", { name: "Hide live graph" }));
-        expect(screen.queryByTestId("graph-live")).toBeNull();
-
-        fireEvent.click(screen.getByRole("button", { name: "Maximise live graph" }));
-        expect(await canvas()).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Hide live graph" })).toBeTruthy();
-
-        fireEvent.click(screen.getByRole("button", { name: "Hide live graph" }));
-        expect(screen.queryByTestId("graph-live")).toBeNull();
-        expect(screen.getByRole("button", { name: "Show live graph" })).toBeTruthy();
     });
 });

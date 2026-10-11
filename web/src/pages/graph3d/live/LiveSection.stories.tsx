@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 import { BIG, drillServer } from "../../../api/sampleDrill";
 import { project } from "../../../api/sampleRows";
 import type { Frame, Connect } from "../../../api/ws";
@@ -270,55 +270,5 @@ export const FoldedCalls: Story = {
             READY,
         );
         expect(within(list).getByText(/^\+\d+ more · 1 folded$/)).toBeTruthy();
-    },
-};
-
-const phone = { viewport: { value: "mobile1", isRotated: false } };
-
-/** Under 900 px the metrics are one line (T329.52): running, calls and saved, with the cards shut. */
-export const MetricsStripPhone: Story = {
-    decorators: [withData(streaming(calls()))],
-    globals: phone,
-    play: async ({ canvasElement }) => {
-        const view = within(canvasElement);
-        const strip = await view.findByRole("button", { name: /^running 2 calls/ });
-        await expect(window.innerWidth).toBeLessThan(900);
-        expect(strip.getAttribute("aria-expanded")).toBe("false");
-        expect(view.queryByText("latency p50")).toBeNull();
-        // The three figures and the window fit the narrowest phone without spilling out of the line.
-        await waitFor(() => expect(strip.textContent).toBe("running2calls3saved1.1k5 min"));
-        expect(strip.scrollWidth).toBeLessThanOrEqual(strip.clientWidth);
-    },
-};
-export const MetricsStripPhoneLight: Story = {
-    ...MetricsStripPhone,
-    globals: { ...phone, theme: "light" },
-};
-
-/** The line opens the full cards, and opens only them: the rest of the page keeps its place. */
-export const MetricsStripExpanded: Story = {
-    ...MetricsStripPhone,
-    play: async ({ canvasElement }) => {
-        const view = within(canvasElement);
-        await userEvent.click(await view.findByRole("button", { name: /^running 2 calls/ }));
-        await waitFor(() => expect(view.getByText("latency p50")).toBeTruthy());
-        expect(
-            view.getByRole("button", { name: /^running 2 calls/ }).getAttribute("aria-expanded"),
-        ).toBe("true");
-    },
-};
-export const MetricsStripExpandedLight: Story = {
-    ...MetricsStripExpanded,
-    globals: { ...phone, theme: "light" },
-};
-
-/** At 900 px and above the cards are always there and there is no strip. */
-export const MetricsWide: Story = {
-    decorators: [withData(streaming(calls()))],
-    play: async ({ canvasElement }) => {
-        const view = within(canvasElement);
-        await view.findByText("latency p50");
-        await expect(window.innerWidth).toBeGreaterThanOrEqual(900);
-        expect(view.queryByRole("button", { name: /^running 2 calls/ })).toBeNull();
     },
 };

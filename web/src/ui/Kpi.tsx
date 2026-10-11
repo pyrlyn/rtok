@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { HoverSub, Scoped, type Readout } from "../charts/Readout";
 
-export const tones = {
+const tones = {
     default: "",
     ok: "text-success-fg",
     warn: "text-warn-fg",
