@@ -28,8 +28,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T276 | in progress | P2 | 5 | 15% | Claude Code / sonnet-5.5 |
-| T276.2 | todo | P2 | 3 | 0% | |
+| T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
 | T276.4 | todo | P2 | 4 | 0% | |
 | T276.5 | todo | P2 | 3 | 0% | |
@@ -291,12 +290,6 @@ Execution plan (after T275, T277 and T279, which touch the same `agents` spawn h
 4. PRs 3-4: the remaining sites file by file, per the audit's `Output` choice.
 5. PR 5: delete `with_loader` / `render::loader` / `render::spinner`, turn on the `clippy.toml` ban, contributor docs and `CHANGELOG.md`.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-
-### T276.2. `Batch`, `Progress::Callback`, `CargoProgress`, `JsonLines`, Windows shim in `proc`
-
-Split from T276 (migration plan step 1, 2026-10-11, D16): the rest of the runner API from the epic card. `ProgressRunner::batch(label, total, Unit)` and `Batch::step(msg)` (a bar over items with each command's spinner under it), `Progress::Callback`, the `CargoProgress` and `JsonLines` parsers, and the Windows `cmd /C` shim for npm-installed CLIs as a runner option (moved from `spawn_cli` and `mcp_command` when T276.3 uses it). First user: the `rtok worktree gc/clean` bar over worktrees. Depends on T276.1.
-
-Check: batch position/total tests on a hidden target; parser tests on recorded `cargo` output and JSON lines; `just check`.
 
 ### T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
 

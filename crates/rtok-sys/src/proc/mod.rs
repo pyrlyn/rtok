@@ -15,7 +15,10 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 pub use indicator::{Hidden, Indicator, TtyIndicator, disable_progress, suspend};
-pub use parse::{GitProgress, Percent, ProgressParser, Stream, Unit, Update};
+pub use parse::{
+    CargoProgress, GitProgress, JsonLines, Percent, ProgressCallback, ProgressParser, Stream, Unit,
+    Update,
+};
 
 /// What a finished `.run()` hands back; the same shape as `Command::output`.
 pub type Captured = std::process::Output;
@@ -41,6 +44,8 @@ pub enum Progress {
     Unknown,
     /// A spinner that turns into a bar when the parser reports a total.
     Parse(Box<dyn ProgressParser>),
+    /// [`Progress::Parse`] with a closure, for a one-off format that needs no parser type.
+    Callback(ProgressCallback),
 }
 
 pub struct ProgressRunner {
@@ -49,7 +54,8 @@ pub struct ProgressRunner {
     output: Output,
     progress: Progress,
     timeout: Option<Duration>,
-    stdin_set: bool,
+    stdin: Option<Stdio>,
+    shim: bool,
 }
 
 impl ProgressRunner {
@@ -68,8 +74,15 @@ impl ProgressRunner {
             output: Output::Capture,
             progress: Progress::Unknown,
             timeout: None,
-            stdin_set: false,
+            stdin: None,
+            shim: false,
         }
+    }
+
+    /// A bar over `total` items that rtok works through itself (worktrees to remove, runs to
+    /// time). Commands run inside it keep their own spinner under the bar.
+    pub fn batch(label: &str, total: u64, unit: Unit) -> Batch {
+        Batch::new(indicator::pick_bar(label, total, unit), total, unit)
     }
 
     /// A call with no indicator.
@@ -93,8 +106,16 @@ impl ProgressRunner {
 
     /// Without this a piped or detached child gets a closed stdin; an inherited one keeps ours.
     pub fn stdin(mut self, stdin: Stdio) -> Self {
-        self.cmd.stdin(stdin);
-        self.stdin_set = true;
+        self.stdin = Some(stdin);
+        self
+    }
+
+    /// Windows CLIs installed through npm (`npx`, `claude`) ship as `.cmd` or `.bat` shims, which
+    /// `CreateProcess` cannot start and `PATHEXT` never reaches; run those through
+    /// `cmd.exe /D /C`, as the shell does. A no-op elsewhere and for anything that is an `.exe`
+    /// or a path.
+    pub fn windows_shim(mut self) -> Self {
+        self.shim = true;
         self
     }
 
@@ -121,7 +142,10 @@ impl ProgressRunner {
         match self.output {
             Output::Capture | Output::Stream => self.run_piped(),
             Output::Inherit => Ok(Captured {
-                status: self.cmd.status()?,
+                status: {
+                    self.prepare(false);
+                    self.cmd.status()?
+                },
                 stdout: Vec::new(),
                 stderr: Vec::new(),
             }),
@@ -142,17 +166,26 @@ impl ProgressRunner {
             }
             Output::Inherit => {}
         }
-        if !self.stdin_set && self.output != Output::Inherit {
-            self.cmd.stdin(Stdio::null());
-        }
+        self.prepare(self.output != Output::Inherit);
         self.cmd.spawn()
+    }
+
+    /// Settings that wait for the last moment: the shim replaces the command, so stdin cannot be
+    /// applied to it earlier. `closed` is the stdin of a child nobody feeds.
+    fn prepare(&mut self, closed: bool) {
+        if self.shim && cfg!(windows) && needs_cmd_host(&self.cmd.get_program().to_string_lossy()) {
+            self.cmd = via_cmd_host(&self.cmd);
+        }
+        match self.stdin.take() {
+            Some(stdin) => self.cmd.stdin(stdin),
+            None if closed => self.cmd.stdin(Stdio::null()),
+            None => &mut self.cmd,
+        };
     }
 
     fn run_piped(mut self) -> io::Result<Captured> {
         self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-        if !self.stdin_set {
-            self.cmd.stdin(Stdio::null());
-        }
+        self.prepare(true);
         let mut child = self.cmd.spawn()?;
         let ind = match self.progress {
             Progress::Off => Box::new(Hidden) as Box<dyn Indicator>,
@@ -160,6 +193,7 @@ impl ProgressRunner {
         };
         let parser = Mutex::new(match self.progress {
             Progress::Parse(p) => Some(p),
+            Progress::Callback(f) => Some(Box::new(parse::Callback(f)) as Box<dyn ProgressParser>),
             _ => None,
         });
         let forward = self.output == Output::Stream;
@@ -181,6 +215,98 @@ impl ProgressRunner {
             stdout,
             stderr,
         })
+    }
+}
+
+/// True when `command` is a Windows batch or `PATHEXT` shim that `CreateProcess` cannot run: a
+/// `.cmd` or `.bat` path, or a bare name (`npx`, `uvx`) that `PATHEXT` may resolve to one.
+pub fn needs_cmd_host(command: &str) -> bool {
+    let lower = command.to_ascii_lowercase();
+    if lower.ends_with(".exe") || lower.ends_with(".com") {
+        return false;
+    }
+    if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        return true;
+    }
+    !command.contains(['/', '\\', ':'])
+}
+
+/// `cmd.exe /D /C <program> <args>` with the directory and environment of `old`.
+fn via_cmd_host(old: &Command) -> Command {
+    let mut cmd = Command::new("cmd.exe");
+    cmd.arg("/D")
+        .arg("/C")
+        .arg(old.get_program())
+        .args(old.get_args());
+    if let Some(dir) = old.get_current_dir() {
+        cmd.current_dir(dir);
+    }
+    for (key, val) in old.get_envs() {
+        match val {
+            Some(val) => cmd.env(key, val),
+            None => cmd.env_remove(key),
+        };
+    }
+    cmd
+}
+
+/// A bar over a known number of items, from [`ProgressRunner::batch`]. It counts finished
+/// items: [`Batch::step`] finishes the previous one and names the next.
+pub struct Batch {
+    ind: Box<dyn Indicator>,
+    total: u64,
+    pos: u64,
+    unit: Unit,
+    running: bool,
+}
+
+impl Batch {
+    fn new(ind: Box<dyn Indicator>, total: u64, unit: Unit) -> Self {
+        Self {
+            ind,
+            total,
+            pos: 0,
+            unit,
+            running: false,
+        }
+    }
+
+    /// Items finished so far.
+    pub fn position(&self) -> u64 {
+        self.pos
+    }
+
+    pub fn total(&self) -> u64 {
+        self.total
+    }
+
+    /// The previous item is done; `msg` names the one that starts now.
+    pub fn step(&mut self, msg: &str) {
+        self.complete();
+        self.running = true;
+        self.draw(Some(msg.to_string()));
+    }
+
+    /// The last item is done; the bar is cleared.
+    pub fn finish(mut self) {
+        self.complete();
+        self.draw(None);
+        self.ind.finish();
+    }
+
+    fn complete(&mut self) {
+        if std::mem::take(&mut self.running) {
+            self.pos = (self.pos + 1).min(self.total);
+        }
+    }
+
+    fn draw(&self, msg: Option<String>) {
+        self.ind.set(&Update {
+            pos: self.pos,
+            total: Some(self.total),
+            unit: self.unit,
+            msg,
+        });
     }
 }
 
@@ -376,5 +502,150 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         let piped = sh("printf x").spawn().unwrap().wait_with_output().unwrap();
         assert_eq!(piped.stdout, b"x");
+    }
+
+    struct Seen(Arc<Mutex<Vec<Update>>>);
+
+    impl Indicator for Seen {
+        fn set(&self, update: &Update) {
+            self.0.lock().unwrap().push(update.clone());
+        }
+        fn message(&self, _: &str) {}
+        fn suspend(&self, f: &mut dyn FnMut()) {
+            f();
+        }
+        fn finish(&self) {
+            self.0.lock().unwrap().push(Update {
+                pos: u64::MAX,
+                total: None,
+                unit: Unit::Items,
+                msg: None,
+            });
+        }
+    }
+
+    #[test]
+    fn a_batch_counts_finished_items_and_names_the_running_one() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let mut batch = Batch::new(Box::new(Seen(seen.clone())), 2, Unit::Items);
+        assert_eq!((batch.position(), batch.total()), (0, 2));
+        batch.step("a");
+        assert_eq!(batch.position(), 0);
+        batch.step("b");
+        assert_eq!(batch.position(), 1);
+        batch.finish();
+        let got: Vec<_> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|u| (u.pos, u.total, u.msg.clone()))
+            .collect();
+        let want = [
+            (0, Some(2), Some("a")),
+            (1, Some(2), Some("b")),
+            (2, Some(2), None),
+            (u64::MAX, None, None),
+        ];
+        let want: Vec<_> = want
+            .map(|(p, t, m)| (p, t, m.map(String::from)))
+            .into_iter()
+            .collect();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn a_batch_never_counts_past_its_total_and_a_hidden_one_draws_nothing() {
+        let mut batch = Batch::new(Box::new(Hidden), 1, Unit::Items);
+        for item in ["a", "b", "c"] {
+            batch.step(item);
+        }
+        assert_eq!(batch.position(), 1);
+        batch.finish();
+        // Under test stderr is not a terminal, so the runner's own pick is Hidden too.
+        ProgressRunner::batch("x…", 3, Unit::Items).finish();
+    }
+
+    #[test]
+    fn a_batch_bar_and_a_command_spinner_share_one_target() {
+        let multi =
+            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden());
+        let bar = TtyIndicator::bar(&multi, "removing…", 3, Unit::Items);
+        let spinner = TtyIndicator::new(&multi, "git…");
+        bar.set(&Update {
+            pos: 1,
+            total: Some(3),
+            unit: Unit::Items,
+            msg: Some("x".into()),
+        });
+        spinner.finish();
+        bar.finish();
+    }
+
+    #[test]
+    fn a_callback_reads_both_streams_and_can_end_the_spinner_phase() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        let cb = move |s: Stream, line: &str| {
+            log.lock().unwrap().push((s, line.to_string()));
+            None
+        };
+        let done = sh("printf 'one\\n'; printf 'two\\n' >&2")
+            .progress(Progress::Callback(Box::new(cb)))
+            .run()
+            .unwrap();
+        assert_eq!(
+            (done.stdout.as_slice(), done.stderr.as_slice()),
+            (&b"one\n"[..], &b"two\n"[..])
+        );
+        let mut got = seen.lock().unwrap().clone();
+        got.sort_by_key(|(_, l)| l.clone());
+        assert_eq!(
+            got,
+            [
+                (Stream::Stdout, "one".to_string()),
+                (Stream::Stderr, "two".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn the_cmd_host_wraps_npm_shims_not_exes() {
+        assert!(needs_cmd_host("npx"));
+        assert!(needs_cmd_host("uvx"));
+        assert!(needs_cmd_host(r"C:\Program Files\nodejs\npx.cmd"));
+        assert!(needs_cmd_host("tool.bat"));
+        assert!(!needs_cmd_host("rtok.exe"));
+        assert!(!needs_cmd_host(r"C:\Users\u\.ketch\bin\rtok.exe"));
+        assert!(!needs_cmd_host("/usr/bin/uvx"));
+    }
+
+    #[test]
+    fn the_cmd_host_command_keeps_args_directory_and_environment() {
+        let mut old = Command::new("npx");
+        old.args(["-y", "pkg"]).current_dir("/tmp").env("A", "1");
+        old.env_remove("B");
+        let new = via_cmd_host(&old);
+        assert_eq!(new.get_program(), "cmd.exe");
+        let args: Vec<_> = new.get_args().collect();
+        assert_eq!(args, ["/D", "/C", "npx", "-y", "pkg"]);
+        assert_eq!(new.get_current_dir(), Some(Path::new("/tmp")));
+        let envs: Vec<_> = new.get_envs().collect();
+        assert_eq!(
+            envs,
+            [
+                (OsStr::new("A"), Some(OsStr::new("1"))),
+                (OsStr::new("B"), None)
+            ]
+        );
+    }
+
+    #[test]
+    fn the_shim_is_a_no_op_off_windows() {
+        let got = ProgressRunner::quiet("sh", ["-c", "cat; printf ok"])
+            .windows_shim()
+            .stdin(Stdio::null())
+            .run()
+            .unwrap();
+        assert_eq!(got.stdout, b"ok");
     }
 }

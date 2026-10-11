@@ -33,13 +33,22 @@ pub(crate) fn shown(stderr_is_tty: bool, disabled: bool, env: Option<&str>) -> b
 
 /// The indicator for a command labelled `label`: drawn on a terminal, otherwise [`Hidden`].
 pub(crate) fn pick(label: &str) -> Box<dyn Indicator> {
+    pick_with(|multi| TtyIndicator::new(multi, label))
+}
+
+/// Like [`pick`], for a bar over `total` items that is a bar from the first draw.
+pub(crate) fn pick_bar(label: &str, total: u64, unit: Unit) -> Box<dyn Indicator> {
+    pick_with(|multi| TtyIndicator::bar(multi, label, total, unit))
+}
+
+fn pick_with(make: impl FnOnce(&MultiProgress) -> TtyIndicator) -> Box<dyn Indicator> {
     let env = std::env::var("RTOK_NO_PROGRESS").ok();
     if shown(
         std::io::stderr().is_terminal(),
         OFF.load(Ordering::Relaxed),
         env.as_deref(),
     ) {
-        Box::new(TtyIndicator::new(&MULTI, label))
+        Box::new(make(&MULTI))
     } else {
         Box::new(Hidden)
     }
@@ -83,6 +92,21 @@ impl TtyIndicator {
             bar,
             label: label.to_string(),
             unit: Mutex::new(None),
+        }
+    }
+
+    /// A bar over `total` items. Added to `multi` before any command's spinner, so it stays on
+    /// top of the spinners of the commands run for each item.
+    pub fn bar(multi: &MultiProgress, label: &str, total: u64, unit: Unit) -> Self {
+        let bar = multi.add(ProgressBar::new(total));
+        bar.set_style(bar_style(unit));
+        bar.set_message(label.to_string());
+        bar.enable_steady_tick(Duration::from_millis(120));
+        Self {
+            multi: multi.clone(),
+            bar,
+            label: label.to_string(),
+            unit: Mutex::new(Some(unit)),
         }
     }
 }
@@ -176,6 +200,22 @@ mod tests {
         assert_eq!((ind.bar.position(), ind.bar.length()), (3, Some(10)));
         ind.finish();
         assert!(ind.bar.is_finished());
+    }
+
+    #[test]
+    fn a_bar_has_its_total_before_the_first_update() {
+        let ind = TtyIndicator::bar(&hidden_multi(), "removing…", 4, Unit::Items);
+        assert_eq!((ind.bar.position(), ind.bar.length()), (0, Some(4)));
+        ind.set(&Update {
+            pos: 2,
+            total: Some(4),
+            unit: Unit::Items,
+            msg: Some("two".into()),
+        });
+        assert_eq!(
+            (ind.bar.position(), ind.bar.message().as_str()),
+            (2, "removing… two")
+        );
     }
 
     #[test]
