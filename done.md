@@ -1,5 +1,26 @@
 # rtok — completed tasks
 
+### T561. Audit project references, memory packing/sync/files, and CLI data boundaries
+
+Review `src/project/refs.rs` and its language-specific resolvers; `src/plugins/memory/{pack,sync,files}.rs`; and the CLI entrypoints that accept or emit project, reference, note, and file data. Read `src/plugins/memory/AGENTS.md` and its `PLAN.md` first. T538/T539 already cover import hash reservation and revise project scope; do not repeat the previously reviewed save/import/revise paths. This is a source audit and docs-only claim: do not change product code or copy real user/host data.
+
+Execution plan:
+
+1. Trace reference discovery and resolution across Cargo, Go, npm and Python, including relative paths, project roots, malformed inputs and missing-file behavior.
+2. Trace `memory pack`, sync and note-file linking through their CLI/MCP/store boundaries; check project scoping, path normalization, size/budget limits, stale state and error/fail-open behavior.
+3. Review CLI parsing and serialization for these data paths, compare each concrete candidate against active, roadmap, done and idea entries, then file only distinct source-confirmed fixes with reproduction, implementation steps and checks; sync `todo.md`.
+
+Check: every filed issue has a source-backed trigger and deterministic fixture; no duplicate is added; no product files or real host data are changed; plan/todo stay synchronized; `git diff --check` and scoped `just check` pass.
+
+Result: reviewed Cargo/npm/pnpm/Go/Python reference resolvers, graph-follow consumption, memory packing and its MCP boundary, memory sync and its CLI/SDK write path, and note-file mention normalization. Filed six distinct defects T562–T567 with ordered fixes and acceptance checks. Compared related T69.6/T460/T374/T452/T329.7 and active/roadmap/idea entries. A recursive-glob fixture also reproduced the one-level limitation already acknowledged by completed T329.7; it was deliberately not filed as a new finding. No product code, dependencies or ideas were changed.
+
+Evidence revision: `c1f6ac06b5891f592f7da29449be3877a5d38305` (product source unchanged from `0b14b88e`). An offline Rust harness compiled the actual pack module and reference resolvers, plus verbatim sync and path helpers. It reproduced the basename digest collision, marker-title round-trip failure, a budget-2 pack costing 4 tokens after rendering, hidden/dot-relative path loss and wrong-sibling association, and external references contributed by an excluded pnpm member. An invalid-UTF-8 read/splice fixture demonstrated preparation of replacement text without the original outside bytes; inspection of SDK backup/write established that existing file UTF-8 is not validated there. No live CLI overwrite, store integration, real agent or graph-registration run was performed; those regressions belong to the fix cards. Initial harness compilation failed on module resolution and a scratch SHA formatter; after fixing only that harness plumbing, all seven probes passed.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` passed for the documentation-only diff (no repository Cargo tests selected); `git diff --check` passed. New source links resolve; the active table and todo have matching unique identities. This pass extends audit coverage without claiming exhaustive verification of every module or platform.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
 ### T554. Audit archive, compression, JSON and guard edges
 
 Review source paths not yet covered in `archive`, `compress`, `json_tree`, `toon` and `guard`. Read each plugin's local `AGENTS.md` and `PLAN.md` first (the compression module has no `AGENTS.md`); compare concrete candidates with active, roadmap, done and idea entries before filing. Preserve the shared main checkout's dirty T522–T527 changes. This is a source audit and docs-only task.

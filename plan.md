@@ -109,6 +109,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T558 | todo | P2 | 2 | 0% | |
 | T559 | todo | P2 | 2 | 0% | |
 | T560 | todo | P3 | 2 | 0% | |
+| T562 | todo | P1 | 2 | 0% | |
+| T563 | todo | P2 | 2 | 0% | |
+| T564 | todo | P2 | 2 | 0% | |
+| T565 | todo | P2 | 3 | 0% | |
+| T566 | todo | P2 | 2 | 0% | |
+| T567 | todo | P2 | 2 | 0% | |
 
 
 
@@ -397,6 +403,79 @@ Execution plan:
 3. Add generated round-trip coverage combining commas, quotes, backslashes, control characters, empty strings and scalar-looking strings, and check declared row/column counts.
 
 Check: decode(encode(table)) equals the original for all accepted generated fixtures, valid comma cells pass, malformed rows are rejected, and `just check` passes. This is a P3 test-quality defect.
+
+
+### T562. Abort memory sync when an existing host file cannot be read
+
+Source-confirmed: [sync read](src/plugins/memory/sync.rs#L119) uses read_to_string(...).unwrap_or_default(), treating every read error as an empty file. An existing CLAUDE.md containing an invalid UTF-8 byte therefore bypasses the managed-block guard; a normal sync prepares only the new memory block and [backs up and overwrites](src/plugins/memory/sync.rs#L138) the original, losing all outside content from the active host file. A backup does not make this replacement correct. A missing file is the only read failure that should enter the create path.
+
+Execution plan:
+
+1. Add a scratch host-file fixture with ordinary outside text and an invalid UTF-8 byte; assert sync fails and preserves the original bytes and stored digest.
+2. Handle NotFound explicitly as a new file; propagate all other read failures before rendering, backups, writes or digest updates.
+3. Cover unreadable files where permissions allow a reliable fixture, dry-run/remove/force variants, and successful creation of a genuinely missing file.
+
+Check: failed reads never replace or remove host content or change sync metadata; existing valid managed-block behavior and `just check` pass. The isolated read/splice probe establishes the lossy replacement text; the live CLI write regression remains part of this fix.
+
+### T563. Key memory-sync protection by the complete destination path
+
+Source-confirmed: [kv_key](src/plugins/memory/sync.rs#L28) stores a block digest under `memory.sync.sha:<basename>`. Sync A/CLAUDE.md with one note set, then B/CLAUDE.md with another, using the same store. The second sync replaces the first file's digest. Re-syncing unchanged A now [fails as hand-edited](src/plugins/memory/sync.rs#L93); removing B also deletes the shared guard state. T69.6 established the hand-edit guard but does not cover this cross-file identity collision.
+
+Execution plan:
+
+1. Add a two-directory fixture sharing one store; sync different blocks and verify each file can be re-synced without force.
+2. Derive the state key from a stable normalized absolute destination identity, consistently handling aliases and not falling back to another file's basename digest.
+3. Cover removal of either destination, same-file relative/absolute spellings and legacy-key handling without falsely trusting unrelated host content.
+
+Check: one destination's sync/removal cannot invalidate another's protection; genuine hand edits still require force; `just check` passes.
+
+### T564. Keep memory-sync note titles from becoming block delimiters
+
+Source-confirmed: [render](src/plugins/memory/sync.rs#L36) interpolates saved titles verbatim between its markers; [mem_save](src/plugins/memory/mod.rs#L420) accepts nonempty titles containing those markers. A title containing `<!-- /rtok:memory -->` creates an early END. The whole rendered block is hashed when saved, but [block_range](src/plugins/memory/sync.rs#L53) stops at the title's END: the next ordinary sync rejects its own unchanged output as hand-edited. A forced sync leaves the old title tail and actual closing marker behind. A title containing START instead makes the generated file look like multiple blocks.
+
+Execution plan:
+
+1. Add render/save/resync fixtures with START, END and multiline titles; demonstrate rejection of an unchanged generated block and the leftover tail after force.
+2. Encode titles in the host-file presentation so they cannot emit structural markers; preserve the stored note title and define a deterministic single-line representation.
+3. Validate generated block structure before writing and cover repeat sync, remove, force, budget accounting and preservation of bytes outside the genuine block.
+
+Check: generated output has exactly one structural marker pair, normal repeated sync succeeds, and force/remove leave no generated tail; `just check` passes.
+
+### T565. Include serialized metadata and separators in mem_pack's budget
+
+Source-confirmed: [pack_notes](src/plugins/memory/pack.rs#L104) budgets tier text and a fixed separator cost, but [render](src/plugins/memory/pack.rs#L256) adds an id/tier header and separators afterwards. [mem_pack](src/plugins/memory/mod.rs#L461) returns that larger string without enforcing max_tokens again, contrary to the memory plugin invariant. With the four-characters-per-token estimator, hit (1, "a", "b"), no body and max_tokens=2, the pack reports 2 used tokens while the rendered text "1\tabstract\n1 a\nb" costs 4. T460 covers tier selection, not final serialization overhead.
+
+Execution plan:
+
+1. Add the minimal budget-2 fixture and multi-note cases asserting the estimate of the complete returned string stays within the requested effective budget.
+2. Budget the same serialized representation that will be returned, including headers, newlines and separators, when admitting or deepening entries.
+3. Derive used_tokens from the final representation; cover all tiers, Unicode, estimator settings and budgets too small for even one complete entry.
+
+Check: estimate(render(pack)) <= max_tokens for every fixture, used_tokens agrees with the returned payload, note entries remain complete, and `just check` passes.
+
+### T566. Preserve leading dots in memory note-file mentions
+
+Source-confirmed: [clean](src/plugins/memory/files.rs#L56) strips periods from both ends of a path token. ".env" becomes "env" and is discarded by [mentioned](src/plugins/memory/files.rs#L95); "./src/lib.rs" becomes "/src/lib.rs" and is rejected as outside the fixture root. Worse, ".config/file" becomes "config/file" and links the wrong existing sibling if both exist. This affects note linking and prompt-driven recall. T374/T452 specify those features but do not track this normalization defect.
+
+Execution plan:
+
+1. Create existing .env, src/lib.rs, .config/file and config/file fixtures; assert hidden and dot-relative mentions resolve to the named file only.
+2. Separate prose punctuation handling from path syntax so leading dots and dot-relative prefixes survive; preserve existing root confinement and position-suffix handling.
+3. Cover Markdown/backtick mentions, trailing punctuation, line ranges, hidden-directory collisions and traversal rejection in both note linking and prompt recall.
+
+Check: no-dot siblings are never substituted for explicitly named dot paths, valid mentions remain root-relative, outside paths stay excluded, and `just check` passes.
+
+### T567. Apply negative pnpm workspace patterns before reading members
+
+Source-confirmed: [members](src/project/refs.rs#L122) discards patterns beginning with ! instead of subtracting their matches. With packages/* and !packages/skip, an excluded packages/skip/package.json is still read by [npm discovery](src/project/refs/npm.rs#L44); its external file: dependency is returned and can be automatically registered by graph following. The [pnpm packages specification](https://pnpm.io/settings#packages) explicitly supports negative exclusions. This reproduces with single-level globs, independently of the recursive-glob limitation already acknowledged by T329.7.
+
+Execution plan:
+
+1. Add included and excluded sibling packages with distinct external dependencies; verify discovery returns only the included package's dependency.
+2. Apply negative pnpm patterns to the selected member set before recording members or reading their dependencies, following pnpm semantics rather than silently dropping exclusions.
+3. Cover multiple positives/negatives, overlapping patterns, nested exclusions and root-package inclusion; keep behavior of other manifest formats explicit.
+
+Check: excluded members contribute neither references nor missing-reference warnings/auto-projects, included members still resolve, and `just check` passes.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

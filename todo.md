@@ -25,6 +25,12 @@
 - T558. Fail open for a sole skill installation scoped to another project
 - T559. Recognize YAML-quoted host keys before digesting skills
 - T560. Make the TOON test decoder handle quoted comma cells
+- T562. Abort memory sync when an existing host file cannot be read
+- T563. Key memory-sync protection by the complete destination path
+- T564. Keep memory-sync note titles from becoming block delimiters
+- T565. Include serialized metadata and separators in mem_pack's budget
+- T566. Preserve leading dots in memory note-file mentions
+- T567. Apply negative pnpm workspace patterns before reading members
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
