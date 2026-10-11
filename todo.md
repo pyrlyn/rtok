@@ -58,6 +58,7 @@
 - T608. Preserve identifier and path suffixes in prose word stripping
 - T609. Preserve code inside longer Markdown backtick fences
 - T611. Decode serialized Copilot tool arguments before hook dispatch
+- T613. Attach sub-agents when their main agent is registered later
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

@@ -139,6 +139,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T608 | todo | P3 | 3 | 0% | |
 | T609 | todo | P3 | 3 | 0% | |
 | T611 | todo | P2 | 3 | 0% | |
+| T613 | todo | P2 | 3 | 0% | |
 
 
 
@@ -756,6 +757,21 @@ Execution plan:
 4. Retain malformed-string, absent-argument and already-normalized controls, cover the installed Copilot event spellings, then run focused hook/guard tests and `just check`.
 
 Check: equivalent documented string and supported object payloads reach consumers with equivalent argument objects. The isolated executable compiled the actual HookInput struct/serde, Copilot adapter and naming helpers, main-argument reader, and Read cache-key branch. The unused Bash-only key helpers were panic-only stubs and were never called. No real Copilot process, complete hook dispatch, persistent store or end-to-end guard denial was exercised; those effects were source-traced, with integration tests prescribed above.
+
+### T613. Attach sub-agents when their main agent is registered later
+
+Confirmed on `2d91199fdb507af71eedbcf1b7ed127a06b39784` using the actual in-memory Store. Register a sub-agent with `register_agent(host, session, Some("sub-1"), ...)` before that session's main row, then register the main agent and repeat the sub-agent registration. [register_agent](crates/rtok-store/src/agents.rs#L202) initially obtains no parent from `main_agent_id`, inserts `parent_id = NULL`, and its conflict-update fields never repair that parent. The repeated call returns the same sub-agent id but leaves it unattached; `agent_children(main)` is empty. Hook dispatch directly passes the input's sub-agent key to this method, so the first observed event of a session being a sub-agent event is not rejected or repaired by the caller.
+
+The broken relation also affects [session_views](src/model/agents.rs#L73). Both rows become roots, and the first root matching the host/session is selected as the session's main agent. The probe registered the child more than one second earlier to make the store's ordering deterministic: `agents_of_sessions` returned it first, and the actual model selected it instead of the real main row. This can display the wrong agent identity/activity/state and omit the intended child relationship. T282's existing parent test registers the main row first; T284 covers ordinary nesting, and T324 covers revival on repeat registration. None covers a late main row repairing an existing child.
+
+Execution plan:
+
+1. Add store regressions for sub-agent-first registration, subsequent main registration and child re-registration. Assert stable ids, exactly one main row and correct `parent_id`/`agent_children` results. Retain the main-first control and isolate host/session identities.
+2. Establish the parent relation in the registry layer for either arrival order. Ensure or reconcile the main row and repair existing unparented sub-agent rows through typed Diesel operations, without changing a legitimate relationship or clearing activity/status fields. Make the operation safe under concurrent registrations and partial failures.
+3. Add model and hook-dispatch regressions for a first observed sub-agent event followed by a main event. Assert that the true main agent is selected and the child is nested; include ended/live filtering so an orphan's state cannot hide or mislabel the session. Preserve same-id repeat behavior and existing T324 revival semantics.
+4. Cover pre-existing orphan rows through the chosen reconciliation path without requiring their ids to change. Run focused store/agent/model/hook tests and `just check`.
+
+Check: event arrival order no longer changes parentage or which agent represents the session. The isolated executable linked the actual `rtok-store` crate, used its in-memory migrations and public methods, imported actual agent-view types and compiled the production pure model functions. The two orders and repeated-registration controls were executed without raw SQL or mocked store behavior. SessionTotals were synthetic; full CLI output, live hosts, real agents and concurrent OS processes were not exercised.
 
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 
