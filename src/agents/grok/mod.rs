@@ -16,10 +16,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{KETCH_INSTALL, NO_CHANGES};
+use rtok_mcp::spec::{EntryShape, Format as McpFormat, McpSpec};
 use serde_json::{Value, json};
-use toml_edit::{DocumentMut, Item, Table, value};
+use toml_edit::{DocumentMut, Item};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply, rtok_command};
+use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
 
 /// Grok Build: one CLI (`grok` on PATH, or the binary under `~/.grok` / `GROK_HOME`).
@@ -214,31 +215,29 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
             NO_CHANGES.into()
         });
     }
-    let path = &cfg.setup.grok.config_path;
-    let mut doc = load(path)?;
-    let servers = doc
-        .entry("mcp_servers")
-        .or_insert_with(|| Table::new().into())
-        .as_table_mut()
-        .ok_or_else(|| anyhow::anyhow!("mcp_servers is not a table"))?;
+    let spec = mcp_spec(cfg);
     // An entry that is there stays, except the one an earlier rtok wrote without `--host`
-    // (T283.2): that exact shape is upgraded, a user's own edit is not touched.
-    if let Some(have) = servers.get("rtok")
+    // (T283.2): that exact shape is upgraded, a user's own edit is not touched. `rtok_mcp`
+    // rewrites any entry that differs, so this guard is Grok's own policy, ahead of it.
+    let doc = load(&spec.config_path)?;
+    if let Some(have) = doc.get("mcp_servers").and_then(|s| s.get("rtok"))
         && !is_legacy_entry(have)
     {
         return Ok(NO_CHANGES.into());
     }
-    let mut entry = Table::new();
-    entry.insert("command", value(rtok_command()));
-    entry.insert(
-        "args",
-        value(toml_edit::Array::from_iter(super::mcp_args("grok"))),
-    );
-    servers.insert("rtok", entry.into());
-    let summary = super::mcp_summary(&rtok_command(), "grok");
-    let report = format!("mcp_servers.rtok: {summary}");
-    rtok_agent_sdk::write(&apply(cfg), path, &doc.to_string(), &report)?;
-    Ok(report)
+    super::mcp::install(cfg, &spec)
+}
+
+/// Grok's `[mcp_servers.rtok] = {command, args}` in `config.toml`, as `rtok_mcp` reads it
+/// (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::host_spec(
+        "grok",
+        cfg.setup.grok.config_path.clone(),
+        "mcp_servers",
+        McpFormat::Toml,
+        EntryShape::Command,
+    )
 }
 
 /// True for `[mcp_servers.rtok]` as rtok wrote it before `--host` joined the entry: the rtok
@@ -251,45 +250,11 @@ fn is_legacy_entry(item: &Item) -> bool {
         && have.get("args") == Some(&json!(["mcp"]))
 }
 
-/// The `[mcp_servers.rtok]` table [`register_mcp`] writes, as JSON: the shape
-/// [`rtok_agent_sdk::judge_owned`] compares a live table against (T246.5). `cmd` only stands in
-/// for the comparison — `judge_owned` treats every rtok binary string as the same one, so the
-/// literal command never matters.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("grok")})
-}
-
-/// Take back the `rtok` slot only as far as rtok wrote it: [`rtok_agent_sdk::judge_owned`]
-/// (T246, T246.5) leaves a slot that does not run the rtok binary, or one the user changed
-/// from [`mcp_entry`] unless `--yes` says remove. A missing slot is already the goal.
+/// Take the `rtok` slot back only as far as rtok wrote it ([`rtok_agent_sdk::judge_owned`],
+/// T246, T246.5): a slot that does not run the rtok binary, or one the user changed, stays
+/// unless `--yes` says remove. A missing slot is already the goal.
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    let path = &cfg.setup.grok.config_path;
-    let mut doc = load(path)?;
-    let have = doc
-        .get("mcp_servers")
-        .and_then(|s| s.get("rtok"))
-        .map(super::mcp::toml_item_to_json);
-    let Some(have) = have else {
-        return Ok(NO_CHANGES.into());
-    };
-    let at = format!("mcp_servers.rtok in {}", path.display());
-    if let Some(leave) = rtok_agent_sdk::judge_owned(
-        &apply(cfg),
-        &at,
-        &have,
-        &mcp_entry("rtok"),
-        super::is_rtok_bin,
-    ) {
-        return Ok(leave);
-    }
-    let Some(servers) = doc.get_mut("mcp_servers").and_then(|s| s.as_table_mut()) else {
-        return Ok(NO_CHANGES.into());
-    };
-    if servers.remove("rtok").is_none() {
-        return Ok(NO_CHANGES.into());
-    }
-    rtok_agent_sdk::write(&apply(cfg), path, &doc.to_string(), "- mcp_servers.rtok")?;
-    Ok("- mcp_servers.rtok".into())
+    super::mcp::remove(cfg, &mcp_spec(cfg))
 }
 
 fn load(path: &Path) -> Result<DocumentMut> {
