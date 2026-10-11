@@ -232,6 +232,8 @@ jobs:
           path: target/vitest
           key: vitest-${{ runner.os }}-${{ hashFiles('mise.toml', 'vitest.config.mjs', 'plugins/**/*.ts') }}
           restore-keys: vitest-${{ runner.os }}-
+      # tests/deps.rs runs `cargo metadata --offline`; nothing was built here, so fetch the crates.
+      - run: mise exec -- cargo fetch --locked
       - uses: actions/download-artifact@v8
         with:
           name: nextest-archive-${{ matrix.os }}
@@ -321,6 +323,8 @@ jobs:
         with:
           path: ${{ steps.rustup.outputs.path }}
           key: ${{ steps.rustup.outputs.key }}
+      # tests/deps.rs runs `cargo metadata --offline`; nothing was built here, so fetch the crates.
+      - run: mise exec -- cargo fetch --locked
       - uses: actions/download-artifact@v8
         with:
           name: nextest-archive-windows
