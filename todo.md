@@ -68,3 +68,9 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T521. MiMo Desktop variant of the `mimo` host
+- T522. `read` and `expand` accept the line ranges agents sent this week
+- T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
+- T524. Worktree `--idle` accepts `30m` and `0s`
+- T525. SubagentStart and PreCompact under the 10 ms hook budget
+- T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
+- T527. A worktree claim does not stay held by an agent idle for days
