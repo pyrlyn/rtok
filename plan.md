@@ -48,7 +48,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
-| T385.10 | todo | P3 | 4 | 10% | |
 | T385.11 | todo | P3 | 4 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
@@ -909,12 +908,6 @@ Check: one dated `research.md` row per setting.
 optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
 
 Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
-
-### T385.10. Routing for `internal` and `bulk` calls
-
-optimization.md §4.2 (D9, I-101). Route `internal` and opted-in `bulk` calls to a cheaper model or provider per the policy table; the `agent` lane is not routed.
-
-Check: dollars per lane before/after from `stats --price` on fixtures; `just check`.
 
 ### T385.11. Deferred tool schemas and thinking replay
 

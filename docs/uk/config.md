@@ -229,7 +229,20 @@ on_429              = "none"          # Flex has no capacity: none = the 429 goe
 retries             = 3               # backoff only: retries before giving up; at most 5
 backoff_ms          = 1000            # backoff only: delay before the first retry, doubled each time, capped at 30 s; a 429's Retry-After (seconds) can lengthen it, up to that cap
 
-[proxy.routing]                       # ключів ще немає (D9)
+[proxy.routing]                       # model routing; only the internal and bulk lanes, never the agent lane
+enabled             = false           # off: every call keeps the model the client sent
+
+[proxy.routing.bulk]                  # one rule per lane; it acts only with from, to and gate all set
+from                = []              # request models it applies to: an exact id or a prefix ending in * (empty = off)
+to                  = ""              # the model that serves a matching call (empty = off)
+provider            = ""              # provider slug recorded for a routed call (empty = the wire's own); pair with [proxy.lanes.<lane>] upstream
+gate                = ""              # where the quality bench for this swap is kept (a path, URL or run id); empty = off
+
+[proxy.routing.internal]              # same keys as bulk (rtok's own model calls)
+from                = []
+to                  = ""
+provider            = ""
+gate                = ""
 
 [web]                                 # rtok web (ті самі дані, що й у rtok tui)
 host = "127.0.0.1"                    # --host
@@ -662,8 +675,7 @@ bulk заповнює лише свою смугу й ніколи не затр
 `upstream`: створення, опитування й результати Batch-задачі завжди йдуть до провайдера, якому
 вона належить.
 
-Маршрутизації тут поки немає: вона з'явиться в цій таблиці власним кроком (`[proxy.routing]`
-нижче). Смуга `agent` не має перемикача `flex`: живий хід не змінює рівень, доки клієнт сам
+Смуга `agent` не має перемикача `flex`: живий хід не змінює рівень, доки клієнт сам
 його не попросить.
 
 ### `[proxy.batch]`
@@ -719,27 +731,52 @@ force = false
 on_429 = "backoff"
 ```
 
-### `[proxy.routing]` — заплановано (див. `docs/batch-flex.md`)
+### `[proxy.routing]`
 
-Таблиця існує і порожня: ключів поки немає. Ключі нижче — **задумані**; додавання будь-якого з них
-до робочого файлу конфігурації й надалі не проходить `rtok config validate`, доки не з'явиться
-відповідний крок. Переписування для маршрутизації — це майбутня робота над `prepare` / політиками.
-Повна семантика: [`docs/batch-flex.md`](batch-flex.md).
+Маршрутизація моделей (D9) переводить виклик на дешевшу модель, і лише там, де ризик для якості
+мінімальний: власні виклики rtok у смузі `internal` та смуга `bulk`, увімкнена явно
+(`docs/research/optimization.md` §4.2). Смуга `agent` не маршрутизується ніколи: живий хід іде
+на моделі, яку обрав оператор. `batch` і `files` теж ніколи не переписуються. Типово вимкнено,
+правил у поставці немає.
 
-#### `[proxy.routing]`
+| Ключ | Тип | Типово | Значення |
+|-----|------|---------|---------|
+| `enabled` | bool | `false` | Головний перемикач; вимкнений — кожен виклик іде на моделі, яку надіслав клієнт |
 
-| Ключ | Тип | Типово (задумано) | Значення |
-|-----|------|--------------------|---------|
-| `enabled` | bool | `false` | Маршрутизація моделей / рівнів (D9); вимкнено, доки немає політики + Check вимірювання |
-| `sticky` | bool | `true` | Віддавати перевагу одному upstream заради прив'язки кешу промптів провайдера (I-84); не стосується Batch проти Flex |
-| `default_model` | string | `""` | Порожньо = лишити `model` клієнта; інакше — запасна ціль переписування |
+У `[proxy.routing.bulk]` та `[proxy.routing.internal]` лежить по одному правилу. Правило працює,
+лише коли задано всі чотири ключі нижче; недописане правило нічого не робить.
+
+| Ключ | Тип | Типово | Значення |
+|-----|------|---------|---------|
+| `from` | список рядків | `[]` | Моделі запиту, до яких застосовується правило: точний id або id із `*` наприкінці як префікс (`claude-opus-*`). Модель поза списком іде як є |
+| `to` | string | `""` | Модель, яка обслужить відповідний виклик |
+| `provider` | string | `""` | Slug провайдера, що записується для маршрутизованого виклику, якщо `to` живе не в провайдера wire; `""` = провайдер wire |
+| `gate` | string | `""` | Де зберігається бенч якості для цієї заміни (шлях, URL або id запуску) |
+
+`gate` — це контроль якості I-101. Чи достатньо добре відповідає дешева модель — результат бенчу,
+а не те, що проксі може побачити, тому rtok вимагає від оператора спершу прогнати бенч на
+реальному навантаженні смуги й назвати його тут; сам він його не читає й не оцінює. Без `gate`
+правило вимкнене.
+
+Замінюється лише JSON-поле `model` (тіло серіалізується знову); Gemini вказує модель у шляху,
+який маршрутизація не переписує, тож виклик Gemini не маршрутизується ніколи. Заміна відбувається
+до запису виклику, тож `calls` і `usage` називають модель, що обслужила виклик (і `provider`,
+якщо задано), `rtok stats --price` оцінює смугу за ціною цієї моделі, а рядок журналу виклику
+зберігає модель, яку просив клієнт. Кожен маршрутизований виклик отримує також рядок виміру
+`model_route`; заощадження токенів він не заявляє, бо заощадження — це долари: порівнюйте
+`cost by lane` з `rtok stats --price` на тому самому навантаженні з вимкненою та ввімкненою
+маршрутизацією. Правило між провайдерами поєднуйте з `[proxy.lanes.<lane>] upstream` для шлюзу,
+що обслуговує `to`; rtok не перекладає між wire, тож `to` має бути моделлю, яку приймає API цього
+wire.
 
 ```toml
-# Заплановано — сьогодні не завантажується
 [proxy.routing]
-enabled = false
-sticky = true
-default_model = ""
+enabled = true
+
+[proxy.routing.bulk]
+from = ["claude-sonnet-*"]
+to = "claude-haiku-4-5"
+gate = "bench/bulk-haiku-2026-10.md"
 ```
 
 ### Ціни для статистики (`[stats.prices]`)
@@ -758,7 +795,10 @@ default_model = ""
 а не бере стандартну ставку. Виклики, які провайдер повідомив як обслуговані на Flex (`service_tier` у відповіді, записується в
 `calls.service_tier`), виводяться під `<model>@flex` і рахуються так само. `rtok stats` і `rtok report` додають таблицю
 `lane/tier` з лічильниками кешу, коли трафік ішов поза смугою agent або на рівні, відмінному від `standard` / `default`;
-виклик, у відповіді якого рівень не названо, друкується з `-`.
+Коли трафік пішов поза смугою agent, `--price` друкує ще й `cost by lane` (у JSON — `cost.lanes`):
+долари кожної смуги, де кожен виклик оцінено за моделлю, записаною для нього, тож виклик, переведений
+[`[proxy.routing]`](#proxyrouting), оцінюється за моделлю, що його обслужила. `*` позначає смугу,
+де була й модель без рядка ціни, тож її сума — нижня оцінка.
 
 ### Хост WASM-плагінів (`[plugins.wasm]`)
 

@@ -31,7 +31,6 @@
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
-- T385.10. Routing for `internal` and `bulk` calls
 - T385.11. Deferred tool schemas and thinking replay
 - T394. Run the paid live benches and record them
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
