@@ -106,10 +106,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.50. Graph page: running labels with elapsed counters on the live canvas
-- T329.51. Graph page: maximise buttons for the two parts
-- T329.52. Graph page: metrics collapsed to a strip under 900 px
-- T329.53. Graph page: count-up animation of the live numbers
-- T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
@@ -121,7 +117,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T404. Evaluate a local draft model that the cloud model only verifies
 - T413. More agent hosts: popular agents rtok does not install into yet
 - T413.3. `rtok agents install droid` — Factory Droid
 - T413.4. `rtok agents install kiro` — Kiro IDE and CLI
@@ -139,10 +134,6 @@
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
-- T416.1. rtok renders previews through `change-preview`
-- T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
-- T416.3. `--stat` on the commands that show a diff
-- T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
@@ -154,3 +145,4 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
+- T561. TUI: folded-target counter in a one-project view

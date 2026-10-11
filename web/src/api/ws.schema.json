@@ -2133,6 +2133,12 @@
           "description": "Planned and not removed: the re-check refused it or the removal failed.",
           "type": "boolean"
         },
+        "files": {
+          "description": "Files in it, counted for a planned item before anything is removed.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
         "kind": {
           "type": "string"
         },
@@ -2164,6 +2170,7 @@
         "kind",
         "path",
         "bytes",
+        "files",
         "last_used",
         "reason",
         "planned",

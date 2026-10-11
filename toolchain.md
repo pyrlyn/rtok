@@ -92,6 +92,7 @@ Project programs and direct packages from the manifests.
 | assert_cmd | local | https://crates.io/crates/assert_cmd | CLI e2e tests |
 | axum | local | https://crates.io/crates/axum | Rust dependency |
 | base64 | local | https://crates.io/crates/base64 | T329.40: the graph page receives a PNG export inside a text frame |
+| change-preview | local | https://crates.io/crates/change-preview | Shared dry-run diff, colour and byte-size rendering (T416.1) |
 | clap | local | https://crates.io/crates/clap | CLI |
 | clap_complete | local | https://crates.io/crates/clap_complete | `rtok completions` shell scripts (T53.2) |
 | clap_mangen | local | https://crates.io/crates/clap_mangen | `rtok man` roff page (T53.2) |
@@ -142,7 +143,6 @@ Project programs and direct packages from the manifests.
 | serde_json | local | https://crates.io/crates/serde_json | JSON |
 | serde-saphyr | local | https://crates.io/crates/serde-saphyr | T329.7: `pnpm-workspace.yaml` of project references; maintained (serde_yaml is deprecated) |
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
-| similar | local | https://crates.io/crates/similar | Rust dependency |
 | subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | thiserror | local | https://crates.io/crates/thiserror | public error enums for `rtok-store` and `rtok-config` |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |

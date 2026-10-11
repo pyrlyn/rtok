@@ -2178,6 +2178,76 @@ Check: `npx vitest run --project storybook src/pages/GraphOverview.stories.tsx` 
 
 Result (2026-10-05, Claude Code / opus-5.5): one `READY = { timeout: 10_000 }` in `web/src/pages/GraphOverview.stories.tsx`, passed to every `findBy*`/`waitFor` in both play functions (the canvas-drawn wait drops its own 8 s). Before the click, "Webgl Draws And Click Selects" waits until `screenOf(2)` reads the same rounded pixel twice in a row, so the click lands on the sphere the layout and the camera fit already placed. Reproduced first: the full story suite failed 3 of 3 runs at load average 106-135 (both stories, 1013-1058 ms, `node-2d` and `graph-3d` not found); after the change the full suite passed 5 of 5 and the file alone 5 of 5 at load average 47-78 (lower than the failing runs, but inside the 15-250 band the flake was reported in). Fail-fast kept: with a wrong node count and a missing name the two stories fail at 10.0 s and 12.5 s instead of hanging. `just check`, `just spa-stories` and `just spa-e2e` green.
 
+### T416.1. rtok renders previews through `change-preview`
+
+Replace `render::unified_diff`, `render::file_diff`, `render::paint` and `info::human_bytes` with the crate (call sites: `config/mod.rs`, `config/validate.rs`, `plugins/memory/sync.rs`, `plugins/read/cache.rs`, `doctor/fix.rs`, `agents/mod.rs`, `agents/junk.rs`, `worktree/list.rs`, `worktree/clean.rs`). No output changes: the trycmd and installer tests stay byte-identical. Drop `similar` from `Cargo.toml` if nothing else uses it.
+
+Check: `just check` green with no expected-output file touched.
+
+Result: `src/diff.rs` and `bytes::human_bytes` are gone; `change_preview::{paint, unified_diff, human_bytes}` are called directly (config crate's private diff copy dropped too), `similar` left every `Cargo.toml`. `render::file_diff` stays as a three-line `paint(unified_diff(..))` because the crate has no one-call form. No expected-output file changed.
+
+### T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
+
+`worktree clean`, `worktree gc` and `agents junk clear` keep dry run as the default and gain `--dry-run` (the same thing, said explicitly; conflicts with `--yes`) and `--stat`. Both modes print one `- path  size  N files` line per path plus the totals line, because a removal's line already is its stat; `--stat` is accepted so every preview command takes the same flags. `junk::disk_usage_until` counts files next to bytes; `--json` gains `files`.
+
+Check: trycmd cases for each command in default, `--stat`, `--dry-run --yes` (rejected) and `--json`; `just check` green.
+
+Result: `worktree clean`, `worktree gc` and `agents junk clear` take `--dry-run` (conflicts with `--yes`) and `--stat`; both print one `- path  size  N files` line per path and the totals line through `change_preview` (`src/removal_preview.rs`). `junk::Usage` counts `files` next to `bytes`; `--json` gains `files` (and `bytes` on `worktree gc`). trycmd covers the `--dry-run --yes` rejection and the `junk clear` cases; default, `--stat` and the git-backed clean/gc output are asserted in `tests/worktree.rs`.
+
+
+### T416.3. `--stat` on the commands that show a diff
+
+`config init`, `config set`, `memory sync`, `agents install`, `agents uninstall`, `agents update` and `doctor --fix` gain `--stat`: the per-file stat lines and the totals line instead of the diff. The default `--dry-run` diff ends with the same totals line.
+
+Check: trycmd cases for `--dry-run` and `--dry-run --stat` on `config set` and one installer; `surface_parity` and `config_coverage` green; `just check` green.
+
+Result: `config init`, `config set`, `memory sync`, `agents install/uninstall/update` and `doctor --fix` take `--stat` (requires `--dry-run`, or `--fix` on `doctor`); every default `--dry-run` diff now ends with the totals line. `src/stat_preview.rs` counts the diff lines for `change_preview`. Installers show one stat row per host (the step lines carry no path). trycmd: `config-set-stat`; `tests/agents_install.rs` covers the installer case.
+
+
+### T416.4. `--dry-run` for the destructive commands without a preview
+
+`worktree remove` (the worktree path, its branch and its size and file count), `completions install` and `completions uninstall` (the file diff), `graph projects remove` and `graph projects unlink` (the rows that would go). Out of scope, because they are easy to undo or change no files: `memory pin/unpin/retire/revise`, `agents send/status`, `graph projects add/select/link`, `demon *`, `otel flush`.
+
+Check: a test per command that the dry run changes nothing and prints the preview; `just check` green.
+
+Result: `worktree remove --dry-run` (path, size, files, branch fate; every refusal still applies; `--json` gains `bytes`/`files`), `completions <shell> --install|--uninstall --dry-run` (file diff), `graph projects remove --dry-run` (root, index rows, indexed files, link counts) and `graph projects unlink --dry-run`. Tests in `tests/worktree.rs`, `tests/completions.rs`, `tests/graph_projects.rs` plus five trycmd cases.
+
+### T404. Evaluate a local draft model that the cloud model only verifies
+
+Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
+
+Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
+
+Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
+
+Result: closed with the finding, nothing built (`research.md` §38, sources checked 2026-10-11). Claude 4.6+ rejects a prefilled assistant message; OpenAI Predicted Outputs is unsupported with `tools`; 96 % of output is tool-call input, which a text draft cannot carry; the break-even needs an accept rate above 0.2 plus the verdict cost. Reopen only if a bench can show cost per passed task falling with the pass rate held. Not covered: Claude Code and Codex request paths, Ollama, any measured local-model pass rate.
+
+### T329.51. Graph page: maximise buttons for the two parts
+
+Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
+
+Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
+
+### T329.52. Graph page: metrics collapsed to a strip under 900 px
+
+Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
+
+Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
+
+### T329.53. Graph page: count-up animation of the live numbers
+
+Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
+
+Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
+
+### T500. TUI: live calls extras (sparklines, outside-scope mark; folded-target counter moved to T561)
+
+D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
+
+Depends on the T329.32 slice (done): the series is `CallsStore::spark(window, now)` in `src/web/calls_store.rs` (a `Spark { span_ms, calls, saved }` of `SPARK_SLOTS` = 30 slots, oldest first; "since open" covers the last 15 minutes, all the buckets keep). The page names the sparklines "calls over the last N min" and "tokens saved over the last N min" (N = `span_ms` in minutes) and puts them on its "calls" and "saved" cards. The "outside scope" mark is the text `outside scope` beside the project of a feed row whose project is not among the scope's project names; the scope is the project the page is drilled into, else the selected one, plus everything its links reach, and with no such project nothing is outside; a call with no project is never outside (the page's rule is `web/src/pages/graph3d/live/scope.ts`; the TUI needs its Rust equivalent over the registry rows, reusing `scopeOf` logic if one exists in Rust). The folded counter applies only in the one-project view when the cap left nodes out (`more` > 0): a call of the last 5 minutes (running or finished, not interrupted, in scope) whose target matches no drawn node counts on the drawn node whose path equals or is a directory prefix of the target (longest first), else on the "+N more" group; the page lists these as `{label} · {n} folded` under "folded calls". `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records the gap: it asserts the TUI pane lacks the wording, so T500 must turn it into a both-surface check.
+
+Check: the sparklines match the store buckets; an outside-scope call is marked; folded targets count on their nearest visible ancestor; `tests/surface_parity.rs` lists each item on both surfaces; `just check`.
+
 ### T427. The brand-copy test hashes only files whose size matches a brand file
 
 `web/src/brandSources.test.ts` hashes every file in `web/` and `brand/` (about 400 files, 5 MB). Run alone it takes about 2 s; in the parallel unit suite on a loaded host it took 16 to 68 s and failed the 5 s timeout. A copy of a brand file always has the same size, so only files whose size matches some brand file need a hash.
