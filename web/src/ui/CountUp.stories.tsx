@@ -28,7 +28,9 @@ type Story = StoryObj<typeof meta>;
 
 export const LandsOnTheServersValue: Story = {
     play: async ({ canvasElement }) => {
-        await waitFor(() => expect(within(canvasElement).getByRole("status")).toHaveTextContent("3,456"));
+        await waitFor(() =>
+            expect(within(canvasElement).getByRole("status")).toHaveTextContent("3,456"),
+        );
     },
 };
 
