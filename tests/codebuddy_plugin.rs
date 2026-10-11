@@ -4,7 +4,8 @@
 
 //! T560.1 + D21: the CodeBuddy Code / WorkBuddy plugin tree carries a `.codebuddy-plugin`
 //! manifest and marketplace, Claude-shaped `hooks/hooks.json` that run `rtok hook <Event> --host
-//! codebuddy`, and an `.mcp.json` for `rtok mcp --host codebuddy`. The installer is T560.2.
+//! codebuddy` (events per `hook_events`), and an `.mcp.json` for `rtok mcp --host codebuddy`.
+//! The installer is T560.2.
 
 use std::fs;
 use std::path::PathBuf;
@@ -51,38 +52,33 @@ fn mcp_json_runs_rtok_mcp_for_the_codebuddy_host() {
     );
 }
 
+/// The events and matchers themselves are held to `hook_events::HOOK_EVENTS` by
+/// `tests/hook_manifests.rs`; this pins the command chain and what the table cannot say.
 #[test]
-fn hooks_cover_the_five_events_and_all_name_the_codebuddy_host() {
+fn hooks_run_the_three_step_chain_with_the_codebuddy_host() {
     let doc = read("hooks/hooks.json");
     let hooks = doc["hooks"].as_object().unwrap();
-    let mut events: Vec<_> = hooks.keys().map(String::as_str).collect();
-    events.sort_unstable();
-    assert_eq!(
-        events,
-        [
-            "PostToolUse",
-            "PreToolUse",
-            "SessionStart",
-            "Stop",
-            "UserPromptSubmit"
-        ]
-    );
-    assert_eq!(
-        hooks["PreToolUse"][0]["matcher"],
-        "Bash|Read|Edit|Write|Grep|Glob"
+    let matchers: Vec<_> = hooks["PreToolUse"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["matcher"].as_str().unwrap())
+        .collect();
+    assert_eq!(matchers, ["Bash", "Read", "Skill"]);
+    assert!(
+        !hooks.contains_key("Stop"),
+        "rtok registers no Stop hook for Claude-shaped hosts"
     );
     for (event, entries) in hooks {
         let hook = &entries[0]["hooks"][0];
-        let cmd = hook["command"].as_str().unwrap();
-        assert!(
-            cmd.contains(&format!("rtok hook {event} --host codebuddy")),
-            "{event}: {cmd}"
-        );
-        assert!(
-            cmd.contains(&format!(
-                "\"${{CODEBUDDY_PLUGIN_ROOT}}/scripts/hook.sh\" {event}"
-            )),
-            "{event}: {cmd}"
+        assert_eq!(
+            hook["command"],
+            format!(
+                "command -v rtok-hook >/dev/null 2>&1 && exec rtok-hook {event} --host codebuddy; \
+                 command -v rtok >/dev/null 2>&1 && exec rtok hook {event} --host codebuddy; \
+                 exec \"${{CODEBUDDY_PLUGIN_ROOT}}/scripts/hook.sh\" {event}"
+            ),
+            "{event}"
         );
         assert_eq!(hook["type"], "command");
         assert_eq!(hook["timeout"], 5);
@@ -96,14 +92,21 @@ mod launcher {
     use std::path::Path;
     use std::process::Command;
 
-    /// A directory holding an `rtok` shim that prints its arguments.
-    fn shim_dir(name: &str) -> PathBuf {
+    /// A directory holding an `rtok` shim that prints its arguments, and an `rtok-hook` one
+    /// when `with_daemon_client` (it prefixes the output so the two are told apart).
+    fn shim_dir(name: &str, with_daemon_client: bool) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("rtok-t560-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        let shim = dir.join("rtok");
-        fs::write(&shim, "#!/bin/sh\necho \"$@\"\n").unwrap();
-        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+        let mut shims = vec![("rtok", "#!/bin/sh\necho \"$@\"\n")];
+        if with_daemon_client {
+            shims.push(("rtok-hook", "#!/bin/sh\necho \"rtok-hook $@\"\n"));
+        }
+        for (name, body) in shims {
+            let shim = dir.join(name);
+            fs::write(&shim, body).unwrap();
+            fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+        }
         dir
     }
 
@@ -122,16 +125,22 @@ mod launcher {
     }
 
     #[test]
-    fn every_hook_command_execs_rtok_with_the_codebuddy_host() {
-        let dir = shim_dir("path");
+    fn every_hook_command_prefers_rtok_hook_then_rtok() {
         let doc = read("hooks/hooks.json");
-        for (event, entries) in doc["hooks"].as_object().unwrap() {
-            let cmd = entries[0]["hooks"][0]["command"].as_str().unwrap();
-            let (ok, stdout) = run(cmd, &dir, &dir);
-            assert!(ok, "{event}");
-            assert_eq!(stdout.trim(), format!("hook {event} --host codebuddy"));
+        for (with_client, want) in [(true, "rtok-hook "), (false, "")] {
+            let dir = shim_dir(&format!("path{with_client}"), with_client);
+            for (event, entries) in doc["hooks"].as_object().unwrap() {
+                let cmd = entries[0]["hooks"][0]["command"].as_str().unwrap();
+                let (ok, stdout) = run(cmd, &dir, &dir);
+                assert!(ok, "{event}");
+                let rest = if with_client { "" } else { "hook " };
+                assert_eq!(
+                    stdout.trim(),
+                    format!("{want}{rest}{event} --host codebuddy")
+                );
+            }
+            let _ = fs::remove_dir_all(&dir);
         }
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -145,7 +154,7 @@ mod launcher {
             )
         };
 
-        let home = shim_dir("ketch");
+        let home = shim_dir("ketch", false);
         fs::create_dir_all(home.join(".ketch/bin")).unwrap();
         fs::rename(home.join("rtok"), home.join(".ketch/bin/rtok")).unwrap();
         assert_eq!(

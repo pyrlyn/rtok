@@ -17,9 +17,12 @@ Files:
   before `.workbuddy-plugin/` and `.claude-plugin/`, so this one directory serves both hosts.
 - `.codebuddy-plugin/marketplace.json` — this directory's own one-plugin marketplace (`rtok`,
   plugin `rtok`, source `./`).
-- `hooks/hooks.json` — `rtok hook <Event> --host codebuddy`, `timeout` 5 s: PreToolUse
-  (`Bash|Read|Edit|Write|Grep|Glob`), PostToolUse, SessionStart, UserPromptSubmit, Stop. The
-  command execs `rtok` from PATH and falls back to `scripts/hook.sh` only when PATH has none.
+- `hooks/hooks.json` — the rows `agents::hook_events` lists for `codebuddy` (checked by
+  `tests/hook_manifests.rs`): PreToolUse on `Bash`, `Read` and `Skill`, PostToolUse `*`,
+  UserPromptSubmit, SessionStart, PreCompact, PostCompact, SessionEnd; `timeout` 5 s. No
+  SubagentStart: CodeBuddy's hooks page only names it, with no input or output shape. The command
+  runs `rtok-hook` then `rtok hook` from PATH, each with `--host codebuddy`, and falls back to
+  `scripts/hook.sh` only when PATH has neither.
 - `scripts/hook.sh` — resolves `rtok` from PATH or the ketch store; a missing `rtok` fails the hook
   open (exit 0), printing `ketch install pyrlyn/rtok` once on SessionStart.
 - `.mcp.json` — `mcpServers.rtok` → `rtok mcp --host codebuddy`.
