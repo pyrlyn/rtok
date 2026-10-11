@@ -31,7 +31,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T276 | in progress | P2 | 5 | 0% | Claude Code / claude-opus-5-5 |
 | T277 | in progress | P2 | 5 | 20% | Claude Code / claude-opus-5-5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
-| T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
+| T279 | in progress | P1 | 5 | 92% | Claude Code / sonnet-5.5 |
+| T279.2 | in progress | P1 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T279.3 | todo | P2 | 3 | 0% | |
+| T279.4 | todo | P2 | 4 | 0% | |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T283 | in progress | P1 | 3 | 60% | Claude Code / sonnet-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
@@ -413,8 +416,34 @@ Execution plan:
 3. PR 3: `agents update` uses the decision; `--force`, `--dry-run`, `--source`, the legacy path, failure handling; integration tests in `tests/plugin_versions.rs` with a fake host CLI.
 4. PR 4: `docs/plugin-versions.md` with real command output, and its links (step 7).
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
+Progress (2026-10-11): the four Claude defects below are T279.2 (in progress); the `+g<sha>` write into the installed copy and the marketplace catalog read are T279.3; Codex, Copilot and Gemini are T279.4.
 Progress (2026-09-28): PRs 1-4 merged (docs: #465, today's behaviour). Open against this card, for the creator: the installed copy's `.rtok-plugin-version` is never read or written (`read_installed` and `VersionFile::write` are unused), so there is no legacy line from it; a missing `claude` on `PATH` prints "already current"; the dry-run reinstall wording differs from step 5; `--source local` fails from a release install; the marketplace source does not read the catalog. Only Claude is wired; Codex, Copilot and Gemini follow.
 
+
+### T279.2. Claude `agents update` reads the installed copy's version file and closes the four open defects
+
+Slice of T279 (D16). From the T279 progress note of 2026-09-28, the Claude-only defects still open on `main`:
+- the installed copy's `.rtok-plugin-version` is never read by `agents update` (`plugin_update` passes no file to `plugin_version::installed`), so a GitHub install that carries the file still compares against Claude's stale `0.0.1` record, and the `legacy install, update failed: …` line of step 4 does not exist;
+- a due update with `claude` missing from `PATH` prints `already current`;
+- `--dry-run --force` prints `offer … claude plugin uninstall …` instead of `would reinstall rtok@rtok from github v0.10.0 (forced)` (step 6);
+- `--source local` from a release install fails in `git describe` because the plugin tree is a copy, not a checkout.
+
+Execution plan (Claude Code / sonnet-5.5):
+1. `plugin_version::installed`: at the same release the receipt's `+g<sha>[.dirty]` string stands over the file's plain version (the committed file has no metadata, so a local build would otherwise read as different on every run); a file that moved on beats a stale receipt. `plugin_version::available`: a local tree without a git checkout uses the file's version with no metadata (fail open). Drop the stale `#[allow(dead_code)]` on `read_installed` (used by `agents outdated`).
+2. `plugin_install::install_probe`: a receipt row's `path` is used only when it is a directory (Claude's row names `installed_plugins.json`, a file); otherwise the host probe finds `installPath`.
+3. `claude::plugin_update`: read the installed copy through the probe and `read_installed` (a broken file reads as absent, never an error); wrap a failed update of a legacy install as `plugin rtok@rtok: legacy install, update failed: …`; `update_in_place` with no `claude` reports the failure instead of `NO_CHANGES`; the dry-run reinstall line follows the card.
+4. Tests: unit (`installed`, `available`, `legacy_failure`, `plugin_update` with a copy file, with a broken file, dry-run wordings) and `tests/plugin_versions.rs` (version file makes update a no-op, `--dry-run --force`, missing `claude`). Fail-first: the version-file and missing-`claude` tests fail on `main`.
+5. `docs/plugin-versions.md`: the version-file paragraph, the lookup order, the dry-run example, and the two troubleshooting entries that described these defects, with output copied from a run.
+
+Not in this slice: T279.3 and T279.4.
+
+### T279.3. Local installs write `+g<sha>[.dirty]` into the installed copy; the marketplace source reads the catalog
+
+Slice of T279 (D16), step 1 and step 2 of the card. After a local `claude plugin install`, rtok writes the installed copy's `.rtok-plugin-version` (`source: "local"`, version with build metadata, via `VersionFile::new`/`write`, today test-only) and the same string into the copy's manifest `version`, so a host that caches by version sees a new build. The marketplace source refreshes the host catalog and reads `plugins/claude/.rtok-plugin-version` from the refreshed checkout (`~/.claude/plugins/marketplaces/rtok/…`) instead of assuming the running version. Needs a decision on how Claude treats an edited manifest inside its cache, checked on a real install first.
+
+### T279.4. Codex, Copilot and Gemini follow Claude in `agents update`
+
+Slice of T279 (D16). Only Claude uses `decide`, `--force`, `--source` and the receipt in `agents update`; the other plugin hosts reinstall unconditionally. Wire Codex, Copilot and Gemini through a per-host lookup field next to `McpSpec` (installed copy's version file, host record, source detection, update and reinstall commands) with the same fake-host integration tests as Claude's. `agents outdated` already lists them through `plugin_install::install_probe`.
 
 ### T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 
