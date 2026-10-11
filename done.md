@@ -11451,3 +11451,18 @@ Result: `upsert_note` records the previous title and body in `note_versions` ins
 
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
+
+### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
+
+Plan: one `project::project_dir(cwd, extra)` helper — `cwd` when it lies in a git checkout, else the first `roots/list` client root that does, else a `no project root` error that says to pass a path or open a project (never git's `fatal: not a git repository`). MCP `worktree_list` lists that directory; a pathless `search` from an unwalkable cwd (`$HOME`, `/`) walks it. `walk_root_ok` shares the same wording.
+
+Check: MCP test with cwd outside any repository plus a `roots/list` root; the no-root error text; `just check`.
+
+Result: `src/project.rs` gains `project_dir` / `no_project_root`; `src/mcp/worktrees.rs` and `src/plugins/read/search.rs` use them (`roots::client_roots()` exposes the client roots); `walk_root_ok` returns the shared error.
+
+Check result: `mcp_home_cwd_worktree_list_and_search_use_the_client_root` and `mcp_home_cwd_without_a_root_says_pass_a_path_or_open_a_project` pass; `project_dir_prefers_cwd_then_extra_and_never_git_fatal` passes; `just check` green (3330 tests).
+
+Status: done 2026-10-11
+Model: MiMo / mimo
+
+(Card not in this worktree plan.md — base is origin/main.)

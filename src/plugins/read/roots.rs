@@ -42,6 +42,11 @@ pub fn set_client_roots(roots: Vec<PathBuf>) {
     *lock(&CLIENT) = roots;
 }
 
+/// The client's latest `roots/list` directories, for T526's project-dir fallback.
+pub fn client_roots() -> Vec<PathBuf> {
+    lock(&CLIENT).clone()
+}
+
 /// Client roots plus the worktrees of the repositories of `cwd` and of every client root;
 /// empty unless [`enable`]d.
 pub(crate) fn dynamic(cwd: &Path) -> Vec<PathBuf> {

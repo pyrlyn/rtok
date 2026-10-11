@@ -49,6 +49,31 @@ pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
     Some(main.to_string_lossy().into_owned())
 }
 
+/// T526: the directory a tool should treat as the project when the launch cwd is not one
+/// (`$HOME`, `/`). `cwd` when it lies in a git checkout; else the first of `extra` (the
+/// client's `roots/list` directories) that does. [`Err`] otherwise — never git's
+/// `fatal: not a git repository`.
+pub fn project_dir(cwd: &Path, extra: &[PathBuf]) -> anyhow::Result<PathBuf> {
+    if crate::config::layers::git_root(cwd).is_some() {
+        return Ok(cwd.to_path_buf());
+    }
+    if let Some(root) = extra
+        .iter()
+        .find(|r| crate::config::layers::git_root(r).is_some())
+    {
+        return Ok(root.clone());
+    }
+    Err(no_project_root(cwd))
+}
+
+/// The one wording when neither the cwd nor any extra root lies in a repository (T526).
+pub fn no_project_root(cwd: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "no project root: rtok mcp runs in {}; pass a path or open a project",
+        crate::fs::canon(cwd).display()
+    )
+}
+
 /// `<main>/.git` of the checkout `cwd` lies in, through a linked worktree's `commondir`.
 fn common_git_dir(fs: &impl ReadFs, cwd: &Path) -> Option<PathBuf> {
     let mut root = cwd.to_path_buf();
@@ -262,5 +287,36 @@ mod tests {
         let key = project_key_with(&vfs, Path::new("/home/me/local-only"));
         assert_eq!(key.as_deref(), Some("/home/me/local-only"));
         assert_eq!(project_key_with(&vfs, Path::new("/home/me")), None);
+    }
+
+    /// T526: cwd wins when it lies in a checkout; else a client root that does; else the
+    /// wording that tells the caller to pass a path or open a project.
+    #[test]
+    fn project_dir_prefers_cwd_then_extra_and_never_git_fatal() {
+        let base = std::env::temp_dir().join(format!("rtok-project-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (home, repo, plain) = (base.join("home"), base.join("repo"), base.join("plain"));
+        for d in [&home, &repo, &plain] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        // cwd itself is in a checkout: cwd wins, even with other extras around.
+        let got = project_dir(&repo, &[home.clone(), plain.clone()]).unwrap();
+        assert_eq!(got, repo);
+        // cwd is not a checkout: the extra that is, in order.
+        let got = project_dir(&home, &[plain.clone(), repo.clone()]).unwrap();
+        assert_eq!(got, repo);
+        // A subdirectory of a checkout still counts as "cwd lies in one".
+        let src = repo.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        assert_eq!(project_dir(&src, &[]).unwrap(), src);
+        // Neither cwd nor any extra: the T526 wording, never git's fatal.
+        let err = project_dir(&home, std::slice::from_ref(&plain))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("no project root"), "{err}");
+        assert!(err.contains("pass a path or open a project"), "{err}");
+        assert!(!err.contains("fatal:"), "{err}");
+        let _ = std::fs::remove_dir_all(base);
     }
 }
