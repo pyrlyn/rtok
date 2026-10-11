@@ -134,6 +134,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T592 | todo | P2 | 3 | 0% | |
 | T594 | todo | P2 | 3 | 0% | |
 | T595 | todo | P2 | 3 | 0% | |
+| T597 | todo | P1 | 3 | 0% | |
 
 
 
@@ -665,6 +666,19 @@ Execution plan:
 3. Cover environment and project/user config layers, help/completion output, and a CLI rendering fixture that verifies Markdown bytes for an explicit --format md over configured HTML/PDF.
 
 Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
+
+### T597. Reject stale demon process identities before stopping services
+
+Confirmed in [stop](src/demon.rs#L208): a saved state file is enough to send TERM or KILL to its supervisor and child PIDs; the timestamp is never checked. A state left over from an earlier boot can therefore cause `demon stop`, `demon kill`, or the stop phase of `demon restart` to terminate unrelated processes after those positive PIDs are reused. [start](src/demon.rs#L154) and [quiesce](src/demon.rs#L263) already guard stale retirement with the boot time, but stop bypasses that protection. [process_term/process_kill](crates/rtok-sys/src/lib.rs#L48) validate positive PIDs, not process identity. T73 covers start/quiesce around upgrade; no active card covers this stop-path gap.
+
+Execution plan:
+
+1. Add deterministic tests with pre-boot state and reused positive PID identities for normal stop, forced kill and restart. Use a recording process adapter and assert no signal reaches unrelated processes; retain missing-state and valid-live-service controls.
+2. Apply one shared stale-state/identity check before any initial or escalation signal. Reject pre-boot records and handle unknown boot information conservatively; do not let force mode bypass ownership checks. For current-boot PID reuse, verify a process birth token or equivalent platform identity rather than treating liveness alone as ownership.
+3. Retire stale metadata with an explicit result while preserving any concurrently published new supervisor state. Keep stop-marker ordering and the valid-service shutdown/escalation behavior; revalidate identity before escalation to avoid signalling a newly reused PID.
+4. Cover restart and upgrade callers, unavailable identity information, malformed state, nonpositive PIDs and concurrent service replacement using fakes. Rerun demon/platform tests and `just check`.
+
+Check: stale state never authorizes a signal to a different process, including forced shutdown; valid owned services still stop and restart. The scratch probe compiled actual Service/State, file/read, targets and stop functions with a recording-only process adapter. State `since=1` sent TERM to both simulated reused PIDs in normal mode and KILL in force mode, then removed the state; the missing-state control sent nothing. No OS process was signalled, and real kernel PID reuse or full CLI integration was not exercised.
 
 ### T594. Validate structured config types before persisting edits
 
