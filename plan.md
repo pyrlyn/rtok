@@ -136,6 +136,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T601 | todo | P2 | 3 | 0% | |
 | T604 | todo | P2 | 3 | 0% | |
 | T606 | todo | P2 | 3 | 0% | |
+| T608 | todo | P3 | 3 | 0% | |
+| T609 | todo | P3 | 3 | 0% | |
 
 
 
@@ -712,6 +714,32 @@ Execution plan:
 4. Add SessionStart coverage with an actual Unicode mode file: assert the fitting tail survives, repeated unchanged runs remain byte-identical, and mode text is absent from UserPromptSubmit. Run focused injection/token tests and `just check`.
 
 Check: the reproduced 242-token mode survives in full under budget 800; genuinely oversized files remain bounded and existing priority/budget behavior stays intact. The isolated executable compiled the production read, fit, apply and estimate functions, used real scratch files and minimal config/Measurement adapters, and observed stable repeated output. ASCII and missing-file builtin controls retained all fitting text. Full hook dispatch, checkpoint composition and persistent Measurement storage were source-traced or excluded, not executed.
+
+### T608. Preserve identifier and path suffixes in prose word stripping
+
+The public [compress_prose](src/modes/compress.rs#L82) helper changes `Edit foo_a now` to `Edit foo_ now`, `Open /tmp/a now` to `Open /tmp/ now`, and `Keep item1a here` to `Keep item1 here` at Full intensity. [strip_words](src/modes/compress.rs#L259) starts a removable word after an underscore, slash or digit but checks only the character following that word for identifier/path glue. Thus the final `a` is mistaken for an article and deleted. These are changes to names, not whitespace or filler compression. The existing `a.txt`/`a-b`/`a/b`/`a1` tests cover following glue, not preceding glue.
+
+Execution plan:
+
+1. Add Full and Ultra regressions for `foo_a`, `/tmp/a`, `item1a`, and analogous suffixes matching filler words. Assert preservation of the entire name, not merely the surrounding sentence. Retain standalone-article removal and existing right-boundary cases.
+2. Decide whether a token is standalone from both original input boundaries. Treat preceding identifier/path punctuation and digits consistently with the current following-boundary protection, without making the decision from already edited output.
+3. Cover combinations of left/right glue, Unicode neighbors, negation words and protected inline/fenced code; retain Lite behavior and deterministic output. Keep genuine prose article/filler removal working.
+4. Add realistic identifier/path fixtures to the mode comparison tests, checking exact retained names before recording compression measurements. Run focused mode unit/benchmark tests and `just check`.
+
+Check: the three reproduced names remain byte-identical while `Edit the file` still becomes `Edit file`. The isolated executable imported the actual compression module by path and reproduced all three changes; Lite and `a.txt` controls preserved their names. This is a P3 library/benchmark correctness defect: these native helpers are currently used by tests and comparisons, not wired into production hook compression.
+
+### T609. Preserve code inside longer Markdown backtick fences
+
+The public [compress_prose](src/modes/compress.rs#L82) helper closes a fence at the next occurrence of exactly three backticks, without remembering the opening delimiter length or requiring a closing fence line. For a four-backtick Markdown block containing a triple-backtick example followed by `The really exact content`, Full compression removes `The really` inside the outer code block. The source promise to preserve fenced code verbatim is therefore violated. This is distinct from inline code-span protection and from stripping identifiers outside code.
+
+Execution plan:
+
+1. Add a golden regression for a four-backtick outer fence containing a triple-backtick example and filler-like code text. Assert exact preservation of the whole fenced region, including delimiters, spacing and newlines, at every intensity.
+2. Recognize fence openings and closures by line position, delimiter kind and opening run length. A shorter internal run or an occurrence inside a code line must not close the block. Preserve unclosed blocks through the end as today; define and test supported Markdown fence forms.
+3. Add controls for ordinary triple fences, longer matching closers, code lines containing backtick runs, and prose around the fence. Verify that inline-span handling remains independent and that prose outside the block still compresses.
+4. Extend `tests/mode_bench.rs` with the reproduced fixture and an independent preservation oracle: its current `fence_bodies` helper also splits on raw triple-backtick substrings and cannot establish correctness for this case. Run focused mode tests, comparison tests and `just check`.
+
+Check: the complete reproduced outer code block is byte-for-byte unchanged. An isolated executable imported the actual compression module by path, reproduced the four-backtick mutation, and passed ordinary triple-fence and double-backtick inline controls. This is a P3 library/benchmark defect, not observed production hook corruption; the native compression helper is not currently wired into those hooks.
 
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 
