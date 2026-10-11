@@ -8,12 +8,9 @@ import { Chip } from "../../../ui/Chip";
 import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
 import { Sparkline } from "../../../ui/Sparkline";
-import { compact, fmt, pct } from "../../format";
+import { compact, fmt, millis, pct, seconds } from "../../format";
 import { CountUp } from "./CountUp";
 import { emptyWindow } from "./useCalls";
-
-const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
-const millis = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
 
