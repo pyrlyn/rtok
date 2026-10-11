@@ -130,6 +130,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T584 | todo | P2 | 2 | 0% | |
 | T586 | todo | P2 | 3 | 0% | |
 | T587 | todo | P2 | 2 | 0% | |
+| T588 | in progress | P2 | 3 | 5% | OpenAI / GPT-6 |
 
 
 
@@ -661,6 +662,19 @@ Execution plan:
 3. Cover environment and project/user config layers, help/completion output, and a CLI rendering fixture that verifies Markdown bytes for an explicit --format md over configured HTML/PDF.
 
 Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
+
+### T588. Audit Read search/tree filters and log selection boundaries
+
+Source audit only; do not change product code. Trace Read `search`/`tree` path resolution, ignore rules, pattern semantics, size/output caps and result shape, plus relevant `rtok logs` selection/export/watch behavior. Read `src/plugins/read/AGENTS.md` and existing Read/log tasks first; use scratch fixtures only.
+
+Execution plan:
+
+1. Trace search/tree from tool arguments through `resolve`, root guard, `ignore::WalkBuilder`, `skip_git`, text-file loading, cap/archive recording and displayed paths. Compare hidden files, `.gitignore`/nested ignores, symlinks, invalid UTF-8, oversized files and roots outside cwd with the documented Read contract.
+2. Trace regex compilation/fallback, max/depth normalization, ordering, snippets and empty/no-hit outputs in both production code and the Vfs mirror. Compare actual WalkBuilder behavior with tests and the stated plugin description; identify only cases where the two surfaces or contract diverge.
+3. Trace logs filters and limits from CLI/config into model selection, JSON/export rendering, watch stream and logfile/store source. Compare ordering, inclusive time/level/source selection, zero/large limits, rotation and follow behavior without opening or exporting real host logs.
+4. Deduplicate exact scenarios against T4.2–T4.6, T55.5, T56.2/T56.4/T56.5, T59.2, T83.16, T127/T263/T300/T383, T15.11/T24.3/T225.1 and existing plan/done/roadmap/ideas. Use small scratch fixtures to reproduce only uncovered candidates, then record sequential fix cards with source evidence, steps and checks.
+
+Check: all fixtures and generated outputs stay in scratch; search/tree remain root-guarded and capped with expandable results; log selection remains consistent across table/JSON/export/watch; active plan/todo IDs match and `git diff --check` plus scoped `just check` pass. No product code, real host logs or live application is used.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
