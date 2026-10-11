@@ -30,10 +30,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
-| T276.4 | todo | P2 | 4 | 0% | |
+| T276.4 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T276.5 | todo | P2 | 3 | 0% | |
 | T276.6 | todo | P2 | 3 | 0% | |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
+| T277.2 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -147,10 +148,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T617 | todo | P2 | 3 | 0% | |
 | T618 | todo | P1 | 3 | 0% | |
 | T619 | todo | P2 | 3 | 0% | |
-| T620 | todo | P1 | 5 | 0% | |
-| T621 | todo | P2 | 5 | 0% | |
+| T620 | in progress | P1 | 5 | 0% | Claude Code / sonnet-5.5 |
+| T621 | in progress | P2 | 5 | 0% | Claude Code / sonnet-5.5 |
 | T622 | todo | P2 | 3 | 0% | |
-| T623 | todo | P2 | 5 | 0% | |
+| T623 | in progress | P2 | 5 | 0% | Claude Code / sonnet-5.5 |
 | T624 | todo | P3 | 2 | 0% | |
 | T625 | todo | P1 | 3 | 0% | |
 | T626 | todo | P2 | 3 | 0% | |
@@ -1522,6 +1523,8 @@ Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a
 
 Check: the T276 card's Check lines for items 4 and 5; `just check`.
 
+Execution plan: route the 3 `bench.rs` sites (a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture` from the code) and the 10 `agents/restart.rs` sites through `rtok_sys::proc::ProgressRunner`; keep stdout and non-TTY stderr byte-identical; add non-TTY tests asserting no spinner bytes and unchanged output with own `sh` fakes; then `just check`.
+
 ### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
 
 Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
@@ -1567,6 +1570,14 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1. Next: PR 3, the other hosts.
+
+### T277.2. Cursor, Copilot, Gemini, Codex, VS Code, ZCode, Kimi and Grok write and remove the MCP entry through `rtok_mcp::ops`
+
+PR 3 of T277: the hosts T275 lists as affected move onto `rtok_mcp` the way T277.1 moved Claude. Each host gets its `McpSpec`, routes install, update, remove and the MCP branch of `installed` through `rtok_mcp::ops` / `status`, and deletes its own `register_mcp` / `unregister_mcp` (and `plugin_is_mcp` for Cursor). One commit per host; split into T277.3 at claim time if it passes 500 code lines. Blocks T276.3.
+
+Execution plan: follow T277.1 (done.md) host by host; table-driven `Vfs` test rows per host covering install, update, remove and status with unrelated keys kept byte-for-byte; `just check`.
+
+Check: every listed host passes the shared table-driven test; `rg "register_mcp|unregister_mcp|plugin_is_mcp" src/agents/{cursor,copilot,gemini,codex,vscode,zcode,kimi,grok}` finds nothing; `just check`.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
