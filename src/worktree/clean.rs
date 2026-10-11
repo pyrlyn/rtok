@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, ensure};
+use rtok_sys::proc::{ProgressRunner, Unit};
 use serde::Serialize;
 
 use super::list::{Cache, orphans, usage};
@@ -81,37 +82,55 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
     let here = real(cwd);
     let explicit = !paths.is_empty();
     let unix = |t: SystemTime| t.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs());
-    let mut outcomes = Vec::new();
+    let mut judged = Vec::new();
     for dir in targets(cwd, paths)? {
         let current = here.starts_with(real(&dir));
         for cache in usage(&dir).caches {
             let kept = kept_because(&cache, current, explicit, policy);
-            let files = if kept.is_none() {
-                crate::removal_preview::size_of(&cache.path).1
-            } else {
-                0
-            };
-            let done = (yes && kept.is_none()).then(|| {
-                std::fs::remove_dir_all(&cache.path)
-                    .with_context(|| format!("cannot delete {}", cache.path.display()))
-            });
-            let relative = cache.path.strip_prefix(&dir).unwrap_or(&cache.path);
-            outcomes.push(Outcome {
-                worktree: dir.display().to_string(),
-                cache: relative.display().to_string(),
-                bytes: cache.bytes,
-                files,
-                modified_unix: cache.modified.and_then(unix),
-                action: if kept.is_some() { "keep" } else { "clean" },
-                failed: matches!(done, Some(Err(_))),
-                note: match (kept, done) {
-                    (Some(why), _) => why,
-                    (None, Some(Ok(()))) => "deleted".into(),
-                    (None, Some(Err(e))) => format!("failed, kept: {e:#}"),
-                    (None, None) => "tagged cache, idle".into(),
-                },
-            });
+            judged.push((dir.clone(), cache, kept));
         }
+    }
+    let count = judged
+        .iter()
+        .filter(|(.., kept)| yes && kept.is_none())
+        .count();
+    // A deletion is silent and can take long; a bar over the caches shows it is moving (T276.2).
+    let mut bar =
+        (count > 1).then(|| ProgressRunner::batch("cleaning caches…", count as u64, Unit::Items));
+    let mut outcomes = Vec::with_capacity(judged.len());
+    for (dir, cache, kept) in judged {
+        let relative = cache.path.strip_prefix(&dir).unwrap_or(&cache.path);
+        // Counted before the delete, so the preview and the report agree on what went.
+        let files = if kept.is_none() {
+            crate::removal_preview::size_of(&cache.path).1
+        } else {
+            0
+        };
+        let done = (yes && kept.is_none()).then(|| {
+            if let Some(bar) = bar.as_mut() {
+                bar.step(&format!("{} {}", dir.display(), relative.display()));
+            }
+            std::fs::remove_dir_all(&cache.path)
+                .with_context(|| format!("cannot delete {}", cache.path.display()))
+        });
+        outcomes.push(Outcome {
+            worktree: dir.display().to_string(),
+            cache: relative.display().to_string(),
+            bytes: cache.bytes,
+            files,
+            modified_unix: cache.modified.and_then(unix),
+            action: if kept.is_some() { "keep" } else { "clean" },
+            failed: matches!(done, Some(Err(_))),
+            note: match (kept, done) {
+                (Some(why), _) => why,
+                (None, Some(Ok(()))) => "deleted".into(),
+                (None, Some(Err(e))) => format!("failed, kept: {e:#}"),
+                (None, None) => "tagged cache, idle".into(),
+            },
+        });
+    }
+    if let Some(bar) = bar {
+        bar.finish();
     }
     Ok(outcomes)
 }

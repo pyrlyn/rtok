@@ -654,6 +654,12 @@ fn clean_deletes_idle_tagged_caches_and_nothing_else() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
+    // T276.2: two caches go, so a bar is due on a terminal; off one, stderr stays untouched.
+    assert!(
+        out.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(!idle.join("target").exists());
     assert!(!tmp.join("wt-orphan/target").exists());
     assert!(tmp.join("wt-fresh/target/debug/bin").exists());
