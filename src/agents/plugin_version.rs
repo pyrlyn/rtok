@@ -244,11 +244,21 @@ pub fn installed(
     fallback_source: Source,
 ) -> Installed {
     let legacy = version_file.is_none();
-    let version = version_file
-        .map(|f| f.version.clone())
-        .or_else(|| receipt_entry.map(|e| e.version.clone()))
-        .or_else(|| host_record_version.and_then(|v| Version::parse(v).ok()))
-        .unwrap_or_else(|| Version::new(0, 0, 0));
+    let receipt_version = receipt_entry.map(|e| &e.version);
+    let version = match (version_file.map(|f| &f.version), receipt_version) {
+        // A local install's committed file carries no `+g<sha>` (rtok does not rewrite the
+        // installed copy yet), so at the same release the receipt's richer string is the one
+        // that can tell two local builds apart; a file that moved on (a hand-run `claude plugin
+        // update`) still wins over a stale receipt.
+        (Some(file), Some(receipt)) if file.cmp_precedence(receipt) == Ordering::Equal => {
+            receipt.clone()
+        }
+        (Some(file), _) => file.clone(),
+        (None, Some(receipt)) => receipt.clone(),
+        (None, None) => host_record_version
+            .and_then(|v| Version::parse(v).ok())
+            .unwrap_or_else(|| Version::new(0, 0, 0)),
+    };
     let source = version_file
         .and_then(|f| f.source)
         .or_else(|| receipt_entry.map(|e| e.source))
@@ -261,11 +271,8 @@ pub fn installed(
 }
 
 /// Reads the version file (if the installed copy has one) and the receipt row, then applies
-/// [`installed`] — the thin I/O wrapper the pure lookup is built on. Not called yet: Claude's
-/// `plugin_update` (T279 PR 3) only has the receipt and the host record — locating the
-/// installed copy's own file needs the version-numbered cache directory a host names only
-/// after install, a later task.
-#[allow(dead_code)]
+/// [`installed`] — the thin I/O wrapper the pure lookup is built on. `agents outdated` and
+/// Claude's `agents update` both call it with the path `plugin_install::install_probe` found.
 pub fn read_installed(
     version_file_path: &Path,
     receipt: &Receipt,
@@ -309,11 +316,13 @@ pub fn available(source: Source, local_dir: &Path, running_version: &Version) ->
         });
     }
     let file = VersionFile::read(&local_dir.join(".rtok-plugin-version"))?;
-    let describe = git_describe(local_dir)?;
-    Ok(Available {
-        version: local_version(&file.version, &describe),
-        source,
-    })
+    // Fail open: a release install's plugin tree is a plain copy, not a git checkout, so there
+    // is no build to name and the file's own version is the whole answer.
+    let version = match git_describe(local_dir) {
+        Ok(describe) => local_version(&file.version, &describe),
+        Err(_) => file.version,
+    };
+    Ok(Available { version, source })
 }
 
 /// `git -C <dir> describe --always --dirty`, trimmed — the only place this module spawns a
@@ -572,6 +581,42 @@ mod tests {
         let got = installed(Some(&vf), Some(&entry), Some("0.0.1"), Source::Github);
         assert_eq!(got.version, v("0.10.0"));
         assert!(!got.legacy);
+    }
+
+    /// A local build's receipt keeps `+g<sha>`; the committed file in the installed copy does
+    /// not. At the same release the receipt's string stands, so an unchanged build is not
+    /// "different" on every run.
+    #[test]
+    fn receipt_build_metadata_stands_when_the_file_has_the_same_release() {
+        let vf = VersionFile::new("claude", v("0.10.0"));
+        let entry = ReceiptEntry {
+            source: Source::Local,
+            reference: "checkout".to_string(),
+            marketplace: None,
+            path: PathBuf::from("/x"),
+            version: v("0.10.0+g12c7e91.dirty"),
+            installed_at: "t".to_string(),
+        };
+        let got = installed(Some(&vf), Some(&entry), None, Source::Github);
+        assert_eq!(got.version, v("0.10.0+g12c7e91.dirty"));
+        assert_eq!(got.source, Source::Local);
+        assert!(!got.legacy);
+    }
+
+    /// The file moved on (a hand-run `claude plugin update`): the stale receipt loses.
+    #[test]
+    fn a_newer_version_file_beats_a_stale_receipt() {
+        let vf = VersionFile::new("claude", v("0.11.0"));
+        let entry = ReceiptEntry {
+            source: Source::Github,
+            reference: "v0.10.0".to_string(),
+            marketplace: Some("rtok".to_string()),
+            path: PathBuf::from("/x"),
+            version: v("0.10.0"),
+            installed_at: "t".to_string(),
+        };
+        let got = installed(Some(&vf), Some(&entry), None, Source::Github);
+        assert_eq!(got.version, v("0.11.0"));
     }
 
     #[test]
@@ -834,16 +879,26 @@ mod tests {
         assert!(a.version.to_string().starts_with("0.10.0+g"), "{a:?}");
     }
 
+    /// `--source local` from a release install: the plugin tree is a copy, not a checkout, so
+    /// `git describe` fails; the file's version stands without build metadata.
     #[test]
-    fn available_local_names_the_directory_when_git_fails() {
+    fn available_local_without_a_git_checkout_uses_the_file_version() {
         let dir = scratch("available-local-no-git");
         VersionFile::new("claude", v("0.10.0"))
             .write(&dir.join(".rtok-plugin-version"))
             .unwrap();
+        let a = super::available(Source::Local, &dir, &v("99.0.0")).unwrap();
+        assert_eq!(a.version, v("0.10.0"));
+        assert_eq!(a.source, Source::Local);
+    }
+
+    #[test]
+    fn available_local_without_a_version_file_names_the_file() {
+        let dir = scratch("available-local-no-file");
         let err = super::available(Source::Local, &dir, &v("99.0.0"))
             .unwrap_err()
             .to_string();
-        assert!(err.contains(&dir.display().to_string()), "{err}");
+        assert!(err.contains(".rtok-plugin-version"), "{err}");
     }
 
     // ── now_iso ──────────────────────────────────────────────────────────────

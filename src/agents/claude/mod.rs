@@ -728,7 +728,11 @@ fn update_in_place(
         ));
     }
     if super::find_on_path("claude").is_none() {
-        return Ok(NO_CHANGES.into());
+        // Not "already current": nothing was updated and the next run must say why.
+        return Ok(format!(
+            "offer {PLUGIN_SRC} → {} (claude failed: claude not found on PATH) {KETCH_INSTALL}",
+            shown()
+        ));
     }
     match STEPS.iter().try_for_each(|s| claude_cli(cfg, s)) {
         Ok(()) => {
@@ -755,14 +759,8 @@ fn plugin_update(cfg: &Config) -> Result<String> {
     let receipt_path = plugin_version::receipt_path(cfg);
     let receipt = plugin_version::Receipt::read(&receipt_path)?;
     let currently_installed = plugin_installed(cfg);
-    let installed = currently_installed.then(|| {
-        plugin_version::installed(
-            None,
-            receipt.get("claude"),
-            host_record_version(cfg).as_deref(),
-            plugin_version::Source::Github,
-        )
-    });
+    let installed = currently_installed.then(|| installed_copy(cfg, &receipt));
+    let legacy = installed.as_ref().is_some_and(|i| i.legacy);
     let source = update_source(cfg, installed.as_ref())?;
     let available = plugin_version::available(
         source,
@@ -774,7 +772,7 @@ fn plugin_update(cfg: &Config) -> Result<String> {
     // pulling from the stale one.
     let stale = currently_installed
         && marketplace_state_for(cfg, &marketplace_target(source)) == MarketplaceState::Stale;
-    match plugin_version::decide(installed, &available, cfg.setup.force || stale) {
+    let line = match plugin_version::decide(installed, &available, cfg.setup.force || stale) {
         // Nothing to do: report NO_CHANGES like every other up-to-date step, so the block
         // header's "already current" note still fires (`agents::mod::block`). `--dry-run`
         // still names the version, since a dry run has nothing else to show for this host.
@@ -785,16 +783,82 @@ fn plugin_update(cfg: &Config) -> Result<String> {
                     available.version
                 ));
             }
-            Ok(NO_CHANGES.into())
+            return Ok(NO_CHANGES.into());
         }
         plugin_version::Decision::SkipOlder { warning } => {
-            Ok(format!("plugin {PLUGIN_ID}: {warning}"))
+            return Ok(format!("plugin {PLUGIN_ID}: {warning}"));
         }
-        plugin_version::Decision::Update => update_in_place(cfg, source, &available, &receipt_path),
-        plugin_version::Decision::Install | plugin_version::Decision::Reinstall { .. } => {
-            reinstall(cfg, source, &available, &receipt_path)
+        plugin_version::Decision::Update => {
+            update_in_place(cfg, source, &available, &receipt_path)?
         }
+        plugin_version::Decision::Install => reinstall(cfg, source, &available, &receipt_path)?,
+        plugin_version::Decision::Reinstall { reason } if apply(cfg).dry_run => {
+            let why = if cfg.setup.force {
+                "forced".to_string()
+            } else if stale {
+                "marketplace points elsewhere".to_string()
+            } else {
+                reason
+            };
+            format!(
+                "would reinstall {PLUGIN_ID} from {source} v{} ({why})",
+                available.version
+            )
+        }
+        plugin_version::Decision::Reinstall { .. } => {
+            reinstall(cfg, source, &available, &receipt_path)?
+        }
+    };
+    Ok(if legacy && !apply(cfg).dry_run {
+        legacy_failure(line)
+    } else {
+        line
+    })
+}
+
+/// The installed plugin as the version lookup sees it (T279 step 2): the
+/// `.rtok-plugin-version` inside the installed copy, then the receipt, then Claude's own record
+/// — the same probe `agents outdated` uses. A version file that cannot be read must not wedge
+/// every later update (`--force` looks here too), so it reads as if the copy had none.
+fn installed_copy(cfg: &Config, receipt: &plugin_version::Receipt) -> plugin_version::Installed {
+    super::plugin_install::install_probe("claude", cfg, Kind::Cli, receipt)
+        .and_then(|probe| {
+            plugin_version::read_installed(
+                &probe.version_file,
+                receipt,
+                "claude",
+                probe.host_record_version.as_deref(),
+                probe.fallback_source,
+            )
+            .ok()
+        })
+        .unwrap_or_else(|| {
+            plugin_version::installed(
+                None,
+                receipt.get("claude"),
+                host_record_version(cfg).as_deref(),
+                plugin_version::Source::Github,
+            )
+        })
+}
+
+/// A legacy install (no version file, T279 step 4) whose update could not run keeps its old
+/// plugin and no receipt; say so under the wording the card names, so the next run's retry is
+/// expected. Lines that did something, or that [`REINSTALL_FAILED`] already makes loud, pass
+/// through.
+fn legacy_failure(line: String) -> String {
+    if !line.starts_with("offer ") {
+        return line;
     }
+    let detail = line
+        .split_once("claude failed: ")
+        .map_or(line.as_str(), |(_, rest)| rest);
+    let detail = detail.split(" (update failed:").next().unwrap_or(detail);
+    let detail = detail
+        .trim_end_matches(KETCH_INSTALL)
+        .trim_end()
+        .trim_end_matches(')');
+    format!("plugin {PLUGIN_ID}: legacy install, update failed: {detail}")
 }
 
 /// Where Claude Desktop reads `mcpServers`: its own file, not `~/.claude.json`.
@@ -1772,8 +1836,8 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// `--force` reinstalls even at the running version: uninstall then install, no
-    /// marketplace repoint since the recorded source is already GitHub.
+    /// `--force` reinstalls even at the running version; the dry run names the plan in the
+    /// card's wording (T279 step 6) and runs no `claude`.
     #[test]
     fn plugin_update_force_reinstalls_even_when_up_to_date() {
         let dir = plugin_dir("update-force");
@@ -1781,11 +1845,13 @@ mod tests {
         let mut c = plugin_cfg(&dir, true);
         c.setup.force = true;
         let report = plugin_update(&c).unwrap();
-        assert!(
-            report.contains("claude plugin uninstall rtok@rtok && claude plugin install rtok@rtok"),
-            "{report}"
+        assert_eq!(
+            report,
+            format!(
+                "would reinstall rtok@rtok from github v{} (forced)",
+                env!("CARGO_PKG_VERSION")
+            )
         );
-        assert!(!report.contains("marketplace"), "{report}");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1797,15 +1863,115 @@ mod tests {
         let stale = r#"{"source":"directory","path":"/x/.ketch/store/rtok/v0.6.3/plugins/claude"}"#;
         record(&dir, env!("CARGO_PKG_VERSION"), stale);
         let report = plugin_update(&plugin_cfg(&dir, true)).unwrap();
-        for step in [
-            "uninstall rtok@rtok",
-            "marketplace remove rtok",
-            "marketplace add pyrlyn/rtok",
-        ] {
-            assert!(report.contains(step), "{step}: {report}");
-        }
-        assert!(!report.contains("marketplace update"), "{report}");
+        assert!(
+            report.starts_with("would reinstall rtok@rtok from github v"),
+            "{report}"
+        );
+        assert!(
+            report.ends_with("(marketplace points elsewhere)"),
+            "{report}"
+        );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Claude's record still says `0.0.1`, but the installed copy carries a version file at the
+    /// running release (a GitHub install after T279): the file decides, so nothing updates.
+    #[test]
+    fn plugin_update_reads_the_version_file_inside_the_installed_copy() {
+        let dir = plugin_dir("update-copy-file");
+        record(&dir, "0.0.1", GITHUB);
+        let copy = dir.join(format!(
+            "{}/0.0.1",
+            super::super::plugin_install::PLUGIN_CACHE
+        ));
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(
+            copy.join(".rtok-plugin-version"),
+            format!(
+                r#"{{"schema":1,"plugin":"claude","version":"{}"}}"#,
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .unwrap();
+        let report = plugin_update(&plugin_cfg(&dir, true)).unwrap();
+        assert!(report.contains("up to date"), "{report}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Claude's receipt row names `installed_plugins.json`, a file: the probe must still find the
+    /// installed copy's version file through the host record instead of giving up on the row.
+    #[test]
+    fn installed_copy_finds_the_version_file_when_the_receipt_path_is_a_file() {
+        let dir = plugin_dir("update-receipt-file");
+        record(&dir, "0.0.1", GITHUB);
+        let copy = dir.join(format!(
+            "{}/0.0.1",
+            super::super::plugin_install::PLUGIN_CACHE
+        ));
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(
+            copy.join(".rtok-plugin-version"),
+            r#"{"schema":1,"plugin":"claude","version":"0.20.0"}"#,
+        )
+        .unwrap();
+        let mut receipt = plugin_version::Receipt::default();
+        receipt.upsert(
+            "claude",
+            plugin_version::ReceiptEntry {
+                source: plugin_version::Source::Github,
+                reference: "v0.10.0".to_string(),
+                marketplace: Some("rtok".to_string()),
+                path: dir.join("plugins/installed_plugins.json"),
+                version: Version::new(0, 10, 0),
+                installed_at: "t".to_string(),
+            },
+        );
+        let got = installed_copy(&plugin_cfg(&dir, true), &receipt);
+        assert_eq!(got.version, Version::new(0, 20, 0));
+        assert!(!got.legacy);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A version file that does not parse must not wedge updates: the copy reads as having none.
+    #[test]
+    fn plugin_update_survives_a_broken_version_file() {
+        let dir = plugin_dir("update-broken-file");
+        record(&dir, "0.0.1", GITHUB);
+        let copy = dir.join(format!(
+            "{}/0.0.1",
+            super::super::plugin_install::PLUGIN_CACHE
+        ));
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(copy.join(".rtok-plugin-version"), "not json").unwrap();
+        let report = plugin_update(&plugin_cfg(&dir, true)).unwrap();
+        assert!(report.starts_with("~ plugin"), "{report}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The card's wording for a legacy install whose update could not run; lines that did
+    /// something, and the loud half-done failure, pass through.
+    #[test]
+    fn legacy_failure_rewrites_only_an_offer_line() {
+        let missing = format!(
+            "offer {PLUGIN_SRC} → claude plugin update rtok@rtok (claude failed: claude not found on PATH) {KETCH_INSTALL}"
+        );
+        assert_eq!(
+            legacy_failure(missing),
+            "plugin rtok@rtok: legacy install, update failed: claude not found on PATH"
+        );
+        let both = format!(
+            "offer {PLUGIN_SRC} → claude plugin install rtok@rtok (claude failed: boom) (update failed: nope)"
+        );
+        assert_eq!(
+            legacy_failure(both),
+            "plugin rtok@rtok: legacy install, update failed: boom"
+        );
+        for line in [
+            "+ plugin plugins/claude → rtok@rtok".to_string(),
+            format!("plugin rtok@rtok {REINSTALL_FAILED} boom"),
+        ] {
+            assert_eq!(legacy_failure(line.clone()), line);
+        }
     }
 
     /// `--source local` reinstalls from the local plugin tree instead of the GitHub repo.

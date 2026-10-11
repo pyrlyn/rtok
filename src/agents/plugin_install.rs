@@ -28,7 +28,10 @@ pub(crate) fn install_probe(
     kind: Kind,
     receipt: &Receipt,
 ) -> Option<InstallProbe> {
-    if let Some(entry) = receipt.get(host_id) {
+    // Claude's row names `installed_plugins.json` (a file, the host record), not the install
+    // directory, so only a directory is a copy to look inside; a file falls through to the
+    // host's own probe, which reads `installPath` off that record.
+    if let Some(entry) = receipt.get(host_id).filter(|e| e.path.is_dir()) {
         return Some(InstallProbe {
             version_file: entry.path.join(".rtok-plugin-version"),
             host_record_version: None,

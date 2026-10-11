@@ -55,9 +55,9 @@ $ cat plugins/claude/.rtok-plugin-version
 
 Ці файли записує лише реліз ([Випуск релізів](#випуск-релізів)). Файл лежить у корені плагіна,
 тож кожне джерело копіює його разом із плагіном у встановлену копію хоста (для Claude — у його кеш
-плагінів у `~/.claude/plugins/cache/rtok/`). rtok поки що не читає файл назад зі
-встановленої копії й не записує туди копію з `+g<sha>`: для локальної збірки рядок збірки зберігається
-лише у квитанції.
+плагінів у `~/.claude/plugins/cache/rtok/`). `agents update` і `agents outdated` читають
+його назад зі встановленої копії. rtok поки що не записує туди копію з `+g<sha>`: для локальної
+збірки рядок збірки зберігається лише у квитанції.
 
 ## Квитанція `plugins.json`
 
@@ -122,9 +122,13 @@ GitHub і marketplace не потребують мережевого викли�
 локальне дерево може відрізнятися від бінарника, тож лише його читають із диска. Сьогодні GitHub і marketplace
 відрізняються лише записаним джерелом.
 
-Встановлена версія береться з рядка квитанції, інакше з власного запису Claude
-(`~/.claude/plugins/installed_plugins.json`, `plugins["rtok@rtok"][0].version`), якщо це
-SemVer, інакше `0.0.0`. Вважається, що Claude має плагін, коли цей файл містить `rtok@rtok`.
+Встановлена версія береться з `.rtok-plugin-version` усередині встановленої копії
+(`installPath` у `~/.claude/plugins/installed_plugins.json`, інакше каталог версії в кеші плагінів),
+інакше з рядка квитанції, інакше з власного запису Claude (`plugins["rtok@rtok"][0].version`),
+якщо це SemVer, інакше `0.0.0`. Якщо файл і квитанція називають той самий реліз, лишається рядок
+квитанції: у ньому зберігається `+g<sha>` локальної збірки; файл, що пішов уперед (ручний
+`claude plugin update`), перемагає застарілу квитанцію. Файл, який не вдається прочитати,
+вважається відсутнім. Вважається, що Claude має плагін, коли його запис містить `rtok@rtok`.
 
 Запис `rtok` у `~/.claude/plugins/known_marketplaces.json` звіряється з вибраним
 джерелом: `{"source":"github","repo":"pyrlyn/rtok"}` для GitHub і marketplace,
@@ -154,7 +158,7 @@ pyrlyn/rtok && claude plugin install rtok@rtok` (Codex: те саме з `codex 
 | Джерело змінилося або запис marketplace застарів | перевстановлення | `plugin uninstall`, `plugin marketplace remove rtok` і `add` (якщо запис не актуальний), `plugin install` |
 | Доступна новіша | оновлення на місці | `plugin marketplace update rtok`, `plugin update rtok@rtok` |
 | Та сама базова версія, інші метадані збірки | оновлення на місці | як вище |
-| Застаріле встановлення: немає квитанції, запис хоста `0.0.1` або не SemVer (`0.0.0`) | оновлення на місці (старіше за будь-який реліз) | як вище |
+| Застаріле встановлення: немає ні файла версії, ні квитанції, запис хоста `0.0.1` або не SemVer (`0.0.0`) | оновлення на місці (старіше за будь-який реліз) | як вище |
 | Однакові версія й метадані збірки | пропуск | жодних |
 | Доступна старіша | пропуск, попередження | жодних |
 
@@ -171,15 +175,18 @@ CLI: Claude Code — already current
 ```
 
 `--dry-run` показує рішення й нічого не записує. Оновлення чи пропуск називає версію;
-встановлення чи перевстановлення виводить команди `claude`, які було б виконано:
+встановлення виводить команди `claude`, які було б виконано; перевстановлення виводить
+`would reinstall` із джерелом, версією та причиною (`forced`, `marketplace points elsewhere` або
+`source changed from … to …`). Версію в першій команді прочитано з `.rtok-plugin-version`
+встановленої копії:
 
 ```text
 $ rtok agents update claude --cli --no-restart --dry-run
 CLI: Claude Code — dry run, nothing written
-plugin rtok@rtok 0.10.0 up to date (github)
+plugin rtok@rtok 0.17.0 up to date (github)
 $ rtok agents update claude --cli --no-restart --dry-run --force
 CLI: Claude Code — dry run, nothing written
-offer plugins/claude → claude plugin uninstall rtok@rtok && claude plugin install rtok@rtok ketch install pyrlyn/rtok
+would reinstall rtok@rtok from github v0.17.0 (forced)
 ```
 
 Старіша доступна версія (квитанція на `0.11.0`, rtok на `0.10.0`) лишається на місці:
@@ -367,10 +374,11 @@ CLI: Claude Code — dry run, nothing written
 ~ plugin rtok@rtok → 0.10.0 (claude plugin marketplace update rtok && claude plugin update rtok@rtok)
 ```
 
-Якщо пробний запуск хоче оновлення, а справжній каже `already current`, `claude` немає в
-`PATH`: оновлення пропускається, а квитанція лишається як була. Додайте `claude` у `PATH` і запустіть
-знову. Якщо пробний запуск каже `up to date`, але копія, яку запускає Claude, стара, квитанція неправильна
-(rtok довіряє їй більше, ніж встановленій копії): `rtok agents update claude --force`.
+Якщо справжній запуск виводить `claude failed: claude not found on PATH`, оновлення пропущено, а
+квитанція лишилася як була (для застарілого встановлення замість цього буде
+`legacy install, update failed:`). Додайте `claude` у `PATH` і запустіть знову. Якщо пробний запуск
+каже `up to date`, але копія, яку запускає Claude, стара, квитанція й файл версії встановленої копії
+називають один реліз, а файли різні: `rtok agents update claude --force`.
 
 **Застаріле встановлення.** Встановлення з часів до rtok 0.10.0 не має квитанції, а запис хоста —
 `0.0.1` (або взагалі не SemVer). Перший `rtok agents update claude` оновлює його один раз і записує
@@ -393,6 +401,7 @@ $ echo $?
 tools/plugin-versions.sh --set "$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
 ```
 
-**`--source local` падає з `git describe`.** Локальне джерело читає метадані збірки з
-git, тож йому потрібне дерево плагіна всередині git checkout; `plugins/` встановленого rtok ним
-не є. Запустіть бінарник rtok, зібраний із checkout, або використайте `--source github`.
+**`--source local` зі встановленого rtok.** Локальне джерело бере метадані збірки `+g<sha>` із
+git. `plugins/` встановленого rtok — копія, а не checkout, тож називати збірку нічим: лишається
+версія з файла дерева, без метаданих. Для локальної збірки з sha запустіть бінарник rtok, зібраний
+із checkout.

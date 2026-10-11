@@ -326,6 +326,72 @@ mod claude_reinstall {
         let again = rtok(&["agents", "update", "claude", "--cli"], &cfg, &home);
         assert!(again.contains("+ plugin"), "{again}");
     }
+
+    /// The installed copy's own `.rtok-plugin-version` decides over Claude's stale `0.0.1`
+    /// record (T279 step 2): a GitHub install made after the release carries the file, so an
+    /// update calls no `claude` and the dry run names the version.
+    #[test]
+    fn a_version_file_in_the_installed_copy_makes_update_a_no_op() {
+        let (home, cfg) = home_with_fake_claude("pv-copy-file");
+        seed(&home, GITHUB_SOURCE, "0.0.1");
+        let copy = home.join(".claude/plugins/cache/rtok/rtok/0.0.1");
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(
+            copy.join(".rtok-plugin-version"),
+            format!(
+                r#"{{"schema":1,"plugin":"claude","version":"{}"}}"#,
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .unwrap();
+
+        // The MCP entry and skills are still written, so the header is not "already current";
+        // the plugin step is what must stay silent and call no `claude`.
+        let out = rtok(&["agents", "update", "claude", "--cli"], &cfg, &home);
+        assert!(!out.contains("plugin rtok@rtok"), "{out}");
+        assert!(!out.contains("+ plugin plugins/claude"), "{out}");
+        assert_eq!(claude_log(&home), "");
+        let dry = rtok(
+            &["agents", "update", "claude", "--cli", "--dry-run"],
+            &cfg,
+            &home,
+        );
+        assert!(
+            dry.contains(&format!(
+                "plugin rtok@rtok {} up to date (github)",
+                env!("CARGO_PKG_VERSION")
+            )),
+            "{dry}"
+        );
+    }
+
+    /// `--dry-run --force` prints the card's one line per host and runs nothing (T279 step 6).
+    #[test]
+    fn dry_run_force_prints_would_reinstall_and_calls_no_claude() {
+        let (home, cfg) = home_with_fake_claude("pv-dry-force");
+        seed(&home, GITHUB_SOURCE, env!("CARGO_PKG_VERSION"));
+        let out = rtok(
+            &[
+                "agents",
+                "update",
+                "claude",
+                "--cli",
+                "--dry-run",
+                "--force",
+            ],
+            &cfg,
+            &home,
+        );
+        assert!(
+            out.contains(&format!(
+                "would reinstall rtok@rtok from github v{} (forced)",
+                env!("CARGO_PKG_VERSION")
+            )),
+            "{out}"
+        );
+        assert_eq!(claude_log(&home), "");
+        assert!(!receipt_path(&home).exists());
+    }
 } // mod claude_reinstall
 
 // ── T279.1: `rtok agents outdated` ───────────────────────────────────────────

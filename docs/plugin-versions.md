@@ -51,9 +51,9 @@ manifest version sees each release as new.
 
 Only the release writes these files ([Releasing](#releasing)). The file sits at the plugin root,
 so every source copies it along with the plugin into the host's install (for Claude, its plugin
-cache under `~/.claude/plugins/cache/rtok/`). rtok does not yet read the file back from the
-installed copy, nor write a `+g<sha>` copy into it: for a local build the build string lives in
-the receipt only.
+cache under `~/.claude/plugins/cache/rtok/`). `agents update` and `agents outdated` read it back
+from the installed copy. rtok does not yet write a `+g<sha>` copy into it: for a local build the
+build string lives in the receipt only.
 
 ## The receipt `plugins.json`
 
@@ -118,9 +118,14 @@ GitHub and marketplace need no network call: the release keeps every version fil
 local tree can differ from the binary, so it alone is read from disk. GitHub and marketplace
 differ only in the recorded source today.
 
-The installed version comes from the receipt row, else from Claude's own record
-(`~/.claude/plugins/installed_plugins.json`, `plugins["rtok@rtok"][0].version`) when that is
-SemVer, else `0.0.0`. Claude counts as having the plugin when that file lists `rtok@rtok`.
+The installed version comes from the `.rtok-plugin-version` inside the installed copy
+(`installPath` in `~/.claude/plugins/installed_plugins.json`, else its version directory under
+the plugin cache), else from the receipt row, else from Claude's own record
+(`plugins["rtok@rtok"][0].version`) when that is SemVer, else `0.0.0`. When the file and the
+receipt name the same release, the receipt's string stands, because it keeps a local build's
+`+g<sha>`; a file that moved on (a hand-run `claude plugin update`) wins over a stale receipt. A
+file that cannot be read counts as absent. Claude counts as having the plugin when its record
+lists `rtok@rtok`.
 
 The `rtok` entry in `~/.claude/plugins/known_marketplaces.json` is checked against the chosen
 source: `{"source":"github","repo":"pyrlyn/rtok"}` for GitHub and marketplace,
@@ -150,7 +155,7 @@ metadata separately. Rows are checked top to bottom; the first match wins.
 | Source changed, or marketplace entry stale | reinstall | `plugin uninstall`, `plugin marketplace remove rtok` and `add` (when not current), `plugin install` |
 | Available newer | update in place | `plugin marketplace update rtok`, `plugin update rtok@rtok` |
 | Same base version, different build metadata | update in place | as above |
-| Legacy: no receipt, host record `0.0.1` or not SemVer (`0.0.0`) | update in place (older than any release) | as above |
+| Legacy: no version file or receipt, host record `0.0.1` or not SemVer (`0.0.0`) | update in place (older than any release) | as above |
 | Equal version and build metadata | skip | none |
 | Available older | skip, warn | none |
 
@@ -167,15 +172,18 @@ CLI: Claude Code — already current
 ```
 
 `--dry-run` shows the decision and writes nothing. An update or a skip names the version; an
-install or reinstall prints the `claude` commands it would run:
+install prints the `claude` commands it would run; a reinstall prints `would reinstall` with the
+source, the version and the reason (`forced`, `marketplace points elsewhere` or `source changed
+from … to …`). The version in the first command is read from the installed copy's
+`.rtok-plugin-version`:
 
 ```text
 $ rtok agents update claude --cli --no-restart --dry-run
 CLI: Claude Code — dry run, nothing written
-plugin rtok@rtok 0.10.0 up to date (github)
+plugin rtok@rtok 0.17.0 up to date (github)
 $ rtok agents update claude --cli --no-restart --dry-run --force
 CLI: Claude Code — dry run, nothing written
-offer plugins/claude → claude plugin uninstall rtok@rtok && claude plugin install rtok@rtok ketch install pyrlyn/rtok
+would reinstall rtok@rtok from github v0.17.0 (forced)
 ```
 
 An older available version (receipt at `0.11.0`, rtok at `0.10.0`) is left in place:
@@ -363,10 +371,11 @@ CLI: Claude Code — dry run, nothing written
 ~ plugin rtok@rtok → 0.10.0 (claude plugin marketplace update rtok && claude plugin update rtok@rtok)
 ```
 
-If the dry run wants an update but a real run says `already current`, `claude` is not on
-`PATH`: the update is skipped and the receipt is left as it was. Put `claude` on `PATH` and run
-again. If the dry run says `up to date` but the copy Claude runs is old, the receipt is wrong
-(rtok trusts it over the installed copy): `rtok agents update claude --force`.
+If a real run prints `claude failed: claude not found on PATH`, the update was skipped and the
+receipt is left as it was (a legacy install says `legacy install, update failed:` instead). Put
+`claude` on `PATH` and run again. If the dry run says `up to date` but the copy Claude runs is
+old, the receipt and the installed copy's version file name the same release while the files
+differ: `rtok agents update claude --force`.
 
 **Legacy install.** An install from before rtok 0.10.0 has no receipt and a host record of
 `0.0.1` (or no SemVer at all). The first `rtok agents update claude` updates it once and writes
@@ -389,6 +398,7 @@ Rewrite every file from `Cargo.toml` and commit the result:
 tools/plugin-versions.sh --set "$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
 ```
 
-**`--source local` fails with `git describe`.** The local source reads its build metadata from
-git, so it needs the plugin tree inside a git checkout; an installed rtok's `plugins/` is not
-one. Run the rtok binary built from the checkout, or use `--source github`.
+**`--source local` from an installed rtok.** The local source takes its `+g<sha>` build
+metadata from git. An installed rtok's `plugins/` is a copy, not a checkout, so there is no
+build to name: the tree's own version file stands, with no metadata. For a local build with a
+sha, run the rtok binary built from the checkout.
