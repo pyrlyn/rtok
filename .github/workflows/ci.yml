@@ -191,7 +191,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: nextest-archive-${{ matrix.os }}
-          path: nextest-archive.tar.zst
+          # web/dist rides along: tests/web.rs compares the embedded SPA with the file on disk.
+          path: |
+            nextest-archive.tar.zst
+            web/dist
           retention-days: 1
           if-no-files-found: error
       - if: failure() && github.event_name == 'pull_request'
