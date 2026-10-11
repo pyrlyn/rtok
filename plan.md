@@ -29,7 +29,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275 | in progress | P1 | 4 | 80% | Claude Code / claude-opus-5-5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 15% | Claude Code / sonnet-5.5 |
-| T276.2 | todo | P2 | 3 | 0% | |
+| T276.2 | in progress | P2 | 3 | 5% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
 | T276.4 | todo | P2 | 4 | 0% | |
 | T276.5 | todo | P2 | 3 | 0% | |
@@ -298,6 +298,13 @@ Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this car
 Split from T276 (migration plan step 1, 2026-10-11, D16): the rest of the runner API from the epic card. `ProgressRunner::batch(label, total, Unit)` and `Batch::step(msg)` (a bar over items with each command's spinner under it), `Progress::Callback`, the `CargoProgress` and `JsonLines` parsers, and the Windows `cmd /C` shim for npm-installed CLIs as a runner option (moved from `spawn_cli` and `mcp_command` when T276.3 uses it). First user: the `rtok worktree gc/clean` bar over worktrees. Depends on T276.1.
 
 Check: batch position/total tests on a hidden target; parser tests on recorded `cargo` output and JSON lines; `just check`.
+
+Execution plan (all in `crates/rtok-sys/src/proc/` unless noted):
+1. `parse.rs`: `CargoProgress` (cargo's `Building [==>   ] 120/300: crate` line, recorded from cargo 1.98 with `CARGO_TERM_PROGRESS_WHEN=always`; cargo draws it only on a terminal or with that env, so the parser exports the two env pairs) and `JsonLines` (`{"progress":{"pos","total","unit","msg"}}` through `serde_json`, a new `rtok-sys` dependency already in the workspace).
+2. `indicator.rs`: a bar-from-the-start `TtyIndicator::bar` for a known total. `mod.rs`: `Progress::Callback` (a closure parser), `ProgressRunner::batch(label, total, Unit)` and `Batch::{step, finish}`: `step(msg)` completes the previous item and starts the next, so the bar counts finished items and each command's spinner sits under it in the shared `MultiProgress`.
+3. `mod.rs`: `.windows_shim()` option (`cmd.exe /D /C` for bare names and `.cmd`/`.bat`) with the pure `needs_cmd_host` moved out of `doctor.rs` (which calls it); `stdin` is stored and applied at run time so the shim can rebuild the command.
+4. First user: a `Batch` over worktrees in `worktree gc --yes` (`src/worktree/gc.rs`) and over cache roots in `worktree clean --yes` (`clean.rs`).
+5. Tests: batch position/total on a hidden target, a recording `Indicator` for step/finish order, parser tests on recorded lines, shim decision, `Progress::Callback` with a fake `sh` child, non-TTY `Batch` draws nothing. Verify with `mise exec -- just check`.
 
 ### T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
 
