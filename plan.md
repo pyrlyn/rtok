@@ -54,7 +54,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T404 | todo | P3 | 3 | 80% | MiMo / mimo |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -973,16 +972,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T404. Evaluate a local draft model that the cloud model only verifies
-
-Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
-
-Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
-
-Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
-
-Progress (2026-10-11, research.md §16.9): research pass recorded with primary sources. **Go/no-go: no-go for the original I-111 prefill shape** — Anthropic returns 400 for prefill on Claude 4.6 and later (the production Opus/Fable line); docs point at structured outputs instead. **Conditional go for verify-only** (local draft as history + cloud `{ok, patch}`): build only after a `rtok bench` row shows USD per passed task falls with pass rate held. Local 2.6–4B Q4 drafts are fast enough (≈80–220 tok/s on M4–M5, llmcheck 2026-08). No product code in this pass.
 
 ### T413. More agent hosts: popular agents rtok does not install into yet
 
