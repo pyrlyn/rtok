@@ -43,6 +43,8 @@
 - T581. Filter actionable report sinks before applying the top-ten limit
 - T583. Make Batch result accounting idempotent across downloads
 - T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
+- T586. Resolve local relative remotes before deriving project identity
+- T587. Let an explicit report --format md override configuration
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

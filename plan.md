@@ -128,6 +128,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T581 | todo | P2 | 2 | 0% | |
 | T583 | todo | P2 | 3 | 0% | |
 | T584 | todo | P2 | 2 | 0% | |
+| T586 | todo | P2 | 3 | 0% | |
+| T587 | todo | P2 | 2 | 0% | |
 
 
 
@@ -634,6 +636,31 @@ Execution plan:
 3. Add a mock streaming regression ending after a split UTF-8 chunk, plus a small configurable capture-limit fixture. Verify retained counters/tier reach the store, missing final output counters remain explicitly partial, original response bytes are forwarded unchanged and truncated responses still cannot enter the semantic cache.
 
 Check: a damaged or incomplete trailing SSE event cannot erase earlier complete usage/tier events, genuinely absent counters remain unknown, and `just check` passes. The isolated probe exercised actual wire/Anthropic extraction functions with synthetic byte prefixes; transport cancellation, the 256 MiB cap and store persistence were source-traced rather than exercised end to end.
+
+### T586. Resolve local relative remotes before deriving project identity
+
+Confirmed with separate Git repositories: [project_key_with](src/project.rs#L42) passes the origin string into [canonical_url](src/project.rs#L120) without its checkout context. Two checkouts at a/checkout and b/checkout, each configured with origin ../remote.git, target different bare repositories but both receive the key ../remote. Git ls-remote controls returned different fixture refs, while the actual project resolver returned equal keys. Replacing A's relative URL with the absolute path of the same remote also changed its key. [Task projects](src/tasks/run.rs#L56) use this key for counters, and [claim injection](src/hooks/mod.rs#L162) uses it to select project claims. Unrelated repositories can therefore share a namespace, while alternate spellings of one local remote split it. T441.3's canonical origin identity has no relative-path exception or existing fix for this case.
+
+Execution plan:
+
+1. Add two-checkout fixtures with identical relative origin strings resolving to different repositories; assert distinct keys. Add relative/absolute/file-URL spellings of the same local remote and assert one identity, using real Git resolution as a control.
+2. Distinguish local filesystem remotes from network URL and scp forms before normalization. Resolve relative local paths with the proper checkout context, canonicalize existing destinations and provide a stable absolute fallback for missing ones. Preserve filesystem case semantics and validate linked-worktree behavior against the existing shared-project contract.
+3. Cover nested cwd, dot segments, symlinks, spaces and supported Windows path forms without regressing network remote normalization. Verify task-counter and claim lookups remain isolated between different repositories.
+4. Handle persisted old keys explicitly: seed/reconcile counters from the intended project's adapter as needed, and avoid blindly migrating an ambiguous shared relative key into every project. Test compatibility without silently resetting IDs or moving unrelated claim rows.
+
+Check: different resolved local remotes never collide solely because their relative strings match, equivalent local spellings share a key, existing state is handled deliberately, and `just check` passes. The isolated harness compiled actual project resolver/normalization functions with a standard filesystem adapter; Git controls used only scratch local repositories. Store counter/claim behavior was source-traced, not exercised end to end.
+
+### T587. Let an explicit report --format md override configuration
+
+Confirmed through actual Clap argument parsing and [report_flags](src/cli/report.rs#L32): [Args.format](src/cli/report.rs#L63) defaults to Md, and the flag layer treats every Md value as omitted. With report.format=html in a lower-precedence config layer, explicitly passing --format md produces no format override and the effective value remains html; --format pdf correctly overrides it. [run](src/cli/report.rs#L89) merges this flag layer and selects the renderer using cfg.report.format. Thus the explicit CLI request can produce HTML or PDF instead of Markdown. D12 and docs/config.md promise flags override configuration; T22.1/T22.2 and T60 do not cover explicit selection of the built-in default.
+
+Execution plan:
+
+1. Add argument/config regressions for configured html and pdf with omitted --format, explicit md and explicit pdf/html. Assert omission preserves configuration but every explicit format wins; include combinations with --out and --since.
+2. Preserve whether --format was supplied, for example with an Option<ReportFormat>, and insert every explicitly supplied value into the flag layer. Keep md as the configuration default and preserve the documented --ai precedence.
+3. Cover environment and project/user config layers, help/completion output, and a CLI rendering fixture that verifies Markdown bytes for an explicit --format md over configured HTML/PDF.
+
+Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
