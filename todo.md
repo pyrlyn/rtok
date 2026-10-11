@@ -60,7 +60,6 @@
 - T611. Decode serialized Copilot tool arguments before hook dispatch
 - T613. Attach sub-agents when their main agent is registered later
 - T615. Preserve claim order when tasks are claimed in the same second
-- T616. Audit remaining module coverage
 - T617. Limit file-linked observation recall after deduplicating observations
 - T618. Scrub private observation content before truncation removes its delimiters
 - T619. Scroll wrapped TUI panel results by rendered rows
@@ -71,6 +70,19 @@
 - T624. Retain the trace ID in the OTel integration-check extractor
 - T625. Preserve invalid Grok configuration when installing MCP
 - T626. Match Aider proxy ownership by URL authority
+- T627. Preserve JSONC separators when removing an item with a trailing comment
+- T628. Select cached plugin versions by version precedence
+- T629. Reopen previously closed hosts when a later preflight fails
+- T630. Preserve the selected config file in operator pages
+- T631. Track the real Git metadata when embedding a worktree build SHA
+- T632. Use rendered chart height when paginating PDF reports
+- T633. Include the contents page in printed PDF page numbers
+- T634. Keep PyPI dry-run behavior independent of flag order
+- T635. Decode JSON paths in Claude worktree fallback hooks
+- T636. Limit Claude legacy proxy migration to owned endpoints
+- T637. Route filter text before global TUI shortcuts
+- T638. Bound benchmark output draining after the child exits
+- T639. Keep the selected Calls row visible in the TUI
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

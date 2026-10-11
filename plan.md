@@ -141,7 +141,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T611 | todo | P2 | 3 | 0% | |
 | T613 | todo | P2 | 3 | 0% | |
 | T615 | todo | P2 | 3 | 0% | |
-| T616 | in progress | P2 | 3 | 5% | OpenAI / GPT-6 |
 | T617 | todo | P2 | 3 | 0% | |
 | T618 | todo | P1 | 3 | 0% | |
 | T619 | todo | P2 | 3 | 0% | |
@@ -152,6 +151,19 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T624 | todo | P3 | 2 | 0% | |
 | T625 | todo | P1 | 3 | 0% | |
 | T626 | todo | P2 | 3 | 0% | |
+| T627 | todo | P1 | 3 | 0% | |
+| T628 | todo | P2 | 3 | 0% | |
+| T629 | todo | P2 | 3 | 0% | |
+| T630 | todo | P2 | 3 | 0% | |
+| T631 | todo | P3 | 3 | 0% | |
+| T632 | todo | P2 | 3 | 0% | |
+| T633 | todo | P3 | 2 | 0% | |
+| T634 | todo | P2 | 2 | 0% | |
+| T635 | todo | P2 | 3 | 0% | |
+| T636 | todo | P2 | 3 | 0% | |
+| T637 | todo | P2 | 3 | 0% | |
+| T638 | todo | P2 | 3 | 0% | |
+| T639 | todo | P2 | 3 | 0% | |
 
 
 
@@ -800,21 +812,6 @@ Execution plan:
 
 Check: selecting the latest claim is independent of task ID spelling when timestamps tie. The isolated probe used real Store migrations and public APIs, checked that all reproducing writes occurred in one wall-clock second, and exercised re-claim, release fallback, project/agent isolation and separate-second controls. No raw SQL, full hook dispatch, live host or concurrent process was exercised; the injected-text effect was source-traced.
 
-### T616. Audit remaining module coverage
-
-Inventory and audit remaining Rust and production non-Rust modules across `src/`, `crates/`, `web/`, `plugins/`, and project scripts, using prior T530-and-newer audit records to avoid treating a filename mention as full coverage. Work from grouped subsystem inventories, inspect uncovered call paths and invariants, and report only confirmed findings with evidence and explicit limits.
-
-Execution plan:
-
-1. Inventory Rust and tracked production non-Rust source modules by directory and compare exact path citations in T530+ plan/done records, treating these as aids rather than proof of full or absent coverage.
-2. Inspect remaining subsystem groups and their callers, then run focused real-source reproductions and controls for concrete candidates.
-3. Deduplicate reproduced cases across `plan.md`, `done.md`, `roadmap.md`, and `ideas.md`; file only distinct findings, preserving the probe and integration limits.
-4. Record exact reviewed coverage and evidence, verify task parity and the docs diff, run scoped `just check`, and prepare the PR #986 update.
-
-Check: the inventory groups Rust and production non-Rust modules, with tests, fixtures, generated files and dependencies identified or excluded; each new finding has source evidence, a distinct reproduced invariant failure, and ordered fix/check steps; the final audit record states scope and limits, and scoped `just check` passes.
-
-Coverage checkpoint (still in progress): production adapters reviewed in `src/agents/{aider,antigravity,claude,cline,codebuddy,codewhale,codex,commandcode,copilot,cursor,devin,gemini,grok,kilo,kimi,mimo,omp,opencode,pi,qwen,roo,vscode,windsurf,zcode,zed}/mod.rs`. This does not claim coverage of every shared agent helper, package installer, test module, or Claude migration path. Confirmed audit findings so far are T617–T626. Reviewed bounded scopes include Store/memory observation recall and privacy, the TUI result panel, graph LSP framing/document opens, Pi mixed-content replacement, web reply correlation, the OTel check extractor, and Aider/Grok host-config boundaries. OpenCode proxy-variable removal remains a revalidation candidate against T10.9's completed foreign-value preservation contract; it is not counted as a new finding here. Remaining work includes shared agent helpers, other Rust groups whose source review is partial or only inventory-backed, and frontend pages/3D rendering and packaging/platform integration. Filenames and risk-scan hits are not proof of full review.
-
 ### T617. Limit file-linked observation recall after deduplicating observations
 
 Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with actual Store migrations and public APIs. [observations_for_files](crates/rtok-store/src/observations.rs#L122) joins `observation_files` to `observations`, then orders and limits joined rows without making observation IDs distinct. Insert an older observation linked to `a.rs`, then a newer one linked to both `a.rs` and `b.rs`; querying both paths with limit 2 returns the newer ID twice and omits the older matching observation. [obs_for_prompt](src/plugins/memory/mod.rs#L299) feeds these rows into [rrf_obs](src/plugins/memory/observe.rs#L180), which both gives duplicate IDs extra rank contributions and merges them after the store limit has already discarded other hits. The real ranking helper reduces this fixture to one hit despite two eligible observations.
@@ -958,6 +955,175 @@ Execution plan:
 4. Run focused Aider detection/removal tests and `just check`.
 
 Check: a foreign URL containing loopback-looking text outside its authority is neither reported as rtok's proxy nor removed. Executed evidence used extracted production parsing/removal code; full CLI file edits and real Aider were not run.
+
+### T627. Preserve JSONC separators when removing an item with a trailing comment
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the verbatim production JSONC editor. [excise_member](src/agents/jsonc.rs#L241) skips whitespace but not comments when looking for the following comma. Removing `rtok` from `{"servers":{"rtok":1 /*keep*/,"other":2}}` returns `{"servers":{ /*keep*/,"other":2}}`, which no longer parses. The array equivalent, removing `"rtok worktree adopt" /*keep*/,` before another command, also leaves a leading comma. [Cursor post-create removal](src/agents/post_create.rs#L129) passes that result to `save` without validating it again; the ordinary MCP `remove_entry` wrapper instead rejects it before writing. T328 fixed replacement token boundaries, and T331.5 introduced shared removal coverage; neither records this comment-before-separator counterexample.
+
+Execution plan:
+
+1. Add object and array regressions with first/middle/last owned elements, block and line comments, trailing commas and multiple removals. Assert valid output, preserved foreign values and comments, and byte stability outside the removed span.
+2. Make separator selection aware of JSONC trivia through the existing parser/scanner; share the correction between object and array removals.
+3. Validate the final edited document before post-create settings can be written, preserving original bytes on errors. Exercise Cursor and the Devin/Windsurf caller with temporary files.
+4. Run JSONC, Doctor removal and post-create preservation tests, then `just check`.
+
+Check: removal leaves a parseable document containing the unrelated entry/command. Executed evidence compiled the actual editor and passed no-comment and last-element controls; the post-create filesystem write was source-traced, not executed against a real host.
+
+### T628. Select cached plugin versions by version precedence
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536`: [newest_child_dir](src/agents/plugin_install.rs#L225) sorts directory paths lexicographically and pops the last. An isolated fixture containing `0.9.0` and `0.10.0` selects `0.9.0`. [cache_probe](src/agents/plugin_install.rs#L190) uses this for Codex and CodeBuddy installed-version detection, so the outdated/list paths can report an older cached copy even when the newer copy exists. T328 corrected the separate `ketch_store_plugin` resolver; this still-unfixed cache selector does not use that ordering.
+
+Execution plan:
+
+1. Add installed-version probes containing `0.9.0`, `0.10.0`, prereleases, build metadata, malformed names and unrelated files; assert which manifest/version record supplies the result.
+2. Prefer an authoritative active-install record wherever the host supplies one. For the documented newest-cache fallback, apply SemVer precedence and an explicit deterministic fallback for unparseable names.
+3. Reuse the existing version parsing/order policy rather than adding another independent comparator. Verify Codex and CodeBuddy list/outdated behavior and keep receipt precedence intact.
+4. Run plugin-install/version/outdated tests and `just check`.
+
+Check: a newer semantic version is not hidden by the lexical order of cache folder names. Executed evidence used the exact selector over real temporary directories; host activation and update commands were not run.
+
+### T629. Reopen previously closed hosts when a later preflight fails
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [with_restart](src/agents/restart.rs#L289). The loop closes each running desktop immediately after its `would_change` check. If a later host's check returns an error, `?` exits before the reopen loop. A probe compiling this exact orchestration with fake processes recorded only `quit:First` when the second host's preflight failed; the write callback was never reached. A write-error control recorded both quits and both reopens. T141/T434 cover ordinary restart and write/quit failures, not a later preflight error after partial shutdown.
+
+Execution plan:
+
+1. Add an orchestration regression with two running desktop hosts and an error in the second preflight. Assert no host remains closed and no write occurs.
+2. Complete fallible preflight checks before shutting down any app, or use guaranteed cleanup for every successfully closed app on every exit path. Preserve existing warnings and best-effort reopen semantics.
+3. Cover failures on first/middle/last hosts, dry run, no-restart, CLI-only hosts and write errors without launching real applications.
+4. Run restart/install orchestration tests and `just check`.
+
+Check: every successfully closed app is reopened even if a subsequent host cannot be planned. Executed evidence used the real orchestration function with injected process/config seams; OS process control was not exercised.
+
+### T630. Preserve the selected config file in operator pages
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` with the actual `rtok-config` crate. [page](src/model/tasks.rs#L156) reloads layers using `(&home, None, None)` and [configured](src/model/tasks.rs#L184) repeats that selection, dropping `cfg.loaded_from`. A custom file supplied through `--config` with task prefix `Z` loads correctly, but the verbatim `configured` helper returns false when the default file has no tasks section. If the default file instead specifies prefix `A`, the page's reload selects `A`; a control passing `loaded_from` retains `Z`. The board can consequently report an unconfigured project or use different task settings from the CLI launched with the same explicit config. The Config page's [config_page_text](src/model/mod.rs#L1019) calls the same `figment(&cfg.home, None, None)`, so it also displays values and provenance from the wrong file (source-traced). T441.13.7's refresh behavior does not cover this source-selection case.
+
+Execution plan:
+
+1. Add task-page refresh regressions for an explicit config file with no default file and with a conflicting default task configuration. Compare the board's settings and rows, and the Config page's values/provenance, with the CLI using that same config.
+2. Carry the original selected config path through both refresh and provenance checks, reusing `Config::loaded_from`. Preserve reloading of project-level `.rtok.toml` changes.
+3. Cover default-file, `RTOK_CONFIG`, explicit `--config`, missing/invalid files and fallback behavior without process-global environment mutation in tests.
+4. Run config-layer/task-page tests and `just check`.
+
+Check: task-page refresh and Config page rendering use the same selected user file as the process that created them. Executed evidence used real config extraction and the exact provenance predicate; background polling and browser rendering were source-traced, not run.
+
+### T631. Track the real Git metadata when embedding a worktree build SHA
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the actual [build script](build.rs#L39) in a minimal temporary Cargo package and a real linked Git worktree. `.git` is a file there, so none of `.git/HEAD`, `.git/refs/heads`, `.git/packed-refs` exists and no Git rerun hint is emitted. After an initial build and an empty commit advancing HEAD, a second `cargo run` still prints the old embedded SHA. The fixture reported new HEAD `86a42649a` while the binary retained `81b95850e`. Other rerun directives keep Cargo from using its broad default source scan. T10.4's version embedding and T310's SPA hints do not cover linked-worktree Git metadata.
+
+Execution plan:
+
+1. Add an isolated incremental-build regression with a linked worktree: build, advance HEAD without touching sources, build again and compare the embedded SHA with Git.
+2. Resolve the actual per-worktree Git directory and common directory through Git, and watch HEAD plus the current loose ref/packed refs as appropriate. Support detached HEAD and ordinary checkouts.
+3. Keep source archives without Git working, avoid always-dirty missing-path hints, and cover checkout/ref changes as well as ordinary commits.
+4. Run build/version tests and `just check`.
+
+Check: an incremental worktree build embeds its current HEAD rather than a stale commit. The reproduction ran Cargo and Git with the production build.rs; the full rtok binary and release packaging were not rebuilt.
+
+### T632. Use rendered chart height when paginating PDF reports
+
+Source-confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [pagination](src/report/pdf.rs#L77) and [bar rendering](src/report/pdf.rs#L243). A chart is budgeted as `pairs.len() + 2` lines at `LEAD = 4.6` mm, but each drawn bar advances 5.2 mm. The chunker accepts 56 bars as a 58-line page. Starting at TOP 282 mm, after the chart title the last bar baseline is `282 - 6 - 55 * 5.2 = -10` mm, below the page itself and well below the 15 mm bottom margin. The existing oversized-chart guard and T167's orphan-heading fix do not account for the different physical bar spacing.
+
+Execution plan:
+
+1. Add layout regressions at the maximum chart size, with and without a preceding heading/paragraph. Inspect the emitted positions and require every row to stay within the content area.
+2. Express block costs and splitting in the same physical units used for rendering, including chart title and trailing spacing. Derive the maximum rows per chart from available height.
+3. Preserve chart continuation, heading placement and progress guarantees for oversized and empty charts; check mixed charts and paragraphs.
+4. Render representative reports for visual inspection, run PDF/report parity tests and `just check`.
+
+Check: no chart row crosses the bottom margin. The executed probe checked the current source constants and arithmetic; an actual PDF renderer/viewer was not run in this audit.
+
+### T633. Include the contents page in printed PDF page numbers
+
+Source-confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536`: [render](src/report/pdf.rs#L52) prepends one contents page, and section bookmarks use `start + 2`, but [toc_page](src/report/pdf.rs#L171) prints `start + 1`. A section starting on content index zero is physically on page 2 while the contents says page 1; subsequent section numbers have the same offset. This is separate from T632's chart-height calculation.
+
+Execution plan:
+
+1. Add a PDF contents regression with sections starting on different content pages, checking printed page numbers against their physical pages.
+2. Share the conversion from zero-based content index to physical page number between the contents and bookmark construction, honoring the PDF library's index convention.
+3. Verify first, middle and final sections plus chart continuations with extracted text/bookmarks and a rendered sample.
+4. Run PDF/report tests and `just check`.
+
+Check: every contents entry points to the page that actually starts the section. The source-arithmetic probe confirmed the one-page discrepancy; viewer navigation was not executed.
+
+### T634. Keep PyPI dry-run behavior independent of flag order
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` by running the actual [publisher](tools/pypi-publish.sh#L18) with temporary artifacts and fake git/cargo/twine executables. Both options overwrite one `mode` variable: `--dry-run --testpypi` invokes `twine upload --repository-url https://test.pypi.org/legacy/`, whereas the reverse order and `--dry-run` alone only invoke `twine check`. A dry run can therefore upload if the repository-selection flag follows it. No network upload occurred in the probe.
+
+Execution plan:
+
+1. Add a fake-twine command test for both flag orders, repeated flags and each standalone option. Require every invocation containing `--dry-run` to perform no upload.
+2. Store repository selection and dry-run state independently, or reject the combination explicitly before any publishing command. Keep the target repository visible in dry-run output.
+3. Preserve version/artifact validation and production wheel completeness checks for the chosen target; verify validation failures never upload.
+4. Run publisher script checks and `just check`.
+
+Check: flag order cannot turn a requested dry run into a publishing operation. The actual shell script ran with synthetic distribution files and a logging-only twine stub; package validity and registry authentication were not exercised.
+
+### T635. Decode JSON paths in Claude worktree fallback hooks
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [field](plugins/claude/scripts/worktree.sh#L26). The sed expression copies the JSON string's encoded bytes and stops at an escaped quote. Given a JSON-encoded cwd `/tmp/quote"dir`, it returns `/tmp/quote\`; a cwd containing one backslash retains the JSON escape pair. [WorktreeCreate](plugins/claude/scripts/worktree.sh#L49) passes that wrong path to `git -C` in its fallback. Removal's directory check can silently skip the actual worktree for the same reason. D31/T159 require a functioning fallback, and absolute paths are not restricted to characters that avoid JSON escaping.
+
+Execution plan:
+
+1. Add script regressions with plain, spaced, quoted, backslash-containing and Unicode paths, using a missing/old rtok fallback and fake Git argv capture.
+2. Decode the hook payload with a real JSON parser available under the supported fallback contract; do not replace one partial unescaper with another. Explicitly handle unavailable parsing and malformed fields.
+3. Test create cwd/name and remove cwd/worktree_path independently, preserving slug sanitation, dirty-worktree refusal and stdout's single-path contract.
+4. Run hook-script/fallback tests and `just check` on supported shell platforms.
+
+Check: Git receives the decoded path exactly and removal does not silently skip an escaped path. Executed evidence ran the verbatim `field` function through POSIX sh with synthetic JSON; real Git worktree creation/removal and Windows were not run.
+
+### T636. Limit Claude legacy proxy migration to owned endpoints
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the actual [retarget_proxy](src/agents/claude/migrate.rs#L94). `agents install claude --replace --yes` rewrites any `ANTHROPIC_BASE_URL` containing `8788` or `8787`, wherever those digits occur. The foreign URL `https://api.example/v1/8788` becomes `https://api.example/v1/8790`. The migration also hardcodes its destination instead of receiving the configured endpoint. T10.9's normal removal contract is related, but this is the separate legacy migration entry point; T626 affects Aider's ownership predicate.
+
+Execution plan:
+
+1. Add migration fixtures for genuine legacy loopback endpoints and foreign URLs with matching digits in hosts, paths, queries and userinfo. Assert foreign values are unchanged.
+2. Parse and verify the legacy endpoint's actual authority before retargeting, using the established ownership policy and supported loopback aliases.
+3. Pass the effective configured proxy destination into migration, preserving endpoint structure deliberately rather than globally replacing digit strings. Cover nondefault ports and idempotence.
+4. Run Claude migration and host-config preservation tests and `just check`.
+
+Check: migration retargets only recognized legacy rtok-related endpoints to the effective destination. The extracted production helper reproduced foreign-path mutation and passed an ordinary foreign-URL control; full installer dispatch and live Claude were not run.
+
+### T637. Route filter text before global TUI shortcuts
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [App::key](src/tui/app.rs#L715). The global `r`/`?` branches run before the Config and Calls filter handlers. An isolated compiled probe using the verbatim routing prefix and [config_key](src/tui/app.rs#L483) typed `proxy?` into an active Config filter and obtained `poxy`, one refresh and an opened help overlay. Calling the filter handler directly preserves `proxy?`. The Calls filter is reached after the same global branches (source-traced). T60.8 establishes global help/refresh outside text entry; its tests do not exercise active filters. The existing compare/export typing exceptions already demonstrate the needed precedence. This is separate from T619's wrapped-row scrolling.
+
+Execution plan:
+
+1. Add App-level regressions typing `proxy?` and ordinary text into Config and Calls filters; assert exact text and no refresh/help side effects.
+2. Dispatch active text-entry handlers before ordinary global shortcuts, keeping Ctrl+C and the documented finish/cancel keys deliberate. Reuse the compare/export routing convention.
+3. Keep `r` and `?` functional outside text entry and cover closing a filter, reopening it, Backspace and switching pages.
+4. Run TUI state/rendering tests and `just check`.
+
+Check: every printable filter character reaches its input without firing an unrelated command. The executed probe compiled the actual routing prefix and Config handler with unrelated page/model methods stubbed; a full interactive terminal and Calls input were not run.
+
+### T638. Bound benchmark output draining after the child exits
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [run_bounded](src/bench.rs#L402). The deadline controls only child polling; the subsequent `reader.join()` waits without a limit for stdout EOF. With the actual extracted function, a synthetic `sh -c 'sleep 0.8 & printf parent; exit 0'` and a 100 ms limit took 816 ms, waiting for the descendant after the direct child had exited. The ordinary `printf control` case returned its complete output. A longer-lived inherited pipe can stall the benchmark indefinitely. T235.1 and the host-version follow-up fixed command capture through `src/proc.rs`; this separate benchmark helper still implements its own unbounded drain. T620 concerns LSP request framing, not this process reader.
+
+Execution plan:
+
+1. Add hermetic subprocess regressions for an exited child whose descendant holds stdout, a child exceeding its deadline, nonzero exit and ordinary complete output. Never launch a real agent.
+2. Reuse the shared bounded capture mechanism in `src/proc.rs`, preserving the benchmark's success/timeout result semantics and imposing a finite post-exit drain.
+3. Reap the direct child on errors and timeout, and check both ordinary and graph benchmark callers. Keep capture output bounded where the shared API supports it.
+4. Run benchmark/process tests and `just check`.
+
+Check: the benchmark finishes within its deadline plus a documented finite drain allowance even when descendants retain stdout. The reproduction compiled the actual helper and ran synthetic shell children on macOS; no live benchmark agent or Windows process path was run.
+
+### T639. Keep the selected Calls row visible in the TUI
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [render_calls](src/tui/view.rs#L609) and [calls_table](src/tui/view.rs#L654). The cursor advances through all snapshot rows, but the renderer uses a stateless `Table` with no offset; selection only changes a row's style. A Ratatui 0.30.2 TestBackend probe of the actual `calls_table`, with 15 rows in a 100-by-5 area, renders row 0 and highlights it when selected. Selecting row 10 still renders row 0, hides row 10 and leaves no highlighted row on screen. T15.5 added the Calls cursor and details; T60.10 fixed viewport tracking for Sessions, not Calls. T619 is the independent wrapped-result panel issue.
+
+Execution plan:
+
+1. Add a Calls rendering regression navigating beyond a short viewport and back, asserting that the selected row remains visible and highlighted.
+2. Use Ratatui table state or the existing derived-offset convention to scroll the Calls list to its cursor, accounting for its header and border.
+3. Cover terminal resize, snapshot shrink, empty rows and opening the detail/expand panes, which reduce the list height. Keep selection and details on the same call.
+4. Run TUI state/rendering tests and `just check`.
+
+Check: keyboard navigation never leaves the Calls cursor outside its visible list. The executed probe used the production table function and real TestBackend; row data and formatting/theme dependencies were small fixtures, and full App navigation was source-traced.
 
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 
