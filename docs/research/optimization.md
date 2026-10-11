@@ -191,7 +191,8 @@ Order by expected dollars per effort; each line becomes a `plan.md` card with on
 7. **Isolation and per-lane upstream** (§2 L5). Check: agent latency under a bulk burst.
 8. **P28 Phase 1 measurement** (§3). Check: dated `research.md` rows and the must-keep fixture.
 9. **P28 Phase 2 compressor** on the `internal` lane, async, cached per archive id (§3.3).
-   Check: Gate P28.
+   Check: Gate P28. Dropped 2026-10-11 (T385.9): step 8's ceiling cannot pass the gate
+   (`research.md` §16.8).
 10. **Routing for internal/bulk calls** (§4.2). Check: dollars per lane before/after.
 11. **Deferred tool schemas, thinking replay** (§5). Check: per-wire tests and a bench row.
 12. **`rtok batch` CLI and report breakdown** (§2 L6). Check: trycmd + report fixture.

@@ -8608,6 +8608,18 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.9. P28 Phase 2: async compressor on the `internal` lane
+
+optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
+
+Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
+
+Result: dropped, nothing built (creator decision 2026-10-11). T385.8 sets the ceiling. The eligible set is 6.54 % of input, so a 2x-5x compressor removes at most 3.3 % to 5.2 % of input tokens. Few of those are dollars at a 98.4 % cache-hit rate, and a rewrite of an old block busts the cache after it. Gate P28 cannot be met on that ceiling once the compressor's own calls are counted. The decision and the reopen condition are in `research.md` §16.8. The cheaper `min_tokens` floor bench stays I-116.
+
+Status: dropped 2026-10-11
+
+Model: Claude Code / claude-opus-5-5
+
 ### T385.4. Batch observe and `parse_results` into `usage`
 
 optimization.md §2.2 L3 (roadmap S2/S3). Tag Batch create/poll/list/cancel/results calls on the `batch` lane; with `parse_results = true`, parse result lines into `usage` rows. Fail open on malformed lines.
