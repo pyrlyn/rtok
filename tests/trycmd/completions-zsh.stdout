@@ -440,12 +440,43 @@ _arguments "${_arguments_options[@]}" : /
 ':level -- 0 to 4:_default' /
 && ret=0
 ;;
+(conflict)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--remove[Take the conflict off instead]' /
+'--json[Print the task as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- One task:_default' /
+':other -- The task it conflicts with:_default' /
+&& ret=0
+;;
+(parallel)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--off[Take the mark off instead]' /
+'--json[Print the task as JSON]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':id -- Task id, e.g. `R12`:_default' /
+&& ret=0
+;;
 (sync)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the text]' /
 '-h[Print help]' /
 '--help[Print help]' /
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--dry-run[Print the planned creates, updates and closes and send nothing]' /
+'--json[JSON instead of the text]' /
+'-h[Print help]' /
+'--help[Print help]' /
+':backend -- Where to mirror the tasks:(github linear)' /
 && ret=0
 ;;
 (init)
@@ -509,7 +540,19 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(conflict)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(parallel)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (sync)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(export)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -900,6 +943,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (send)
 _arguments "${_arguments_options[@]}" : /
+'--task=[The task this message is about (e.g. /`A12/`); the recipient can read just that thread]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--all-live[Every live agent of this project (same repository or cwd), except the sender]' /
 '-h[Print help]' /
@@ -910,6 +954,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (inbox)
 _arguments "${_arguments_options[@]}" : /
+'--task=[Only messages about this task (e.g. /`A12/`)]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--unread[Only messages not read yet]' /
 '--json[JSON instead of the framed text]' /
@@ -1315,6 +1360,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (send)
 _arguments "${_arguments_options[@]}" : /
+'--task=[The task this message is about (e.g. /`A12/`); the recipient can read just that thread]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--all-live[Every live agent of this project (same repository or cwd), except the sender]' /
 '-h[Print help]' /
@@ -1325,6 +1371,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (inbox)
 _arguments "${_arguments_options[@]}" : /
+'--task=[Only messages about this task (e.g. /`A12/`)]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--unread[Only messages not read yet]' /
 '--json[JSON instead of the framed text]' /
@@ -2697,7 +2744,19 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(conflict)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(parallel)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (sync)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(export)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -4731,7 +4790,10 @@ _rtok__subcmd__help__subcmd__task_commands() {
 'release:Clear the assignee and set the task open. Only the holder, unless --force' /
 'dep:Record that this task waits on another. A cycle is refused and nothing is written' /
 'priority:Set priority from 0 (highest) to 4. 2 is the default and is not stored' /
+'conflict:Record that two tasks touch the same files, so they should not run at once. Symmetric; /`ready/` flags a task whose partner is in progress' /
+'parallel:Mark a task safe to run beside any other task' /
 'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
+'export:Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
     )
     _describe -t commands 'rtok help task commands' commands "$@"
@@ -4740,6 +4802,11 @@ _rtok__subcmd__help__subcmd__task_commands() {
 _rtok__subcmd__help__subcmd__task__subcmd__claim_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help task claim commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__conflict_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__conflict_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task conflict commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__create_commands] )) ||
 _rtok__subcmd__help__subcmd__task__subcmd__create_commands() {
@@ -4750,6 +4817,11 @@ _rtok__subcmd__help__subcmd__task__subcmd__create_commands() {
 _rtok__subcmd__help__subcmd__task__subcmd__dep_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help task dep commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__export_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task export commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__init_commands] )) ||
 _rtok__subcmd__help__subcmd__task__subcmd__init_commands() {
@@ -4765,6 +4837,11 @@ _rtok__subcmd__help__subcmd__task__subcmd__list_commands() {
 _rtok__subcmd__help__subcmd__task__subcmd__next_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help task next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__parallel_commands] )) ||
+_rtok__subcmd__help__subcmd__task__subcmd__parallel_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help task parallel commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__task__subcmd__priority_commands] )) ||
 _rtok__subcmd__help__subcmd__task__subcmd__priority_commands() {
@@ -5162,7 +5239,10 @@ _rtok__subcmd__task_commands() {
 'release:Clear the assignee and set the task open. Only the holder, unless --force' /
 'dep:Record that this task waits on another. A cycle is refused and nothing is written' /
 'priority:Set priority from 0 (highest) to 4. 2 is the default and is not stored' /
+'conflict:Record that two tasks touch the same files, so they should not run at once. Symmetric; /`ready/` flags a task whose partner is in progress' /
+'parallel:Mark a task safe to run beside any other task' /
 'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
+'export:Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -5173,6 +5253,11 @@ _rtok__subcmd__task__subcmd__claim_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task claim commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__task__subcmd__conflict_commands] )) ||
+_rtok__subcmd__task__subcmd__conflict_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task conflict commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__task__subcmd__create_commands] )) ||
 _rtok__subcmd__task__subcmd__create_commands() {
     local commands; commands=()
@@ -5182,6 +5267,11 @@ _rtok__subcmd__task__subcmd__create_commands() {
 _rtok__subcmd__task__subcmd__dep_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task dep commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__export_commands] )) ||
+_rtok__subcmd__task__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task export commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__help_commands] )) ||
 _rtok__subcmd__task__subcmd__help_commands() {
@@ -5196,7 +5286,10 @@ _rtok__subcmd__task__subcmd__help_commands() {
 'release:Clear the assignee and set the task open. Only the holder, unless --force' /
 'dep:Record that this task waits on another. A cycle is refused and nothing is written' /
 'priority:Set priority from 0 (highest) to 4. 2 is the default and is not stored' /
+'conflict:Record that two tasks touch the same files, so they should not run at once. Symmetric; /`ready/` flags a task whose partner is in progress' /
+'parallel:Mark a task safe to run beside any other task' /
 'sync:Raise the id counters to the adapter'/''s highest ids and report drift; never writes the adapter' /
+'export:Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write' /
 'init:Write /`/[tasks/]/` into this checkout'/''s /`.rtok.toml/` and seed the counter from existing tasks' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
@@ -5207,6 +5300,11 @@ _rtok__subcmd__task__subcmd__help__subcmd__claim_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task help claim commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__conflict_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__conflict_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help conflict commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__create_commands] )) ||
 _rtok__subcmd__task__subcmd__help__subcmd__create_commands() {
     local commands; commands=()
@@ -5216,6 +5314,11 @@ _rtok__subcmd__task__subcmd__help__subcmd__create_commands() {
 _rtok__subcmd__task__subcmd__help__subcmd__dep_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task help dep commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__export_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help export commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__help_commands] )) ||
 _rtok__subcmd__task__subcmd__help__subcmd__help_commands() {
@@ -5236,6 +5339,11 @@ _rtok__subcmd__task__subcmd__help__subcmd__list_commands() {
 _rtok__subcmd__task__subcmd__help__subcmd__next_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task help next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__parallel_commands] )) ||
+_rtok__subcmd__task__subcmd__help__subcmd__parallel_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task help parallel commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__help__subcmd__priority_commands] )) ||
 _rtok__subcmd__task__subcmd__help__subcmd__priority_commands() {
@@ -5281,6 +5389,11 @@ _rtok__subcmd__task__subcmd__list_commands() {
 _rtok__subcmd__task__subcmd__next_commands() {
     local commands; commands=()
     _describe -t commands 'rtok task next commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__task__subcmd__parallel_commands] )) ||
+_rtok__subcmd__task__subcmd__parallel_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok task parallel commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__task__subcmd__priority_commands] )) ||
 _rtok__subcmd__task__subcmd__priority_commands() {

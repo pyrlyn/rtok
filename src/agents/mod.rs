@@ -16,6 +16,7 @@ pub mod aider;
 pub mod antigravity;
 pub mod claude;
 pub mod cline;
+pub mod codebuddy;
 pub mod codewhale;
 pub mod codex;
 pub mod command;
@@ -55,6 +56,7 @@ pub mod qwen;
 pub mod restart;
 pub mod roo;
 pub mod skill;
+pub mod task_list;
 pub mod usage;
 pub mod vscode;
 pub mod windsurf;
@@ -105,6 +107,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "devin" => Some(&devin::Devin),
         "roo" => Some(&roo::Roo),
         "qwen" => Some(&qwen::Qwen),
+        "codebuddy" => Some(&codebuddy::Codebuddy),
         _ => None,
     }
 }

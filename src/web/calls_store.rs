@@ -15,23 +15,23 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::live::CallBatch;
+use crate::config::Graph;
 use crate::store::{EventPhase, GraphEvent};
 
-pub const FEED_ROWS: usize = 200;
 /// A call with no end this long after its start is shown as interrupted: its process is gone.
 pub const INTERRUPT_MS: i64 = 120_000;
 const LONGEST_BUCKET_MS: i64 = 900_000;
-/// Latencies kept for the percentiles: "since open" would otherwise grow with every call.
+/// Latencies kept for the percentiles: "since start" would otherwise grow with every call.
 pub const LATENCY_KEEP: usize = 1000;
 /// Slots of a sparkline. The page and the TUI draw the same series, so the count is fixed here.
 pub const SPARK_SLOTS: usize = 30;
 
-/// The window chips of the page; the last one is "since open" and reads the running total.
+/// The window chips of the page; the last one is "since start" and reads the running total.
 pub const WINDOWS: [(&str, i64); 4] = [
     ("1 min", 60_000),
     ("5 min", 300_000),
     ("15 min", LONGEST_BUCKET_MS),
-    ("since open", i64::MAX),
+    ("since start", i64::MAX),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
@@ -41,6 +41,8 @@ pub struct Running {
     pub target: Option<String>,
     pub project: Option<String>,
     pub session: String,
+    /// T329.34: what the store calls the session (`claude 3f9a1c2e`), else the session's start.
+    pub caller: String,
     /// The reader's clock: the interrupt timeout must not depend on the writer's.
     pub at: i64,
 }
@@ -52,6 +54,7 @@ pub struct Finished {
     pub target: Option<String>,
     pub project: Option<String>,
     pub session: String,
+    pub caller: String,
     pub ok: bool,
     pub error: Option<String>,
     pub backend: Option<String>,
@@ -66,7 +69,7 @@ pub struct Finished {
 /// the window totals, so the slots add up to them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Spark {
-    /// What the slots cover. "since open" reads the buckets, which are kept for 15 minutes only.
+    /// What the slots cover. "since start" reads the buckets, which are kept for 15 minutes only.
     pub span_ms: i64,
     pub calls: Vec<u64>,
     pub saved: Vec<i64>,
@@ -149,23 +152,39 @@ impl Totals {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CallsStore {
     pub running: Vec<Running>,
     /// Newest first.
     pub feed: Vec<Finished>,
+    /// `[plugins.graph] live_feed_rows`: how long the feed grows.
+    feed_rows: usize,
+    /// `[plugins.graph] live_heat_window_s`, carried to the page in the view.
+    pub heat_window_s: u32,
     /// One per batch, kept for the longest window.
     buckets: Vec<(i64, Totals)>,
     pub all: Totals,
 }
 
-fn ended(e: &GraphEvent, at: i64) -> Finished {
+impl Default for CallsStore {
+    fn default() -> Self {
+        Self::with(&Graph::default())
+    }
+}
+
+/// The session as a caller column shows it when the store names nobody.
+pub fn bare_caller(session: &str) -> String {
+    session.chars().take(8).collect()
+}
+
+fn ended(e: &GraphEvent, at: i64, caller: String) -> Finished {
     Finished {
         call: e.call.clone(),
         tool: e.tool.clone(),
         target: e.target.clone(),
         project: e.project.clone(),
         session: e.session.clone(),
+        caller,
         ok: e.ok,
         error: e.error.clone(),
         backend: e.backend.clone(),
@@ -178,6 +197,17 @@ fn ended(e: &GraphEvent, at: i64) -> Finished {
 }
 
 impl CallsStore {
+    pub fn with(cfg: &Graph) -> Self {
+        Self {
+            running: Vec::new(),
+            feed: Vec::new(),
+            feed_rows: cfg.live_feed_rows as usize,
+            heat_window_s: cfg.live_heat_window_s,
+            buckets: Vec::new(),
+            all: Totals::default(),
+        }
+    }
+
     /// Folds one batch in. Totals come from the batch `summary`, which counts every event, so a
     /// burst cut down to the listed events still adds up to what `rtok stats` sums.
     pub fn fold(&mut self, batch: &CallBatch, now: i64) {
@@ -203,6 +233,7 @@ impl CallsStore {
                     target: e.target.clone(),
                     project: e.project.clone(),
                     session: e.session.clone(),
+                    caller: batch.caller(&e.session),
                     at,
                 };
                 match self.running.iter_mut().find(|x| x.call == e.call) {
@@ -225,7 +256,10 @@ impl CallsStore {
             projects_hit: u64::from(batch.summary.projects_hit),
             ..Totals::default()
         };
-        let rows: Vec<Finished> = ends.iter().map(|e| ended(e, now)).collect();
+        let rows: Vec<Finished> = ends
+            .iter()
+            .map(|e| ended(e, now, batch.caller(&e.session)))
+            .collect();
         for row in &rows {
             let t = bucket.tools.entry(row.tool.clone()).or_default();
             t.calls += 1;
@@ -239,7 +273,7 @@ impl CallsStore {
         // A late end for a call already marked interrupted replaces the mark.
         self.feed.retain(|r| !done.contains(r.call.as_str()));
         self.feed.splice(0..0, rows.into_iter().rev());
-        self.feed.truncate(FEED_ROWS);
+        self.feed.truncate(self.feed_rows);
         self.buckets.push((now, bucket));
         self.buckets.retain(|(at, _)| now - at <= LONGEST_BUCKET_MS);
     }
@@ -256,6 +290,7 @@ impl CallsStore {
             target: r.target,
             project: r.project,
             session: r.session,
+            caller: r.caller,
             ok: false,
             error: None,
             backend: None,
@@ -266,7 +301,7 @@ impl CallsStore {
             interrupted: true,
         });
         self.feed.splice(0..0, rows);
-        self.feed.truncate(FEED_ROWS);
+        self.feed.truncate(self.feed_rows);
     }
 
     /// Summed from the buckets on every call, never kept as a second counter.
@@ -312,14 +347,14 @@ impl CallsStore {
 /// Empty strings mean "all".
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FeedFilter {
-    pub session: String,
+    pub caller: String,
     pub tool: String,
     pub project: String,
 }
 
 impl FeedFilter {
     fn keeps(&self, r: &Finished) -> bool {
-        (self.session.is_empty() || r.session == self.session)
+        (self.caller.is_empty() || r.caller == self.caller)
             && (self.tool.is_empty() || r.tool == self.tool)
             && (self.project.is_empty() || Some(&self.project) == r.project.as_ref())
     }
@@ -399,6 +434,7 @@ pub(crate) mod fixtures {
         CallBatch {
             head: events.len() as i64,
             omitted,
+            callers: Default::default(),
             summary: CallSummary {
                 starts: events
                     .iter()
@@ -463,7 +499,7 @@ mod tests {
             (60_000, 1, 2)
         );
         assert_eq!(short.calls.iter().sum::<u64>(), 3);
-        // "since open" has no buckets beyond 15 minutes: it draws the last 15.
+        // "since start" has no buckets beyond 15 minutes: it draws the last 15.
         assert_eq!(s.spark(3, now), long);
     }
 
@@ -569,14 +605,41 @@ mod tests {
     }
 
     #[test]
-    fn the_feed_keeps_the_newest_rows_first_up_to_the_cap() {
-        let mut s = CallsStore::default();
-        for i in 0..FEED_ROWS + 5 {
+    fn the_feed_keeps_the_newest_rows_first_up_to_the_configured_cap() {
+        let cfg = Graph {
+            live_feed_rows: 5,
+            live_heat_window_s: 90,
+            ..Graph::default()
+        };
+        let mut s = CallsStore::with(&cfg);
+        for i in 0..8 {
             folded(&mut s, vec![end(&format!("c{i}"), 2, 1)], T + i as i64);
         }
-        assert_eq!(s.feed.len(), FEED_ROWS);
-        assert_eq!(s.feed[0].call, format!("c{}", FEED_ROWS + 4));
-        assert_eq!(s.all.calls, FEED_ROWS as u64 + 5);
+        assert_eq!(s.feed.len(), 5);
+        assert_eq!(s.feed[0].call, "c7");
+        assert_eq!(s.all.calls, 8);
+        assert_eq!(s.heat_window_s, 90);
+        assert_eq!(CallsStore::default().feed_rows, 200, "the shipped default");
+    }
+
+    #[test]
+    fn a_row_carries_the_name_the_batch_gives_its_session_else_the_session() {
+        let mut s = CallsStore::default();
+        let mut b = batch(vec![event("run"), end("a", 2, 1)], 0);
+        b.callers
+            .insert("session-abcdef".into(), "claude 3f9a1c2e".into());
+        s.fold(&b, T);
+        assert_eq!(s.running[0].caller, "claude 3f9a1c2e");
+        assert_eq!(s.feed[0].caller, "claude 3f9a1c2e");
+        let mut other = end("b", 2, 1);
+        other.session = "mcp-1234567890".into();
+        folded(&mut s, vec![other], T + 1);
+        assert_eq!(s.feed[0].caller, "mcp-1234", "no name: the session's start");
+        let by = |caller: &str| FeedFilter {
+            caller: caller.into(),
+            ..FeedFilter::default()
+        };
+        assert_eq!(filter_feed(&s.feed, &by("claude 3f9a1c2e")).len(), 1);
     }
 
     #[test]
@@ -637,8 +700,8 @@ mod tests {
             ],
             T,
         );
-        let f = |session: &str, tool: &str| FeedFilter {
-            session: session.into(),
+        let f = |caller: &str, tool: &str| FeedFilter {
+            caller: caller.into(),
             tool: tool.into(),
             project: String::new(),
         };

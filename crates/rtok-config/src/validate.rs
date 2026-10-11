@@ -688,6 +688,17 @@ fn check_leaf(
             "proxy.flex.retries" if n > 5 => {
                 errors.push(format!("{at}: {dotted} must be ≤ 5"));
             }
+            // A zero window or rate would blank the live panel; 1000 rows is what a frame carries.
+            "plugins.graph.live_heat_window_s"
+            | "plugins.graph.live_max_events_per_s"
+            | "plugins.graph.live_feed_rows"
+                if n < 1 =>
+            {
+                errors.push(format!("{at}: {dotted} must be ≥ 1"));
+            }
+            "plugins.graph.live_feed_rows" if n > 1000 => {
+                errors.push(format!("{at}: {dotted} must be ≤ 1000"));
+            }
             "tui.tick_secs" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
             }

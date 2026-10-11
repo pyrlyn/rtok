@@ -482,6 +482,10 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     // Only on the remote: a stale local `origin/main` would branch from the wrong commit.
     run(&tmp, &["clone", "-q", "origin.git", "other"]);
     commit(&tmp.join("other"), "b.txt");
+    // T441.13.3: the host config is only written where git ignores it.
+    std::fs::write(tmp.join("other/.gitignore"), ".claude/\n").unwrap();
+    run(&tmp.join("other"), &["add", ".gitignore"]);
+    run(&tmp.join("other"), &["commit", "-q", "-m", "ignore"]);
     run(&tmp.join("other"), &["push", "-q", "origin", "main"]);
     let tip = run(&tmp.join("other"), &["rev-parse", "HEAD"]);
     // T410: the default root is `~/.rtok/worktrees`; a `_worktrees/` beside the repository
@@ -504,6 +508,15 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     let expected = root.join("rtok-t158").canonicalize().unwrap();
     assert_eq!(path.canonicalize().unwrap(), expected);
     assert_eq!(run(path, &["rev-parse", "HEAD"]), tip);
+    // T441.13.3: the session started in the worktree shares one Claude Code task list.
+    let local: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(path.join(".claude/settings.local.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        local["env"]["CLAUDE_CODE_TASK_LIST_ID"], "origin-t158",
+        "{local}"
+    );
     assert_eq!(
         run(path, &["branch", "--show-current"]).trim(),
         "t158-worktree-add"
@@ -618,6 +631,12 @@ fn clean_deletes_idle_tagged_caches_and_nothing_else() {
     let out = rtok(&work, &["worktree", "clean", "--yes"]);
     assert!(
         out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // T276.2: two caches go, so a bar is due on a terminal; off one, stderr stays untouched.
+    assert!(
+        out.stderr.is_empty(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );

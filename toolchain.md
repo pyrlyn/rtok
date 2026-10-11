@@ -108,7 +108,7 @@ Project programs and direct packages from the manifests.
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
-| indicatif | local | https://crates.io/crates/indicatif | Rust dependency |
+| indicatif | local | https://crates.io/crates/indicatif | Spinner and progress bar: `graph index` and the loaders in the root crate, `proc::ProgressRunner` in `crates/rtok-sys` (T276) |
 | inquire | local | https://crates.io/crates/inquire | `rtok completions` shell picker (multi-select, crossterm backend only) |
 | insta | local | https://crates.io/crates/insta | Snapshot tests for stable text output |
 | jiff | local | https://crates.io/crates/jiff | T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger |

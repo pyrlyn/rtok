@@ -301,6 +301,10 @@ fn live_calls_view_exists_on_both_surfaces() {
         env!("CARGO_MANIFEST_DIR"),
         "/src/web/calls_store.rs"
     ));
+    let page_feed = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/web/src/pages/graph3d/live/CallFeed.tsx"
+    ));
     let pane = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/src/tui/live_calls.rs"
@@ -340,6 +344,20 @@ fn live_calls_view_exists_on_both_surfaces() {
     assert!(
         app.contains("(\"graph\", \"f\", \"freeze/unfreeze calls\")"),
         "the TUI's KEYS table documents the freeze key"
+    );
+    // T329.34: both surfaces count from their own start, replayed from the store by the one
+    // Reader, and show the caller names the Reader resolves.
+    assert!(
+        web_live.contains("r.replay(") || web_live.contains(".replay(since)"),
+        "the web poller replays the store since the server started"
+    );
+    assert!(
+        pane.contains("r.replay(") && pane.contains("live::head_of"),
+        "the TUI pane replays the store since the TUI started"
+    );
+    assert!(
+        pane.contains("r.caller") && page_feed.contains("r.caller"),
+        "both surfaces show the caller name, not the session id"
     );
 }
 
@@ -721,6 +739,26 @@ fn usage_page_exists_on_both_surfaces() {
     );
 }
 
+/// T441.13.7: both surfaces render the Tasks page from the one list `rtok task list --all` reads
+/// (`Project::adapter().list`): the tui shows its table, the SPA the same rows as a board.
+#[test]
+fn tasks_page_exists_on_both_surfaces() {
+    let tasks = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/model/tasks.rs"));
+    let Surfaces { model, tui, .. } = SURFACES;
+    assert!(
+        model.contains("(\"tasks\", \"tasks\")"),
+        "pages() offers tasks"
+    );
+    assert!(
+        tasks.contains(".list(&filter(&[], true, None)?)"),
+        "the one list lives behind the model (D23)"
+    );
+    assert!(
+        tui.contains("\"tasks\" =>"),
+        "the TUI renders the tasks page"
+    );
+}
+
 /// Reading commands and the page of the model they render: (command path, page). The
 /// page must be one `model::pages()` offers — a page both surfaces carry in the frame.
 /// The mapping is many-to-one: several commands may render the same page.
@@ -755,6 +793,8 @@ const COMMAND_PAGES: &[(&str, &str)] = &[
     // the Worktrees page rides the snapshot since T232, so `worktree list` renders it
     ("worktree list", "worktrees"),
     ("agents usage", "usage"),
+    // the Tasks page rides the snapshot since T441.13.7, so `task list` renders it
+    ("task list", "tasks"),
 ];
 
 /// The commands D27 exempts, each with its reason. Streaming commands print a stream,
@@ -875,10 +915,6 @@ const EXEMPT: &[(&str, &str)] = &[
         "allocates an id and writes a task through the adapter (T441.5)",
     ),
     (
-        "task list",
-        "reads the project's adapter, not the store snapshot (T441.5)",
-    ),
-    (
         "task show",
         "reads the project's adapter, not the store snapshot (T441.5)",
     ),
@@ -899,6 +935,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "raises the store's id counters to the adapter's highest ids; agents get that for free, since task_create seeds first (T441.12)",
     ),
     (
+        "task export",
+        "a human's one-way mirror of the disk tasks into an issue tracker; it writes to a third party, so no agent tool (T441.13.5)",
+    ),
+    (
         "task ready",
         "reads the project's adapter, not the store snapshot (T442)",
     ),
@@ -911,6 +951,14 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "task priority",
         "writes a priority through the adapter (T442)",
+    ),
+    (
+        "task conflict",
+        "writes a symmetric conflict marker through the adapter (T441.13.2)",
+    ),
+    (
+        "task parallel",
+        "writes a parallel marker through the adapter (T441.13.2)",
     ),
     (
         "worktree add",
@@ -1116,6 +1164,8 @@ const JSON_READERS: &[&str] = &[
     "task release",
     "task dep",
     "task priority",
+    "task conflict",
+    "task parallel",
 ];
 
 fn command_at<'a>(root: &'a Command, path: &str) -> &'a Command {
