@@ -140,6 +140,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T609 | todo | P3 | 3 | 0% | |
 | T611 | todo | P2 | 3 | 0% | |
 | T613 | todo | P2 | 3 | 0% | |
+| T615 | todo | P2 | 3 | 0% | |
 
 
 
@@ -772,6 +773,21 @@ Execution plan:
 4. Cover pre-existing orphan rows through the chosen reconciliation path without requiring their ids to change. Run focused store/agent/model/hook tests and `just check`.
 
 Check: event arrival order no longer changes parentage or which agent represents the session. The isolated executable linked the actual `rtok-store` crate, used its in-memory migrations and public methods, imported actual agent-view types and compiled the production pure model functions. The two orders and repeated-registration controls were executed without raw SQL or mocked store behavior. SessionTotals were synthetic; full CLI output, live hosts, real agents and concurrent OS processes were not exercised.
+
+### T615. Preserve claim order when tasks are claimed in the same second
+
+Confirmed on `e8d36a0c6fdfb27f37ca97ceb33e6230bee545d1` with the actual in-memory Store. [upsert_task_claim](crates/rtok-store/src/task_claims.rs#L36) records `since` in whole Unix seconds, while [latest_task_claim](crates/rtok-store/src/task_claims.rs#L78) sorts by `since DESC, task_id ASC`. Claim `R1` and then `R2` for the same project/agent within one second: the method returns `R1` and its old title. Re-claiming `R2` within that second still returns `R1`. The existing test claims `R1`, `R2`, then `R1` again, so its expected result coincides with the lexical tie-break and misses the defect.
+
+The task runner writes this row after a successful claim and on a same-agent re-claim ([claim_held](src/tasks/run.rs#L245)); it does not restrict an agent to one active task. [claim_injection](src/hooks/mod.rs#L159) uses the result directly for the SessionStart/PostCompact task line, despite its explicit newest-row contract. Fast successive claims can therefore inject the earlier task instead of the task most recently selected. This is separate from T601's disk lock ownership race and T592's OTel cursor ordering.
+
+Execution plan:
+
+1. Add deterministic store regressions for equal-second `R1` then `R2`, the reverse order, and re-claiming either existing row. Assert last successful claim order, not lexical ID order; keep separate-second, project/agent isolation and release-fallback controls.
+2. Persist an ordering value that advances on every successful claim and re-claim, including updates of existing rows. Use typed Diesel operations and a transaction-safe ordering scheme; retain `since` for elapsed-time/display semantics. Include a compatible migration and deterministic handling of pre-existing ties.
+3. Cover the runner-to-hook path so SessionStart/PostCompact select the latest claimed task and its current first-line title, including rapid re-claims. Preserve release/finish cleanup and the injection budget.
+4. Run focused task-claim, runner and hook tests and `just check`.
+
+Check: selecting the latest claim is independent of task ID spelling when timestamps tie. The isolated probe used real Store migrations and public APIs, checked that all reproducing writes occurred in one wall-clock second, and exercised re-claim, release fallback, project/agent isolation and separate-second controls. No raw SQL, full hook dispatch, live host or concurrent process was exercised; the injected-text effect was source-traced.
 
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 

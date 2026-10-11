@@ -59,6 +59,7 @@
 - T609. Preserve code inside longer Markdown backtick fences
 - T611. Decode serialized Copilot tool arguments before hook dispatch
 - T613. Attach sub-agents when their main agent is registered later
+- T615. Preserve claim order when tasks are claimed in the same second
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
