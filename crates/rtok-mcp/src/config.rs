@@ -96,6 +96,56 @@ pub fn remove_entry(fs: &mut impl Fs, spec: &McpSpec) -> Result<Written> {
     }
 }
 
+/// Add the spec's user keys that the entry at `key_path.<name>` lacks, in place, and return
+/// them. A key that is there keeps its value, and everything else in the entry (comments, a
+/// sub-table such as Codex's `[mcp_servers.rtok.tools.read]`) stays as it was. Writes nothing
+/// when no key is missing, or when there is no entry to complete.
+pub fn add_missing_keys(fs: &mut impl Fs, spec: &McpSpec) -> Result<Vec<(&'static str, Value)>> {
+    let Some(have) = read_entry(fs, spec)? else {
+        return Ok(Vec::new());
+    };
+    let missing: Vec<_> = spec
+        .user_keys
+        .iter()
+        .filter(|(key, _)| have.get(*key).is_none())
+        .cloned()
+        .collect();
+    if missing.is_empty() {
+        return Ok(missing);
+    }
+    match spec.format {
+        Format::Json => {
+            let mut merged = have;
+            merged
+                .as_object_mut()
+                .with_context(|| {
+                    format!("{}: the entry is not an object", spec.config_path.display())
+                })?
+                .extend(missing.iter().map(|(k, v)| ((*k).to_string(), v.clone())));
+            write_json(fs, spec, Some(&merged))?;
+        }
+        Format::Jsonc => add_jsonc(fs, spec, &missing)?,
+        Format::Toml => add_toml(fs, spec, &missing)?,
+    }
+    Ok(missing)
+}
+
+/// `entry`'s keys as the `key = value` lines a TOML table holds, in order, for a report.
+pub fn toml_lines(entry: &Value) -> String {
+    let mut doc = toml_edit::DocumentMut::new();
+    if let Some(m) = entry.as_object() {
+        for (k, v) in m {
+            doc[k.as_str()] = toml_edit::Item::Value(json_to_toml_value(v));
+        }
+    }
+    doc.to_string().trim_end().to_string()
+}
+
+/// `value` as a TOML value, for a report.
+pub fn toml_value(value: &Value) -> String {
+    json_to_toml_value(value).to_string().trim().to_string()
+}
+
 // ---- JSON (strict; T79 refuses to rewrite a file that fails to parse as plain JSON) ----
 
 fn parse_json(bytes: &[u8], path: &Path) -> Result<Value> {
@@ -253,6 +303,26 @@ fn write_jsonc(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Resul
     Ok(Written::Changed)
 }
 
+fn add_jsonc(fs: &mut impl Fs, spec: &McpSpec, keys: &[(&'static str, Value)]) -> Result<()> {
+    let root = parse_jsonc(fs.read(&spec.config_path), &spec.config_path)?;
+    let mut obj = root
+        .object_value_or_create()
+        .with_context(|| format!("{}: root is not an object", spec.config_path.display()))?;
+    for k in &spec.key_path {
+        obj = obj
+            .object_value_or_create(k)
+            .with_context(|| format!("{}: {k} is not an object", spec.config_path.display()))?;
+    }
+    let entry = obj
+        .object_value(spec.server.name)
+        .with_context(|| format!("{}: the entry is not an object", spec.config_path.display()))?;
+    for (key, value) in keys {
+        entry.append(key, json_to_cst(value));
+    }
+    fs.backup(&spec.config_path)?;
+    fs.write(&spec.config_path, root.to_string().into_bytes())
+}
+
 fn json_to_cst(v: &Value) -> CstInputValue {
     match v {
         Value::Null => CstInputValue::Null,
@@ -303,17 +373,7 @@ fn write_toml(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result
         Some(bytes) => parse_toml(&bytes, &spec.config_path)?,
         None => toml_edit::DocumentMut::new(),
     };
-    let mut table: &mut dyn toml_edit::TableLike = doc.as_table_mut();
-    for k in &spec.key_path {
-        // Implicit: a created `[mcp]` above `[mcp.servers.rtok]` prints no empty header of its own.
-        let mut created = toml_edit::Table::new();
-        created.set_implicit(true);
-        table = table
-            .entry(k)
-            .or_insert(toml_edit::Item::Table(created))
-            .as_table_like_mut()
-            .with_context(|| format!("{}: {k} is not a table", spec.config_path.display()))?;
-    }
+    let table = servers_toml_mut(&mut doc, spec)?;
     match entry {
         Some(v) => {
             table.insert(spec.server.name, json_to_toml_item(v));
@@ -325,6 +385,39 @@ fn write_toml(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result
     fs.backup(&spec.config_path)?;
     fs.write(&spec.config_path, doc.to_string().into_bytes())?;
     Ok(Written::Changed)
+}
+
+/// The servers table at `key_path`, created (as implicit tables) where it is missing.
+fn servers_toml_mut<'a>(
+    doc: &'a mut toml_edit::DocumentMut,
+    spec: &McpSpec,
+) -> Result<&'a mut dyn toml_edit::TableLike> {
+    let mut table: &mut dyn toml_edit::TableLike = doc.as_table_mut();
+    for k in &spec.key_path {
+        // Implicit: a created `[mcp]` above `[mcp.servers.rtok]` prints no empty header of its own.
+        let mut created = toml_edit::Table::new();
+        created.set_implicit(true);
+        table = table
+            .entry(k)
+            .or_insert(toml_edit::Item::Table(created))
+            .as_table_like_mut()
+            .with_context(|| format!("{}: {k} is not a table", spec.config_path.display()))?;
+    }
+    Ok(table)
+}
+
+fn add_toml(fs: &mut impl Fs, spec: &McpSpec, keys: &[(&'static str, Value)]) -> Result<()> {
+    let bytes = fs.read(&spec.config_path).unwrap_or_default();
+    let mut doc = parse_toml(&bytes, &spec.config_path)?;
+    let entry = servers_toml_mut(&mut doc, spec)?
+        .get_mut(spec.server.name)
+        .and_then(toml_edit::Item::as_table_like_mut)
+        .with_context(|| format!("{}: the entry is not a table", spec.config_path.display()))?;
+    for (key, value) in keys {
+        entry.insert(key, toml_edit::Item::Value(json_to_toml_value(value)));
+    }
+    fs.backup(&spec.config_path)?;
+    fs.write(&spec.config_path, doc.to_string().into_bytes())
 }
 
 fn toml_item_to_json(item: &toml_edit::Item) -> Value {
@@ -448,6 +541,8 @@ mod tests {
             entry_shape: EntryShape::Command,
             duplicate_name: DuplicateName::ShowsBoth,
             plugin_serves: None,
+            user_keys: Vec::new(),
+            report: crate::spec::ReportStyle::default(),
         }
     }
 

@@ -3,9 +3,10 @@
 
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES};
+use serde_json::Value;
 
 use crate::config::{self, Fs, Written};
-use crate::spec::McpSpec;
+use crate::spec::{McpSpec, ReportStyle};
 
 /// What `apply` should do to the entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,7 +21,8 @@ pub enum Mode {
 pub enum Report {
     NoChanges,
     /// `<key>.<name>: <command> <args>` for an install or update, `- <key>.<name>` for a remove;
-    /// the same lines the hosts' own installers print.
+    /// the same lines the hosts' own installers print ([`ReportStyle::Summary`]), or the
+    /// `[<key>.<name>]` block of [`ReportStyle::TomlBlock`].
     Wrote(String),
     /// Left alone: `leave …` when the entry is not rtok's or the user edited it and declined to
     /// have it removed, `? …` on a dry run that would ask.
@@ -51,25 +53,81 @@ pub fn apply(
 ) -> Result<Report> {
     let ours = spec.entry();
     let at = format!("{}.{}", spec.key_path.join("."), spec.server.name);
+    let toml_block = spec.report == ReportStyle::TomlBlock;
     match mode {
-        Mode::Install | Mode::Update => match config::write_entry(fs, spec, &ours)? {
-            Written::Unchanged => Ok(Report::NoChanges),
-            Written::Changed => Ok(Report::Wrote(format!("{at}: {}", spec.summary()))),
-        },
+        Mode::Install | Mode::Update => {
+            if let Some(report) = complete_entry(spec, &ours, &at, fs, is_bin)? {
+                return Ok(report);
+            }
+            match config::write_entry(fs, spec, &ours)? {
+                Written::Unchanged => Ok(Report::NoChanges),
+                Written::Changed if toml_block => Ok(Report::Wrote(format!(
+                    "+ [{at}]\n{}",
+                    config::toml_lines(&ours)
+                ))),
+                Written::Changed => Ok(Report::Wrote(format!("{at}: {}", spec.summary()))),
+            }
+        }
         Mode::Remove => {
             let Some(have) = config::read_entry(fs, spec)? else {
                 return Ok(Report::NoChanges);
             };
             let named = format!("{at} in {}", spec.config_path.display());
+            // A user key left at its seed is rtok's own; one the user changed is an edit.
+            let (have, ours) = (
+                spec.without_seeded_keys(&have),
+                spec.without_user_keys(&ours),
+            );
             if let Some(leave) = rtok_agent_sdk::judge_owned(ctx, &named, &have, &ours, is_bin) {
                 return Ok(Report::Left(leave));
             }
             match config::remove_entry(fs, spec)? {
                 Written::Unchanged => Ok(Report::NoChanges),
+                Written::Changed if toml_block => Ok(Report::Wrote(format!("- [{at}]"))),
                 Written::Changed => Ok(Report::Wrote(format!("- {at}"))),
             }
         }
     }
+}
+
+/// An entry that already starts rtok the way `ours` does (an rtok binary and the same args) is
+/// not replaced when the spec has user keys: it only gains the ones it lacks, so a value the
+/// user chose, and any other key or sub-table they added, stay. `None` when the spec has no
+/// user keys or the entry is missing or is not rtok's, which `apply` writes in full.
+fn complete_entry(
+    spec: &McpSpec,
+    ours: &Value,
+    at: &str,
+    fs: &mut impl Fs,
+    is_bin: fn(&str) -> bool,
+) -> Result<Option<Report>> {
+    if spec.user_keys.is_empty() {
+        return Ok(None);
+    }
+    let Some(have) = config::read_entry(fs, spec)? else {
+        return Ok(None);
+    };
+    let starts_rtok = have
+        .get("command")
+        .and_then(Value::as_str)
+        .is_some_and(is_bin)
+        && have.get("args") == ours.get("args");
+    if !starts_rtok {
+        return Ok(None);
+    }
+    let added = config::add_missing_keys(fs, spec)?;
+    if added.is_empty() {
+        return Ok(Some(Report::NoChanges));
+    }
+    let one = |(key, seed): &(&str, Value)| match spec.report {
+        ReportStyle::TomlBlock => format!("{key} = {}", config::toml_value(seed)),
+        ReportStyle::Summary => format!("{key} = {seed}"),
+    };
+    let pairs = added.iter().map(one).collect::<Vec<_>>().join(", ");
+    Ok(Some(Report::Wrote(match spec.report {
+        ReportStyle::TomlBlock => format!("+ [{at}] {pairs}"),
+        ReportStyle::Summary => format!("{at}: added {pairs}"),
+    })))
 }
 
 #[cfg(test)]
@@ -79,7 +137,7 @@ mod tests {
 
     use super::*;
     use crate::registry;
-    use crate::spec::{Client, DuplicateName, EntryShape, Format, Launch};
+    use crate::spec::{Client, DuplicateName, EntryShape, Format, Launch, ReportStyle};
     use crate::status::{self, Entry};
 
     /// An in-memory [`Fs`] for tests: no host disk touched, `backups` counts every call so a
@@ -122,6 +180,8 @@ mod tests {
             entry_shape: EntryShape::TypedCommand,
             duplicate_name: DuplicateName::ShowsBoth,
             plugin_serves: None,
+            user_keys: Vec::new(),
+            report: ReportStyle::default(),
         }
     }
 
@@ -391,5 +451,108 @@ mod tests {
                 "{have} yes={yes} dry={dry_run}"
             );
         }
+    }
+
+    fn seeded(format: Format, key_path: &str) -> McpSpec {
+        let mut s = spec(format, key_path);
+        s.user_keys = vec![("approval", serde_json::json!("writes"))];
+        s
+    }
+
+    fn entry_of(fs: &MemFs, s: &McpSpec) -> Value {
+        config::read_entry(fs, s).unwrap().unwrap()
+    }
+
+    /// A user key is seeded on install, added to an entry that lacks it with the rest of the
+    /// entry untouched, never overwritten, and a changed value is neither stale nor removable
+    /// without asking; a foreign entry is replaced in full, seed included.
+    #[test]
+    fn a_user_key_is_seeded_added_and_never_overwritten() {
+        let ctx = Apply::default();
+        for (format, key) in [
+            (Format::Json, "mcpServers"),
+            (Format::Jsonc, "mcpServers"),
+            (Format::Toml, "mcp_servers"),
+        ] {
+            let s = seeded(format, key);
+            let mut fs = MemFs::default();
+            let run = |fs: &mut MemFs, mode| apply(&s, mode, &ctx, fs, is_rtok_bin).unwrap();
+            let ours = s.entry();
+            assert_eq!(ours["approval"], "writes", "{format:?}");
+
+            assert!(matches!(run(&mut fs, Mode::Install), Report::Wrote(_)));
+            assert_eq!(entry_of(&fs, &s), ours, "{format:?}");
+
+            let mut mine = ours.clone();
+            mine["approval"] = "mine".into();
+            config::write_entry(&mut fs, &s, &mine).unwrap();
+            let before = fs.read(&s.config_path).unwrap();
+            for mode in [Mode::Install, Mode::Update] {
+                assert_eq!(run(&mut fs, mode), Report::NoChanges, "{format:?}");
+            }
+            assert_eq!(fs.read(&s.config_path).unwrap(), before, "{format:?}");
+            assert_eq!(
+                status::status(&fs, &s).unwrap().entry,
+                Entry::Present,
+                "{format:?}: a changed user key is not stale"
+            );
+            let left = run(&mut fs, Mode::Remove).line();
+            assert!(left.starts_with("leave "), "{format:?}: {left}");
+
+            // Without the key it is added; a key of the user's own and the rest stay.
+            let mut bare = ours.clone();
+            bare.as_object_mut().unwrap().remove("approval");
+            bare["extra"] = serde_json::json!({"deep": 1});
+            config::write_entry(&mut fs, &s, &bare).unwrap();
+            let Report::Wrote(line) = run(&mut fs, Mode::Install) else {
+                panic!("{format:?}: key not added");
+            };
+            assert!(line.contains("approval"), "{format:?}: {line}");
+            let mut want = bare.clone();
+            want["approval"] = "writes".into();
+            assert_eq!(entry_of(&fs, &s), want, "{format:?}");
+            assert_eq!(run(&mut fs, Mode::Install), Report::NoChanges);
+            assert_eq!(
+                run(&mut fs, Mode::Remove).line(),
+                format!("leave {key}.rtok in /config (changed by you; remove by hand)"),
+                "{format:?}: an extra key is the user's edit"
+            );
+
+            // Not rtok's: replaced whole, the user's value is not carried over.
+            let other = serde_json::json!({"command": "other-tool", "approval": "mine"});
+            config::write_entry(&mut fs, &s, &other).unwrap();
+            assert!(matches!(run(&mut fs, Mode::Install), Report::Wrote(_)));
+            assert_eq!(entry_of(&fs, &s), ours, "{format:?}");
+
+            // Left at its seed, the key is rtok's own: remove takes the entry out.
+            assert!(matches!(run(&mut fs, Mode::Remove), Report::Wrote(_)));
+            assert_eq!(config::read_entry(&fs, &s).unwrap(), None, "{format:?}");
+        }
+    }
+
+    /// The TOML block report: the table as written, a key added to an entry, and the removal.
+    #[test]
+    fn toml_block_report_shows_the_table() {
+        let mut s = seeded(Format::Toml, "mcp_servers");
+        s.report = ReportStyle::TomlBlock;
+        s.entry_shape = EntryShape::Command;
+        let mut fs = MemFs::default();
+        let run = |fs: &mut MemFs, mode| {
+            apply(&s, mode, &Apply::default(), fs, is_rtok_bin)
+                .unwrap()
+                .line()
+        };
+        assert_eq!(
+            run(&mut fs, Mode::Install),
+            "+ [mcp_servers.rtok]\ncommand = \"rtok\"\nargs = [\"mcp\"]\napproval = \"writes\""
+        );
+        let mut bare = s.entry();
+        bare.as_object_mut().unwrap().remove("approval");
+        config::write_entry(&mut fs, &s, &bare).unwrap();
+        assert_eq!(
+            run(&mut fs, Mode::Install),
+            "+ [mcp_servers.rtok] approval = \"writes\""
+        );
+        assert_eq!(run(&mut fs, Mode::Remove), "- [mcp_servers.rtok]");
     }
 }

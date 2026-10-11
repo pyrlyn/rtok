@@ -15,8 +15,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::{Apply, KETCH_INSTALL, NO_CHANGES, edit_json, object_at};
+use rtok_mcp::spec::{EntryShape, Format as McpFormat, McpSpec, ReportStyle};
 use serde_json::json;
-use toml_edit::{Array, DocumentMut, Item, Table, value};
+use toml_edit::{DocumentMut, Item, Table, value};
 
 use super::{Agent, Kind, Mode, Support, Variant, apply};
 use crate::config::Config;
@@ -360,15 +361,31 @@ impl Agent for Codex {
 }
 /// Apply, dry-run, or remove the `[mcp_servers.rtok]` block.
 pub fn run(cfg: &Config, remove: bool) -> Result<String> {
-    let path = &cfg.setup.codex.config_path;
-    let mut doc = load(path)?;
-    let report = if remove {
-        strip_ours(&apply(cfg), path, &mut doc)
+    // `rtok_mcp` reads a file it cannot open as absent, which would overwrite a config this
+    // installer never read (permissions): refuse it here, as before.
+    load(&cfg.setup.codex.config_path)?;
+    let spec = mcp_spec(cfg);
+    if remove {
+        super::mcp::remove(cfg, &spec)
     } else {
-        insert_ours(&mut doc, path.display())?
-    };
-    persist(cfg, path, &doc, &report)?;
-    Ok(report)
+        super::mcp::install(cfg, &spec)
+    }
+}
+
+/// Codex's `[mcp_servers.rtok]` in `config.toml`, as `rtok_mcp` reads it (T277.3). The approval
+/// key is a user key: install adds it to an entry that lacks it, never overwrites a value the
+/// user chose, and the report is the TOML block Codex's installer has always printed.
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    let mut spec = super::mcp::host_spec(
+        "codex",
+        cfg.setup.codex.config_path.clone(),
+        "mcp_servers",
+        McpFormat::Toml,
+        EntryShape::Command,
+    );
+    spec.user_keys = vec![(APPROVAL_KEY, json!(APPROVAL))];
+    spec.report = ReportStyle::TomlBlock;
+    spec
 }
 
 /// Point Codex `model_provider` at this proxy (T11.5).
@@ -402,105 +419,6 @@ fn load(path: &Path) -> Result<DocumentMut> {
 
 fn persist(cfg: &Config, path: &Path, doc: &DocumentMut, report: &str) -> Result<()> {
     rtok_agent_sdk::write(&apply(cfg), path, &doc.to_string(), report)
-}
-
-fn insert_ours(doc: &mut DocumentMut, path: impl std::fmt::Display) -> Result<String> {
-    let servers = doc
-        .entry("mcp_servers")
-        .or_insert(Item::Table(Table::new()));
-    let Some(servers) = servers.as_table_mut() else {
-        bail!("mcp_servers is not a table in {path}");
-    };
-    // No bare `[mcp_servers]` header: Codex's own files only carry the per-server tables.
-    servers.set_implicit(true);
-    if let Some(ours) = servers
-        .get_mut(NAME)
-        .and_then(Item::as_table_mut)
-        .filter(|t| is_ours(t))
-    {
-        // An entry written before T528 gains the key; a value the user chose stays.
-        if ours.contains_key(APPROVAL_KEY) {
-            return Ok(NO_CHANGES.into());
-        }
-        ours[APPROVAL_KEY] = value(APPROVAL);
-        return Ok(format!(
-            "+ [mcp_servers.rtok] {APPROVAL_KEY} = \"{APPROVAL}\""
-        ));
-    }
-    let cmd = super::rtok_command();
-    let mut entry = Table::new();
-    entry["command"] = value(cmd.as_str());
-    let args = Array::from_iter(super::mcp_args("codex"));
-    entry["args"] = value(args);
-    entry[APPROVAL_KEY] = value(APPROVAL);
-    servers.insert(NAME, Item::Table(entry));
-    Ok(format!(
-        "+ [mcp_servers.rtok]\ncommand = \"{cmd}\"\nargs = [\"{}\"]\n{APPROVAL_KEY} = \"{APPROVAL}\"",
-        super::mcp_args("codex").join("\", \"")
-    ))
-}
-
-/// `have` without our own approval value, so remove judges an entry written before T528 and
-/// one written after it the same way; any other value is the user's edit.
-fn without_our_approval(mut have: serde_json::Value) -> serde_json::Value {
-    if let Some(m) = have.as_object_mut()
-        && m.get(APPROVAL_KEY).and_then(serde_json::Value::as_str) == Some(APPROVAL)
-    {
-        m.remove(APPROVAL_KEY);
-    }
-    have
-}
-
-/// The `[mcp_servers.rtok]` table [`insert_ours`] writes, as JSON: the shape
-/// [`rtok_agent_sdk::judge_owned`] compares a live table against (T246.5, T275/D33). The
-/// literal command never matters — `judge_owned` folds every rtok binary string to one.
-fn mcp_entry() -> serde_json::Value {
-    json!({"command": "rtok", "args": super::mcp_args("codex")})
-}
-
-/// Take the `rtok` slot back only as far as rtok wrote it (T246, T246.5, T275/D33):
-/// [`rtok_agent_sdk::judge_owned`] leaves a slot that does not run the rtok binary, or one the
-/// user changed from [`mcp_entry`], unless `--yes` (or an accepted prompt) says remove. A
-/// missing slot is already the goal.
-fn strip_ours(apply: &Apply, path: &Path, doc: &mut DocumentMut) -> String {
-    let have = doc
-        .get("mcp_servers")
-        .and_then(|s| s.get(NAME))
-        .map(super::mcp::toml_item_to_json)
-        .map(without_our_approval);
-    let Some(have) = have else {
-        return NO_CHANGES.into();
-    };
-    let at = format!("mcp_servers.{NAME} in {}", path.display());
-    if let Some(leave) =
-        rtok_agent_sdk::judge_owned(apply, &at, &have, &mcp_entry(), super::is_rtok_bin)
-    {
-        return leave;
-    }
-    let removed = doc
-        .get_mut("mcp_servers")
-        .and_then(Item::as_table_mut)
-        .and_then(|t| t.remove(NAME))
-        .is_some();
-    if removed {
-        "- [mcp_servers.rtok]".into()
-    } else {
-        NO_CHANGES.into()
-    }
-}
-
-fn is_ours(t: &Table) -> bool {
-    let args: Vec<&str> = t
-        .get("args")
-        .and_then(Item::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|v| v.as_str())
-        .collect();
-    t.get("command")
-        .and_then(Item::as_str)
-        .is_some_and(super::is_rtok_bin)
-        && args == super::mcp_args("codex")
 }
 
 fn insert_proxy(doc: &mut DocumentMut, url: &str) -> Result<String> {

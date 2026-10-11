@@ -32,7 +32,10 @@ pub struct McpStatus {
 pub fn status(fs: &impl Fs, spec: &McpSpec) -> Result<McpStatus> {
     let entry = match config::read_entry(fs, spec)? {
         None => Entry::Missing,
-        Some(have) if have == spec.entry() => Entry::Present,
+        // A user key the user changed (or has not got yet) does not make the entry stale.
+        Some(have) if spec.without_user_keys(&have) == spec.without_user_keys(&spec.entry()) => {
+            Entry::Present
+        }
         Some(have) => Entry::Stale(format!("have {have}, want {}", spec.entry())),
     };
     Ok(McpStatus {

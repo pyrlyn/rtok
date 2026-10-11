@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use rtok_mcp::config::Fs;
 use rtok_mcp::ops::{self, Mode as McpMode};
 use rtok_mcp::registry::RTOK;
-use rtok_mcp::spec::{Client, DuplicateName, EntryShape, Format, Launch, McpSpec};
+use rtok_mcp::spec::{Client, DuplicateName, EntryShape, Format, Launch, McpSpec, ReportStyle};
 use rtok_mcp::status::Entry;
 use serde_json::Value;
 use toml_edit::{DocumentMut, Item};
@@ -273,6 +273,8 @@ fn surface(
         entry_shape: EntryShape::Command,
         duplicate_name: DuplicateName::ShowsBoth,
         plugin_serves: plugin.map(|_| RTOK.name),
+        user_keys: Vec::new(),
+        report: ReportStyle::default(),
     };
     McpSurface {
         label,
@@ -436,6 +438,8 @@ pub(crate) fn host_spec(
         entry_shape,
         duplicate_name: DuplicateName::ShowsBoth,
         plugin_serves: None,
+        user_keys: Vec::new(),
+        report: ReportStyle::default(),
     }
 }
 
@@ -976,15 +980,18 @@ mod tests {
         key: &'static str,
         kind: Option<&'static str>,
         tools: bool,
+        /// A key the user may change (Codex's approval mode) and its seed.
+        user_key: Option<(&'static str, &'static str)>,
     }
 
     fn migrated() -> Vec<Migrated> {
-        use super::super::{copilot, cursor, gemini, grok, kimi, vscode, zcode};
+        use super::super::{codex, copilot, cursor, gemini, grok, kimi, vscode, zcode};
         let row = |spec, key, kind, tools| Migrated {
             spec,
             key,
             kind,
             tools,
+            user_key: None,
         };
         vec![
             row(cursor::mcp_spec, "mcpServers", Some("stdio"), false),
@@ -1005,6 +1012,10 @@ mod tests {
             row(zcode::mcp_spec, "mcp.servers", None, false),
             row(kimi::mcp_spec, "mcpServers", None, false),
             row(grok::mcp_spec, "mcp_servers", None, false),
+            Migrated {
+                user_key: Some(("default_tools_approval_mode", "writes")),
+                ..row(codex::mcp_spec, "mcp_servers", None, false)
+            },
         ]
     }
 
@@ -1043,6 +1054,9 @@ mod tests {
             if row.tools {
                 want["tools"] = serde_json::json!(["*"]);
             }
+            if let Some((key, seed)) = row.user_key {
+                want[key] = seed.into();
+            }
             let seed = migrated_seed(spec.format, row.key);
 
             let mut fs = crate::testutil::Vfs::new();
@@ -1063,7 +1077,11 @@ mod tests {
             let Report::Wrote(line) = run(&mut fs, McpMode::Install) else {
                 panic!("{host}: install wrote nothing");
             };
-            assert!(line.starts_with(&format!("{at}: ")), "{host}: {line}");
+            let (wrote, took) = match spec.report {
+                ReportStyle::Summary => (format!("{at}: "), format!("- {at}")),
+                ReportStyle::TomlBlock => (format!("+ [{at}]\n"), format!("- [{at}]")),
+            };
+            assert!(line.starts_with(&wrote), "{host}: {line}");
             assert_eq!(entry(&fs), Some(want.clone()), "{host}");
             assert_eq!(status(&fs), Entry::Present, "{host}");
             let after = text(&fs);
@@ -1089,8 +1107,33 @@ mod tests {
                 assert_eq!(run(&mut fs, mode), Report::NoChanges, "{host} {mode:?}");
             }
 
+            if let Some((key, seed)) = row.user_key {
+                // The user's own value is kept by install and update, is no stale entry, and
+                // stops remove from taking the entry without asking; a missing key is added.
+                let mut mine = want.clone();
+                mine[key] = "mine".into();
+                rtok_mcp::config::write_entry(&mut fs, &spec, &mine).unwrap();
+                assert_eq!(status(&fs), Entry::Present, "{host}");
+                for mode in [McpMode::Install, McpMode::Update] {
+                    assert_eq!(run(&mut fs, mode), Report::NoChanges, "{host} {mode:?}");
+                }
+                assert_eq!(entry(&fs), Some(mine), "{host}");
+                let left = run(&mut fs, McpMode::Remove).line();
+                assert!(left.starts_with("leave "), "{host}: {left}");
+
+                let mut bare = want.clone();
+                bare.as_object_mut().unwrap().remove(key);
+                rtok_mcp::config::write_entry(&mut fs, &spec, &bare).unwrap();
+                let added = run(&mut fs, McpMode::Install);
+                assert!(
+                    matches!(&added, Report::Wrote(l) if l.contains(key) && l.contains(seed)),
+                    "{host}: {added:?}"
+                );
+                assert_eq!(entry(&fs), Some(want.clone()), "{host}");
+            }
+
             let removed = run(&mut fs, McpMode::Remove);
-            assert_eq!(removed, Report::Wrote(format!("- {at}")), "{host}");
+            assert_eq!(removed, Report::Wrote(took.clone()), "{host}");
             assert_eq!(entry(&fs), None, "{host}");
             assert_eq!(
                 text(&fs),

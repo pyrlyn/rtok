@@ -49,6 +49,18 @@ pub enum EntryShape {
     LocalAllTools,
 }
 
+/// How [`crate::ops::apply`] words the report of a change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ReportStyle {
+    /// `<key>.<name>: <command> <args>` and `- <key>.<name>`.
+    #[default]
+    Summary,
+    /// `+ [<key>.<name>]` followed by the entry's own `key = value` lines, and
+    /// `- [<key>.<name>]`: the table a TOML host's installer shows, which is what its users
+    /// read in a dry run.
+    TomlBlock,
+}
+
 /// How a host starts the server when that is not the registry's bare `rtok mcp`. A desktop app
 /// starts without a shell `PATH`, so it needs the absolute binary; since T283.2 every host's
 /// entry also names itself with `--host <id>`.
@@ -77,6 +89,12 @@ pub struct McpSpec {
     /// The name the rtok plugin itself serves on this host, if any (D33: usually none — the
     /// plugin ships no MCP server and the config entry is the only call path).
     pub plugin_serves: Option<&'static str>,
+    /// Keys the entry carries with a seed value that the user may change (Codex's
+    /// `default_tools_approval_mode`). Install adds one that is missing and never overwrites
+    /// one that is there, as long as the rest of the entry still starts rtok; status and
+    /// remove do not count a changed value as a stale or an edited entry.
+    pub user_keys: Vec<(&'static str, Value)>,
+    pub report: ReportStyle,
 }
 
 impl McpSpec {
@@ -127,6 +145,9 @@ impl McpSpec {
         if self.entry_shape == EntryShape::LocalAllTools {
             m.insert("tools".into(), json!(["*"]));
         }
+        for (key, seed) in &self.user_keys {
+            m.insert((*key).into(), seed.clone());
+        }
         if !self.server.env.is_empty() {
             let env: serde_json::Map<String, Value> = self
                 .server
@@ -137,5 +158,28 @@ impl McpSpec {
             m.insert("env".into(), Value::Object(env));
         }
         Value::Object(m)
+    }
+
+    /// `entry` without every user key, whatever its value: what is left must match rtok's.
+    pub fn without_user_keys(&self, entry: &Value) -> Value {
+        self.strip(entry, |_, _| true)
+    }
+
+    /// `entry` without the user keys still at their seed, so one the user changed stays and
+    /// shows up as a difference.
+    pub fn without_seeded_keys(&self, entry: &Value) -> Value {
+        self.strip(entry, |have, seed| have == seed)
+    }
+
+    fn strip(&self, entry: &Value, drop: impl Fn(&Value, &Value) -> bool) -> Value {
+        let mut out = entry.clone();
+        if let Some(m) = out.as_object_mut() {
+            for (key, seed) in &self.user_keys {
+                if m.get(*key).is_some_and(|have| drop(have, seed)) {
+                    m.remove(*key);
+                }
+            }
+        }
+        out
     }
 }

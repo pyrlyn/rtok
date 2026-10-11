@@ -402,6 +402,8 @@ pub(crate) fn mcp_spec_at(client: McpClient, file: PathBuf, command: String) -> 
         entry_shape: EntryShape::TypedCommand,
         duplicate_name: DuplicateName::ShowsBoth,
         plugin_serves: None,
+        user_keys: Vec::new(),
+        report: Default::default(),
     }
 }
 
