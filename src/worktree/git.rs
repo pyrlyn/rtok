@@ -44,6 +44,11 @@ pub fn is_dirty(worktree: &Path) -> Result<bool> {
     Ok(!stdout(worktree, &["status", "--porcelain"])?.is_empty())
 }
 
+/// Whether git ignores `path` (relative to `worktree`): exit 0 of `check-ignore`.
+pub fn is_ignored(worktree: &Path, path: &str) -> bool {
+    git(worktree, &["check-ignore", "-q", "--", path]).is_ok_and(|o| o.status.success())
+}
+
 /// The remote's default branch, `origin/main` when `origin/HEAD` is not set.
 pub fn default_base(repo: &Path) -> String {
     stdout(

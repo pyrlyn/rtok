@@ -85,7 +85,7 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | `aider` | no | none | none | CLI only |
 | `zed` | no | MCP | threads can point at a worktree you make | `worktree_adopt` |
 
-Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add` (CLI); a host with no agent row passes `--owner` on the CLI. A worktree whose path matches none of the pools above is listed with origin `other` and adopted the same way.
+Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add` (CLI); a host with no agent row passes `--owner` on the CLI. A worktree whose path matches none of the pools above is listed with origin `other` and adopted the same way. `worktree add` (CLI and MCP `worktree_add`) also sets `env.CLAUDE_CODE_TASK_LIST_ID` to `<project>-<task>` in the new worktree's `.claude/settings.local.json`, so Claude Code sessions there share one task list; only that key is written, the rest of the file stays as it was, a file that is not valid JSON or already sets the id is left alone with a warning, and `.claude/` is git-ignored.
 
 ### Windows
 

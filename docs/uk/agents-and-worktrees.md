@@ -89,7 +89,7 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `aider` | ні | немає | немає | лише CLI |
 | `zed` | ні | MCP | треди можуть вказувати на worktree, який ви створили | `worktree_adopt` |
 
-Кожен хост може створювати worktree через `worktree_add` (MCP) або `rtok worktree add` (CLI); хост без рядка агента передає `--owner` у CLI. Worktree, чий шлях не збігається з жодним із пулів вище, показується з origin `other` і приймається так само.
+Кожен хост може створювати worktree через `worktree_add` (MCP) або `rtok worktree add` (CLI); хост без рядка агента передає `--owner` у CLI. Worktree, чий шлях не збігається з жодним із пулів вище, показується з origin `other` і приймається так само. `worktree add` також записує `env.CLAUDE_CODE_TASK_LIST_ID` = `<project>-<task>` у `.claude/settings.local.json` нового worktree, щоб сесії Claude Code там ділили один список завдань; записується лише цей ключ, решта файлу не змінюється, файл, що не є коректним JSON або вже задає цей id, лишається недоторканим із попередженням, а `.claude/` ігнорується git.
 
 ### Десктопний застосунок Claude
 
