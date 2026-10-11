@@ -48,11 +48,12 @@ export class Rtok {
     readonly port: number,
   ) {}
 
-  static async create(): Promise<Rtok> {
+  /** `seeded: false` leaves the ledger empty: the screenshots of the "No calls yet" state need it. */
+  static async create(seeded = true): Promise<Rtok> {
     const home = mkdtempSync(join(tmpdir(), "rtok-spa-e2e-"));
     const rtok = new Rtok(home, await freePort());
     try {
-      rtok.seed();
+      if (seeded) rtok.seed();
     } catch (e) {
       rmSync(home, { recursive: true, force: true });
       throw e;
