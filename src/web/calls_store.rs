@@ -470,7 +470,7 @@ impl CallsStore {
                 calls: group,
             });
         }
-        out.sort_by(|a, b| b.calls.cmp(&a.calls));
+        out.sort_by_key(|a| std::cmp::Reverse(a.calls));
         out
     }
 }
