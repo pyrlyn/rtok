@@ -22,8 +22,7 @@ fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
 /// Claim rows store `fs::canon`. On Windows that drops a safe `\\?\` prefix that
 /// `std::fs::canonicalize` keeps, so a string compare against the raw canonical path fails.
 fn stored_claim_path(path: &Path) -> String {
-    let text = path.canonicalize().unwrap().display().to_string();
-    text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
+    dunce::canonicalize(path).unwrap().display().to_string()
 }
 
 #[test]
