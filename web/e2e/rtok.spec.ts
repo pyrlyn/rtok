@@ -422,6 +422,29 @@ test("under 900 px the two parts stack and there is no splitter", async ({ page,
   await expect(page.getByRole("separator")).toBeHidden();
 });
 
+test("each part of the graph page maximises to fill the page and Escape restores", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live");
+  await expect(live).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise live graph" }).click();
+  const fill = await live.boundingBox();
+  const view = page.viewportSize();
+  expect(fill?.width).toBeGreaterThan((view?.width ?? 0) - 40);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Maximise live graph" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise explorer" }).click();
+  await expect(live).toHaveCount(0);
+  await page.getByRole("button", { name: "Restore explorer" }).click();
+  await expect(live).toBeVisible();
+});
+
 test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {
   await viewing(page, "2d");
   rtok.addProject();
