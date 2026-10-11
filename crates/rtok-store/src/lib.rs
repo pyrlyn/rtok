@@ -668,6 +668,13 @@ pub struct ModelUsage {
     pub output: i64,
 }
 
+/// [`ModelUsage`] of one `calls.kind` (the proxy lane), T385.10.
+#[derive(Debug, Clone)]
+pub struct LaneModelUsage {
+    pub kind: Option<String>,
+    pub usage: ModelUsage,
+}
+
 /// One [`Store::usage_slices`] row: the usage of one session on one model at `ts` (unix
 /// seconds, UTC).
 #[derive(Debug, Clone)]
