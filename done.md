@@ -11451,3 +11451,16 @@ Result: `upsert_note` records the previous title and body in `note_versions` ins
 
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
+
+### T524. Worktree `--idle` accepts `30m` and `0s`
+
+Plan: `worktree gc --idle`/`--stale-lock` and `clean --idle` went through `parse_since` (bare number = days, `d`, `h` only), so the humantime values agents copy from `[agents] idle` (`30m`, `0s`, `1m`, `1s`, `15m`, `10m`) failed — and the error said `bad --since unit` for a flag that is not `--since`. Extract one humantime parser, `parse_idle_from(s, source)`, next to `idle_secs` (which now calls it), and point the worktree flags at it with the passed flag as `source`. Keep `--since` / `stats.since` / `report.since` on the days grammar; document the split in both `since.rs` modules. Update the flag help (`30m`, `24h`, `7d`) and re-bless the help/completion snapshots.
+
+Check: `cargo test -p rtok-store parse_idle_from`; unit tests `parse_idle_from_accepts_the_agents_idle_grammar` (`30m`, `0s`, `24h`, `7d`, `1m`, `1s`) and `parse_idle_from_names_the_passed_flag` (`5x` names `--idle` / `--stale-lock` / `[agents] idle`, never `--since`); `just check`; smoke `rtok worktree gc --idle 30m`, `worktree clean --idle 0s`, `--stale-lock 30m`, and `--idle 5x` / `--stale-lock 5x` / `stats --since 5x` / `stats --since 7` / `stats --since 30m` on the built binary.
+
+Result: `parse_idle_from(idle, source)` in `rtok-store` is the one humantime parser of `[agents] idle` and the worktree `--idle` / `--stale-lock` flags; `idle_secs` delegates to it. `worktree gc`/`clean` call it with `--idle` / `--stale-lock` as the error source, so a bad value names the flag that was passed. `--since` keeps bare-number-as-days (`7` = 7 days) and still rejects `30m`; the split is documented in `src/since.rs` and `crates/rtok-config/src/since.rs`. Flag help now cites `30m` alongside `24h`/`7d`; `tests/trycmd/help-subcommands.trycmd` and `completions-{clink,fish,powershell,zsh}.stdout` re-blessed (`TRYCMD=overwrite`, `tool[..]cute.after` wildcard kept).
+
+Check result: `just check` green — 3329 tests passed, 8 skipped. Binary smoke: `gc --idle 30m` and `clean --idle 0s` run; `gc --idle 5x` → `Error: bad --idle "5x": unknown time unit "x", ...`; `gc --stale-lock 5x` → `Error: bad --stale-lock "5x": ...`; `stats --since 5x` → `Error: bad --since unit in 5x`; `stats --since 7` succeeds; `stats --since 30m` still `Error: bad --since unit in 30m`.
+
+Status: done 2026-10-11
+Model: MiMo / mimo

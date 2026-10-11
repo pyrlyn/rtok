@@ -3,6 +3,8 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! `<n>`, `<n>d` or `<n>h` windows shared by `stats`, `report` and config validation.
+//! Bare `<n>` is days. `worktree --idle` / `--stale-lock` and `[agents] idle` are not this
+//! grammar: they take humantime (`30m`, `0s`, `24h`, `7d`) via `rtok_store::parse_idle_from`.
 
 use std::time::Duration;
 
