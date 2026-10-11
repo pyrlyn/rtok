@@ -121,6 +121,31 @@ pub(super) enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Record that two tasks touch the same files, so they should not run at once. Symmetric;
+    /// `ready` flags a task whose partner is in progress. Disk adapter only.
+    Conflict {
+        /// One task
+        id: String,
+        /// The task it conflicts with
+        other: String,
+        /// Take the conflict off instead
+        #[arg(long)]
+        remove: bool,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Mark a task safe to run beside any other task. Disk adapter only.
+    Parallel {
+        /// Task id, e.g. `R12`
+        id: String,
+        /// Take the mark off instead
+        #[arg(long)]
+        off: bool,
+        /// Print the task as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Raise the id counters to the adapter's highest ids and report drift; never writes the adapter
     Sync {
         /// JSON instead of the text
@@ -283,6 +308,31 @@ pub(super) fn run(action: TaskCmd, config_file: Option<&std::path::Path>) -> Res
                 print_json(&task)?;
             } else {
                 println!("{id}: blocked by {blocker}");
+            }
+        }
+        TaskCmd::Conflict {
+            id,
+            other,
+            remove,
+            json,
+        } => {
+            let task = open()?.conflict(&id_of(&id)?, &id_of(&other)?, remove)?;
+            if json {
+                print_json(&task)?;
+            } else if remove {
+                println!("{id}: no longer conflicts with {other}");
+            } else {
+                println!("{id}: conflicts with {other}");
+            }
+        }
+        TaskCmd::Parallel { id, off, json } => {
+            let task = open()?.set_parallel(&id_of(&id)?, !off)?;
+            if json {
+                print_json(&task)?;
+            } else if off {
+                println!("{}: not parallel", task.id);
+            } else {
+                println!("{}: parallel", task.id);
             }
         }
         TaskCmd::Priority { id, level, json } => {

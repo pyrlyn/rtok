@@ -931,6 +931,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "writes a priority through the adapter (T442)",
     ),
     (
+        "task conflict",
+        "writes a symmetric conflict marker through the adapter (T441.13.2)",
+    ),
+    (
+        "task parallel",
+        "writes a parallel marker through the adapter (T441.13.2)",
+    ),
+    (
         "worktree add",
         "creates a locked git worktree and prints its path (T158)",
     ),
@@ -1134,6 +1142,8 @@ const JSON_READERS: &[&str] = &[
     "task release",
     "task dep",
     "task priority",
+    "task conflict",
+    "task parallel",
 ];
 
 fn command_at<'a>(root: &'a Command, path: &str) -> &'a Command {

@@ -1354,6 +1354,9 @@ Commands:
   release   Clear the assignee and set the task open. Only the holder, unless --force
   dep       Record that this task waits on another. A cycle is refused and nothing is written
   priority  Set priority from 0 (highest) to 4. 2 is the default and is not stored
+  conflict  Record that two tasks touch the same files, so they should not run at once. Symmetric;
+            `ready` flags a task whose partner is in progress. Disk adapter only
+  parallel  Mark a task safe to run beside any other task. Disk adapter only
   sync      Raise the id counters to the adapter's highest ids and report drift; never writes the
             adapter
   init      Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing
@@ -1496,6 +1499,36 @@ Arguments:
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --json           Print the task as JSON
+  -h, --help           Print help
+
+$ rtok task conflict --help
+Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags
+a task whose partner is in progress. Disk adapter only
+
+Usage: rtok task conflict [OPTIONS] <ID> <OTHER>
+
+Arguments:
+  <ID>     One task
+  <OTHER>  The task it conflicts with
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --remove         Take the conflict off instead
+      --json           Print the task as JSON
+  -h, --help           Print help
+
+$ rtok task parallel --help
+Mark a task safe to run beside any other task. Disk adapter only
+
+Usage: rtok task parallel [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Task id, e.g. `R12`
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --off            Take the mark off instead
       --json           Print the task as JSON
   -h, --help           Print help
 

@@ -104,6 +104,12 @@ pub trait TaskAdapter: Send {
     fn save(&self, _task: &Task) -> Result<Task> {
         bail!("{} tasks: saving a claim is not supported", self.name())
     }
+
+    /// Whether `save` keeps `conflicts_with` and `parallel` (T441.13.2). The remote adapters
+    /// read neither back yet, so the commands that set them refuse instead of dropping them.
+    fn stores_markers(&self) -> bool {
+        false
+    }
 }
 
 /// Set a task's status. A parent with active subtasks cannot finish unless `force`: the error

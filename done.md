@@ -11344,6 +11344,17 @@ Result: migration `0046_message_task` adds the nullable `messages.task`. `Store:
 Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
 
+### T441.13.2. Conflict and parallel markers between tasks, disk adapter (F9)
+
+Second item of T441.13 (`research.md` §28.4 F9, CCPM semantics; creator decision 2026-10-11: disk adapter first, GitHub and GitLab later as T441.13.4). A task can name tasks it `conflicts_with` (they touch the same files, so two agents should not work on them at once) and carry a `parallel` flag (safe to run beside any other task). Conflicts are symmetric: marking A1 against A2 writes both files. `task list`, `task show` and `task ready` show both markers, and `ready` flags a task whose conflict partner is in progress without hiding it or refusing a claim.
+
+Check: `tests/task_cli.rs` (`conflict_and_parallel_markers_are_symmetric_and_flag_ready`), `tasks::ready::tests::a_conflict_with_a_task_in_progress_flags_the_ready_task_from_either_side`, `tasks::run::claim_tests::markers_are_symmetric_idempotent_and_refused_where_they_cannot_be_kept`, the disk round trip in `src/tasks/disk.rs`, the trycmd help cases, `surface_parity`, `config_coverage`, and `just check`.
+
+Result: `Task.conflicts_with` and `Task.parallel` (both left out of JSON when empty or false) are stored as front-matter keys on the disk adapter, sorted and deduplicated like `blocked_by`. `Project::conflict` writes both sides of the edge (peer first, then the task, only when something changed) and refuses a self-edge or a missing task; `Project::set_parallel` is the flag. `TaskAdapter::stores_markers` is false by default and true on disk, so a GitHub or GitLab project refuses the two commands by name instead of dropping the marker (T441.13.4 lifts that). `ready` finds in-progress partners from either side of the edge and reports them in `ReadyItem.conflicts_in_progress`; the task stays in the list and a claim is not refused. CLI `task conflict <id> <other> [--remove]` and `task parallel <id> [--off]`, MCP `task_conflict` and `task_parallel` call the same functions; `skills/rtok-tasks/SKILL.md` names both tools. Docs in `docs/tasks.md`, `docs/ru/tasks.md` and `docs/uk/tasks.md`.
+
+Status: done 2026-10-11
+Model: Claude Code / claude-sonnet-5-5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.

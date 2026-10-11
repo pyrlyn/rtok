@@ -33,7 +33,7 @@ tasks/done/A7 - old-work.md
 ```
 
 - The file name is `<id> - <slug>.md`. The slug is lower-case letters and digits joined by dashes, at most 48 characters. The title is not in the name; it is in the front matter.
-- The front matter holds `id`, `title`, `status`, `parent` (subtasks only), `created_at` and `updated_at` (Unix seconds). A claim adds `assignee`, `blocked_by` and `priority` (0–4, omitted when it is 2). Files written before those keys still parse. The description is the body, below the front matter.
+- The front matter holds `id`, `title`, `status`, `parent` (subtasks only), `created_at` and `updated_at` (Unix seconds). A claim adds `assignee`, `blocked_by` and `priority` (0–4, omitted when it is 2). The disk adapter also keeps `conflicts_with` and `parallel`, omitted when empty. Files written before those keys still parse. The description is the body, below the front matter.
 - The files belong to the checkout a command runs in. The numbers are shared through the store, but a worktree reads and writes the task files on its own branch, so they reach other checkouts through git.
 - Done and closed tasks move to `tasks/done/`, so the plan is the directory listing.
 - Writes go to a temporary file that is renamed into place.
@@ -68,6 +68,8 @@ Why the task exists and what done means.
 | `rtok task release <id> [--agent <id>] [--force] [--json]` | clear the assignee and set the task open. Only the holder, unless `--force` |
 | `rtok task dep <id> <blocker> [--json]` | `id` waits until `blocker` is done or closed. A cycle is refused and nothing is written |
 | `rtok task priority <id> <0-4> [--json]` | set priority. `0` is highest, `2` is the default and is not stored |
+| `rtok task conflict <id> <other> [--remove] [--json]` | the two tasks touch the same files, so they should not run at once. Symmetric: both files are written. `task ready` marks a task whose partner is in progress, and still lists it. Disk adapter only |
+| `rtok task parallel <id> [--off] [--json]` | mark a task safe to run beside any other task. Disk adapter only |
 
 Without `--json` the commands print text. With `--json` they print the task as JSON.
 
@@ -87,6 +89,8 @@ Without `--json` the commands print text. With `--json` they print the task as J
 | `task_release` | `id` (required), `agent`, `force` | `task release` |
 | `task_dep` | `id` (required), `blocker` (required) | `task dep` |
 | `task_priority` | `id` (required), `level` (required, 0–4) | `task priority` |
+| `task_conflict` | `id` (required), `other` (required), `remove` | `task conflict` |
+| `task_parallel` | `id` (required), `on` (default true) | `task parallel` |
 
 ## Config
 

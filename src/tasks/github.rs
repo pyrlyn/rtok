@@ -99,6 +99,8 @@ impl Issue {
             priority,
             assignee,
             blocked_by,
+            conflicts_with: Vec::new(),
+            parallel: false,
             id,
         })
     }

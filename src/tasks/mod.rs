@@ -176,6 +176,13 @@ pub struct Task {
     /// Tasks that must finish before this one can be claimed. Only `blocks`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocked_by: Vec<TaskId>,
+    /// Tasks that touch the same files, so two agents should not work on both at once (T441.13.2,
+    /// CCPM `conflicts_with`). Symmetric: the disk adapter writes both sides.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts_with: Vec<TaskId>,
+    /// Safe to run beside any other task (T441.13.2, CCPM `parallel`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub parallel: bool,
 }
 
 impl Task {
@@ -199,6 +206,8 @@ impl Task {
             priority: DEFAULT_PRIORITY,
             assignee: None,
             blocked_by: Vec::new(),
+            conflicts_with: Vec::new(),
+            parallel: false,
         }
     }
 }
@@ -209,6 +218,10 @@ pub struct ReadyItem {
     #[serde(flatten)]
     pub task: Task,
     pub stale: bool,
+    /// Conflict partners that are in progress right now (T441.13.2). The task stays ready: this
+    /// is a warning to the claimer, not a refusal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts_in_progress: Vec<TaskId>,
 }
 
 /// What `claim` did. `changed` is false when this agent already holds the task, and the
@@ -356,7 +369,9 @@ mod tests {
                 && !json.contains("external")
                 && !json.contains("priority")
                 && !json.contains("assignee")
-                && !json.contains("blocked_by"),
+                && !json.contains("blocked_by")
+                && !json.contains("conflicts_with")
+                && !json.contains("parallel"),
             "{json}"
         );
         assert_eq!(serde_json::from_str::<Task>(&json).unwrap(), task);
