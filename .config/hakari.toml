@@ -29,6 +29,7 @@ platforms = [
 # (mio, rustix, ...) do not compile there, so the guest stays out of the unification.
 # tree-sitter's build script enables serde_json/preserve_order; unified into workspace-hack it
 # would reach the rtok binary and reorder every JSON object it prints.
+# rtok-hook stays std-only and rtok-plugin-sdk free of workspace crates (tests/deps.rs).
 [traversal-excludes]
-workspace-members = ["rtok-wasm-demo-guest"]
+workspace-members = ["rtok-wasm-demo-guest", "rtok-hook", "rtok-plugin-sdk"]
 third-party = [{ name = "tree-sitter" }]
