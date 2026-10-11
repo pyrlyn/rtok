@@ -77,8 +77,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
-| T441 | todo | P2 | 5 | 0% | |
-| T441.13.4 | todo | P3 | 3 | 0% | |
+| T441 | in progress | P2 | 5 | 90% | Claude Code / claude-opus-5-5 |
+| T441.13.4 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T441.13.5 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T441.13.6 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T441.13.7 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
 
@@ -1486,7 +1489,7 @@ project = "group/name"
 10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
 11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
 12. **T441.12 `rtok task sync`** (split from T441.7) — done: counters raised to what the adapter holds, drift reported, the adapter never written (#820).
-13. **T441.13 Task-board extras** (from T405, creator 2026-10-10; `research.md` §28.4) — a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20). One subtask per item when claimed; F20 and F11's Linear part sit under §13 "Out of scope", so they need the creator's go-ahead at claim time.
+13. **T441.13 Task-board extras** (from T405, creator 2026-10-10; `research.md` §28.4) — a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20). One subtask per item when claimed; F20 and F11's Linear part sit under §13 "Out of scope", so they need the creator's go-ahead at claim time. Creator go-ahead 2026-10-11 for both; split into T441.13.1 (F8), T441.13.2 and T441.13.4 (F9), T441.13.3 (F19), T441.13.5 and T441.13.6 (F11 GitHub, Linear), T441.13.7 (F20).
 
 #### 12. Open questions
 
@@ -1511,3 +1514,35 @@ project = "group/name"
 Follow-up of T441.13.2, which stores the markers on the disk adapter only. Store `conflicts_with` as `rtok:conflicts:<id>` labels and `parallel` as an `rtok:parallel` label through `src/tasks/meta.rs` (the same managed-label path as `rtok:needs:` and `rtok:p:`), read them back in the GitHub and GitLab issue-to-task mapping, drop the T441.13.2 refusal for these adapters (`stores_markers` true), and keep a user's own labels untouched. Done when `task conflict` and `task parallel` work on both with the recorded HTTP fixtures, `list`/`show`/`ready` show the markers, and `just check` passes.
 
 Check: the recorded HTTP fixtures for both adapters pass and `just check` is green.
+
+Plan: (1) `meta.rs` gains the `rtok:conflicts:<id>` and `rtok:parallel` managed labels beside `rtok:needs:`/`rtok:p:`; (2) `github.rs` and `gitlab.rs` write them on create and on `task conflict`/`task parallel`, and read them back in the issue-to-task mapping; (3) `stores_markers` true for both, the T441.13.2 refusal removed for them; (4) recorded HTTP fixtures per adapter plus a test that a user's own labels survive; docs en/ru/uk for the markers section.
+
+### T441.13.5. GitHub Issues exporter for disk tasks (F11)
+
+`research.md` §28.4 F11, creator go-ahead 2026-10-11. A project on the disk adapter mirrors its tasks one way into GitHub Issues; the disk files stay the source of truth and the exporter never reads issues back into tasks. `rtok task export github [--dry-run] [--json]` creates a missing issue (title `<id>. <title>`, labels `rtok` and `rtok:<id>`, the managed labels from `meta.rs`), updates title, body and labels when they drift, and closes the issue for `done` (`completed`) and `closed` (`not_planned`). Config `[tasks.export.github] repo = "owner/name"`, token lookup and pacing from `src/tasks/remote.rs`, issue mapping reused from `src/tasks/github.rs`.
+
+Done when: a second run against the same state sends no write; `--dry-run` prints the planned creates, updates and closes and sends nothing; recorded HTTP fixtures (no live network) cover create, update, close and a re-run; `just check`.
+
+Check: the exporter's fixture tests, the trycmd help golden and `just check`.
+
+Plan: (1) `src/tasks/export.rs`: an `Exporter` trait (`plan(tasks) -> Vec<Action>`, `apply(action)`) and the diff of local tasks against what the remote holds by `rtok:<id>` label, shared with T441.13.6; (2) `export/github.rs` on top of `remote.rs` and the `github.rs` mapping; (3) `[tasks.export.github]` in the one config module (T238) and `rtok task export` in the CLI with `--dry-run`/`--json`; (4) fixtures and tests; docs en/ru/uk; the trycmd fence, `surface_parity` and `config_coverage` gates.
+
+### T441.13.6. Linear exporter for disk tasks (F11)
+
+`research.md` §28.4 F11, creator go-ahead 2026-10-11 (the Linear part was under T441 §13 "Out of scope"). Second backend for the T441.13.5 exporter: `rtok task export linear` mirrors disk tasks one way into a Linear team through Linear's GraphQL API, finds earlier exports by a stable marker of the rtok id, updates drift, and moves `done`/`closed` tasks to the team's completed/canceled workflow state. Config `[tasks.export.linear] team = "<key>"`, token from `LINEAR_API_KEY`. Facts about the API are checked against Linear's own docs and cited in `research.md` with the date.
+
+Done when: same contract as T441.13.5 (idempotent re-run, `--dry-run`, recorded fixtures, no live network); `just check`.
+
+Check: the Linear fixture tests and `just check`.
+
+Plan: (1) research the GraphQL calls (`issueCreate`, `issueUpdate`, team workflow states, how to mark an issue with the rtok id) from Linear's docs into `research.md`; (2) `export/linear.rs` behind the T441.13.5 trait, blocking `reqwest` like `remote.rs`; (3) `[tasks.export.linear]` config, `linear` arm of `rtok task export`; (4) fixtures, docs en/ru/uk.
+
+### T441.13.7. Task board page in the web UI (F20)
+
+`research.md` §28.4 F20, creator go-ahead 2026-10-11 (it was under T441 §13 "Out of scope"). A read-only board in `rtok web`: one column per status (open, in progress, done, closed), a card per task with id, title, parent, the `needs`/priority/conflict/parallel markers and the external link, for the project the page is opened for. Data comes from the same adapter and JSON shape as `rtok task list --all --json`; nothing on the page writes tasks.
+
+Done when: the page lists the tasks of a fixture project in the right columns, works in dark and light themes at 375 and 1280 px, has a keyboard-navigable list view, and shows an empty state when the project has no `[tasks]` section.
+
+Check: the API route test, the SPA unit and story tests, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
+Plan: (1) a read-only `/api/tasks` route in the web server that calls the tasks core (no duplicated listing logic); (2) a `Tasks` page in `web/src` with the board columns and a list view, registered in the page registry and navigation (`dashboard_page`-style entry if tasks get a page descriptor there); (3) Storybook stories with fixture data, a unit test, an e2e smoke; (4) docs en/ru/uk.
