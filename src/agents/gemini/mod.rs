@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
+use rtok_mcp::spec::{DuplicateName, EntryShape, Format as McpFormat, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -154,33 +155,30 @@ fn strip_ours(apply: &Apply, path: &Path, hooks: &mut Value, timeout_s: u64) -> 
     super::with_kept(kept, super::removed_report(removed))
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("gemini")})
+/// Gemini's `mcpServers.rtok = {command, args}` in `settings.json` — the minimal stdio shape
+/// the Gemini MCP docs show — as `rtok_mcp` reads it (T277.2). A same-name extension server
+/// is overridden by `settings.json`'s.
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    McpSpec {
+        duplicate_name: DuplicateName::OverridesByScope,
+        ..super::mcp::host_spec(
+            "gemini",
+            settings_path(cfg),
+            "mcpServers",
+            McpFormat::Json,
+            EntryShape::Command,
+        )
+    }
 }
 
-/// `mcpServers.rtok = {command, args}` — the minimal stdio shape the Gemini MCP docs show.
+/// Write the entry into `settings.json`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let bin = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &settings_path(cfg),
-        "mcpServers",
-        NAME,
-        mcp_entry(&bin),
-        &super::mcp_summary(&bin, "gemini"),
-    )
+    super::mcp::install(cfg, &mcp_spec(cfg))
 }
 
 /// Drop `mcpServers.rtok` from `settings.json`, unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &settings_path(cfg),
-        "mcpServers",
-        NAME,
-        &mcp_entry("rtok"),
-    )
+    super::mcp::remove(cfg, &mcp_spec(cfg))
 }
 
 /// `{hooks: {<Event>: [{hooks: [{type: "command", command, timeout}]}]}}` — the extension
