@@ -35,6 +35,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T276.6 | todo | P2 | 3 | 0% | |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T277.2 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
+| T277.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1578,6 +1579,14 @@ PR 3 of T277: the hosts T275 lists as affected move onto `rtok_mcp` the way T277
 Execution plan: follow T277.1 (done.md) host by host; table-driven `Vfs` test rows per host covering install, update, remove and status with unrelated keys kept byte-for-byte; `just check`.
 
 Check: every listed host passes the shared table-driven test; `rg "register_mcp|unregister_mcp|plugin_is_mcp" src/agents/{cursor,copilot,gemini,codex,vscode,zcode,kimi,grok}` finds nothing; `just check`.
+
+### T277.3. Codex writes and removes the MCP entry through `rtok_mcp::ops`
+
+Split from T277.2: Codex was the one affected host left, because its entry carries `default_tools_approval_mode = "writes"`, which the user may change and the installer must keep, its install replaces a non-ours entry but only adds the approval key to ours, and its report line `+ [mcp_servers.rtok]` differs from the `mcp_servers.rtok: <cmd> <args>` line `ops` prints. Blocks T276.3.
+
+Execution plan: extend `rtok_mcp` with extra entry keys that keep a user-set value (no Codex special case in the crate); give Codex its `mcp_spec`; route install, update and remove through `agents::mcp::{install, remove}`; decide the report line deliberately (keep Codex's text through the spec, or update the asserting tests with a reason); add the Codex row to the table-driven `Vfs` test, including a user-changed approval value surviving an update; `just check`.
+
+Check: the Codex row passes the shared table-driven test; a user-set `default_tools_approval_mode` survives install and update; `rg "register_mcp|unregister_mcp" src/agents/codex` shows only thin wrappers into `agents::mcp`; `just check`.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
