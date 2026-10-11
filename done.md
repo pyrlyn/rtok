@@ -8755,6 +8755,15 @@ Result (2026-10-07, creator decision): D33/T275 wins. Install and update keep wr
 Status: done 2026-10-07
 Model: Claude Code / claude-opus-5-5
 
+### T275.2. Command Code writes rtok's MCP entry on every install and update
+
+The last host that still applied the old D21 singleton to MCP (found by scanning every host's `apply` / `installed` after PRs A-E and Command Code's later arrival): `commandcode/mod.rs` skipped `register_mcp` while the plugin was linked (`plugin_is_mcp`), `offer_plugin` stripped `mcpServers.rtok` on the run that linked the plugin, and `installed()` reported `mcp` whenever the plugin was ours. D33 says install and update always write the entry and only `remove` takes it out. Command Code was also missing from `src/agents/mcp.rs` `surfaces()`, so `agents info` and `rtok doctor` never checked its `mcp.json`.
+
+Result: install and update write `mcpServers.rtok` in `~/.commandcode/mcp.json` behind `[setup] mcp`, plugin linked or not; remove takes it out; a linked plugin no longer strips it; `installed()` reports `mcp` only from the config entry (`mcp::has_entry`); `surfaces()` has a `commandcode` row; the README plugin row and the plugin tree README no longer claim the singleton, and `plugin_surfaces` drops `Mcp` (the linked tree registers no server; `scripts/mcp.sh` is a by-hand command), so `tests/singleton.rs` stops counting it as a second server. `plugin_is_mcp` and the stripping `offer_plugin` are deleted. Tests: plugin linked plus install and update keep the entry next to a foreign server, remove takes it out with the plugin linked, the plugin alone does not read as `mcp`, a user-edited entry is left by remove, and the surface row exists.
+
+Status: done 2026-10-11
+Model: Claude Code / sonnet-5.5
+
 ### T332. Investigate: rtok's own MCP duplicate: T331 keep rule vs D33/T275
 
 In the plan, T331 (plan.md on branch `docs/plan-doctor-hooks-mcp`, ~line 711, from PR #542 (T331), not merged yet) says "for rtok's own server, the rules of T275 (plugin serves MCP, so the separate entry goes)" and keeps the "plugin-provided first" copy by default, reporting a host that de-duplicates by name as "shadowed, unused, still removable" (~line 706). D33 (plan.md@966f067 line 709) and T275 (plan.md@966f067 lines 171-175) say "Install and update always write the config entry `rtok`; only `remove` takes it out, and a plugin no longer suppresses or strips it", "the rtok plugin ships no MCP server", and "Gemini keeps both, since settings.json wins over an extension's same-name server". These contradict each other because `rtok doctor --fix --yes` would delete exactly the config entry D33 requires (on Gemini, and on any host where an old plugin still serves MCP), and the next `rtok agents install|update` would write it back, so the two features undo each other.
@@ -10500,6 +10509,17 @@ Result (2026-10-03, Claude Code / sonnet-5): 19 hosts write `rtok mcp --host <id
 Status: done 2026-10-03
 Model: Claude Code / claude-sonnet-5
 
+### T283. An agent learns its own rtok agent id
+
+An agent must know its id to report it, to claim worktrees and to message others. Epic; shipped in four PRs.
+
+Done: PR 1 (#449, 2026-09-28): the SessionStart/SubagentStart line `rtok agent id: <short> (full: <uuid>). ...` as a priority-10 offering inside the injection budget (none when `[agents] enabled = false`), `RTOK_AGENT_ID` exported through Claude Code's `CLAUDE_ENV_FILE` (cited in the `src/hooks/mod.rs` doc comment and `research.md` §26), and `rtok agents whoami [--json]`; T473 later made the CLI fall back to the host-session rule when `RTOK_AGENT_ID` is unset. PR 2 was split: T283.1 (MCP agent link at `initialize`, `rtok mcp --host`, MCP `whoami`, hook-less hosts register their own row), T283.2 (`--host <id>` in every host's MCP entry), T283.3 (the nearest-common-ancestor pid rule). The hook fixtures (line byte-stable but for the id, none when agents are disabled), the MCP e2e `whoami` tests and `tests/agents_whoami.rs` plus `tests/trycmd/agents-whoami.trycmd` cover the Check.
+
+Result: every step of the card is on main. The one open item, the creator's live probe that only confirms the doc-derived link rule per host, belongs to T281 (still in progress), which writes that table into `research.md` §26.
+
+Status: done 2026-10-11
+Model: Claude Code / claude-sonnet-5.5
+
 ### T285. Worktree claims: `rtok worktree add` hands the worktree to the calling agent; MCP `worktree_add`
 
 Depends on T282, T283. `rtok worktree add <task> [slug] --owner` exists (T158, `src/worktree/add.rs`) and prints the path, but the owner is free text and nothing links the worktree to an agent; `list` guesses the session from the last cwd seen (T154, `src/worktree/list.rs:174`).
@@ -11132,6 +11152,17 @@ Result: `render::with_loader` now wraps the pending-migration apply in `Store::m
 
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
+
+### T276.1. `proc::ProgressRunner` core in `crates/rtok-sys`, first call sites in `worktree/git.rs`
+
+Split from T276 (migration plan step 1, 2026-10-11, D16): the `proc` module (`mod.rs` runner, `indicator.rs`, `parse.rs`) in `crates/rtok-sys` with `ProgressRunner` (`Capture`, `Stream`, `Inherit`, `Detached`; `.cwd()`, `.env()`, `.stdin()`, `.timeout()`, `.progress()`; `.run()` returns `std::process::Output`, `.spawn()` returns `std::process::Child`), `Progress::{Off, Unknown, Parse}`, the `Indicator` trait with `TtyIndicator` (indicatif, one shared `MultiProgress` on stderr) and `Hidden` (non-TTY stderr, `RTOK_NO_PROGRESS=1`, `proc::disable_progress()`), `proc::suspend`, and the `GitProgress` and `Percent` parsers. First migrated site: the shared `git` helper in `src/worktree/git.rs` (quick reads `Progress::Off`; `fetch`, `worktree add` and `worktree remove` get `fetching <branch>…`, `creating worktree…`, `removing worktree…`), which replaces the two outer `with_loader` calls of `worktree add/remove`. `indicatif` moves to `rtok-sys` (the root crate keeps it until T276.6). Not here: `Batch`/`Callback`, `CargoProgress`, `JsonLines`, the Windows shim (T276.2); `agents`/`doctor` helpers (T276.3), so nothing under `src/agents` changes.
+
+Check: parser tests on recorded `git` stderr; `Hidden` writes no bytes and a non-TTY run returns the same `Output` as `Command::output`; `TtyIndicator` switches from spinner to bar on the first measurable update; `suspend` runs its closure; timeout kills the child; `just check`.
+
+Result: `crates/rtok-sys/src/proc/` holds `ProgressRunner` (`Capture`, `Stream`, `Inherit`, `Detached`; `.cwd()`, `.env()`, `.stdin()`, `.timeout()`, `.progress()`; `.run()` returns `std::process::Output`, `.spawn()` returns `std::process::Child`), `Progress::{Off, Unknown, Parse}`, `TtyIndicator` over one shared `MultiProgress` on stderr and `Hidden`, `proc::suspend` and `proc::disable_progress`, and the `GitProgress` and `Percent` parsers. Nothing is drawn unless stderr is a terminal, `RTOK_NO_PROGRESS` is not `1` and `disable_progress` was not called (a pure function, tested). `rtok mcp` serving, `--call` and `--http` call `disable_progress`; `rtok mcp ping` does not. `src/worktree/git.rs` runs git through the runner: quick reads are `Progress::Off`; `fetch`, `worktree add` and `worktree remove` show `fetching <branch>…`, `creating worktree…` and `removing worktree <name>…`, replacing the outer `with_loader` calls of `rtok worktree add/remove`. `indicatif` is now also a dependency of `rtok-sys` (the root crate keeps its own until T276.6; the `rust.md` row already existed). Deviations from the epic card: the runner returns `std::process::Output` instead of a `Captured` struct; `git fetch` stays `--quiet` (no `--progress` yet, because its stderr feeds the error text), so the parsers are tested on recorded git lines and wait for T276.2 and later slices. A `.timeout()` kills only the child, not a grandchild that keeps the pipes open. `just check`: 3421 tests passed, 8 skipped (after one load-related flake in `agents_install::the_agent_alias_prints_what_agents_prints`, which passes alone and on the rerun); the min-feature build shows the two unused-import warnings of T487 that exist on `main`.
+
+Status: done 2026-10-11
+Model: Claude Code / sonnet-5.5
 
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
