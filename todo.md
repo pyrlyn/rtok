@@ -1,3 +1,12 @@
+- T531. Make the archive reference returned by read dedup expandable
+- T532. Preserve typed content and message fields in the direct cache key
+- T533. Scope cached responses to the resolved upstream request target
+- T534. Validate expand ranges against the payload before freezing decisions
+- T535. Record the first full or ranged read when its output is capped
+- T536. Preserve raw command bytes when storage fails open
+- T537. Keep MCP pending calls when the server sends its own request
+- T538. Do not let skipped memory imports reserve unseen body hashes
+- T539. Preserve a global note's project scope when revising it
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
@@ -25,8 +34,6 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
-- T372. Link tests to sources by naming convention in `affected_from_paths`
-- T373. `rrf_merge` breaks score ties by note id
 - T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
@@ -39,8 +46,6 @@
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T404. Evaluate a local draft model that the cloud model only verifies
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.1. `rtok agents install roo` — Roo Code
-- T413.2. `rtok agents install qwen` — Qwen Code
 - T413.3. `rtok agents install droid` — Factory Droid
 - T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 - T413.5. `rtok agents install amp` — Amp

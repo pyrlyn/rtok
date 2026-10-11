@@ -82,8 +82,139 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
+| T531 | todo | P2 | 2 | 0% | |
+| T532 | todo | P1 | 3 | 0% | |
+| T533 | todo | P1 | 3 | 0% | |
+| T534 | todo | P2 | 2 | 0% | |
+| T535 | todo | P2 | 2 | 0% | |
+| T536 | todo | P2 | 2 | 0% | |
+| T537 | todo | P2 | 2 | 0% | |
+| T538 | todo | P2 | 2 | 0% | |
+| T539 | todo | P2 | 2 | 0% | |
 
 
+
+**Source audit (T530).**
+
+T531–T539 are confirmed source defects on `0b14b88e`, filed for implementation rather
+than fixed during this audit. Start with the incorrect-response cases T532/T533, then
+the remaining independent P2 fixes. Each card distinguishes executed function probes
+from source-derived reproduction steps and gives its own implementation/check sequence.
+Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
+overlap and were not copied or reassigned. This is a bounded review of the core data
+paths, not a claim that every bug or host/platform combination has been exhausted.
+
+### T531. Make the archive reference returned by read dedup expandable
+
+Source-confirmed on `0b14b88e`: [`dedup_line`](src/plugins/read/cache.rs#L65) formats a 64-character archive id, then always shortens it to eight characters to meet the 80-character output limit. Even a one-line file produces a full form longer than 80 characters. [`Store::get_archive`](crates/rtok-store/src/archive_rows.rs#L402) performs an exact primary-key lookup; neither CLI nor MCP expand resolves prefixes. Read a file twice in one session, copy the id from `unchanged since <8 chars>`, then expand it: the lookup has no matching row. The bytes exist, but the returned reference cannot retrieve them. T4.4 introduced the short display; T354 documents full ids but does not make this reference usable.
+
+Execution plan:
+
+1. Add a regression using the id parsed from the second read response, not the full id fetched from the database.
+2. Prefer a compact dedup message containing the full id within the existing budget; reuse the archive reference convention instead of introducing ambiguous prefix lookup.
+3. Exercise CLI and MCP expansion of that exact reference, including large line counts; retain one dedup Measurement.
+
+Check: the second read's reference expands to the archived bytes, the response meets its length contract, and `just check` passes.
+
+### T532. Preserve typed content and message fields in the direct cache key
+
+Source-confirmed on `0b14b88e`: [`messages_text` / `block_text`](src/proxy/semantic_cache.rs#L368) flatten structured requests into strings before hashing. `tool_result.is_error`, message `name`, and `image_url.detail` are omitted. For example, otherwise identical single-user requests with the same image URL and `detail: "low"` versus `"high"` produce identical CachePrompts. A text block containing `tool_result t: OK` also has the same flattened text as `{type:"tool_result", tool_use_id:"t", content:"OK"}`. With semantic cache enabled, the direct tier returns the first response for the second request before an upstream call. This is distinct from completed T55.14/T212/T303/T323: those added fields but retained lossy flattening.
+
+Validation: an offline Rust harness compiled verbatim `messages_text`, `content_text`, `block_text` and `canonical_json` from this revision; all four differing pairs above returned equal message fields. Other CachePrompt inputs were held equal. This proves the normalization collision, not an end-to-end proxy run.
+
+Execution plan:
+
+1. Add paired-request fixtures for image detail, tool-result error status, participant name and literal text versus typed tool content. Assert distinct direct keys and two upstream calls.
+2. Build the direct key from canonical structured message/content values, keeping type tags, field boundaries and response-affecting fields. Keep semantic text extraction separate.
+3. Retain key-order equivalence and the existing caller/model/tool-schema isolation tests; do not broaden cache eligibility.
+
+Check: all differing fixture pairs miss the direct cache, exact replay still hits, reordered object keys retain the same key, and `just check` passes.
+
+### T533. Scope cached responses to the resolved upstream request target
+
+Source-confirmed on `0b14b88e`: [`handle`](src/proxy/mod.rs#L407) looks up a shared cache before resolving the target at line 430. [`CachePrompt`](src/proxy/semantic_cache.rs#L22) includes provider/model/body/caller but no upstream URL, path, query or HTTP method. [`upstream_for`](src/proxy/mod.rs#L224) supports different upstreams per lane. Two cache-enabled lanes with identical shaping policy, body and credentials but different upstreams therefore share a direct key: warming endpoint A can cause a request intended for B to return A's answer without contacting B. This remains possible with `cache_by_provider` and `cache_by_model` both enabled; T323 isolated callers, not routing destinations.
+
+Execution plan:
+
+1. Reproduce with two local upstream servers returning distinct sentinel responses and two lanes that permit cache reads/fills.
+2. Resolve the effective target before lookup and include a consistent target/method namespace in both lookup and fill. Avoid retaining raw credentials or credential-bearing query strings in cache metadata; reuse hashing.
+3. Test differing paths/queries as well as lane upstreams; exact replay to one endpoint must still hit.
+
+Check: B receives its first request after A was warmed, each endpoint returns its own bytes, same-target replay hits, and `just check` passes.
+
+### T534. Validate expand ranges against the payload before freezing decisions
+
+Source-confirmed on `0b14b88e`: [`expand::run`](src/expand.rs#L200) and [`mcp::expand_text`](src/mcp.rs#L837) validate ranges against `usize::MAX`, call `fetch`, and only then validate against the actual line count. [`fetch`](src/expand.rs#L26) commits the expanded flag and its Measurement. Expanding a one-line live-zone archive with `lines: "2-3"` therefore returns an error after permanently freezing the compression decision and charging an expansion that returned no bytes. The earlier past-EOF fix correctly rejects the range; this task addresses its remaining side effects, not range syntax (T522).
+
+Execution plan:
+
+1. Seed an unexpanded decision and a one-line archive, request `2-3` through both CLI and MCP, and assert an error with unchanged decision and measurement rows.
+2. Separate retrieval/validation from successful-expansion bookkeeping; share the sequence across both surfaces and preserve the atomic freeze-plus-measurement transaction.
+3. Cover empty archives and valid filtered expansion, and retain malformed-range checks.
+
+Check: all failed ranges leave state unchanged; successful expansion still freezes once and records the intended cost; `just check` passes.
+
+### T535. Record the first full or ranged read when its output is capped
+
+Source-confirmed on `0b14b88e`: [`read_with`](src/plugins/read/mod.rs#L171) calls `cap`, which passes `None` to [`cap_impl`](src/plugins/read/mod.rs#L270) and writes no Measurement. The subsequent render measurement only handles map/signatures/stripped modes. A fresh `full` or `lines` read exceeding `read.max_chars` is archived and shortened but produces no read saving row. Generic MCP token rows compare the arguments with the response and do not repair this missing Measurement. T300 covers outlines and stripped output; search/tree already use `cap_recording`.
+
+Execution plan:
+
+1. In a fresh session, read a fixture above the cap in full and ranged modes; assert one Measurement with the full rendered view as before and the returned text, including its marker, as after.
+2. Reuse the existing cap recorder at the responsible path; retain a single measurement for map/signatures/stripped, dedup and delta paths.
+3. Verify an uncapped full read does not acquire a fictitious saving, and the capped archive remains expandable.
+
+Check: capped fresh full/lines reads have exactly one correct Measurement, existing rendering/dedup accounting does not double count, and `just check` passes.
+
+### T536. Preserve raw command bytes when storage fails open
+
+Source-confirmed on `0b14b88e`: [`emit_filtered_to`](src/plugins/cmd/run.rs#L323) creates a lossy UTF-8 view before opening the runtime. Both the runtime-open failure at line 332 and the archive-write failure at line 393 print that lossy view. With a body containing byte `0xff` and an unavailable database/archive, the fallback outputs UTF-8 replacement bytes instead; no usable archive can restore the input. The normal successful archive path already preserves binary bytes, so its tests do not cover this fallback.
+
+Execution plan:
+
+1. Inject runtime-open failure and archive-write failure using a temporary store/path and non-UTF-8 input. Compare output bytes, not decoded strings.
+2. Share a raw-byte fallback writer for both failures, preserving the CLI's established trailing-newline convention and wrapped exit code.
+3. Keep the successful formatter/archive path and tiny-body behavior unchanged; verify no dead archive pointer is emitted on failure.
+
+Check: the original bytes survive both failure branches, the command status is preserved, and `just check` passes.
+
+### T537. Keep MCP pending calls when the server sends its own request
+
+Source-confirmed on `0b14b88e`: [`take_call`](src/mcp/wrap.rs#L207) removes a client pending call for any server frame with the same `id`, without checking whether the frame is a response. After client `tools/call` id 7, a server `sampling/createMessage` request id 7 consumes the tool name; the eventual tool result id 7 is then forwarded without compression or its archive/measurement. Request ids in opposite directions must not be treated as one response namespace. The existing `pending_matches_tool_call_ids_only` test covers numeric versus string ids, not reverse requests.
+
+Validation: an offline Rust harness compiled verbatim `note_call` and `take_call` from this revision. The server request returned the pending tool name; the later response returned `None`. Full transport validation remains part of the fix.
+
+Execution plan:
+
+1. Extend the framing fixture with an in-flight client tool call, a server request using the same numeric id, and the eventual tool response.
+2. Consume pending state only for response-shaped frames; preserve server requests/notifications byte-for-byte.
+3. Cover server requests with string ids, error responses and unrelated notifications; a genuine success/error response must drain its pending entry once.
+
+Check: the server request does not remove the client call, the later large result is shortened and expandable with one measurement, and `just check` passes.
+
+### T538. Do not let skipped memory imports reserve unseen body hashes
+
+Source-confirmed on `0b14b88e`: [`memory::import::run`](src/plugins/memory/import.rs#L94) inserts a body's hash into `seen` before checking whether the topic key is already occupied. Seed local topic A with body `old`; import A with body `new`, then free topic B with body `new`. A is correctly skipped to protect the local note, but B is also skipped because A already reserved `new` in memory, although no stored note has that body. The reported result is zero insertions; reversing the input order permits B. The same false skip affects dry-run.
+
+Execution plan:
+
+1. Add this two-line fixture in both orders, with an existing local A, for dry-run and actual import.
+2. Check body/topic eligibility before reserving either; reserve both only for an accepted simulated or successful insertion. Handle the concurrent insert returning `None` without poisoning later rows.
+3. Preserve idempotency, the local-topic-wins rule and intentional dedup against bodies that really exist.
+
+Check: B is imported regardless of the skipped A's position, A keeps `old`, dry-run matches actual import, a second import is idempotent, and `just check` passes.
+
+### T539. Preserve a global note's project scope when revising it
+
+Source-confirmed on `0b14b88e`: [`mem_revise`](src/plugins/memory/mod.rs#L598) passes `old.project.as_deref()` to `mem_save`. For a global note (`project = NULL`), that becomes `None`, which [`mem_save`](src/plugins/memory/mod.rs#L430) interprets as infer the current working directory's project. Global notes are supported by [`memory import`](src/plugins/memory/import.rs#L30), whose optional project is stored without cwd inference. Import a global note, then revise it while inside a repository: the replacement becomes repository-scoped and the global note is retired, even when the title is unchanged. It may also upsert an existing same-title project note.
+
+Execution plan:
+
+1. Seed a global note and a separate same-title project note. Revise the global id from a repository cwd with both unchanged and changed titles.
+2. Separate an already-resolved optional project from the user-facing infer-project default; reuse one save implementation while preserving the old note's exact scope.
+3. Cover global, explicit-project and inferred-project creation plus revision; keep privacy stripping, embeddings and note history on the same write path.
+
+Check: global revisions stay global, unrelated project notes are untouched, ordinary creation still infers cwd, and `just check` passes.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
