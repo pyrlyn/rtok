@@ -35,10 +35,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T283 | in progress | P1 | 3 | 60% | Claude Code / sonnet-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
-| T329 | in progress | P2 | 5 | 95% | Claude Code / claude-opus-5-5 |
-| T329.50 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T329.52 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T329.53 | in progress | P3 | 2 | 90% | Claude Code / claude-opus-5-5 |
+| T329 | in progress | P2 | 5 | 99% | Claude Code / claude-opus-5-5 |
 | T500 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -46,9 +43,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T378 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.9 | in progress | P3 | 5 | 10% | Claude Code / claude-opus-5-5 |
-| T385.9.1 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
-| T385.9.2 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
+| T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
 | T385.9.3 | todo | P3 | 2 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
@@ -790,30 +785,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
 
-### T329.50. Graph page: running labels with elapsed counters on the live canvas
-
-Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
-
-Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
-
-Plan: (1) a label layer in the 2D and 3D live canvases fed by the running calls the metrics list already has (tool name, start time); (2) elapsed counter ticking off one shared timer, fade a few seconds after the call ends, "+N more" labels the node holding the count, none outside the scope; (3) Vitest, stories with axe, a Playwright case; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
-
-### T329.52. Graph page: metrics collapsed to a strip under 900 px
-
-Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
-
-Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
-
-Plan: (1) under 900 px the live metrics render as a one-line strip (running, calls, saved) with an expand/collapse toggle, unchanged at 900 px and above; (2) Vitest, stories with axe at 375 and 1280 px, a Playwright case at 375 px; web gates and `just check`.
-
-### T329.53. Graph page: count-up animation of the live numbers
-
-Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
-
-Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
-
-Plan: MiMo's commit `418fb2e35` (CountUp in `web/src/pages/graph3d/live/`) carried onto this branch; verify with the web gates and `just check`, add the done entry.
-
 ### T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
 
 D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
@@ -910,26 +881,6 @@ optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arX
 Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
 
 Creator decision 2026-10-11: build it behind a flag that is off by default, tested against a mock upstream; the task closes only after the live Gate P28 bench (T385.9.3, needs the creator's API spend). Split (complexity 5): T385.9.1 client and cache, T385.9.2 asynchronous use in the live zone, T385.9.3 the live bench.
-
-### T385.9.1. P28 compressor client on the `internal` lane and the summary cache
-
-Part of T385.9 (`docs/research/optimization.md` §3.3, `docs/llm-soft-compression.md`). A compressor client that sends one summarisation request for an archived tool result through the proxy's own `internal` lane (so the spend is tagged and T385.10 routing applies), with the compressor prompt kept as data. Summaries are stored next to the archive row, keyed by archive id and compressor version, through Diesel (a new migration; check every open branch for the next free number). A code-aware guard copies the must-keep spans (identifiers, paths, numbers, error codes; the kinds in `tests/fixtures/p28_must_keep.toml`) and rejects a summary that drops one. Config lives in the one config module, `enabled = false` by default.
-
-Done when: with the flag off nothing calls a model and no row is written; with it on and a mock upstream, a summary is stored once per archive id and version and read back; a summary that drops a must-keep span is rejected and not stored; an upstream error stores nothing and is warned, never fatal; `just check`.
-
-Check: mock-upstream tests for store, reuse, guard rejection and upstream failure; the must-keep fixture test; `just check`.
-
-Plan: (1) config section and types; (2) migration + Diesel model and store API for summaries; (3) must-keep span extraction shared with `tests/p28_must_keep.rs` (no second parser) and the guard; (4) client over the `internal` lane with a mock upstream in tests; docs en/ru/uk.
-
-### T385.9.2. P28 asynchronous compression and summaries in the live zone, behind a flag
-
-Part of T385.9, after T385.9.1. When a tool result enters the archive and is eligible (outside `keep_turns`, above `min_tokens`, logs and prose before diffs and source), compression is queued off the hot path; a request never waits on it. From the next turn on, the proxy's live-zone view of that result is the cached summary plus the archive id instead of the extractive view, byte-stable across turns so the prompt cache survives; no summary yet means the extractive view (fail open). `expand <id>` still returns the original.
-
-Done when: flag off → proxy bytes identical to today; flag on → the second turn carries the summary and the third turn's prefix is byte-identical to the second; a slow mock compressor never delays a request; `expand` recovers the original; `just check`.
-
-Check: replay byte-stability, flag-off identity, slow-upstream latency and `expand` tests; `just check`.
-
-Plan: (1) eligibility and a background queue fed from the archive write path; (2) the live-zone rewrite reads the cached summary, else the extractive view; (3) tests with a slow mock compressor and a two-turn replay; docs en/ru/uk.
 
 ### T385.9.3. Gate P28 live bench for the compressor
 
