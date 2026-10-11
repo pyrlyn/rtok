@@ -28,7 +28,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 80% | Claude Code / claude-opus-5-5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T276 | in progress | P2 | 5 | 0% | Claude Code / claude-opus-5-5 |
+| T276 | in progress | P2 | 5 | 0% | Claude Code / sonnet-5.5 |
+| T276.1 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T276.2 | todo | P2 | 3 | 0% | |
+| T276.3 | todo | P2 | 4 | 0% | |
+| T276.4 | todo | P2 | 4 | 0% | |
+| T276.5 | todo | P2 | 3 | 0% | |
+| T276.6 | todo | P2 | 3 | 0% | |
 | T277 | in progress | P2 | 5 | 20% | Claude Code / claude-opus-5-5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -287,6 +293,48 @@ Execution plan (after T275, T277 and T279, which touch the same `agents` spawn h
 4. PRs 3-4: the remaining sites file by file, per the audit's `Output` choice.
 5. PR 5: delete `with_loader` / `render::loader` / `render::spinner`, turn on the `clippy.toml` ban, contributor docs and `CHANGELOG.md`.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
+
+### T276.1. `proc::ProgressRunner` core in `crates/rtok-sys`, first call sites in `worktree/git.rs`
+
+Split from T276 (migration plan step 1, 2026-10-11, D16): the `proc` module (`mod.rs` runner, `indicator.rs`, `parse.rs`) in `crates/rtok-sys` with `ProgressRunner` (`Capture`, `Stream`, `Inherit`, `Detached`; `.cwd()`, `.env()`, `.stdin()`, `.timeout()`, `.progress()`; `.run()` returns `std::process::Output`, `.spawn()` returns `std::process::Child`), `Progress::{Off, Unknown, Parse}`, the `Indicator` trait with `TtyIndicator` (indicatif, one shared `MultiProgress` on stderr) and `Hidden` (non-TTY stderr, `RTOK_NO_PROGRESS=1`, `proc::disable_progress()`), `proc::suspend`, and the `GitProgress` and `Percent` parsers. First migrated site: the shared `git` helper in `src/worktree/git.rs` (quick reads `Progress::Off`; `fetch`, `worktree add` and `worktree remove` get `fetching <branch>…`, `creating worktree…`, `removing worktree…`), which replaces the two outer `with_loader` calls of `worktree add/remove`. `indicatif` moves to `rtok-sys` (the root crate keeps it until T276.6). Not here: `Batch`/`Callback`, `CargoProgress`, `JsonLines`, the Windows shim (T276.2); `agents`/`doctor` helpers (T276.3), so nothing under `src/agents` changes.
+
+Check: parser tests on recorded `git` stderr; `Hidden` writes no bytes and a non-TTY run returns the same `Output` as `Command::output`; `TtyIndicator` switches from spinner to bar on the first measurable update; `suspend` runs its closure; timeout kills the child; `just check`.
+
+Execution plan:
+1. `crates/rtok-sys/src/proc/{mod,indicator,parse}.rs`, `pub mod proc;` in `lib.rs`, `indicatif` in its `Cargo.toml`, rows in `toolchain.md` and `rust.md`.
+2. Tests beside each file (process tests behind `cfg(unix)`, `sh -c` fakes only, no agents).
+3. `src/worktree/git.rs` onto the runner; drop the `with_loader` calls of `worktree add/remove` in `src/cli/worktree.rs`; call `proc::disable_progress()` at the start of `rtok mcp`.
+4. `just check`, move this card to `done.md`.
+
+### T276.2. `Batch`, `Progress::Callback`, `CargoProgress`, `JsonLines`, Windows shim in `proc`
+
+Split from T276 (migration plan step 1, 2026-10-11, D16): the rest of the runner API from the epic card. `ProgressRunner::batch(label, total, Unit)` and `Batch::step(msg)` (a bar over items with each command's spinner under it), `Progress::Callback`, the `CargoProgress` and `JsonLines` parsers, and the Windows `cmd /C` shim for npm-installed CLIs as a runner option (moved from `spawn_cli` and `mcp_command` when T276.3 uses it). First user: the `rtok worktree gc/clean` bar over worktrees. Depends on T276.1.
+
+Check: batch position/total tests on a hidden target; parser tests on recorded `cargo` output and JSON lines; `just check`.
+
+### T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
+
+Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cli` / `spawn_cli` / `app_version` and `doctor.rs::spawn_mcp` / `mcp_command` go through `ProgressRunner`; `proc::suspend` replaces the T81 `interactive` switch so `rtok agents install/update/remove` shows step loaders and the plugin question stays readable; `probing MCP server <name>…` with a bar when more than one server. Starts after T275, T277 and T279 land (same spawn helpers). Unblocks T436.4. Depends on T276.1, T276.2.
+
+Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
+
+### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
+
+Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
+
+Check: the T276 card's Check lines for items 4 and 5; `just check`.
+
+### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
+
+Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
+
+Check: hook latency budget unchanged (fail open, 10 ms); `just check`.
+
+### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
+
+Split from T276 (migration plan steps 4-6, 2026-10-11, D16): delete `with_loader` and the T81 switch in `cli.rs`, `render::loader` / `render::spinner` (`graph index` moves to a `Batch` over files), drop `indicatif` from the root crate, add `disallowed-methods = ["std::process::Command::new"]` to `clippy.toml` with an `#[allow]` only inside `crates/rtok-sys`, update the contributor notes in `docs/` and `CHANGELOG.md`. Closes T276. Depends on T276.2 to T276.5.
+
+Check: `just check` fails on a stray `Command::new` outside `crates/rtok-sys`.
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 
