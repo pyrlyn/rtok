@@ -5,7 +5,7 @@
 //! Optional LSP backend (T30.2). Native JSON-RPC over stdio.
 //! Spawns rust-analyzer / clangd / typescript-language-server from PATH (D6: not serena).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -198,6 +198,15 @@ impl std::error::Error for Refused {}
 
 pub(crate) fn server_broke(e: &anyhow::Error) -> bool {
     e.downcast_ref::<Refused>().is_none()
+}
+
+/// `textDocumentSync` from the `initialize` result: the change kind (0 none, 1 full, 2 incremental).
+/// A bare number is the kind itself; an options object carries it as `change`.
+fn change_kind(init: &Value) -> u64 {
+    let sync = &init["capabilities"]["textDocumentSync"];
+    sync.as_u64()
+        .or_else(|| sync["change"].as_u64())
+        .unwrap_or(0)
 }
 
 fn pick(root: &Path) -> Result<Server> {
@@ -407,11 +416,18 @@ struct Session {
     inbox: mpsc::Receiver<Result<Value>>,
     next_id: i64,
     root: PathBuf,
-    opened: HashSet<String>,
+    opened: HashMap<String, Doc>,
+    sync_change: u64,
     broken: bool,
     err_path: PathBuf,
     /// Overrides the configured wait cap; tests use it so they never touch the process-wide cell.
     limit: Option<Duration>,
+}
+
+/// What the peer holds for one open document.
+struct Doc {
+    version: i64,
+    text: String,
 }
 
 impl Session {
@@ -428,7 +444,8 @@ impl Session {
             inbox: spawn_reader(stdout),
             next_id: 1,
             root,
-            opened: HashSet::new(),
+            opened: HashMap::new(),
+            sync_change: 0,
             broken: false,
             err_path,
             limit: None,
@@ -485,7 +502,7 @@ impl Session {
         let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
         let mut s = Self::attach(stdin, stdout, Some(child), root, err_path);
         let uri = file_uri(&s.root);
-        if let Err(e) = s.request(
+        let init = match s.request(
             "initialize",
             json!({
                 // Ours, not null: the server watches it and exits when rtok dies, even by
@@ -506,8 +523,10 @@ impl Session {
                 "workspaceFolders": [{"uri": uri, "name": "root"}]
             }),
         ) {
-            return Err(s.dead(e));
-        }
+            Ok(v) => v,
+            Err(e) => return Err(s.dead(e)),
+        };
+        s.sync_change = change_kind(&init);
         s.notify("initialized", json!({}))?;
         Ok(s)
     }
@@ -625,12 +644,46 @@ impl Session {
         )
     }
 
-    fn did_open(&mut self, uri: &str) -> Result<()> {
-        if !self.opened.insert(uri.to_string()) {
+    /// Make the peer's copy of `uri` match the file on disk before a query (T621). A file
+    /// that is gone or unreadable is closed so the peer cannot keep answering from its old
+    /// text. A document counts as synced only once its notification was written.
+    fn sync_doc(&mut self, uri: &str) -> Result<()> {
+        let path = path_from_file_uri(uri);
+        let read = std::fs::read_to_string(&path);
+        let Some(doc) = self.opened.get(uri) else {
+            // An empty snapshot of a file we cannot read would itself be wrong text.
+            return match read {
+                Ok(text) => self.open_doc(uri, &path, text, 1),
+                Err(_) => Ok(()),
+            };
+        };
+        let version = doc.version + 1;
+        let Ok(text) = read else {
+            self.close_doc(uri)?;
+            return Ok(());
+        };
+        if text == doc.text {
             return Ok(());
         }
-        let path = path_from_file_uri(uri);
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        if self.sync_change == 0 {
+            // The peer did not offer to take changes, so give it a fresh document instead.
+            self.close_doc(uri)?;
+            return self.open_doc(uri, &path, text, version);
+        }
+        // A single change without a range replaces the whole text under both full and
+        // incremental sync, and carries no UTF-16 offsets to get wrong.
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {"uri": uri, "version": version},
+                "contentChanges": [{"text": text}]
+            }),
+        )?;
+        self.opened.insert(uri.to_string(), Doc { version, text });
+        Ok(())
+    }
+
+    fn open_doc(&mut self, uri: &str, path: &Path, text: String, version: i64) -> Result<()> {
         let language_id = match path.extension().and_then(OsStr::to_str) {
             Some("rs") => "rust",
             Some("dart") => "dart",
@@ -639,9 +692,20 @@ impl Session {
         self.notify(
             "textDocument/didOpen",
             json!({"textDocument": {
-                "uri": uri, "languageId": language_id, "version": 1, "text": text
+                "uri": uri, "languageId": language_id, "version": version, "text": text
             }}),
-        )
+        )?;
+        self.opened.insert(uri.to_string(), Doc { version, text });
+        Ok(())
+    }
+
+    fn close_doc(&mut self, uri: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didClose",
+            json!({"textDocument": {"uri": uri}}),
+        )?;
+        self.opened.remove(uri);
+        Ok(())
     }
 }
 
@@ -852,7 +916,7 @@ pub(crate) fn callers(cx: &Ctx, root: &Path, name: &str, filter: &super::Filter)
                 format!("no references to {name}{}", filter.scope_note()),
             );
         };
-        s.did_open(&d.uri)?;
+        s.sync_doc(&d.uri)?;
         let refs = s.request(
             "textDocument/references",
             json!({
@@ -865,7 +929,7 @@ pub(crate) fn callers(cx: &Ctx, root: &Path, name: &str, filter: &super::Filter)
         let mut syms_by: BTreeMap<String, Vec<Value>> = BTreeMap::new();
         for loc in refs.as_array().cloned().unwrap_or_default() {
             let uri = loc["uri"].as_str().unwrap_or("");
-            s.did_open(uri)?;
+            s.sync_doc(uri)?;
             let path = rel(&s.root, uri);
             let line0 = loc["range"]["start"]["line"].as_u64().unwrap_or(0);
             let ch = loc["range"]["start"]["character"].as_u64().unwrap_or(0);
@@ -928,7 +992,7 @@ fn impact_walk(
     let Some(d) = wait_def(s, name)? else {
         return Ok(Vec::new());
     };
-    s.did_open(&d.uri)?;
+    s.sync_doc(&d.uri)?;
     let items = s.request(
         "textDocument/prepareCallHierarchy",
         json!({"textDocument": {"uri": d.uri}, "position": d.pos}),
@@ -1025,7 +1089,7 @@ fn call_paths(s: &mut Session, a: &str, b: &str, max_depth: u32) -> Result<Vec<S
     let Some(d) = wait_def(s, a)? else {
         return Ok(Vec::new());
     };
-    s.did_open(&d.uri)?;
+    s.sync_doc(&d.uri)?;
     let items = s.request(
         "textDocument/prepareCallHierarchy",
         json!({"textDocument": {"uri": d.uri}, "position": d.pos}),
@@ -1200,7 +1264,7 @@ pub(crate) fn outline(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
     };
     with_session(&ws, |s| {
         let uri = file_uri(&abs);
-        s.did_open(&uri)?;
+        s.sync_doc(&uri)?;
         let deadline = Instant::now() + ready();
         loop {
             let raw = s.request(
