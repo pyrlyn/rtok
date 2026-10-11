@@ -120,7 +120,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T571 | todo | P2 | 2 | 0% | |
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
-| T560.2 | todo | P2 | 3 | 0% | |
 | T576 | todo | P2 | 3 | 0% | |
 | T577 | todo | P2 | 3 | 0% | |
 | T579 | todo | P2 | 3 | 0% | |
