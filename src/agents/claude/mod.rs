@@ -1213,9 +1213,14 @@ mod tests {
     /// rest are the idempotent re-run, and remove takes it out, keeping the file's other keys.
     #[test]
     fn install_update_and_remove_write_the_same_entry_on_both_surfaces() {
-        let surfaces: [(&str, fn(&Path) -> McpSpec); 2] =
-            [("cli", cli_spec_fn), ("desktop", desktop_spec_at)];
-        for (name, spec_at) in surfaces {
+        for (name, desktop) in [("cli", false), ("desktop", true)] {
+            let spec_at = |p: &Path| {
+                if desktop {
+                    desktop_spec_at(p)
+                } else {
+                    cli_spec_fn(p)
+                }
+            };
             let path = tmp(&format!("mcp-both-{name}"));
             fs::write(&path, r#"{"keep":{"me":1}}"#).unwrap();
             let c = cfg(path.clone(), false);
