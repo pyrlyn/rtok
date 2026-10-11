@@ -8918,6 +8918,21 @@ Check run: `just check` (full gate, `.config/nextest.toml` is a shared input) gr
 Status: done 2026-10-10
 Model: Claude Code / sonnet-5.5
 
+### T528. Codex runs rtok's MCP tools without an approval prompt
+
+Found 2026-10-11 in the Codex Desktop rollout `~/.codex/sessions/2026/10/11/rollout-2026-10-11T14-41-07-01a12ac4-….jsonl` (cwd `apps/cox`, approval policy `on-request`): all three `mcp__rtok__read` calls the main thread made from code mode failed with `MCP tool call requires approval, but approval policy is never`, and the agent fell back to native reads. After the failure `~/.codex/config.toml` got per-tool `approval_mode = "approve"` for `tree`, `read` and `search` only; every other rtok tool still needed a prompt.
+
+Codex reads a server-wide `default_tools_approval_mode` in `[mcp_servers.<name>]`; codex-cli 0.162.1 accepts `auto`, `prompt`, `writes` or `approve` and refuses to load the whole config on any other value (checked 2026-10-11 in a scratch `CODEX_HOME`).
+
+Done when: the install (`rtok agents install codex`, also run by the plugin install and update) writes `default_tools_approval_mode = "approve"` in a new `[mcp_servers.rtok]`, and adds it to an existing rtok-owned table that lacks the key. A value the user set is left alone. Remove still treats an entry carrying `"approve"`, or none, as rtok's own. The rest of the file stays byte-for-byte.
+
+Result: `insert_ours` (`src/agents/codex/mod.rs`) writes the key in a new entry and adds only that key to an owned entry without it (per-tool `[mcp_servers.rtok.tools.*]` tables survive); a user value is `no changes`. `strip_ours` drops our `"approve"` before `judge_owned`, so entries from before and after T528 are both removed as rtok's. `plugins/codex/README.md` says so.
+
+Check: `cargo nextest --lib agents::codex` 20/20 (the new upgrade and user-value tests, the install test now asserts the key); `just check` green: 3329 passed, 8 skipped.
+
+Status: done 2026-10-11
+Model: Claude Code / claude-opus-5-5
+
 ### T245. One tool call is processed once
 
 Runtime half of the same request: a host may fire two events for one call (Cursor: `afterMCPExecution` and `postToolUse`; Claude Code with both the plugin and settings-file hooks), and each processing adds a `Measurement` row and an archive entry, so savings double-count (D3).
