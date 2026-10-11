@@ -23,10 +23,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.50. Graph page: running labels with elapsed counters on the live canvas
-- T329.51. Graph page: maximise buttons for the two parts
-- T329.52. Graph page: metrics collapsed to a strip under 900 px
-- T329.53. Graph page: count-up animation of the live numbers
-- T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
@@ -64,3 +60,4 @@
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T521. MiMo Desktop variant of the `mimo` host
+- T561. TUI: folded-target counter in a one-project view
