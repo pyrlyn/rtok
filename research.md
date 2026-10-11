@@ -1605,6 +1605,38 @@ Eligible share by tool (sums to 6.54 %): `Bash` 2.12 %, `Read` of code 1.40 %, r
 
 Caveats: `bytes / 4` underestimates code (about 3 chars per token), so the true token shares are somewhat higher; the tool-name classes come from the transcript's own `tool_use` records; transcripts of the last 60 days only, Claude Code only (Codex, Cursor and others are not in the denominator); mtime-selected files may hold older, uncounted requests; eligibility assumes the 4-message boundary of the proxy even though no proxy ran; micro-compaction by the host, if any, is not modelled. Commands: read-only `sqlite3 -readonly "file:<home>/rtok.db?mode=ro"` for the `archive`, `archive_decisions` and config values; `rtok stats --since 30d --json`.
 
+### 16.9 Speculative local draft → cloud verify (T404 research, 2026-10-11)
+
+Idea I-111 / §16.3 row 10: a local small model proposes output and a cloud model verifies it, cutting cloud **output** tokens (the expensive side on Fable-class pricing). Research pass only — no product code. Primary sources opened 2026-10-11.
+
+**API surface that lets a host start from a draft.**
+
+| Host / API | Pre-filled assistant as the last turn | Notes (source, 2026-10-11) |
+| --- | --- | --- |
+| Anthropic Messages (Claude) | **No on Claude 4.6 and later, and Claude Mythos Preview** — request returns 400. Yes on older models (docs example uses `claude-sonnet-4-5`). | Official: https://platform.claude.com/docs/en/build-with-claude/working-with-messages ("Prefilling Claude's response"; note that prefill is not supported on Claude 4.6 and later). Docs tell you to use structured outputs or system instructions instead. Multi-turn still accepts synthetic `assistant` messages that are not the last turn. |
+| Anthropic structured outputs | Yes as a *replacement shape*, not a draft continuation | Same page: "Use structured outputs on models that support it". Fits a verify-only reply (`accept` / `patch`), not a silent extend-of-the-draft. |
+| OpenAI Chat/Responses | No first-class "continue from this assistant prefix" prefill on current API; structured outputs / JSON schema exist | https://developers.openai.com/api/docs/guides/structured-outputs (opened via SERP 2026-10-11). Assistant messages can appear in history; they are not a draft the model continues from the way Anthropic's prefill worked on old Claude. |
+| Speculative decoding (vLLM / TensorRT-LLM / provider-side) | Different layer: draft tokens verified inside one inference server | Draft and target are the same request's sampling path. Not a host-side "local draft, remote verify" product; no host hook. |
+
+**Local draft speed on Apple Silicon (for the draft half).** Public open dataset (llmcheck.net/benchmarks, updated 2026-08, labeled sourced/estimated/community; opened 2026-10-11): 2.6–4B Q4_K_M models run roughly **80–220 tok/s** on M4–M5 class chips via MLX/Ollama (e.g. LFM2.5-2.6B 220 tok/s M5 Max MLX sourced; Qwen 3 4B ~161 tok/s M5 Max Ollama estimated; SmolLM3 3B ~106–199 tok/s). 8B class sits near 90 tok/s. Fast enough to draft a few hundred tokens before a cloud call; not free (RAM + process), and tok/s is not cost-per-passed-task.
+
+**How verification would have to be prompted without prefill.** The classic shape (local draft as assistant prefix; cloud finishes) is **unavailable on the Claude models this product actually uses** (Opus/Fable 5.x = 4.6-lineage). Remaining shapes:
+
+1. **Verify-only structured reply.** Cloud sees the draft as `user`/`assistant` history and returns `{ok: true}` or `{ok: false, patch: "..."}` (schema-constrained). Cloud output ≈ one small object on accept, a patch on reject. Draft text is input, not output. This is the only shape that still cuts cloud output on current Claude.
+2. **Reject-and-redraft.** On `ok: false`, cloud writes the full answer (worst case = today's cost). Expected saving depends on accept rate; a low accept rate makes the draft a pure extra input tax.
+3. **Host compaction / structured tools.** Not this idea.
+
+**Go / no-go for building (2026-10-11).**
+
+- **No-go for the original I-111 shape** (prefill a cloud completion with a local draft) on current Claude: API rejects prefill. Do not build against Sonnet-4.5-class only; that is not the production model.
+- **Conditional go for verify-only (shape 1)** only after a bench on the real workload: `rtok bench` (or a fixture of Fable-shaped coding tasks) with local draft + structured verify vs baseline, cost per passed task, pass rate held. Gate: cloud output tokens fall enough that **USD per passed task falls**, and pass rate does not drop. Without that row, stay unbuilt.
+- Wrong-draft risk is real: a verifier that rubber-stamps bad drafts is worse than no draft. Any future bench needs a quality fixture, not only token counts (same rule as Gate P28).
+
+**What is not settled (needs a bench, not more search).** Accept rate of a 3–4B coder draft on rtok-style tool I/O; whether the draft as *input* busts the prompt cache often enough to eat the output saving; which local runtime (MLX vs Ollama) keeps TTFT under the interactive budget; whether the host (Claude Code) will even send a synthetic assistant history entry we control.
+
+Commands / sources: Browser Use IAB, Bing SERP (Google was CAPTCHA-blocked), 2026-10-11; Anthropic Messages guide as above; OpenAI structured outputs guide as above; llmcheck.net/benchmarks Apple Silicon table.
+
+
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
 Creator request: a freshly spawned sub-agent gets none of the parent's context, reads the same files again and pays for them again. Find what rtok can apply; sub-agents stay cheap (Haiku). Method: two Haiku agents (repo inventory, web scan), one Haiku docs check, an ad-hoc scan of this machine's transcripts; synthesis in the main session. Vendor numbers stay claims.
