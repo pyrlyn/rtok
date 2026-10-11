@@ -44,8 +44,18 @@ pub fn send(cx: &Runtime, from: &AgentDetail, args: &Value) -> Result<String> {
         .map_err(|e| anyhow::anyhow!("agent {to}: {e}"))?;
     let msg = cx
         .store
-        .send_message_on(Some(&from.id), &id, text, args["task"].as_str())?;
+        .send_message_on(Some(&from.id), &id, text, task_arg(args)?)?;
     Ok(json!({"id": msg, "to": short_agent_id(&id)}).to_string())
+}
+
+/// A `task` that is present but not a string is refused: read as absent, `agent_inbox`
+/// would return and mark read the whole queue instead of one task's messages.
+fn task_arg(args: &Value) -> Result<Option<&str>> {
+    match &args["task"] {
+        Value::Null => Ok(None),
+        Value::String(s) => Ok(Some(s)),
+        other => bail!("`task` must be a task id string, got {other}"),
+    }
 }
 
 pub fn inbox(cx: &Runtime, me: &AgentDetail, args: &Value) -> Result<String> {
@@ -55,7 +65,7 @@ pub fn inbox(cx: &Runtime, me: &AgentDetail, args: &Value) -> Result<String> {
         .map_or(DEFAULT_LIMIT, |n| (n as usize).clamp(1, MAX_LIMIT));
     let rows = cx
         .store
-        .inbox_limited(&me.id, unread, true, Some(limit), args["task"].as_str())?;
+        .inbox_limited(&me.id, unread, true, Some(limit), task_arg(args)?)?;
     if rows.is_empty() {
         return Ok("no messages".into());
     }
@@ -64,4 +74,17 @@ pub fn inbox(cx: &Runtime, me: &AgentDetail, args: &Value) -> Result<String> {
         .map(crate::render::agent_message_frame)
         .collect();
     Ok(frames.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_task_that_is_not_a_string_is_refused() {
+        assert_eq!(task_arg(&json!({})).unwrap(), None);
+        assert_eq!(task_arg(&json!({"task": "A12"})).unwrap(), Some("A12"));
+        assert!(task_arg(&json!({"task": 12})).is_err());
+        assert!(task_arg(&json!({"task": true})).is_err());
+    }
 }
