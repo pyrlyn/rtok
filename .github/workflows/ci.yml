@@ -235,9 +235,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: nextest-archive-${{ matrix.os }}
+      # Extracted into the checkout, not a temp dir: the tests call env!("CARGO_BIN_EXE_rtok"),
+      # a path fixed at build time under ./target, and the cached target/vitest is already there.
       - run: >-
           mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
           --workspace-remap .
+          --extract-to . --extract-overwrite
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
@@ -321,9 +324,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: nextest-archive-windows
+      # Extracted into the checkout, not a temp dir: the tests call env!("CARGO_BIN_EXE_rtok"), a path
+      # fixed at build time under ./target.
       - run: >-
           mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
           --workspace-remap .
+          --extract-to . --extract-overwrite
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
