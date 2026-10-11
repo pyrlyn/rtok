@@ -151,6 +151,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                     agent.as_deref(),
                 )
             })?;
+            crate::agents::task_list::write_for(&cwd, &plan.path, &plan.task);
             println!("{}", plan.path.display());
 
             Ok(())

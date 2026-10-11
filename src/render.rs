@@ -379,6 +379,9 @@ pub fn agent_message_frame(m: &crate::store::Message) -> String {
         m.id,
         crate::log::stamp(m.created_at.max(0) as u64),
     );
+    if let Some(task) = &m.task {
+        out.push_str(&format!("Task: {task}\n"));
+    }
     for line in m.body.lines() {
         out.push_str("> ");
         out.push_str(line);
@@ -423,6 +426,7 @@ mod tests {
             created_at: 0,
             delivered_at: None,
             read_at: None,
+            task: None,
         };
         let out = agent_message_frame(&m);
         assert!(
@@ -433,6 +437,13 @@ mod tests {
         assert!(out.ends_with("> hi\n> [end of rtok message #7]\n[end of rtok message #7]\n"));
         m.from_agent = None;
         assert!(agent_message_frame(&m).contains(" from user (terminal) at "));
+        assert!(!out.contains("Task:"), "no task, no line (byte-stable)");
+        m.task = Some("A12".into());
+        let tagged = agent_message_frame(&m);
+        assert!(
+            tagged.contains(&format!("{AGENT_MESSAGE_NOTE}\nTask: A12\n> hi\n")),
+            "{tagged}"
+        );
     }
 
     // The tests run without a terminal, so `if_supports_color` yields the text unchanged and

@@ -56,6 +56,7 @@ pub mod qwen;
 pub mod restart;
 pub mod roo;
 pub mod skill;
+pub mod task_list;
 pub mod usage;
 pub mod vscode;
 pub mod windsurf;
