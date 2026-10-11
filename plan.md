@@ -82,7 +82,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
-| T560.1 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 | T560.2 | todo | P2 | 3 | 0% | |
 
 
@@ -844,16 +843,11 @@ Facts (primary unless marked; checked 2026-10-11):
 - `CODEBUDDY_CONFIG_DIR` moves the config and data dir — https://www.codebuddy.ai/docs/cli/env-vars
 - **unverified** (https://github.com/lorelum/lorelum/issues/205, WorkBuddy 5.5.6 on Windows): the WorkBuddy app embeds the CodeBuddy Code CLI and keeps its registry in `~/.workbuddy`, so `CODEBUDDY_CONFIG_DIR=~/.workbuddy codebuddy plugin …` installs into WorkBuddy. WorkBuddy's own docs (https://www.codebuddy.ai/docs/workbuddy/Changelog, 5.7.6) do not mention plugins or hooks.
 
-Split at claim (500-line cap):
-
-#### T560.1. `--host codebuddy` hook dialect and `plugins/codebuddy/` tree
-
-Plan: `src/hooks/mod.rs` `dispatch_owned_strict` gets a `codebuddy` branch whose output renames `hookSpecificOutput.updatedInput` to `modifiedInput` (everything else is Claude's envelope; stdin is Claude's shape, so no input adapter). `plugins/codebuddy/`: `.codebuddy-plugin/plugin.json` + `.codebuddy-plugin/marketplace.json` (marketplace `rtok`, plugin `rtok`, source `./`), `hooks/hooks.json` running `rtok hook <Event> --host codebuddy` on PreToolUse (`Bash|Read|Edit|Write|Grep|Glob`), PostToolUse, SessionStart, UserPromptSubmit, Stop, with the fail-open ketch hint like `plugins/claude/scripts/hook.sh`; `.mcp.json` → `rtok mcp --host codebuddy`; `README.md`, `.rtok-plugin-version`; row in `plugins/README.md`.
-Check: unit tests for the output rename (rewrite, deny, context, `{}`); `tests/codebuddy_plugin.rs` pins manifest/marketplace/hooks/.mcp.json shape; `just check`.
+Split at claim (500-line cap); T560.1 (hook dialect and `plugins/codebuddy/`) is done (`done.md`).
 
 #### T560.2. `codebuddy` host installer (CodeBuddy Code CLI + WorkBuddy Desktop)
 
-Needs T560.1. Plan: `src/agents/codebuddy/{mod.rs,README.md}` (with `## Docs`), registered in `HOSTS`/`host()`, `[setup.codebuddy] dir` (default `~/.codebuddy`) and `workbuddy_dir` (default `~/.workbuddy`) through the one config module. Variants: CLI (`codebuddy` on PATH), Desktop (WorkBuddy app: `/Applications/WorkBuddy.app`, `%LOCALAPPDATA%\Programs\WorkBuddy`). `support("plugin")` is an offer whose `--yes` runs `codebuddy plugin marketplace add <resolved plugins/codebuddy> --name rtok` then `codebuddy plugin install rtok@rtok -s user` (Desktop: same with `CODEBUDDY_CONFIG_DIR=<workbuddy_dir>`); remove runs `codebuddy plugin uninstall rtok@rtok -y`; `installed()` reads `<dir>/plugins/installed_plugins.json` (no spawn). Without the plugin, own files: `hooks` key of `<dir>/settings.json` and `mcpServers.rtok` in the first existing MCP file (create `.mcp.json`), our entries only, rest byte-for-byte. D21 singleton: while the plugin is installed, setup takes those own entries back. `plugin_install.rs` probe, `docs/agents.md` blessed, `toolchain.md` untouched (no new dep).
+Needs T560.1. Plan: flip the `codebuddy` rows of `HOOK_EVENTS` the installer writes to `installer = true`; `src/agents/codebuddy/{mod.rs,README.md}` (with `## Docs`), registered in `HOSTS`/`host()`, `[setup.codebuddy] dir` (default `~/.codebuddy`) and `workbuddy_dir` (default `~/.workbuddy`) through the one config module. Variants: CLI (`codebuddy` on PATH), Desktop (WorkBuddy app: `/Applications/WorkBuddy.app`, `%LOCALAPPDATA%\Programs\WorkBuddy`). `support("plugin")` is an offer whose `--yes` runs `codebuddy plugin marketplace add <resolved plugins/codebuddy> --name rtok` then `codebuddy plugin install rtok@rtok -s user` (Desktop: same with `CODEBUDDY_CONFIG_DIR=<workbuddy_dir>`); remove runs `codebuddy plugin uninstall rtok@rtok -y`; `installed()` reads `<dir>/plugins/installed_plugins.json` (no spawn). Without the plugin, own files: `hooks` key of `<dir>/settings.json` and `mcpServers.rtok` in the first existing MCP file (create `.mcp.json`), our entries only, rest byte-for-byte. D21 singleton: while the plugin is installed, setup takes those own entries back. `plugin_install.rs` probe, `docs/agents.md` blessed, `toolchain.md` untouched (no new dep).
 Check: fake-`codebuddy` e2e (dry-run prints and runs nothing; `--yes` adds marketplace + installs, strips own files; repeat says already installed; remove uninstalls; Desktop passes `CODEBUDDY_CONFIG_DIR`); units for detection, MCP file choice and the singleton; gates from `new-cli-command` docs if surfaces change; `just check`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
