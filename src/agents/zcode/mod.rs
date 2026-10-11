@@ -15,7 +15,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use rtok_agent_sdk::{NO_CHANGES, array_at, edit_json, object_at};
-use serde_json::{Value, json};
+use rtok_mcp::spec::{Client, EntryShape, Format as McpFormat, McpSpec};
+use serde_json::json;
 
 use super::claude::{desktop_command, insert_ours, strip_ours};
 use super::hook_events;
@@ -72,33 +73,29 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
     })
 }
 
-/// The `mcp.servers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("zcode")})
+/// ZCode's `mcp.servers.rtok = {command, args}` in its `config.json`, started by the absolute
+/// binary (the app has no shell PATH), as `rtok_mcp` reads it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    let mut spec = super::mcp::host_spec(
+        "zcode",
+        cfg.setup.zcode.config_path.clone(),
+        "mcp.servers",
+        McpFormat::Json,
+        EntryShape::Command,
+    );
+    spec.client = Client::Desktop;
+    spec.launch.command = Some(desktop_command());
+    spec
 }
 
 /// `mcp.servers.rtok` → `<abs rtok> mcp`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = desktop_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &cfg.setup.zcode.config_path,
-        "mcp.servers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "zcode"),
-    )
+    super::mcp::install(cfg, &mcp_spec(cfg))
 }
 
 /// Drop `mcp.servers.rtok` (`rtok agents remove zcode`), unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &cfg.setup.zcode.config_path,
-        "mcp.servers",
-        NAME,
-        &mcp_entry("rtok"),
-    )
+    super::mcp::remove(cfg, &mcp_spec(cfg))
 }
 
 const PLUGIN_SRC_REL: &str = "plugins/zcode";
@@ -262,6 +259,7 @@ impl Agent for Zcode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
     use std::fs;
 
     fn cfg(name: &str, dry: bool) -> (Config, PathBuf) {

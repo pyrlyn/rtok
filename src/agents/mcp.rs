@@ -979,7 +979,7 @@ mod tests {
     }
 
     fn migrated() -> Vec<Migrated> {
-        use super::super::{copilot, cursor, gemini, vscode};
+        use super::super::{copilot, cursor, gemini, vscode, zcode};
         let row = |spec, key, kind, tools| Migrated {
             spec,
             key,
@@ -1002,6 +1002,7 @@ mod tests {
                 Some("stdio"),
                 false,
             ),
+            row(zcode::mcp_spec, "mcp.servers", None, false),
         ]
     }
 
