@@ -105,8 +105,8 @@ pub trait TaskAdapter: Send {
         bail!("{} tasks: saving a claim is not supported", self.name())
     }
 
-    /// Whether `save` keeps `conflicts_with` and `parallel` (T441.13.2). The remote adapters
-    /// read neither back yet, so the commands that set them refuse instead of dropping them.
+    /// Whether `save` keeps `conflicts_with` and `parallel` (T441.13.2, T441.13.4). An adapter
+    /// that does not says so, and the commands that set them refuse instead of dropping them.
     fn stores_markers(&self) -> bool {
         false
     }

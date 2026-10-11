@@ -68,12 +68,12 @@ pub fn defs() -> [ToolDef; 12] {
         },
         ToolDef {
             name: "task_conflict",
-            description: "Record that id and other touch the same files, so they should not run at once (symmetric; remove takes it off). task_ready flags a task whose conflict partner is in progress. Disk adapter only.",
+            description: "Record that id and other touch the same files, so they should not run at once (symmetric; remove takes it off). task_ready flags a task whose conflict partner is in progress.",
             input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"other":{"type":"string"},"remove":{"type":"boolean"}},"required":["id","other"]}),
         },
         ToolDef {
             name: "task_parallel",
-            description: "Mark a task safe to run beside any other task; on false takes the mark off. Disk adapter only.",
+            description: "Mark a task safe to run beside any other task; on false takes the mark off..",
             input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"on":{"type":"boolean","description":"default true"}},"required":["id"]}),
         },
     ]

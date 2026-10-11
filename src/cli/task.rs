@@ -122,7 +122,7 @@ pub(super) enum TaskCmd {
         json: bool,
     },
     /// Record that two tasks touch the same files, so they should not run at once. Symmetric;
-    /// `ready` flags a task whose partner is in progress. Disk adapter only.
+    /// `ready` flags a task whose partner is in progress.
     Conflict {
         /// One task
         id: String,
@@ -135,7 +135,7 @@ pub(super) enum TaskCmd {
         #[arg(long)]
         json: bool,
     },
-    /// Mark a task safe to run beside any other task. Disk adapter only.
+    /// Mark a task safe to run beside any other task.
     Parallel {
         /// Task id, e.g. `R12`
         id: String,

@@ -1355,8 +1355,8 @@ Commands:
   dep       Record that this task waits on another. A cycle is refused and nothing is written
   priority  Set priority from 0 (highest) to 4. 2 is the default and is not stored
   conflict  Record that two tasks touch the same files, so they should not run at once. Symmetric;
-            `ready` flags a task whose partner is in progress. Disk adapter only
-  parallel  Mark a task safe to run beside any other task. Disk adapter only
+            `ready` flags a task whose partner is in progress
+  parallel  Mark a task safe to run beside any other task
   sync      Raise the id counters to the adapter's highest ids and report drift; never writes the
             adapter
   init      Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing
@@ -1504,7 +1504,7 @@ Options:
 
 $ rtok task conflict --help
 Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags
-a task whose partner is in progress. Disk adapter only
+a task whose partner is in progress
 
 Usage: rtok task conflict [OPTIONS] <ID> <OTHER>
 
@@ -1519,7 +1519,7 @@ Options:
   -h, --help           Print help
 
 $ rtok task parallel --help
-Mark a task safe to run beside any other task. Disk adapter only
+Mark a task safe to run beside any other task
 
 Usage: rtok task parallel [OPTIONS] <ID>
 
