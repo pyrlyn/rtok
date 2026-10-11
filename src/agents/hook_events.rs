@@ -65,6 +65,18 @@ pub const HOOK_EVENTS: &[HookEvent] = &[
     row("claude", "PostCompact", "PostCompact", false),
     row("claude", "SessionEnd", "SessionEnd", false),
     row("claude", "SubagentStart", "SubagentStart", false),
+    // CodeBuddy takes Claude's rows minus SubagentStart: its hooks page (checked 2026-10-11,
+    // https://www.codebuddy.ai/docs/cli/hooks) only names that event, with no input or output
+    // shape to deliver the spawn brief through. T560.2 flips the rows its installer writes.
+    matched("codebuddy", "PreToolUse", "PreToolUse", "Bash", false),
+    matched("codebuddy", "PreToolUse", "PreToolUse", "Read", false),
+    matched("codebuddy", "PreToolUse", "PreToolUse", "Skill", false),
+    matched("codebuddy", "PostToolUse", "PostToolUse", "*", false),
+    row("codebuddy", "UserPromptSubmit", "UserPromptSubmit", false),
+    row("codebuddy", "SessionStart", "SessionStart", false),
+    row("codebuddy", "PreCompact", "PreCompact", false),
+    row("codebuddy", "PostCompact", "PostCompact", false),
+    row("codebuddy", "SessionEnd", "SessionEnd", false),
     row("cline", "PreToolUse", "PreToolUse", true),
     row("cline", "PostToolUse", "PostToolUse", true),
     row("cline", "TaskStart", "TaskStart", true),
