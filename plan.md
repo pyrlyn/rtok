@@ -120,6 +120,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T571 | todo | P2 | 2 | 0% | |
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
+| T560.2 | todo | P2 | 3 | 0% | |
+| T575 | in progress | P2 | 3 | 5% | OpenAI / GPT-6 |
 
 
 
@@ -541,6 +543,19 @@ Execution plan:
 3. Cover encoded traversal and separators, literal percent sequences without double decoding, missing assets, page fallback and negotiated compressed variants; retain the existing GET/HEAD behavior.
 
 Check: encoded URLs resolve the intended existing asset in both sources, traversal remains rejected and unknown asset URLs stay 404, and `just check` passes. Actual router probes returned 404 for all four encoded-name fixtures and 200 for the plain-name control; HEAD controls correctly returned no body.
+
+### T575. Audit Doctor confirmation and junk protected-path rechecks
+
+Source audit only; do not change product code. Trace Doctor web plan/apply selection and junk clear's item planning, protected-path recheck and removal together with their CLI/TUI callers. Check the existing T331 and T330 safety promises before recording any defect.
+
+Execution plan:
+
+1. Trace `doctor::web::{plan,apply}`, `prepare`, `fix::candidates`, `fix_found` and `fix_file`. In a scratch-only machine fixture, plan one fixable broken hook, add a different fixable broken hook before submitting the prior selection, and observe whether the new finding is selected and written without appearing in the confirmed diff. Compare same-file content re-read protections, changed-file behavior, default toggles and explicit confirmation in T331.6/.7/.12; distinguish fresh discovery from an edit to an already-planned file.
+2. Trace junk scan → plan → confirm → `protected`/`recheck` → `remove` for eligible cache/build/extra directories. In an isolated tree, place a package-manager lockfile below a removable directory (including below an immediate child of a tagged cache); observe whether any ancestor is protected before recursive removal. Compare direct lockfile, nested lockfile, settings/store descendants, `CACHEDIR.TAG`, and `[agents.junk].exclude` cases.
+3. Deduplicate exact behavior against T331's web/terminal selection and file re-read guarantees, plus T330.4/.5.1/.6/.7 and T479. Record that T330.4 says a path that “is or holds” a package-manager lockfile is refused and that T330.5.1 exclusions protect items that match or hold a match; check whether existing tests cover nested locks or a new finding appearing between web plan and apply.
+4. For each source-confirmed gap, preserve a minimal fixture and evidence, then add a separate sequential fix card with the protected-data boundary, expected preview/confirmation behavior, implementation steps and acceptance checks. Leave unresolved hypotheses as audit notes.
+
+Check: fixtures remain in scratch only, existing positive/negative selection and cleanup cases remain explicit, plan/todo IDs match, `git diff --check` and scoped `just check` pass. No host app, real home directory or product source is touched.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
@@ -1369,6 +1384,25 @@ Split from T520. No documented config path for MiMo Desktop (early access); a th
 
 Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
 
+
+### T560. CodeBuddy Code and WorkBuddy host (`codebuddy`)
+
+Creator request (2026-10-11): rtok plugin support for Tencent WorkBuddy. WorkBuddy shares CodeBuddy Code's plugin system, so this is one host `codebuddy` with two variants, CodeBuddy Code CLI and WorkBuddy Desktop (the `devin` CLI + Desktop shape), served by one plugin tree under the D21 singleton.
+
+Facts (primary unless marked; checked 2026-10-11):
+- Plugin manifest dirs: `.codebuddy-plugin/` (priority), `.workbuddy-plugin/`, `.claude-plugin/`; hooks in `hooks/hooks.json`, MCP in `.mcp.json`; `${CODEBUDDY_PLUGIN_ROOT}`, alias `${CLAUDE_PLUGIN_ROOT}`; cache `~/.codebuddy/plugins/cache/<marketplace>/<plugin>/<version>` — https://www.codebuddy.ai/docs/cli/plugins-reference
+- CLI: `codebuddy plugin marketplace add <local dir> [--name <name>]`, `codebuddy plugin install <plugin>@<marketplace> [-s user]`, `codebuddy plugin uninstall <plugin> -y`, `codebuddy plugin list --json`; install records `installed_plugins.json` — same page and https://www.codebuddy.ai/docs/cli/plugin-marketplaces
+- Hooks: settings `~/.codebuddy/settings.json` `hooks` key; stdin `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `tool_name`, `tool_input`, `tool_response`; PreToolUse output `hookSpecificOutput.{permissionDecision, permissionDecisionReason, modifiedInput}` (no `updatedInput`); PostToolUse `additionalContext`; tools `Bash`, `Read`, `Edit`, `Write`, `Grep`, `Glob` — https://www.codebuddy.ai/docs/cli/hooks
+- MCP: user file is the first existing of `~/.codebuddy/.mcp.json`, `~/.codebuddy/mcp.json`, `~/.codebuddy.json` (created as `.mcp.json`), `mcpServers.<name>.{type, command, args}` — https://www.codebuddy.ai/docs/cli/mcp
+- `CODEBUDDY_CONFIG_DIR` moves the config and data dir — https://www.codebuddy.ai/docs/cli/env-vars
+- **unverified** (https://github.com/lorelum/lorelum/issues/205, WorkBuddy 5.5.6 on Windows): the WorkBuddy app embeds the CodeBuddy Code CLI and keeps its registry in `~/.workbuddy`, so `CODEBUDDY_CONFIG_DIR=~/.workbuddy codebuddy plugin …` installs into WorkBuddy. WorkBuddy's own docs (https://www.codebuddy.ai/docs/workbuddy/Changelog, 5.7.6) do not mention plugins or hooks.
+
+Split at claim (500-line cap); T560.1 (hook dialect and `plugins/codebuddy/`) is done (`done.md`).
+
+#### T560.2. `codebuddy` host installer (CodeBuddy Code CLI + WorkBuddy Desktop)
+
+Needs T560.1. Plan: flip the `codebuddy` rows of `HOOK_EVENTS` the installer writes to `installer = true`; `src/agents/codebuddy/{mod.rs,README.md}` (with `## Docs`), registered in `HOSTS`/`host()`, `[setup.codebuddy] dir` (default `~/.codebuddy`) and `workbuddy_dir` (default `~/.workbuddy`) through the one config module. Variants: CLI (`codebuddy` on PATH), Desktop (WorkBuddy app: `/Applications/WorkBuddy.app`, `%LOCALAPPDATA%\Programs\WorkBuddy`). `support("plugin")` is an offer whose `--yes` runs `codebuddy plugin marketplace add <resolved plugins/codebuddy> --name rtok` then `codebuddy plugin install rtok@rtok -s user` (Desktop: same with `CODEBUDDY_CONFIG_DIR=<workbuddy_dir>`); remove runs `codebuddy plugin uninstall rtok@rtok -y`; `installed()` reads `<dir>/plugins/installed_plugins.json` (no spawn). Without the plugin, own files: `hooks` key of `<dir>/settings.json` and `mcpServers.rtok` in the first existing MCP file (create `.mcp.json`), our entries only, rest byte-for-byte. D21 singleton: while the plugin is installed, setup takes those own entries back. `plugin_install.rs` probe, `docs/agents.md` blessed, `toolchain.md` untouched (no new dep).
+Check: fake-`codebuddy` e2e (dry-run prints and runs nothing; `--yes` adds marketplace + installs, strips own files; repeat says already installed; remove uninstalls; Desktop passes `CODEBUDDY_CONFIG_DIR`); units for detection, MCP file choice and the singleton; gates from `new-cli-command` docs if surfaces change; `just check`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 

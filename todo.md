@@ -36,6 +36,7 @@
 - T571. Redact graph-export scope metadata and suggested download names
 - T573. Apply terminal call state even when the live event list is capped
 - T574. Decode SPA asset URL paths before looking up filenames
+- T575. Audit Doctor confirmation and junk protected-path rechecks
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
@@ -101,3 +102,4 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T521. MiMo Desktop variant of the `mimo` host
+- T560.2. `codebuddy` host installer (CodeBuddy Code CLI + WorkBuddy Desktop)
