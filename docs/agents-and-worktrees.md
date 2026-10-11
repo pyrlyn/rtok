@@ -17,8 +17,8 @@ Every agent session that works through rtok gets one **rtok agent id**, and ever
 | `rtok agents sessions [--all]` | `agents_list` | every agent with host, state (`live`, `idle`, `ended`), activity, status, claimed worktrees and unread count; `--all` adds ended ones |
 | `rtok agents show <id>` | `agent_show` | one agent: host, model, ids, parent and sub-agents, cwd, claimed worktrees, status, unread |
 | `rtok agents status <text>` | `agent_status_set` | what this agent is busy with (at most 120 characters); an empty text clears it |
-| `rtok agents send <id> <text>` | `agent_send` | a message to one live agent (size-capped); `--all-live` sends to every live agent of the sender's project |
-| `rtok agents inbox [<id>]` | `agent_inbox` | your own messages, oldest first, marked read; with an id, that agent's queue, marking nothing |
+| `rtok agents send <id> <text>` | `agent_send` | a message to one live agent (size-capped); `--all-live` sends to every live agent of the sender's project; `--task <id>` (`task` for MCP) tags it with the task it is about, such as `A12` |
+| `rtok agents inbox [<id>]` | `agent_inbox` | your own messages, oldest first, marked read; with an id, that agent's queue, marking nothing; `--task <id>` (`task` for MCP) reads one task's thread and leaves the rest unread |
 
 `[agents] idle` (default 30 minutes) decides who is live. `[agents] enabled = false` stops registration and the push.
 

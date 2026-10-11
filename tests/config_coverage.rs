@@ -137,6 +137,9 @@ const ALLOW_KEYS: &[&str] = &[
     // which rows one read shows; `agents` flags map onto `setup.*`, which they are not.
     "setup.all_live",
     "setup.unread",
+    // `agents send --task` / `agents inbox --task` (T441.13.1): which task one message is about or
+    // which thread one read shows, per call like the two flags above.
+    "setup.task",
     // `agents update --check` / `agents outdated --exit-code` (T279.1): one-shot
     // listing and a one-shot exit status, not stored settings.
     "setup.check",

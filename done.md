@@ -11333,6 +11333,17 @@ Result: the rule line is a new skill, `skills/rtok-tasks/SKILL.md`, added to `SK
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
 
+### T441.13.1. Task field on agent messages (F8)
+
+First item of T441.13 (`research.md` §28.4 F8): `rtok agents send --task <id>` and MCP `agent_send {task}` tag a message with a task id, so a thread about one task can be read apart from the rest. `agents inbox --task <id>` and `agent_inbox {task}` read only that task's messages. The frame names the task. A message without a task is byte-for-byte what it is today.
+
+Check: store, frame, CLI and MCP tests below pass; the trycmd help and completion goldens, `surface_parity` and `config_coverage` pass; `just check` green.
+
+Result: migration `0046_message_task` adds the nullable `messages.task`. `Store::send_message_on` takes the task and `Store::inbox_limited` filters by it; both parse it as a `TaskId` and keep the canonical upper-case text (`a12` and ` A12 ` become `A12`), and refuse anything that is not an id, so a task line in a frame cannot be forged. `send_message` and `inbox` keep their signatures. The frame gains a `Task: A12` line after the fixed note only when a task is set, and `Message` JSON skips an absent task, so existing output and `agents inbox --json` are unchanged. A filtered read marks only the messages it returned. The hook push (T288) frames through the same function and shows the task with no change of its own. Tests: `messages::tests` (canonical tag, filter marks only its thread, bad ids refused on both sides), `render` frame test, `tests/agents_messages.rs` and `tests/mcp_agent_messages.rs` cases; `--task` is exempt in `config_coverage` as a per-call selector like `--all-live`. Docs: `docs/agents-and-worktrees.md` with `docs/ru` and `docs/uk`.
+
+Status: done 2026-10-11
+Model: Claude Code / sonnet-5.5
+
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 
 Found 2026-10-06: after T351, `~/.rtok/errors.log` still logs `path outside cwd` for `_worktrees/rtok-<task>/…` paths from sessions working in `apps/rtok`, and subagents in task worktrees could not read their own files through `rtok read`. In Claude.app's Code tab the session's `rtok mcp` ran with cwd `apps/stator` (`tree` listed stator's files), so the session's own repository reached the server only as a `roots/list` root. T351 looked up worktrees only for the cwd's repository, so `apps/rtok` itself passed (client root) while its worktrees did not.

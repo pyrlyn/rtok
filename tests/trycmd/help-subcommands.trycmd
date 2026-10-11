@@ -493,6 +493,8 @@ Arguments:
 Options:
       --all-live       Every live agent of this project (same repository or cwd), except the sender
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --task <ID>      The task this message is about (e.g. `A12`); the recipient can read just that
+                       thread
   -h, --help           Print help
 
 $ rtok agents inbox --help
@@ -507,6 +509,7 @@ Arguments:
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --unread         Only messages not read yet
+      --task <ID>      Only messages about this task (e.g. `A12`)
       --json           JSON instead of the framed text
   -h, --help           Print help
 

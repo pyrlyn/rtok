@@ -262,12 +262,12 @@ clink.argmatcher("rtok")
         "send" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--all-live", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--all-live", "--task" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--task"] = "The task this message is about (e.g. `A12`); the recipient can read just that thread", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "inbox" .. clink.argmatcher()
           :addarg({})
-          :addflags({ "--unread", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--unread", "--task" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--task"] = "Only messages about this task (e.g. `A12`)", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "help" .. clink.argmatcher()
           :addarg({
             "install" .. clink.argmatcher(),
@@ -377,12 +377,12 @@ clink.argmatcher("rtok")
         "send" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--all-live", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--all-live", "--task" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--task"] = "The task this message is about (e.g. `A12`); the recipient can read just that thread", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "inbox" .. clink.argmatcher()
           :addarg({})
-          :addflags({ "--unread", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--unread", "--task" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--task"] = "Only messages about this task (e.g. `A12`)", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "help" .. clink.argmatcher()
           :addarg({
             "install" .. clink.argmatcher(),

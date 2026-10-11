@@ -1405,12 +1405,16 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__agents__subcmd__inbox)
-            opts="-h --unread --json --config --help"
+            opts="-h --unread --task --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --task)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1657,12 +1661,16 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__agents__subcmd__send)
-            opts="-h --all-live --config --help"
+            opts="-h --all-live --task --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --task)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

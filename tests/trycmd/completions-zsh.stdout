@@ -900,6 +900,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (send)
 _arguments "${_arguments_options[@]}" : /
+'--task=[The task this message is about (e.g. /`A12/`); the recipient can read just that thread]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--all-live[Every live agent of this project (same repository or cwd), except the sender]' /
 '-h[Print help]' /
@@ -910,6 +911,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (inbox)
 _arguments "${_arguments_options[@]}" : /
+'--task=[Only messages about this task (e.g. /`A12/`)]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--unread[Only messages not read yet]' /
 '--json[JSON instead of the framed text]' /
@@ -1315,6 +1317,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (send)
 _arguments "${_arguments_options[@]}" : /
+'--task=[The task this message is about (e.g. /`A12/`); the recipient can read just that thread]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--all-live[Every live agent of this project (same repository or cwd), except the sender]' /
 '-h[Print help]' /
@@ -1325,6 +1328,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (inbox)
 _arguments "${_arguments_options[@]}" : /
+'--task=[Only messages about this task (e.g. /`A12/`)]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--unread[Only messages not read yet]' /
 '--json[JSON instead of the framed text]' /

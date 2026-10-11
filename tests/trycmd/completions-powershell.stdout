@@ -955,6 +955,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;send' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'The task this message is about (e.g. `A12`); the recipient can read just that thread')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--all-live', '--all-live', [CompletionResultType]::ParameterName, 'Every live agent of this project (same repository or cwd), except the sender')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -962,6 +963,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;send' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'The task this message is about (e.g. `A12`); the recipient can read just that thread')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--all-live', '--all-live', [CompletionResultType]::ParameterName, 'Every live agent of this project (same repository or cwd), except the sender')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -969,6 +971,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;inbox' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only messages about this task (e.g. `A12`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--unread', '--unread', [CompletionResultType]::ParameterName, 'Only messages not read yet')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the framed text')
@@ -977,6 +980,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;inbox' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only messages about this task (e.g. `A12`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--unread', '--unread', [CompletionResultType]::ParameterName, 'Only messages not read yet')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the framed text')
