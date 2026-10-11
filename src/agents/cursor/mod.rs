@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
+use rtok_mcp::spec::{EntryShape, Format as McpFormat, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -203,21 +204,25 @@ pub(crate) fn mcp_path(cfg: &Config) -> PathBuf {
     cfg.setup.cursor.hooks_path.with_file_name("mcp.json")
 }
 
+/// Cursor's `mcpServers.rtok` as `rtok_mcp` reads it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::host_spec(
+        "cursor",
+        mcp_path(cfg),
+        "mcpServers",
+        McpFormat::Json,
+        EntryShape::TypedCommand,
+    )
+}
+
 /// Register `rtok mcp` in `~/.cursor/mcp.json` (sibling of `hooks.json`).
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_mcp(
-        &apply(cfg),
-        &mcp_path(cfg),
-        "rtok",
-        &cmd,
-        &super::mcp_args("cursor"),
-    )
+    super::mcp::install(cfg, &mcp_spec(cfg))
 }
 
 /// Drop `mcpServers.rtok` from `~/.cursor/mcp.json` (`rtok agents remove cursor`).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_mcp_ours(cfg, &mcp_path(cfg), "rtok")
+    super::mcp::remove(cfg, &mcp_spec(cfg))
 }
 
 /// The linked Cursor plugin (D21, T10.5). Dry-run and the unaccepted offer MUST contain the

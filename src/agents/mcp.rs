@@ -412,6 +412,43 @@ pub(crate) fn run(cfg: &Config, spec: &McpSpec, mode: McpMode) -> anyhow::Result
     Ok(report.line())
 }
 
+/// The [`McpSpec`] of a host that starts rtok as `rtok_command() mcp --host <host>` and keeps
+/// its servers under the dotted `key` of `file` (T277.2). A host with another duplicate-name
+/// rule sets that field on the returned value.
+pub(crate) fn host_spec(
+    host: &'static str,
+    file: PathBuf,
+    key: &str,
+    format: Format,
+    entry_shape: EntryShape,
+) -> McpSpec {
+    McpSpec {
+        host,
+        client: Client::Cli,
+        config_path: file,
+        format,
+        key_path: McpSpec::key_path(key),
+        server: RTOK,
+        launch: Launch {
+            command: Some(super::rtok_command()),
+            host_arg: true,
+        },
+        entry_shape,
+        duplicate_name: DuplicateName::ShowsBoth,
+        plugin_serves: None,
+    }
+}
+
+/// [`run`] as an install or update: the body of a host's `register_mcp`.
+pub(crate) fn install(cfg: &Config, spec: &McpSpec) -> anyhow::Result<String> {
+    run(cfg, spec, McpMode::Install)
+}
+
+/// [`run`] as a remove: the body of a host's `unregister_mcp`.
+pub(crate) fn remove(cfg: &Config, spec: &McpSpec) -> anyhow::Result<String> {
+    run(cfg, spec, McpMode::Remove)
+}
+
 /// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
 /// plus `args`, or as one `command` array), with `--host <host>` or, as written before T283.2,
 /// without it; otherwise what it runs instead.
@@ -931,6 +968,118 @@ mod tests {
         let mut import = row(EntryState::Missing);
         import.plugin = Some("[compat.claude] import");
         assert_eq!(doctor_line("grok", None, &import), None);
+    }
+    /// A host that writes its entry through `rtok_mcp` (T277.2): its spec, the dotted key its
+    /// servers sit under, and the `type` / `tools` its entry carries on top of `command`/`args`.
+    struct Migrated {
+        spec: fn(&Config) -> McpSpec,
+        key: &'static str,
+        kind: Option<&'static str>,
+        tools: bool,
+    }
+
+    fn migrated() -> Vec<Migrated> {
+        use super::super::cursor;
+        let row = |spec, key, kind, tools| Migrated {
+            spec,
+            key,
+            kind,
+            tools,
+        };
+        vec![row(cursor::mcp_spec, "mcpServers", Some("stdio"), false)]
+    }
+
+    /// A config file with unrelated keys and a sibling server, as the host itself would hold it:
+    /// pretty JSON, or TOML with a comment that must survive byte for byte.
+    fn migrated_seed(format: Format, key: &str) -> String {
+        if format == Format::Toml {
+            return format!("# keep me\nkeep = 1\n\n[{key}.other]\ncommand = \"x\"\n");
+        }
+        let servers = serde_json::json!({"other": {"command": "x"}});
+        let mut seed = key.rsplit('.').fold(servers, |inner, k| {
+            let mut m = serde_json::Map::new();
+            m.insert(k.into(), inner);
+            Value::Object(m)
+        });
+        seed["keep"] = serde_json::json!({"me": 1});
+        serde_json::to_string_pretty(&seed).unwrap() + "\n"
+    }
+
+    /// T277.2: install, update (also of a stale pre-`--host` entry), remove and status for every
+    /// migrated host against an in-memory file that holds unrelated keys, which stay as they were.
+    #[test]
+    fn migrated_hosts_install_update_remove_and_report_status() {
+        use rtok_mcp::ops::Report;
+        let ctx = rtok_agent_sdk::Apply::default();
+        for row in migrated() {
+            let spec = (row.spec)(&Config::default());
+            let (at, host) = (format!("{}.rtok", row.key), spec.host);
+            let mut want = serde_json::json!({
+                "command": spec.launch.command.clone().unwrap(),
+                "args": ["mcp", "--host", host],
+            });
+            if let Some(kind) = row.kind {
+                want["type"] = kind.into();
+            }
+            if row.tools {
+                want["tools"] = serde_json::json!(["*"]);
+            }
+            let seed = migrated_seed(spec.format, row.key);
+
+            let mut fs = crate::testutil::Vfs::new();
+            let file = spec.config_path.to_string_lossy().to_string();
+            fs.write(&file, &seed);
+            let run = |fs: &mut crate::testutil::Vfs, mode| {
+                ops::apply(&spec, mode, &ctx, fs, super::super::is_rtok_bin).unwrap()
+            };
+            let status =
+                |fs: &crate::testutil::Vfs| rtok_mcp::status::status(fs, &spec).unwrap().entry;
+            let entry =
+                |fs: &crate::testutil::Vfs| rtok_mcp::config::read_entry(fs, &spec).unwrap();
+            let text = |fs: &crate::testutil::Vfs| {
+                String::from_utf8(fs.read(&file).unwrap().to_vec()).unwrap()
+            };
+            assert_eq!(status(&fs), Entry::Missing, "{host}");
+
+            let Report::Wrote(line) = run(&mut fs, McpMode::Install) else {
+                panic!("{host}: install wrote nothing");
+            };
+            assert!(line.starts_with(&format!("{at}: ")), "{host}: {line}");
+            assert_eq!(entry(&fs), Some(want.clone()), "{host}");
+            assert_eq!(status(&fs), Entry::Present, "{host}");
+            let after = text(&fs);
+            for kept in ["other", "keep"] {
+                assert!(after.contains(kept), "{host}: lost {kept}: {after}");
+            }
+            if spec.format == Format::Toml {
+                assert!(
+                    after.starts_with("# keep me\nkeep = 1\n"),
+                    "{host}: {after}"
+                );
+            }
+
+            // An entry written before `--host` joined it is stale; update rewrites it once.
+            let mut old = want.clone();
+            old["args"] = serde_json::json!(["mcp"]);
+            rtok_mcp::config::write_entry(&mut fs, &spec, &old).unwrap();
+            assert!(matches!(status(&fs), Entry::Stale(_)), "{host}");
+            let rewrite = run(&mut fs, McpMode::Update);
+            assert!(matches!(rewrite, Report::Wrote(_)), "{host}: {rewrite:?}");
+            assert_eq!(status(&fs), Entry::Present, "{host}");
+            for mode in [McpMode::Install, McpMode::Update] {
+                assert_eq!(run(&mut fs, mode), Report::NoChanges, "{host} {mode:?}");
+            }
+
+            let removed = run(&mut fs, McpMode::Remove);
+            assert_eq!(removed, Report::Wrote(format!("- {at}")), "{host}");
+            assert_eq!(entry(&fs), None, "{host}");
+            assert_eq!(
+                text(&fs),
+                seed,
+                "{host}: unrelated keys survive a round trip"
+            );
+            assert_eq!(run(&mut fs, McpMode::Remove), Report::NoChanges, "{host}");
+        }
     }
 
     #[test]
