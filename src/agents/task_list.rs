@@ -136,6 +136,11 @@ mod tests {
             assert!(ok.unwrap().success(), "{args:?}");
         };
         git(&["init", "-q"]);
+        // A global excludes file that ignores `.claude/` (common for Claude Code users) would
+        // make the first write happen; the repo's own config outranks it.
+        let excludes = repo.join("no-global-excludes");
+        fs::write(&excludes, "").unwrap();
+        git(&["config", "core.excludesFile", excludes.to_str().unwrap()]);
         write_for(repo, repo, "t1");
         assert!(!dir.exists(), "{}", dir.display());
         fs::write(repo.join(".gitignore"), ".claude/\n").unwrap();
