@@ -1073,6 +1073,8 @@ mod tests {
         "task_release",
         "task_dep",
         "task_priority",
+        "task_conflict",
+        "task_parallel",
         "mem_save",
         "mem_update",
     ];
