@@ -84,6 +84,7 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `cline` | так | хуки | немає (checkpoints, не worktree) | `worktree_add` |
 | `roo` | ні | MCP | ще не перевірено | `worktree_add` |
 | `qwen` | так | хуки | ще не перевірено | `worktree_add` |
+| `codebuddy` | так | хуки | ще не перевірено | `worktree_add` |
 | `codewhale` | так | хуки | не задокументовано | `worktree_add` |
 | `aider` | ні | немає | немає | лише CLI |
 | `zed` | ні | MCP | треди можуть вказувати на worktree, який ви створили | `worktree_adopt` |
