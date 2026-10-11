@@ -165,6 +165,7 @@ _arguments "${_arguments_options[@]}" : /
 '--fix[Clean up broken hooks and duplicate hooks and MCP entries/: a terminal gets a checklist, a pipe the diff; --yes writes without asking]' /
 '--yes[With --fix/: write the changes (a copy goes to /`_backup//` first)]' /
 '--dry-run[With --fix --yes/: print the diffs and write nothing]' /
+'--stat[With --fix/: stat lines and totals instead of the diffs (a dry run)]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0
@@ -223,6 +224,7 @@ _arguments "${_arguments_options[@]}" : /
 '--owner=[The owner an old lock names, as /`<provider> / <model>/`. Defaults to /`<host> / <model>/` of the agent]:OWNER:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--keep-branch[Remove an unmerged worktree too and keep its branch (a merged branch is kept as well)]' /
+'--dry-run[Show the path, branch, size and file count that would go; remove nothing]' /
 '--json[JSON instead of the text line]' /
 '-h[Print help]' /
 '--help[Print help]' /
@@ -252,6 +254,8 @@ _arguments "${_arguments_options[@]}" : /
 '--stale-lock=[Treat someone else'/''s lock as abandoned once its merged, clean worktree is untouched this long]:STALE_LOCK:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
+'(--yes)--dry-run[Say the dry run out loud/: print what would go and change nothing (the default)]' /
+'--stat[The same preview as the dry run/: a removal'/''s line already is its stat]' /
 '--json[JSON instead of the table]' /
 '-h[Print help]' /
 '--help[Print help]' /
@@ -262,6 +266,8 @@ _arguments "${_arguments_options[@]}" : /
 '--idle=[Keep caches modified within this window (/`24h/`, /`7d/`)]:IDLE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
+'(--yes)--dry-run[Say the dry run out loud/: print what would go and change nothing (the default)]' /
+'--stat[The same preview as the dry run/: a removal'/''s line already is its stat]' /
 '--json[JSON instead of the table]' /
 '-h[Print help]' /
 '--help[Print help]' /
@@ -692,6 +698,7 @@ _arguments "${_arguments_options[@]}" : /
 '--all[All variants (the default when neither /`--cli/` nor /`--desktop/` is given)]' /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--project[Add rtok to the project'/''s post-create script, so a worktree the host makes joins rtok (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`); run it inside the repository]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -704,6 +711,7 @@ _arguments "${_arguments_options[@]}" : /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--yes[Also remove rtok entries you changed, without asking]' /
 '--project[Take rtok out of the project'/''s post-create script (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`) instead of the host'/''s config]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -716,6 +724,7 @@ _arguments "${_arguments_options[@]}" : /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--yes[Also remove rtok entries you changed, without asking]' /
 '--project[Take rtok out of the project'/''s post-create script (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`) instead of the host'/''s config]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -732,6 +741,7 @@ _arguments "${_arguments_options[@]}" : /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--force[Reinstall the plugin even when it is already at the available version]' /
 '--check[List outdated plugins only (same output as /`agents outdated/`)]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 '::host -- Host(s), comma-separated; omitted = every host rtok is installed in:_default' /
@@ -878,6 +888,8 @@ _arguments "${_arguments_options[@]}" : /
 '--min-size=[Only items of at least this size (/`10MB/`); on /`clear/` this also limits what /`--yes/` removes]:SIZE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
+'(--yes)--dry-run[Say the dry run out loud/: print what would go and change nothing (the default)]' /
+'--stat[The same preview as the dry run/: a removal'/''s line already is its stat]' /
 '--json[JSON instead of the table]' /
 '--trash[Move to the OS trash instead of deleting]' /
 '-h[Print help (see more with '/''--help'/'')]' /
@@ -1109,6 +1121,7 @@ _arguments "${_arguments_options[@]}" : /
 '--all[All variants (the default when neither /`--cli/` nor /`--desktop/` is given)]' /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--project[Add rtok to the project'/''s post-create script, so a worktree the host makes joins rtok (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`); run it inside the repository]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -1121,6 +1134,7 @@ _arguments "${_arguments_options[@]}" : /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--yes[Also remove rtok entries you changed, without asking]' /
 '--project[Take rtok out of the project'/''s post-create script (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`) instead of the host'/''s config]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -1133,6 +1147,7 @@ _arguments "${_arguments_options[@]}" : /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--yes[Also remove rtok entries you changed, without asking]' /
 '--project[Take rtok out of the project'/''s post-create script (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`) instead of the host'/''s config]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -1149,6 +1164,7 @@ _arguments "${_arguments_options[@]}" : /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--force[Reinstall the plugin even when it is already at the available version]' /
 '--check[List outdated plugins only (same output as /`agents outdated/`)]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 '::host -- Host(s), comma-separated; omitted = every host rtok is installed in:_default' /
@@ -1295,6 +1311,8 @@ _arguments "${_arguments_options[@]}" : /
 '--min-size=[Only items of at least this size (/`10MB/`); on /`clear/` this also limits what /`--yes/` removes]:SIZE:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--yes[Apply; without it this is a dry run that changes nothing]' /
+'(--yes)--dry-run[Say the dry run out loud/: print what would go and change nothing (the default)]' /
+'--stat[The same preview as the dry run/: a removal'/''s line already is its stat]' /
 '--json[JSON instead of the table]' /
 '--trash[Move to the OS trash instead of deleting]' /
 '-h[Print help (see more with '/''--help'/'')]' /
@@ -1511,6 +1529,7 @@ _arguments "${_arguments_options[@]}" : /
 '--all[All variants (the default when neither /`--cli/` nor /`--desktop/` is given)]' /
 '--no-restart[Skip closing/reopening a running desktop app around the write]' /
 '--project[Add rtok to the project'/''s post-create script, so a worktree the host makes joins rtok (/`cursor/`, /`kilo/`, /`windsurf/`, /`devin/`); run it inside the repository]' /
+'--stat[With --dry-run/: stat lines and totals instead of the planned edits]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':host -- Host(s), comma-separated (`claude`, `cursor`, `codex`, `opencode`, `pi`, `zcode`, `kimi`, `copilot`, `aider`, `windsurf`, `zed`, `vscode`):_default' /
@@ -1603,6 +1622,7 @@ _arguments "${_arguments_options[@]}" : /
 '(--uninstall --list)--install[Write the script to the shell'/''s per-user completions directory]' /
 '(--list)--uninstall[Remove what /`--install/` wrote]' /
 '()--list[Print each shell, whether its completions are installed (yes/no) and the file]' /
+'--dry-run[With /`--install/`//`--uninstall/`/: show the file diff and write nothing]' /
 '-h[Print help (see more with '/''--help'/'')]' /
 '--help[Print help (see more with '/''--help'/'')]' /
 '::shell -- Shell to complete for (with `--install`/`--uninstall`/: default `$SHELL`):(bash zsh fish powershell elvish clink)' /
@@ -1644,6 +1664,7 @@ _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--force[Overwrite an existing file]' /
 '--dry-run[Print the diff it would write and exit]' /
+'--stat[With --dry-run/: stat lines and totals instead of the diff]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0
@@ -1685,6 +1706,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--dry-run[Print the diff it would write and exit]' /
+'--stat[With --dry-run/: stat lines and totals instead of the diff]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':key:_default' /
@@ -1820,6 +1842,7 @@ _arguments "${_arguments_options[@]}" : /
 '--budget=[Token budget; default /`/[plugins.memory/] sync_tokens/`]:BUDGET:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--dry-run[Print the unified diff and write nothing]' /
+'--stat[With --dry-run/: stat lines and totals instead of the diff]' /
 '--remove[Delete the managed block and nothing else]' /
 '--force[Overwrite a hand-edited block]' /
 '-h[Print help]' /
@@ -2056,6 +2079,7 @@ _arguments "${_arguments_options[@]}" : /
 '--from=[Unlink from this project instead of the selected one]:FROM:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--both[Also remove the link the other way]' /
+'--dry-run[Show the links that would go; remove nothing]' /
 '--json[JSON instead of a table]' /
 '-h[Print help]' /
 '--help[Print help]' /
@@ -2065,6 +2089,7 @@ _arguments "${_arguments_options[@]}" : /
 (remove)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--dry-run[Show the index rows and links that would go; remove nothing]' /
 '--json[JSON instead of a table]' /
 '-h[Print help]' /
 '--help[Print help]' /

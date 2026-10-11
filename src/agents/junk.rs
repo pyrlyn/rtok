@@ -30,9 +30,9 @@ use super::junk_review;
 use super::junk_sessions;
 use super::junk_worktrees;
 use super::{Agent, HOSTS, host, present};
-use crate::bytes::human_bytes;
 use crate::config::Config;
 use crate::store::Store;
+use change_preview::human_bytes;
 
 #[derive(Debug, Serialize)]
 pub struct Outcome {
@@ -40,6 +40,8 @@ pub struct Outcome {
     pub kind: &'static str,
     pub path: String,
     pub bytes: u64,
+    /// A log sibling or archive is one file.
+    pub files: u64,
     /// `clear` or `keep` (only after `--yes` failed to remove it).
     pub action: &'static str,
     pub note: String,
@@ -76,6 +78,7 @@ fn outcome(kind: &'static str, path: PathBuf, note: String) -> Outcome {
         kind,
         path: path.display().to_string(),
         bytes,
+        files: 1,
         action: "clear",
         note,
         failed: false,
@@ -163,6 +166,12 @@ pub fn to_table(outcomes: &[Outcome], yes: bool) -> String {
     let mut out = crate::worktree::noted_table(&cols, &lines, notes);
     let cleared = outcomes.iter().filter(|o| o.action == "clear" && !o.failed);
     let (n, bytes) = cleared.fold((0, 0), |(n, b), o| (n + 1, b + o.bytes));
+    if !yes && n > 0 {
+        let planned = outcomes.iter().filter(|o| o.action == "clear");
+        let planned = planned.map(|o| (o.path.as_str(), o.bytes, o.files));
+        out.push('\n');
+        out.push_str(&crate::removal_preview::render(planned));
+    }
     out.push_str(&match (yes, n) {
         (false, 0) => "\nnothing to clear\n".to_string(),
         (false, n) => format!(
@@ -239,18 +248,7 @@ pub struct Report {
     pub freed_review_bytes: u64,
 }
 
-/// What one walk found: the shared walk of `fs-kit` (disk usage, links never followed, a
-/// folder it could not read or finish is a lower bound).
-pub use fs_kit::tree::{Usage, usage_until as disk_usage_until};
-
-/// How long one agent's folders may take to size before the rest is reported as a lower bound
-/// (a huge cache on a network volume must not hang `list`).
-pub const AGENT_SCAN_LIMIT: Duration = Duration::from_secs(10);
-
-/// Disk usage of `path`, not apparent size; see [`fs_kit::tree::usage`].
-pub fn disk_usage(path: &Path) -> u64 {
-    fs_kit::tree::usage(path).bytes
-}
+pub use crate::disk_usage::{AGENT_SCAN_LIMIT, Usage, disk_usage, disk_usage_until};
 
 /// The directories rtok's junk lives in: the log directory and the archive directory. One
 /// nested inside the other is folded into the outer so a byte is shown once.
