@@ -357,7 +357,7 @@ fn fix_file(
             return fix;
         }
     };
-    fix.diff = crate::render::unified_diff(path, &raw, &body);
+    fix.diff = change_preview::unified_diff(path, &raw, &body);
     if !apply {
         return fix;
     }

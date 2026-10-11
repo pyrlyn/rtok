@@ -22,10 +22,10 @@ use super::junk_review::EXTRA;
 use super::junk_worktrees::{self, Remover};
 use super::restart::{RealProcs, host_running};
 use super::{HOSTS, host};
-use crate::bytes::human_bytes;
 use crate::config::Config;
 use crate::store::Store;
 use crate::worktree::list::{is_cache_dir, usage_until};
+use change_preview::human_bytes;
 
 /// What `--kind` takes today: rtok's own T182 junk, then the T330.3, T330.5.1, T330.5.2 and
 /// T330.5.4 kinds. `snapshots` is accepted and never clears anything: its class is `never`.

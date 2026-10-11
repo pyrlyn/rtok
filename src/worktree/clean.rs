@@ -16,8 +16,8 @@ use serde::Serialize;
 
 use super::list::{Cache, orphans, usage};
 use super::{inventory, noted_table};
-use crate::bytes::human_bytes;
 use crate::render::{Col, duration};
+use change_preview::human_bytes;
 
 pub struct Policy {
     pub idle: Duration,

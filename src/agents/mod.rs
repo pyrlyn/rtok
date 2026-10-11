@@ -855,7 +855,7 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
             .map(String::as_str)
             .collect();
         if !changed.is_empty() {
-            out.push_str(&crate::render::paint(&changed.join("\n")));
+            out.push_str(&change_preview::paint(&changed.join("\n")));
             out.push('\n');
         }
     }

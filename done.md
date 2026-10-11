@@ -1661,6 +1661,14 @@ Check: `npx vitest run --project storybook src/pages/GraphOverview.stories.tsx` 
 
 Result (2026-10-05, Claude Code / opus-5.5): one `READY = { timeout: 10_000 }` in `web/src/pages/GraphOverview.stories.tsx`, passed to every `findBy*`/`waitFor` in both play functions (the canvas-drawn wait drops its own 8 s). Before the click, "Webgl Draws And Click Selects" waits until `screenOf(2)` reads the same rounded pixel twice in a row, so the click lands on the sphere the layout and the camera fit already placed. Reproduced first: the full story suite failed 3 of 3 runs at load average 106-135 (both stories, 1013-1058 ms, `node-2d` and `graph-3d` not found); after the change the full suite passed 5 of 5 and the file alone 5 of 5 at load average 47-78 (lower than the failing runs, but inside the 15-250 band the flake was reported in). Fail-fast kept: with a wrong node count and a missing name the two stories fail at 10.0 s and 12.5 s instead of hanging. `just check`, `just spa-stories` and `just spa-e2e` green.
 
+### T416.1. rtok renders previews through `change-preview`
+
+Replace `render::unified_diff`, `render::file_diff`, `render::paint` and `info::human_bytes` with the crate (call sites: `config/mod.rs`, `config/validate.rs`, `plugins/memory/sync.rs`, `plugins/read/cache.rs`, `doctor/fix.rs`, `agents/mod.rs`, `agents/junk.rs`, `worktree/list.rs`, `worktree/clean.rs`). No output changes: the trycmd and installer tests stay byte-identical. Drop `similar` from `Cargo.toml` if nothing else uses it.
+
+Check: `just check` green with no expected-output file touched.
+
+Result: `src/diff.rs` and `bytes::human_bytes` are gone; `change_preview::{paint, unified_diff, human_bytes}` are called directly (config crate's private diff copy dropped too), `similar` left every `Cargo.toml`. `render::file_diff` stays as a three-line `paint(unified_diff(..))` because the crate has no one-call form. No expected-output file changed.
+
 ### T427. The brand-copy test hashes only files whose size matches a brand file
 
 `web/src/brandSources.test.ts` hashes every file in `web/` and `brand/` (about 400 files, 5 MB). Run alone it takes about 2 s; in the parallel unit suite on a loaded host it took 16 to 68 s and failed the 5 s timeout. A copy of a brand file always has the same size, so only files whose size matches some brand file need a hash.

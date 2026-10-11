@@ -17,7 +17,11 @@ use owo_colors::{OwoColorize, Stream};
 
 use crate::agent_view::{AgentState, AgentView, SessionView};
 
-pub use crate::diff::{file_diff, paint, unified_diff};
+/// A `git diff` of one file, coloured. The crate paints and diffs but has no one-call form,
+/// and two surfaces (memory sync, config dry-run) want exactly this.
+pub fn file_diff(path: &std::path::Path, before: &str, after: &str) -> String {
+    change_preview::paint(&change_preview::unified_diff(path, before, after))
+}
 
 /// A spinner for a walk with no known length. indicatif draws to stderr and draws nothing at
 /// all when stderr is not a terminal, so a piped or redirected run stays byte-clean.
@@ -453,11 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_text_passes_through_when_colour_is_off() {
-        assert_eq!(
-            paint("+ added\n- gone\nno changes"),
-            "+ added\n- gone\nno changes"
-        );
+    fn a_state_word_is_plain_when_colour_is_off() {
         assert_eq!(state("running", true), "running");
     }
 

@@ -30,9 +30,9 @@ use super::junk_review;
 use super::junk_sessions;
 use super::junk_worktrees;
 use super::{Agent, HOSTS, host, present};
-use crate::bytes::human_bytes;
 use crate::config::Config;
 use crate::store::Store;
+use change_preview::human_bytes;
 
 #[derive(Debug, Serialize)]
 pub struct Outcome {

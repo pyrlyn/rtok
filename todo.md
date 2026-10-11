@@ -57,7 +57,6 @@
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
-- T416.1. rtok renders previews through `change-preview`
 - T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
 - T416.3. `--stat` on the commands that show a diff
 - T416.4. `--dry-run` for the destructive commands without a preview

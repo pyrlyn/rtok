@@ -29,7 +29,6 @@ pub mod cli;
 pub mod completions;
 pub mod config;
 pub mod demon;
-pub mod diff;
 pub mod doctor;
 pub mod expand;
 pub mod fs;
