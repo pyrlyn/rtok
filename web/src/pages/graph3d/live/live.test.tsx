@@ -32,6 +32,13 @@ afterEach(() => {
 });
 const noop = () => {};
 
+/** Accessible text of a card: CountUp draws its frames aria-hidden and the total in sr-only. */
+const accessible = (root: HTMLElement) => {
+    const clone = root.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.remove());
+    return clone.textContent;
+};
+
 const canvas = () => screen.findByTestId("graph-live");
 const calls = (sent: unknown[]) =>
     sent.flatMap((m) =>
@@ -82,7 +89,7 @@ describe("live graph", () => {
             }),
         );
         const card = async (label: string) =>
-            (await screen.findByText(label)).parentElement?.textContent;
+            accessible((await screen.findByText(label)).parentElement!);
         await waitFor(async () => expect(await card("latency p50")).toContain("40 ms"));
         expect(await card("latency p50")).toContain("p95 1.5 s");
         expect(await card("symbols returned")).toContain("2 of 3");
@@ -301,7 +308,7 @@ describe("live graph", () => {
         const card = () =>
             screen
                 .getAllByText("calls")
-                .map((e) => e.parentElement?.textContent)
+                .map((e) => accessible(e.parentElement!))
                 .find((t) => t?.includes("failed"));
         for (const [i, label] of LABELS.entries()) {
             fireEvent.click(screen.getByRole("button", { name: label }));
