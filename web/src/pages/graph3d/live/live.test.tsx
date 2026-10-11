@@ -14,7 +14,7 @@ import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
 import { done, LABELS, running, view, windowOf } from "./callsFixtures";
 import { FOCUS_MS } from "./lit";
-import { HIDE_KEY, SPLIT_KEY } from "./Split";
+import { HIDE_KEY, MAX_KEY, SPLIT_KEY } from "./Split";
 
 const snap: Snapshot = {
     ...richSnapshot,
@@ -400,5 +400,75 @@ describe("split", () => {
     test("the live graph follows the drilled project", async () => {
         mount(drillServer(snap), "/graph?p=1");
         expect((await canvas()).getAttribute("aria-label")).toContain("symbols of");
+    });
+});
+
+describe("maximise", () => {
+    test("maximising the explorer fills the area and restores; the live stream stops", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        fireEvent.click(screen.getByRole("button", { name: "Maximise explorer" }));
+        expect(screen.getByRole("button", { name: "Restore explorer" })).toBeTruthy();
+        expect(screen.queryByTestId("graph-live")).toBeNull();
+        expect(screen.queryByRole("separator")).toBeNull();
+        expect(screen.getByText("project graph")).toBeTruthy();
+        await waitFor(() => expect(calls(w.sent)).toEqual([true, false]));
+
+        fireEvent.click(screen.getByRole("button", { name: "Restore explorer" }));
+        expect(await canvas()).toBeTruthy();
+        expect(screen.getByRole("separator")).toBeTruthy();
+        expect(localStorage.getItem(MAX_KEY)).toBe("");
+    });
+
+    test("maximising the live graph fills the area and restores", async () => {
+        mount(wire(snap).connect, "/graph");
+        await canvas();
+        fireEvent.click(screen.getByRole("button", { name: "Maximise live graph" }));
+        expect(screen.getByRole("button", { name: "Restore live graph" })).toBeTruthy();
+        expect(screen.queryByTestId("graph-live")).toBeTruthy();
+        expect(screen.queryByText("project graph")).toBeNull();
+        expect(screen.queryByRole("separator")).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Restore live graph" }));
+        await waitFor(() => expect(screen.getByText("project graph")).toBeTruthy());
+        expect(screen.getByRole("separator")).toBeTruthy();
+    });
+
+    test("Escape restores the split", async () => {
+        mount(wire(snap).connect, "/graph");
+        await canvas();
+        fireEvent.click(screen.getByRole("button", { name: "Maximise explorer" }));
+        expect(screen.queryByRole("separator")).toBeNull();
+        fireEvent.keyDown(document, { key: "Escape" });
+        expect(screen.getByRole("separator")).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Maximise explorer" })).toBeTruthy();
+    });
+
+    test("the maximised part is remembered across a remount", async () => {
+        const first = mount(wire(snap).connect, "/graph");
+        await canvas();
+        fireEvent.click(screen.getByRole("button", { name: "Maximise live graph" }));
+        expect(localStorage.getItem(MAX_KEY)).toBe("live");
+        first.unmount();
+        mount(wire(snap).connect, "/graph");
+        expect(await screen.findByRole("button", { name: "Restore live graph" })).toBeTruthy();
+        expect(screen.queryByText("project graph")).toBeNull();
+        expect(screen.queryByRole("separator")).toBeNull();
+    });
+
+    test("maximising the live graph shows it even while hidden, and hiding restores the split", async () => {
+        mount(wire(snap).connect, "/graph");
+        await canvas();
+        fireEvent.click(screen.getByRole("button", { name: "Hide live graph" }));
+        expect(screen.queryByTestId("graph-live")).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Maximise live graph" }));
+        expect(await canvas()).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Hide live graph" })).toBeTruthy();
+
+        fireEvent.click(screen.getByRole("button", { name: "Hide live graph" }));
+        expect(screen.queryByTestId("graph-live")).toBeNull();
+        expect(screen.getByRole("button", { name: "Show live graph" })).toBeTruthy();
     });
 });
