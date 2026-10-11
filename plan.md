@@ -1504,25 +1504,6 @@ Split from T520. No documented config path for MiMo Desktop (early access); a th
 Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
 
 
-### T560. CodeBuddy Code and WorkBuddy host (`codebuddy`)
-
-Creator request (2026-10-11): rtok plugin support for Tencent WorkBuddy. WorkBuddy shares CodeBuddy Code's plugin system, so this is one host `codebuddy` with two variants, CodeBuddy Code CLI and WorkBuddy Desktop (the `devin` CLI + Desktop shape), served by one plugin tree under the D21 singleton.
-
-Facts (primary unless marked; checked 2026-10-11):
-- Plugin manifest dirs: `.codebuddy-plugin/` (priority), `.workbuddy-plugin/`, `.claude-plugin/`; hooks in `hooks/hooks.json`, MCP in `.mcp.json`; `${CODEBUDDY_PLUGIN_ROOT}`, alias `${CLAUDE_PLUGIN_ROOT}`; cache `~/.codebuddy/plugins/cache/<marketplace>/<plugin>/<version>` — https://www.codebuddy.ai/docs/cli/plugins-reference
-- CLI: `codebuddy plugin marketplace add <local dir> [--name <name>]`, `codebuddy plugin install <plugin>@<marketplace> [-s user]`, `codebuddy plugin uninstall <plugin> -y`, `codebuddy plugin list --json`; install records `installed_plugins.json` — same page and https://www.codebuddy.ai/docs/cli/plugin-marketplaces
-- Hooks: settings `~/.codebuddy/settings.json` `hooks` key; stdin `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `tool_name`, `tool_input`, `tool_response`; PreToolUse output `hookSpecificOutput.{permissionDecision, permissionDecisionReason, modifiedInput}` (no `updatedInput`); PostToolUse `additionalContext`; tools `Bash`, `Read`, `Edit`, `Write`, `Grep`, `Glob` — https://www.codebuddy.ai/docs/cli/hooks
-- MCP: user file is the first existing of `~/.codebuddy/.mcp.json`, `~/.codebuddy/mcp.json`, `~/.codebuddy.json` (created as `.mcp.json`), `mcpServers.<name>.{type, command, args}` — https://www.codebuddy.ai/docs/cli/mcp
-- `CODEBUDDY_CONFIG_DIR` moves the config and data dir — https://www.codebuddy.ai/docs/cli/env-vars
-- **unverified** (https://github.com/lorelum/lorelum/issues/205, WorkBuddy 5.5.6 on Windows): the WorkBuddy app embeds the CodeBuddy Code CLI and keeps its registry in `~/.workbuddy`, so `CODEBUDDY_CONFIG_DIR=~/.workbuddy codebuddy plugin …` installs into WorkBuddy. WorkBuddy's own docs (https://www.codebuddy.ai/docs/workbuddy/Changelog, 5.7.6) do not mention plugins or hooks.
-
-Split at claim (500-line cap); T560.1 (hook dialect and `plugins/codebuddy/`) is done (`done.md`).
-
-#### T560.2. `codebuddy` host installer (CodeBuddy Code CLI + WorkBuddy Desktop)
-
-Needs T560.1. Plan: flip the `codebuddy` rows of `HOOK_EVENTS` the installer writes to `installer = true`; `src/agents/codebuddy/{mod.rs,README.md}` (with `## Docs`), registered in `HOSTS`/`host()`, `[setup.codebuddy] dir` (default `~/.codebuddy`) and `workbuddy_dir` (default `~/.workbuddy`) through the one config module. Variants: CLI (`codebuddy` on PATH), Desktop (WorkBuddy app: `/Applications/WorkBuddy.app`, `%LOCALAPPDATA%\Programs\WorkBuddy`). `support("plugin")` is an offer whose `--yes` runs `codebuddy plugin marketplace add <resolved plugins/codebuddy> --name rtok` then `codebuddy plugin install rtok@rtok -s user` (Desktop: same with `CODEBUDDY_CONFIG_DIR=<workbuddy_dir>`); remove runs `codebuddy plugin uninstall rtok@rtok -y`; `installed()` reads `<dir>/plugins/installed_plugins.json` (no spawn). Without the plugin, own files: `hooks` key of `<dir>/settings.json` and `mcpServers.rtok` in the first existing MCP file (create `.mcp.json`), our entries only, rest byte-for-byte. D21 singleton: while the plugin is installed, setup takes those own entries back. `plugin_install.rs` probe, `docs/agents.md` blessed, `toolchain.md` untouched (no new dep).
-Check: fake-`codebuddy` e2e (dry-run prints and runs nothing; `--yes` adds marketplace + installs, strips own files; repeat says already installed; remove uninstalls; Desktop passes `CODEBUDDY_CONFIG_DIR`); units for detection, MCP file choice and the singleton; gates from `new-cli-command` docs if surfaces change; `just check`.
-
 ### T356. Never index `$HOME` or `/` as a graph root
 
 Found 2026-10-02 (T352 research): `symbols` holds 617,319 rows (~120 MB plus indexes) under the root `/Users/listepo` — `.config/amp/plugins`, `.cursor/extensions`, `.grok/bundled`, `go/pkg/mod`, `.motive/node_modules`. The graph root is the `rtok mcp` process cwd (`std::env::current_dir()` in `src/plugins/graph/mod.rs`), so a server launched in the home directory (no `roots/list` answer yet, or a host without roots) walks the whole home on its first `symbol`/`callers`/`explore` call, and the rows never leave: `delete_symbols_missing` runs only when that same root is re-indexed.

@@ -85,6 +85,7 @@ pub const HOSTS: &[&str] = &[
     "devin",
     "roo",
     "qwen",
+    "codebuddy",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -760,6 +761,7 @@ section! {
         devin: SetupDevin = SetupDevin::default(),
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
+        codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
     }
 }
 
@@ -901,6 +903,16 @@ section! {
     /// `[setup.qwen]` — Qwen Code's `settings.json` (`hooks`, `mcpServers`) lives under
     /// `dir` (T413.2). `QWEN_HOME` moves that directory; this key is the override.
     SetupQwen { dir: PathBuf = p("~/.qwen") }
+}
+
+section! {
+    /// `[setup.codebuddy]` — CodeBuddy Code's config directory (`settings.json` `hooks`, the
+    /// MCP file, `plugins/`; `CODEBUDDY_CONFIG_DIR` moves it) and WorkBuddy Desktop's, which
+    /// embeds the same CLI (T560.2).
+    SetupCodebuddy {
+        dir: PathBuf = p("~/.codebuddy"),
+        workbuddy_dir: PathBuf = p("~/.workbuddy"),
+    }
 }
 
 section! {
@@ -1603,6 +1615,8 @@ impl Config {
             setup.cline.mcp_path,
             setup.gemini.dir,
             setup.qwen.dir,
+            setup.codebuddy.dir,
+            setup.codebuddy.workbuddy_dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

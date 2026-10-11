@@ -4,8 +4,8 @@
 
 //! T560.1 + D21: the CodeBuddy Code / WorkBuddy plugin tree carries a `.codebuddy-plugin`
 //! manifest and marketplace, Claude-shaped `hooks/hooks.json` that run `rtok hook <Event> --host
-//! codebuddy` (events per `hook_events`), and an `.mcp.json` for `rtok mcp --host codebuddy`.
-//! The installer is T560.2.
+//! codebuddy` (events per `hook_events`), and no MCP server: that is the installer's
+//! `mcpServers.rtok` (D33, T560.2).
 
 use std::fs;
 use std::path::PathBuf;
@@ -35,20 +35,20 @@ fn manifest_and_marketplace_name_the_rtok_plugin() {
         json!([{
             "name": "rtok",
             "source": "./",
-            "description": "rtok hooks and MCP for CodeBuddy Code and WorkBuddy"
+            "description": "rtok hooks for CodeBuddy Code and WorkBuddy"
         }])
     );
 }
 
+/// D33: the installer's `mcpServers.rtok` is the only MCP entry; a plugin `.mcp.json` would
+/// start a second rtok server and double the tool set.
 #[test]
-fn mcp_json_runs_rtok_mcp_for_the_codebuddy_host() {
-    assert_eq!(
-        read(".mcp.json"),
-        json!({"mcpServers": {"rtok": {
-            "type": "stdio",
-            "command": "rtok",
-            "args": ["mcp", "--host", "codebuddy"]
-        }}})
+fn the_plugin_ships_no_mcp_server() {
+    assert!(!root().join(".mcp.json").exists());
+    assert!(
+        read(".codebuddy-plugin/plugin.json")
+            .get("mcpServers")
+            .is_none()
     );
 }
 

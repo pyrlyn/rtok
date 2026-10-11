@@ -427,6 +427,9 @@ config_path   = "~/.config/devin/config.json"  # mcp_config.json читаєть�
 mcp_path      = ""                               # порожньо: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
 [setup.qwen]
 dir           = "~/.qwen"                    # settings.json (хуки, mcpServers); QWEN_HOME переносить каталог
+[setup.codebuddy]
+dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (хуки), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR переносить каталог
+workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: ті самі файли (вбудований CodeBuddy Code; неперевірено)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)

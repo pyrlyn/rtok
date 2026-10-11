@@ -1248,6 +1248,19 @@ Do (2026-09-22): verified against the Copilot docs first (plugins-creating + cli
 
 Check result (2026-09-22): `tests/copilot_plugin.rs` — manifest/component-path parity, hooks doc equality with `hooks_doc("rtok", 5)`, exact `.mcp.json`, and the fake-`copilot` e2e (dry-run names the command and runs nothing, `--yes` installs and strips the own-files pair, a repeat is `already installed` with no second CLI call, remove uninstalls); units for the offer/marker decision and the D21 singleton; `just check` green.
 
+### T560. CodeBuddy Code and WorkBuddy host (`codebuddy`)
+
+Creator request (2026-10-11): rtok plugin support for Tencent WorkBuddy. WorkBuddy shares CodeBuddy Code's plugin system, so this is one host `codebuddy` with two variants, CodeBuddy Code CLI and WorkBuddy Desktop (the `devin` CLI + Desktop shape), served by one plugin tree under the D21 singleton.
+
+Facts (primary unless marked; checked 2026-10-11):
+- Plugin manifest dirs: `.codebuddy-plugin/` (priority), `.workbuddy-plugin/`, `.claude-plugin/`; hooks in `hooks/hooks.json`, MCP in `.mcp.json`; `${CODEBUDDY_PLUGIN_ROOT}`, alias `${CLAUDE_PLUGIN_ROOT}`; cache `~/.codebuddy/plugins/cache/<marketplace>/<plugin>/<version>` — https://www.codebuddy.ai/docs/cli/plugins-reference
+- CLI: `codebuddy plugin marketplace add <local dir> [--name <name>]`, `codebuddy plugin install <plugin>@<marketplace> [-s user]`, `codebuddy plugin uninstall <plugin> -y`, `codebuddy plugin list --json`; install records `installed_plugins.json` — same page and https://www.codebuddy.ai/docs/cli/plugin-marketplaces
+- Hooks: settings `~/.codebuddy/settings.json` `hooks` key; stdin `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `tool_name`, `tool_input`, `tool_response`; PreToolUse output `hookSpecificOutput.{permissionDecision, permissionDecisionReason, modifiedInput}` (no `updatedInput`); PostToolUse `additionalContext`; tools `Bash`, `Read`, `Edit`, `Write`, `Grep`, `Glob` — https://www.codebuddy.ai/docs/cli/hooks
+- MCP: user file is the first existing of `~/.codebuddy/.mcp.json`, `~/.codebuddy/mcp.json`, `~/.codebuddy.json` (created as `.mcp.json`), `mcpServers.<name>.{type, command, args}` — https://www.codebuddy.ai/docs/cli/mcp
+- `CODEBUDDY_CONFIG_DIR` moves the config and data dir — https://www.codebuddy.ai/docs/cli/env-vars
+- **unverified** (https://github.com/lorelum/lorelum/issues/205, WorkBuddy 5.5.6 on Windows): the WorkBuddy app embeds the CodeBuddy Code CLI and keeps its registry in `~/.workbuddy`, so `CODEBUDDY_CONFIG_DIR=~/.workbuddy codebuddy plugin …` installs into WorkBuddy. WorkBuddy's own docs (https://www.codebuddy.ai/docs/workbuddy/Changelog, 5.7.6) do not mention plugins or hooks.
+
+
 ### T560.1. `--host codebuddy` hook dialect and `plugins/codebuddy/` tree
 
 Part of T560 (CodeBuddy Code and WorkBuddy host; the parent card and T560.2 stay in `plan.md`). CodeBuddy Code sends Claude's stdin and reads Claude's output envelope, except that a PreToolUse rewrite travels as `hookSpecificOutput.modifiedInput` (https://www.codebuddy.ai/docs/cli/hooks, checked 2026-10-11).
@@ -1255,6 +1268,12 @@ Part of T560 (CodeBuddy Code and WorkBuddy host; the parent card and T560.2 stay
 Do (2026-10-11): `dispatch_owned_strict` gets a `codebuddy` branch; `codebuddy_output` renames `updatedInput` to `modifiedInput` and passes decisions, context and `{}` through. No input adapter (stdin is already Claude's shape). `plugins/codebuddy/`: `.codebuddy-plugin/plugin.json` (version kept by `tools/plugin-versions.sh`) and `marketplace.json` (marketplace `rtok`, plugin `rtok`, source `./`), `hooks/hooks.json` with the `rtok-hook` → `rtok hook` → `scripts/hook.sh` chain, all with `--host codebuddy` and `${CODEBUDDY_PLUGIN_ROOT}`, `.mcp.json` → `rtok mcp --host codebuddy`, README with `## Docs`. The events are `codebuddy` rows in `HOOK_EVENTS` that mirror Claude's: PreToolUse `Bash`/`Read`/`Skill`, PostToolUse `*`, UserPromptSubmit, SessionStart, PreCompact, PostCompact, SessionEnd. SubagentStart is left out because the hooks page names it without an input/output section. The rows have `installer = false` until T560.2.
 
 Check result (2026-10-11): unit tests for the output rename and an end-to-end PreToolUse dispatch; `tests/codebuddy_plugin.rs` pins the manifest, marketplace, exact `.mcp.json`, hook commands, and runs the commands against `rtok-hook`/`rtok` shims and the missing-rtok fail-open; `hook_manifests`, `host_docs`, `plugin_versions` green; `just check`.
+
+### T560.2. `codebuddy` host installer (CodeBuddy Code CLI + WorkBuddy Desktop)
+
+Do (2026-10-11): `src/agents/codebuddy/{mod.rs,README.md}`, registered in `HOSTS`, `agent_by_id`, MCP surfaces, `junk_map`, `restart`; `[setup.codebuddy] dir` (`~/.codebuddy`) and `workbuddy_dir` (`~/.workbuddy`) through the one config module. Variants: CLI (`codebuddy` on PATH) and Desktop (WorkBuddy app). `--yes` runs `codebuddy plugin marketplace add <resolved plugins/codebuddy> --name rtok` then `codebuddy plugin install rtok@rtok -s user`, with `CODEBUDDY_CONFIG_DIR` for WorkBuddy or a relocated CLI dir (**unverified** that WorkBuddy shares the registry); remove runs `codebuddy plugin uninstall rtok@rtok -s user -y`; `installed()` looks for `"rtok@rtok"` in `plugins/installed_plugins.json` (schema undocumented), no spawn. Own files: `hooks` in `settings.json` from the `codebuddy` rows of `HOOK_EVENTS` (now `installer = true`), `mcpServers.rtok` in the first existing of `.mcp.json`, `mcp.json`, `~/.codebuddy.json` (JSONC, rest byte-for-byte). D21: while the plugin is installed the settings.json hooks are taken back. D33: MCP is always the host-file entry, so `plugins/codebuddy/.mcp.json` from T560.1 was removed (it would have started a second rtok server). `claude::command_for`/`is_ours_for` shared with Devin; `codex_probe` generalised to `cache_probe` with a codebuddy probe. Not done: `update` does not reinstall the plugin, `remove` leaves the `rtok` marketplace registered, no skill sync, the fake-CLI e2e is unix-only.
+
+Check result (2026-10-11): `agents::codebuddy` units (detection, MCP file choice, foreign content byte-identical, singleton, offer text), `tests/codebuddy_host.rs` fake-CLI e2e, `codebuddy_plugin`, `hook_manifests`, `singleton`, `surface_parity`, `config_coverage`, `host_docs`, `cli_trycmd`; full suite green in CI on PR #987 (local disk was full).
 
 ### T100. `rtok agents install grok` and the Read path under Grok
 

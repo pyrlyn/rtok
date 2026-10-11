@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "rtok": {
-      "type": "stdio",
-      "command": "rtok",
-      "args": ["mcp", "--host", "codebuddy"]
-    }
-  }
-}

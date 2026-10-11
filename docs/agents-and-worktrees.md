@@ -80,6 +80,7 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | `cline` | yes | hooks | none (checkpoints, not worktrees) | `worktree_add` |
 | `roo` | no | MCP | not checked yet | `worktree_add` |
 | `qwen` | yes | hooks | not checked yet | `worktree_add` |
+| `codebuddy` | yes | hooks | not checked yet | `worktree_add` |
 | `codewhale` | yes | hooks | none documented | `worktree_add` |
 | `aider` | no | none | none | CLI only |
 | `zed` | no | MCP | threads can point at a worktree you make | `worktree_adopt` |

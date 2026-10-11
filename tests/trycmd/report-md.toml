@@ -303,6 +303,8 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.claude.settings_path | ~/.claude/settings.json | default |
 | setup.cline.hooks_path | ~/Documents/Cline/Hooks | default |
 | setup.cline.mcp_path | ~/.cline/data/settings/cline_mcp_settings.json | default |
+| setup.codebuddy.dir | ~/.codebuddy | default |
+| setup.codebuddy.workbuddy_dir | ~/.workbuddy | default |
 | setup.codewhale.dir | ~/.codewhale | default |
 | setup.codex.config_path | ~/.codex/config.toml | default |
 | setup.commandcode.dir | ~/.commandcode | default |
@@ -422,7 +424,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-376 keys.
+378 keys.
 
 ## Doctor
 
@@ -615,6 +617,16 @@ agents
     hooks   not installed
     mcp     not installed
     proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
+    plugin  not installed (--yes)
+  codebuddy (cli)
+    hooks   not installed
+    mcp     not installed
+    proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
+    plugin  not installed (--yes)
+  codebuddy (desktop)
+    hooks   not installed
+    mcp     not installed
+    proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
     plugin  not installed (--yes)
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
