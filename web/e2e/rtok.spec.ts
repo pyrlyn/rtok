@@ -534,3 +534,32 @@ test("Export downloads the JSON the CLI writes, and the page opens it back read-
   await page.getByRole("button", { name: "Close export" }).click();
   await expect(page.getByText(/viewing export from/)).toHaveCount(0);
 });
+
+test("a project with tasks shows them on the board, a subtask under its parent, and writes nothing", async ({
+  page,
+  rtok,
+}) => {
+  // The server reads the project again on its own schedule, so the page is opened after the
+  // tasks exist and given a few refreshes to catch up.
+  const [parent, child, finished] = rtok.addTasks(["Ship it", "Write the docs", "Cut the release"]);
+  await page.goto("/#/tasks");
+
+  const open = page.getByRole("region", { name: "open" });
+  await expect(open.getByText("Ship it")).toBeVisible({ timeout: 20_000 });
+  await expect(open.getByText("Write the docs")).toBeVisible();
+  await expect(open.getByText(`in ${parent}`)).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "done" }).getByText("Cut the release"),
+  ).toBeVisible();
+  expect([parent, child, finished]).toEqual(["E1", "E1.1", "E2"]);
+
+  await page.getByRole("button", { name: "list" }).click();
+  const row = page
+    .getByRole("table", { name: "tasks" })
+    .getByRole("row", { name: /Write the docs/ });
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: child! })).toBeVisible();
+  // Read-only: nothing on the page is a form control that could change a task.
+  await expect(page.getByRole("main").getByRole("switch")).toHaveCount(0);
+});

@@ -739,6 +739,26 @@ fn usage_page_exists_on_both_surfaces() {
     );
 }
 
+/// T441.13.7: both surfaces render the Tasks page from the one list `rtok task list --all` reads
+/// (`Project::adapter().list`): the tui shows its table, the SPA the same rows as a board.
+#[test]
+fn tasks_page_exists_on_both_surfaces() {
+    let tasks = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/model/tasks.rs"));
+    let Surfaces { model, tui, .. } = SURFACES;
+    assert!(
+        model.contains("(\"tasks\", \"tasks\")"),
+        "pages() offers tasks"
+    );
+    assert!(
+        tasks.contains(".list(&filter(&[], true, None)?)"),
+        "the one list lives behind the model (D23)"
+    );
+    assert!(
+        tui.contains("\"tasks\" =>"),
+        "the TUI renders the tasks page"
+    );
+}
+
 /// Reading commands and the page of the model they render: (command path, page). The
 /// page must be one `model::pages()` offers — a page both surfaces carry in the frame.
 /// The mapping is many-to-one: several commands may render the same page.
@@ -773,6 +793,8 @@ const COMMAND_PAGES: &[(&str, &str)] = &[
     // the Worktrees page rides the snapshot since T232, so `worktree list` renders it
     ("worktree list", "worktrees"),
     ("agents usage", "usage"),
+    // the Tasks page rides the snapshot since T441.13.7, so `task list` renders it
+    ("task list", "tasks"),
 ];
 
 /// The commands D27 exempts, each with its reason. Streaming commands print a stream,
@@ -891,10 +913,6 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "task create",
         "allocates an id and writes a task through the adapter (T441.5)",
-    ),
-    (
-        "task list",
-        "reads the project's adapter, not the store snapshot (T441.5)",
     ),
     (
         "task show",

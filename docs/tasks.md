@@ -73,6 +73,15 @@ Why the task exists and what done means.
 
 Without `--json` the commands print text. With `--json` they print the task as JSON.
 
+## Task board
+
+`rtok web` has a read-only Tasks page (`g b`) and `rtok tui` a `tasks` tab. Both show the tasks of the project the process was started in, read through the same adapter and in the same shape as `rtok task list --all --json`. Nothing on the page writes a task.
+
+- **Board**: one column per status (open, in progress, done, closed). A card shows the id, title, parent (`in R2`), assignee and the issue link of a `github` or `gitlab` task, plus markers: the priority when it is not the default `P2`, `needs <ids>` for blockers, `conflicts <ids>` and `parallel`. Cards in a column are ordered by priority, then id.
+- **List**: a table with the details of the selected task beside it. Rows are tab stops; Enter or Space selects one. The board or list choice is remembered in the browser. The filter box matches id, title, parent and assignee.
+- **No `[tasks]` section** in the user config or the project's `.rtok.toml`: the page says so and points at `rtok task init`. A project without tasks, or an adapter that cannot be reached (no token, no network), is a message on the page, not an error of the dashboard.
+- **Size and freshness**: done and closed tasks are capped at the newest 50 each, with a note counting the rest; `rtok task list --all` has all of them. The `disk` adapter is read every 5 seconds, `github` and `gitlab` every 2 minutes so the page does not eat the API rate limit. The page links only to `http` and `https` issue URLs.
+
 ## MCP tools
 
 `rtok mcp` serves the same operations as tools. Each returns the same JSON as the matching `--json` flag.
