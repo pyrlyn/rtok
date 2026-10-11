@@ -60,6 +60,17 @@
 - T611. Decode serialized Copilot tool arguments before hook dispatch
 - T613. Attach sub-agents when their main agent is registered later
 - T615. Preserve claim order when tasks are claimed in the same second
+- T616. Audit remaining module coverage
+- T617. Limit file-linked observation recall after deduplicating observations
+- T618. Scrub private observation content before truncation removes its delimiters
+- T619. Scroll wrapped TUI panel results by rendered rows
+- T620. Enforce LSP request deadlines during blocking transport reads
+- T621. Refresh opened LSP documents after their files change
+- T622. Preserve non-text blocks when the pi extension compresses tool output
+- T623. Correlate web replies across request timeouts and retries
+- T624. Retain the trace ID in the OTel integration-check extractor
+- T625. Preserve invalid Grok configuration when installing MCP
+- T626. Match Aider proxy ownership by URL authority
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

@@ -141,6 +141,17 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T611 | todo | P2 | 3 | 0% | |
 | T613 | todo | P2 | 3 | 0% | |
 | T615 | todo | P2 | 3 | 0% | |
+| T616 | in progress | P2 | 3 | 5% | OpenAI / GPT-6 |
+| T617 | todo | P2 | 3 | 0% | |
+| T618 | todo | P1 | 3 | 0% | |
+| T619 | todo | P2 | 3 | 0% | |
+| T620 | todo | P1 | 5 | 0% | |
+| T621 | todo | P2 | 5 | 0% | |
+| T622 | todo | P2 | 3 | 0% | |
+| T623 | todo | P2 | 5 | 0% | |
+| T624 | todo | P3 | 2 | 0% | |
+| T625 | todo | P1 | 3 | 0% | |
+| T626 | todo | P2 | 3 | 0% | |
 
 
 
@@ -788,6 +799,165 @@ Execution plan:
 4. Run focused task-claim, runner and hook tests and `just check`.
 
 Check: selecting the latest claim is independent of task ID spelling when timestamps tie. The isolated probe used real Store migrations and public APIs, checked that all reproducing writes occurred in one wall-clock second, and exercised re-claim, release fallback, project/agent isolation and separate-second controls. No raw SQL, full hook dispatch, live host or concurrent process was exercised; the injected-text effect was source-traced.
+
+### T616. Audit remaining module coverage
+
+Inventory and audit remaining Rust and production non-Rust modules across `src/`, `crates/`, `web/`, `plugins/`, and project scripts, using prior T530-and-newer audit records to avoid treating a filename mention as full coverage. Work from grouped subsystem inventories, inspect uncovered call paths and invariants, and report only confirmed findings with evidence and explicit limits.
+
+Execution plan:
+
+1. Inventory Rust and tracked production non-Rust source modules by directory and compare exact path citations in T530+ plan/done records, treating these as aids rather than proof of full or absent coverage.
+2. Inspect remaining subsystem groups and their callers, then run focused real-source reproductions and controls for concrete candidates.
+3. Deduplicate reproduced cases across `plan.md`, `done.md`, `roadmap.md`, and `ideas.md`; file only distinct findings, preserving the probe and integration limits.
+4. Record exact reviewed coverage and evidence, verify task parity and the docs diff, run scoped `just check`, and prepare the PR #986 update.
+
+Check: the inventory groups Rust and production non-Rust modules, with tests, fixtures, generated files and dependencies identified or excluded; each new finding has source evidence, a distinct reproduced invariant failure, and ordered fix/check steps; the final audit record states scope and limits, and scoped `just check` passes.
+
+Coverage checkpoint (still in progress): production adapters reviewed in `src/agents/{aider,antigravity,claude,cline,codebuddy,codewhale,codex,commandcode,copilot,cursor,devin,gemini,grok,kilo,kimi,mimo,omp,opencode,pi,qwen,roo,vscode,windsurf,zcode,zed}/mod.rs`. This does not claim coverage of every shared agent helper, package installer, test module, or Claude migration path. Confirmed audit findings so far are T617–T626. Reviewed bounded scopes include Store/memory observation recall and privacy, the TUI result panel, graph LSP framing/document opens, Pi mixed-content replacement, web reply correlation, the OTel check extractor, and Aider/Grok host-config boundaries. OpenCode proxy-variable removal remains a revalidation candidate against T10.9's completed foreign-value preservation contract; it is not counted as a new finding here. Remaining work includes shared agent helpers, other Rust groups whose source review is partial or only inventory-backed, and frontend pages/3D rendering and packaging/platform integration. Filenames and risk-scan hits are not proof of full review.
+
+### T617. Limit file-linked observation recall after deduplicating observations
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with actual Store migrations and public APIs. [observations_for_files](crates/rtok-store/src/observations.rs#L122) joins `observation_files` to `observations`, then orders and limits joined rows without making observation IDs distinct. Insert an older observation linked to `a.rs`, then a newer one linked to both `a.rs` and `b.rs`; querying both paths with limit 2 returns the newer ID twice and omits the older matching observation. [obs_for_prompt](src/plugins/memory/mod.rs#L299) feeds these rows into [rrf_obs](src/plugins/memory/observe.rs#L180), which both gives duplicate IDs extra rank contributions and merges them after the store limit has already discarded other hits. The real ranking helper reduces this fixture to one hit despite two eligible observations.
+
+Execution plan:
+
+1. Add store regressions with multiple file links per observation and several distinct observations. Assert unique IDs, newest-first ordering and a limit counted in observations; include project isolation, overlapping paths and single-path controls.
+2. Express an existence/subquery or distinct projection through Diesel so each observation participates once before ordering and LIMIT. Preserve global/project visibility and the existing empty-path behavior.
+3. Add recall/ranking coverage proving extra matched files do not create duplicate contributions within one result list or starve older distinct hits. Preserve the intentional boost when an observation appears in separate FTS and file-recall lists.
+4. Run focused store observation and memory recall tests, then `just check`.
+
+Check: the two-path fixture returns both distinct observations, and fusion retains both. Executed evidence used the real in-memory Store and the verbatim production `rrf_obs`; single-path and other-project controls passed. Full hook dispatch and live host integration were not run.
+
+### T618. Scrub private observation content before truncation removes its delimiters
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with the production [synthesize](src/plugins/memory/observe.rs#L153) and [strip_private](src/plugins/memory/scrub.rs#L48). A complete output `<private>SYNTHETIC_PRIVATE_MARKER` + 300 filler characters + `</private> public` is redacted by `strip_private` when passed whole. `synthesize` first truncates each input/output string to 200 characters, then the combined narrative to 400, and only then scrubs. That removes the closing tag; the paired-tag regex no longer matches, so the private marker remains in the narrative. The real Store persisted and returned that narrative in the isolated probe.
+
+[capture](src/plugins/memory/observe.rs#L245) passes this synthesized narrative straight to `insert_observation`. Short complete blocks are covered by existing tests and redact correctly; the long complete-block case is not. T548 covers checkpoint prompts bypassing private-tag filtering entirely; this is a separate observation path where truncation defeats an existing scrubber.
+
+Execution plan:
+
+1. Add synthetic private-block regressions crossing the 200-character per-field and 400-character combined limits, for both tool input and response. Assert private text never reaches the stored narrative; retain short-block, ordinary-text and Unicode-cap controls.
+2. Scrub complete field content before applying lossy truncation, using the shared privacy function. Ensure any bounded implementation tracks private spans across its cut rather than retaining an unmatched private prefix. Preserve the final narrative character cap.
+3. Exercise capture through the memory host and Store retrieval/search so private payloads cannot reappear in recall. Cover other supported secret patterns crossing a cut, without real credentials in fixtures.
+4. Run focused privacy, observation/capture and memory recall tests and `just check`.
+
+Check: a complete private block remains private regardless of its position or length. The probe compiled the verbatim production synthesizer, imported the actual scrubber, and used real Store migrations/public methods; the full-block scrub, short-block and Unicode-cap controls passed. The full hook/capture integration was source-traced, not executed.
+
+### T619. Scroll wrapped TUI panel results by rendered rows
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with the actual [Panel](src/tui/panel.rs#L144) and Ratatui's test backend. The shown-result key handler passes `lines.len()` to `scroll_key`, which caps the offset at the number of logical lines minus one. [render](src/tui/panel.rs#L199) enables paragraph wrapping and applies that offset in rendered rows. A one-line result that wraps beyond the viewport therefore has a maximum offset of zero: even 100 PageDown events leave the same first rows visible and its tail inaccessible. A directly scrolled Paragraph renders the tail, and the unwrapped multi-line control scrolls normally. Compare/export result and error text share this panel.
+
+Execution plan:
+
+1. Add a small-viewport regression with one long result line and a distinctive tail. Send Down/PageDown and assert the tail becomes visible; retain the ordinary multi-line control.
+2. Calculate or maintain the scroll range from wrapped rows at the current content width and viewport height. Share that geometry between rendering and navigation rather than capping against the logical input line count.
+3. Clamp the offset when resizing or replacing the result; cover Unicode, blank lines, narrow terminals, short results, Up/PageUp and the compare/export result paths.
+4. Run focused TUI panel and caller tests, then `just check`.
+
+Check: every rendered result row is reachable using the existing navigation keys. The isolated probe imported the production panel with small surrounding UI shims and used a real Ratatui buffer; it did not execute an interactive terminal session or graph backend.
+
+### T620. Enforce LSP request deadlines during blocking transport reads
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::request](src/plugins/graph/lsp.rs#L461). Its deadline is checked before `read_msg`, but that function performs blocking pipe reads without a deadline. A matching response returns immediately without checking the elapsed deadline. An isolated probe compiled the verbatim request/framing methods against a synthetic subprocess peer: with `ready()` set to 10 ms and the peer delaying its reply by 250 ms, the request still succeeded after 675 ms wall time. A peer that stays silent can leave the call blocked instead of reaching the documented fallback.
+
+[with_session](src/plugins/graph/lsp.rs#L544) holds the shared session mutex through the call; [capability::ask](src/plugins/graph/capability.rs#L197) invokes the server closure synchronously. T376 adds fallback after a returned error, but that does not enforce a deadline on an unread pipe.
+
+Execution plan:
+
+1. Add deterministic fake-peer regressions for no reply, a delayed reply, a partial header/body and intervening notifications. Assert bounded completion and timeout classification, with a timely-response control.
+2. Make framing reads deadline-aware using one transport owner and bounded cancellation. Include writes in the request budget so a peer that stops consuming input cannot bypass the same bound.
+3. On timeout, invalidate or safely resynchronize the session, release locks and reach the existing fallback path. Verify a later request and shutdown cannot be trapped behind the expired request or consume its late response.
+4. Run focused LSP transport, capability/fallback and shutdown tests, then `just check`.
+
+Check: an unresponsive peer cannot hold an LSP request beyond its configured budget plus a bounded cleanup allowance. Executed evidence used extracted production request/framing code, a synthetic peer and a 10 ms timeout shim; real language servers, the full capability dispatcher and silent-peer indefinite waiting were not executed.
+
+### T621. Refresh opened LSP documents after their files change
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::did_open](src/plugins/graph/lsp.rs#L511). The first query reads a file and sends `textDocument/didOpen` with version 1. Subsequent calls return immediately if the URI is already in `opened`, before reading the file again. [with_session](src/plugins/graph/lsp.rs#L544) reuses the same live server for the workspace; the module sends no document-change or close notification. Editing a file between queries therefore leaves the peer with the original open-document text.
+
+The isolated probe opened a temporary file containing `old_symbol`, changed it to `new_symbol`, and called the actual `did_open` implementation again. A synthetic protocol peer reported only one notification, still carrying `old_symbol`. This affects repeated queries in a resident MCP session; restarting a server happens to refresh the initial snapshot. T376's lifecycle/fallback work does not cover edits to an already opened document.
+
+Execution plan:
+
+1. Add a fake-peer test that opens, edits and re-queries one URI in the same session; assert the peer receives the new content before the query. Keep an unchanged-file control.
+2. Track each opened document's content/version and send the appropriate full-content change or close/reopen sequence when it changes, respecting the negotiated synchronization capability. Do not mark a document as synchronized before its notification succeeds.
+3. Cover consecutive edits, Unicode, deletion/read failure and session replacement; ensure query results and source ranges cannot silently refer to the old snapshot.
+4. Run focused document synchronization and repeated graph-query tests, then `just check`.
+
+Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
+
+### T622. Preserve non-text blocks when the pi extension compresses tool output
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [pi tool_result](plugins/pi/extensions/rtok.ts#L143). The handler joins only text blocks for `rtok filter`, then returns a replacement content array containing only the compressed text. A successful transformation of a text-plus-image result therefore drops the image; its bytes were never sent to the filter and cannot be recovered from that text's archive. The omp installer links the same package. T70.1 covers text replacement, not preservation of mixed content.
+
+A Vitest probe imported the actual extension with a synthetic registrar and mocked child-process transport. A text/image fixture returned only compressed text; unchanged-output and subprocess-failure controls returned no replacement.
+
+Execution plan:
+
+1. Add a mixed-content regression for text, image and other host-supported blocks, alongside text-only, unchanged and failure controls.
+2. Preserve every non-text block and its ordering when replacing text, or conservatively pass mixed content through until a lossless mapping is available. Do not claim that archiving only the joined text preserves the whole result.
+3. Cover multiple text blocks separated by images, empty text, unknown block types and the shared omp package path.
+4. Run extension/package parity tests and `just check`.
+
+Check: successful compression cannot remove or alter non-text tool-result blocks. Evidence used the actual extension under Vitest; no real pi/omp process or model was invoked.
+
+### T623. Correlate web replies across request timeouts and retries
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
+
+A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+
+Execution plan:
+
+1. Add deterministic timeout/retry tests for two requests with different selections; the late first reply must never resolve the second promise. Include same-project graph/diff and export/import variants sharing this queue.
+2. Add request identifiers to the client/server protocol and echo them in successful and failed answers. Match pending promises by identifier and operation; update generated types and protocol tests together.
+3. Ignore replies for expired requests, isolate reconnect generations and retain bounded pending-state cleanup. Verify timely requests, concurrent requests and connection closure.
+4. Run focused API/protocol and Doctor UI tests, then `just check`.
+
+Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
+
+### T624. Retain the trace ID in the OTel integration-check extractor
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [otel-check.sh](tools/otel-check.sh#L72). After `rg` matches a complete `"traceID":"<32 hex digits>"` field, `sed 's/.*"//;s/"$//'` greedily removes everything through the final quote. Even a valid trace therefore becomes an empty ID and the following check fails before trace validation. Running the exact pipeline on `0123456789abcdef0123456789abcdef` produced an empty result; the malformed-ID control was also empty. T53.4 introduced the check but does not cover this extraction defect.
+
+Execution plan:
+
+1. Add an offline fixture test proving that a valid Jaeger response yields the exact trace ID and a missing/invalid ID fails clearly.
+2. Parse the response structurally using an existing available JSON parser, and explicitly select a valid trace ID rather than depending on quote stripping or compact JSON formatting.
+3. Cover compact/pretty JSON, multiple traces, empty data and malformed responses; keep these checks independent of Docker.
+4. Run the extractor tests and `just check`; run the existing Docker-backed OTel check when that environment is available.
+
+Check: a valid returned trace can reach the existing trace-validation stage. Only the exact extraction pipeline was executed with synthetic JSON; the Docker/collector/Jaeger integration was not run.
+
+### T625. Preserve invalid Grok configuration when installing MCP
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Grok load](src/agents/grok/mod.rs#L295): a TOML parse error becomes a default empty document. When Claude MCP does not already cover Grok, [register_mcp](src/agents/grok/mod.rs#L209) inserts its server into that empty document and writes it over the existing configuration. An unrelated syntax error therefore discards the user's provider/settings text instead of stopping the edit.
+
+An isolated probe compiled the verbatim registration/loader functions with a temporary config path and the real agent SDK writer. A fixture containing a user provider followed by an unfinished array was replaced by an MCP-only document. The original bytes survived in the enabled backup; a valid-provider control retained its content. Configuration and Claude-coverage dependencies were shimmed, and no real host was started.
+
+Execution plan:
+
+1. Add a malformed-existing-TOML regression through the Grok registration path. Require an error and byte-for-byte preservation of the original file; retain missing-file and valid-file controls.
+2. Make loading distinguish a missing config from read/UTF-8/parse errors, propagating errors with the path instead of substituting an empty document. Reuse the existing strict TOML loader where its contract fits.
+3. Verify install/remove/compatibility checks cannot turn a read failure into an empty writable config; test backup-disabled operation, permission failures where supported and idempotent valid installs.
+4. Run focused Grok and host-config preservation tests, then `just check`.
+
+Check: an invalid existing Grok file is never replaced by generated configuration. The executed probe covered parsing, registration and the real SDK filesystem write with backups; real CLI dispatch and OS permission failures were not exercised.
+
+### T626. Match Aider proxy ownership by URL authority
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [is_ours_value](src/agents/aider/mod.rs#L149). Ownership accepts `localhost` or `127.0.0.1` anywhere in the value, plus the configured port anywhere with a non-digit boundary. [strip_ours](src/agents/aider/mod.rs#L213) consequently deletes an unrelated `openai-api-base: https://api.example/localhost:8790/v1` when the rtok port is 8790, even though the URL authority is `api.example`. The same predicate reports that endpoint as rtok-installed.
+
+An isolated Rust probe compiled the actual parser, predicate and remover: the foreign endpoint disappeared while an unrelated `model` line remained. A conventional foreign endpoint was kept and rtok's exact loopback endpoint was removed. T559 concerns quoted YAML keys, not URL ownership; the existing foreign-base-URL test does not cover loopback text outside the authority.
+
+Execution plan:
+
+1. Add ownership/removal regressions for loopback strings and port-like text in paths, queries, userinfo and foreign hostnames. Assert foreign configuration remains byte-for-byte unchanged.
+2. Parse the endpoint and compare its actual scheme, host and port against the supported rtok ownership contract. Preserve exact configured URL recognition and intentional loopback aliases; do not infer ownership from arbitrary substrings.
+3. Use the same predicate for installed-state detection and removal. Cover IPv6 loopback if supported, malformed URLs, port-prefix collisions and quoted YAML values without duplicating T559's parser work.
+4. Run focused Aider detection/removal tests and `just check`.
+
+Check: a foreign URL containing loopback-looking text outside its authority is neither reported as rtok's proxy nor removed. Executed evidence used extracted production parsing/removal code; full CLI file edits and real Aider were not run.
 
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 
