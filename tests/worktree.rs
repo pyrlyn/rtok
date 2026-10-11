@@ -1041,7 +1041,10 @@ fn remove_dry_run_previews_and_changes_nothing() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(text.contains(&done.display().to_string()), "{text}");
+    // Windows `canonicalize` returns the `\\?\` form; the preview prints the plain path.
+    let shown = done.display().to_string();
+    let shown = shown.trim_start_matches(r"\\?\");
+    assert!(text.contains(shown), "{text}");
     assert!(text.contains("files"), "{text}");
     assert!(text.contains("branch t-done: would be deleted"), "{text}");
     assert!(done.exists() && !run(&work, &["branch", "--list", "t-done"]).is_empty());
