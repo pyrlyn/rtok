@@ -32,8 +32,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T276.3 | todo | P2 | 4 | 0% | |
 | T276.5 | todo | P2 | 3 | 0% | |
 | T276.6 | todo | P2 | 3 | 0% | |
-| T277 | in progress | P2 | 5 | 55% | Claude Code / sonnet-5.5 |
-| T277.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
+| T277 | in progress | P2 | 5 | 60% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1512,15 +1511,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1; PR 3 done as T277.2 (seven hosts), Codex as T277.3. Next: PR 4, the unaffected hosts.
-
-### T277.3. Codex writes and removes the MCP entry through `rtok_mcp::ops`
-
-Split from T277.2: Codex was the one affected host left, because its entry carries `default_tools_approval_mode = "writes"`, which the user may change and the installer must keep, its install replaces a non-ours entry but only adds the approval key to ours, and its report line `+ [mcp_servers.rtok]` differs from the `mcp_servers.rtok: <cmd> <args>` line `ops` prints. Blocks T276.3.
-
-Execution plan: extend `rtok_mcp` with extra entry keys that keep a user-set value (no Codex special case in the crate); give Codex its `mcp_spec`; route install, update and remove through `agents::mcp::{install, remove}`; decide the report line deliberately (keep Codex's text through the spec, or update the asserting tests with a reason); add the Codex row to the table-driven `Vfs` test, including a user-changed approval value surviving an update; `just check`.
-
-Check: the Codex row passes the shared table-driven test; a user-set `default_tools_approval_mode` survives install and update; `rg "register_mcp|unregister_mcp" src/agents/codex` shows only thin wrappers into `agents::mcp`; `just check`.
+Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1; PR 3 done as T277.2 (seven hosts) and T277.3 (Codex). Next: PR 4, the unaffected hosts.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
