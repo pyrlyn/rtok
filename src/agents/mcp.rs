@@ -979,14 +979,17 @@ mod tests {
     }
 
     fn migrated() -> Vec<Migrated> {
-        use super::super::cursor;
+        use super::super::{copilot, cursor};
         let row = |spec, key, kind, tools| Migrated {
             spec,
             key,
             kind,
             tools,
         };
-        vec![row(cursor::mcp_spec, "mcpServers", Some("stdio"), false)]
+        vec![
+            row(cursor::mcp_spec, "mcpServers", Some("stdio"), false),
+            row(copilot::mcp_spec, "mcpServers", Some("local"), true),
+        ]
     }
 
     /// A config file with unrelated keys and a sibling server, as the host itself would hold it:

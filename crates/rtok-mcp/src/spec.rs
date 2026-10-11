@@ -45,6 +45,8 @@ pub enum DuplicateName {
 pub enum EntryShape {
     TypedCommand,
     Command,
+    /// Copilot CLI: `"type": "local"` and `"tools": ["*"]` (all of the server's tools).
+    LocalAllTools,
 }
 
 /// How a host starts the server when that is not the registry's bare `rtok mcp`. A desktop app
@@ -110,12 +112,21 @@ impl McpSpec {
     /// ([`crate::config`] owns that conversion, never a caller).
     pub fn entry(&self) -> Value {
         let mut m = serde_json::Map::new();
-        if self.entry_shape == EntryShape::TypedCommand {
-            m.insert("type".into(), json!("stdio"));
+        match self.entry_shape {
+            EntryShape::TypedCommand => {
+                m.insert("type".into(), json!("stdio"));
+            }
+            EntryShape::LocalAllTools => {
+                m.insert("type".into(), json!("local"));
+            }
+            EntryShape::Command => {}
         }
         let (command, args) = self.argv();
         m.insert("command".into(), json!(command));
         m.insert("args".into(), json!(args));
+        if self.entry_shape == EntryShape::LocalAllTools {
+            m.insert("tools".into(), json!(["*"]));
+        }
         if !self.server.env.is_empty() {
             let env: serde_json::Map<String, Value> = self
                 .server

@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rtok_agent_sdk::{Apply, NO_CHANGES, edit_json};
+use rtok_mcp::spec::{EntryShape, Format as McpFormat, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -220,27 +221,26 @@ fn remove_file(apply: &Apply, path: &Path) -> Result<String> {
     Ok(report)
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"type": "local", "command": cmd, "args": super::mcp_args("copilot"), "tools": ["*"]})
+/// Copilot's `mcpServers.rtok = {type: "local", command, args, tools: ["*"]}` in
+/// `mcp-config.json`, as `rtok_mcp` reads it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::host_spec(
+        "copilot",
+        mcp_path(cfg),
+        "mcpServers",
+        McpFormat::Json,
+        EntryShape::LocalAllTools,
+    )
 }
 
-/// `mcpServers.rtok = {type: "local", command, args, tools: ["*"]}` in `mcp-config.json`.
+/// Write the entry into `mcp-config.json`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &mcp_path(cfg),
-        "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "copilot"),
-    )
+    super::mcp::install(cfg, &mcp_spec(cfg))
 }
 
 /// Drop `mcpServers.rtok` from `mcp-config.json`, unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(cfg, &mcp_path(cfg), "mcpServers", NAME, &mcp_entry("rtok"))
+    super::mcp::remove(cfg, &mcp_spec(cfg))
 }
 
 const PLUGIN_SRC: &str = "plugins/copilot";
