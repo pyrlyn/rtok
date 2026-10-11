@@ -91,6 +91,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T537 | todo | P2 | 2 | 0% | |
 | T538 | todo | P2 | 2 | 0% | |
 | T539 | todo | P2 | 2 | 0% | |
+| T541 | todo | P1 | 2 | 0% | |
+| T542 | todo | P2 | 3 | 0% | |
+| T543 | todo | P2 | 2 | 0% | |
+| T544 | todo | P2 | 2 | 0% | |
+| T545 | todo | P2 | 3 | 0% | |
+| T546 | todo | P2 | 2 | 0% | |
 
 
 
@@ -215,6 +221,89 @@ Execution plan:
 3. Cover global, explicit-project and inferred-project creation plus revision; keep privacy stripping, embeddings and note history on the same write path.
 
 Check: global revisions stay global, unrelated project notes are untouched, ordinary creation still infers cwd, and `just check` passes.
+
+**Continued source audit (T540).** T541–T546 were confirmed against source at
+`efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
+case T541 first. T542/T543 concern index freshness; T544/T545 concern filtering
+and should share eligibility logic; T546 concerns the derived rank document.
+Completed T68.10/T35.5 and active T370 describe intended behavior, but do not
+track these concrete failure cases. These cards record defects, not implemented fixes.
+
+### T541. Reject disk task filename and frontmatter identity mismatches
+
+Source-confirmed: [disk scan/find](src/tasks/disk.rs#L81) accepts a valid task id in the filename without comparing it to the parsed frontmatter id. Lookup selects by filename, but [place/write](src/tasks/disk.rs#L116) chooses the destination using the frontmatter id and title, then deletes the original file. Create a valid `R2 - target.md`, then a manually copied `R1 - copy.md` whose frontmatter says `id: R2`, `title: target` and has a different body. Setting R1 to in-progress overwrites R2's file with the copied body and removes R1. A malformed identity must be rejected before any mutation. T441.4 shipped the adapter; it does not validate this consistency boundary.
+
+Execution plan:
+
+1. Add a two-file fixture with the mismatch above; assert get/list/status reject the inconsistent task and preserve both files byte-for-byte.
+2. Validate filename id against frontmatter id in the shared disk read path and return an error naming the offending path and ids before write/move operations.
+3. Cover mismatches in active and done directories, status changes and claim/save; retain valid renames, moves and case-normalized ids.
+
+Check: no operation on the malformed R1 overwrites R2 or removes either fixture; valid task lifecycle tests and `just check` pass. This reproduction is source-derived; an end-to-end regression remains part of the fix.
+
+### T542. Invalidate graph rows when an extension's grammar mapping changes
+
+Source-confirmed: [extractor_fingerprint](src/plugins/graph/index.rs#L417) hashes compiled queries and INDEX_VERSION but no configured extension map. [run_with](src/plugins/graph/index.rs#L111) therefore reuses old stats after changing `plugins.graph.extensions`; its stat gate skips unchanged files. Even touching the file reaches the [SHA gate](src/plugins/graph/index.rs#L346), which returns Same before consulting the new grammar. Index `sample.tpl` containing `fn old() {}` with `tpl = "rust"`, change only the mapping to `tpl = "py"`, then index again: the old Rust definition survives. T35.5 covers extractor upgrades; T68.10 added configurable mappings without including them in freshness.
+
+Execution plan:
+
+1. Add a fixture that changes the mapping after an initial index, with unchanged source bytes; exercise both unchanged and changed mtime.
+2. Include a deterministic representation of the effective extension-to-grammar mapping in index freshness and invalidate the affected cached rows before either skip gate. Reuse the same policy for full and incremental entry points.
+3. Verify equivalent map insertion orders do not rebuild, while mapping changes re-extract and remove obsolete symbols; retain warm-index skipping.
+
+Check: the mapped file's symbols match the current grammar after reindex without a source edit; unchanged configuration still skips; `just check` passes. Source-derived reproduction, not an executed integration test.
+
+### T543. Make stale-fingerprint dry runs predict the actual cold reindex
+
+Source-confirmed: [run_with](src/plugins/graph/index.rs#L113) clears stale symbol rows only when `!dry_run`, then reads the existing stats unconditionally. With an old stored fingerprint and unchanged indexed files, dry-run takes the stat skip gate and reports no new rows; an actual run clears those stats and parses the same files. This violates the dry-run's would-be indexing report independently of T542's missing configuration input.
+
+Execution plan:
+
+1. Seed an indexed fixture and a deliberately obsolete fingerprint. Snapshot the store, run dry-run, then run the actual index on the same fixture.
+2. When the fingerprint is stale, bypass old stat/SHA reuse for the simulated run without deleting rows or changing metadata.
+3. Compare predicted indexed/inserted counts with the real cold run and assert the dry-run left symbols, fingerprint, timestamps and rank unchanged; retain warm dry-run behavior.
+
+Check: stale-fingerprint dry-run predicts the real reindex and performs no writes; `just check` passes. Source-derived reproduction.
+
+### T544. Keep unrelated gitignored files excluded when graph include is nonempty
+
+Confirmed in source and an isolated Rust probe: [Matcher::new](src/plugins/graph/walk.rs#L27) adds the positive override `**` before any configured includes. Override whitelists take precedence over gitignore, so this revives every ignored file, not only the requested subtree. With `.gitignore` containing `wanted/` and `unwanted/`, and include containing only `wanted/`, the full walk returns both `wanted/a.rs` and `unwanted/a.rs`. This can index large ignored trees and pollute graph results. T68.10 intended selective inclusion, not disabling ignore rules globally.
+
+Validation: the offline probe compiled this revision's actual `walk.rs` with the real `ignore` crate, plus minimal configuration/extension-support stubs. It asserted both paths were returned. No repository index or live watcher was run.
+
+Execution plan:
+
+1. Add a real-repository fixture with two ignored subtrees, one explicit include and ordinary nonignored source.
+2. Replace the blanket whitelist with eligibility handling that preserves normal gitignore behavior while admitting explicit includes; share the override interpretation with T545.
+3. Cover no includes, nested patterns and include/exclude precedence without restricting ordinary supported source to the include list.
+
+Check: only the explicitly included ignored subtree returns, ordinary source remains eligible, unrelated ignored source stays out, and `just check` passes.
+
+### T545. Apply full-walk include and glob-exclude rules to watcher events
+
+Confirmed in source and an isolated Rust probe: [absorb_event](src/plugins/graph/watch.rs#L193) rejects gitignored paths before considering configured includes. Conversely, [Matcher::is_excluded](src/plugins/graph/walk.rs#L69) treats exclude patterns as literal prefixes, while the full walker interprets globs. Thus a file explicitly included from a gitignored subtree is indexed initially but its edits are ignored; a path matching `**/generated/**` is excluded from the full index but accepted as a watcher event and passed to incremental indexing. These are the event-path regressions of T68.10, distinct from T544's blanket full-walk whitelist.
+
+Validation: the same offline probe compiled verbatim `gitignore`, `git_path`, `relevant` and `absorb_event` functions alongside actual `walk.rs`. It asserted rejection of the explicitly included file and acceptance of the glob-excluded file. This tests event filtering, not OS notification delivery or a database update.
+
+Execution plan:
+
+1. Add paired full-walk/event fixtures for an included ignored file and a glob-excluded supported file.
+2. Reuse a consistent eligibility decision for walking, event intake and incremental indexing, with the same include/exclude precedence; preserve directory-rescan and .git exclusions.
+3. Exercise edit and deletion events: included paths refresh/remove their symbols, excluded paths never enter the index, and irrelevant files do not reset the quiet window.
+
+Check: full and incremental paths agree on eligibility for both fixtures, existing watcher debounce tests and `just check` pass.
+
+### T546. Refresh stored file ranks after deletion or zero-symbol replacement
+
+Source-confirmed: [run_changed](src/plugins/graph/index.rs#L238) removes deleted files' symbol rows but refreshes the derived rank document only when `report.inserted > 0` (line 290). Replacing the last definition with an empty file also reports zero inserted symbols: [replace_one](crates/rtok-store/src/symbols.rs#L234) deletes old symbols, writes a freshness sentinel and returns zero. [run_with](src/plugins/graph/index.rs#L192) has the same zero-symbol replacement gap: its later missing-file deletion count is zero because the path remains in the keep set. [rank::map/render](src/plugins/graph/rank.rs#L221) renders definitions from the stored document without checking current symbols or files. Index a sole `a.rs` defining `old`, then delete it via the incremental path or empty it and reindex: the map still lists `a.rs: old`. A later unchanged full scan does not repair the already-existing rank document. The symbols themselves are removed correctly; this is not T324's rejected stale-symbol candidate.
+
+Execution plan:
+
+1. Seed symbols and a rank document; separately test an incremental deletion and full/incremental replacement with zero extracted rows.
+2. Track whether index contents changed independently of the number of inserted rows, and refresh or invalidate the derived document after successful removals/replacements.
+3. Assert the rendered map and stored rank paths/definitions drop obsolete entries immediately; retain warm no-change behavior and the existing rank-rebuild failure fallback.
+
+Check: the map never serves the removed definition after a successful update, subsequent warm indexing stays consistent, and `just check` passes. Source-derived reproduction; no full index runtime was executed during the audit.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.

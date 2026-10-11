@@ -7,6 +7,12 @@
 - T537. Keep MCP pending calls when the server sends its own request
 - T538. Do not let skipped memory imports reserve unseen body hashes
 - T539. Preserve a global note's project scope when revising it
+- T541. Reject disk task filename and frontmatter identity mismatches
+- T542. Invalidate graph rows when an extension's grammar mapping changes
+- T543. Make stale-fingerprint dry runs predict the actual cold reindex
+- T544. Keep unrelated gitignored files excluded when graph include is nonempty
+- T545. Apply full-walk include and glob-exclude rules to watcher events
+- T546. Refresh stored file ranks after deletion or zero-symbol replacement
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
