@@ -118,6 +118,78 @@ impl ProgressParser for GitProgress {
     }
 }
 
+/// `cargo`'s own bar, `    Building [====>      ] 120/300: serde, rtok(bin)`: the crate count as the bar,
+/// the crates being built as the message. Cargo draws it only on a terminal, so a caller that
+/// pipes stderr sets [`CargoProgress::ENV`] on the child.
+pub struct CargoProgress;
+
+impl CargoProgress {
+    /// Makes cargo draw the bar into a pipe (`term.progress.when` and `.width`).
+    pub const ENV: [(&'static str, &'static str); 2] = [
+        ("CARGO_TERM_PROGRESS_WHEN", "always"),
+        ("CARGO_TERM_PROGRESS_WIDTH", "80"),
+    ];
+}
+
+impl ProgressParser for CargoProgress {
+    fn feed(&mut self, _: Stream, line: &str) -> Option<Update> {
+        let open = line.find('[')?;
+        let (bar, after) = line[open + 1..].split_once(']')?;
+        if !bar.chars().all(|c| matches!(c, '=' | '>' | ' ')) {
+            return None;
+        }
+        let (counts, crates) = after.split_once(':').unwrap_or((after, ""));
+        let (done, total) = counts.trim().split_once('/')?;
+        let total: u64 = total.trim().parse().ok().filter(|t| *t > 0)?;
+        let crates = crates.trim();
+        Some(Update {
+            pos: done.trim().parse().ok()?,
+            total: Some(total),
+            unit: Unit::Items,
+            msg: (!crates.is_empty()).then(|| crates.to_string()),
+        })
+    }
+}
+
+/// One JSON object per line, `{"progress":{"pos":3,"total":10,"unit":"items","msg":"x"}}`: how
+/// rtok's own child processes and plugin CLIs report. `total` and `msg` are optional, `unit` is
+/// `items` (the default), `bytes` or `percent`; any other line, or an unknown unit, is ignored.
+pub struct JsonLines;
+
+impl ProgressParser for JsonLines {
+    fn feed(&mut self, _: Stream, line: &str) -> Option<Update> {
+        let line = line.trim();
+        if !line.starts_with('{') {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        let p = value.get("progress")?;
+        let unit = match p.get("unit").and_then(|u| u.as_str()) {
+            None | Some("items") => Unit::Items,
+            Some("bytes") => Unit::Bytes,
+            Some("percent") => Unit::Percent,
+            Some(_) => return None,
+        };
+        Some(Update {
+            pos: p.get("pos")?.as_u64()?,
+            total: p.get("total").and_then(|t| t.as_u64()),
+            unit,
+            msg: p.get("msg").and_then(|m| m.as_str()).map(String::from),
+        })
+    }
+}
+
+/// A closure that reads lines like a [`ProgressParser`], for [`Progress::Callback`](super::Progress::Callback).
+pub type ProgressCallback = Box<dyn FnMut(Stream, &str) -> Option<Update> + Send>;
+
+pub(crate) struct Callback(pub(crate) ProgressCallback);
+
+impl ProgressParser for Callback {
+    fn feed(&mut self, stream: Stream, line: &str) -> Option<Update> {
+        (self.0)(stream, line)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,5 +276,78 @@ mod tests {
         lines.push(&vec![b'x'; LINE_CAP * 3], |_| {});
         lines.finish(&mut |l: &str| seen.push(l.len()));
         assert_eq!(seen, [LINE_CAP]);
+    }
+
+    #[test]
+    fn cargo_progress_reads_a_recorded_bar_line() {
+        // Recorded from cargo 1.98 with CARGO_TERM_PROGRESS_WHEN=always, then the same shape midway.
+        let start =
+            "    Building [                                                  ]  0/1: a(bin)       ";
+        let got = feed(&mut CargoProgress, start).unwrap();
+        assert_eq!(
+            (got.pos, got.total, got.unit, got.msg.as_deref()),
+            (0, Some(1), Unit::Items, Some("a(bin)"))
+        );
+        let mid = "    Building [=========>                     ] 120/300: serde, rtok(bin)";
+        let got = feed(&mut CargoProgress, mid).unwrap();
+        assert_eq!(
+            (got.pos, got.total, got.msg.as_deref()),
+            (120, Some(300), Some("serde, rtok(bin)"))
+        );
+        let bare = feed(&mut CargoProgress, "Fetching [===>  ] 3/9").unwrap();
+        assert_eq!((bare.pos, bare.total, bare.msg), (3, Some(9), None));
+    }
+
+    #[test]
+    fn cargo_progress_ignores_every_other_line() {
+        for line in [
+            "   Compiling serde v1.0.0",
+            "    Finished `dev` profile in 3.2s",
+            "warning: unused [x] 1/2",
+            "Building [==>] 0/0: none",
+            "Building [==>] x/9",
+            "",
+        ] {
+            assert_eq!(feed(&mut CargoProgress, line), None, "{line}");
+        }
+    }
+
+    #[test]
+    fn json_lines_reads_the_progress_object() {
+        let line = r#"{"progress":{"pos":3,"total":10,"unit":"bytes","msg":"x"}}"#;
+        assert_eq!(
+            feed(&mut JsonLines, line),
+            Some(Update {
+                pos: 3,
+                total: Some(10),
+                unit: Unit::Bytes,
+                msg: Some("x".into()),
+            })
+        );
+        let minimal = feed(&mut JsonLines, r#" {"progress":{"pos":1}} "#).unwrap();
+        assert_eq!(
+            (minimal.total, minimal.unit, minimal.msg),
+            (None, Unit::Items, None)
+        );
+        let pct = feed(
+            &mut JsonLines,
+            r#"{"progress":{"pos":5,"total":100,"unit":"percent"}}"#,
+        );
+        assert_eq!(pct.map(|u| u.unit), Some(Unit::Percent));
+    }
+
+    #[test]
+    fn json_lines_ignores_what_is_not_a_progress_object() {
+        for line in [
+            "plain text",
+            "{not json",
+            r#"{"other":1}"#,
+            r#"{"progress":{"total":3}}"#,
+            r#"{"progress":{"pos":-1}}"#,
+            r#"{"progress":{"pos":1,"unit":"furlongs"}}"#,
+            "[1,2]",
+        ] {
+            assert_eq!(feed(&mut JsonLines, line), None, "{line}");
+        }
     }
 }
