@@ -51,6 +51,7 @@
 - T594. Validate structured config types before persisting edits
 - T595. Keep commented-default discovery outside TOML string payloads
 - T597. Reject stale demon process identities before stopping services
+- T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
