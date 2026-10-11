@@ -4,7 +4,6 @@
 
 use super::util::print_json;
 use crate::config::Config;
-use crate::render::with_loader;
 use anyhow::{Result, bail};
 use clap::Subcommand;
 use std::path::PathBuf;
@@ -141,16 +140,14 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let cwd = std::env::current_dir()?;
-            let plan = with_loader("adding worktree", || {
-                crate::worktree::ops::add(
-                    &cfg,
-                    &cwd,
-                    &task,
-                    slug.as_deref(),
-                    owner,
-                    agent.as_deref(),
-                )
-            })?;
+            let plan = crate::worktree::ops::add(
+                &cfg,
+                &cwd,
+                &task,
+                slug.as_deref(),
+                owner,
+                agent.as_deref(),
+            )?;
             crate::agents::task_list::write_for(&cwd, &plan.path, &plan.task);
             println!("{}", plan.path.display());
 
@@ -199,9 +196,8 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             json,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
-            let done = with_loader("removing worktree", || {
-                crate::worktree::ops::remove(&cfg, &target, agent.as_deref(), owner, keep_branch)
-            })?;
+            let done =
+                crate::worktree::ops::remove(&cfg, &target, agent.as_deref(), owner, keep_branch)?;
             if json {
                 print_json(&done)?;
             } else {

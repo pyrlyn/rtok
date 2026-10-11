@@ -10,7 +10,6 @@
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
-- T276.1. `proc::ProgressRunner` core in `crates/rtok-sys`, first call sites in `worktree/git.rs`
 - T276.2. `Batch`, `Progress::Callback`, `CargoProgress`, `JsonLines`, Windows shim in `proc`
 - T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
 - T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
