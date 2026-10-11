@@ -7,11 +7,11 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -331,12 +331,48 @@ fn kind_name(k: u64) -> &'static str {
     }
 }
 
-fn write_msg(w: &mut impl Write, v: &Value) -> Result<()> {
+fn frame(v: &Value) -> Result<Vec<u8>> {
     let body = serde_json::to_vec(v)?;
-    write!(w, "Content-Length: {}\r\n\r\n", body.len())?;
-    w.write_all(&body)?;
-    w.flush()?;
-    Ok(())
+    let mut out = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+    out.extend_from_slice(&body);
+    Ok(out)
+}
+
+/// A frame for the writer thread and the channel on which it reports the write.
+type Outgoing = (Vec<u8>, mpsc::Sender<std::io::Result<()>>);
+
+/// Pipe reads and writes block with no deadline, so each end belongs to a thread of its own
+/// and the session only waits on channels (T620). A timeout kills the server, which closes
+/// both pipes and ends the threads; they never outlive the session by more than that.
+fn spawn_writer(mut w: impl Write + Send + 'static) -> mpsc::Sender<Outgoing> {
+    let (tx, rx) = mpsc::channel::<Outgoing>();
+    std::thread::spawn(move || {
+        for (bytes, done) in rx {
+            let r = w.write_all(&bytes).and_then(|()| w.flush());
+            let failed = r.is_err();
+            let _ = done.send(r);
+            if failed {
+                break;
+            }
+        }
+    });
+    tx
+}
+
+/// Bounded so a chatty server blocks on a full channel the way it blocked on a full pipe.
+fn spawn_reader(r: impl Read + Send + 'static) -> mpsc::Receiver<Result<Value>> {
+    let (tx, rx) = mpsc::sync_channel(256);
+    std::thread::spawn(move || {
+        let mut r = BufReader::new(r);
+        loop {
+            let m = read_msg(&mut r);
+            let failed = m.is_err();
+            if tx.send(m).is_err() || failed {
+                break;
+            }
+        }
+    });
+    rx
 }
 
 fn read_msg(r: &mut impl BufRead) -> Result<Value> {
@@ -364,16 +400,60 @@ fn read_msg(r: &mut impl BufRead) -> Result<Value> {
 }
 
 struct Session {
-    child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    child: Option<Child>,
+    /// Frames for the writer thread; see [`spawn_writer`].
+    out: mpsc::Sender<Outgoing>,
+    /// Messages from the reader thread; see [`spawn_reader`].
+    inbox: mpsc::Receiver<Result<Value>>,
     next_id: i64,
     root: PathBuf,
     opened: HashSet<String>,
+    broken: bool,
     err_path: PathBuf,
+    /// Overrides the configured wait cap; tests use it so they never touch the process-wide cell.
+    limit: Option<Duration>,
 }
 
 impl Session {
+    fn attach(
+        stdin: impl Write + Send + 'static,
+        stdout: impl Read + Send + 'static,
+        child: Option<Child>,
+        root: PathBuf,
+        err_path: PathBuf,
+    ) -> Self {
+        Self {
+            child,
+            out: spawn_writer(stdin),
+            inbox: spawn_reader(stdout),
+            next_id: 1,
+            root,
+            opened: HashSet::new(),
+            broken: false,
+            err_path,
+            limit: None,
+        }
+    }
+
+    /// False once the server exited or a request expired: the cached session is then replaced,
+    /// so a late reply to an abandoned request can never be read by a later one.
+    fn usable(&mut self) -> bool {
+        !self.broken
+            && self
+                .child
+                .as_mut()
+                .is_none_or(|c| c.try_wait().ok().flatten().is_none())
+    }
+
+    /// Give up on this server after a missed deadline. Killing it ends its pipes, which
+    /// unblocks the transport threads; `Drop` reaps it.
+    fn expire(&mut self) {
+        self.broken = true;
+        if let Some(c) = self.child.as_mut() {
+            let _ = c.kill();
+        }
+    }
+
     fn spawn(root: &Path) -> Result<Self> {
         let (bin, args) = pick(root)?;
         if !on_path(bin) {
@@ -401,16 +481,9 @@ impl Session {
             .spawn()
             .with_context(|| format!("spawn {} ({bin})", path.display()))?;
         let stdin = child.stdin.take().context("lsp stdin")?;
-        let stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
-        let mut s = Self {
-            child,
-            stdin,
-            stdout,
-            next_id: 1,
-            root: dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
-            opened: HashSet::new(),
-            err_path,
-        };
+        let stdout = child.stdout.take().context("lsp stdout")?;
+        let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        let mut s = Self::attach(stdin, stdout, Some(child), root, err_path);
         let uri = file_uri(&s.root);
         if let Err(e) = s.request(
             "initialize",
@@ -439,8 +512,15 @@ impl Session {
         Ok(s)
     }
 
+    fn budget(&self) -> Duration {
+        self.limit.unwrap_or_else(ready)
+    }
+
     fn dead(&mut self, e: anyhow::Error) -> anyhow::Error {
-        let st = self.child.try_wait().ok().flatten();
+        let st = self
+            .child
+            .as_mut()
+            .and_then(|c| c.try_wait().ok().flatten());
         let err = std::fs::read_to_string(&self.err_path).unwrap_or_default();
         let err = err.trim();
         match (st, err.is_empty()) {
@@ -451,31 +531,67 @@ impl Session {
         }
     }
 
+    /// Queue one message and wait for the writer thread to hand it to the pipe, within
+    /// `deadline`. A peer that stopped reading stalls the writer, not the caller.
+    fn send(&mut self, v: &Value, deadline: Instant, what: &str) -> Result<()> {
+        if self.broken {
+            bail!("lsp: session expired");
+        }
+        let (done_tx, done_rx) = mpsc::channel();
+        if self.out.send((frame(v)?, done_tx)).is_err() {
+            return Err(self.dead(anyhow::anyhow!("lsp: writer closed")));
+        }
+        match done_rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(self.dead(e.into())),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                self.expire();
+                bail!("lsp: timeout writing {what}")
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err(self.dead(anyhow::anyhow!("lsp: writer closed")))
+            }
+        }
+    }
+
     fn notify(&mut self, method: &str, params: Value) -> Result<()> {
-        write_msg(
-            &mut self.stdin,
+        let deadline = Instant::now() + self.budget();
+        self.send(
             &json!({"jsonrpc":"2.0","method": method, "params": params}),
+            deadline,
+            method,
         )
     }
 
+    /// One budget covers the write and the wait for the matching reply (T620).
     fn request(&mut self, method: &str, params: Value) -> Result<Value> {
+        let deadline = Instant::now() + self.budget();
         let id = json!(self.next_id);
         self.next_id += 1;
-        write_msg(
-            &mut self.stdin,
+        self.send(
             &json!({"jsonrpc":"2.0","id": id, "method": method, "params": params}),
+            deadline,
+            method,
         )?;
-        let deadline = Instant::now() + ready();
         loop {
-            if Instant::now() > deadline {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                self.expire();
                 bail!("lsp: timeout waiting for {method}");
             }
-            let msg = match read_msg(&mut self.stdout) {
-                Ok(m) => m,
-                Err(e) => return Err(self.dead(e)),
+            let msg = match self.inbox.recv_timeout(left) {
+                Ok(Ok(m)) => m,
+                Ok(Err(e)) => return Err(self.dead(e)),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.expire();
+                    bail!("lsp: timeout waiting for {method}");
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(self.dead(anyhow::anyhow!("lsp: eof")));
+                }
             };
             if msg.get("method").is_some() && msg.get("id").is_some_and(|i| !i.is_null()) {
-                self.reply_server(&msg)?;
+                self.reply_server(&msg, deadline)?;
                 continue;
             }
             if msg.get("id") == Some(&id) {
@@ -487,7 +603,7 @@ impl Session {
         }
     }
 
-    fn reply_server(&mut self, msg: &Value) -> Result<()> {
+    fn reply_server(&mut self, msg: &Value, deadline: Instant) -> Result<()> {
         let id = &msg["id"];
         let result = match msg["method"].as_str().unwrap_or("") {
             "workspace/configuration" => {
@@ -502,9 +618,10 @@ impl Session {
             }
             _ => json!(null),
         };
-        write_msg(
-            &mut self.stdin,
+        self.send(
             &json!({"jsonrpc":"2.0","id": id, "result": result}),
+            deadline,
+            "a server request",
         )
     }
 
@@ -530,9 +647,15 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        let _ = write_msg(&mut self.stdin, &json!({"jsonrpc":"2.0","method":"exit"}));
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        // Queued, not awaited: the writer may be stuck on a peer that stopped reading, and
+        // the kill below is what ends it.
+        if let Ok(bytes) = frame(&json!({"jsonrpc":"2.0","method":"exit"})) {
+            let _ = self.out.send((bytes, mpsc::channel().0));
+        }
+        if let Some(c) = self.child.as_mut() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
         let _ = std::fs::remove_file(&self.err_path);
     }
 }
@@ -545,7 +668,7 @@ fn with_session<T>(root: &Path, f: impl FnOnce(&mut Session) -> Result<T>) -> Re
     let key = super::index::canon(root);
     let mut g = SESSION.lock().unwrap_or_else(PoisonError::into_inner);
     let restart = match g.as_mut() {
-        Some((k, s)) if *k == key => s.child.try_wait().ok().flatten().is_some(),
+        Some((k, s)) if *k == key => !s.usable(),
         _ => true,
     };
     if restart {
@@ -1100,6 +1223,9 @@ pub(crate) fn outline(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
 }
 
 #[cfg(all(test, unix))]
+mod transport_tests;
+
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -1148,15 +1274,13 @@ mod tests {
         let pid = child.id().to_string();
         let err_path = std::env::temp_dir().join(format!("rtok-lsp-test-{pid}.stderr"));
         std::fs::write(&err_path, "").unwrap();
-        let s = Session {
-            stdin: child.stdin.take().unwrap(),
-            stdout: BufReader::new(child.stdout.take().unwrap()),
-            child,
-            next_id: 1,
-            root: PathBuf::new(),
-            opened: HashSet::new(),
-            err_path: err_path.clone(),
-        };
+        let s = Session::attach(
+            child.stdin.take().unwrap(),
+            child.stdout.take().unwrap(),
+            Some(child),
+            PathBuf::new(),
+            err_path.clone(),
+        );
         *SESSION.lock().unwrap_or_else(|e| e.into_inner()) = Some(("test".into(), s));
         shutdown();
         let alive = Command::new("kill").args(["-0", &pid]).status().unwrap();
