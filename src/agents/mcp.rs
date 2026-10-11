@@ -215,6 +215,7 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
         "claude" => (cfg.doctor.claude_json.clone(), SERVERS),
         "cline" if desktop => (cline::ext_mcp_path(cfg), SERVERS),
         "cline" => (s.cline.mcp_path.clone(), SERVERS),
+        "codebuddy" => (super::codebuddy::mcp_path(cfg, kind), SERVERS),
         "codewhale" => (codewhale::mcp_path(cfg), SERVERS),
         "codex" => (s.codex.config_path.clone(), "mcp_servers"),
         "copilot" => (copilot::mcp_path(cfg), SERVERS),

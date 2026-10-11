@@ -153,6 +153,24 @@ pub(super) struct HookForm {
     pub is_ours: fn(&str, &str) -> bool,
 }
 
+/// [`command`] for a host that names itself: `hook <event> --host <host>` (Devin T89, CodeBuddy
+/// T560.2), resolved at run time like Claude's on POSIX.
+pub(super) fn command_for(host: &str, bin: &str, event: &str) -> String {
+    if cfg!(windows) || bin != "rtok" {
+        return format!("{bin} hook {event} --host {host}");
+    }
+    super::hook_resolver(&format!("hook {event} --host {host}"), None)
+}
+
+/// [`is_ours`] for [`command_for`]'s spelling.
+pub(super) fn is_ours_for(host: &str, cmd: &str, event: &str) -> bool {
+    let suffix = format!(" hook {event} --host {host}");
+    if let Some(bin) = cmd.strip_suffix(&suffix) {
+        return super::is_rtok_bin(super::unquote_bin(bin));
+    }
+    cmd.contains(&format!("exec rtok hook {event} --host {host};"))
+}
+
 /// Claude's own spelling, which Codex and ZCode share.
 const CLAUDE_FORM: HookForm = HookForm { command, is_ours };
 
