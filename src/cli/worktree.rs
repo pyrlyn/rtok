@@ -73,6 +73,9 @@ pub(super) enum WorktreeCmd {
         /// Remove an unmerged worktree too and keep its branch (a merged branch is kept as well)
         #[arg(long)]
         keep_branch: bool,
+        /// Show the path, branch, size and file count that would go; remove nothing
+        #[arg(long)]
+        dry_run: bool,
         /// JSON instead of the text line
         #[arg(long)]
         json: bool,
@@ -94,6 +97,12 @@ pub(super) enum WorktreeCmd {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
         yes: bool,
+        /// Say the dry run out loud: print what would go and change nothing (the default)
+        #[arg(long, conflicts_with = "yes")]
+        dry_run: bool,
+        /// The same preview as the dry run: a removal's line already is its stat
+        #[arg(long)]
+        stat: bool,
         /// Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`
         #[arg(long)]
         owner: Option<String>,
@@ -117,6 +126,12 @@ pub(super) enum WorktreeCmd {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
         yes: bool,
+        /// Say the dry run out loud: print what would go and change nothing (the default)
+        #[arg(long, conflicts_with = "yes")]
+        dry_run: bool,
+        /// The same preview as the dry run: a removal's line already is its stat
+        #[arg(long)]
+        stat: bool,
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
@@ -193,13 +208,22 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             agent,
             owner,
             keep_branch,
+            dry_run,
             json,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
-            let done =
-                crate::worktree::ops::remove(&cfg, &target, agent.as_deref(), owner, keep_branch)?;
+            let done = crate::worktree::ops::remove(
+                &cfg,
+                &target,
+                agent.as_deref(),
+                owner,
+                keep_branch,
+                dry_run,
+            )?;
             if json {
                 print_json(&done)?;
+            } else if dry_run {
+                print!("{}", done.preview_text());
             } else {
                 println!("{}: {}", done.path, done.note);
             }
@@ -233,6 +257,8 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
         }
         WorktreeCmd::Gc {
             yes,
+            dry_run: _,
+            stat: _,
             owner,
             idle,
             stale_lock,
@@ -268,6 +294,8 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             paths,
             idle,
             yes,
+            dry_run: _,
+            stat: _,
             json,
         } => {
             use crate::worktree::clean;

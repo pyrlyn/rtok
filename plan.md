@@ -40,10 +40,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.50 | todo | P3 | 3 | 0% | |
-| T329.51 | todo | P3 | 2 | 0% | |
-| T329.52 | todo | P3 | 2 | 0% | |
-| T329.53 | todo | P3 | 2 | 0% | |
-| T500 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -55,7 +51,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T404 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -73,10 +68,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | todo | P3 | 1 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
-| T416.1 | todo | P1 | 2 | 0% | |
-| T416.2 | todo | P1 | 3 | 0% | |
-| T416.3 | todo | P2 | 3 | 0% | |
-| T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
@@ -109,6 +100,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T558 | todo | P2 | 2 | 0% | |
 | T559 | todo | P2 | 2 | 0% | |
 | T560 | todo | P3 | 2 | 0% | |
+| T561 | todo | P3 | 3 | 0% | |
 | T562 | todo | P1 | 2 | 0% | |
 | T563 | todo | P2 | 2 | 0% | |
 | T564 | todo | P2 | 2 | 0% | |
@@ -1662,7 +1654,6 @@ Execution plan:
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 Progress (2026-09-28): PRs 1-4 merged (docs: #465, today's behaviour). Open against this card, for the creator: the installed copy's `.rtok-plugin-version` is never read or written (`read_installed` and `VersionFile::write` are unused), so there is no legacy line from it; a missing `claude` on `PATH` prints "already current"; the dry-run reinstall wording differs from step 5; `--source local` fails from a release install; the marketplace source does not read the catalog. Only Claude is wired; Codex, Copilot and Gemini follow.
 
-
 ### T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 
 Creator request 2026-09-27 (T281–T290, D34): every agent working through rtok gets one rtok agent id, visible to the user in the terminal and to the agent over MCP. Hooks see the host's session id (`research.md` §26), but `rtok mcp` is started by the host with only `["mcp"]` and its cwd (`src/mcp.rs:592`, host from `[hook] host`); nothing today tells the MCP process which session it serves. Without that link an agent's MCP calls (`whoami`, `worktree_add`, `agent_send`) cannot be attributed to its agent id. No product code in this task.
@@ -2016,45 +2007,17 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-
 ### T329.50. Graph page: running labels with elapsed counters on the live canvas
 
 Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
 
 Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.51. Graph page: maximise buttons for the two parts
-
-Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
-
-Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
-
-### T329.52. Graph page: metrics collapsed to a strip under 900 px
-
-Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
-
-Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
-
-### T329.53. Graph page: count-up animation of the live numbers
-
-Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
-
-Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
-
-### T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
-
-D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
-
-Depends on the T329.32 slice (done): the series is `CallsStore::spark(window, now)` in `src/web/calls_store.rs` (a `Spark { span_ms, calls, saved }` of `SPARK_SLOTS` = 30 slots, oldest first; "since open" covers the last 15 minutes, all the buckets keep). The page names the sparklines "calls over the last N min" and "tokens saved over the last N min" (N = `span_ms` in minutes) and puts them on its "calls" and "saved" cards. The "outside scope" mark is the text `outside scope` beside the project of a feed row whose project is not among the scope's project names; the scope is the project the page is drilled into, else the selected one, plus everything its links reach, and with no such project nothing is outside; a call with no project is never outside (the page's rule is `web/src/pages/graph3d/live/scope.ts`; the TUI needs its Rust equivalent over the registry rows, reusing `scopeOf` logic if one exists in Rust). The folded counter applies only in the one-project view when the cap left nodes out (`more` > 0): a call of the last 5 minutes (running or finished, not interrupted, in scope) whose target matches no drawn node counts on the drawn node whose path equals or is a directory prefix of the target (longest first), else on the "+N more" group; the page lists these as `{label} · {n} folded` under "folded calls". `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records the gap: it asserts the TUI pane lacks the wording, so T500 must turn it into a both-surface check.
-
-Check: the sparklines match the store buckets; an outside-scope call is marked; folded targets count on their nearest visible ancestor; `tests/surface_parity.rs` lists each item on both surfaces; `just check`.
-
 ### T521. MiMo Desktop variant of the `mimo` host
 
 Split from T520. No documented config path for MiMo Desktop (early access); a third-party README (https://github.com/akaradje/mimo-desktop, unverified) says Desktop reads `~/.config/mimocode/mimocode.jsonc`. Waits for the creator's run of the read-only probe `scratchpad/mimo-desktop-probe/run.sh`; done = a Desktop variant (detection plus the same config family or its own) with tests.
 
 Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
-
 
 ### T356. Never index `$HOME` or `/` as a graph root
 
@@ -2167,14 +2130,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T404. Evaluate a local draft model that the cloud model only verifies
-
-Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
-
-Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
-
-Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
 
 ### T413. More agent hosts: popular agents rtok does not install into yet
 
@@ -2308,7 +2263,6 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
-
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -2318,30 +2272,6 @@ The crate renders two kinds of change. A file edit (path, before, after) is a un
 Plan: in `packages/crates` (branch `t1-change-preview`), add the crate's project files (`AGENTS.md`, `plan.md`, `todo.md`, `done.md`, `roadmap.md`, `ideas.md`, `toolchain.md`) and the crate as a workspace member, with unit tests for both modes, the totals and the colour switch; `bump.yml` gains a `package` choice and `release.yml` reads the crate from the tag, so the pipeline that releases `file-backup` releases this crate too; one PR there; then `bump.yml -f package=change-preview` publishes it. The crates.io token must allow publishing the new crate name.
 
 Check: `cargo test` and `cargo clippy -- -D warnings` green in `packages/crates`; the crate is on crates.io.
-
-### T416.1. rtok renders previews through `change-preview`
-
-Replace `render::unified_diff`, `render::file_diff`, `render::paint` and `info::human_bytes` with the crate (call sites: `config/mod.rs`, `config/validate.rs`, `plugins/memory/sync.rs`, `plugins/read/cache.rs`, `doctor/fix.rs`, `agents/mod.rs`, `agents/junk.rs`, `worktree/list.rs`, `worktree/clean.rs`). No output changes: the trycmd and installer tests stay byte-identical. Drop `similar` from `Cargo.toml` if nothing else uses it.
-
-Check: `just check` green with no expected-output file touched.
-
-### T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
-
-`worktree clean`, `worktree gc` and `agents junk clear` keep dry run as the default and gain `--dry-run` (the same thing, said explicitly; conflicts with `--yes`) and `--stat`. Both modes print one `- path  size  N files` line per path plus the totals line, because a removal's line already is its stat; `--stat` is accepted so every preview command takes the same flags. `junk::disk_usage_until` counts files next to bytes; `--json` gains `files`.
-
-Check: trycmd cases for each command in default, `--stat`, `--dry-run --yes` (rejected) and `--json`; `just check` green.
-
-### T416.3. `--stat` on the commands that show a diff
-
-`config init`, `config set`, `memory sync`, `agents install`, `agents uninstall`, `agents update` and `doctor --fix` gain `--stat`: the per-file stat lines and the totals line instead of the diff. The default `--dry-run` diff ends with the same totals line.
-
-Check: trycmd cases for `--dry-run` and `--dry-run --stat` on `config set` and one installer; `surface_parity` and `config_coverage` green; `just check` green.
-
-### T416.4. `--dry-run` for the destructive commands without a preview
-
-`worktree remove` (the worktree path, its branch and its size and file count), `completions install` and `completions uninstall` (the file diff), `graph projects remove` and `graph projects unlink` (the rows that would go). Out of scope, because they are easy to undo or change no files: `memory pin/unpin/retire/revise`, `agents send/status`, `graph projects add/select/link`, `demon *`, `otel flush`.
-
-Check: a test per command that the dry run changes nothing and prints the preview; `just check` green.
 
 ### T428. SessionStart hook back under the 10 ms budget
 
@@ -2562,3 +2492,9 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
+
+### T561. TUI: folded-target counter in a one-project view
+
+Left over from T500. `CallsStore::folded_counters(drawn, more, scope, now)` and the pane's "folded calls" lines (`{label} · {n} folded`) exist, but the TUI has no one-project drill view, so nothing fills `LiveCalls.drawn`/`more` and the counter never shows. Give the TUI a one-project view that supplies the drawn nodes and `more`, then wire it in and drop the `#[cfg(test)]` `set_drawn`.
+
+Check: in the one-project view the pane lists folded targets on their nearest drawn ancestor, else on the "+N more" group; TUI test; `tests/surface_parity.rs`; `just check`.

@@ -347,7 +347,7 @@ impl Report {
         if let Some(bytes) = self.junk_bytes {
             out.push_str(&format!(
                 "junk\n  reclaimable: {}",
-                crate::bytes::human_bytes(bytes)
+                change_preview::human_bytes(bytes)
             ));
             if bytes > JUNK_HINT_BYTES {
                 out.push_str(" (run `rtok agents junk list`)");
