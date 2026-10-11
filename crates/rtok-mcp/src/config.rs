@@ -136,7 +136,7 @@ pub fn add_missing_keys(fs: &mut impl Fs, spec: &McpSpec) -> Result<Vec<(&'stati
 pub fn toml_lines(entry: &Value) -> String {
     let mut doc = toml_edit::DocumentMut::new();
     if let Some(m) = entry.as_object() {
-        for (k, v) in m {
+        for (k, v) in toml_key_order(m) {
             doc[k.as_str()] = toml_edit::Item::Value(json_to_toml_value(v));
         }
     }
@@ -463,13 +463,25 @@ fn toml_value_to_json(v: &toml_edit::Value) -> Value {
     }
 }
 
+/// An entry's keys as a TOML table lists them: `command`, `args`, then the rest in the map's
+/// own (sorted) order. Spelled out because the map's order is not ours to rely on: a
+/// `preserve_order` anywhere in the dependency graph would silently change what every host's
+/// file looks like (and every other `--json` output), so no feature may be needed for this.
+fn toml_key_order(m: &serde_json::Map<String, Value>) -> impl Iterator<Item = (&String, &Value)> {
+    let first = ["command", "args"];
+    first
+        .into_iter()
+        .filter_map(|k| m.get_key_value(k))
+        .chain(m.iter().filter(move |(k, _)| !first.contains(&k.as_str())))
+}
+
 /// The entry itself as a standard table (`[mcp_servers.rtok]`, the shape Codex and Grok write
 /// today), not an inline `rtok = { … }`; values inside it stay inline.
 fn json_to_toml_item(v: &Value) -> toml_edit::Item {
     match v {
         Value::Object(m) => {
             let mut t = toml_edit::Table::new();
-            for (k, x) in m {
+            for (k, x) in toml_key_order(m) {
                 t.insert(k, toml_edit::Item::Value(json_to_toml_value(x)));
             }
             toml_edit::Item::Table(t)
@@ -584,6 +596,35 @@ mod tests {
             user_keys: Vec::new(),
             report: crate::spec::ReportStyle::default(),
         }
+    }
+
+    /// The `[mcp_servers.rtok]` table is written `command`, `args`, then the rest, whatever
+    /// order the entry's map iterates in (serde_json maps are sorted: `args` would come first);
+    /// the user's comments and unrelated tables stay byte for byte.
+    #[test]
+    fn a_toml_entry_is_written_command_then_args_then_the_rest() {
+        let mut s = spec(Format::Toml);
+        s.key_path = McpSpec::key_path("mcp_servers");
+        let entry = json!({
+            "command": "rtok",
+            "args": ["mcp", "--host", "codex"],
+            "default_tools_approval_mode": "writes",
+        });
+        let mut fs = MemFs::default();
+        let mine = "# mine\nmodel = \"x\" # keep\n\n[mcp_servers.other]\ncommand = \"x\"\n";
+        fs.0.insert(PathBuf::from("/cfg"), mine.as_bytes().to_vec());
+        write_entry(&mut fs, &s, &entry).unwrap();
+        let want = format!(
+            "{mine}\n[mcp_servers.rtok]\ncommand = \"rtok\"\nargs = [\"mcp\", \"--host\", \"codex\"]\ndefault_tools_approval_mode = \"writes\"\n"
+        );
+        assert_eq!(
+            String::from_utf8(fs.0[&PathBuf::from("/cfg")].clone()).unwrap(),
+            want
+        );
+        assert_eq!(
+            toml_lines(&entry),
+            "command = \"rtok\"\nargs = [\"mcp\", \"--host\", \"codex\"]\ndefault_tools_approval_mode = \"writes\""
+        );
     }
 
     /// T328: a root or servers table of the wrong type is an error that leaves the file

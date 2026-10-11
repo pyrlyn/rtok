@@ -12,9 +12,7 @@ license = "MIT"
 anyhow = { workspace = true }
 # `runs_bin`: the one "does this entry run rtok" walk, instead of a second copy here (T463).
 rtok-agent-sdk = { version = "0.0.1", path = "../rtok-agent-sdk" }
-# `preserve_order`: an entry is written key by key in `McpSpec::entry`'s order (`command`, then
-# `args`), which a sorted map would turn into alphabetical in this crate's own build.
-serde_json = { workspace = true, features = ["preserve_order"] }
+serde_json = { workspace = true }
 # `cst`: lossless edit (comments, formatting) of a JSONC document; `serde_json`: read a CST
 # node back out as a `serde_json::Value` to compare against the entry rtok wants (T277 config.rs).
 jsonc-parser = { workspace = true, features = ["cst", "serde_json"] }
