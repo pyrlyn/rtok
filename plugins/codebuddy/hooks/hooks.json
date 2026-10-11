@@ -1,0 +1,61 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PreToolUse --host codebuddy; exec \"${CODEBUDDY_PLUGIN_ROOT}/scripts/hook.sh\" PreToolUse",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PostToolUse --host codebuddy; exec \"${CODEBUDDY_PLUGIN_ROOT}/scripts/hook.sh\" PostToolUse",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook SessionStart --host codebuddy; exec \"${CODEBUDDY_PLUGIN_ROOT}/scripts/hook.sh\" SessionStart",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook UserPromptSubmit --host codebuddy; exec \"${CODEBUDDY_PLUGIN_ROOT}/scripts/hook.sh\" UserPromptSubmit",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook Stop --host codebuddy; exec \"${CODEBUDDY_PLUGIN_ROOT}/scripts/hook.sh\" Stop",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

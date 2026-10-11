@@ -1,0 +1,41 @@
+# rtok CodeBuddy Code / WorkBuddy plugin
+
+One plugin tree for both Tencent hosts: CodeBuddy Code (CLI) and WorkBuddy (desktop), which embeds
+the same plugin system. Part of the [host plugin packages](../README.md); the installer
+(`rtok agents install codebuddy`) is the follow-up task T560.2, so for now install by hand:
+
+```bash
+codebuddy plugin marketplace add <path to this directory> --name rtok
+codebuddy plugin install rtok@rtok -s user
+```
+
+Remove with `codebuddy plugin uninstall rtok@rtok -y`.
+
+Files:
+
+- `.codebuddy-plugin/plugin.json` — manifest (`name` `rtok`). CodeBuddy reads `.codebuddy-plugin/`
+  before `.workbuddy-plugin/` and `.claude-plugin/`, so this one directory serves both hosts.
+- `.codebuddy-plugin/marketplace.json` — this directory's own one-plugin marketplace (`rtok`,
+  plugin `rtok`, source `./`).
+- `hooks/hooks.json` — `rtok hook <Event> --host codebuddy`, `timeout` 5 s: PreToolUse
+  (`Bash|Read|Edit|Write|Grep|Glob`), PostToolUse, SessionStart, UserPromptSubmit, Stop. The
+  command execs `rtok` from PATH and falls back to `scripts/hook.sh` only when PATH has none.
+- `scripts/hook.sh` — resolves `rtok` from PATH or the ketch store; a missing `rtok` fails the hook
+  open (exit 0), printing `ketch install pyrlyn/rtok` once on SessionStart.
+- `.mcp.json` — `mcpServers.rtok` → `rtok mcp --host codebuddy`.
+- `.rtok-plugin-version` — the version stamp `tools/plugin-versions.sh` keeps equal to `Cargo.toml`.
+
+`--host codebuddy` changes only the output: stdin is Claude's shape, but CodeBuddy's PreToolUse
+reads a rewrite from `hookSpecificOutput.modifiedInput` where Claude says `updatedInput`
+(`codebuddy_output` in `src/hooks/mod.rs`). Decisions and `additionalContext` pass through.
+
+`${CODEBUDDY_PLUGIN_ROOT}` is the plugin's cache directory; `scripts/hook.sh` is POSIX shell, so
+on Windows it needs Git Bash on PATH.
+
+## Docs
+
+- Plugins (layout, manifest directories, `${CODEBUDDY_PLUGIN_ROOT}`): https://www.codebuddy.ai/docs/cli/plugins-reference
+- Marketplaces (`marketplace.json`, `codebuddy plugin marketplace add`): https://www.codebuddy.ai/docs/cli/plugin-marketplaces
+- Hooks (events, stdin, `hookSpecificOutput.modifiedInput`): https://www.codebuddy.ai/docs/cli/hooks
+- MCP (`.mcp.json`, `mcpServers`): https://www.codebuddy.ai/docs/cli/mcp
+- WorkBuddy documents no plugin or hook surface of its own (https://www.codebuddy.ai/docs/workbuddy/Changelog, checked 2026-10-11).
