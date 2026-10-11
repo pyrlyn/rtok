@@ -28,3 +28,6 @@ windows-sys = { version = "0.61", features = [
 # override one inherited lint, so `src/lib.rs` allows `unsafe_code`.
 [lints]
 workspace = true
+
+[dependencies]
+indicatif = "0.18" # spinner and progress bar of `proc::ProgressRunner` (T276); the root crate keeps its own until T276.6
