@@ -27,5 +27,8 @@ platforms = [
 
 # The wasm32 guest is no_std and builds only for wasm32; workspace-hack's host dependencies
 # (mio, rustix, ...) do not compile there, so the guest stays out of the unification.
+# tree-sitter's build script enables serde_json/preserve_order; unified into workspace-hack it
+# would reach the rtok binary and reorder every JSON object it prints.
 [traversal-excludes]
 workspace-members = ["rtok-wasm-demo-guest"]
+third-party = [{ name = "tree-sitter" }]

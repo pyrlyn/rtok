@@ -51,7 +51,7 @@ schemars = { version = "1", features = ["chrono04"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
-serde_json = { version = "1", features = ["alloc", "float_roundtrip", "preserve_order", "raw_value"] }
+serde_json = { version = "1", features = ["alloc", "float_roundtrip", "raw_value"] }
 serde_spanned = { version = "1" }
 simd-adler32 = { version = "0.3" }
 similar = { version = "3", features = ["inline"] }
@@ -82,7 +82,7 @@ rust-embed-utils = { version = "8", default-features = false, features = ["debug
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
-serde_json = { version = "1", features = ["alloc", "float_roundtrip", "preserve_order", "raw_value"] }
+serde_json = { version = "1", features = ["alloc", "float_roundtrip", "raw_value"] }
 serde_spanned = { version = "1" }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit-mut"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
