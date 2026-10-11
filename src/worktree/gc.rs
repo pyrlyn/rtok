@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use rtok_sys::proc::{ProgressRunner, Unit};
 use serde::Serialize;
 
 use super::list::newest_until;
@@ -180,12 +181,29 @@ pub fn judge(cwd: &Path, policy: &Policy) -> anyhow::Result<(PathBuf, Vec<Judged
 
 pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome>> {
     let (repo, judged) = judge(cwd, policy)?;
+    let acting = |v: &Verdict| yes && v.plan().0 != "keep";
+    let count = judged.iter().filter(|j| acting(&j.verdict)).count();
+    // One removal keeps its own spinner; several get a bar over the worktrees (T276.2).
+    let mut bar = (count > 1)
+        .then(|| ProgressRunner::batch("removing worktrees…", count as u64, Unit::Items));
     // Removals stay one at a time: each takes the repository's locks.
-    let outcomes = judged.iter().map(|Judged { entry, verdict }| {
+    let mut outcomes = Vec::with_capacity(judged.len());
+    for Judged { entry, verdict } in &judged {
         let (action, planned) = verdict.plan();
-        let done = (yes && action != "keep")
-            .then(|| super::remove::detach(&repo, &entry.record, entry.merged));
-        Outcome {
+        let done = acting(verdict).then(|| {
+            if let Some(bar) = bar.as_mut() {
+                bar.step(
+                    &entry
+                        .record
+                        .path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy(),
+                );
+            }
+            super::remove::detach(&repo, &entry.record, entry.merged)
+        });
+        outcomes.push(Outcome {
             path: entry.record.path.display().to_string(),
             branch: entry.record.branch.clone(),
             action,
@@ -195,9 +213,12 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
                 Some(Err(e)) => format!("failed, kept: {e:#}"),
                 None => planned,
             },
-        }
-    });
-    Ok(outcomes.collect())
+        });
+    }
+    if let Some(bar) = bar {
+        bar.finish();
+    }
+    Ok(outcomes)
 }
 
 pub fn to_table(outcomes: &[Outcome], yes: bool) -> String {
