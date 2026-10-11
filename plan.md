@@ -78,7 +78,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T441 | in progress | P2 | 5 | 90% | Claude Code / claude-opus-5-5 |
-| T441.13.4 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T441.13.5 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T441.13.6 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T441.13.7 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1508,14 +1507,6 @@ project = "group/name"
 - A web UI page for tasks, dependencies beyond parent/child, assignees, priorities, LLM-generated task breakdowns (Taskmaster's PRD parsing).
 - An HTTP MCP transport or a hosted service.
 - Replacing hosts' built-in TodoWrite/`update_plan` checklists.
-
-### T441.13.4. Conflict and parallel markers on GitHub and GitLab (F9 follow-up)
-
-Follow-up of T441.13.2, which stores the markers on the disk adapter only. Store `conflicts_with` as `rtok:conflicts:<id>` labels and `parallel` as an `rtok:parallel` label through `src/tasks/meta.rs` (the same managed-label path as `rtok:needs:` and `rtok:p:`), read them back in the GitHub and GitLab issue-to-task mapping, drop the T441.13.2 refusal for these adapters (`stores_markers` true), and keep a user's own labels untouched. Done when `task conflict` and `task parallel` work on both with the recorded HTTP fixtures, `list`/`show`/`ready` show the markers, and `just check` passes.
-
-Check: the recorded HTTP fixtures for both adapters pass and `just check` is green.
-
-Plan: (1) `meta.rs` gains the `rtok:conflicts:<id>` and `rtok:parallel` managed labels beside `rtok:needs:`/`rtok:p:`; (2) `github.rs` and `gitlab.rs` write them on create and on `task conflict`/`task parallel`, and read them back in the issue-to-task mapping; (3) `stores_markers` true for both, the T441.13.2 refusal removed for them; (4) recorded HTTP fixtures per adapter plus a test that a user's own labels survive; docs en/ru/uk for the markers section.
 
 ### T441.13.5. GitHub Issues exporter for disk tasks (F11)
 
