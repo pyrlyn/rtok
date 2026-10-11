@@ -42,6 +42,8 @@ pub struct Outcome {
     /// The cache root, relative to its worktree (`target`).
     pub cache: String,
     pub bytes: u64,
+    /// Files in the cache, counted before it is deleted; 0 for a cache that stays.
+    pub files: u64,
     pub modified_unix: Option<u64>,
     /// `clean` or `keep`.
     pub action: &'static str,
@@ -84,6 +86,11 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
         let current = here.starts_with(real(&dir));
         for cache in usage(&dir).caches {
             let kept = kept_because(&cache, current, explicit, policy);
+            let files = if kept.is_none() {
+                crate::removal_preview::size_of(&cache.path).1
+            } else {
+                0
+            };
             let done = (yes && kept.is_none()).then(|| {
                 std::fs::remove_dir_all(&cache.path)
                     .with_context(|| format!("cannot delete {}", cache.path.display()))
@@ -93,6 +100,7 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
                 worktree: dir.display().to_string(),
                 cache: relative.display().to_string(),
                 bytes: cache.bytes,
+                files,
                 modified_unix: cache.modified.and_then(unix),
                 action: if kept.is_some() { "keep" } else { "clean" },
                 failed: matches!(done, Some(Err(_))),
@@ -106,6 +114,16 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
         }
     }
     Ok(outcomes)
+}
+
+/// The removal lines of the caches a `--yes` would delete.
+fn preview(outcomes: &[Outcome]) -> String {
+    let paths: Vec<(String, u64, u64)> = outcomes
+        .iter()
+        .filter(|o| o.action == "clean" && !o.failed)
+        .map(|o| (format!("{}/{}", o.worktree, o.cache), o.bytes, o.files))
+        .collect();
+    crate::removal_preview::render(paths.iter().map(|(p, b, f)| (p.as_str(), *b, *f)))
 }
 
 pub fn to_table(outcomes: &[Outcome], yes: bool, now: SystemTime) -> String {
@@ -134,6 +152,11 @@ pub fn to_table(outcomes: &[Outcome], yes: bool, now: SystemTime) -> String {
     let mut out = noted_table(&cols, &lines, outcomes.iter().map(|o| o.note.as_str()));
     let cleaned = outcomes.iter().filter(|o| o.action == "clean" && !o.failed);
     let (n, bytes) = cleaned.fold((0, 0), |(n, b), o| (n + 1, b + o.bytes));
+    let planned = preview(outcomes);
+    if !yes && !planned.is_empty() {
+        out.push('\n');
+        out.push_str(&planned);
+    }
     out.push_str(&match (yes, n) {
         (false, 0) => "\nnothing to clean\n".to_string(),
         (false, n) => format!(
@@ -194,6 +217,7 @@ mod tests {
             worktree: "/w/x".into(),
             cache: cache.into(),
             bytes,
+            files: 7,
             modified_unix: Some(1_000),
             action,
             note: note.into(),
@@ -223,6 +247,8 @@ mod tests {
         keep   /w/x     node_modules/.cache 3d04h     512 B  modified within the idle window
         clean  /w/x     build               3d04h    1.0 KB  failed, kept: cannot delete /w/x/build
 
+        - /w/x/target  2.0 KB  7 files
+        1 path, 7 files, -2.0 KB
         dry run: 1 caches, 2.0 KB to free, nothing changed; rerun with --yes
         ");
         assert!(to_table(&rows, true, now).ends_with("freed 2.0 KB in 1 caches (logical bytes)\n"));

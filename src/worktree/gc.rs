@@ -124,6 +124,9 @@ pub fn decide(
 pub struct Outcome {
     pub path: String,
     pub branch: Option<String>,
+    /// What a removal frees, counted before it runs; 0 unless the action is `remove`.
+    pub bytes: u64,
+    pub files: u64,
     /// `remove`, `drop-record` or `keep`.
     pub action: &'static str,
     /// Why it was kept, what was done, or git's message when a step failed.
@@ -183,11 +186,17 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
     // Removals stay one at a time: each takes the repository's locks.
     let outcomes = judged.iter().map(|Judged { entry, verdict }| {
         let (action, planned) = verdict.plan();
+        let (bytes, files) = match action {
+            "remove" => crate::removal_preview::size_of(&entry.record.path),
+            _ => (0, 0),
+        };
         let done = (yes && action != "keep")
             .then(|| super::remove::detach(&repo, &entry.record, entry.merged));
         Outcome {
             path: entry.record.path.display().to_string(),
             branch: entry.record.branch.clone(),
+            bytes,
+            files,
             action,
             failed: matches!(done, Some(Err(_))),
             note: match done {
@@ -212,6 +221,13 @@ pub fn to_table(outcomes: &[Outcome], yes: bool) -> String {
     let mut out = super::noted_table(&cols, &lines, notes);
     let planned = outcomes.iter().filter(|o| o.action != "keep").count();
     if !yes && planned > 0 {
+        let removals = outcomes.iter().filter(|o| o.action == "remove");
+        let removals = removals.map(|o| (o.path.as_str(), o.bytes, o.files));
+        let preview = crate::removal_preview::render(removals);
+        if !preview.is_empty() {
+            out.push('\n');
+            out.push_str(&preview);
+        }
         out.push_str(&format!(
             "\ndry run: {planned} to act on, nothing changed; rerun with --yes\n"
         ));

@@ -40,6 +40,8 @@ pub struct Outcome {
     pub kind: &'static str,
     pub path: String,
     pub bytes: u64,
+    /// A log sibling or archive is one file.
+    pub files: u64,
     /// `clear` or `keep` (only after `--yes` failed to remove it).
     pub action: &'static str,
     pub note: String,
@@ -76,6 +78,7 @@ fn outcome(kind: &'static str, path: PathBuf, note: String) -> Outcome {
         kind,
         path: path.display().to_string(),
         bytes,
+        files: 1,
         action: "clear",
         note,
         failed: false,
@@ -163,6 +166,12 @@ pub fn to_table(outcomes: &[Outcome], yes: bool) -> String {
     let mut out = crate::worktree::noted_table(&cols, &lines, notes);
     let cleared = outcomes.iter().filter(|o| o.action == "clear" && !o.failed);
     let (n, bytes) = cleared.fold((0, 0), |(n, b), o| (n + 1, b + o.bytes));
+    if !yes && n > 0 {
+        let planned = outcomes.iter().filter(|o| o.action == "clear");
+        let planned = planned.map(|o| (o.path.as_str(), o.bytes, o.files));
+        out.push('\n');
+        out.push_str(&crate::removal_preview::render(planned));
+    }
     out.push_str(&match (yes, n) {
         (false, 0) => "\nnothing to clear\n".to_string(),
         (false, n) => format!(
@@ -243,6 +252,8 @@ pub struct Report {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Usage {
     pub bytes: u64,
+    /// Everything that is not a directory, a symlink included; the count a removal preview shows.
+    pub files: u64,
     pub denied: bool,
     pub timed_out: bool,
 }
@@ -285,6 +296,7 @@ pub fn disk_usage_until(path: &Path, deadline: Option<Instant>) -> Usage {
             let _ = &seen;
             u.bytes += meta.len();
         }
+        u.files += u64::from(!meta.is_dir());
         if meta.is_dir() {
             match std::fs::read_dir(path) {
                 Ok(entries) => {

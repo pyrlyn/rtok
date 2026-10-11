@@ -405,6 +405,12 @@ Options:
           JSON instead of the table
 
       --agent <AGENT>
+      --dry-run
+          Say the dry run out loud: print what would go and change nothing (the default)
+
+      --stat
+          The same preview as the dry run: a removal's line already is its stat
+
           Only this agent: `rtok` or a host id (repeatable)
 
       --kind <KIND>
@@ -1247,6 +1253,10 @@ Options:
       --json                     JSON instead of the table
   -h, --help                     Print help
 
+      --dry-run                  Say the dry run out loud: print what would go and change nothing
+                                 (the default)
+      --stat                     The same preview as the dry run: a removal's line already is its
+                                 stat
 $ rtok worktree clean --help
 Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`
 
@@ -1268,6 +1278,9 @@ Create the worktree for a task: one location, one name, one locked owner; prints
 Usage: rtok worktree add [OPTIONS] <TASK> [SLUG]
 
 Arguments:
+      --dry-run        Say the dry run out loud: print what would go and change nothing (the
+                       default)
+      --stat           The same preview as the dry run: a removal's line already is its stat
   <TASK>  Task id, e.g. `t158`; directory `<repo>-<task>`, branch `<task>[-<slug>]`
   [SLUG]  Optional branch suffix
 

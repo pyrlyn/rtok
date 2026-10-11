@@ -60,6 +60,13 @@ const ALLOW_KEYS: &[&str] = &[
     "completions.dry_run",
     "graph.projects.remove.dry_run",
     "graph.projects.unlink.dry_run",
+    // T416.2: the deletion commands' explicit preview flags, one-shot like the above.
+    "worktree.gc.dry_run",
+    "worktree.gc.stat",
+    "worktree.clean.dry_run",
+    "worktree.clean.stat",
+    "agents.junk.clear.dry_run",
+    "agents.junk.clear.stat",
     "guard.check.host", // overlay `[hook] host` on the plugin CLI path (T70.5)
     "memory.import.dry_run",
     "graph.index.dry_run",

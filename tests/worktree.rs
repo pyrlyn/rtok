@@ -614,6 +614,16 @@ fn clean_deletes_idle_tagged_caches_and_nothing_else() {
     let table = rtok(&work, &["worktree", "clean"]);
     let table = String::from_utf8_lossy(&table.stdout);
     assert!(table.contains("dry run: 2 caches, "), "{table}");
+    // T416.2: each cache is a removal line with its file count, then the totals; `--stat` and
+    // `--dry-run` print the same preview, `--json` carries the count.
+    assert_eq!(row("wt-idle")["files"], 2);
+    assert_eq!(row("wt-fresh")["files"], 0);
+    assert!(table.contains("2 paths, 4 files"), "{table}");
+    assert!(table.contains("  2 files"), "{table}");
+    for flag in ["--stat", "--dry-run"] {
+        let flagged = rtok(&work, &["worktree", "clean", flag]);
+        assert_eq!(flagged.stdout, rtok(&work, &["worktree", "clean"]).stdout);
+    }
 
     let out = rtok(&work, &["worktree", "clean", "--yes"]);
     assert!(

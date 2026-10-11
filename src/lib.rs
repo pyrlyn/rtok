@@ -55,6 +55,7 @@ pub mod proc;
 pub mod progress;
 pub mod project;
 pub mod proxy;
+pub mod removal_preview;
 pub mod render;
 pub mod report;
 pub mod sanitize;

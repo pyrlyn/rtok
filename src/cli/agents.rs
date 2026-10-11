@@ -191,6 +191,12 @@ pub(super) enum JunkCmd {
         /// Apply; without it this is a dry run that changes nothing
         #[arg(long)]
         yes: bool,
+        /// Say the dry run out loud: print what would go and change nothing (the default)
+        #[arg(long, conflicts_with = "yes")]
+        dry_run: bool,
+        /// The same preview as the dry run: a removal's line already is its stat
+        #[arg(long)]
+        stat: bool,
         /// JSON instead of the table
         #[arg(long)]
         json: bool,
@@ -412,6 +418,8 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
             action:
                 JunkCmd::Clear {
                     yes,
+                    dry_run: _,
+                    stat: _,
                     json,
                     agents,
                     kinds,
