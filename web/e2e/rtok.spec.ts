@@ -178,7 +178,8 @@ test("clear safe junk plans without deleting and deletes only on the confirmed m
   await junk.getByRole("button", { name: "Clear safe junk" }).click();
   await junk.getByRole("button", { name: "Clear 2 items" }).click();
   await junk.getByRole("button", { name: "Confirm" }).click();
-  await expect(junk.getByRole("status")).toContainText("Freed");
+  // The section reloads after the apply, so its loading status can sit beside the result.
+  await expect(junk.getByRole("status").filter({ hasText: "Freed" })).toBeVisible();
   expect(stale.some((p) => existsSync(p))).toBe(false);
   const applies = sent.filter((m) => m.junk?.action === "apply");
   expect(applies).toHaveLength(1);
@@ -433,9 +434,11 @@ test("each part of the graph page maximises to fill the page and Escape restores
   await expect(live).toBeVisible();
 
   await page.getByRole("button", { name: "Maximise live graph" }).click();
-  const fill = await live.boundingBox();
+  // The section, not the picture inside it: the section pads the picture on its own.
+  const fill = await page.getByRole("region", { name: "live graph" }).boundingBox();
   const view = page.viewportSize();
   expect(fill?.width).toBeGreaterThan((view?.width ?? 0) - 40);
+  await expect(live).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Maximise live graph" })).toBeVisible();
 
