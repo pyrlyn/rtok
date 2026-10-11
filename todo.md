@@ -65,6 +65,5 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T441.13.5. GitHub Issues exporter for disk tasks (F11)
 - T441.13.6. Linear exporter for disk tasks (F11)
-- T441.13.7. Task board page in the web UI (F20)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T521. MiMo Desktop variant of the `mimo` host

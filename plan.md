@@ -80,7 +80,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | in progress | P2 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T441.13.5 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T441.13.6 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T441.13.7 | in progress | P3 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
 
@@ -1528,12 +1527,3 @@ Check: the Linear fixture tests and `just check`.
 
 Plan: (1) research the GraphQL calls (`issueCreate`, `issueUpdate`, team workflow states, how to mark an issue with the rtok id) from Linear's docs into `research.md`; (2) `export/linear.rs` behind the T441.13.5 trait, blocking `reqwest` like `remote.rs`; (3) `[tasks.export.linear]` config, `linear` arm of `rtok task export`; (4) fixtures, docs en/ru/uk.
 
-### T441.13.7. Task board page in the web UI (F20)
-
-`research.md` §28.4 F20, creator go-ahead 2026-10-11 (it was under T441 §13 "Out of scope"). A read-only board in `rtok web`: one column per status (open, in progress, done, closed), a card per task with id, title, parent, the `needs`/priority/conflict/parallel markers and the external link, for the project the page is opened for. Data comes from the same adapter and JSON shape as `rtok task list --all --json`; nothing on the page writes tasks.
-
-Done when: the page lists the tasks of a fixture project in the right columns, works in dark and light themes at 375 and 1280 px, has a keyboard-navigable list view, and shows an empty state when the project has no `[tasks]` section.
-
-Check: the API route test, the SPA unit and story tests, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
-
-Plan: (1) a read-only `/api/tasks` route in the web server that calls the tasks core (no duplicated listing logic); (2) a `Tasks` page in `web/src` with the board columns and a list view, registered in the page registry and navigation (`dashboard_page`-style entry if tasks get a page descriptor there); (3) Storybook stories with fixture data, a unit test, an e2e smoke; (4) docs en/ru/uk.
