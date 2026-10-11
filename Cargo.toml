@@ -23,7 +23,7 @@ toml_edit = "0.25" # in-place TOML: `config set` and rtok-mcp
 diesel = { version = "2.2", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 rstest = "0.27.0" # parameterized tests in the binary and rtok-agent-sdk
 sha2 = "0.11" # checksums: the store, the proxy cache, and otel
-dunce = "1" # canonicalize without Windows UNC prefixes (store index keys + the host)
+fs-kit = { path = "../crates-fs-kit/fs-kit", version = "0.1.0" } # one entry point for paths, atomic writes, trees
 regex = "1" # request-body noise (store) and search/bench patterns (binary)
 schemars = "1.2.2" # JSON Schema: store project rows and the /ws protocol
 humantime = "2.4" # idle duration: the store and `rtok agents`
@@ -154,7 +154,7 @@ wasmi = { version = "2.0", optional = true } # pure-Rust WASM interpreter for op
 toml_edit = { workspace = true } # `config set` (T12.3) edits in place, preserving comments
 toml = "0.8" # Cargo.lock [[package]] parse for docs_resolve (already in the lock via figment)
 zstd = "0.13" # decode docs.rs crate rustdoc JSON (.json.zst) for `rtok docs fetch`
-dunce = { workspace = true } # canonicalize without Windows UNC prefixes (graph index keys + file:// URIs)
+fs-kit = { workspace = true } # paths without Windows UNC prefixes, atomic writes, tree usage and copy
 pathdiff = "0.2" # relative path of a file under a repo root (graph LSP + index)
 rmcp = { version = "3.2", features = ["transport-streamable-http-server"] } # stdio MCP types + JSON-RPC (T4.1); the SDK's Streamable HTTP server for `rtok mcp --http` (T401)
 subtle = "2.6" # constant-time bearer-token compare for `rtok mcp --http` (T401); already in the tree via rustls

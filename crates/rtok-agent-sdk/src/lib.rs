@@ -322,78 +322,7 @@ pub fn write(apply: &Apply, path: &Path, body: &str, report: &str) -> Result<()>
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).ok();
     }
-    let target = link_target(path);
-    write_atomic(&target, body).with_context(|| target.display().to_string())
-}
-
-/// The file `path` resolves to. `canonicalize` fails on a dangling link (a dotfile manager's
-/// link whose target is not there yet), and the rename then replaced the link with a plain
-/// file; following the links by hand writes the target and keeps the link. A target whose
-/// directory is gone fails the write instead of being created.
-fn link_target(path: &Path) -> PathBuf {
-    let mut p = path.to_path_buf();
-    // 40: the kernel's own ELOOP limit, so a cycle ends.
-    for _ in 0..40 {
-        if let Ok(real) = fs::canonicalize(&p) {
-            return real;
-        }
-        match fs::read_link(&p) {
-            Ok(next) => p = p.parent().unwrap_or(Path::new("")).join(next),
-            Err(_) => break,
-        }
-    }
-    p
-}
-
-/// [`write`]'s atomic swap: write `body` to a sibling temp file, copy `target`'s
-/// permissions onto it when `target` exists (a 0600 `~/.claude.json` must stay
-/// 0600 on Unix), then `fs::rename` the temp file over `target` — atomic on one
-/// filesystem. Any failed step cleans up the temp file before returning the error.
-///
-/// On Windows, `MoveFileExW(REPLACE_EXISTING)` fails when the destination has the
-/// read-only attribute. Copying that bit onto the temp file (as Unix mode copy
-/// would) then made every update of a read-only host config fail; clear it on
-/// the destination instead. Temp names include a nanos suffix so two writes in
-/// the same process cannot share one leftover `.rtok-tmp-*` file.
-pub fn write_atomic(target: &Path, body: &str) -> Result<()> {
-    let dir = target.parent().unwrap_or(Path::new("."));
-    let name = target.file_name().unwrap_or_default().to_string_lossy();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let tmp = dir.join(format!(".{name}.rtok-tmp-{}-{nanos}", std::process::id()));
-    let result: Result<()> = (|| -> Result<()> {
-        fs::write(&tmp, body)?;
-        #[cfg(unix)]
-        if let Ok(meta) = fs::metadata(target) {
-            fs::set_permissions(&tmp, meta.permissions())?;
-        }
-        #[cfg(windows)]
-        clear_readonly(target);
-        fs::rename(&tmp, target)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&tmp);
-    }
-    result
-}
-
-/// `MOVEFILE_REPLACE_EXISTING` cannot replace a read-only file; drop that bit.
-#[cfg(windows)]
-// Windows-only, so the world-writable risk the lint names for Unix cannot arise here.
-#[allow(clippy::permissions_set_readonly_false)]
-fn clear_readonly(path: &Path) {
-    let Ok(meta) = fs::metadata(path) else {
-        return;
-    };
-    let mut perms = meta.permissions();
-    if !perms.readonly() {
-        return;
-    }
-    perms.set_readonly(false);
-    let _ = fs::set_permissions(path, perms);
+    Ok(fs_kit::write::atomic(path, body)?)
 }
 
 /// [`write`] for a JSON document: pretty-printed with the trailing newline host files carry.
@@ -1109,36 +1038,25 @@ fn copy_owned_with(src: &Path, dest: &Path, fix: CopyFix) -> Result<()> {
             .with_context(|| format!("copy plugin {} → {}", src.display(), dest.display()))?;
         return Ok(());
     }
-    copy_dir(src, dest, fix, Path::new(""))
+    copy_dir(src, dest, fix)
         .with_context(|| format!("copy plugin {} → {}", src.display(), dest.display()))?;
     fs::write(dest.join(OWNED_MARKER), b"")
         .with_context(|| format!("mark owned {}", dest.display()))?;
     Ok(())
 }
 
-fn copy_dir(src: &Path, dest: &Path, fix: CopyFix, rel: &Path) -> Result<()> {
-    fs::create_dir_all(dest)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let from = entry.path();
-        let to = dest.join(entry.file_name());
-        let rel = rel.join(entry.file_name());
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            copy_dir(&from, &to, fix, &rel)?;
-        } else {
-            // Plain files and symlink targets we can read: plugins ship as a normal tree.
-            // `fs::copy` keeps the mode (a skill's scripts); a fix rewrites the bytes after.
-            fs::copy(&from, &to)
-                .with_context(|| format!("copy {} → {}", from.display(), to.display()))?;
-            let bytes = fs::read(&to)?;
-            let fixed = fix(&rel, bytes.clone());
-            if fixed != bytes {
-                fs::write(&to, fixed).with_context(|| format!("fix {}", to.display()))?;
-            }
-        }
-    }
-    Ok(())
+fn copy_dir(src: &Path, dest: &Path, fix: CopyFix) -> Result<()> {
+    // Links are followed: a plugin ships as a plain tree, and the copy must stand alone.
+    let links = fs_kit::tree::Links::Follow;
+    Ok(fs_kit::tree::copy_tree_with(
+        src,
+        dest,
+        links,
+        &mut |rel, bytes| {
+            let fixed = fix(rel, bytes.to_vec());
+            (fixed != bytes).then_some(fixed)
+        },
+    )?)
 }
 
 #[cfg(test)]

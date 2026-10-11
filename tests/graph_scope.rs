@@ -14,7 +14,7 @@ fn home(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rtok-t3294-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    dunce::canonicalize(&dir).unwrap()
+    fs_kit::path::canonicalize(&dir).unwrap()
 }
 
 fn rtok(home: &Path, args: &[&str]) {

@@ -546,7 +546,7 @@ fn holder(scope: &[Member], path: &str) -> usize {
     let p = Path::new(path);
     // Both sides canonical: Windows' `canonicalize` adds `\\?\` and expands 8.3 names
     // (`RUNNER~1`), macOS resolves `/var` to `/private/var`.
-    let canon = |q: &Path| dunce::canonicalize(q).unwrap_or_else(|_| q.to_path_buf());
+    let canon = |q: &Path| fs_kit::path::canonicalize(q).unwrap_or_else(|_| q.to_path_buf());
     let real = canon(p);
     scope
         .iter()

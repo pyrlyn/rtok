@@ -164,9 +164,8 @@ pub fn judge(cwd: &Path, policy: &Policy) -> anyhow::Result<(PathBuf, Vec<Judged
     // The walks are the expensive part: side by side, and stopped at the first recent file.
     let verdicts = par_map(&entries, |_, entry| {
         let path = &entry.record.path;
-        let current = path
-            .canonicalize()
-            .is_ok_and(|p| crate::fs::path_starts_with(&here, &crate::fs::canon(&p)));
+        let current =
+            fs_kit::path::canonicalize(path).is_ok_and(|p| crate::fs::path_starts_with(&here, &p));
         let modified = |within| newest_until(path, |m| policy.age(m) < within);
         decide(entry, modified, current, policy)
     });

@@ -1590,6 +1590,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-kit"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+]
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4281,9 +4288,9 @@ dependencies = [
  "clap_mangen",
  "crossterm",
  "divan",
- "dunce",
  "env_logger",
  "figment",
+ "fs-kit",
  "futures-util",
  "globset",
  "httpmock",
@@ -4364,6 +4371,7 @@ name = "rtok-agent-sdk"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "fs-kit",
  "rstest",
  "serde_json",
 ]
@@ -4422,7 +4430,7 @@ dependencies = [
  "anyhow",
  "diesel",
  "diesel_migrations",
- "dunce",
+ "fs-kit",
  "humantime",
  "libsqlite3-sys",
  "proptest",

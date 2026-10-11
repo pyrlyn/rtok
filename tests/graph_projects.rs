@@ -15,8 +15,8 @@ fn fixture(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rtok-t3292-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    // Windows `canonicalize` yields `\\?\` paths, which the registry (via dunce) never stores.
-    dunce::canonicalize(&dir).unwrap()
+    // Windows `canonicalize` yields `\\?\` paths, which the registry (via fs-kit) never stores.
+    fs_kit::path::canonicalize(&dir).unwrap()
 }
 
 fn rtok(home: &Path, args: &[&str]) -> Output {
