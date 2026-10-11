@@ -140,6 +140,7 @@ pub struct ProxyState {
     cfg: Config,
     cache: Mutex<semantic_cache::Cache>,
     /// P28 model summaries (T385.9.2): `None` unless `[plugins.compress.llm] enabled`.
+    #[cfg(feature = "compress")]
     summaries: Option<Arc<crate::plugins::compress::queue::Queue>>,
 }
 
@@ -172,6 +173,7 @@ impl ProxyState {
         // see plan.md §6 amendment in the T5.1 commit). Unknown slugs fall back to `other` (6).
         let host_id = store.host_id(&cfg.hook.host)?.or(Some(6));
         // Optional like every extension: a queue that cannot start leaves the extractive view.
+        #[cfg(feature = "compress")]
         let summaries = crate::plugins::compress::queue::Queue::new(cfg).unwrap_or_else(|e| {
             crate::log::record(
                 cfg,
@@ -201,6 +203,7 @@ impl ProxyState {
             registry: Registry::new(cfg),
             cfg: cfg.clone(),
             cache: Mutex::new(semantic_cache::Cache::new()),
+            #[cfg(feature = "compress")]
             summaries,
         })
     }
@@ -679,12 +682,15 @@ fn shape_request(
             )
         });
         // Drained on every pass so a thread reused for the next request starts empty.
-        let offered = crate::plugins::compress::take_offered();
-        if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
-            queue.submit(
-                crate::plugins::compress::llm::Auth::from_headers(headers),
-                offered,
-            );
+        #[cfg(feature = "compress")]
+        {
+            let offered = crate::plugins::compress::take_offered();
+            if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
+                queue.submit(
+                    crate::plugins::compress::llm::Auth::from_headers(headers),
+                    offered,
+                );
+            }
         }
         shaped
     } else {
