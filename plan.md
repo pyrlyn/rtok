@@ -82,7 +82,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T441 | todo | P2 | 5 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
-| T560.2 | todo | P2 | 3 | 0% | |
+| T560.2 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
 
