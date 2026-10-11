@@ -856,8 +856,27 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
             .map(String::as_str)
             .collect();
         if !changed.is_empty() {
-            out.push_str(&crate::render::paint(&changed.join("\n")));
-            out.push('\n');
+            let text = changed.join("\n");
+            let shown = if cfg.setup.dry_run {
+                // The step lines carry no path, so the stat row is the host's one config file,
+                // or the host itself when it writes several.
+                let at = match files.as_slice() {
+                    [one] => one.clone(),
+                    _ => std::path::PathBuf::from(format!("{}: {}", v.kind.label(), v.name)),
+                };
+                let shown = if crate::stat_preview::on() {
+                    String::new()
+                } else {
+                    change_preview::paint(&text)
+                };
+                crate::stat_preview::show(&[(at, text)], &shown)
+            } else {
+                change_preview::paint(&text)
+            };
+            if !shown.is_empty() {
+                out.push_str(&shown);
+                out.push('\n');
+            }
         }
     }
     // T278: the `mcp` row becomes one line per surface wherever the host has an entry.

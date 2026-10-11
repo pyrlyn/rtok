@@ -24,6 +24,12 @@ const snap: Snapshot = {
 beforeEach(() => {
     localStorage.clear();
     localStorage.setItem(VIEW_KEY, "list");
+    // The cards' numbers jump under reduced motion (T329.53), so a test reads the total at once.
+    vi.stubGlobal("matchMedia", (q: string) => ({
+        matches: q.includes("reduce"),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    }));
 });
 afterEach(() => {
     cleanup();
