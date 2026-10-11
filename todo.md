@@ -41,6 +41,8 @@
 - T579. Count each transcript once when scanning directory aliases
 - T580. Include report metadata and anchors in the AI output budget
 - T581. Filter actionable report sinks before applying the top-ten limit
+- T583. Make Batch result accounting idempotent across downloads
+- T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
