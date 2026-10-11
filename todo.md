@@ -45,7 +45,8 @@
 - T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
 - T586. Resolve local relative remotes before deriving project identity
 - T587. Let an explicit report --format md override configuration
-- T588. Audit Read search/tree filters and log selection boundaries
+- T589. Track log generations without using their first line as identity
+- T590. Preserve filesystem semantics for parent segments after symlinks
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

@@ -129,7 +129,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T584 | todo | P2 | 2 | 0% | |
 | T586 | todo | P2 | 3 | 0% | |
 | T587 | todo | P2 | 2 | 0% | |
-| T588 | in progress | P2 | 3 | 5% | OpenAI / GPT-6 |
+| T589 | todo | P2 | 3 | 0% | |
+| T590 | todo | P2 | 3 | 0% | |
 
 
 
@@ -662,18 +663,31 @@ Execution plan:
 
 Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
 
-### T588. Audit Read search/tree filters and log selection boundaries
+### T589. Track log generations without using their first line as identity
 
-Source audit only; do not change product code. Trace Read `search`/`tree` path resolution, ignore rules, pattern semantics, size/output caps and result shape, plus relevant `rtok logs` selection/export/watch behavior. Read `src/plugins/read/AGENTS.md` and existing Read/log tasks first; use scratch fixtures only.
+Confirmed with actual [Follow::poll](src/log.rs#L399): matching first lines and sufficient line count make a rotated replacement look like the previous file. Prime a reader with `same\nold-shown\n`, append `old-unseen`, rotate to `.1`, then create `same\nnew-unseen\n`: polling returns nothing, losing the old tail and both replacement rows. A second manifestation occurs when the replacement exists but is empty: polling carries the old tail and resets `first` to None; after the replacement receives its first line, polling replays the whole rotated file, including previously shown rows. [State replacement](src/log.rs#L430) loses the generation boundary. T24.3 covers ordinary rotation, missing-path gaps and storms with distinct first lines, not either fixture. These are one identity/state defect, not two cards.
 
 Execution plan:
 
-1. Trace search/tree from tool arguments through `resolve`, root guard, `ignore::WalkBuilder`, `skip_git`, text-file loading, cap/archive recording and displayed paths. Compare hidden files, `.gitignore`/nested ignores, symlinks, invalid UTF-8, oversized files and roots outside cwd with the documented Read contract.
-2. Trace regex compilation/fallback, max/depth normalization, ordering, snippets and empty/no-hit outputs in both production code and the Vfs mirror. Compare actual WalkBuilder behavior with tests and the stated plugin description; identify only cases where the two surfaces or contract diverge.
-3. Trace logs filters and limits from CLI/config into model selection, JSON/export rendering, watch stream and logfile/store source. Compare ordering, inclusive time/level/source selection, zero/large limits, rotation and follow behavior without opening or exporting real host logs.
-4. Deduplicate exact scenarios against T4.2–T4.6, T55.5, T56.2/T56.4/T56.5, T59.2, T83.16, T127/T263/T300/T383, T15.11/T24.3/T225.1 and existing plan/done/roadmap/ideas. Use small scratch fixtures to reproduce only uncovered candidates, then record sequential fix cards with source evidence, steps and checks.
+1. Add deterministic follow tests for matching first lines across rotations and an empty or partial-line replacement between polls. Assert every complete line is returned once in chronological order, including the unread tail of the old file.
+2. Track file generations with a reliable filesystem identity or retained file handle and consumed position, using the existing platform abstractions where possible. Do not infer identity from log text; retain the carry boundary after observing an empty replacement.
+3. Cover consecutive rotations, retention exhaustion, missing/unreadable intervals, truncation and partial writes. Preserve the shared initial-screen snapshot contract and define any unavoidable loss when the old generation has already been deleted.
+4. Exercise watch integration with a scratch rotating writer and rerun the existing rotation/first-screen tests on supported platforms.
 
-Check: all fixtures and generated outputs stay in scratch; search/tree remain root-guarded and capped with expandable results; log selection remains consistent across table/JSON/export/watch; active plan/todo IDs match and `git diff --check` plus scoped `just check` pass. No product code, real host logs or live application is used.
+Check: retained generations neither lose nor replay complete rows in either fixture, existing follow ordering remains intact, and `just check` passes. The offline probe compiled actual Follow and whole-line functions with local scratch files; full CLI/watch scheduling was source-traced, not executed.
+
+### T590. Preserve filesystem semantics for parent segments after symlinks
+
+Confirmed in [resolve_with](src/plugins/read/mod.rs#L205): the request is lexically normalized before filesystem canonicalization at lines 218–224. With `root/link -> root/a/nested`, both `root/a/target.txt` and `root/target.txt` present and containing different text, native lookup of `link/../target.txt` reads `root/a/target.txt`, but rtok resolves and reads `root/target.txt`. Both targets are inside the allowed root; this is a wrong-file result, not a demonstrated root escape. Read, search and tree share this resolver. T56's Vfs/symlink-escape coverage and T430's Windows path identity do not cover parent traversal through an existing symlink.
+
+Execution plan:
+
+1. Add a fixture with distinct target contents and an in-root directory symlink followed by `..`; compare relative and absolute requests with native filesystem lookup. Keep a direct-path control.
+2. Preserve symlink-sensitive traversal when resolving an existing request instead of collapsing parent components first. Apply the root guard to the actual resolved target and return a path naming that same target; handle missing paths explicitly without weakening confinement.
+3. Cover allowed extra/dynamic roots, symlinks leaving a root, parent segments after those links, missing components and multiple links. Align the Vfs adapter with the host contract and retain Windows prefix/case coverage.
+4. Add representative read/search/tree integration checks proving both selected content and root rejection, then rerun existing root-guard and path tests.
+
+Check: existing paths identify the same file as native lookup, outside-root targets remain rejected, and `just check` passes. The Unix scratch probe compiled actual resolve/normalize functions with a standard filesystem adapter, equivalent Unix prefix checks and inactive dynamic roots; full MCP and Windows behavior were not executed.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
