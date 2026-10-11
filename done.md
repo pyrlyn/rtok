@@ -1651,6 +1651,37 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
+
+Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
+
+Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+
+Plan (the "existing script" does not exist: the 48 shots come from the old plain-HTML admin of #447 and no script was kept):
+1. `web/e2e/screenshots.shoot.ts` (run by `web/playwright.screenshots.config.ts`, so `spa-e2e` never rewrites tracked files) drives the real `rtok web` on a throwaway store and writes the same 48 names: six pages at 1440, 768 and 390 px in dark and light, plus `calls-empty`, `overview-loading` and `overview-error` at 1440 and 390 px. WebP comes from Chromium's canvas encoder, so no image dependency. `just spa-screenshots` runs it.
+2. Re-shoot, then look at a sample of the shots in both themes.
+3. `brand/README.md`, `brand/PROVENANCE.md` and `brand/DESIGN.md`: the web admin is adopted.
+
+Result (2026-10-11, Claude Code / sonnet-5.5): the card said "the existing script", but none is in the repository: the 48 shots came from the old plain-HTML admin of #447 and no script was kept. New `web/e2e/screenshots.shoot.ts` (config `web/playwright.screenshots.config.ts`, so `spa-e2e` never rewrites tracked files; `npm run screenshots`, `just spa-screenshots`) drives the real `rtok web` binary on a throwaway store and writes the same 48 names: overview, calls, sessions, plugins, doctor and logs at 1440, 768 and 390 px in dark and light, plus `calls-empty`, `overview-loading` and `overview-error` at 1440 and 390 px. The empty ledger is `Rtok.create(false)` (one optional argument on the e2e fixture); loading and error replace the page's socket (`routeWebSocket`): a quiet one, and one that relays the first real snapshot and then adds the server's `snapshot_error` frame. WebP comes from Chromium's canvas encoder, so no image dependency was added. `brand/README.md`, `brand/PROVENANCE.md` and `brand/DESIGN.md` now say the web admin reads `brand/` and holds no copy (the docs site is still a follow-up). Gates on a host at load average above 100: `just js` green; `spa-typecheck` green; `spa-stories` 244 green; `spa-test` 444 and `spa-e2e` 35 only flaked on timeouts (5 s unit, 15 s e2e) and pass alone, `app.test.tsx` and `GraphAlerts.test.tsx` with `--testTimeout=60000`.
+
+Status: done 2026-10-11
+
+Model: Claude Code / sonnet-5.5
+
+### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
+
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
+
+Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
+
+Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
+
+Result (2026-10-11, Claude Code / sonnet-5.5): every sub-task (T414.1-T414.17) is closed in this file. The check holds: `web/src/brandSources.test.ts` is green and a checksum comparison of the tracked `web/` files against `brand/` and `brand/node_modules/@pyrlyn/brand/base/` finds no byte-identical file.
+
+Status: done 2026-10-11
+
+Model: Claude Code / sonnet-5.5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
