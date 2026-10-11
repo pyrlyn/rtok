@@ -67,8 +67,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | todo | P3 | 1 | 0% | |
+| T414 | in progress | P1 | 4 | 95% | Claude Code / sonnet-5.5 |
+| T414.7 | in progress | P3 | 1 | 20% | Claude Code / sonnet-5.5 |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T416.1 | todo | P1 | 2 | 0% | |
 | T416.2 | todo | P1 | 3 | 0% | |
@@ -1078,6 +1078,11 @@ Check: every sub-task below is closed in `done.md`, and no file under `web/` is 
 Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+
+Plan (the "existing script" does not exist: the 48 shots come from the old plain-HTML admin of #447 and no script was kept):
+1. `web/e2e/screenshots.shoot.ts` (run by `web/playwright.screenshots.config.ts`, so `spa-e2e` never rewrites tracked files) drives the real `rtok web` on a throwaway store and writes the same 48 names: six pages at 1440, 768 and 390 px in dark and light, plus `calls-empty`, `overview-loading` and `overview-error` at 1440 and 390 px. WebP comes from Chromium's canvas encoder, so no image dependency. `just spa-screenshots` runs it.
+2. Re-shoot, then look at a sample of the shots in both themes.
+3. `brand/README.md`, `brand/PROVENANCE.md` and `brand/DESIGN.md`: the web admin is adopted.
 
 
 ### T416. Shared `change-preview` crate for dry-run output
