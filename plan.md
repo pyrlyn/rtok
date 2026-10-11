@@ -121,7 +121,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
 | T560.2 | todo | P2 | 3 | 0% | |
-| T575 | in progress | P2 | 3 | 5% | OpenAI / GPT-6 |
+| T576 | todo | P2 | 3 | 0% | |
+| T577 | todo | P2 | 3 | 0% | |
 
 
 
@@ -544,18 +545,29 @@ Execution plan:
 
 Check: encoded URLs resolve the intended existing asset in both sources, traversal remains rejected and unknown asset URLs stay 404, and `just check` passes. Actual router probes returned 404 for all four encoded-name fixtures and 200 for the plain-name control; HEAD controls correctly returned no body.
 
-### T575. Audit Doctor confirmation and junk protected-path rechecks
+### T576. Bind Doctor web writes to the confirmed preview
 
-Source audit only; do not change product code. Trace Doctor web plan/apply selection and junk clear's item planning, protected-path recheck and removal together with their CLI/TUI callers. Check the existing T331 and T330 safety promises before recording any defect.
+Confirmed in the selection path: [Selection](src/doctor/web.rs#L31) carries only kept-copy swaps and toggles, and [prepare](src/doctor/web.rs#L80) rebuilds candidates and default selections on both plan and apply. Preview a removable broken hook A in a user-level settings file, then add another removable broken hook B before confirming the original preview. With the original empty selection delta, B is also selected during apply although the page confirmed only A. [DoctorFix confirmation](web/src/pages/DoctorFix.tsx#L38) sends the deltas without preview identities or file versions. [fix_found](src/doctor/fix.rs#L284) edits the fresh selected findings; [fix_file's reread](src/doctor/fix.rs#L366) compares bytes read within that apply request, not those shown in the earlier preview. T331.12's fresh rescan prevents use of stale findings but does not bind writes to the confirmed diff.
 
 Execution plan:
 
-1. Trace `doctor::web::{plan,apply}`, `prepare`, `fix::candidates`, `fix_found` and `fix_file`. In a scratch-only machine fixture, plan one fixable broken hook, add a different fixable broken hook before submitting the prior selection, and observe whether the new finding is selected and written without appearing in the confirmed diff. Compare same-file content re-read protections, changed-file behavior, default toggles and explicit confirmation in T331.6/.7/.12; distinguish fresh discovery from an edit to an already-planned file.
-2. Trace junk scan → plan → confirm → `protected`/`recheck` → `remove` for eligible cache/build/extra directories. In an isolated tree, place a package-manager lockfile below a removable directory (including below an immediate child of a tagged cache); observe whether any ancestor is protected before recursive removal. Compare direct lockfile, nested lockfile, settings/store descendants, `CACHEDIR.TAG`, and `[agents.junk].exclude` cases.
-3. Deduplicate exact behavior against T331's web/terminal selection and file re-read guarantees, plus T330.4/.5.1/.6/.7 and T479. Record that T330.4 says a path that “is or holds” a package-manager lockfile is refused and that T330.5.1 exclusions protect items that match or hold a match; check whether existing tests cover nested locks or a new finding appearing between web plan and apply.
-4. For each source-confirmed gap, preserve a minimal fixture and evidence, then add a separate sequential fix card with the protected-data boundary, expected preview/confirmation behavior, implementation steps and acceptance checks. Leave unresolved hypotheses as audit notes.
+1. Add a fake-filesystem plan/apply regression: preview A, introduce B, submit the original confirmation and assert B is untouched. Cover insertion in the same file and a newly discovered file, plus an unchanged-preview success control.
+2. Carry an explicit set of confirmed identities and content/version evidence from the preview into apply. Revalidate the selected entries and affected files before writing; refuse a changed preview and return a fresh plan requiring confirmation. Do not auto-select findings discovered after the preview or treat a reused array position as the same entry.
+3. Wire the preview evidence through the web protocol and page state; cover toggles, kept-copy swaps, shared-file defaults, reordered/replaced entries, stale requests and backup/write failures. Retain the immediate pre-write reread as a separate safeguard.
 
-Check: fixtures remain in scratch only, existing positive/negative selection and cleanup cases remain explicit, plan/todo IDs match, `git diff --check` and scoped `just check` pass. No host app, real home directory or product source is touched.
+Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
+
+### T577. Protect nested package-manager lockfiles during junk cleanup
+
+Confirmed with an isolated directory fixture: [recheck](src/agents/junk_clear.rs#L278) compares PACKAGE_LOCKS only with the candidate's own basename. Its protected-path list contains the store and host settings paths, not discovered descendant lockfiles. An eligible explicitly configured cache containing nested/Cargo.lock passes recheck, then [remove](src/agents/junk_clear.rs#L334) recursively discards its children and deletes that lockfile. The cache root remains, while the same Cargo.lock checked directly is refused. [extra_items](src/agents/junk_review.rs#L169) accepts the configured cache root; the plan's D36/age/running gates do not add a descendant-lockfile check. This contradicts completed T330.4's promise to refuse a path that is or holds a package-manager lockfile; T330.5.1's explicit exclude globs do not supply the missing automatic protection.
+
+Execution plan:
+
+1. Add scratch-tree cleanup regressions for an eligible extra cache with direct-child and deeper Cargo.lock files. Assert the parent is refused and all contents remain; retain controls for a direct lockfile, a cache without protected descendants, settings/store descendants and CACHEDIR.TAG.
+2. Share a bounded descendant-protection check between planning and the immediate pre-delete recheck. Match the existing PACKAGE_LOCKS set, never follow symlinks, and refuse deletion when inspection fails or times out. Protect the entire removal candidate if it contains a protected lockfile.
+3. Cover tagged build/cache roots, extra cache roots and recursively removed temp entries, a lockfile appearing after preview, all supported package lock names, unreadable subtrees and trash/permanent-delete paths. Preserve existing store/settings and exclude protections and clear refusal reasons.
+
+Check: no planned recursive deletion or cache emptying removes a protected descendant lockfile, unknown inspection results remain non-destructive, and `just check` passes. The actual recheck/newest/usage-walk/remove functions and permanent-delete branch reproduced the loss; a synthetic clock made the fixture older than the settle window. This was not a full report/CLI or trash integration test.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

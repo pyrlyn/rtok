@@ -36,7 +36,8 @@
 - T571. Redact graph-export scope metadata and suggested download names
 - T573. Apply terminal call state even when the live event list is capped
 - T574. Decode SPA asset URL paths before looking up filenames
-- T575. Audit Doctor confirmation and junk protected-path rechecks
+- T576. Bind Doctor web writes to the confirmed preview
+- T577. Protect nested package-manager lockfiles during junk cleanup
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
