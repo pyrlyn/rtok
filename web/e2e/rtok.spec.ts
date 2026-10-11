@@ -500,6 +500,34 @@ test("under 900 px the two parts stack and there is no splitter", async ({ page,
   await expect(page.getByRole("separator")).toBeHidden();
 });
 
+test("at 375 px the live metrics are one line that opens and shuts the cards, and 900 px brings them back", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/#/graph");
+  const strip = page.getByRole("button", { name: /^running \d+ calls \d+ saved/ });
+  const cards = page.getByText("latency p50");
+  await expect(strip).toBeVisible();
+  await expect(strip).toHaveAttribute("aria-expanded", "false");
+  await expect(cards).toHaveCount(0);
+  // One line: the three figures and the window fit the phone's width without spilling out.
+  expect(await strip.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+
+  await strip.click();
+  await expect(strip).toHaveAttribute("aria-expanded", "true");
+  await expect(cards).toBeVisible();
+  await strip.click();
+  await expect(strip).toHaveAttribute("aria-expanded", "false");
+  await expect(cards).toHaveCount(0);
+
+  await page.setViewportSize({ width: 900, height: 812 });
+  await expect(strip).toHaveCount(0);
+  await expect(cards).toBeVisible();
+});
+
 test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {
   await viewing(page, "2d");
   rtok.addProject();

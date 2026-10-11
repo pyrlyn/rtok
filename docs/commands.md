@@ -99,6 +99,8 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   subscribes only while the live graph is shown. Below it: running calls, calls and failures, tokens sent, tokens without rtok and saved,
   per-tool bars and backend shares, over the last 1, 5 or 15 minutes or since `rtok web` started: the totals are read from the store, so a page reload shows the same
   figures (the store keeps the newest 5000 call events, so a call older than that is gone from them).
+  Under 900 px, where the live part stacks below the explorer, these numbers fold into one line (running,
+  calls, saved) that opens the full cards and shuts them again; from 900 px up nothing changes.
   Totals come from each frame's `summary` and the `graph` measurement rows, so a window equals
   `rtok stats` over the same calls (the per-tool bars and backend shares cover the calls a frame
   lists). The page also counts symbols asked (and how many calls crossed more than one project),

@@ -41,6 +41,20 @@ describe("CountUp", () => {
         expect(total()).toBeNull();
     });
 
+    test("a whole total counts through whole numbers, a fractional one does not", () => {
+        reduced(false);
+        const { rerender } = render(<CountUp value={0} />);
+        rerender(<CountUp value={7} />);
+        for (let i = 0; i < 8; i++) {
+            act(() => void vi.advanceTimersByTime(COUNT_MS / 8));
+            const frame = screen.queryByText((_, el) => el?.getAttribute("aria-hidden") === "true");
+            if (frame) expect(frame.textContent).toMatch(/^\d+$/);
+        }
+        rerender(<CountUp value={0.5} />);
+        act(() => void vi.advanceTimersByTime(COUNT_MS / 2));
+        expect(drawn()).toMatch(/\./);
+    });
+
     test("with prefers-reduced-motion it jumps", () => {
         reduced(true);
         const { rerender } = render(<CountUp value={0} />);

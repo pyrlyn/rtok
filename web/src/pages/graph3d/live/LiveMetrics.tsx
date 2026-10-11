@@ -2,15 +2,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import type { CallsView, WindowView } from "../../../api/snapshot.gen";
 import { Chip } from "../../../ui/Chip";
 import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
 import { Sparkline } from "../../../ui/Sparkline";
 import { compact, fmt, millis, pct, seconds } from "../../format";
+import { useMinWidth } from "../../parts";
 import { CountUp } from "./CountUp";
+import { MetricsStrip } from "./MetricsStrip";
 import { emptyWindow } from "./useCalls";
+
+/** The width where part 2 sits beside part 1 (`Split`); below it the metrics fold to a strip. */
+export const STRIP_BELOW_PX = 900;
 
 const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
 
@@ -45,15 +50,33 @@ function Trend({
  * same calls, and `rtok tui` shows the same figures. Latency is the exception: a percentile cannot
  * be summed, so it is measured on the calls a batch lists.
  */
-export function LiveMetrics({
-    view,
-    now,
-    window,
-    onWindow,
-    frozen,
-    pending,
-    onFreeze,
-}: {
+export function LiveMetrics(props: Props) {
+    const { view, window, frozen } = props;
+    const wide = useMinWidth(STRIP_BELOW_PX);
+    // The choice outlives the window chips and the freeze, which re-render this.
+    const [open, setOpen] = useState(false);
+    const body = useId();
+    const t = view.windows[window] ?? emptyWindow;
+    return (
+        <div className="flex flex-col gap-2">
+            {!wide && (
+                <MetricsStrip
+                    running={<CountUp value={view.running.length} />}
+                    calls={<CountUp value={t.calls} />}
+                    saved={<CountUp value={t.before - t.after} format={compact} />}
+                    window={t.label}
+                    frozen={frozen}
+                    open={open}
+                    onToggle={() => setOpen(!open)}
+                    controls={body}
+                />
+            )}
+            {(wide || open) && <MetricsCards id={body} {...props} />}
+        </div>
+    );
+}
+
+interface Props {
     view: CallsView;
     now: number;
     /** Index into the server's windows. */
@@ -63,14 +86,25 @@ export function LiveMetrics({
     /** Calls that arrived while the picture was held. */
     pending: number;
     onFreeze(on: boolean): void;
-}) {
+}
+
+function MetricsCards({
+    id,
+    view,
+    now,
+    window,
+    onWindow,
+    frozen,
+    pending,
+    onFreeze,
+}: Props & { id: string }) {
     const t = view.windows[window] ?? emptyWindow;
     const saved = t.before - t.after;
     const lat = t.latency;
     const top = Math.max(1, ...t.tools.map((v) => v.calls));
     const listed = Object.values(t.backends).reduce((n, v) => n + v, 0);
     return (
-        <div className="flex flex-col gap-2">
+        <div id={id} className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
                 <div role="group" aria-label="window" className="flex gap-1">
                     {view.windows.map((w, i) => (

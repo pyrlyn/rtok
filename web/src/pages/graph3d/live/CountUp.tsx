@@ -38,7 +38,10 @@ export function useCountUp(value: number): number {
             const m = move.current;
             if (!m) return;
             const t = Math.min(1, (performance.now() - m.t0) / COUNT_MS);
-            const next = t >= 1 ? goal.current : m.from + (goal.current - m.from) * easeOut(t);
+            const eased = m.from + (goal.current - m.from) * easeOut(t);
+            // A count of things passes through whole numbers; "15.169809" is never a count.
+            const next =
+                t >= 1 ? goal.current : Number.isInteger(goal.current) ? Math.round(eased) : eased;
             drawn.current = next;
             setShown(next);
             if (t >= 1) move.current = null;
