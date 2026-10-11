@@ -29,7 +29,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275 | in progress | P1 | 4 | 80% | Claude Code / claude-opus-5-5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 0% | Claude Code / claude-opus-5-5 |
-| T277 | in progress | P2 | 5 | 20% | Claude Code / claude-opus-5-5 |
+| T277 | in progress | P2 | 5 | 20% | Claude Code / sonnet-5.5 |
+| T277.1 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -320,6 +321,17 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
+Progress: PR 1 merged (#437); PR 2 is T277.1.
+
+### T277.1. Claude Code and Claude Desktop write and remove rtok's MCP entry through `rtok_mcp::ops`
+
+Epic PR 2. `Claude::apply` (CLI `~/.claude.json`, Desktop `claude_desktop_config.json`) still calls `rtok_agent_sdk::register_mcp` / `unregister_mcp_ours`, so `rtok_mcp::ops::apply` has no caller. Move both surfaces onto it; other hosts stay as they are.
+
+Execution plan:
+1. `rtok-mcp`: `McpSpec` gains a `launch` (absolute `command`, `--host <id>` pair) so the entry is the one Claude writes today; `ops::apply` takes the SDK `Apply` (dry run, `--yes`) and judges removal with `rtok_agent_sdk::judge_owned` instead of its own smaller copy; `write_entry` ignores the default `"type": "stdio"` like the SDK does (T265); the strict-JSON error reuses the SDK's message.
+2. `src/agents/mcp.rs`: a disk `Fs` over `rtok_agent_sdk::write` (atomic, backup, dry run) and `run(cfg, spec, mode)` returning the host report line.
+3. `src/agents/claude/mod.rs`: `mcp_spec(kind)`; `register_mcp`, `unregister_mcp` and the Desktop branch of `apply` call `mcp::run`; the SDK calls and `unregister_mcp_ours` use for Claude go.
+4. Tests: crate table (format x launch x type tolerance x dry run x remove ownership) and Claude install, update and remove on both surfaces in a temp dir; `just check`.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
