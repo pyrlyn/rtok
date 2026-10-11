@@ -3697,6 +3697,10 @@
             "null"
           ]
         },
+        "tasks": {
+          "description": "Tasks page (T441.13.7): the project's `rtok task list --all` as a board, through\n[`tasks::page`]. Read-only; the slow adapters are read off the tick.",
+          "$ref": "#/$defs/TasksPage"
+        },
         "type": {
           "type": "string"
         },
@@ -3730,7 +3734,8 @@
         "config",
         "services",
         "worktrees",
-        "agent_usage"
+        "agent_usage",
+        "tasks"
       ]
     },
     "Spark": {
@@ -3806,6 +3811,197 @@
         "est_before",
         "est_after",
         "rows"
+      ]
+    },
+    "TaskBoard": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "description": "`disk`, `github` or `gitlab`.",
+          "type": "string"
+        },
+        "hidden": {
+          "description": "Finished tasks left off `tasks`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tasks": {
+          "description": "Every active task, and the newest [`FINISHED_SHOWN`] of each finished status, by id.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskCard"
+          }
+        }
+      },
+      "required": [
+        "adapter",
+        "tasks",
+        "hidden"
+      ]
+    },
+    "TaskCard": {
+      "description": "One task as the board draws it: the fields of `rtok task list --json` except the description,\nwhich can be pages long and has no place on a card (`rtok task show` has it).",
+      "type": "object",
+      "properties": {
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocked_by": {
+          "description": "The tasks this one waits for (`task_dep`), shown as \"needs\".",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conflicts_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "external": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "parallel": {
+          "type": "boolean"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "`0` is highest. Unlike the CLI's JSON, the default is carried too: a card always has one.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/TaskColumn"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "description": "Unix seconds.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "parent",
+        "priority",
+        "assignee",
+        "blocked_by",
+        "conflicts_with",
+        "parallel",
+        "external",
+        "updated_at"
+      ]
+    },
+    "TaskColumn": {
+      "description": "The board's columns, the four statuses of [`Status`] under their `rtok task` names.",
+      "type": "string",
+      "enum": [
+        "open",
+        "in-progress",
+        "done",
+        "closed"
+      ]
+    },
+    "TaskLink": {
+      "description": "The issue a task lives in on GitHub or GitLab.",
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "url": {
+          "description": "Always `http(s)`: an issue host's reply is untrusted, and the page turns this into a link.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter",
+        "number",
+        "url"
+      ]
+    },
+    "TasksPage": {
+      "description": "The Tasks page. `text` is the `rtok task list` screen for the tui and the SPA's status line;\n`board` is the same rows as data for the SPA. Both come from one list.",
+      "type": "object",
+      "properties": {
+        "board": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskBoard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/TasksState"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "text",
+        "board"
+      ]
+    },
+    "TasksState": {
+      "description": "Where the Tasks page stands. `Unconfigured` is an ordinary case (the project never ran\n`rtok task init`), not a failure, so the page shows how to start instead of an error.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "ready"
+          ]
+        },
+        {
+          "description": "The first read has not landed yet.",
+          "type": "string",
+          "const": "reading"
+        },
+        {
+          "description": "No `[tasks]` key in any config layer.",
+          "type": "string",
+          "const": "unconfigured"
+        },
+        {
+          "description": "The adapter would not open or list; [`TasksPage::text`] says why.",
+          "type": "string",
+          "const": "failed"
+        }
       ]
     },
     "ToolSearch": {

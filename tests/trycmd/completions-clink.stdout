@@ -129,9 +129,22 @@ clink.argmatcher("rtok")
           :addarg({})
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+        "conflict" .. clink.argmatcher()
+          :addarg({})
+          :addarg({})
+          :addflags({ "--remove", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--remove"] = "Take the conflict off instead", ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+        "parallel" .. clink.argmatcher()
+          :addarg({})
+          :addflags({ "--off", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--off"] = "Take the mark off instead", ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "sync" .. clink.argmatcher()
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--json"] = "JSON instead of the text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+        "export" .. clink.argmatcher()
+          :addarg({ "github", "linear" })
+          :addflags({ "--dry-run", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--dry-run"] = "Print the planned creates, updates and closes and send nothing", ["--json"] = "JSON instead of the text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "init" .. clink.argmatcher()
           :addflags({ "--adapter" .. clink.argmatcher():addarg({}), "--prefix" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--adapter"] = "disk, github or gitlab (default: disk, or what the file already says)", ["--prefix"] = "Task id prefix, 1–8 ASCII letters (default: the project name's first letter)", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
@@ -147,14 +160,17 @@ clink.argmatcher("rtok")
             "release" .. clink.argmatcher(),
             "dep" .. clink.argmatcher(),
             "priority" .. clink.argmatcher(),
+            "conflict" .. clink.argmatcher(),
+            "parallel" .. clink.argmatcher(),
             "sync" .. clink.argmatcher(),
+            "export" .. clink.argmatcher(),
             "init" .. clink.argmatcher(),
             "help" .. clink.argmatcher()
           })
-          :adddescriptions({ ["create"] = "Create a task under the next free id and print the id", ["list"] = "The plan: open and in-progress tasks, subtasks under their parent", ["show"] = "One task: title, status, parent, subtasks, link and description", ["status"] = "Print a task's status, or set it; done and closed move it out of the plan", ["next"] = "The first ready task: free or stale, not blocked; a leaf when nothing is blocked", ["ready"] = "Tasks that can be claimed, highest priority first", ["claim"] = "Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set", ["release"] = "Clear the assignee and set the task open. Only the holder, unless --force", ["dep"] = "Record that this task waits on another. A cycle is refused and nothing is written", ["priority"] = "Set priority from 0 (highest) to 4. 2 is the default and is not stored", ["sync"] = "Raise the id counters to the adapter's highest ids and report drift; never writes the adapter", ["init"] = "Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks", ["help"] = "Print this message or the help of the given subcommand(s)" })
+          :adddescriptions({ ["create"] = "Create a task under the next free id and print the id", ["list"] = "The plan: open and in-progress tasks, subtasks under their parent", ["show"] = "One task: title, status, parent, subtasks, link and description", ["status"] = "Print a task's status, or set it; done and closed move it out of the plan", ["next"] = "The first ready task: free or stale, not blocked; a leaf when nothing is blocked", ["ready"] = "Tasks that can be claimed, highest priority first", ["claim"] = "Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set", ["release"] = "Clear the assignee and set the task open. Only the holder, unless --force", ["dep"] = "Record that this task waits on another. A cycle is refused and nothing is written", ["priority"] = "Set priority from 0 (highest) to 4. 2 is the default and is not stored", ["conflict"] = "Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress", ["parallel"] = "Mark a task safe to run beside any other task", ["sync"] = "Raise the id counters to the adapter's highest ids and report drift; never writes the adapter", ["export"] = "Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write", ["init"] = "Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks", ["help"] = "Print this message or the help of the given subcommand(s)" })
       })
       :addflags({ "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-      :adddescriptions({ ["create"] = "Create a task under the next free id and print the id", ["list"] = "The plan: open and in-progress tasks, subtasks under their parent", ["show"] = "One task: title, status, parent, subtasks, link and description", ["status"] = "Print a task's status, or set it; done and closed move it out of the plan", ["next"] = "The first ready task: free or stale, not blocked; a leaf when nothing is blocked", ["ready"] = "Tasks that can be claimed, highest priority first", ["claim"] = "Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set", ["release"] = "Clear the assignee and set the task open. Only the holder, unless --force", ["dep"] = "Record that this task waits on another. A cycle is refused and nothing is written", ["priority"] = "Set priority from 0 (highest) to 4. 2 is the default and is not stored", ["sync"] = "Raise the id counters to the adapter's highest ids and report drift; never writes the adapter", ["init"] = "Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks", ["help"] = "Print this message or the help of the given subcommand(s)", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+      :adddescriptions({ ["create"] = "Create a task under the next free id and print the id", ["list"] = "The plan: open and in-progress tasks, subtasks under their parent", ["show"] = "One task: title, status, parent, subtasks, link and description", ["status"] = "Print a task's status, or set it; done and closed move it out of the plan", ["next"] = "The first ready task: free or stale, not blocked; a leaf when nothing is blocked", ["ready"] = "Tasks that can be claimed, highest priority first", ["claim"] = "Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set", ["release"] = "Clear the assignee and set the task open. Only the holder, unless --force", ["dep"] = "Record that this task waits on another. A cycle is refused and nothing is written", ["priority"] = "Set priority from 0 (highest) to 4. 2 is the default and is not stored", ["conflict"] = "Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress", ["parallel"] = "Mark a task safe to run beside any other task", ["sync"] = "Raise the id counters to the adapter's highest ids and report drift; never writes the adapter", ["export"] = "Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write", ["init"] = "Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks", ["help"] = "Print this message or the help of the given subcommand(s)", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
     "batch" .. clink.argmatcher()
       :addarg({
         "submit" .. clink.argmatcher()
@@ -262,12 +278,12 @@ clink.argmatcher("rtok")
         "send" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--all-live", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--all-live", "--task" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--task"] = "The task this message is about (e.g. `A12`); the recipient can read just that thread", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "inbox" .. clink.argmatcher()
           :addarg({})
-          :addflags({ "--unread", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--unread", "--task" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--task"] = "Only messages about this task (e.g. `A12`)", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "help" .. clink.argmatcher()
           :addarg({
             "install" .. clink.argmatcher(),
@@ -377,12 +393,12 @@ clink.argmatcher("rtok")
         "send" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--all-live", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--all-live", "--task" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--all-live"] = "Every live agent of this project (same repository or cwd), except the sender", ["--task"] = "The task this message is about (e.g. `A12`); the recipient can read just that thread", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "inbox" .. clink.argmatcher()
           :addarg({})
-          :addflags({ "--unread", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--unread", "--task" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--unread"] = "Only messages not read yet", ["--task"] = "Only messages about this task (e.g. `A12`)", ["--json"] = "JSON instead of the framed text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "help" .. clink.argmatcher()
           :addarg({
             "install" .. clink.argmatcher(),
@@ -771,10 +787,13 @@ clink.argmatcher("rtok")
             "release" .. clink.argmatcher(),
             "dep" .. clink.argmatcher(),
             "priority" .. clink.argmatcher(),
+            "conflict" .. clink.argmatcher(),
+            "parallel" .. clink.argmatcher(),
             "sync" .. clink.argmatcher(),
+            "export" .. clink.argmatcher(),
             "init" .. clink.argmatcher()
           })
-          :adddescriptions({ ["create"] = "Create a task under the next free id and print the id", ["list"] = "The plan: open and in-progress tasks, subtasks under their parent", ["show"] = "One task: title, status, parent, subtasks, link and description", ["status"] = "Print a task's status, or set it; done and closed move it out of the plan", ["next"] = "The first ready task: free or stale, not blocked; a leaf when nothing is blocked", ["ready"] = "Tasks that can be claimed, highest priority first", ["claim"] = "Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set", ["release"] = "Clear the assignee and set the task open. Only the holder, unless --force", ["dep"] = "Record that this task waits on another. A cycle is refused and nothing is written", ["priority"] = "Set priority from 0 (highest) to 4. 2 is the default and is not stored", ["sync"] = "Raise the id counters to the adapter's highest ids and report drift; never writes the adapter", ["init"] = "Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks" }),
+          :adddescriptions({ ["create"] = "Create a task under the next free id and print the id", ["list"] = "The plan: open and in-progress tasks, subtasks under their parent", ["show"] = "One task: title, status, parent, subtasks, link and description", ["status"] = "Print a task's status, or set it; done and closed move it out of the plan", ["next"] = "The first ready task: free or stale, not blocked; a leaf when nothing is blocked", ["ready"] = "Tasks that can be claimed, highest priority first", ["claim"] = "Claim a task for this agent, or the first ready task when no id is given. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set", ["release"] = "Clear the assignee and set the task open. Only the holder, unless --force", ["dep"] = "Record that this task waits on another. A cycle is refused and nothing is written", ["priority"] = "Set priority from 0 (highest) to 4. 2 is the default and is not stored", ["conflict"] = "Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress", ["parallel"] = "Mark a task safe to run beside any other task", ["sync"] = "Raise the id counters to the adapter's highest ids and report drift; never writes the adapter", ["export"] = "Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write", ["init"] = "Write `[tasks]` into this checkout's `.rtok.toml` and seed the counter from existing tasks" }),
         "batch" .. clink.argmatcher()
           :addarg({
             "submit" .. clink.argmatcher(),

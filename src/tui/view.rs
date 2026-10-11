@@ -202,6 +202,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "services" => frame.render_widget(services_page(app), area),
         "worktrees" => frame.render_widget(worktrees_page(app), area),
         "usage" => frame.render_widget(usage_page(app), area),
+        "tasks" => frame.render_widget(tasks_page(app), area),
         page => unreachable!("page `{page}` has no TUI body — surface_parity holds the list"),
     }
 }
@@ -593,6 +594,12 @@ fn worktrees_page(app: &App) -> Paragraph<'static> {
 /// text says "reading usage…" until the first one lands, and why when one fails.
 fn usage_page(app: &App) -> Paragraph<'static> {
     Paragraph::new(app.snapshot().agent_usage.text.clone())
+}
+
+/// The model's Tasks page (T441.13.7): `rtok task list --all`'s table, verbatim, or the line
+/// that says why there is none (no `[tasks]` section, a failed adapter, still reading).
+fn tasks_page(app: &App) -> Paragraph<'static> {
+    Paragraph::new(app.snapshot().tasks.text.clone())
 }
 
 /// The model's Calls page (T15.5): the ledger's recent rows, newest first — surface,
@@ -1064,8 +1071,9 @@ pub(super) mod tests {
     /// page too.
     pub(in crate::tui) fn screen(app: &App) -> String {
         // T228 widened the tab bar to 11 tabs, T229/T232 to 13 — narrower widths clip the
-        // last one off the pane's border before its text ever hits the buffer.
-        let mut terminal = ratatui::Terminal::new(TestBackend::new(128, 24)).unwrap();
+        // last one off the pane's border before its text ever hits the buffer; the tasks tab
+        // (T441.13.7) made it 15.
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(140, 24)).unwrap();
         terminal.draw(|frame| draw(frame, app)).unwrap();
         terminal
             .backend()
@@ -1216,6 +1224,20 @@ pub(super) mod tests {
         let screen = screen(&app);
         assert!(screen.contains("logs from 2 agents"), "{screen}");
         assert!(screen.contains("1.2M tokens"), "{screen}");
+    }
+
+    /// T441.13.7: the Tasks tab shows the snapshot's `tasks.text`, the CLI's own list.
+    #[test]
+    fn tasks_tab_renders_the_task_list() {
+        let cfg = config();
+        let mut app = App::new(&cfg);
+        while app.page() != "tasks" {
+            app.key(KeyCode::Right, KeyModifiers::NONE);
+        }
+        let mut snap = crate::model::snapshot(&cfg);
+        snap.tasks.text = "R1  open  Ship the board\n".into();
+        app.refresh(snap);
+        assert!(screen(&app).contains("Ship the board"));
     }
 
     /// The bar's guards: nothing saved is no bar.

@@ -152,6 +152,9 @@ const ALLOW_KEYS: &[&str] = &[
     // which rows one read shows; `agents` flags map onto `setup.*`, which they are not.
     "setup.all_live",
     "setup.unread",
+    // `agents send --task` / `agents inbox --task` (T441.13.1): which task one message is about or
+    // which thread one read shows, per call like the two flags above.
+    "setup.task",
     // `agents update --check` / `agents outdated --exit-code` (T279.1): one-shot
     // listing and a one-shot exit status, not stored settings.
     "setup.check",
@@ -205,6 +208,12 @@ const ALLOW_KEYS: &[&str] = &[
     "task.list.all",
     "task.list.parent",
     "task.status.force",
+    // `task conflict|parallel` (T441.13.2): undo flags for one call, nothing to store.
+    "task.conflict.remove",
+    "task.parallel.off",
+    // `task export --dry-run` (T441.13.5): a stored `true` would turn a later export into a
+    // silent no-op; the repo is the setting (`tasks.export.github.repo`).
+    "task.export.dry_run",
     // `batch submit|status|fetch --provider/--url` (T385.12.1): which provider's Batch API and
     // which proxy one call talks to; the URL defaults to `[proxy] bind`/`port`, and the
     // provider is read from the batch id, so there is nothing to store.

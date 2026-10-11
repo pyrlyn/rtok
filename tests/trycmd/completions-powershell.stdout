@@ -310,7 +310,10 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
             [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
             [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
+            [CompletionResult]::new('conflict', 'conflict', [CompletionResultType]::ParameterValue, 'Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress')
+            [CompletionResult]::new('parallel', 'parallel', [CompletionResultType]::ParameterValue, 'Mark a task safe to run beside any other task')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -396,8 +399,32 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;task;conflict' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--remove', '--remove', [CompletionResultType]::ParameterName, 'Take the conflict off instead')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;parallel' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--off', '--off', [CompletionResultType]::ParameterName, 'Take the mark off instead')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;task;sync' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;export' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the planned creates, updates and closes and send nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -422,7 +449,10 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
             [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
             [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
+            [CompletionResult]::new('conflict', 'conflict', [CompletionResultType]::ParameterValue, 'Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress')
+            [CompletionResult]::new('parallel', 'parallel', [CompletionResultType]::ParameterValue, 'Mark a task safe to run beside any other task')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -457,7 +487,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;task;help;priority' {
             break
         }
+        'rtok;task;help;conflict' {
+            break
+        }
+        'rtok;task;help;parallel' {
+            break
+        }
         'rtok;task;help;sync' {
+            break
+        }
+        'rtok;task;help;export' {
             break
         }
         'rtok;task;help;init' {
@@ -973,6 +1012,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;send' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'The task this message is about (e.g. `A12`); the recipient can read just that thread')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--all-live', '--all-live', [CompletionResultType]::ParameterName, 'Every live agent of this project (same repository or cwd), except the sender')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -980,6 +1020,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;send' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'The task this message is about (e.g. `A12`); the recipient can read just that thread')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--all-live', '--all-live', [CompletionResultType]::ParameterName, 'Every live agent of this project (same repository or cwd), except the sender')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -987,6 +1028,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;inbox' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only messages about this task (e.g. `A12`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--unread', '--unread', [CompletionResultType]::ParameterName, 'Only messages not read yet')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the framed text')
@@ -995,6 +1037,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;inbox' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only messages about this task (e.g. `A12`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--unread', '--unread', [CompletionResultType]::ParameterName, 'Only messages not read yet')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the framed text')
@@ -2055,7 +2098,10 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
             [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
             [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
+            [CompletionResult]::new('conflict', 'conflict', [CompletionResultType]::ParameterValue, 'Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress')
+            [CompletionResult]::new('parallel', 'parallel', [CompletionResultType]::ParameterValue, 'Mark a task safe to run beside any other task')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             break
         }
@@ -2089,7 +2135,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;help;task;priority' {
             break
         }
+        'rtok;help;task;conflict' {
+            break
+        }
+        'rtok;help;task;parallel' {
+            break
+        }
         'rtok;help;task;sync' {
+            break
+        }
+        'rtok;help;task;export' {
             break
         }
         'rtok;help;task;init' {
