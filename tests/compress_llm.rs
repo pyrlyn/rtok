@@ -9,38 +9,12 @@
 use httpmock::prelude::*;
 use rtok::config::Config;
 use rtok::plugins::compress::llm::{Auth, Compressor, Outcome};
-use rtok::plugins::compress::must_keep;
 use rtok::store::Store;
 use serde_json::json;
 
 mod common;
+use common::compress_fixture::{log, reply, summary_with};
 use common::proxy::proxy_server;
-
-/// A build log long enough that a short summary is a real saving, with spans of every kind.
-fn log() -> String {
-    let mut lines: Vec<String> = (1..=120)
-        .map(|i| format!("   Compiling filler-crate-{i} v0.1.0 (/work/acme/crates/f{i})"))
-        .collect();
-    lines.splice(
-        40..40,
-        [
-            "error[E0308]: mismatched types".to_string(),
-            "   --> crates/ledger/src/posting.rs:142:23".to_string(),
-            "settler: leg_0004 failed: BudgetExhausted after 5 attempts".to_string(),
-            "run `acme settle --retry bat_01HZX4M8Q2` once; id 9c1e5ab07f2d44e8".to_string(),
-        ],
-    );
-    lines.join("\n")
-}
-
-fn summary_with(text: &str, skip: Option<&str>) -> String {
-    let kept: Vec<String> = must_keep::spans(text)
-        .into_iter()
-        .map(|s| s.text)
-        .filter(|t| Some(t.as_str()) != skip)
-        .collect();
-    format!("cargo build failed.\n{}", kept.join("\n"))
-}
 
 struct Fixture {
     store: Store,
@@ -75,10 +49,6 @@ fn auth() -> Auth {
         ("anthropic-beta".into(), "oauth-test".into()),
     ])
     .expect("a credential")
-}
-
-fn reply(text: &str) -> serde_json::Value {
-    json!({"content": [{"type": "text", "text": text}], "stop_reason": "end_turn"})
 }
 
 #[test]

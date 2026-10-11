@@ -55,13 +55,32 @@ impl Auth {
         (has("x-api-key") || has("authorization")).then_some(Self(headers))
     }
 
-    /// Header names the proxy copies from the agent request.
-    pub const HEADERS: [&str; 4] = [
+    /// The credential and version headers of an agent request. Everything else (session ids,
+    /// tracing, the lane header) stays behind so the compressor call is its own request.
+    pub fn from_headers(headers: &axum::http::HeaderMap) -> Option<Self> {
+        let copied = Self::HEADERS
+            .iter()
+            .filter_map(|name| {
+                let v = headers.get(*name)?.to_str().ok()?;
+                Some(((*name).to_string(), v.to_string()))
+            })
+            .collect();
+        Self::new(copied)
+    }
+
+    const HEADERS: [&str; 4] = [
         "x-api-key",
         "authorization",
         "anthropic-version",
         "anthropic-beta",
     ];
+}
+
+/// The cache key half beside the archive id: the prompt file's hash and the model, so editing
+/// the prompt or changing the model invalidates every stored summary.
+pub fn version(model: &str) -> String {
+    let digest = crate::store::hex_sha256(PROMPT_FILE.as_bytes());
+    format!("{}+{model}", &digest[..VERSION_HASH_CHARS])
 }
 
 /// What one job came to.
@@ -103,11 +122,10 @@ impl Compressor {
         } else {
             llm.url.trim().trim_end_matches('/').to_string()
         };
-        let digest = crate::store::hex_sha256(PROMPT_FILE.as_bytes());
         Ok(Some(Self {
             url: format!("{base}/v1/messages"),
             client: crate::proxy::build_client(llm.timeout_s)?,
-            version: format!("{}+{}", &digest[..VERSION_HASH_CHARS], llm.model),
+            version: version(&llm.model),
             archive_dir: cfg.core.archive_dir.clone(),
             full: cfg.clone(),
             cfg: llm,

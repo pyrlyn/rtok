@@ -160,6 +160,8 @@ pub struct ProxyState {
     registry: Registry,
     cfg: Config,
     cache: Mutex<semantic_cache::Cache>,
+    /// P28 model summaries (T385.9.2): `None` unless `[plugins.compress.llm] enabled`.
+    summaries: Option<Arc<crate::plugins::compress::queue::Queue>>,
 }
 
 impl ProxyState {
@@ -190,6 +192,20 @@ impl ProxyState {
         // Host agent: the `[hook] host` setting (T5.1 says `core.host`, which T12 removed —
         // see plan.md §6 amendment in the T5.1 commit). Unknown slugs fall back to `other` (6).
         let host_id = store.host_id(&cfg.hook.host)?.or(Some(6));
+        // Optional like every extension: a queue that cannot start leaves the extractive view.
+        let summaries = crate::plugins::compress::queue::Queue::new(cfg).unwrap_or_else(|e| {
+            crate::log::record(
+                cfg,
+                &store,
+                None,
+                None,
+                "warn",
+                "plugin",
+                "compress",
+                &format!("summary queue not started: {e:#}"),
+            );
+            None
+        });
         Ok(Self {
             store,
             client,
@@ -206,6 +222,7 @@ impl ProxyState {
             registry: Registry::new(cfg),
             cfg: cfg.clone(),
             cache: Mutex::new(semantic_cache::Cache::new()),
+            summaries,
         })
     }
 
@@ -672,7 +689,7 @@ fn shape_request(
     // From here on `request_body` is what upstream sees (and what `call_io` records).
     let compressing = state.mode == "compress" && policy.compress;
     let request_body = if compressing {
-        wire.map_or(request_body.clone(), |wire| {
+        let shaped = wire.map_or(request_body.clone(), |wire| {
             compress(
                 state,
                 wire,
@@ -681,7 +698,16 @@ fn shape_request(
                 &policy,
                 request_body,
             )
-        })
+        });
+        // Drained on every pass so a thread reused for the next request starts empty.
+        let offered = crate::plugins::compress::take_offered();
+        if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
+            queue.submit(
+                crate::plugins::compress::llm::Auth::from_headers(headers),
+                offered,
+            );
+        }
+        shaped
     } else {
         request_body
     };
