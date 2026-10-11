@@ -57,7 +57,7 @@ impl Auth {
 
     /// The credential and version headers of an agent request. Everything else (session ids,
     /// tracing, the lane header) stays behind so the compressor call is its own request.
-    pub fn from_headers(headers: &axum::http::HeaderMap) -> Option<Self> {
+    pub fn from_headers(headers: &reqwest::header::HeaderMap) -> Option<Self> {
         let copied = Self::HEADERS
             .iter()
             .filter_map(|name| {
@@ -124,7 +124,7 @@ impl Compressor {
         };
         Ok(Some(Self {
             url: format!("{base}/v1/messages"),
-            client: crate::proxy::build_client(llm.timeout_s)?,
+            client: crate::tls::client(llm.timeout_s)?,
             version: version(&llm.model),
             archive_dir: cfg.core.archive_dir.clone(),
             full: cfg.clone(),
@@ -224,7 +224,7 @@ impl Compressor {
             .client
             .post(&self.url)
             .header("content-type", "application/json")
-            .header(crate::proxy::lane::HEADER, "internal");
+            .header(crate::lane::HEADER, "internal");
         if !auth
             .0
             .iter()
