@@ -28,13 +28,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
+| T276 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
-| T276.4 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T276.5 | todo | P2 | 3 | 0% | |
 | T276.6 | todo | P2 | 3 | 0% | |
-| T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
-| T277.2 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
+| T277 | in progress | P2 | 5 | 55% | Claude Code / sonnet-5.5 |
 | T277.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -149,10 +147,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T617 | todo | P2 | 3 | 0% | |
 | T618 | todo | P1 | 3 | 0% | |
 | T619 | todo | P2 | 3 | 0% | |
-| T620 | in progress | P1 | 5 | 0% | Claude Code / sonnet-5.5 |
-| T621 | in progress | P2 | 5 | 0% | Claude Code / sonnet-5.5 |
 | T622 | todo | P2 | 3 | 0% | |
-| T623 | in progress | P2 | 5 | 0% | Claude Code / sonnet-5.5 |
 | T624 | todo | P3 | 2 | 0% | |
 | T625 | todo | P1 | 3 | 0% | |
 | T626 | todo | P2 | 3 | 0% | |
@@ -858,36 +853,6 @@ Execution plan:
 
 Check: every rendered result row is reachable using the existing navigation keys. The isolated probe imported the production panel with small surrounding UI shims and used a real Ratatui buffer; it did not execute an interactive terminal session or graph backend.
 
-### T620. Enforce LSP request deadlines during blocking transport reads
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::request](src/plugins/graph/lsp.rs#L461). Its deadline is checked before `read_msg`, but that function performs blocking pipe reads without a deadline. A matching response returns immediately without checking the elapsed deadline. An isolated probe compiled the verbatim request/framing methods against a synthetic subprocess peer: with `ready()` set to 10 ms and the peer delaying its reply by 250 ms, the request still succeeded after 675 ms wall time. A peer that stays silent can leave the call blocked instead of reaching the documented fallback.
-
-[with_session](src/plugins/graph/lsp.rs#L544) holds the shared session mutex through the call; [capability::ask](src/plugins/graph/capability.rs#L197) invokes the server closure synchronously. T376 adds fallback after a returned error, but that does not enforce a deadline on an unread pipe.
-
-Execution plan:
-
-1. Add deterministic fake-peer regressions for no reply, a delayed reply, a partial header/body and intervening notifications. Assert bounded completion and timeout classification, with a timely-response control.
-2. Make framing reads deadline-aware using one transport owner and bounded cancellation. Include writes in the request budget so a peer that stops consuming input cannot bypass the same bound.
-3. On timeout, invalidate or safely resynchronize the session, release locks and reach the existing fallback path. Verify a later request and shutdown cannot be trapped behind the expired request or consume its late response.
-4. Run focused LSP transport, capability/fallback and shutdown tests, then `just check`.
-
-Check: an unresponsive peer cannot hold an LSP request beyond its configured budget plus a bounded cleanup allowance. Executed evidence used extracted production request/framing code, a synthetic peer and a 10 ms timeout shim; real language servers, the full capability dispatcher and silent-peer indefinite waiting were not executed.
-
-### T621. Refresh opened LSP documents after their files change
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::did_open](src/plugins/graph/lsp.rs#L511). The first query reads a file and sends `textDocument/didOpen` with version 1. Subsequent calls return immediately if the URI is already in `opened`, before reading the file again. [with_session](src/plugins/graph/lsp.rs#L544) reuses the same live server for the workspace; the module sends no document-change or close notification. Editing a file between queries therefore leaves the peer with the original open-document text.
-
-The isolated probe opened a temporary file containing `old_symbol`, changed it to `new_symbol`, and called the actual `did_open` implementation again. A synthetic protocol peer reported only one notification, still carrying `old_symbol`. This affects repeated queries in a resident MCP session; restarting a server happens to refresh the initial snapshot. T376's lifecycle/fallback work does not cover edits to an already opened document.
-
-Execution plan:
-
-1. Add a fake-peer test that opens, edits and re-queries one URI in the same session; assert the peer receives the new content before the query. Keep an unchanged-file control.
-2. Track each opened document's content/version and send the appropriate full-content change or close/reopen sequence when it changes, respecting the negotiated synchronization capability. Do not mark a document as synchronized before its notification succeeds.
-3. Cover consecutive edits, Unicode, deletion/read failure and session replacement; ensure query results and source ranges cannot silently refer to the old snapshot.
-4. Run focused document synchronization and repeated graph-query tests, then `just check`.
-
-Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
-
 ### T622. Preserve non-text blocks when the pi extension compresses tool output
 
 Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [pi tool_result](plugins/pi/extensions/rtok.ts#L143). The handler joins only text blocks for `rtok filter`, then returns a replacement content array containing only the compressed text. A successful transformation of a text-plus-image result therefore drops the image; its bytes were never sent to the filter and cannot be recovered from that text's archive. The omp installer links the same package. T70.1 covers text replacement, not preservation of mixed content.
@@ -902,21 +867,6 @@ Execution plan:
 4. Run extension/package parity tests and `just check`.
 
 Check: successful compression cannot remove or alter non-text tool-result blocks. Evidence used the actual extension under Vitest; no real pi/omp process or model was invoked.
-
-### T623. Correlate web replies across request timeouts and retries
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
-
-A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
-
-Execution plan:
-
-1. Add deterministic timeout/retry tests for two requests with different selections; the late first reply must never resolve the second promise. Include same-project graph/diff and export/import variants sharing this queue.
-2. Add request identifiers to the client/server protocol and echo them in successful and failed answers. Match pending promises by identifier and operation; update generated types and protocol tests together.
-3. Ignore replies for expired requests, isolate reconnect generations and retain bounded pending-state cleanup. Verify timely requests, concurrent requests and connection closure.
-4. Run focused API/protocol and Doctor UI tests, then `just check`.
-
-Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
 
 ### T624. Retain the trace ID in the OTel integration-check extractor
 
@@ -1518,14 +1468,6 @@ Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cl
 
 Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
 
-### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
-
-Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
-
-Check: the T276 card's Check lines for items 4 and 5; `just check`.
-
-Execution plan: route the 3 `bench.rs` sites (a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture` from the code) and the 10 `agents/restart.rs` sites through `rtok_sys::proc::ProgressRunner`; keep stdout and non-TTY stderr byte-identical; add non-TTY tests asserting no spinner bytes and unchanged output with own `sh` fakes; then `just check`.
-
 ### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
 
 Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
@@ -1570,15 +1512,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1. Next: PR 3, the other hosts.
-
-### T277.2. Cursor, Copilot, Gemini, Codex, VS Code, ZCode, Kimi and Grok write and remove the MCP entry through `rtok_mcp::ops`
-
-PR 3 of T277: the hosts T275 lists as affected move onto `rtok_mcp` the way T277.1 moved Claude. Each host gets its `McpSpec`, routes install, update, remove and the MCP branch of `installed` through `rtok_mcp::ops` / `status`, and deletes its own `register_mcp` / `unregister_mcp` (and `plugin_is_mcp` for Cursor). One commit per host; split into T277.3 at claim time if it passes 500 code lines. Blocks T276.3.
-
-Execution plan: follow T277.1 (done.md) host by host; table-driven `Vfs` test rows per host covering install, update, remove and status with unrelated keys kept byte-for-byte; `just check`.
-
-Check: every listed host passes the shared table-driven test; `rg "register_mcp|unregister_mcp|plugin_is_mcp" src/agents/{cursor,copilot,gemini,codex,vscode,zcode,kimi,grok}` finds nothing; `just check`.
+Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1; PR 3 done as T277.2 (seven hosts), Codex as T277.3. Next: PR 4, the unaffected hosts.
 
 ### T277.3. Codex writes and removes the MCP entry through `rtok_mcp::ops`
 

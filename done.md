@@ -21,6 +21,23 @@ Validation: scoped `CHECK_BASE=085b49e9450de9326e7738dc441718e1bd667363 mise exe
 
 Status: done 2026-10-12
 
+### T623. Correlate web replies across request timeouts and retries
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
+
+A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+
+Execution plan:
+
+1. Add deterministic timeout/retry tests for two requests with different selections; the late first reply must never resolve the second promise. Include same-project graph/diff and export/import variants sharing this queue.
+2. Add request identifiers to the client/server protocol and echo them in successful and failed answers. Match pending promises by identifier and operation; update generated types and protocol tests together.
+3. Ignore replies for expired requests, isolate reconnect generations and retain bounded pending-state cleanup. Verify timely requests, concurrent requests and connection closure.
+4. Run focused API/protocol and Doctor UI tests, then `just check`.
+
+Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
+
+Result: every web client message carries a page-chosen `rid` that the server echoes in every answer and refusal (`Message{rid}`); a non-string, empty or over-64-byte `rid` is dropped, and pushed frames never carry one. `query.tsx` has one pending list matched by `rid` plus kind, so a late reply of an expired request can no longer resolve the retry, including same-project graph/diff and export/import. Refusals fail only the request they name; frames from a replaced socket are ignored and a reconnect rejects the old socket's requests. Fake-clock Vitest tests (14 failed before the fix), a Rust `inbound` test and a protocol test cover it; `ws.schema.json` and `snapshot.gen.ts` were regenerated.
+
 ### T614. Audit remaining store retention and identity boundaries
 
 Bounded source audit only; no product code changed. Read the task-claim, message, pending-worktree, worktree-claim, hook-field, retention, and path store methods and their relevant callers, focusing on ordering, identity and cleanup. This was a targeted pass, not an exhaustive audit of the store crate.
@@ -601,6 +618,16 @@ Crate changes: `McpSpec` gains `launch` (absolute command, `--host <id>` pair); 
 
 Check: crate table tests (launch and type tolerance; ownership x `--yes` x dry run), Claude table over both clients x install, update, remove with foreign keys kept, and a dry run that creates no file; `just check`.
 
+### T277.2. Cursor, Copilot, Gemini, VS Code, ZCode, Kimi and Grok write and remove the MCP entry through `rtok_mcp::ops`
+
+PR 3 of T277: the hosts T275 lists as affected move onto `rtok_mcp` the way T277.1 moved Claude. Each host gets its `McpSpec`, routes install, update, remove and the MCP branch of `installed` through `rtok_mcp::ops` / `status`, and deletes its own `register_mcp` / `unregister_mcp` (and `plugin_is_mcp` for Cursor). One commit per host; split into T277.3 at claim time if it passes 500 code lines. Blocks T276.3.
+
+Execution plan: follow T277.1 (done.md) host by host; table-driven `Vfs` test rows per host covering install, update, remove and status with unrelated keys kept byte-for-byte; `just check`.
+
+Check: every listed host passes the shared table-driven test; `rg "register_mcp|unregister_mcp|plugin_is_mcp" src/agents/{cursor,copilot,gemini,vscode,zcode,kimi,grok}` finds nothing; `just check`.
+
+Result: Cursor, Copilot, Gemini, VS Code (stable and Insiders), ZCode, Kimi and Grok build an `McpSpec` (`agents::mcp::host_spec` plus `<host>::mcp_spec`) and write and remove their MCP entry through `rtok_mcp::ops` via `agents::mcp::{install, remove}`; their hand-written read/modify/write logic is gone, `register_mcp`/`unregister_mcp` stay as one-line wrappers because `d21_plugin_apply` takes them as function pointers. The crate gained `EntryShape::LocalAllTools` for Copilot's `type: local` + `tools: ["*"]`. Grok keeps its guard (an existing non-legacy entry is left alone) ahead of `ops`; an unparsable Grok `config.toml` is now an error instead of being overwritten. `installed()` MCP branches stay on the JSONC-tolerant `has_entry`. A table-driven `Vfs` test covers install, update of a stale entry, remove and status per host with unrelated keys and comments byte for byte. Codex moved to T277.3.
+
 ### T461. Windows resident exit condition matches Unix
 
 Cloud review finding (suspected): the Windows resident (`src/hooks/resident.rs`) exits only when `hook.lock` vanishes, while the Unix one also exits when its socket file vanishes. Not a bug. The Unix check exists because a new resident unlinks and rebinds the socket path, which would orphan the old listener. A named pipe has no file a user or another resident can delete, and `ServerOptions::first_pipe_instance(true)` makes a second resident fail to create the pipe while the first holds it, so there is no Windows counterpart to mirror. Added a comment on the Windows tick saying why; no behaviour change.
@@ -765,6 +792,40 @@ Check: test with the fake/absent server for each of the five ops; existing LSP t
 Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend check, `Err` or none-answer for a name `tags_know` finds, prefix, `lsp_fallback` Measurement); each of the five tools keeps its tags body as `<op>_tags` and routes through the wrapper, the outline path guard stays outside it. (2) Tests in the same file: a manifest-less root makes `lsp::*` fail before any spawn, so no PATH access; plus direct wrapper tests for the empty-answer rule. (3) `just check`, then move the card to `done.md`.
 
 Result: with `backend = "lsp"`, `symbol`, `callers`, `impact`, `outline` and `explore` go through one `lsp_or_tags` wrapper in `src/plugins/graph/mod.rs`; an `Err` or a none-answer for a name `tags_know` finds returns the tags answer headed `(tags; lsp: <reason>)` and records `graph` / `lsp_fallback`. Tests: `lsp_backend_falls_back_to_tags_for_every_tool`, `lsp_empty_answer_falls_back_only_for_a_known_name`.
+
+### T620. Enforce LSP request deadlines during blocking transport reads
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::request](src/plugins/graph/lsp.rs#L461). Its deadline is checked before `read_msg`, but that function performs blocking pipe reads without a deadline. A matching response returns immediately without checking the elapsed deadline. An isolated probe compiled the verbatim request/framing methods against a synthetic subprocess peer: with `ready()` set to 10 ms and the peer delaying its reply by 250 ms, the request still succeeded after 675 ms wall time. A peer that stays silent can leave the call blocked instead of reaching the documented fallback.
+
+[with_session](src/plugins/graph/lsp.rs#L544) holds the shared session mutex through the call; [capability::ask](src/plugins/graph/capability.rs#L197) invokes the server closure synchronously. T376 adds fallback after a returned error, but that does not enforce a deadline on an unread pipe.
+
+Execution plan:
+
+1. Add deterministic fake-peer regressions for no reply, a delayed reply, a partial header/body and intervening notifications. Assert bounded completion and timeout classification, with a timely-response control.
+2. Make framing reads deadline-aware using one transport owner and bounded cancellation. Include writes in the request budget so a peer that stops consuming input cannot bypass the same bound.
+3. On timeout, invalidate or safely resynchronize the session, release locks and reach the existing fallback path. Verify a later request and shutdown cannot be trapped behind the expired request or consume its late response.
+4. Run focused LSP transport, capability/fallback and shutdown tests, then `just check`.
+
+Check: an unresponsive peer cannot hold an LSP request beyond its configured budget plus a bounded cleanup allowance. Executed evidence used extracted production request/framing code, a synthetic peer and a 10 ms timeout shim; real language servers, the full capability dispatcher and silent-peer indefinite waiting were not executed.
+
+Result: LSP framing reads and writes run on dedicated threads, and `Session::request` waits on channels under one deadline covering the write and the reply. A silent, slow, partial-frame or non-reading peer yields a timeout error within the budget and reaches the existing fallback (`capability.rs` already counts a timeout as `server_broke`). A timeout kills the server and marks the session expired, so `with_session` replaces it and a late reply is never consumed; `Drop` no longer blocks on writing `exit`. Seven fake-peer tests in `src/plugins/graph/lsp/transport_tests.rs` (`sh` peers, real pipes) failed or hung before the fix.
+
+### T621. Refresh opened LSP documents after their files change
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::did_open](src/plugins/graph/lsp.rs#L511). The first query reads a file and sends `textDocument/didOpen` with version 1. Subsequent calls return immediately if the URI is already in `opened`, before reading the file again. [with_session](src/plugins/graph/lsp.rs#L544) reuses the same live server for the workspace; the module sends no document-change or close notification. Editing a file between queries therefore leaves the peer with the original open-document text.
+
+The isolated probe opened a temporary file containing `old_symbol`, changed it to `new_symbol`, and called the actual `did_open` implementation again. A synthetic protocol peer reported only one notification, still carrying `old_symbol`. This affects repeated queries in a resident MCP session; restarting a server happens to refresh the initial snapshot. T376's lifecycle/fallback work does not cover edits to an already opened document.
+
+Execution plan:
+
+1. Add a fake-peer test that opens, edits and re-queries one URI in the same session; assert the peer receives the new content before the query. Keep an unchanged-file control.
+2. Track each opened document's content/version and send the appropriate full-content change or close/reopen sequence when it changes, respecting the negotiated synchronization capability. Do not mark a document as synchronized before its notification succeeds.
+3. Cover consecutive edits, Unicode, deletion/read failure and session replacement; ensure query results and source ranges cannot silently refer to the old snapshot.
+4. Run focused document synchronization and repeated graph-query tests, then `just check`.
+
+Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
+
+Result: opened LSP documents track their version and text. Each query re-reads the file and sends a full-content `didChange`, or `didClose` plus `didOpen` with the next version when the server declared no change sync. A deleted or unreadable file is closed, and a document is recorded as synced only after its notification was written. Behaviour change: a file that cannot be read on first open is no longer opened as an empty document. Eight fake-peer tests cover edits, Unicode, close/reopen, deletion, a failed notification and session replacement; the four edit tests failed before the fix.
 
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
@@ -11684,6 +11745,16 @@ Result: `crates/rtok-sys/src/proc/` gains `ProgressRunner::batch(label, total, u
 
 Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
+
+### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
+
+Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
+
+Check: the T276 card's Check lines for items 4 and 5; `just check`.
+
+Execution plan: route the 3 `bench.rs` sites (a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture` from the code) and the 10 `agents/restart.rs` sites through `rtok_sys::proc::ProgressRunner`; keep stdout and non-TTY stderr byte-identical; add non-TTY tests asserting no spinner bytes and unchanged output with own `sh` fakes; then `just check`.
+
+Result: `rtok bench`, `rtok run` and the desktop restart in `agents/restart.rs` run their children through `ProgressRunner`. `rtok bench` shows a bar over runs with a spinner per `claude -p` (the outer `with_loader` is gone); `rtok run` captures through the runner, so the buffered wait shows `running <command>…` on a terminal (control characters stripped from the label). The runner gained `run_capped` (shared byte cap with a dropped count, the old T448 cap), a return at child exit with a 200 ms pipe drain instead of waiting for pipe EOF (a backgrounded grandchild no longer holds a run), and `raw_arg` for the cmd.exe body; `capture_capped` left `src/proc.rs`. `restart.rs` closes and reopens apps with `closing …` and `reopening …` spinners and `quiet` probes. Pipes, CI and `--json` keep byte-identical stdout and stderr (`tests/progress_sites.rs`).
 
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
