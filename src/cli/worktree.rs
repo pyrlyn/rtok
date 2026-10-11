@@ -210,6 +210,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             agent,
             owner,
             keep_branch,
+            dry_run,
             json,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
@@ -225,11 +226,12 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             })?;
             if json {
                 print_json(&done)?;
+            } else if dry_run {
+                print!("{}", done.preview_text());
             } else {
                 println!("{}: {}", done.path, done.note);
             }
 
-            dry_run,
             Ok(())
         }
         WorktreeCmd::Whoami { json } => {
@@ -238,8 +240,6 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             let me = crate::worktree::ops::whoami(&cfg, &cwd);
             if json {
                 print_json(&me)?;
-            } else if dry_run {
-                print!("{}", done.preview_text());
             } else {
                 print!("{}", crate::worktree::whoami::to_text(&me));
             }

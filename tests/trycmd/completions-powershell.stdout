@@ -162,6 +162,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--fix', '--fix', [CompletionResultType]::ParameterName, 'Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a checklist, a pipe the diff; --yes writes without asking')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'With --fix: write the changes (a copy goes to `_backup/` first)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'With --fix --yes: print the diffs and write nothing')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --fix: stat lines and totals instead of the diffs (a dry run)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -212,6 +213,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--owner', '--owner', [CompletionResultType]::ParameterName, 'The owner an old lock names, as `<provider> / <model>`. Defaults to `<host> / <model>` of the agent')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--keep-branch', '--keep-branch', [CompletionResultType]::ParameterName, 'Remove an unmerged worktree too and keep its branch (a merged branch is kept as well)')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Show the path, branch, size and file count that would go; remove nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text line')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -237,6 +239,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--stale-lock', '--stale-lock', [CompletionResultType]::ParameterName, 'Treat someone else''s lock as abandoned once its merged, clean worktree is untouched this long')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -246,6 +250,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep caches modified within this window (`24h`, `7d`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -578,6 +584,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'All variants (the default when neither `--cli` nor `--desktop` is given)')
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add rtok to the project''s post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -596,6 +603,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'All variants (the default when neither `--cli` nor `--desktop` is given)')
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add rtok to the project''s post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -606,6 +614,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -616,6 +625,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -626,6 +636,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -636,6 +647,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -650,6 +662,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Reinstall the plugin even when it is already at the available version')
             [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'List outdated plugins only (same output as `agents outdated`)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -664,6 +677,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Reinstall the plugin even when it is already at the available version')
             [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'List outdated plugins only (same output as `agents outdated`)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -839,6 +853,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--min-size', '--min-size', [CompletionResultType]::ParameterName, 'Only items of at least this size (`10MB`); on `clear` this also limits what `--yes` removes')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('--trash', '--trash', [CompletionResultType]::ParameterName, 'Move to the OS trash instead of deleting')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -893,6 +909,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--min-size', '--min-size', [CompletionResultType]::ParameterName, 'Only items of at least this size (`10MB`); on `clear` this also limits what `--yes` removes')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('--trash', '--trash', [CompletionResultType]::ParameterName, 'Move to the OS trash instead of deleting')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -1148,6 +1166,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'All variants (the default when neither `--cli` nor `--desktop` is given)')
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add rtok to the project''s post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1208,6 +1227,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--install', '--install', [CompletionResultType]::ParameterName, 'Write the script to the shell''s per-user completions directory')
             [CompletionResult]::new('--uninstall', '--uninstall', [CompletionResultType]::ParameterName, 'Remove what `--install` wrote')
             [CompletionResult]::new('--list', '--list', [CompletionResultType]::ParameterName, 'Print each shell, whether its completions are installed (yes/no) and the file')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'With `--install`/`--uninstall`: show the file diff and write nothing')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -1243,6 +1263,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Overwrite an existing file')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the diff it would write and exit')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the diff')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1277,6 +1298,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;config;set' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the diff it would write and exit')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the diff')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1380,6 +1402,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--budget', '--budget', [CompletionResultType]::ParameterName, 'Token budget; default `[plugins.memory] sync_tokens`')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the unified diff and write nothing')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the diff')
             [CompletionResult]::new('--remove', '--remove', [CompletionResultType]::ParameterName, 'Delete the managed block and nothing else')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Overwrite a hand-edited block')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -1554,6 +1577,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--from', '--from', [CompletionResultType]::ParameterName, 'Unlink from this project instead of the selected one')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--both', '--both', [CompletionResultType]::ParameterName, 'Also remove the link the other way')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Show the links that would go; remove nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of a table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -1561,6 +1585,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         }
         'rtok;graph;projects;remove' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Show the index rows and links that would go; remove nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of a table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')

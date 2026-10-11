@@ -37,7 +37,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T404. Evaluate a local draft model that the cloud model only verifies
 - T413. More agent hosts: popular agents rtok does not install into yet
 - T413.1. `rtok agents install roo` — Roo Code
 - T413.2. `rtok agents install qwen` — Qwen Code
@@ -57,9 +56,6 @@
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
-- T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
-- T416.3. `--stat` on the commands that show a diff
-- T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`

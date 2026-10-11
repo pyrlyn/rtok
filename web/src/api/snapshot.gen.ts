@@ -453,6 +453,10 @@ export interface Planned {
    * Planned and not removed: the re-check refused it or the removal failed.
    */
   failed: boolean;
+  /**
+   * Files in it, counted for a planned item before anything is removed.
+   */
+  files: number;
   kind: string;
   /**
    * Unix seconds of the newest file in it; `None` when unreadable (T330.6).

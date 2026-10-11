@@ -10,7 +10,7 @@ use std::path::Path;
 
 use change_preview::{Mode, Preview};
 
-use crate::agents::junk::disk_usage_until;
+use crate::disk_usage::disk_usage_until;
 
 /// How many bytes and files a removal of `path` takes, counted before it goes.
 pub fn size_of(path: &Path) -> (u64, u64) {

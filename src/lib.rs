@@ -29,6 +29,7 @@ pub mod cli;
 pub mod completions;
 pub mod config;
 pub mod demon;
+pub mod disk_usage;
 pub mod doctor;
 pub mod expand;
 pub mod fs;

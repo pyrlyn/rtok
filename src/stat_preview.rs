@@ -126,7 +126,10 @@ mod tests {
         set(false);
         let out = show_file(Path::new("f"), DIFF);
         assert!(out.starts_with("--- a/f"), "{out}");
-        assert!(out.ends_with("1 file changed, 2 insertions(+), 1 deletion(-)"), "{out}");
+        assert!(
+            out.ends_with("1 file changed, 2 insertions(+), 1 deletion(-)"),
+            "{out}"
+        );
     }
 
     #[test]

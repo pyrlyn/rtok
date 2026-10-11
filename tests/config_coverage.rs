@@ -128,6 +128,9 @@ const ALLOW_KEYS: &[&str] = &[
     "junk.yes",
     // `agents junk list --bytes` (T330.1): how one call prints sizes, not a stored setting.
     "junk.bytes",
+    // `agents junk clear --dry-run/--stat` (T416.2): one-shot preview flags, like `junk.yes`.
+    "junk.dry_run",
+    "junk.stat",
     // `agents junk clear` filters (T330.4): what one run removes. A stored filter would widen
     // a later bare `clear --yes` without anyone typing it; `--trash` is the same per-call choice.
     "junk.agent",

@@ -620,9 +620,20 @@ fn clean_deletes_idle_tagged_caches_and_nothing_else() {
     assert_eq!(row("wt-fresh")["files"], 0);
     assert!(table.contains("2 paths, 4 files"), "{table}");
     assert!(table.contains("  2 files"), "{table}");
+    // The idle column counts seconds, so two runs may differ in it: compare the words with
+    // every age (`9s`, `2h`) masked.
+    let words = |out: &std::process::Output| -> Vec<String> {
+        let age = |w: &str| {
+            let (n, unit) = w.split_at(w.len().saturating_sub(1));
+            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && "smhd".contains(unit)
+        };
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mask = |w: &str| if age(w) { "AGE".into() } else { w.to_string() };
+        text.split_whitespace().map(mask).collect()
+    };
     for flag in ["--stat", "--dry-run"] {
         let flagged = rtok(&work, &["worktree", "clean", flag]);
-        assert_eq!(flagged.stdout, rtok(&work, &["worktree", "clean"]).stdout);
+        assert_eq!(words(&flagged), words(&rtok(&work, &["worktree", "clean"])));
     }
 
     let out = rtok(&work, &["worktree", "clean", "--yes"]);
@@ -974,16 +985,6 @@ fn remove_takes_only_the_caller_s_own_clean_worktree() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
-/// T412: what `remove` guards beyond `git worktree remove` + `git branch -d`. `--keep-branch`
-/// never lets a detached HEAD's commits or uncommitted files go; ignored build output does not
-/// make a worktree dirty; a merged branch `git branch -D` cannot delete (checked out in a second
-/// worktree) leaves a removal that is reported as done, branch kept, claim released; an
-/// unreachable `origin` is a warning, and the local base still decides.
-#[test]
-fn remove_guards_commits_and_reports_a_branch_it_could_not_delete() {
-    let tmp = rtok::testutil::tmp_dir("worktree-remove-edges");
-    let work = common::git::repo(&tmp);
-
 /// T416.4: `remove --dry-run` names the path, branch, size and file count, keeps every refusal,
 /// and leaves the worktree, its branch and its claim alone.
 #[test]
@@ -1047,6 +1048,16 @@ fn remove_dry_run_previews_and_changes_nothing() {
     );
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+/// T412: what `remove` guards beyond `git worktree remove` + `git branch -d`. `--keep-branch`
+/// never lets a detached HEAD's commits or uncommitted files go; ignored build output does not
+/// make a worktree dirty; a merged branch `git branch -D` cannot delete (checked out in a second
+/// worktree) leaves a removal that is reported as done, branch kept, claim released; an
+/// unreachable `origin` is a warning, and the local base still decides.
+#[test]
+fn remove_guards_commits_and_reports_a_branch_it_could_not_delete() {
+    let tmp = rtok::testutil::tmp_dir("worktree-remove-edges");
+    let work = common::git::repo(&tmp);
     std::fs::write(work.join(".git/info/exclude"), "target/\n").unwrap();
     let (store, ids) = agents(&tmp, &["sess-me"]);
     let me = ids[0].as_str();
