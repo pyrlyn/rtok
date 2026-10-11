@@ -414,6 +414,9 @@
 [tasks.export.github]                 # `rtok task export github`: mirror the disk tasks into GitHub Issues, one way
 # repo = ""                             # owner/name; empty: [tasks.github] repo, else the origin remote
 
+[tasks.export.linear]                 # `rtok task export linear`: mirror the disk tasks into Linear, one way; token in LINEAR_API_KEY
+# team = ""                             # the team's short key, e.g. "ENG"; empty: the export refuses to run
+
 [otel]                                # OpenTelemetry export; off until endpoint resolves
 # endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 # headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS

@@ -472,6 +472,9 @@ project = ""                          # group/name or numeric id; empty: the ori
 [tasks.export.github]                 # `rtok task export github`: mirror the disk tasks into GitHub Issues, one way
 repo = ""                             # owner/name; empty: [tasks.github] repo, else the origin remote
 
+[tasks.export.linear]                 # `rtok task export linear`: mirror the disk tasks into Linear, one way; token in LINEAR_API_KEY
+team = ""                             # the team's short key, e.g. "ENG"; empty: the export refuses to run
+
 [otel]                                # OpenTelemetry export (D19); off until endpoint resolves
 endpoint      = ""                    # OTLP/HTTP base URL, e.g. "http://localhost:4318"; "" = $OTEL_EXPORTER_OTLP_ENDPOINT
 headers       = ""                    # "k=v,k2=v2", e.g. "signoz-ingestion-key=…"; "" = $OTEL_EXPORTER_OTLP_HEADERS
@@ -883,7 +886,7 @@ Unset keeps Mozilla roots only. `rtok hook` never opens TLS.
 | `agents whoami` | — | reads `RTOK_AGENT_ID` and resolves it through the store (T283); no key, no `setup.*` (`--json` is the reading row) |
 | `worktree whoami` | — | reads `RTOK_AGENT_ID` and `[worktree] root` (T411); no key of its own (`--json` is the reading row) |
 | `task init` | `--adapter`, `--prefix` | `tasks.adapter`, `tasks.prefix`: written into the checkout's `.rtok.toml` (T441.5) |
-| `task export` | `--dry-run`, `--json` | `tasks.export.github.repo` (T441.13.5); `--dry-run` is per call (no key) |
+| `task export` | `--dry-run`, `--json` | `tasks.export.github.repo`, `tasks.export.linear.team` (T441.13.5, T441.13.6); `--dry-run` is per call (no key) |
 | `task create` / `list` / `status` | `--description`, `--body-file`, `--parent`, `--status`, `--all`, `--force` | per call (no key): what one task is and which rows one call shows; `[tasks]` picks the adapter and the prefix |
 | `agents junk list` / `clear` | `--agent`, `--kind`, `--include review`, `--older-than`, `--session-days`, `--trash`, `--bytes`, `--items`, `--sort`, `--min-size`, `--yes` | per call (no key): what one run lists or removes; `--session-days` is `agents.junk.stale_session_days` for one run; `agents.junk.keep_logs_days`, `.temp_min_age_hours`, `.crash_dump_min_age_days`, `.stale_worktree_days`, `.exclude`, `.extra` have no flag |
 | `agents usage` | `--source`, `--host`, `--since`, `--until`, `--daily` / `--monthly`, `--tz` | `agents.usage.source`, `.hosts`, `.since`, `.until`, `.period`, `.tz`, plus `.dirs.<host>` with no flag (`--unpriced` picks the view of one call, `--json` is the reading row) |

@@ -1551,7 +1551,7 @@ run with nothing changed sends no write
 Usage: rtok task export [OPTIONS] <BACKEND>
 
 Arguments:
-  <BACKEND>  Where to mirror the tasks [possible values: github]
+  <BACKEND>  Where to mirror the tasks [possible values: github, linear]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)

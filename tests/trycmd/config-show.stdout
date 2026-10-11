@@ -373,6 +373,7 @@ stats.transcripts_dir = ~/.claude/projects
 tasks.adapter = disk
 tasks.disk.dir = tasks
 tasks.export.github.repo = 
+tasks.export.linear.team = 
 tasks.github.project = 0
 tasks.github.repo = 
 tasks.gitlab.project = 

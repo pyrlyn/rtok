@@ -14,13 +14,15 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use self::github::GithubExporter;
+use self::linear::LinearExporter;
 use super::github::{self as adapter_github, GithubAdapter};
 use super::{Task, TaskId, remote};
 
 pub mod github;
+pub mod linear;
 
 /// The backends `rtok task export` takes.
-pub const BACKENDS: [&str; 1] = ["github"];
+pub const BACKENDS: [&str; 2] = ["github", "linear"];
 
 /// The exporter `backend` names, with its target and token resolved. `key` is the project's
 /// counter key ([`crate::project::project_key`]), which names the GitHub repo when none is set.
@@ -41,6 +43,19 @@ pub fn open(cfg: &crate::config::Tasks, key: &str, backend: &str) -> Result<Box<
             let adapter =
                 GithubAdapter::new(adapter_github::API, &repo, &token, remote::WRITE_GAP)?;
             Ok(Box::new(GithubExporter::new(adapter, &repo)))
+        }
+        "linear" => {
+            let team = cfg.export.linear.team.trim();
+            if team.is_empty() {
+                bail!("linear export: set [tasks.export.linear] team to the team's short key");
+            }
+            let key = remote::token("linear", &["LINEAR_API_KEY"], &[])?;
+            Ok(Box::new(LinearExporter::new(
+                linear::API,
+                team,
+                &key,
+                remote::WRITE_GAP,
+            )?))
         }
         other => bail!(
             "rtok task export: unknown backend {other:?}; use {}",
@@ -198,6 +213,12 @@ pub(crate) fn drifted(local: &Task, remote: &Task, claims: bool) -> Vec<&'static
         if local.blocked_by != remote.blocked_by {
             out.push("needs");
         }
+        if local.conflicts_with != remote.conflicts_with {
+            out.push("conflicts");
+        }
+        if local.parallel != remote.parallel {
+            out.push("parallel");
+        }
     }
     out
 }
@@ -336,6 +357,28 @@ mod tests {
         assert_eq!(unchanged, 1);
         let (a, ..) = diff(&[local], &[remote], true);
         assert_eq!(a[0].fields, ["assignee"]);
+    }
+
+    #[test]
+    fn linear_needs_a_team_before_anything_else() {
+        let err = open(&crate::config::Tasks::default(), "R", "linear")
+            .err()
+            .expect("an empty team is refused");
+        assert!(format!("{err:#}").contains("[tasks.export.linear] team"));
+    }
+
+    #[test]
+    fn markers_count_as_claims() {
+        let mut local = task("R1", Status::Open);
+        local.parallel = true;
+        local.conflicts_with = vec!["R2".parse().unwrap()];
+        let remote = task("R1", Status::Open);
+        let (a, ..) = diff(
+            std::slice::from_ref(&local),
+            std::slice::from_ref(&remote),
+            true,
+        );
+        assert_eq!(a[0].fields, ["conflicts", "parallel"]);
     }
 
     #[test]

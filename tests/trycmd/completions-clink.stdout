@@ -142,7 +142,7 @@ clink.argmatcher("rtok")
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--json"] = "JSON instead of the text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "export" .. clink.argmatcher()
-          :addarg({ "github" })
+          :addarg({ "github", "linear" })
           :addflags({ "--dry-run", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--dry-run"] = "Print the planned creates, updates and closes and send nothing", ["--json"] = "JSON instead of the text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "init" .. clink.argmatcher()

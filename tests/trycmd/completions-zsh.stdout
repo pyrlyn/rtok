@@ -476,7 +476,7 @@ _arguments "${_arguments_options[@]}" : /
 '--json[JSON instead of the text]' /
 '-h[Print help]' /
 '--help[Print help]' /
-':backend -- Where to mirror the tasks:(github)' /
+':backend -- Where to mirror the tasks:(github linear)' /
 && ret=0
 ;;
 (init)

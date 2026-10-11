@@ -420,6 +420,7 @@ Every effective key with its origin — the `config show --sources` page.
 | tasks.adapter | disk | default |
 | tasks.disk.dir | tasks | default |
 | tasks.export.github.repo |  | default |
+| tasks.export.linear.team |  | default |
 | tasks.github.project | 0 | default |
 | tasks.github.repo |  | default |
 | tasks.gitlab.project |  | default |
@@ -434,7 +435,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-388 keys.
+389 keys.
 
 ## Doctor
 

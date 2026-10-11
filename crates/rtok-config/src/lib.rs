@@ -997,6 +997,15 @@ section! {
     /// `[tasks.export]` — where `rtok task export` mirrors the disk tasks (T441.13.5).
     TasksExport {
         github: TasksExportGithub = TasksExportGithub::default(),
+        linear: TasksExportLinear = TasksExportLinear::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export.linear]` — the Linear team whose issues mirror the tasks (T441.13.6).
+    TasksExportLinear {
+        /// The team's short key, e.g. `ENG`. Empty: `rtok task export linear` refuses to run.
+        team: String = String::new(),
     }
 }
 
