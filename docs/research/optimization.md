@@ -160,8 +160,8 @@ default.
 | Context editing (T51.2) | Off | Measure with archive ids kept; candidate default for Anthropic wires |
 | Live-zone skill bodies (T61.2) | Off (`plugins.archive.skills`) | Gate on skill stats (T61.1), then default |
 | Nested JSON / `data:` blobs (T51.1) | Off (`plugins.archive.live_blobs`) | Same: bench, then default |
-| Deferred tool schemas | Not built | Short tool stubs, full schema on first use, for hosts without Tool Search (`research.md` §16.3 #2) |
-| Thinking / reasoning replay | Not built | Drop prior reasoning blocks the host re-sends where the provider allows it (`research.md` §16.3 #4); provider rules differ, needs per-wire tests |
+| Deferred tool schemas | Not built | Short tool stubs, full schema on first use, for hosts without Tool Search (`research.md` §16.3 #2). *Measured* 2026-10-11 (T385.11, `research.md` §37): 99.7 % of Claude Code sessions already defer, both vendors do it server side; not built |
+| Thinking / reasoning replay | Not built | Drop prior reasoning blocks the host re-sends where the provider allows it (`research.md` §16.3 #4); provider rules differ, needs per-wire tests. *Measured* 2026-10-11 (T385.11, `research.md` §37): replayed thinking is 11.5 % of input tokens, 3.4 % from earlier turns; dropping those nets 1.1 % to 1.6 % of input cost after cache re-creation; the earlier 0.03 % (T125) was a measurement error. Undecided |
 | Lane-aware Flex / Batch | Not built | §2 (dollars, not tokens) |
 | LLM soft compression (P28) | Not built | §3 |
 | Semantic response cache (P31) | Off | Zero hits at threshold 0.99 (`research.md` §9.3); keep off for agents, consider for `bulk` |

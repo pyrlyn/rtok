@@ -48,7 +48,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
-| T385.11 | todo | P3 | 4 | 10% | |
+| T385.11 | in progress | P3 | 4 | 50% | Claude Code / sonnet-5.5 |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -914,6 +914,10 @@ Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossles
 optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas and replayed thinking blocks, only where the measurement in each idea shows a saving (I-86 was rejected at 0.03 % — re-measure before building).
 
 Check: per-wire tests and a dated bench row; `just check`.
+
+Plan: (1) re-measure I-86 and I-85 on the local Claude Code transcripts (parent chain walk, resident-weighted, signature size as the billed size of an omitted thinking block) and cite the vendor docs; (2) record dated rows in `research.md` and fix `ideas.md` / `optimization.md` §5; (3) build only a part whose number clears its gate, otherwise close as dropped with the numbers.
+
+Status 2026-10-11: step 1 and 2 done (`research.md` §37). I-85 has no saving left (99.7 % of sessions already defer) and is dropped. I-86 is ambiguous: replayed thinking is 11.5 % of input tokens (3.4 % from earlier turns, above its 3 % gate) but the net dollar saving is 1.1 % to 1.6 % of input cost, a client-side edit is unsafe, and the only safe route is the beta `clear_thinking_20251015` edit with unmeasured quality. Waiting for the creator to pick build (server-side `clear_thinking` edit in `[proxy] context_management`, Anthropic wire only) or drop.
 
 ### T394. Run the paid live benches and record them
 
