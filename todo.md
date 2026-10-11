@@ -38,6 +38,9 @@
 - T574. Decode SPA asset URL paths before looking up filenames
 - T576. Bind Doctor web writes to the confirmed preview
 - T577. Protect nested package-manager lockfiles during junk cleanup
+- T579. Count each transcript once when scanning directory aliases
+- T580. Include report metadata and anchors in the AI output budget
+- T581. Filter actionable report sinks before applying the top-ten limit
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

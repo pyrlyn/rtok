@@ -123,6 +123,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T560.2 | todo | P2 | 3 | 0% | |
 | T576 | todo | P2 | 3 | 0% | |
 | T577 | todo | P2 | 3 | 0% | |
+| T579 | todo | P2 | 3 | 0% | |
+| T580 | todo | P2 | 2 | 0% | |
+| T581 | todo | P2 | 2 | 0% | |
 
 
 
@@ -568,6 +571,42 @@ Execution plan:
 3. Cover tagged build/cache roots, extra cache roots and recursively removed temp entries, a lockfile appearing after preview, all supported package lock names, unreadable subtrees and trash/permanent-delete paths. Preserve existing store/settings and exclude protections and clear refusal reasons.
 
 Check: no planned recursive deletion or cache emptying removes a protected descendant lockfile, unknown inspection results remain non-destructive, and `just check` passes. The actual recheck/newest/usage-walk/remove functions and permanent-delete branch reproduced the loss; a synthetic clock made the fixture older than the settle window. This was not a full report/CLI or trash integration test.
+
+### T579. Count each transcript once when scanning directory aliases
+
+Confirmed by the actual [paths_with_ext](src/measure/codex.rs#L28) walker: a root with real/s.jsonl returns one path; adding alias pointing to real returns two paths that canonicalize to the same file. The walker follows directory symlinks through Path::is_dir and has no visited-directory or file-identity set. [Codex requests](src/measure/codex.rs#L77), [Claude usage](src/measure/usage.rs#L115) and [stats collect](src/measure/stats.rs#L1098) parse and accumulate each returned path; a path-keyed transcript cache does not remove these aliases. Thus a single recorded request/session can contribute twice to usage and statistics. T135 addresses avoiding repeated parsing of unchanged paths, not alias deduplication.
+
+Execution plan:
+
+1. Add a filesystem fixture with one transcript, a directory alias and an unlinked control. Assert the discovered physical file and its usage/session contribution are counted once; include a symlink cycle and a symlink to a file where supported.
+2. Define one shared traversal policy for transcript readers: resolve the configured root, then either avoid following nested symlinks or track canonical directory/file identities before traversal and emission. Keep legitimate distinct transcripts and supported linked roots readable, preserve cutoff filtering and deterministic ordering, and fail open on inaccessible entries.
+3. Cover Claude/Codex usage, stats and transcript-cache callers, and consolidate the separate jsonl::parse_dir traversal so it cannot reintroduce alias double counting. Verify subagent attribution, missing targets and out-of-root links under the chosen policy.
+
+Check: adding an alias never changes totals for the same physical transcript and cycles terminate without repeated parsing; `just check` passes. The scratch probe exercised the actual walker and proved duplicate canonical paths; downstream accumulation was source-traced, not run through a complete host parser or CLI.
+
+### T580. Include report metadata and anchors in the AI output budget
+
+Confirmed with the actual [AI render loop](src/report/ai.rs#L41) and [token estimator](src/tokens.rs#L22): admission subtracts only section-body estimates, then appends the report header, date range/store path, dropped-section list and section anchors outside the budget. Eight controlled bodies admitted at an 808-token budget produced a final 840-token estimate. A longer store path adds more unbudgeted output. T22.4 and report.budget_tokens describe a cap on the AI report; existing tight-budget tests check whole-section omission but never estimate the final output. T565 covers a similar issue in mem_pack, not this renderer.
+
+Execution plan:
+
+1. Add final-output estimator assertions using real Document fixtures at a tight budget and exact admission boundaries, including long store paths, all-kept and partially dropped sections.
+2. Budget the complete serialized report, including anchors and the actual dropped list. Recompute admission when dropping a section changes metadata; preserve whole sections, their order and byte-stable output.
+3. Define explicit behavior when even the minimal metadata does not fit, and cover zero/tiny budgets, non-default estimator rates, Unicode and both TOON and fallback table rendering. Do not silently emit output above the configured cap.
+
+Check: every successful AI report stays within report.budget_tokens according to the configured estimator, while tables remain whole and drops are accurately named; `just check` passes. The isolated probe used actual render/admission and estimator functions with controlled section bodies and minimal model/config stubs, not the full document renderer.
+
+### T581. Filter actionable report sinks before applying the top-ten limit
+
+Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.
+
+Execution plan:
+
+1. Add an integration fixture with ten distinct positive-byte archive measurements and a smaller Read measurement. Assert that the Read recommendation remains; include cmd and MCP wrap controls and more than ten eligible sinks.
+2. Apply the actionable-class predicate before truncating to ten, or retain all grouped sinks until the recommendation layer filters and limits them. Share the eligibility rule so aggregation and presentation cannot drift; preserve deterministic tie ordering and existing switch labels.
+3. Cover mixed actionable/non-actionable classes, repeated references that aggregate into one sink, nonpositive byte counts and empty ledgers. Verify that recommendations expose at most ten eligible sinks and keep their Measurement evidence.
+
+Check: unrelated archive/injection rows cannot hide eligible read/cmd/MCP recommendations, the largest eligible sinks remain ranked correctly, and `just check` passes. The scratch probe compiled actual report_sinks/sink_label/sink_switch and top_sinks with an in-memory Store fixture and a catalogue subset containing the relevant real plugins; it was not a Diesel or CLI integration test.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
