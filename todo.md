@@ -19,7 +19,6 @@
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
 - T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
-- T283. An agent learns its own rtok agent id
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.50. Graph page: running labels with elapsed counters on the live canvas
