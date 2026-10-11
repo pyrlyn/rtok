@@ -28,6 +28,7 @@ index|sqlite_autoindex___diesel_schema_migrations_1|__diesel_schema_migrations|
 index|sqlite_autoindex_agents_1|agents|
 index|sqlite_autoindex_archive_1|archive|
 index|sqlite_autoindex_archive_decisions_1|archive_decisions|
+index|sqlite_autoindex_archive_summaries_1|archive_summaries|
 index|sqlite_autoindex_doc_crates_1|doc_crates|
 index|sqlite_autoindex_extractor_1|extractor|
 index|sqlite_autoindex_file_rank_1|file_rank|
@@ -59,6 +60,7 @@ table|__diesel_schema_migrations|__diesel_schema_migrations|CREATE TABLE __diese
 table|agents|agents|CREATE TABLE agents ( id TEXT PRIMARY KEY, -- NOT NULL: SQLite treats NULLs as distinct in a UNIQUE index, so a NULL host_id would -- make `agents_host_session` below insert a new row on every event instead of upserting. host_id INTEGER NOT NULL REFERENCES hosts(id), host_session_id TEXT NOT NULL, parent_key TEXT NOT NULL DEFAULT '', parent_id TEXT REFERENCES agents(id), cwd TEXT, started_at INTEGER NOT NULL DEFAULT (unixepoch()), last_seen INTEGER NOT NULL DEFAULT (unixepoch()), ended_at INTEGER, activity TEXT, status_text TEXT , ancestors TEXT)
 table|archive|archive|CREATE TABLE archive ( id TEXT PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session TEXT NOT NULL, tool TEXT, bytes INTEGER NOT NULL, path TEXT NOT NULL, sha256 TEXT NOT NULL , agent_id TEXT NULL)
 table|archive_decisions|archive_decisions|CREATE TABLE "archive_decisions" ( session TEXT NOT NULL, tool_use_id TEXT NOT NULL, archive_id TEXT NOT NULL REFERENCES archive(id), pointer TEXT NOT NULL, expanded_ts INTEGER, ts INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (session, tool_use_id) )
+table|archive_summaries|archive_summaries|CREATE TABLE archive_summaries ( archive_id TEXT NOT NULL REFERENCES archive(id), version TEXT NOT NULL, summary TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (archive_id, version) )
 table|call_io|call_io|CREATE TABLE call_io ( call_id INTEGER PRIMARY KEY REFERENCES calls(id), request_bytes INTEGER NOT NULL DEFAULT 0, response_bytes INTEGER NOT NULL DEFAULT 0, request_sha256 TEXT, response_sha256 TEXT, request_json TEXT, response_json TEXT, request_archive TEXT REFERENCES archive(id), response_archive TEXT REFERENCES archive(id) , request_raw BLOB NULL, response_raw BLOB NULL, hook_session_id INTEGER NULL REFERENCES hook_sessions(id))
 table|calls|calls|CREATE TABLE calls ( id INTEGER PRIMARY KEY, ts INTEGER NOT NULL DEFAULT (unixepoch()), session_id TEXT NOT NULL REFERENCES sessions(id), host_id INTEGER REFERENCES hosts(id), provider_id INTEGER REFERENCES providers(id), model_id INTEGER REFERENCES models(id), plugin TEXT, surface TEXT NOT NULL, kind TEXT NOT NULL, parent_id INTEGER REFERENCES calls(id), name TEXT, ms REAL, ok INTEGER NOT NULL DEFAULT 1, error TEXT , service_tier TEXT)
 table|doc_crates|doc_crates|CREATE TABLE doc_crates ( name TEXT NOT NULL, version TEXT NOT NULL, sha256 TEXT NOT NULL, format_version INTEGER NOT NULL, fetched_unix INTEGER NOT NULL, PRIMARY KEY (name, version) )

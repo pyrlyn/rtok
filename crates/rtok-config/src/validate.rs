@@ -789,8 +789,8 @@ fn check_leaf(
                 ));
             }
             // Caught here, not as a 400 on every request of that lane once the proxy runs.
-            lane if lane.starts_with("proxy.lanes.")
-                && lane.ends_with(".upstream")
+            lane if ((lane.starts_with("proxy.lanes.") && lane.ends_with(".upstream"))
+                || lane == "plugins.compress.llm.url")
                 && !s.trim().is_empty()
                 && !url::Url::parse(s.trim())
                     .is_ok_and(|u| matches!(u.scheme(), "http" | "https")) =>

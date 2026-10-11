@@ -10,6 +10,9 @@
 
 use serde_json::Value;
 
+pub mod llm;
+pub mod must_keep;
+
 use rtok_plugin_sdk::{
     Class, Ctx, DashboardPage, Manifest, Measurement, Plugin, Surface, ToolResultRef, WireRequest,
 };

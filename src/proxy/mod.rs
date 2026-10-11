@@ -123,7 +123,7 @@ fn hops_of(headers: &HeaderMap) -> u32 {
 /// body stream included, so a turn that streams for longer than the budget (extended
 /// thinking, many tool calls) was cut mid-SSE with the client left without a `message_stop`.
 /// The budget bounds one read instead.
-fn build_client(timeout_s: u64) -> Result<Client> {
+pub(crate) fn build_client(timeout_s: u64) -> Result<Client> {
     // Connecting is not streaming: a black-holed upstream used to hold the client for the
     // whole read budget (10 minutes by default) before it saw a 502.
     Client::builder()

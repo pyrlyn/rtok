@@ -391,6 +391,16 @@ diesel::table! {
     }
 }
 
+// 0047 (T385.9.1): the P28 compressor's summary of an archived result, per compressor version.
+diesel::table! {
+    archive_summaries (archive_id, version) {
+        archive_id -> Text,
+        version -> Text,
+        summary -> Text,
+        created_at -> BigInt,
+    }
+}
+
 // 0045 (T289.5): an adopted worktree no single agent could be named for yet.
 diesel::table! {
     worktree_pending (path) {
@@ -513,6 +523,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     measurements,
     archive,
     archive_decisions,
+    archive_summaries,
     read_cache,
     notes,
     note_embeddings,
