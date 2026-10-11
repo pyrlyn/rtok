@@ -13,6 +13,12 @@
 - T544. Keep unrelated gitignored files excluded when graph include is nonempty
 - T545. Apply full-walk include and glob-exclude rules to watcher events
 - T546. Refresh stored file ranks after deletion or zero-symbol replacement
+- T548. Redact private text before storing and restoring checkpoints
+- T549. Scope local llms documentation to its workspace
+- T550. Preserve returned doc ids when unchanged local docs are re-ingested
+- T551. Estimate docs-query savings against the same full content as byte accounting
+- T552. Keep checkpoint prefilter equivalent for spaced and mixed-content JSONL
+- T553. Use the shared project resolver for session checkpoint handoff
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

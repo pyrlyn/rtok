@@ -97,6 +97,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T544 | todo | P2 | 2 | 0% | |
 | T545 | todo | P2 | 3 | 0% | |
 | T546 | todo | P2 | 2 | 0% | |
+| T548 | todo | P1 | 2 | 0% | |
+| T549 | todo | P2 | 3 | 0% | |
+| T550 | todo | P2 | 2 | 0% | |
+| T551 | todo | P2 | 2 | 0% | |
+| T552 | todo | P2 | 2 | 0% | |
+| T553 | todo | P2 | 2 | 0% | |
 
 
 
@@ -221,6 +227,88 @@ Execution plan:
 3. Cover global, explicit-project and inferred-project creation plus revision; keep privacy stripping, embeddings and note history on the same write path.
 
 Check: global revisions stay global, unrelated project notes are untouched, ordinary creation still infers cwd, and `just check` passes.
+
+**Docs/checkpoint audit (T547).** T548–T553 are confirmed against `99b6753d`
+(product source unchanged from `0b14b88e`). Address the private-text persistence
+case first; the remaining fixes are independent except that T549/T550 share the
+local documentation ingestion path. Related completed feature tasks are cited
+below; these are newly identified failure cases, not copies of those features.
+
+### T548. Redact private text before storing and restoring checkpoints
+
+Confirmed in source and a function probe: [user_prompt](src/plugins/checkpoint.rs#L311) keeps private-tagged text, [render](src/plugins/checkpoint.rs#L122) reproduces it, and [write](src/plugins/checkpoint.rs#L687) passes the rendered body directly to upsert_note. Neither [Runtime::upsert_note](src/plugin.rs#L468) nor [Store::upsert_note](crates/rtok-store/src/note_store.rs#L155) strips it. A compact user record containing `use <private>PRIVATE_SENTINEL</private> briefly` therefore persists the sentinel in checkpoint/session notes and exposes it again on restoration. This violates the private-tag invariant in `src/plugins/memory/AGENTS.md`, despite ordinary mem_save/import already redacting.
+
+Validation: an offline Rust probe compiled the verbatim checkpoint extraction/rendering code and asserted that the private sentinel survives. Persistence/restoration is source-confirmed through write → upsert → render_offer; no live hook or database integration was run.
+
+Execution plan:
+
+1. Add PreCompact and SessionEnd fixtures with private text in prompts and captured errors; assert the stored note and restored injection never contain the sentinel.
+2. Reuse the existing private-tag scrubber at the checkpoint text boundary before truncating captured strings, so a closing tag beyond the prompt/error length limit cannot evade redaction.
+3. Cover mixed-case, multiline and long private blocks; retain ordinary prompt/path/action output, budgets and byte stability for nonprivate fixtures.
+
+Check: private content is absent from both persisted and restored checkpoint/session bodies, ordinary memory redaction remains intact, and `just check` passes.
+
+### T549. Scope local llms documentation to its workspace
+
+Source-confirmed: [ingest_llms](src/plugins/docs/mod.rs#L191) writes every workspace to the same `("llms", "local")` cache key. [docs_resolve/query](src/plugins/docs/mod.rs#L91) reads that key even when ingestion finds no local file. [replace_doc_crate](crates/rtok-store/src/docs.rs#L118) replaces all items with that name/version, with no workspace dimension. Query workspace A's llms.txt, then query `llms` in B with the same rtok home and no llms file: B receives A's documentation. If B has its own file, it overwrites A's cache. T455 introduced workspace docs but did not isolate their storage.
+
+Execution plan:
+
+1. Use two temporary workspace roots sharing one store: A has a unique local marker, B initially has no file and then a different marker. Assert neither resolve nor query in B exposes A's content.
+2. Give local documents a canonical workspace namespace, consistently applied during ingestion, cache checks and queries; keep downloaded crate/version documents globally reusable.
+3. Reconcile missing or empty local sources within their namespace and test workspace switching, deletion and recreation. Keep old unscoped local rows from being treated as the current workspace's docs.
+
+Check: each workspace sees only its own local documents, absence reports an uncached/empty result according to the tool contract, shared crate caches still work, and `just check` passes. Reproduction is source-derived.
+
+### T550. Preserve returned doc ids when unchanged local docs are re-ingested
+
+Source-confirmed: every [ingest_llms](src/plugins/docs/mod.rs#L200) call calculates a SHA but unconditionally calls replace_doc_crate. That method deletes and reinserts the items; [doc_items](crates/rtok-store/migrations/0039_docs_fts/up.sql#L12) uses generated integer primary keys. Seed one local section (id 1), fetch a crate whose item gets id 2, then run docs_resolve or docs_query with the unchanged local file present: the local section is recreated at id 3. [docs_get](src/plugins/docs/mod.rs#L177) on the previously returned id 1 now fails. An unrelated read invalidates the handle even though its source bytes did not change. This is distinct from T549's cross-workspace namespace.
+
+Execution plan:
+
+1. Add the interleaved local-ingest/crate-fetch/local-resolve fixture, retaining the id from the first local query and calling docs_get afterward.
+2. Compare the current source SHA and scope with cached metadata and make unchanged ingestion a no-op, with the check/write sequence safe against concurrent ingestion.
+3. Verify repeated resolves and unrelated crate queries preserve local item ids and FTS rows; changed bytes must still refresh the affected document. Coordinate the cache key with T549.
+
+Check: docs_get keeps resolving ids from unchanged local documents across repeated reads, actual edits are searchable, and `just check` passes. Source-derived reproduction; generated-id behavior is visible in the schema and replacement path.
+
+### T551. Estimate docs-query savings against the same full content as byte accounting
+
+Source-confirmed: [docs_query](src/plugins/docs/mod.rs#L138) sets before_bytes from the full documentation bodies of all considered hits, but est_before at line 154 estimates only their already-truncated snippets. est_after estimates the returned JSON. For one long document with a short snippet, most of the reduction is absent from token accounting and JSON metadata can make the reported token saving negative while bytes show a large reduction. T455 requires a query Measurement; this card fixes the inconsistent before basis rather than adding another row.
+
+Execution plan:
+
+1. Seed a long cached document with a small snippet limit and query it under a fixed estimator. Assert before_bytes and est_before describe the same full set of considered bodies, and after values describe the actual response.
+2. Obtain full-body token estimates through the existing store/runtime boundary before snippet and output-budget trimming; avoid duplicating the query Measurement.
+3. Cover multiple hits, budget-trimmed hits and no-result queries; retain the documented definition of considered content and the current query output.
+
+Check: token and byte baselines refer to the same pre-trim content, exactly one row records a returned query result, and `just check` passes. Source-derived accounting defect; no measured saving is claimed by this audit.
+
+### T552. Keep checkpoint prefilter equivalent for spaced and mixed-content JSONL
+
+Confirmed by a function probe: [worth_parsing](src/plugins/checkpoint.rs#L261) requires the literal substring `"type":"user"` and rejects any otherwise ordinary user record containing `"tool_use_id"`. A valid one-line `{"type": "user", "message": {"content": "ship the patch"}}` loses its prompt, as does a compact user record containing both a tool_result and a typed text block. [user_text](src/plugins/checkpoint.rs#L386) correctly extracts text from both if the prefilter is bypassed. Completed T417 filters host-written prompts; these are uncovered false negatives in the prefilter's promised superset, not a request to undo that host filter.
+
+Validation: an offline Rust probe compiled the verbatim extraction code and compared filter=true/false for both records. Only the filtered run lost the prompt; the equivalent compact text-only record survived.
+
+Execution plan:
+
+1. Extend the prefilter equivalence fixtures with optional JSON whitespace, mixed text/tool-result blocks, reordered keys and escaped field names.
+2. Make the cheap filter conservative: ambiguous records must reach the structural parser; do not use tool_use_id presence as proof that no typed text exists.
+3. Compare extracted prompts, counts, paths, skills and errors with filtering disabled; preserve T417's host-envelope exclusions and the existing large-transcript performance check.
+
+Check: semantically equivalent valid JSONL yields identical checkpoint content regardless of formatting, mixed typed text survives, host-only content remains excluded, and `just check` passes.
+
+### T553. Use the shared project resolver for session checkpoint handoff
+
+Source-confirmed: [project_of_cx](src/plugins/checkpoint.rs#L737) returns git_root's directory basename, while [project::project_name](src/project.rs#L19) resolves origin names and linked worktrees to the main project's identity. Both save_session and offer_session use the former, and [latest_session_note](crates/rtok-store/src/note_store.rs#L320) requires an exact project match. End a session in main checkout `repo`, then start one in its linked worktree `repo-fix`: the saved `repo` handoff is not found under `repo-fix`, although normal memory/session attribution treats them as one project. T133/T154 implemented the shared resolver, but this handoff path still bypasses it.
+
+Execution plan:
+
+1. Add a main/linked-worktree fixture and an origin name different from the checkout basename. Save a session checkpoint in one checkout and restore it from the other.
+2. Reuse project::project_name for both saving and looking up session handoffs. Define a narrow compatibility path for existing basename-scoped handoffs without searching unrelated projects.
+3. Exercise both handoff directions, subdirectories and non-git cwd; preserve the opt-in handoff flag, session-local compact restore and injection budget.
+
+Check: linked worktrees share the intended project handoff consistently with ordinary memory, unrelated project notes remain excluded, and `just check` passes. Source-derived reproduction; no real agent session was started.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
