@@ -8986,6 +8986,17 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.11. Deferred tool schemas and thinking replay
+
+optimization.md §5 (I-85, I-86). Per-wire handling for deferred tool schemas and replayed thinking blocks, only where the measurement in each idea shows a saving (I-86 was rejected at 0.03 % — re-measure before building).
+
+Check: per-wire tests and a dated bench row; `just check`.
+
+Result: dropped, nothing built. Measured 2026-10-11 on 1,722 Claude Code transcripts (window 2026-09-11 to 2026-10-11, 153,539 requests, 22.92 G input tokens; `research.md` §37). I-85: 1,491 of 1,495 sessions (99.7 %) already defer MCP tools natively (404 `ToolSearch` calls against 4,631 MCP calls), and Anthropic and OpenAI both offer `defer_loading` server side; other hosts have no request bodies here, so no saving is claimed. I-86: the 0.0297 % of T125 was a measurement error (it counted the empty `thinking` text of omitted blocks, once per block). Replayed thinking is 11.5 % of input tokens (10.8 % to 12.4 %), 3.4 % of it from earlier turns, but dropping those nets only 1.1 % to 1.6 % of input cost after the cache re-creation each new turn causes (1.2 % of input plus output), against an unmeasured quality risk; a client-side edit is unsafe on accounts from 2026-08-31 (prefix check, 338 `thinking_drop` events in the window). If it is ever revisited, the only safe route is the server-side beta `clear_thinking_20251015` edit. `ideas.md` I-85 and I-86 are Rejected; the archive prefix-mismatch side finding is I-119.
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T385.8. P28 Phase 1: measure what LLM compression could save
 
 optimization.md §3 (P28, I-21). Dated `research.md` rows: share of input that is archived tool output old enough to compress, and a must-keep fixture (identifiers, paths, numbers, errors that a compressor must not drop). No compressor yet.
@@ -9017,6 +9028,18 @@ optimization.md §2.2 L4 (roadmap S4). Inject `service_tier = "flex"` only on `b
 Check: mock upstream — omit/force/respect matrix and each 429 policy; `just check`.
 Result: `flex` is a column of `LanePolicy` (`[proxy.lanes.<lane>] flex`, `agent` always false) and `[proxy.flex]` has `force`, `on_429` (`none`/`backoff`/`default`), `retries` and `backoff_ms`. `src/proxy/flex.rs` splices an omitted `service_tier` in after the opening brace on the OpenAI wires only, respects any client value unless `force`, and `flex::send` retries a Flex 429 that rtok itself set, within bounds (at most 5 retries, delay capped at 30 s; `Retry-After` is not read). OpenAI Flex guide (https://developers.openai.com/api/docs/guides/flex-processing) checked 2026-10-08; it names no 429 error code, so the status alone identifies the capacity miss. 7 mock-upstream tests plus unit tests; `just check`: 2735 passed, 8 skipped. #836.
 Status: done 2026-10-08
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T385.10. Routing for `internal` and `bulk` calls
+
+optimization.md §4.2 (D9, I-101). Route `internal` and opted-in `bulk` calls to a cheaper model or provider per the policy table; the `agent` lane is not routed.
+
+Check: dollars per lane before/after from `stats --price` on fixtures; `just check`.
+
+Result: `[proxy.routing]` (`enabled`, default `false`) holds one rule per lane, `[proxy.routing.bulk]` and `[proxy.routing.internal]`, with `from` (exact ids or a `prefix*`), `to`, `provider` and `gate`. A rule acts only with `from`, `to` and `gate` all set; `gate` names the operator's I-101 quality bench, which rtok cannot run or judge, so no rule ships and rtok claims nothing about quality. `Lane::route` returns a rule for `bulk` and `internal` only (never `agent`, `batch`, `files`, `embeddings`, `meta`). `src/proxy/route.rs` swaps the JSON `model` first in `shape_request`, before `record`, so `calls.model_id`, `usage.model` and (via `provider`) the provider slug name the serving model; a log row keeps `<from> -> <to>` and a `model_route` measurement row marks the call without claiming a token saving. Gemini names its model in the path and is not routed; a cross-provider rule pairs with `[proxy.lanes.<lane>] upstream`. `rtok stats --price` gains `cost by lane` (`cost.lanes` in JSON, from `Store::usage_by_lane_model_tier`; absent while all traffic is the agent lane). Fixture run (`tests/proxy_routing.rs`, mock upstream, one call per lane of 1 MTok in and 0.1 MTok out, shipped prices): agent $2.25 -> $2.25, bulk $2.25 -> $0.45, internal $2.25 -> $0.45 for `gpt-5` -> `gpt-5-mini`. Not done: the quality bench itself (needs real models and workload; the operator runs it and names it in `gate`). Config template, `docs/config.md`, `docs/model-routing.md`, `docs/batch-flex.md` (en, ru, uk) and trycmd snapshots updated. `just check`: 3337 tests run, 3336 passed on a full `cargo nextest run --workspace --no-fail-fast`; the one failure (`no_plan_ids`, plan ids in the config template comment) was fixed and re-run.
+
+Status: done 2026-10-11
 
 Model: Claude Code / claude-sonnet-5-5
 
@@ -11681,6 +11704,266 @@ Result: the rule line is a new skill, `skills/rtok-tasks/SKILL.md`, added to `SK
 
 Status: done 2026-10-08
 Model: Claude Code / claude-sonnet-5-5
+
+### T441.13.1. Task field on agent messages (F8)
+
+First item of T441.13 (`research.md` §28.4 F8): `rtok agents send --task <id>` and MCP `agent_send {task}` tag a message with a task id, so a thread about one task can be read apart from the rest. `agents inbox --task <id>` and `agent_inbox {task}` read only that task's messages. The frame names the task. A message without a task is byte-for-byte what it is today.
+
+Check: store, frame, CLI and MCP tests below pass; the trycmd help and completion goldens, `surface_parity` and `config_coverage` pass; `just check` green.
+
+Result: migration `0046_message_task` adds the nullable `messages.task`. `Store::send_message_on` takes the task and `Store::inbox_limited` filters by it; both parse it as a `TaskId` and keep the canonical upper-case text (`a12` and ` A12 ` become `A12`), and refuse anything that is not an id, so a task line in a frame cannot be forged. `send_message` and `inbox` keep their signatures. The frame gains a `Task: A12` line after the fixed note only when a task is set, and `Message` JSON skips an absent task, so existing output and `agents inbox --json` are unchanged. A filtered read marks only the messages it returned. The hook push (T288) frames through the same function and shows the task with no change of its own. Tests: `messages::tests` (canonical tag, filter marks only its thread, bad ids refused on both sides), `render` frame test, `tests/agents_messages.rs` and `tests/mcp_agent_messages.rs` cases; `--task` is exempt in `config_coverage` as a per-call selector like `--all-live`. Docs: `docs/agents-and-worktrees.md` with `docs/ru` and `docs/uk`.
+
+Status: done 2026-10-11
+Model: Claude Code / sonnet-5.5
+
+### T441.13.2. Conflict and parallel markers between tasks, disk adapter (F9)
+
+Second item of T441.13 (`research.md` §28.4 F9, CCPM semantics; creator decision 2026-10-11: disk adapter first, GitHub and GitLab later as T441.13.4). A task can name tasks it `conflicts_with` (they touch the same files, so two agents should not work on them at once) and carry a `parallel` flag (safe to run beside any other task). Conflicts are symmetric: marking A1 against A2 writes both files. `task list`, `task show` and `task ready` show both markers, and `ready` flags a task whose conflict partner is in progress without hiding it or refusing a claim.
+
+Check: `tests/task_cli.rs` (`conflict_and_parallel_markers_are_symmetric_and_flag_ready`), `tasks::ready::tests::a_conflict_with_a_task_in_progress_flags_the_ready_task_from_either_side`, `tasks::run::claim_tests::markers_are_symmetric_idempotent_and_refused_where_they_cannot_be_kept`, the disk round trip in `src/tasks/disk.rs`, the trycmd help cases, `surface_parity`, `config_coverage`, and `just check`.
+
+Result: `Task.conflicts_with` and `Task.parallel` (both left out of JSON when empty or false) are stored as front-matter keys on the disk adapter, sorted and deduplicated like `blocked_by`. `Project::conflict` writes both sides of the edge (peer first, then the task, only when something changed) and refuses a self-edge or a missing task; `Project::set_parallel` is the flag. `TaskAdapter::stores_markers` is false by default and true on disk, so a GitHub or GitLab project refuses the two commands by name instead of dropping the marker (T441.13.4 lifts that). `ready` finds in-progress partners from either side of the edge and reports them in `ReadyItem.conflicts_in_progress`; the task stays in the list and a claim is not refused. CLI `task conflict <id> <other> [--remove]` and `task parallel <id> [--off]`, MCP `task_conflict` and `task_parallel` call the same functions; `skills/rtok-tasks/SKILL.md` names both tools. Docs in `docs/tasks.md`, `docs/ru/tasks.md` and `docs/uk/tasks.md`.
+
+### T441.13.3. Task list id for the Claude Code session in a new worktree (F19)
+
+Third item of T441.13 (`research.md` §28.4 F19; creator decision 2026-10-11). `rtok worktree add <task>` writes `env.CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` into the new worktree's `.claude/settings.local.json`, so Claude Code sessions started there share one task list. `<task>` is the worktree claim's task id; `<project>` is `project::project_name`. Sources, checked 2026-10-11: https://code.claude.com/docs/en/env-vars (`CLAUDE_CODE_TASK_LIST_ID`) and https://code.claude.com/docs/en/settings (`.claude/settings.local.json` and the `env` block).
+
+Check: `agents::task_list::tests` (new file with only our key, every other byte and comment of an existing file kept and the write idempotent, malformed file untouched, a foreign value or shape kept, nothing written where git does not ignore the file), `tests/worktree.rs` (`add_creates_one_locked_worktree_per_task_from_a_fresh_base`), and `just check`.
+
+Result: `src/agents/task_list.rs` is called by `rtok worktree add` and MCP `worktree_add` after the worktree exists (it lives under `agents` because `worktree` may not depend on it: `module_graph` forbids the cycle; the `WorktreeCreate` hook path does not set it). It reuses `agents::jsonc::upsert_member`, the byte-preserving editor `rtok agents install` uses for host configs, and `rtok_agent_sdk::write` for the atomic write; nothing new parses JSON. Fail open: a file that is not JSON, a root that is not an object, an `env` that is not an object, or a different id the user already set is warned about and left untouched, and `worktree add` still succeeds. The file is written only when `git check-ignore` says the repository ignores it (this repository ignores `.claude/`), because an untracked file would also make `worktree remove` refuse the worktree as dirty; otherwise a warning says why nothing was set. Docs in `docs/agents-and-worktrees.md` and `docs/ru|uk`.
+
+Status: done 2026-10-11
+Model: Claude Code / claude-sonnet-5-5
+
+### T441.13.4. Conflict and parallel markers on GitHub and GitLab (F9 follow-up)
+
+Follow-up of T441.13.2, which stores the markers on the disk adapter only. Store `conflicts_with` as `rtok:conflicts:<id>` labels and `parallel` as an `rtok:parallel` label through `src/tasks/meta.rs` (the same managed-label path as `rtok:needs:` and `rtok:p:`), read them back in the GitHub and GitLab issue-to-task mapping, drop the T441.13.2 refusal for these adapters (`stores_markers` true), and keep a user's own labels untouched. Done when `task conflict` and `task parallel` work on both with the recorded HTTP fixtures, `list`/`show`/`ready` show the markers, and `just check` passes.
+
+Check: the recorded HTTP fixtures for both adapters pass and `just check` is green.
+
+Result: GitHub and GitLab store `conflicts_with` as `rtok:conflicts:<id>` labels and `parallel` as `rtok:parallel`, through the managed-label path in `src/tasks/meta.rs` (`read_meta` now returns a `Meta` struct; `is_managed`, `managed_for` and `merge_labels` cover both labels). Both adapters read the markers back in the issue-to-task mapping and report `stores_markers() == true`, so `task conflict` and `task parallel` work there and `list`, `show` and `ready` show them; other adapters still refuse. A user's own labels are kept. Tests on mock-server responses in `src/tasks/github.rs` and `src/tasks/gitlab.rs` (exact save bodies, read-back, symmetric `Project::conflict`, user-label survival) and a round-trip test in `meta.rs`; the "Disk adapter only" help text is gone from the CLI, MCP and goldens; docs en/ru/uk.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T441.13.7. Task board page in the web UI (F20)
+
+`research.md` §28.4 F20, creator go-ahead 2026-10-11 (it was under T441 §13 "Out of scope"). A read-only board in `rtok web`: one column per status (open, in progress, done, closed), a card per task with id, title, parent, the `needs`/priority/conflict/parallel markers and the external link, for the project the page is opened for. Data comes from the same adapter and JSON shape as `rtok task list --all --json`; nothing on the page writes tasks.
+
+Done when: the page lists the tasks of a fixture project in the right columns, works in dark and light themes at 375 and 1280 px, has a keyboard-navigable list view, and shows an empty state when the project has no `[tasks]` section.
+
+Check: the API route test, the SPA unit and story tests, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
+Result: `rtok web` has a read-only Tasks page (`g b`, Monitor group) and `rtok tui` a `tasks` tab, both fed by `src/model/tasks.rs`, which calls the same `Project::adapter().list(&filter(&[], true, None)?)` as `rtok task list --all --json` for the project the process runs in. One column per status; each card shows id, title, parent, assignee, the issue link (only `http(s)` links reach the page) and the priority/needs/conflicts/parallel markers; a keyboard-navigable list view with a detail panel and a filter box. A project without a `[tasks]` section gets an empty state pointing at `rtok task init`; an unreachable adapter is a message on the page. Done and closed are capped at the newest 50 each; disk is re-read every 5 s, remote adapters every 120 s, off the tick. The page rides the `/ws` snapshot like Usage instead of a separate `/api/tasks` route: the server has only `/health`, `/ws` and the SPA, the origin guard sits on `/ws`, and D23 parity needs the TUI body anyway. Config is read with `layers::load` (never writes a stray `config.toml`). Tests: 7 unit tests in `src/model/tasks.rs`, the TUI tab test, `web/src/pages/tasks.test.tsx`, 9 stories (dark/light, 375 px no-overflow, list, filter, empty, no `[tasks]`, reading, failed), e2e smoke and board tests; docs en/ru/uk; icon `brand/icons/ui/tasks.svg`.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T441.13.5. GitHub Issues exporter for disk tasks (F11)
+
+`research.md` §28.4 F11, creator go-ahead 2026-10-11. A project on the disk adapter mirrors its tasks one way into GitHub Issues; the disk files stay the source of truth and the exporter never reads issues back into tasks. `rtok task export github [--dry-run] [--json]` creates a missing issue (title `<id>. <title>`, labels `rtok` and `rtok:<id>`, the managed labels from `meta.rs`), updates title, body and labels when they drift, and closes the issue for `done` (`completed`) and `closed` (`not_planned`). Config `[tasks.export.github] repo = "owner/name"`, token lookup and pacing from `src/tasks/remote.rs`, issue mapping reused from `src/tasks/github.rs`.
+
+Done when: a second run against the same state sends no write; `--dry-run` prints the planned creates, updates and closes and sends nothing; recorded HTTP fixtures (no live network) cover create, update, close and a re-run; `just check`.
+
+Check: the exporter's fixture tests, the trycmd help golden and `just check`.
+
+Result: `rtok task export github [--dry-run] [--json]` mirrors disk tasks one way into GitHub Issues through the `github` task adapter, so labels, `<id>. ` titles, sub-issue links and close reasons are exactly what that adapter writes (`GithubAdapter::save` now delegates to `patch`, and only the exporter writes title and body). `src/tasks/export.rs` holds the `Exporter` trait, the diff of disk tasks against the tracker, `run` and the report; `src/tasks/export/github.rs` is the backend; `[tasks.export.github] repo` in `crates/rtok-config`. A missing issue is created, drift in title, body, status, priority, assignee or blockers is patched, done closes as `completed`, closed as `not_planned`, an active task reopens; a finished task with no issue is skipped unless it is the parent of an active subtask. A re-run with nothing changed sends no write; errors name the backend, the task and the URL, never the token. Tests on httpmock: create then idempotent re-run, update, close, reopen, dry-run, in-progress labelling, failure message; `config_coverage`, `surface_parity`, `task_cli` and the trycmd goldens; docs en/ru/uk.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T441.13.6. Linear exporter for disk tasks (F11)
+
+`research.md` §28.4 F11, creator go-ahead 2026-10-11 (the Linear part was under T441 §13 "Out of scope"). Second backend for the T441.13.5 exporter: `rtok task export linear` mirrors disk tasks one way into a Linear team through Linear's GraphQL API, finds earlier exports by a stable marker of the rtok id, updates drift, and moves `done`/`closed` tasks to the team's completed/canceled workflow state. Config `[tasks.export.linear] team = "<key>"`, token from `LINEAR_API_KEY`. Facts about the API are checked against Linear's own docs and cited in `research.md` with the date.
+
+Done when: same contract as T441.13.5 (idempotent re-run, `--dry-run`, recorded fixtures, no live network); `just check`.
+
+Check: the Linear fixture tests and `just check`.
+
+Result: `rtok task export linear [--dry-run] [--json]` mirrors disk tasks one way into a Linear team over its GraphQL API (`src/tasks/export/linear.rs`), with a personal key from `LINEAR_API_KEY` and the team key from `[tasks.export.linear] team`; an empty team is refused before any request. It reuses the T441.13.5 diff, so creates, updates, closes and reopens go out only on drift and a re-run sends no write. Status maps to the team's workflow state by type (open → `unstarted`, else `backlog`; in progress → `started`; done → `completed`; closed → `canceled`), labels follow the GitHub vocabulary and missing ones are created, a subtask becomes a sub-issue through `parentId`, and archived issues are listed so a re-run never duplicates. Conflict and parallel markers count as drift for both backends. `remote.rs`: the token error names only the variable when a provider has no CLI, and GraphQL `errors[0].message` is used even on a 400 (Linear's rate limit is a 400 `RATELIMITED`). API facts with URLs and the 2026-10-11 check date in `research.md` §35.5; the page size above 50 and Linear's description normalisation are marked unverified (if Linear rewrites descriptions, a task would show as an update on every run). Seven httpmock tests on hand-written fixtures in Linear's response shape (create plus re-run, update/done/closed/reopen, subtask and parent state, dry-run, GraphQL error in a 200, the 400 rate limit, a missing workflow state) plus two in `export.rs`; docs en/ru/uk.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5
+
+### T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
+
+Creator request 2026-10-07 (voice). Plan only: no code until the creator approves the design that comes out of T441.1. Approved 2026-10-07 after T441.1: own core (§12); the remaining §12 questions are settled in the subtask they affect. Every subtask below builds on the T441.1 research findings.
+
+Check: T441.1's findings are recorded in `research.md` and the creator approves the design; each later subtask closes only when its §10 tests and `just check` pass.
+
+#### Goal
+
+Agents in any project create, read and close tasks only through rtok (AirTalk). rtok intercepts task creation, hands out a unique task number from one allocator, and stores the task through the project's configured **adapter**: plain files on disk, GitHub Issues + Projects, or GitLab Issues. Many agents work in parallel, so numbering must never collide. When a task is done, the adapter archives it (disk) or moves it to a done state (GitHub/GitLab) so it no longer shows up in the plan.
+
+#### Terms
+
+- **Provider** — already taken in rtok: an upstream LLM API the proxy talks to (`src/proxy/anthropic.rs`, `openai_chat.rs`, `gemini.rs`). Not reused here.
+- **Adapter** — new: a task storage backend (`disk`, `github`, `gitlab`). One adapter per project, chosen in config. Lives in a new `tasks` module (or crate `crates/rtok-tasks`), never under `proxy`.
+- **Task** — `id`, title, description, status, optional parent. **Plan** — the list of tasks that are not done.
+- **Allocator** — the single per-machine component that hands out task ids.
+
+#### 1. Research (T441.1, first; everything else follows it)
+
+Findings so far (verified 2026-10-07; T441.1 finishes them with a short `research.md` section):
+
+| Prior art | Storage | IDs under parallel agents | Surface | Statuses | GitHub/GitLab sync | What we take |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Backlog.md](https://github.com/MrLesk/Backlog.md) | One Markdown file per task in `backlog/`, config `backlog.config.yml` | Sequential with a configurable prefix (`TASK-1`), subtasks `TASK-5.3`; allocation under `withCreateLock()`, counting other worktrees' uncommitted files (per repo) | CLI first (`backlog task create/list/edit`, `--plain`/`--json`), optional stdio MCP (`backlog mcp start`) over the same core ([MCP README](https://github.com/MrLesk/Backlog.md/blob/main/src/mcp/README.md)) | Configurable, default To Do / In Progress / Done; archive folder | None built in | Markdown-file disk layout, configurable prefix, one core with CLI + MCP as thin wrappers, `claude mcp add` / `codex mcp add` one-liners, agent instructions pointing at a workflow doc |
+| [Taskmaster AI](https://github.com/eyaltoledano/claude-task-master) | `.taskmaster/tasks/tasks.json` | Numeric per tag, subtasks `1.2`, `1.2.1` ([task structure](https://github.com/eyaltoledano/claude-task-master/blob/main/docs/task-structure.md)); read-modify-write of one JSON file under its own `.lock` file (`withFileLock`) | CLI `task-master list/show/set-status` and MCP `get_tasks`, `get_task`, `next_task`, `set_task_status`; tool tiers via `TASK_MASTER_TOOLS` to keep tool lists small | pending, in-progress, done, review, deferred, cancelled | None built in | Dotted subtask ids, `next` command, small default MCP tool set; avoid one JSON file per repo as the only state |
+| [beads](https://github.com/steveyegge/beads) | Dolt (versioned SQL) per repo | Hash ids (`bd-a1b2`) from content + time + creator + nonce, retried on collision, length grows with the DB ([FAQ](https://github.com/steveyegge/beads/blob/main/docs/FAQ.md)); hierarchical `bd-a3f8.1` | CLI `bd` with JSON output | open, in progress, blocked, closed | `bd github`, `bd gitlab`, `bd linear`, `bd jira`, … with pull/push/sync | The reason sequential ids fail across branches/machines; we keep human `R12` ids from one allocator but adopt its import + external-id mapping and "same id = update" rule |
+| [GitHub MCP server](https://github.com/github/github-mcp-server) | GitHub | GitHub's own per-repo issue number | MCP toolsets `issues` (`issue_read`, `issue_write`, `list_issues`, `sub_issue_write`) and `projects` (`projects_get/list/write`, needs a PAT with `project` scope) | open/closed + Project Status field | Native | The GitHub adapter can call the same REST/GraphQL endpoints; sub-issues map to `R2.1`; Projects need the `project` scope |
+| [Linear MCP](https://linear.app/docs/mcp) | Linear (hosted) | Linear's team key + number (`ENG-123`) | Remote MCP over Streamable HTTP at `mcp.linear.app/mcp`, `save_issue` create-or-update | Team workflow states | Native | Upsert tool shape (`save` with/without id); hosted ids keyed by a short team prefix, like our project prefix |
+| [Claude Code tasks](https://code.claude.com/docs/en/agent-sdk/todo-tracking) (TodoWrite; TaskCreate/TaskGet/TaskUpdate/TaskList) | Session or shared list (`CLAUDE_CODE_TASK_LIST_ID`, [env vars](https://code.claude.com/docs/en/env-vars)) | Host-internal | Built-in tools only | pending, in_progress, completed | None | Agents already think in these three statuses; our status names map 1:1 |
+| [Codex CLI `update_plan`](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/plan_tool.rs) | In-session only | None (whole plan resent each call) | Built-in tool | pending, in_progress, completed; one step in progress | None | Same status vocabulary; our tasks are durable and shared, theirs are a per-turn checklist — keep both, do not replace |
+| [AGENTS.md](https://agents.md/) | Markdown convention | — | — | — | — | Install writes a short `AGENTS.md`/`CLAUDE.md` rule: "create and update tasks only through `rtok task`" |
+
+Re-checked in T441.1 (`research.md` §35.1): Backlog.md and Taskmaster lock id allocation per repository and beads uses hash ids, and beads already syncs GitHub and GitLab. What none has is one counter per project shared by every checkout, worktree and agent host on the machine, served through the MCP server and CLI the agents already have — that is what rtok adds, and §12 asks whether it is worth building rather than adopting beads.
+
+T441.1 done means: the table above re-checked, plus answers to the open questions it can settle (GitLab work items API vs issues, GitHub sub-issues limits, rate limits), recorded in `research.md`; the design below adjusted to the findings.
+
+#### 2. Recommended architecture: one core, thin CLI and MCP front-ends
+
+- One core (`rtok_tasks`): domain types, allocator, adapter trait, the three adapters. No I/O policy in the front-ends.
+- **CLI** `rtok task …`: for agents that prefer shell (Codex CLI, Claude Code with Bash) and for humans and scripts. `--json` on every command.
+- **MCP**: new tools on the existing `rtok mcp` stdio server (no second server, no second install): `task_create`, `task_list`, `task_get`, `task_status`, `task_next`. Small tool set, like Taskmaster's core tier. Same JSON shapes as the CLI.
+- **Transport**: stdio for every host (Claude Code, Claude Desktop, Codex CLI, Codex app/IDE all speak it). No HTTP listener.
+- **Install/config** (through the existing `rtok agents install <host>`; entries already managed, host configs touched only at our entry):
+  - Claude Code: `claude mcp add rtok --scope user -- rtok mcp` (or the plugin).
+  - Claude Desktop: `claude_desktop_config.json` → `"mcpServers": {"rtok": {"command": "rtok", "args": ["mcp"]}}` (absolute path to `rtok`, since the app has no shell PATH).
+  - Codex CLI and Codex app/IDE share `~/.codex/config.toml`: `[mcp_servers.rtok]` `command = "rtok"`, `args = ["mcp"]` (or `codex mcp add rtok -- rtok mcp`).
+  - Every host: the AGENTS.md/CLAUDE.md rule line from §1.
+- **Many processes at once**: every Claude/Codex window spawns its own `rtok mcp` and CLI calls are their own processes, so there is no in-memory singleton. The singleton is the allocator state file under rtok's data dir guarded by an OS file lock (§5); all processes go through it. Optional later: route allocation through the existing hook resident (`src/hooks/resident.rs`) to save a lock round trip.
+
+#### 3. CLI commands (proposed names)
+
+- `rtok task create "<title>" [-d <text>|--body-file <path>] [--parent R2] [--status open]` → prints the id (`R12`, `R2.3`).
+- `rtok task list [--status open,in-progress] [--all] [--json]` → the plan (done tasks hidden unless `--all`).
+- `rtok task show <id> [--json]` → title, description, status, parent, subtasks, external link.
+- `rtok task status <id>` → prints status; `rtok task status <id> <open|in-progress|done>` → sets it (`done` triggers §8).
+- `rtok task next` → first open task without an open parent dependency.
+- `rtok task init [--adapter disk|github|gitlab] [--prefix R]` → writes project config.
+- `rtok task sync` → reconcile local cache/index with the adapter (GitHub/GitLab).
+
+#### 4. Data model
+
+- `TaskId { prefix: String, path: Vec<u32> }` — `R12` = prefix `R`, path `[12]`; `R2.1` = `[2, 1]`. Parse/print round-trip; case-insensitive input, canonical upper-case output.
+- `Task { id, title, description, status, parent: Option<TaskId>, created_at, updated_at, external: Option<ExternalRef> }`.
+- `Status { Open, InProgress, Done, Closed }`: `Closed` is "won't do"; both it and `Done` leave the plan (T441.2, `src/tasks/mod.rs`). Maps to Claude Code / Codex `pending/in_progress/completed`.
+- `ExternalRef { adapter, number_or_iid, url, node_id }` — the GitHub/GitLab issue the task lives in.
+- Allocator state: `{ project_key → { prefix, next_top: u32, next_sub: map<top, u32> } }`.
+
+#### 5. ID allocation
+
+- One allocator per machine: a Diesel table in rtok's existing store (T441.1, `research.md` §35.4). Allocation is one `exclusive_transaction` (read → increment → write); the store already runs WAL with `busy_timeout`, so it is atomic across processes and crash-safe on macOS, Linux and Windows without a second file or lock.
+- The project key is the `origin` remote as `host/owner/repo` (two clones share it), else the main checkout's path, never the prefix, so two projects with the same first letter keep separate counters (T441.3, `project::project_key`).
+- Prefix: first letter of the project name, upper-cased (rtok → `R`), overridable in config. Two projects with the same prefix are allowed (counters are per project) but `rtok task init` warns; a two-letter override is recommended for cross-project references.
+- Subtasks: `R2.1`, `R2.2` from the parent's own sub-counter; depth limit 2 at first.
+- Seeding: on `init` for an existing tracker the counter starts above the highest id already present (scan disk files / GitHub titles / labels).
+- GitHub/GitLab: the rtok id is ours, the issue number is theirs. Issue title is prefixed `R12. <title>` and carries label `rtok:R12`; `ExternalRef` stores the mapping. Never derive our number from theirs (PRs share GitHub's counter).
+- Different machines: one allocator per machine cannot stop two machines issuing the same `R13`. Adapter `create` checks for an existing `rtok:R13` and on conflict re-allocates past the highest remote id (GitHub/GitLab label search is the cross-machine source of truth). Open question whether that is enough.
+
+#### 6. Adapter trait
+
+```rust
+trait TaskAdapter {
+    fn create(&self, task: &NewTask, id: &TaskId) -> Result<Task>;
+    fn list(&self, filter: &Filter) -> Result<Vec<Task>>;
+    fn get(&self, id: &TaskId) -> Result<Option<Task>>;
+    fn set_status(&self, id: &TaskId, status: Status) -> Result<Task>;
+    fn archive(&self, id: &TaskId) -> Result<()>; // done flow, §8
+    fn max_id(&self, prefix: &str) -> Result<Option<TaskId>>; // seeding, collisions
+}
+```
+
+As built in T441.4 (`src/tasks/adapter.rs`): `archive` is folded into `write_status` (done/closed archive), and the free `set_status` guards parents for every adapter.
+
+Sync and blocking HTTP is fine for a CLI; errors carry the adapter name and the external URL. No adapter shells out to `gh`/`glab` unless T441.1 decides to (token handling).
+
+#### 7. Adapters
+
+- **disk** (default, offline): one Markdown file per task under `tasks/` in the project, `R12 - <slug>.md` with a small front matter (id, status, parent) and the description as body, the Backlog.md layout. Writes are temp + rename. Optionally renders `plan.md`/`todo.md` rows in this workspace's format (open question).
+- **github**: issues via REST; status via a Projects v2 Status field (`Todo` / `In Progress` / `Done`) via GraphQL; subtasks as sub-issues (100 per parent; REST takes the sub-issue's database id). Token from `GH_TOKEN`, then `GITHUB_TOKEN`, then `gh auth token`; Projects need the `project` scope, and user-owned projects a classic token. Writes are paced (500 content-creating requests/hour, one per second). Config names the owner/repo and project number; field and option ids are looked up once and cached.
+- **gitlab**: issues via REST v4 (`/projects/:id/issues`), done = closed. Subtasks are tasks under the issue, linked through the GraphQL work item hierarchy (REST has no parent field). Status: native Status through GraphQL on Premium/Ultimate 18.4+, else a `status::in-progress` label the adapter swaps itself (scoped labels are Premium too). Token `GITLAB_TOKEN`, scope `api`; self-hosted base URL in config.
+
+#### 8. Done / archival flow
+
+`rtok task status R12 done` (or MCP `task_status`):
+- disk: file moves to `tasks/done/` (or is appended to `done.md` and removed), so `list` never returns it again.
+- github: Project Status → `Done` and the issue is closed (`state_reason: completed`); `list` filters done out.
+- gitlab: issue closed, status label set to done.
+- Parent with open subtasks cannot be done (error lists them) unless `--force`. The id is never reused.
+
+#### 9. Config
+
+Project `.rtok.toml` (rtok's own TOML, schema from types, one config module — T238; the `[tasks]` section landed in T441.2):
+
+```toml
+[tasks]
+adapter = "github"        # disk | github | gitlab
+prefix = "R"              # default: first letter of the project name
+[tasks.disk]
+dir = "tasks"
+[tasks.github]
+repo = "pyrlyn/rtok"
+project = 7               # Projects v2 number; optional
+[tasks.gitlab]
+url = "https://gitlab.com"
+project = "group/name"
+```
+
+#### 10. Tests to write
+
+- `TaskId` parse/print round-trip, ordering, invalid input.
+- Allocator: N processes × M allocations in parallel (spawned test binaries) → all ids unique and dense; crash between write and rename leaves a valid state; lock timeout reports clearly.
+- Two projects with the same prefix keep separate counters; seeding starts above the existing max.
+- disk adapter: create/list/get/status/archive on a temp dir; done tasks never listed.
+- github/gitlab adapters against recorded HTTP fixtures (no live network in CI, no real agents in tests): create maps title/label, status moves the Project field, done closes; collision re-allocation.
+- CLI ↔ MCP parity: same inputs give the same JSON.
+- Install: host config entries for Claude Code, Claude Desktop, Codex stay byte-for-byte except our entry.
+
+#### 11. Milestones
+
+1. **T441.1 Research** — finish §1, record in `research.md`, settle what it can of §12, adjust this card.
+2. **T441.2 Core types** — `TaskId`, `Task`, `Status`, config section; unit tests.
+3. **T441.3 Allocator** — locked file (or Diesel table), project key, prefix rule, subtask counters, seeding hook; the parallel-process test.
+4. **T441.4 Adapter trait + disk adapter** — trait, disk layout, archive on done.
+5. **T441.5 CLI** — `rtok task create/list/show/status/next/init`, `--json`.
+6. **T441.6 MCP tools** — `task_*` on `rtok mcp`, parity test. The server entry is already what `rtok agents install` writes for every host, so the tools need no install of their own.
+7. **T441.7 GitHub adapter** — issues, sub-issues, label mapping, collision check. Done; Projects v2 Status split into T441.11, `sync` into T441.12.
+8. **T441.8 GitLab adapter** — done: issues, `status::` labels, close on done, self-hosted https URL, `relates_to` parent link (#819).
+9. **T441.9 Docs** — README/docs section in English with `docs/ru|uk` synced (CONTRIBUTING.md), `toolchain.md` for any new dependency.
+10. **T441.10 Instruction line** (split from T441.6) — the AGENTS.md/CLAUDE.md rule line from §1 installed through `rtok agents install`, host config entries byte-for-byte except ours (§10).
+11. **T441.11 GitHub Projects v2 Status** (split from T441.7) — done: new issues join the `[tasks.github] project` board and its Status follows the task (#817).
+12. **T441.12 `rtok task sync`** (split from T441.7) — done: counters raised to what the adapter holds, drift reported, the adapter never written (#820).
+13. **T441.13 Task-board extras** (from T405, creator 2026-10-10; `research.md` §28.4) — a `task` field on agent messages (F8); conflict and parallel markers between tasks (F9); an optional GitHub Issues or Linear exporter (F11); `CLAUDE_CODE_TASK_LIST_ID=<project>-<task>` set for the session (F19); a task board page via `dashboard_page` (F20). One subtask per item when claimed; F20 and F11's Linear part sit under §13 "Out of scope", so they need the creator's go-ahead at claim time. Creator go-ahead 2026-10-11 for both; split into T441.13.1 (F8), T441.13.2 and T441.13.4 (F9), T441.13.3 (F19), T441.13.5 and T441.13.6 (F11 GitHub, Linear), T441.13.7 (F20).
+
+#### 12. Open questions
+
+- ~~Build or adopt (from T441.1): beads already has hash ids, a CLI, an MCP server and GitHub/GitLab sync; Backlog.md has the Markdown layout and per-repo locked ids.~~ Creator decision 2026-10-07: build rtok's own core as this card designs it (human `R12` ids, one counter per project in the store, `rtok mcp` + CLI, disk/GitHub/GitLab adapters); no beads or Backlog.md dependency.
+- ~~AirTalk's own prefix: the creator's example is "AirTalk → R" (the binary is `rtok`); the product name starts with `A`. Keep `R` for this repo by override?~~ Creator decision 2026-10-07: `A` for this repo. T441.5's `rtok task init` writes `[tasks] prefix = "A"` into `.rtok.toml`; not committed earlier, since installed rtok builds older than T441.2 reject an unknown `[tasks]` table there.
+- ~~Allocator in a JSON file + lock or in rtok's SQLite store?~~ Settled by T441.1: the store (§5).
+- Is per-machine allocation plus the remote label check enough for several machines, or should GitHub/GitLab adapters allocate remotely (e.g. a counter issue)?
+- ~~Does `closed`/won't-do need its own status, distinct from `done`? T441.1: both providers have it natively (GitHub `not_planned`, GitLab "Won't do"), so it maps cleanly; recommended yes.~~ Creator decision 2026-10-07: yes, `Status::Closed` (T441.2).
+- Should the disk adapter also keep this workspace's `plan.md`/`todo.md`/`done.md` in sync, or replace them?
+- How are tasks that agents create outside rtok (directly in GitHub) adopted — import on `sync`?
+
+#### 13. Out of scope
+
+- Implementation before the creator approves the T441.1 outcome.
+- More adapters (Linear, Jira) — later, through the same trait.
+- A web UI page for tasks, dependencies beyond parent/child, assignees, priorities, LLM-generated task breakdowns (Taskmaster's PRD parsing).
+- An HTTP MCP transport or a hosted service.
+- Replacing hosts' built-in TodoWrite/`update_plan` checklists.
+
+Result: every milestone in §11 is done: T441.1 research (`research.md` §35), T441.2 core types, T441.3 allocator in the store, T441.4 adapter trait and disk adapter, T441.5 CLI, T441.6 MCP tools, T441.7 GitHub adapter, T441.8 GitLab adapter, T441.9 docs, T441.10 instruction line, T441.11 Projects v2 Status, T441.12 `rtok task sync`, and T441.13 split into T441.13.1 (F8 `task` on agent messages), T441.13.2 and T441.13.4 (F9 conflict and parallel markers on disk, GitHub and GitLab), T441.13.3 (F19 `CLAUDE_CODE_TASK_LIST_ID`), T441.13.5 and T441.13.6 (F11 GitHub Issues and Linear exporters) and T441.13.7 (F20 read-only board in `rtok web` and `rtok tui`). The three §12 questions still open (several machines, keeping `plan.md`/`todo.md`/`done.md` in sync from the disk adapter, adopting tasks created outside rtok) are parked as I-126 to I-128 in `ideas.md`.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-opus-5-5
 
 ### T435. MCP refuses sibling worktrees when the server's cwd is another project
 

@@ -458,8 +458,34 @@ section! {
 }
 
 section! {
-    /// `[proxy.routing]` — model routing (D9). No keys yet.
-    RoutingPolicy {}
+    /// `[proxy.routing]` — model routing (D9, I-101), opt-in. Only rtok's own `internal` calls
+    /// and the `bulk` lane can be routed; the `agent` lane never is, and `batch` and `files`
+    /// are never rewritten. A rule moves a call to another model only when `enabled`, the
+    /// request's model is one of the rule's `from` entries and the rule names the quality
+    /// bench behind the swap in `gate`. No rule ships by default.
+    RoutingPolicy {
+        enabled: bool = false,
+        bulk: RouteRule = RouteRule::default(),
+        internal: RouteRule = RouteRule::default(),
+    }
+}
+
+section! {
+    /// `[proxy.routing.<lane>]` — one lane's routing rule (T385.10).
+    RouteRule {
+        /// Request models this rule applies to: an exact id, or an id ending in `*` for a
+        /// prefix (`gpt-5*`). Empty = the rule is off, so no lane is ever routed wholesale.
+        from: Vec<String> = Vec::new(),
+        /// The model that serves a matching call (a cheaper one). Empty = the rule is off.
+        to: String = String::new(),
+        /// The provider slug recorded for a routed call, when `to` lives at another provider
+        /// than the wire's own (pair it with `[proxy.lanes.<lane>] upstream`); empty = the
+        /// wire's provider.
+        provider: String = String::new(),
+        /// Where the quality bench for this `from` → `to` swap is kept (a path, URL or run
+        /// id). rtok cannot judge answer quality, so the rule stays off while this is empty.
+        gate: String = String::new(),
+    }
 }
 
 section! {
@@ -963,6 +989,31 @@ section! {
         disk: TasksDisk = TasksDisk::default(),
         github: TasksGithub = TasksGithub::default(),
         gitlab: TasksGitlab = TasksGitlab::default(),
+        export: TasksExport = TasksExport::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export]` — where `rtok task export` mirrors the disk tasks (T441.13.5).
+    TasksExport {
+        github: TasksExportGithub = TasksExportGithub::default(),
+        linear: TasksExportLinear = TasksExportLinear::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export.linear]` — the Linear team whose issues mirror the tasks (T441.13.6).
+    TasksExportLinear {
+        /// The team's short key, e.g. `ENG`. Empty: `rtok task export linear` refuses to run.
+        team: String = String::new(),
+    }
+}
+
+section! {
+    /// `[tasks.export.github]` — the repository whose issues mirror the tasks.
+    TasksExportGithub {
+        /// `owner/name`. Empty: `[tasks.github] repo`, else the `origin` remote.
+        repo: String = String::new(),
     }
 }
 

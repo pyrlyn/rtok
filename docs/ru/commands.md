@@ -35,6 +35,7 @@ lang: ru
 | `rtok memory import <file>` | импортировать заметки в формате JSONL с дедупликацией по хешу тела |
 | `rtok otel flush\|status` | экспортировать журналы через OTLP/HTTP или показать отметки (watermarks) |
 | `rtok task create\|list\|show\|status\|next\|ready\|claim\|release\|dep\|priority\|sync\|init` | план проекта в адаптере `[tasks]`; `claim` берёт готовую задачу, `dep` записывает блокер, `sync` поднимает счётчики id и сообщает о расхождениях |
+| `rtok task export github\|linear [--dry-run] [--json]` | односторонне отразить задачи с диска в GitHub Issues или Linear; повторный запуск без изменений не отправляет записей |
 | `rtok bench` | A/B-сравнение двух конфигураций хоста на фиксированных задачах |
 
 ## Страница Graph
