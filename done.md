@@ -3154,6 +3154,18 @@ Check: `a_sparkline_spreads_the_buckets_over_equal_slots_and_adds_up_to_the_wind
 
 Check result (2026-10-10): `just check` green, nextest `Summary [227.799s] 3301 tests run: 3301 passed (1 slow), 8 skipped`; `just spa-typecheck` clean; `just spa-test` 48 files, 427 tests passed; `just js` oxlint and oxfmt clean; `just spa-stories` 34 files, 228 tests passed; `just spa-e2e` 30 passed, 2 failed (`a 500-call burst leaves the page responsive` timed out in `rtok mcp` and `Compare against a saved export` hit the 30 s test timeout, both with load average about 20 and neither touching the code of this change).
 
+## T329.51 — Graph page: maximise buttons for the two parts
+
+Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
+
+Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
+
+How it landed: `live/Split.tsx` keeps a `Max` (`"explorer" | "live" | null`) beside the ratio and the hide flag, stored under `MAX_KEY = "rtok.graph.max"` through the guarded `readStored`/`writeStored` like the splitter and the hide toggle. Two `Chip`s in the same toolbar row as "Hide live graph" read "Maximise explorer" / "Restore explorer" and "Maximise live graph" / "Restore live graph"; they are real buttons (keyboard reachable) and `aria-pressed` carries the state. Maximising one part renders only that part at full width (the other is not rendered, so the live stream unsubscribes when the explorer fills the area), hides the separator, and Escape restores the split. Maximising the live graph also clears the hide flag so the toggle then reads "Hide live graph"; pressing hide while something is maximised restores the split and hides. Vitest `live.test.tsx` `maximise` (fill and restore both ways, Escape, remount keeps the choice, maximise-over-hide), stories `Pages/Graph split` (`SideBySide`, `MaximiseExplorer`, `MaximiseLiveAndEscape`, light; axe), Playwright `maximising either part fills the page, Escape and the button restore, and the choice is kept`.
+
+Check result (2026-10-11): `just check` (scoped to this change) green — oxlint/oxfmt and jscpd; `just spa-typecheck` clean; `just spa-test` 49 files, 443 tests passed; `just spa-stories` 36 files, 237 tests passed; Playwright maximise plus the splitter / hide / 900 px / live-graph greps (6 tests) passed. Bare `just check` selects `full-check` in this worktree because `pyrlyn/main` is the first merge-base ref and is far behind HEAD; `CHECK_BASE=HEAD` scopes the gate to the working tree.
+
+Status: done 2026-10-11
+
 ## T480 — TUI: live graph calls panel
 
 T329.26 put a live calls panel on the web graph page: the `{"type":"calls"}` stream of T329.15, the metric displays (now running, tokens, failures, window chips for 1, 5 and 15 minutes, per-tool bars, backend shares), freeze and unfreeze, and a 200-row call feed with filters. D27 (amended 2026-10-10, T346) requires the same view in `rtok tui`. Done means: the TUI graph page has a live calls pane that reads the same `graph_events` rows through the same poller as `src/web/live.rs` (no second reader), shows the same totals as the web panel and `rtok stats`, freezes and unfreezes without losing counts, and lists the feed with the same filters. The live canvas of T329.27 and T329.28 gets its own TUI task when those land. Depends on T329.26.

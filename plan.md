@@ -37,7 +37,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.50 | todo | P3 | 3 | 0% | |
-| T329.51 | todo | P3 | 2 | 0% | |
 | T329.52 | todo | P3 | 2 | 0% | |
 | T329.53 | todo | P3 | 2 | 0% | |
 | T500 | todo | P3 | 3 | 0% | |
@@ -796,12 +795,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
 
 Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
-
-### T329.51. Graph page: maximise buttons for the two parts
-
-Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
-
-Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
 
 ### T329.52. Graph page: metrics collapsed to a strip under 900 px
 

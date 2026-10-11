@@ -413,6 +413,48 @@ test("the splitter keeps its place and the hidden state across a reload and stop
   expect(stream).toHaveLength(sent);
 });
 
+test("maximising either part fills the page, Escape and the button restore, and the choice is kept", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const bar = page.getByRole("separator", { name: "resize the live graph" });
+  await expect(bar).toBeVisible();
+  await expect(page.getByTestId("graph-live")).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise explorer" }).click();
+  await expect(page.getByRole("button", { name: "Restore explorer" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("graph-live")).toHaveCount(0);
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "project graph" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(bar).toBeVisible();
+  await expect(page.getByTestId("graph-live")).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise live graph" }).click();
+  await expect(page.getByRole("button", { name: "Restore live graph" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("graph-live")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "project graph" })).toHaveCount(0);
+  await expect(bar).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Restore live graph" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "project graph" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Restore live graph" }).click();
+  await expect(bar).toBeVisible();
+  await expect(page.getByRole("heading", { name: "project graph" })).toBeVisible();
+});
+
 test("under 900 px the two parts stack and there is no splitter", async ({ page, rtok }) => {
   await viewing(page, "2d");
   rtok.addProject();
