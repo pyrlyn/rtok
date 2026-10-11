@@ -3,8 +3,8 @@
 Moved from the pyrlyn/brand v0.3.0 README (sections "Conflicts", "Adopting in each surface" and
 "Sources"), with paths adjusted to this folder. These notes record how the locked rtok values were
 chosen; they were written against rtok `559a7a11` and the `design/web-admin` branch. Since then the web
-admin moved to React/Vite on `main` and ships `web/src/styles/tokens.css`, which equals
-`dist/legacy/tokens.css`, so the web-admin steps below are history.
+admin moved to React/Vite on `main` and now reads this folder directly (T414), so the web-admin steps
+below are history.
 
 ## Conflicts
 
@@ -46,10 +46,12 @@ are identical across the web admin, docs site, landing and the v3 pack wherever 
 
 ## Adopting in each surface
 
-Nothing was rewired in this change. The rtok repo still carries its own runtime copies; these are
-the steps to switch each surface to this folder.
+The web admin is adopted (T414): `web/` imports the tokens, fonts, icons, logo and offline illustration from
+this folder and `@pyrlyn/brand`, and `web/screenshots/` is re-shot by `just spa-screenshots`. The steps
+below, written for the Tailwind v3 admin, are kept as history. The docs site still carries its own runtime
+copies; the steps for it switch it to this folder.
 
-**Web admin** (`rtok/web/` on `design/web-admin`, currently Tailwind v3 standalone CLI)
+**Web admin** (adopted; the steps below are for the old `rtok/web/` on `design/web-admin`, Tailwind v3 standalone CLI)
 1. Move the web admin to Tailwind v4: delete `web/tailwind.config.js` (its colors, type scale,
    radii, shadows, screens and durations all come from `dist/legacy/tailwind-v4.css`) and build with
    `@tailwindcss/cli` instead of the v3 CLI.

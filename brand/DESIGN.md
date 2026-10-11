@@ -3,8 +3,7 @@
 Only what is specific to rtok. Everything else (type, space, motion, interaction, components,
 icons) is the [Pyrlyn base layer](https://github.com/pyrlyn/brand/blob/v0.3.0/base/DESIGN.md) from `@pyrlyn/brand` (pinned in `package.json`). Tokens: [`tokens.json`](tokens.json) (extends
 `@pyrlyn/brand/base/tokens.json`), built to `dist/tokens.css` by `node build.mjs`. The flat build
-`dist/legacy/tokens.css` (`--rtok-*`, byte for byte what `web/src/styles/tokens.css` ships today) carries
-the same values.
+`dist/legacy/tokens.css` (`--rtok-*`) carries the same values.
 
 One brand across every rtok surface: the web admin, the rtok docs site and the rtok page on the
 Pyrlyn landing. Origin: the v3-B brand pack (pyrlyn/brand v0.3.0 `brands/rtok/sources/rtok-brand-v3-B-tokens/`), updated to the
@@ -50,5 +49,5 @@ thinned, coral cells are measured cuts (Δ). The wordmark is tracked `RTOK` plus
 
 - `icons/feature/`: "Signal / scope" feature icons for marketing pages, with `@2x` PNGs; coral
   appears only where the drawing already marks a Δ. The shared UI icons are `@pyrlyn/brand/base/icons/ui/*`; rtok's own
-  extras (config, graph, hosts, services, stats, tasks, usage, worktrees, from `web/assets/icons/`) are in
-  `icons/ui/` here, and the offline illustration (`web/assets/offline.svg`) in `illustrations/`.
+  extras (config, graph, hosts, services, stats, tasks, usage, worktrees) are in
+  `icons/ui/` here, and the offline illustration in `illustrations/`; the web admin reads both from here.

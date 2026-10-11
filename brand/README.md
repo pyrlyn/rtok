@@ -51,8 +51,8 @@ Plain HTML has no module resolution: link `brand/node_modules/@pyrlyn/brand/dist
 before `brand/dist/tokens.css`. UI icons: `@pyrlyn/brand/base/icons/ui/*.svg`; rtok's own: `icons/ui/` (product UI icons the base does not have) and `icons/feature/` (marketing).
 
 The flat `--rtok-*` build (`dist/legacy/tokens.css`, `tailwind-v4.css`, `components.css` with `.rtok-*`
-classes) is generated from the same sources; `dist/legacy/tokens.css` is byte for byte the body of
-`web/src/styles/tokens.css` that the web admin ships today.
+classes) is generated from the same sources. The web admin (`web/`) imports `dist/tokens.css` and the base
+fonts at build time and holds no copy of a brand file (T414).
 
 
 ## Layout
@@ -131,14 +131,14 @@ Brand constants: `--rtok-brand-cyan` `#5CE1FF` · `--rtok-brand-coral` `#FF6B4A`
 
 - `site/static/logo.svg`, `web/assets/logo.svg` = `logo/rtok-mark.svg`; `site/static/favicon.svg` =
   `logo/rtok-favicon.svg`; `site/static/logo-wordmark.svg` = `logo/rtok-wordmark.svg` (byte-identical).
-- `web/assets/fonts/*.woff2` = the base IBM Plex Mono files; the 9 shared `web/assets/icons/` = base UI icons.
-- `web/src/styles/tokens.css` = `dist/legacy/tokens.css` (same values, only the header line differs).
+- `web/` has no copy of the fonts, icons, logo, offline illustration or tokens: `web/src/styles/app.css`, `web/src/ui/Icon.tsx`
+  and `web/index.html` read them from here and from `@pyrlyn/brand`. `web/src/brandSources.test.ts` fails on any
+  `web/` file that is byte-identical to a file under `brand/` or the base package.
 
 ## Known gaps
 
-- Nothing in rtok imports this folder yet: the web admin still ships its own copies
-  (`web/src/styles/tokens.css`, `web/assets/`), the docs site its `site/static/` files. Rewiring them is
-  a follow-up (see `PROVENANCE.md`, "Adopting in each surface").
+- The web admin imports this folder (T414). The docs site still ships its own copies in `site/static/`;
+  rewiring it is a follow-up (see `PROVENANCE.md`, "Adopting in each surface").
 - The provenance snapshots (`sources/`, `screenshots/`) live only in pyrlyn/brand v0.3.0 and are not
   refreshed (e.g. `sources/rtok/docs/site.md` there still has the old listepo URLs). Only `tokens.json`
   and `dist/` are authoritative.
