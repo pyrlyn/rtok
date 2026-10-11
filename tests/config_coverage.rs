@@ -55,6 +55,11 @@ const ALLOW_KEYS: &[&str] = &[
     "completions.list",
     "config.init.dry_run",
     "config.set.dry_run",
+    // T416.4: print-do-not-write previews on the destructive commands, one-shot like the above.
+    "worktree.remove.dry_run",
+    "completions.dry_run",
+    "graph.projects.remove.dry_run",
+    "graph.projects.unlink.dry_run",
     "guard.check.host", // overlay `[hook] host` on the plugin CLI path (T70.5)
     "memory.import.dry_run",
     "graph.index.dry_run",

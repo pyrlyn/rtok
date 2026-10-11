@@ -74,6 +74,9 @@ pub(super) enum WorktreeCmd {
         /// Remove an unmerged worktree too and keep its branch (a merged branch is kept as well)
         #[arg(long)]
         keep_branch: bool,
+        /// Show the path, branch, size and file count that would go; remove nothing
+        #[arg(long)]
+        dry_run: bool,
         /// JSON instead of the text line
         #[arg(long)]
         json: bool,
@@ -199,7 +202,14 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let done = with_loader("removing worktree", || {
-                crate::worktree::ops::remove(&cfg, &target, agent.as_deref(), owner, keep_branch)
+                crate::worktree::ops::remove(
+                    &cfg,
+                    &target,
+                    agent.as_deref(),
+                    owner,
+                    keep_branch,
+                    dry_run,
+                )
             })?;
             if json {
                 print_json(&done)?;
@@ -207,6 +217,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                 println!("{}: {}", done.path, done.note);
             }
 
+            dry_run,
             Ok(())
         }
         WorktreeCmd::Whoami { json } => {
@@ -215,6 +226,8 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             let me = crate::worktree::ops::whoami(&cfg, &cwd);
             if json {
                 print_json(&me)?;
+            } else if dry_run {
+                print!("{}", done.preview_text());
             } else {
                 print!("{}", crate::worktree::whoami::to_text(&me));
             }

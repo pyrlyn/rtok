@@ -973,6 +973,70 @@ fn remove_takes_only_the_caller_s_own_clean_worktree() {
 fn remove_guards_commits_and_reports_a_branch_it_could_not_delete() {
     let tmp = rtok::testutil::tmp_dir("worktree-remove-edges");
     let work = common::git::repo(&tmp);
+
+/// T416.4: `remove --dry-run` names the path, branch, size and file count, keeps every refusal,
+/// and leaves the worktree, its branch and its claim alone.
+#[test]
+fn remove_dry_run_previews_and_changes_nothing() {
+    let tmp = rtok::testutil::tmp_dir("worktree-remove-dry");
+    run(&tmp, &["init", "-q", "--bare", "origin.git"]);
+    run(&tmp, &["clone", "-q", "origin.git", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    run(&work, &["push", "-q", "-u", "origin", "main"]);
+    run(&work, &["remote", "set-head", "origin", "main"]);
+    let (store, ids) = agents(&tmp, &["sess-me"]);
+    let me = ids[0].as_str();
+    add(
+        &work,
+        "done",
+        Some(&format!("claude | t1 | 2026-09-27 | agent {me}")),
+    );
+    add(
+        &work,
+        "open",
+        Some(&format!("claude | t2 | 2026-09-27 | agent {me}")),
+    );
+    commit(&tmp.join("wt-done"), "done.txt");
+    commit(&tmp.join("wt-open"), "open.txt");
+    squash(&work, "t-done");
+    run(&work, &["push", "-q", "origin", "main"]);
+    let done = tmp.join("wt-done").canonicalize().unwrap();
+    store
+        .claim_worktree(&done.display().to_string(), me, "t1")
+        .unwrap();
+    let remove = |args: &[&str]| {
+        let args = [&["worktree", "remove", "--dry-run"][..], args].concat();
+        rtok_as(&tmp, &work, Some(me), &args, b"")
+    };
+
+    let out = remove(&["t1"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(text.contains(&done.display().to_string()), "{text}");
+    assert!(text.contains("files"), "{text}");
+    assert!(text.contains("branch t-done: would be deleted"), "{text}");
+    assert!(done.exists() && !run(&work, &["branch", "--list", "t-done"]).is_empty());
+    assert_eq!(store.open_worktree_claims().unwrap().len(), 1);
+
+    let out = remove(&["t1", "--json"]);
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(
+        v["files"].as_u64().unwrap() > 0 && v["bytes"].as_u64().is_some(),
+        "{v}"
+    );
+
+    let out = remove(&["../wt-open"]);
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("--keep-branch"),
+        "an unmerged branch is refused in a dry run too"
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
+}
     std::fs::write(work.join(".git/info/exclude"), "target/\n").unwrap();
     let (store, ids) = agents(&tmp, &["sess-me"]);
     let me = ids[0].as_str();
