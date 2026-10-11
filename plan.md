@@ -103,6 +103,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T551 | todo | P2 | 2 | 0% | |
 | T552 | todo | P2 | 2 | 0% | |
 | T553 | todo | P2 | 2 | 0% | |
+| T555 | todo | P2 | 2 | 0% | |
+| T556 | todo | P2 | 3 | 0% | |
+| T557 | todo | P2 | 3 | 0% | |
+| T558 | todo | P2 | 2 | 0% | |
+| T559 | todo | P2 | 2 | 0% | |
+| T560 | todo | P3 | 2 | 0% | |
 
 
 
@@ -309,6 +315,88 @@ Execution plan:
 3. Exercise both handoff directions, subdirectories and non-git cwd; preserve the opt-in handoff flag, session-local compact restore and injection budget.
 
 Check: linked worktrees share the intended project handoff consistently with ordinary memory, unrelated project notes remain excluded, and `just check` passes. Source-derived reproduction; no real agent session was started.
+
+**Guard/encoding audit (T554).** T555–T560 were confirmed against `eb13dd7f`
+(product source unchanged from `0b14b88e`). T555–T559 are guard behavior defects;
+T560 is explicitly a test-oracle defect, not a production decoder failure.
+Each was compared with completed T55.8/T55.9/T57.1/T322/T445/T62.1/T468 and
+the active backlog. The related features do not track these exact triggers.
+
+### T555. Preserve quoted whitespace in guard command identities
+
+Confirmed by an actual-source function probe: [cache_key](src/plugins/guard/mod.rs#L255) passes command text through [norm_cmd/collapse](src/plugins/guard/mod.rs#L409), whose split_whitespace/join normalizes inside quotes too. `cat 'a  b'` and `cat 'a b'` therefore produce the same nonempty Bash key in one cwd, although they read distinct files. After the first result is archived, [pre_tool](src/plugins/guard/mod.rs#L57) can deny the first execution of the second command and offer the wrong file's result. T55.9/T445 preserved cd/cwd distinctions but not quoted argument bytes.
+
+Execution plan:
+
+1. Add two files with different contents and one versus two spaces in their names; cache the first command's result and assert the second command is allowed.
+2. Preserve quoted and escaped argument bytes when normalizing keys; only collapse syntactically insignificant whitespace. Fail open when the existing shell helpers cannot establish a safe identity.
+3. Cover single/double quotes, literal tabs/newlines inside arguments, escaped spaces and supported rtok run wrappers; retain dedup for equivalent outside-quote whitespace.
+
+Check: different paths never collide, ordinary equivalent repeats still deny with the correct archive, and `just check` passes. The probe confirmed key equality; full hook regression is part of the fix.
+
+### T556. Resolve guard Read and invalidation paths against the same cwd
+
+Confirmed by an actual-source key probe and source tracing: [cache_key's Read arm](src/plugins/guard/mod.rs#L230) stores only the trimmed input path and slice, ignoring cwd. A Read of `file.txt` in /A and one in /B produce the same key. An intervening absolute `cd /B && ls` only clears Bash keys in [post_tool](src/plugins/guard/mod.rs#L108), so it does not prevent the false Read denial. Separately, Edit/Write clears the literal `read\t{path}` prefix at line 149: an absolute edit does not invalidate a prior relative/./ spelling of the same file. T55.8 added invalidation and T322 added slices; neither establishes shared path identity.
+
+Execution plan:
+
+1. Add same-session fixtures for equal relative names under two cwd values and for Read("./file.txt") followed by Edit of its absolute path.
+2. Reuse one path-identity function for Read keys and Edit/Write invalidation, resolving relative paths against the hook cwd without reading file bodies. Preserve meaningful filename whitespace; fail open when relative identity cannot be established.
+3. Keep slice and agent/window namespaces distinct, ensure equivalent path spellings invalidate together, and retain the hook's metadata-only budget.
+
+Check: changing cwd allows the new file's first read, editing through an alias invalidates all affected slices, unrelated files retain their cache, and `just check` passes.
+
+### T557. Reject side-effect variants of nominally read-only shell commands
+
+Confirmed by actual-source classification probes: [stem_read_only/writer_marker](src/plugins/guard/mod.rs#L324) accepts `sed 'w output' input`, `find . -fprint output`, and `git diff --output=output` as cacheable. It only checks selected writer markers such as sed -i, find -delete/-exec and redirection. These accepted variants write files, so their PostToolUse stores a dedup key instead of invalidating earlier reads; repeating them can be denied and previous file results can remain stale. T57.1/T322 cover other writer forms, not these options/scripts.
+
+Validation: all three variants returned nonempty keys in an offline actual-source Rust probe. A separate system sed run in a temporary directory created a nonempty output file from the first example. The find/git side effects were not executed during the audit.
+
+Execution plan:
+
+1. Add classification regressions for sed's write/execute script commands, find output actions and git output-file options, plus a hook fixture proving a writer invalidates an earlier Read result.
+2. Tighten eligibility at the shared classification layer: use a conservative supported read-only subset and reject write/execute forms or ambiguous script/option parsing. Reuse existing shell parsing helpers.
+3. Retain common safe sed/grep/find/git listing cases; assert writer variants are allowed to execute again and clear stale read/Bash keys.
+
+Check: all demonstrated writers return no dedup key, their post-tool events invalidate prior results, safe readers retain expected dedup, and `just check` passes.
+
+### T558. Fail open for a sole skill installation scoped to another project
+
+Confirmed by an actual-source function probe: [plugin_root](src/plugins/guard/skill.rs#L116) first looks for the current project or a user installation, then accepts any single remaining installation. A manifest containing only `scope: "project", projectPath: "/A", installPath: "/private-A-plugin"` returns that path even for cwd /B. With skill digest enabled and a sufficiently large file there, the guard archives A's skill body and denies B's invocation using the wrong installation. The single-entry fallback intended for legacy unscoped records does not distinguish an explicitly foreign project. T62.1's existing legacy and multi-install tests do not cover this case.
+
+Execution plan:
+
+1. Add a sole foreign-project installation fixture and assert resolution fails open; include a large skill file to prove no archive/denial is generated for it.
+2. Restrict the legacy fallback to records without contradictory scope/project metadata; never select an explicitly nonmatching project just because it is the only entry.
+3. Retain matching-project precedence, user fallback, genuine legacy single entries and ambiguous-marketplace fail-open behavior.
+
+Check: an unrelated project cannot supply the denied skill's body, supported matching/legacy cases still resolve, and `just check` passes. The probe tested path selection; the full digest check belongs to the fix.
+
+### T559. Recognize YAML-quoted host keys before digesting skills
+
+Confirmed by an actual-source probe: [host_keys](src/plugins/guard/skill.rs#L157) checks raw line prefixes, so valid frontmatter such as `"model": value` or `'allowed-tools': value` bypasses the exemption. [decide](src/plugins/guard/skill.rs#L125) then archives and denies an oversized skill whose host-applied model/tool/context behavior must be preserved. The T62.1 contract is semantic frontmatter key presence, not a particular YAML spelling.
+
+Validation: the probe parsed quoted model/allowed-tools keys with the repository's serde-saphyr version and confirmed host_keys returns false for the same valid YAML.
+
+Execution plan:
+
+1. Add oversized-skill fixtures with single/double-quoted top-level host keys and assert no digest denial or saving row.
+2. Inspect the frontmatter mapping with the existing YAML parser, preserving host behavior for allowed-tools/model/context/agent; malformed or ambiguous frontmatter must fail open.
+3. Cover unquoted keys, CRLF and ordinary prose mentioning those words, while retaining digest behavior for valid frontmatter without host-affecting keys.
+
+Check: equivalent YAML spellings receive the same exemption, host behavior is not lost through a digest denial, and `just check` passes.
+
+### T560. Make the TOON test decoder handle quoted comma cells
+
+Confirmed by an actual-source round-trip probe: [encode_cell](src/plugins/toon/mod.rs#L188) correctly quotes a string containing a comma, but the test-only [decode](src/plugins/toon/mod.rs#L225) unconditionally splits each row on every comma. The accepted table `[{"a":"x,y","b":1,"c":true}]` encodes to a three-column row and decodes to None because the oracle sees four cells. The round-trip cases at line 375 omit commas. T468 intentionally kept this decoder as the losslessness oracle after removing it from release code; this task repairs that verification path and makes no production-decoder/data-loss claim.
+
+Execution plan:
+
+1. Add the quoted-comma table to the round-trip cases and verify the current oracle fails on it.
+2. Parse row cell boundaries with quote/escape awareness in the test decoder, matching the existing encoder's grammar; do not weaken the encoder or reject valid input to satisfy a broken oracle.
+3. Add generated round-trip coverage combining commas, quotes, backslashes, control characters, empty strings and scalar-looking strings, and check declared row/column counts.
+
+Check: decode(encode(table)) equals the original for all accepted generated fixtures, valid comma cells pass, malformed rows are rejected, and `just check` passes. This is a P3 test-quality defect.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

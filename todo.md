@@ -19,6 +19,12 @@
 - T551. Estimate docs-query savings against the same full content as byte accounting
 - T552. Keep checkpoint prefilter equivalent for spaced and mixed-content JSONL
 - T553. Use the shared project resolver for session checkpoint handoff
+- T555. Preserve quoted whitespace in guard command identities
+- T556. Resolve guard Read and invalidation paths against the same cwd
+- T557. Reject side-effect variants of nominally read-only shell commands
+- T558. Fail open for a sole skill installation scoped to another project
+- T559. Recognize YAML-quoted host keys before digesting skills
+- T560. Make the TOON test decoder handle quoted comma cells
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
