@@ -599,6 +599,11 @@ agents
     mcp     not installed
     proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
     plugin  not installed
+  mimo (desktop)
+    hooks   not supported: MiMo Code has no shell hook events; the linked plugin filters bash output instead
+    mcp     not installed
+    proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
+    plugin  not installed
   antigravity (cli)
     hooks   not supported: Antigravity's PreToolUse cannot rewrite tool input and PostToolUse cannot add context
     mcp     not supported: rtok's MCP ships inside the plugin, the only install path

@@ -621,6 +621,7 @@ mod tests {
             "Cline for VS Code" => "Visual Studio Code",
             "Kilo Code for VS Code" => "Visual Studio Code",
             "Kimi Code Desktop" => "Kimi Code",
+            "MiMo Desktop" => "Xiaomi MiMo AI",
             "OpenCode Desktop" => "OpenCode",
             "Roo Code" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",

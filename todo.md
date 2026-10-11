@@ -68,4 +68,3 @@
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
-- T521. MiMo Desktop variant of the `mimo` host
