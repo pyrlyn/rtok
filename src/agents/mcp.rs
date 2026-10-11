@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
 use rtok_mcp::config::Fs;
 use rtok_mcp::ops::{self, Mode as McpMode};
 use rtok_mcp::registry::RTOK;
@@ -383,8 +384,12 @@ fn doctor_line(host: &str, flag: Option<Kind>, row: &McpRow) -> Option<String> {
 struct Disk;
 
 impl Fs for Disk {
-    fn read(&self, path: &Path) -> Option<Vec<u8>> {
-        std::fs::read(path).ok()
+    fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+        match std::fs::read(path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).with_context(|| path.display().to_string()),
+        }
     }
     fn write(&mut self, path: &Path, _: Vec<u8>) -> anyhow::Result<()> {
         anyhow::bail!("{}: MCP status is read-only", path.display())
@@ -397,7 +402,7 @@ impl Fs for Disk {
 struct Writer<'a>(&'a rtok_agent_sdk::Apply);
 
 impl Fs for Writer<'_> {
-    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+    fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
         Disk.read(path)
     }
     fn write(&mut self, path: &Path, bytes: Vec<u8>) -> anyhow::Result<()> {
@@ -753,8 +758,8 @@ mod tests {
     }
 
     impl Fs for crate::testutil::Vfs {
-        fn read(&self, path: &Path) -> Option<Vec<u8>> {
-            crate::testutil::Vfs::read(self, &path.to_string_lossy()).map(<[u8]>::to_vec)
+        fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+            Ok(crate::testutil::Vfs::read(self, &path.to_string_lossy()).map(<[u8]>::to_vec))
         }
         fn write(&mut self, path: &Path, bytes: Vec<u8>) -> anyhow::Result<()> {
             crate::testutil::Vfs::write(self, path.to_string_lossy(), bytes);

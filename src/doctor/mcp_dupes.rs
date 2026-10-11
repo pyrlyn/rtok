@@ -31,6 +31,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
 use rtok_mcp::config::{self, Fs as McpFs};
 use rtok_mcp::registry::RTOK;
 use rtok_mcp::spec::McpSpec;
@@ -131,8 +132,12 @@ pub(super) fn locations(cfg: &crate::config::Config, p: &Probes) -> Vec<Loc> {
 struct Reader<'a>(&'a dyn Fs);
 
 impl McpFs for Reader<'_> {
-    fn read(&self, path: &Path) -> Option<Vec<u8>> {
-        self.0.read(path).ok().map(String::into_bytes)
+    fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+        match self.0.read(path) {
+            Ok(text) => Ok(Some(text.into_bytes())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).with_context(|| path.display().to_string()),
+        }
     }
     fn write(&mut self, _: &Path, _: Vec<u8>) -> anyhow::Result<()> {
         anyhow::bail!("the doctor check never writes")

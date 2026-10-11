@@ -786,4 +786,33 @@ mod tests {
             manifest
         );
     }
+
+    /// T277.2: a host config that exists but cannot be read is refused, never read as absent
+    /// and overwritten (the old `read_json` named the file in an error).
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_mcp_config_is_refused_not_overwritten() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp("mcp-unreadable");
+        let c = cfg(dir.join("hooks.json"), false);
+        let path = mcp_path(&c);
+        let original = br#"{"mcpServers":{"mine":{"command":"x"}}}"#;
+        fs::write(&path, original).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::read(&path).is_ok() {
+            // Running as root: chmod does not stop the read, so there is nothing to prove.
+            let _ = fs::remove_dir_all(dir);
+            return;
+        }
+        let err = register_mcp(&c).unwrap_err();
+        let unregister = unregister_mcp(&c).unwrap_err();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(format!("{err:#}").contains("mcp.json"), "{err:#}");
+        assert!(
+            format!("{unregister:#}").contains("mcp.json"),
+            "{unregister:#}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), original, "file untouched");
+        let _ = fs::remove_dir_all(dir);
+    }
 }

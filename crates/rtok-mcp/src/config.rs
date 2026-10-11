@@ -27,8 +27,10 @@ use crate::spec::{Format, McpSpec};
 /// `backup`'s default is a no-op, which is only valid for a throwaway or in-memory `Fs` — a
 /// disk-backed one reuses `rtok_agent_sdk::backup` instead of a second copy of that logic.
 pub trait Fs {
-    /// Bytes at `path`, or `None` if it does not exist.
-    fn read(&self, path: &Path) -> Option<Vec<u8>>;
+    /// Bytes at `path`, or `None` if it does not exist. A file that exists but cannot be read
+    /// (permissions, a directory, ...) is an error naming the path, never `None`: a caller that
+    /// took it for absent would overwrite a config it never read.
+    fn read(&self, path: &Path) -> Result<Option<Vec<u8>>>;
     /// Overwrite (or create) `path` with `bytes`.
     fn write(&mut self, path: &Path, bytes: Vec<u8>) -> Result<()>;
     /// Best-effort copy of `path`'s current contents before it changes.
@@ -155,7 +157,7 @@ fn parse_json(bytes: &[u8], path: &Path) -> Result<Value> {
 }
 
 fn servers_json(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.read(&spec.config_path)? else {
         return Ok(None);
     };
     let root = parse_json(&bytes, &spec.config_path)?;
@@ -170,7 +172,7 @@ fn walk_json<'a>(
 }
 
 fn write_json(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let mut root = match fs.read(&spec.config_path) {
+    let mut root = match fs.read(&spec.config_path)? {
         Some(bytes) => parse_json(&bytes, &spec.config_path)?,
         None => Value::Object(Default::default()),
     };
@@ -254,7 +256,7 @@ fn parse_jsonc(bytes: Option<Vec<u8>>, path: &Path) -> Result<CstRootNode> {
 }
 
 fn servers_jsonc(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.read(&spec.config_path)? else {
         return Ok(None);
     };
     let root = parse_jsonc(Some(bytes), &spec.config_path)?;
@@ -274,7 +276,7 @@ fn servers_jsonc(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<
 }
 
 fn write_jsonc(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let root = parse_jsonc(fs.read(&spec.config_path), &spec.config_path)?;
+    let root = parse_jsonc(fs.read(&spec.config_path)?, &spec.config_path)?;
     let mut obj = root
         .object_value_or_create()
         .with_context(|| format!("{}: root is not an object", spec.config_path.display()))?;
@@ -304,7 +306,7 @@ fn write_jsonc(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Resul
 }
 
 fn add_jsonc(fs: &mut impl Fs, spec: &McpSpec, keys: &[(&'static str, Value)]) -> Result<()> {
-    let root = parse_jsonc(fs.read(&spec.config_path), &spec.config_path)?;
+    let root = parse_jsonc(fs.read(&spec.config_path)?, &spec.config_path)?;
     let mut obj = root
         .object_value_or_create()
         .with_context(|| format!("{}: root is not an object", spec.config_path.display()))?;
@@ -349,7 +351,7 @@ fn parse_toml(bytes: &[u8], path: &Path) -> Result<toml_edit::DocumentMut> {
 }
 
 fn servers_toml(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.read(&spec.config_path)? else {
         return Ok(None);
     };
     let doc = parse_toml(&bytes, &spec.config_path)?;
@@ -369,7 +371,7 @@ fn servers_toml(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<S
 }
 
 fn write_toml(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let mut doc = match fs.read(&spec.config_path) {
+    let mut doc = match fs.read(&spec.config_path)? {
         Some(bytes) => parse_toml(&bytes, &spec.config_path)?,
         None => toml_edit::DocumentMut::new(),
     };
@@ -407,7 +409,7 @@ fn servers_toml_mut<'a>(
 }
 
 fn add_toml(fs: &mut impl Fs, spec: &McpSpec, keys: &[(&'static str, Value)]) -> Result<()> {
-    let bytes = fs.read(&spec.config_path).unwrap_or_default();
+    let bytes = fs.read(&spec.config_path)?.unwrap_or_default();
     let mut doc = parse_toml(&bytes, &spec.config_path)?;
     let entry = servers_toml_mut(&mut doc, spec)?
         .get_mut(spec.server.name)
@@ -520,12 +522,50 @@ mod tests {
     struct MemFs(HashMap<PathBuf, Vec<u8>>);
 
     impl Fs for MemFs {
-        fn read(&self, path: &Path) -> Option<Vec<u8>> {
-            self.0.get(path).cloned()
+        fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+            Ok(self.0.get(path).cloned())
         }
         fn write(&mut self, path: &Path, bytes: Vec<u8>) -> Result<()> {
             self.0.insert(path.to_path_buf(), bytes);
             Ok(())
+        }
+    }
+
+    /// A file that exists but whose read fails (permissions, a directory); records any write.
+    struct Unreadable {
+        wrote: bool,
+    }
+
+    impl Fs for Unreadable {
+        fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+            anyhow::bail!("{}: permission denied", path.display())
+        }
+        fn write(&mut self, _: &Path, _: Vec<u8>) -> Result<()> {
+            self.wrote = true;
+            Ok(())
+        }
+    }
+
+    /// An existing file the host cannot read is an error from every operation, never an absent
+    /// one that a write would then replace.
+    #[test]
+    fn an_unreadable_file_is_an_error_not_an_absent_one() {
+        let entry = json!({"command": "rtok", "args": ["mcp"]});
+        for format in [Format::Json, Format::Jsonc, Format::Toml] {
+            let s = spec(format);
+            let mut fs = Unreadable { wrote: false };
+            let errors = [
+                read_entry(&fs, &s).err(),
+                read_servers(&fs, &s).err(),
+                write_entry(&mut fs, &s, &entry).err(),
+                remove_entry(&mut fs, &s).err(),
+                add_missing_keys(&mut fs, &s).err(),
+            ];
+            for err in errors {
+                let err = err.unwrap_or_else(|| panic!("{format:?}: no error"));
+                assert!(format!("{err:#}").contains("/cfg"), "{format:?}: {err:#}");
+            }
+            assert!(!fs.wrote, "{format:?}: wrote over an unreadable file");
         }
     }
 

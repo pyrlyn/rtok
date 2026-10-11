@@ -150,8 +150,8 @@ mod tests {
     }
 
     impl Fs for MemFs {
-        fn read(&self, path: &Path) -> Option<Vec<u8>> {
-            self.files.get(path).cloned()
+        fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+            Ok(self.files.get(path).cloned())
         }
         fn write(&mut self, path: &Path, bytes: Vec<u8>) -> Result<()> {
             self.files.insert(path.to_path_buf(), bytes);
@@ -278,7 +278,8 @@ mod tests {
             );
 
             if !case.existing.is_empty() {
-                let after = String::from_utf8(fs.read(&spec.config_path).unwrap()).unwrap();
+                let after =
+                    String::from_utf8(fs.read(&spec.config_path).unwrap().unwrap()).unwrap();
                 assert!(
                     after.contains("// keep me"),
                     "{:?}: lost a comment: {after}",
@@ -329,7 +330,7 @@ mod tests {
                 is_rtok_bin,
             )
             .unwrap();
-            let body = String::from_utf8(fs.read(&spec.config_path).unwrap()).unwrap();
+            let body = String::from_utf8(fs.read(&spec.config_path).unwrap().unwrap()).unwrap();
             assert!(body.starts_with(header), "{body}");
             assert!(!body.contains("rtok = {"), "{body}");
         }
@@ -400,7 +401,11 @@ mod tests {
             let r = apply(&s, mode, &Apply::default(), &mut fs, is_rtok_bin).unwrap();
             assert_eq!(r.line(), rtok_agent_sdk::NO_CHANGES, "{mode:?}");
         }
-        assert_eq!(fs.read(&s.config_path).unwrap(), no_type, "file untouched");
+        assert_eq!(
+            fs.read(&s.config_path).unwrap().unwrap(),
+            no_type,
+            "file untouched"
+        );
     }
 
     /// Removal of an entry already in the file, by who owns it and how the run is set:
@@ -486,11 +491,15 @@ mod tests {
             let mut mine = ours.clone();
             mine["approval"] = "mine".into();
             config::write_entry(&mut fs, &s, &mine).unwrap();
-            let before = fs.read(&s.config_path).unwrap();
+            let before = fs.read(&s.config_path).unwrap().unwrap();
             for mode in [Mode::Install, Mode::Update] {
                 assert_eq!(run(&mut fs, mode), Report::NoChanges, "{format:?}");
             }
-            assert_eq!(fs.read(&s.config_path).unwrap(), before, "{format:?}");
+            assert_eq!(
+                fs.read(&s.config_path).unwrap().unwrap(),
+                before,
+                "{format:?}"
+            );
             assert_eq!(
                 status::status(&fs, &s).unwrap().entry,
                 Entry::Present,

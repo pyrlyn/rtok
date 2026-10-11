@@ -361,9 +361,6 @@ impl Agent for Codex {
 }
 /// Apply, dry-run, or remove the `[mcp_servers.rtok]` block.
 pub fn run(cfg: &Config, remove: bool) -> Result<String> {
-    // `rtok_mcp` reads a file it cannot open as absent, which would overwrite a config this
-    // installer never read (permissions): refuse it here, as before.
-    load(&cfg.setup.codex.config_path)?;
     let spec = mcp_spec(cfg);
     if remove {
         super::mcp::remove(cfg, &spec)

@@ -20,8 +20,8 @@ use crate::agents::jsonc::{self, Seg};
 struct One<'a>(&'a Path, &'a str);
 
 impl McpFs for One<'_> {
-    fn read(&self, path: &Path) -> Option<Vec<u8>> {
-        (path == self.0).then(|| self.1.as_bytes().to_vec())
+    fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+        Ok((path == self.0).then(|| self.1.as_bytes().to_vec()))
     }
     fn write(&mut self, _: &Path, _: Vec<u8>) -> anyhow::Result<()> {
         anyhow::bail!("the guard never writes")
