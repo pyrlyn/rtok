@@ -1,5 +1,514 @@
 # rtok — completed tasks
 
+### T616. Audit remaining module coverage
+
+Inventory and audit remaining Rust and production non-Rust modules across `src/`, `crates/`, `web/`, `plugins/`, and project scripts, using prior T530-and-newer audit records to avoid treating a filename mention as full coverage. Work from grouped subsystem inventories, inspect uncovered call paths and invariants, and report only confirmed findings with evidence and explicit limits.
+
+Execution plan:
+
+1. Inventory Rust and tracked production non-Rust source modules by directory and compare exact path citations in T530+ plan/done records, treating these as aids rather than proof of full or absent coverage.
+2. Inspect remaining subsystem groups and their callers, then run focused real-source reproductions and controls for concrete candidates.
+3. Deduplicate reproduced cases across `plan.md`, `done.md`, `roadmap.md`, and `ideas.md`; file only distinct findings, preserving the probe and integration limits.
+4. Record exact reviewed coverage and evidence, verify task parity and the docs diff, run scoped `just check`, and prepare the PR #986 update.
+
+Check: the inventory groups Rust and production non-Rust modules, with tests, fixtures, generated files and dependencies identified or excluded; each new finding has source evidence, a distinct reproduced invariant failure, and ordered fix/check steps; the final audit record states scope and limits, and scoped `just check` passes.
+
+Result: completed the remaining module-family source pass and recorded its exact depth in [audit-coverage.md](audit-coverage.md). The earlier T616 checkpoint filed T617–T626; this continuation adds T627–T639, thirteen distinct findings with source evidence, reproduction limits and ordered fixes. It closes the checkpoint's shared agent helpers, CLI wrappers, plugin SDK, TUI, frontend page/graph rendering and packaging-source review. Large subsystems retain the targeted depth identified in the ledger; completion of this audit pass is not a claim that every function or runtime integration has been verified.
+
+Evidence revision for the final thirteen findings: `ea999781d7a48733e3a5c92e711cfad291c13536`. Reproductions used actual/extracted production functions, the real config crate, a minimal Cargo package with the real build script and linked Git worktree, synthetic shell children, fake publisher/process executables and Ratatui TestBackend. PDF findings are source/arithmetic proofs, not visual renderer tests. No product source or dependency changed. The seven existing ideas remain unimplemented.
+
+Validation: scoped `CHECK_BASE=085b49e9450de9326e7738dc441718e1bd667363 mise exec -- just check` passed and explicitly skipped Cargo tests for the documentation-only diff. Runtime boundaries are recorded in the coverage ledger and individual cards; this gate does not establish full Cargo, browser, host, release or cross-platform runtime coverage.
+
+Status: done 2026-10-12
+
+### T614. Audit remaining store retention and identity boundaries
+
+Bounded source audit only; no product code changed. Read the task-claim, message, pending-worktree, worktree-claim, hook-field, retention, and path store methods and their relevant callers, focusing on ordering, identity and cleanup. This was a targeted pass, not an exhaustive audit of the store crate.
+
+Execution plan:
+
+1. Inspect unreviewed store queries and their callers, tracing retention cutoffs, identity keys, ordering, and reference cleanup across the small store/foundation modules.
+2. Execute focused real-source reproductions and controls for any concrete boundary case, using isolated fixtures and the actual store where practical.
+3. Deduplicate exact scenarios against `plan.md`, `done.md`, `roadmap.md`, and `ideas.md`; record only confirmed findings and distinguish source inspection from executed paths.
+4. Record the reviewed scope and evidence limits, verify the documentation diff, run scoped `just check`, and prepare the PR #986 update.
+
+Result: filed T615 for `latest_task_claim` returning the lexically earlier task when multiple claims have the same second-resolution timestamp. The task-claim source test claims R1, R2, then R1 again, so its expected R1 also matches the tie-break and does not establish which equal-second claim is latest. The old T442 task-claim card defines the SessionStart/PostCompact row and claim lifecycle but does not specify or test equal-second ordering. The unrelated T442 proxy-hop card is a separate task with the same ID. No additional retention, message, pending-worktree, worktree-claim, hook-field, or path finding was confirmed in this bounded review.
+
+Evidence revision: `e8d36a0c6fdfb27f37ca97ceb33e6230bee545d1`; fetched main was `085b49e9450de9326e7738dc441718e1bd667363`. Source inspection covered `task_claims.rs`, `messages.rs`, `worktree_pending.rs`, `worktree_claims.rs`, `hook_fields.rs`, `retention.rs`, `paths.rs`, plus task runner and hook callers. The offline scratch executable used the actual `rtok-store` crate, real in-memory migrations and public APIs. Two task claims and a re-claim in one wall-clock second returned the lexically earlier task and its old title; separate-second ordering, release fallback, and project/agent isolation controls passed. Full hook dispatch, live hosts, concurrent processes, and Windows path behavior were not exercised; the injected-text effect was source-traced only. No raw SQL or mocked Store behavior was used.
+
+Validation: the actual Store probe passed the same-second reproduction and separate-second, release-fallback, project and agent controls. `git diff --check` passed, and scoped `just check` against `085b49e9` reported no code changes and skipped Cargo tests for this documentation-only diff. Active plan cards and `todo.md` contain the same 122 unique task IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T612. Audit agent registration and model-parent boundaries
+
+Source audit only; no product code changed. Traced host hook identity and parent discovery through `Store::register_agent`, registry queries, and `model::agents` tree/session selection, comparing ordering and repeated-registration behavior with existing agent lifecycle coverage.
+
+Execution plan:
+
+1. Trace parent/session identity discovery, registry upserts, query ordering and the `model::agents` nesting/session-selection path. Inventory the existing lifecycle tests and the invariants they establish.
+2. Use an isolated real-store fixture to compare child-before-parent registration and re-registration with normal parent-first registration; include the model projection and controls for multiple sessions and ordinary orphan agents.
+3. Deduplicate exact scenarios against plan, done, roadmap and ideas, especially T282, T284, T324, T262.5 and the T540/T610 audits. File only a reproduced, contract-relevant defect; otherwise record the investigated boundaries and evidence limits.
+4. Keep the pass documentation-only. Verify task-table/todo parity, source links and `git diff --check`, then run scoped `just check` against the reviewed base.
+
+Result: filed T613 for a sub-agent registered before its main agent. The actual store leaves the child row's `parent_id` null after the main row appears, and repeating the child registration does not repair it. The model then selects the older orphaned child as the session's main agent. T282's relevant test is main-first; T284 covers ordinary nesting; T324 covers repeat-registration revival, not late-parent repair. No cycle or nested-grandchild issue was filed because normal registry flow only assigns direct main-agent parents. Task ID allocation/validation inspection found no additional finding.
+
+Evidence revision: `2d91199fdb507af71eedbcf1b7ed127a06b39784`; fetched main was `085b49e9450de9326e7738dc441718e1bd667363`. The offline scratch executable linked the actual `rtok-store` crate and used its in-memory migrations/public methods, imported actual agent-view types, and compiled the production pure model functions. Child-first registration, late main registration, repeated child registration, and main-first/nesting/repeat controls ran. The child-first case retained the same child ID but `parent_id` remained null, the main had zero children, and `session_views` selected the older child root. A 1.2-second ordering gap made the query order deterministic. Synthetic session totals were used; no full CLI, host integration, real agent, or concurrent process was exercised. No raw SQL or mocked store behavior was used.
+
+Validation: the in-memory Store/model probe passed its child-first reproduction and parent-first/nesting/repeat controls. `git diff --check` passed, and the scoped `just check` against `085b49e9` reported no code changes and skipped Cargo tests for this documentation-only diff. Active plan cards and `todo.md` contain the same 121 unique task IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T610. Audit shared name mappings and their consumers
+
+Source audit only; no product code changed. Traced shared `cmd_stem` and `canonical_tool_name` mappings, their hook/guard/activity consumers, and Copilot argument adaptation. This sampled pass does not claim exhaustive host-schema or all-caller coverage.
+
+Execution plan:
+
+1. Trace shared name helpers from host adapters to their consumers and compare host-specific input shapes with the retained normalized fields.
+2. Probe boundary inputs with object/string and malformed controls, and inspect Copilot range arguments only where a local schema establishes applicability.
+3. Deduplicate against existing task cards before filing; document unresolved candidates and coverage limits.
+
+Result: filed T611 for the documented Copilot CLI representation of `toolArgs` as a JSON string. `HookInput::adapt_copilot` retains that string in `tool_input`, so consumers that read object fields do not see `command` or `path`. T262.5 fixed storing adapted input for ledger consumers but did not parse this representation; existing adapter tests use object-valued `toolArgs`. No separate `view_range` finding was filed because no local schema or runtime fixture established that argument's applicability. Other helper consumers were source-inspected only; this is not an exhaustive audit of `names.rs`.
+
+Evidence revision: `08f1df909f39f85079ef6e74454a438ef04ea398`; fetched main was `085b49e9450de9326e7738dc441718e1bd667363`. GitHub's [Copilot CLI hook tutorial](https://docs.github.com/en/copilot/tutorials/copilot-cli-hooks#understand-the-pretooluse-input), checked 2026-10-11, documents the string form. The offline scratch executable compiled the actual HookInput serde/adaptation, shared naming helpers, main-argument reader and Read cache-key branch. Object inputs produced `main_arg=Some(...)` and a Read cache key; equivalent serialized inputs left `tool_input` as a string, yielded no main argument and no Read cache key. Malformed strings, normalized inputs and Unicode command basenames passed controls. The Bash-only key helpers were panic-only stubs and not called. No live Copilot, full hook dispatch, persistent store or end-to-end guard denial was exercised.
+
+Validation: the isolated probe passed; `git diff --check` passed. The scoped `just check` against `085b49e9` reported no code changes and skipped Cargo tests for the docs-only diff. Active plan cards and `todo.md` contain the same 120 unique IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T607. Audit prose compression and YAGNI ladder boundaries
+
+Source audit only; no product code changed. Reviewed `src/modes/compress.rs` and `src/modes/ladder.rs`, comparing code/prose boundaries and ladder precedence with existing tests and the earlier T554 source audit.
+
+Execution plan:
+
+1. Trace fenced and inline code segmentation, phrase/article stripping, whitespace cleanup and ladder rule ordering.
+2. Probe boundary cases with isolated inputs and controls, recording exactly which production functions run.
+3. Deduplicate against plan, done, roadmap and ideas; file only reproduced contract violations.
+
+Result: filed T608 for article-like suffixes removed from identifiers and paths, and T609 for shorter triple-backtick runs closing longer Markdown fences. The corrected probe passed 128 ladder combinations; no ladder precedence defect was found. T554's earlier broad compression pass found no additional issue, but its checks did not cover these exact suffix and mixed-fence cases. An initial control assertion also included whitespace outside the fence; it was corrected to isolate the fenced region rather than treating expected external whitespace cleanup as a defect.
+
+Evidence revision: `09ed28336d360fde33398de3d2b8ba9c1dfa5eff`; fetched main was `085b49e9450de9326e7738dc441718e1bd667363`. The scratch executable imported the actual compression and ladder modules by path, with no adapters. It reproduced `foo_a` → `foo_`, `/tmp/a` → `/tmp/`, `item1a` → `item1`, and loss of prose-like content inside a four-backtick fence containing an inner triple-backtick run. Lite/name and ordinary triple-fence/double-backtick controls passed. This confirms native helper behavior; it does not establish production hook compression, since these helpers are used by tests and comparisons rather than wired into the hooks.
+
+Validation: the isolated probe passed its reproduction and control assertions; `git diff --check` passed. The scoped `just check` against `085b49e9` reported no code changes and skipped Cargo tests for the docs-only diff. Active plan cards and `todo.md` contain the same 119 unique IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T605. Audit injection budgets, stability, and hook paths
+
+Source audit only; no product code changed. Reviewed `src/plugins/inject` candidate loading, aggregate budget selection, measurements, and SessionStart/UserPromptSubmit placement against T2.4, T7.1, T188, T189 and the plugin invariants.
+
+Execution plan:
+
+1. Trace candidate construction, token estimation, truncation/drop reporting, measurement writes and event dispatch.
+2. Probe budget boundaries, Unicode mode-file reads, repeated output stability and mode placement with isolated fixtures and controls.
+3. Deduplicate exact scenarios against the plan, done list, roadmap and ideas; record only confirmed gaps and distinguish source tracing from executed paths.
+
+Result: filed T606 for Unicode mode text that fits the estimator budget but is truncated by a byte-count read cap before the shared budget fitter can see it. The existing T2.4 intentional 500+500 priority-selection overshoot was not filed separately. T188 introduced bounded mode reads and tested a 1 MB ASCII mode; T189 concerns PostToolUse archive references. Neither covers this Unicode byte/character mismatch.
+
+Evidence revision: `912c0a8dd8561b74ce5531cdb67e5d6f7153ca72`; fetched main was `085b49e9450de9326e7738dc441718e1bd667363`. An isolated executable compiled the production `read_mode`, budget fitter, `apply` and token estimator functions with real scratch files and minimal config/Measurement adapters. The ≤250-token small-emoji input had 1,016 characters and 4,016 bytes; the reader retained 3,360 bytes, and final context was 3,361 bytes / 201 estimated tokens after the newline, losing its distinctive tail despite its 242-token estimate. Cyrillic within the shared 800-token budget showed the same loss; same-length ASCII, repeated-output, and missing-file builtin controls passed. Full hook dispatch, checkpoint composition and persistent Measurement storage were not executed.
+
+Validation: `CHECK_BASE=085b49e9450de9326e7738dc441718e1bd667363 mise exec -- just check` reported no code changes against merged main and skipped Cargo tests for this documentation-only diff. The isolated probe passed its reproduction and control assertions; `git diff --check` passed, and active plan cards and `todo.md` contain the same 117 unique IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T603. Audit JSON-tree references and MCP line caps
+
+Source audit only; no product code changed. Followed the JSON-tree reference/template pipeline and MCP fold wrapper against T475's losslessness and line-limit requirements, after T554's broader folding/rendering pass.
+
+Execution plan:
+
+1. Trace JSON value tallying, variable id assignment, `insert_field`, template generation and rendering; compare folded output with the input types.
+2. Trace MCP fold line checking through pointer assembly and compare it with normal line-cut behavior.
+3. Probe both candidates using actual folding and wrapper functions with isolated fixtures and controls; deduplicate against T475/T554.
+4. Record only confirmed contract violations; document tested boundaries when a candidate is not established.
+
+Result: filed T604 for literal JSON strings that equal generated variable references and therefore share an element template with object-valued occurrences. The separate max-lines candidate was not filed: the isolated probe's wrapper appended a pointer beyond the folded text's line count, but ordinary MCP line-cut output also appends a pointer after applying its content cap. No independent total-response cap contract violation was established. T475's `max_lines` coverage and T554's broad fold inspection are related but do not cover the reference/string collision.
+
+Evidence revision: `e06ada0852e3cc28e5dcaa04d26faa6bdc2bc5ab`; merged main `085b49e9450de9326e7738dc441718e1bd667363` did not change the candidate source files. The offline scratch executable compiled extracted production folding/template/render/hash functions, actual TOON eligibility, and the actual MCP fold wrapper using minimal config, recording and length-estimation adapters. Two equal object values and a literal equal to their generated `V-<sha1-8>` id were all rendered under one `EL-` template; an ordinary-string control templated only the object values. At `max_lines = 8`, the wrapper emitted nine lines; smaller-cap and `read` controls skipped folding. The collision fixture output was 1,075 bytes vs 1,932 original bytes. No full CLI/proxy transport, archive storage, production tokenizer or real agent was exercised.
+
+Validation: `CHECK_BASE=085b49e9450de9326e7738dc441718e1bd667363 mise exec -- just check` reported no code changes against merged main and skipped Cargo tests for this documentation-only diff; `git diff --check` passed. Active plan cards and `todo.md` contain the same 116 unique task IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T602. Audit shared byte, diff and expand boundary helpers
+
+Source audit only; no product code changed. Traced `parse_bytes`/`human_bytes`, their size-reporting and `agents junk --min-size` callers, shared diff rendering, and expand range/filter helpers. Reviewed existing parser, boundary, diff and expand tasks before probing. This sampled pass does not claim every CLI, storage or display integration was executed.
+
+Execution plan:
+
+1. Inventory `parse_bytes`, `human_bytes`, `unified_diff`, `file_diff`, `paint`, `slice_lines` and `filter_lines` callers; trace values/output through CLI, MCP, TUI, read, config and cleanup surfaces.
+2. Compare byte syntax/rounding/overflow boundaries, diff handling of final newlines and equal files, and expand range/filter behavior with existing contracts and tests.
+3. Deduplicate against T330/T330.6, T67.1, T353, T534/T535, T160 and T416.3. Probe source functions with isolated inputs and controls.
+4. File only confirmed gaps; if none is confirmed, document tested boundaries and limits.
+
+Result: no new finding. Bare starting ranges intentionally run through the payload end; `src/expand.rs` already tests `10` as `(10, 20)` and `5-` as `(5, 20)` in `parse_range_bare_start_runs_to_end`. T534/T535 cover range-validation side effects and capped-read accounting. The size probe observed `parse_bytes("18446744073709551616")` returning `Ok(18446744073709551615)`; no supported operational failure or violated range contract was established, so this remains an observation rather than a bug card. T160's trailing-newline rule applies to command-output archive decisions, not a confirmed shared-diff defect.
+
+Evidence revision: `b126b66e8262f8caf51b2e7b28e924986df1a565`; main remained `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca`. An offline scratch executable imported the actual `bytes.rs` and `diff.rs` modules by path and extracted the actual `slice_lines`, `filter_lines`, `strip_quotes` and `parse_range` functions. Binary-unit/decimal/space controls, formatter boundaries, malformed units and numeric strings, inclusive/bare/comma ranges, empty and filtered results, context windows, equal/changed diff output and no-final-newline rendering all passed. It did not invoke the CLI, MCP, config validator, store, or full display consumers. Local evidence: `/tmp/rtok-t602-probe/src/main.rs` and `/tmp/rtok-t602-probe.log`; no repository code was modified.
+
+Validation: `git diff --check` passed. The scoped gate reported no code changes against `ee8d6628` and skipped Cargo tests for this docs-only audit record. Active plan cards and `todo.md` retain the same 118 unique IDs.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T600. Audit disk task claim locking and lifecycle boundaries
+
+Source audit only; no product code changed. Reviewed Project create/status/claim/release and dependency handling, the shared adapter contract, disk persistence and claim locking against T441/T442 and prior disk findings. This sampled pass does not claim exhaustive allocator, remote adapter or concurrency coverage.
+
+Execution plan:
+
+1. Trace Project create/status/claim/release through adapter locks, task persistence and claim rows; compare T441/T442 contracts and earlier disk-task findings.
+2. Examine lock ownership, stale recovery and guard release under delayed writers. Separate documented remote last-write-wins behavior from local mutual-exclusion promises.
+3. Reproduce uncovered local lock cases using actual functions and scratch directories, with no real agents, tracker writes or shared task files.
+4. File confirmed defects with ordered fixes, document evidence limits, verify task-card/todo parity and scoped checks, and update PR #986.
+
+Result: filed T601 for an expired guard unlinking its successor's fresh lock and letting a third holder enter. T442's documented timeout takeover is setup for this defect, not a separate finding. Its existing stale-file test has no displaced live guard; T541's task identity mismatch remains distinct. No additional lifecycle hypothesis was confirmed.
+
+Evidence revision: `0e19cd1733d6f4fdc4b800bc860d638c63878644`; main remained `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca`. A scratch executable compiled actual DiskGuard, lock_claim and lock_is_stale functions. After an actual 11-second wait B acquired while A's guard remained alive; dropping A removed B's fresh file and C acquired while B's guard remained alive. A fresh-lock contender was refused, and normal release allowed reacquisition. These were real scratch files with guards scheduled in one process, without a mocked clock. Full task mutations, multiple OS processes, real agents and remote trackers were not exercised.
+
+Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- just check` reported no code changes against the merged-main baseline and skipped Cargo tests for this documentation-only diff; `git diff --check` passed. The 118 unique active plan cards and 118 todo rows have equal ID sets, with no duplicates.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T598. Audit stored-body sanitation invariants
+
+Source audit only; no product code changed. Reviewed the store sanitizer, byte/JSON dispatch, character and wrapper ordering, stored-call and split-hook consumers, plus raw-storage bypass and existing T431/T432/T433 contracts. This sampled pass does not prove every terminal grammar or storage integration correct.
+
+Execution plan:
+
+1. Trace stored-body/text sanitation and its consumers, comparing wrapper removal, terminal escapes, Unicode boundaries and raw-storage bypass with T431/T432 and existing tests.
+2. Check combined transformations, repeated sanitation and unchanged-input byte preservation with actual sanitizer functions in isolated fixtures.
+3. Deduplicate failures against existing storage/sanitizer tasks, file only confirmed cases with ordered fix steps, and document untested integrations.
+4. Complete the audit record, verify plan/todo parity and the scoped documentation gate, then update PR #986.
+
+Result: filed T599 for non-idempotent cleaning when ANSI/zero-width removal forms a wrapper after the wrapper-removal stage. This extends T431's existing invariant with a deterministic composition counterexample; T432's intentional wrapper retention remains out of scope. No broader data-loss or privacy claim was established.
+
+Evidence revision: `22d0a572cb91063ee770c161e1fa30ec4751e545`; main remained `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca`. An offline scratch executable imported the actual sanitizer module by path. With ANSI reset or U+200B inside an opening wrapper name, the first text pass retained the newly formed wrapper and the second removed it; both JSON body fixtures also changed on a second pass. Plain-wrapper and clean-JSON controls were stable, and the JSON numeric field remained unchanged. No real records, database, network or host application were accessed; persistence, raw bypass and full proxy behavior were source-traced, not executed.
+
+Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- just check` reported no code changes against the merged-main baseline and skipped Cargo tests for this documentation-only diff; `git diff --check` passed. The active task cards in plan.md and rows in todo.md contain the same 117 unique IDs; the active numeric summary table separately tracks its 87 rows.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T596. Audit demon service lifecycle and stale process state
+
+Source audit only; no product code changed or real services operated. Reviewed start/stop/restart/upgrade, supervisor state publication and locking, child logging and backoff, plus process signalling helpers and CLI dispatch. This sampled pass does not establish exhaustive coverage of every lifecycle race or platform.
+
+Execution plan:
+
+1. Trace start, stop, restart, upgrade and supervisor state publication, locking, backoff and child cleanup against their tests and completed tasks.
+2. Compare stale state and process identity checks across entrypoints. Inspect log forwarding and restart boundaries without assuming a saved PID still belongs to the service.
+3. Reproduce concrete gaps using isolated state files and a recording process adapter, never signalling real processes or invoking host applications. Deduplicate exact cases against lifecycle and platform tasks.
+4. Add only confirmed findings with ordered fix steps and checks, complete this audit entry, validate plan/todo parity and the documentation diff, then update PR #986.
+
+Result: filed T597 for stop/kill trusting stale saved PIDs without the boot/identity protection used by start and quiesce. Compared T73, T80 and platform/process tasks including T83.3: none records this stop-path omission. No additional lifecycle or log-forwarding candidate was sufficiently established to file.
+
+Evidence revision: `73b07eafb56ffa9bc5ac7b76ff06ffbbde1d31b0`; main remained `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca`. An offline scratch executable compiled the actual Service/State, file/read, targets and stop functions with minimal config/style adapters and a recording process adapter. With `since=1`, normal mode sent TERM to both simulated unrelated positive PIDs; force mode sent KILL to both. Both removed the state file; missing state sent no signals. Production signal helpers were source-reviewed and perform no birth-identity check. No real process was signalled or queried by the probe, and full CLI/kernel PID reuse was not exercised.
+
+Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- just check` passed; the selective gate reported no code changes and skipped Cargo tests. `git diff --check` passed, and plan/todo contain 116 unique active IDs with equal sets.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T593. Audit config editing and validation boundaries
+
+Source audit only; no product code changed. Reviewed config CLI dispatch, set/init validation, comment revival, TOML mutation and persistence against the typed configuration and existing coverage. Layered environment behavior and every configuration field were not exhaustively tested.
+
+Execution plan:
+
+1. Trace CLI config commands through TOML mutation, validation, layered loading and atomic persistence; read the crate's existing tests and relevant completed tasks.
+2. Check structured keys/values and comment handling with valid TOML fixtures, comparing the requested edit with unrelated values and loader acceptance.
+3. Reproduce uncovered cases with actual config APIs in scratch files and deduplicate against T12, T328, T362–365, T381 and previous audit findings.
+4. Record only confirmed defects with ordered fix plans; move this audit to done, check plan/todo parity and scoped `just check`, then update PR #986.
+
+Result: filed T594 for structured values accepted and persisted despite failing typed Config extraction, and T595 for commented-default revival mutating unrelated multiline TOML string content. The open-map scalar and invalid array element cases share T594. Existing range/env validation and comment-padding tasks do not cover these exact failures; no other candidate was filed.
+
+Evidence revision: `286d8c85bf6deb1ad29b8d30f7697bd2a2f190af`; main remained `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca`. An offline scratch executable linked the actual `rtok-config` crate. The setter accepted `stats.prices = 42` and `plugins.read.allow_paths = [1]`, and `issues` reported neither; pure Figment default-plus-file extraction into Config rejected both. Setting port 9000 also changed `# port = 12` inside an unrelated multiline literal string to `port = 12`. The ordinary commented-default control succeeded and dry-run preserved file bytes. The first probe generator had a Python quoting error before any fixture/build ran; its delimiter was repaired and the full probe passed. No user config, host application or network was used. Full CLI/environment integration was source-traced, not executed.
+
+Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- just check` passed; the selective gate reported no code changes and skipped Cargo tests. `git diff --check` passed, and plan/todo contain 115 unique active IDs with equal sets.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T591. Audit OpenTelemetry export cursors and cumulative metrics
+
+Source audit only; no product code changed. Reviewed OTel export selection and watermark advancement, stream failure isolation, span/log mapping, metric sums and encoding against the module design and existing tests. This was a sampled audit; retention and all transport/platform behavior were not exhaustively verified.
+
+Execution plan:
+
+1. Trace bounded session/call/log selection, stream watermarks, retries and successful/failed export advancement. Compare late session completion, tied timestamps and in-flight calls with the delivery contract.
+2. Inspect span/log mapping, metric aggregation and cumulative timestamps, including mutable calls and retention. Separate intentional compatibility limits from concrete data loss or incorrect output.
+3. Reproduce uncovered cases with actual functions or store APIs in scratch fixtures; keep any adapters and unexecuted integrations explicit. Deduplicate against T16, T106, T143, T163.2, T207/T208, T229 and T395 plus all earlier audit cards.
+4. File only confirmed findings with ordered fix steps and checks; move this audit to done, verify plan/todo parity and run the scoped documentation gate before updating PR #986.
+
+Result: filed T592 for a late lower-ID session disappearing behind the recomputed same-second rank cursor. Compared completed T36.12 and its increasing-ID test: this records the uncovered ordering case rather than duplicating its old implementation task. The broad running-MCP hypothesis was dropped because native MCP records after execution. A hypothesized monotonic metric decrease from a mutable call outcome was not filed because no production outcome update was established. No additional metric or encoding defect was confirmed.
+
+Evidence revision: `7db36a6d6e81f9f781cc67372d192f948ffe5d92`; main remained `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca`. An offline scratch Rust executable linked the actual `rtok-store` crate and compiled `advance_sessions` from the exporter. With an in-memory database, exporting `z-first` and subsequently ending `a-late` in the same second returned `z-first` again, then no pending sessions. Reversing the lexical ID order correctly exported the late session. No SQL stubs, network, real collector or host data were used; full HTTP/CLI integration was source-traced, not run.
+
+Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- just check` passed; the selective gate reported no code changes and skipped Cargo tests. `git diff --check` passed, and plan/todo contain 113 unique active IDs with equal sets.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T588. Audit Read search/tree filters and log selection boundaries
+
+Source audit only; no product code changed. Reviewed Read search/tree path resolution, ignore and pattern rules, output boundaries and the Vfs mirror, plus log selection and rotation-follow state. Read the plugin instructions and compared existing Read/log contracts before filing reproducible gaps.
+
+Execution plan:
+
+1. Trace search/tree from tool arguments through `resolve`, root guard, `ignore::WalkBuilder`, `skip_git`, text-file loading, cap/archive recording and displayed paths. Compare hidden files, `.gitignore`/nested ignores, symlinks, invalid UTF-8, oversized files and roots outside cwd with the documented Read contract.
+2. Trace regex compilation/fallback, max/depth normalization, ordering, snippets and empty/no-hit outputs in both production code and the Vfs mirror. Compare actual WalkBuilder behavior with tests and the stated plugin description; identify only cases where the two surfaces or contract diverge.
+3. Trace logs filters and limits from CLI/config into model selection, JSON/export rendering, watch stream and logfile/store source. Compare ordering, inclusive time/level/source selection, zero/large limits, rotation and follow behavior without opening or exporting real host logs.
+4. Deduplicate exact scenarios against T4.2–T4.6, T55.5, T56.2/T56.4/T56.5, T59.2, T83.16, T127/T263/T300/T383, T15.11/T24.3/T225.1 and existing plan/done/roadmap/ideas. Use small scratch fixtures to reproduce only uncovered candidates, then record sequential fix cards with source evidence, steps and checks.
+
+Result: filed T589 for log generations being confused by repeated first lines or an empty replacement, and T590 for lexical parent normalization selecting a different file through a directory symlink. The two log fixtures share one card. No separate issue was filed for zero-result-limit clamping without a contrary contract, or the explicitly bounded search snippet. Also checked overlap with T430. This sampled pass does not establish exhaustive coverage of all Read filters, Vfs behavior or log exporters.
+
+Evidence revision: product source matches `ee8d66288b1d1b850ba24b7f9a9a70481695c3ca` after merging main. An offline Rust harness compiled actual Follow/whole-line and resolve/normalize functions. A replacement with the same first line returned no rows despite an unread old tail and two new rows; an empty replacement followed by a write replayed both old rows. A Unix symlink/parent request read different contents through rtok than through native lookup; the direct-path control matched. The resolver used a standard filesystem adapter, equivalent Unix prefix checks and inactive dynamic roots. Full CLI/MCP integration and Windows were source-traced or left untested; no real host logs, application, provider or user data were used.
+
+Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- just check` passed; the selective gate reported no code changes and skipped Cargo tests. `git diff --check` passed, and plan/todo contain 112 unique active IDs with equal sets.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T585. Audit CLI output, export and configuration path boundaries
+
+Source audit only; no product code changed. Sampled the filesystem/project resolver and logfile delegation, plus CLI `emit`, report flag resolution and the task/claim consumers of project identity. Checked relevant root instructions and the existing task/config/report contracts before filing only reproducible gaps.
+
+Execution plan:
+
+1. Inventory CLI output/config entrypoints and trace representative output through argument parsing, Figment precedence, shared emit/write helpers, and filesystem/project identity helpers. Inspect log append delegation without assuming every CLI export uses the same path.
+2. Compare relative and absolute local Git origins in isolated checkouts against Git's own resolution, then check whether project identity aligns with the documented task-counter and claim-scope contract.
+3. Compare omitted versus explicit report formats using actual Clap argument parsing, report flag mapping and a lower-precedence Figment configuration.
+4. Deduplicate against T441.3, T22.1/T22.2, D12/D14, CLI trycmd tasks and existing path/atomic-write findings. File only reproduced contract violations, leaving ordinary output overwrite and unproven platform concerns unfiled.
+
+Result: filed T586 for different relative local origins colliding in one project key and equivalent relative/absolute spellings of a local remote splitting identity. Filed T587 because an explicit `--format md` is indistinguishable from the Clap default and therefore fails to override configured HTML/PDF. Ordinary report output overwrite was not a new finding because no contrary contract was established; no separate logfile issue was found. This was a sampled audit, not an exhaustive review of every CLI exporter or the full configuration crate.
+
+Evidence revision: `0e99dda0932c3f926b275a61d204d1dbd7d77ea9`. An offline harness compiled the actual project resolver/normalization and report argument/flag functions with a standard filesystem adapter and Figment config. Two scratch Git checkouts with origin `../remote.git` resolved to different local bare repositories and refs, while rtok returned the same `../remote` key; changing one origin to the same remote's absolute path changed its key. For report flags, configured HTML remained effective under explicit `--format md`, while explicit PDF overrode it. An initial scratch setup failed because its ref pointed at an object not copied into the bare repository; the fixture was corrected and the passing controls were rerun. No network, real repository data, API or host config was used. Store allocation, claim lookup, full report rendering and output-file integration were source-traced, not exercised.
+
+Validation: `CHECK_BASE=1d5889ab36b485befdda0355687a394bf8380077 mise exec -- just check` passed for the documentation-only diff; the selective gate found no code changes, so no Cargo tests were selected. `git diff --check` passed, source links were reviewed, and active plan/todo IDs matched uniquely.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T582. Audit proxy Batch/Flex lifecycle and response persistence
+
+Source audit only; no product code changed. Reviewed Batch client validation, submit/status/fetch, result recording, Flex application/retry policies, OpenAI Responses usage handling and the shared streaming tee. Compared behavior with the proxy/plugin instructions, `docs/batch-flex.md`, and existing Batch/proxy tasks before recording distinct findings.
+
+Execution plan:
+
+1. Trace Batch submit/status/fetch through proxy routing, result parsing and persistence. Compare repeated downloads and partial/error results while distinguishing client output-file handling from proxy result accounting.
+2. Trace Flex request shaping, lane policy, retry/backoff, response parsing, service-tier persistence and usage/cost aggregation. Compare documented success, fallback and retry boundaries.
+3. Trace OpenAI Responses JSON/SSE usage extraction and streaming tee behavior. Use offline scratch probes for repeated result recording and incomplete UTF-8 tails; source-trace transport/capture behavior without provider calls or host writes.
+4. Deduplicate concrete scenarios against T385, T250–T255, T326, T11.3, T45.2, `docs/batch-flex.md` and plugin instructions. File only source-confirmed gaps with ordered implementation steps and checks; leave unproven platform or lifecycle assumptions unfiled.
+
+Result: filed T583 for replayed Batch result downloads adding duplicate usage rows and T584 for an incomplete UTF-8 tail erasing earlier complete SSE usage/tier events. No additional Flex defect was established. Basic Batch validation had no distinct issue, and the Windows output-cleanup concern was not filed because it was not platform-proven. This pass does not claim exhaustive coverage of every proxy provider or transport state.
+
+Evidence revision: `1713f7b34b172d24841ffb181f5d3060024dfdbb`. An offline scratch harness exercised actual Batch record/parse/usage functions with an append-only Store stub and actual wire/Anthropic extraction functions. Replaying one 100-input/20-output result under another call ID changed the aggregate from 120 to 240. A complete `message_start` with 100 input tokens and `standard` tier survived the full and ASCII-safe controls, but both usage and tier disappeared when a later UTF-8 character was split. The probe did not use a real store, provider, server, or 256 MiB allocation; transport cancellation and persistence details were source-traced. No host app or API key was used.
+
+Validation: `CHECK_BASE=1d5889ab36b485befdda0355687a394bf8380077 mise exec -- just check` passed for the documentation-only diff; the selective gate found no code changes, so no Cargo tests were selected. `git diff --check` passed, source links were reviewed, and active plan/todo IDs matched uniquely.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T578. Audit report scopes and transcript usage accounting
+
+Source audit only; do not change product code. Trace `rtok report` aggregation from CLI/model through measurement and usage readers into output renderers, including time/project boundaries and transcript-cache freshness. Read applicable module instructions and compare exact behavior with existing plan, done, roadmap and idea entries before filing fixes. Use synthetic scratch data only; do not inspect or mutate real host transcripts.
+
+Execution plan:
+
+1. Read root instructions and `src/plugins/measure/AGENTS.md`; inventory the `report`, `measure` and CLI entry points. Trace report argument/config defaults (`since`, project/session scope), the model's aggregation sources, and markdown/HTML/PDF/advice/AI rendering. Record where estimates, proxy usage and `Measurement` rows enter or are intentionally excluded.
+2. Trace stats/transcript parsing and `transcript_cache` path enumeration, cache key/freshness checks, invalidation, deletion handling and aggregation. Use tiny scratch transcripts and filesystem aliases to compare logical files, duplicate paths, edits, removals and reappearance without reading real host data.
+3. Probe time boundaries, multiple projects/sessions, empty and malformed input, report output formats and cached-versus-fresh results with isolated fixtures. Separate documented estimates and sampling from actual accounting bugs; do not claim accuracy without a `Measurement`.
+4. Deduplicate concrete scenarios against T105, T167, T207, T219, T239, T379, T128, T135–T137, T163.7, T227, T414.13, T326 and relevant roadmap/idea entries. Add only source-confirmed gaps as sequential cards with evidence, ordered fixes and checks; leave uncertain candidates unfiled.
+
+Check: all fixtures stay in scratch, existing report output contracts and intentional estimates remain explicit, any filed issue has a reproducible trigger and no duplicate card, plan/todo ids match, `git diff --check` and the scoped `just check` pass. No real host transcript or application is used.
+
+
+Result: reviewed report ledgers and advice/AI serialization, transcript-cache and shared path walkers, and the usage source flow. Filed T579 for one physical transcript being discovered twice through a directory alias, T580 for AI report metadata/anchors exceeding its configured cap, and T581 for non-actionable archive rows displacing eligible top-sink recommendations before the advice layer filters them. Did not file out-of-catalogue top-sink rows as a separate issue because the recommendation rule is intentionally limited to actionable read/cmd/MCP classes; timestamp-only cache freshness concerns were not established as a concrete defect. Compared exact overlap with T59.8, T105, T128, T135–T137, T167, T207, T219, T239, T302, T379, T163.7, T227, T414.13 and T565. This pass does not claim exhaustive coverage of all renderers, host parsers or usage providers.
+
+Evidence revision: `11a6aacb79cea9f896aa965d2234a8845095f01e`. An isolated Rust harness compiled actual `paths_with_ext`/`jsonl_paths`, AI render/admission and token estimator, report sink aggregation/classification and top-sink recommendation functions with controlled filesystem, document, config and Store stubs. The alias fixture discovered two paths canonicalizing to one physical transcript; downstream parser/CLI aggregation was source-traced, not executed. AI section bodies admitted under 808 estimated tokens, but metadata/anchors produced an 840-token final estimate. Ten valid `archive`/`skill` measurements with positive `before_bytes` and distinct refs displaced a smaller Read sink; the Read-only control emitted one recommendation. No full Diesel/CLI, complete renderer suite, real host transcript or application integration ran.
+
+Validation: `CHECK_BASE=1d5889ab36b485befdda0355687a394bf8380077 mise exec -- just check` passed; the selective gate found no code changes, so no Cargo tests were selected. `git diff --check` passed, source files/links exist, and active plan/todo IDs matched at 107 unique entries.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T575. Audit Doctor confirmation and junk protected-path rechecks
+
+Source audit only; do not change product code. Trace Doctor web plan/apply selection and junk clear's item planning, protected-path recheck and removal together with their CLI/TUI callers. Check the existing T331 and T330 safety promises before recording any defect.
+
+Execution plan:
+
+1. Trace `doctor::web::{plan,apply}`, `prepare`, `fix::candidates`, `fix_found` and `fix_file`. In a scratch-only machine fixture, plan one fixable broken hook, add a different fixable broken hook before submitting the prior selection, and observe whether the new finding is selected despite not appearing in the confirmed diff; source-trace whether that fresh selection reaches the writer. Compare same-file content re-read protections, changed-file behavior, default toggles and explicit confirmation in T331.6/.7/.12; distinguish fresh discovery from an edit to an already-planned file.
+2. Trace junk scan → plan → confirm → `protected`/`recheck` → `remove` for eligible cache/build/extra directories. In an isolated tree, place a package-manager lockfile below an explicitly configured extra cache root; observe whether the root is protected before recursive removal. Source-trace the separate tagged-cache route. Compare direct lockfile, nested lockfile, settings/store descendants, `CACHEDIR.TAG`, and `[agents.junk].exclude` cases.
+3. Deduplicate exact behavior against T331's web/terminal selection and file re-read guarantees, plus T330.4/.5.1/.6/.7 and T479. Record that T330.4 says a path that “is or holds” a package-manager lockfile is refused and that T330.5.1 exclusions protect items that match or hold a match; check whether existing tests cover nested locks or a new finding appearing between web plan and apply.
+4. For each source-confirmed gap, preserve a minimal fixture and evidence, then add a separate sequential fix card with the protected-data boundary, expected preview/confirmation behavior, implementation steps and acceptance checks. Leave unresolved hypotheses as audit notes.
+
+Check: fixtures remain in scratch only, existing positive/negative selection and cleanup cases remain explicit, plan/todo IDs match, `git diff --check` and scoped `just check` pass. No host app, real home directory or product source is touched.
+
+Result: reviewed Doctor web candidate/default selection and the immediate fix-file reread, plus junk extra-cache planning, recheck and recursive removal. Filed T576 for a newly discovered fix becoming selected after the prior preview and T577 for nested package-lock deletion. Compared against T331.12 and T330.4/.5.1; the latter promises protection for paths that hold a lockfile, while existing direct-lock coverage does not cover a recursively removed parent.
+
+Evidence revision: `5a239604c220da9bef68ad9146d2e8d3315279ae` (the audited product source is unchanged from the pre-merge revision). An isolated Rust probe compiled extracted `prepare`/shared/default-selection functions with fixture discovery/removability stubs; it selected A before rescan and A+B after rescan. The junk probe used actual recheck/newest/usage-walk/remove functions and the permanent-discard branch, with a held-reason stub unreachable and a synthetic timestamp outside the settle window. It showed a direct Cargo.lock protected, an eligible extra cache root retained, and its nested Cargo.lock deleted. This did not exercise host parsing/writes, CLI or trash integration; no real home or host app was touched.
+
+Validation: `CHECK_BASE=1d5889ab36b485befdda0355687a394bf8380077 mise exec -- just check` passed; the selective gate found no code changes, so no Cargo tests were selected. `git diff --check` passed, and active plan/todo IDs matched at 104 unique entries.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T572. Audit live-call state and SPA/protocol boundaries
+
+Trace the live graph-call event path from store polling through coalescing, Rust state folding, WebSocket protocol and SPA rendering. Separately trace `RTOK_WEB_DIST` selection and asset reads, including lexical path validation and filesystem links. Check the applicable root/web instructions and existing tasks before recording any concrete regression; this is an audit-only claim with no product edits.
+
+Execution plan:
+
+1. Follow `graph_events` polling, `live::coalesce`, `CallsStore::fold`, replay and frame delivery. Use isolated fixtures to compare a capped burst containing multiple End events with a sequential delivery, and compare the frame summary, running/interrupted state, feed and tool/backend/time totals. Check T329's documented burst cap and exact-total promises to distinguish permitted display omission from state loss.
+2. Trace `RTOK_WEB_DIST` root selection, raw URI path handling, `safe_join`, asset read and SPA fallback behavior. Use an isolated dist containing filenames with spaces, Unicode, percent signs and `#`; compare literal lookup with the browser's percent-encoded request path. Search T310.9 and later serving tasks for an explicit URL-decoding contract. Treat symlink escape as a finding only if a task or documented boundary promises filesystem confinement within the selected dist root.
+3. Trace inbound `/ws` message parsing, origin checks, allowed message variants, payload bounds and outbound frame serialization. Compare malformed/oversized inputs and disconnect/reconnect behavior with T193, T310 and later protocol tasks; do not restate already-documented cross-origin policy as a new issue.
+4. For each source-confirmed gap, preserve a minimal scratch-only reproduction, identify the exact existing task overlap (or its absence), and add sequential fix cards with source links, implementation steps and acceptance checks. Keep inconclusive behaviors as audit notes, not findings.
+
+Check: focused fixtures stay outside the repository; task IDs/source links and plan-to-todo entries are consistent; `git diff --check` and scoped `just check` pass. No real host app, live server or product source is touched.
+
+Result: reviewed web live polling/coalescing/replay, shared call state and views, TUI consumption, WebSocket message/origin and snapshot paths, and SPA routing/asset negotiation/lookup. Filed T573 for lost terminal state under event-list truncation and T574 for missing URL-path decoding in both asset sources. T329.15/T329.26 intentionally sample per-tool/backend/latency details under bursts; that was excluded from new findings. T310.9/T310.10 contain no encoded-filename fix. Filesystem symlink serving had no established contrary contract and was not filed; the in-process router's HEAD controls passed. No additional distinct protocol failure was established in this pass, and no frontend-wide or network integration coverage is claimed.
+
+Evidence revision: `babfd24b470f7f374ac5985dae458cecc894d8fe` (product source unchanged from `0b14b88e`). An offline Rust harness compiled verbatim coalesce and CallsStore logic plus the event types (schema/Diesel derives omitted), and the complete actual spa.rs with Axum, rust-embed and a scratch dist. The capped End fixture left successful A running and later interrupted while its uncapped control cleared A. Both directory and embedded routers returned 404 for existing space/hash/percent/Unicode filenames requested through encoded URLs, 200 for the ordinary filename, and empty bodies for HEAD. An initial extraction included an orphan test-fixture doc comment and failed compilation; correcting only that excerpt boundary made the probes pass. No product source, live server, real host data or agents were involved.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` and `git diff --check` pass for the documentation-only diff; no repository Cargo tests are selected. New source links and matching unique plan/todo identities were checked. No ideas or dependencies were added.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T568. Audit plugin boundaries, backups, graph export and read search
+
+Audit the remaining SDK and data-boundary edges before filing concrete fix cards: `rtok_agent_sdk` backup/write and per-file retention; the native/WASM plugin boundary documented by `crates/rtok-plugin-sdk/PLAN.md`; graph export parsing/rendering and project scope; and read search plus injection handoff. Trace each path against the applicable AGENTS.md and architecture invariants, then check existing plan/done/roadmap/ideas entries for the exact behavior.
+
+Execution plan:
+
+1. Trace backup creation, cross-file content deduplication, retention/pruning, and shared SDK write entrypoints. Reproduce whether byte-identical content under a different host-config basename can suppress that file's only undo copy, then determine whether T249's per-file cap and T72's intentional basename-agnostic dedup already cover the lifecycle consequence.
+2. Compare the plugin SDK's actual loader/dispatch implementation and feature boundary with the WASM host design; verify declared surfaces, especially Hook exclusion, and identify whether the planned host exists in source or is still only a plan.
+3. Trace graph export parse/read/render and project selection through CLI/MCP/page entry points. Check scope confinement, redaction defaults, malformed/imported data handling, and schema/measurement contracts against T329 entries.
+4. Trace read search path resolution, ignore rules, output caps/archive references, and any read-result injection/advice caller. Check root guard ordering, fail-open behavior, and that no search/injection edge bypasses the documented Read constraints.
+5. For each confirmed gap, record source evidence and a minimal isolated reproduction, deduplicate the exact scenario against plan/done/roadmap/ideas, and add a separate sequential fix card with scope, migration/test needs, and acceptance checks. Leave uncertain hypotheses unfiled.
+
+Check: scoped `just check` and `git diff --check` pass; the audit card remains in progress until each finding has source evidence and a deduplicated fix card or an explicit no-finding rationale.
+
+Result: reviewed the agent SDK's backup/dedup/generation pruning, JSON read/edit and atomic/symlink write helpers; graph export collection/redaction/parsing/rendering and CLI/MCP/page paths plus scope resolution/fan-out; the WASM loader in src/plugins/wasm.rs and its registry integration; read search/tree/walk and injection mode/budget handling. Filed T569–T571 for backup ownership lost across pruning, cyclic symlink replacement, and unredacted scope/download identities. T72/T249 intentionally describe the two backup mechanisms separately but do not cover their combined recovery failure; T329.16/T329.40 do not cover the remaining identity copies. Existing read/archive findings and documented injection overshoot were not repeated. The WASM loader exists in the application, not the SDK crate; its invoke_mcp comment explicitly marks dispatch wiring as pending, so that incompleteness was not filed as a newly discovered regression. No further distinct source-confirmed issue was established in these inspected paths. No product source, dependencies or ideas were changed.
+
+Evidence revision: `424e489d085fef9bb15ecced8734305d3ddc693a` (product source unchanged from `0b14b88e`). An offline Rust harness compiled verbatim SDK backup/write helpers and graph-export types/redaction (only schema-generation derives omitted). Three probes passed: two files sharing original bytes lose B's recovery copy after A's per-file pruning; a two-link Unix cycle is replaced with a regular file by an SDK write with backup enabled; and a redacted export still contains the username alias in meta.scope. The suggested download filename uses the same original alias by source inspection; the subsequently authored filename probe was not run and is not claimed as execution evidence. Fixtures and build output stayed under /tmp/rtok-t568-probe; no real host files, live agents, WASM guests or full application integration were exercised.
+
+Validation: scoped `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` and `git diff --check` pass for this documentation-only change; no repository Cargo tests are selected. Source links and matching unique plan/todo identities were checked. The broader platform and end-to-end regressions remain in the fix cards.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T561. Audit project references, memory packing/sync/files, and CLI data boundaries
+
+Review `src/project/refs.rs` and its language-specific resolvers; `src/plugins/memory/{pack,sync,files}.rs`; and the CLI entrypoints that accept or emit project, reference, note, and file data. Read `src/plugins/memory/AGENTS.md` and its `PLAN.md` first. T538/T539 already cover import hash reservation and revise project scope; do not repeat the previously reviewed save/import/revise paths. This is a source audit and docs-only claim: do not change product code or copy real user/host data.
+
+Execution plan:
+
+1. Trace reference discovery and resolution across Cargo, Go, npm and Python, including relative paths, project roots, malformed inputs and missing-file behavior.
+2. Trace `memory pack`, sync and note-file linking through their CLI/MCP/store boundaries; check project scoping, path normalization, size/budget limits, stale state and error/fail-open behavior.
+3. Review CLI parsing and serialization for these data paths, compare each concrete candidate against active, roadmap, done and idea entries, then file only distinct source-confirmed fixes with reproduction, implementation steps and checks; sync `todo.md`.
+
+Check: every filed issue has a source-backed trigger and deterministic fixture; no duplicate is added; no product files or real host data are changed; plan/todo stay synchronized; `git diff --check` and scoped `just check` pass.
+
+Result: reviewed Cargo/npm/pnpm/Go/Python reference resolvers, graph-follow consumption, memory packing and its MCP boundary, memory sync and its CLI/SDK write path, and note-file mention normalization. Filed six distinct defects T562–T567 with ordered fixes and acceptance checks. Compared related T69.6/T460/T374/T452/T329.7 and active/roadmap/idea entries. A recursive-glob fixture also reproduced the one-level limitation already acknowledged by completed T329.7; it was deliberately not filed as a new finding. No product code, dependencies or ideas were changed.
+
+Evidence revision: `c1f6ac06b5891f592f7da29449be3877a5d38305` (product source unchanged from `0b14b88e`). An offline Rust harness compiled the actual pack module and reference resolvers, plus verbatim sync and path helpers. It reproduced the basename digest collision, marker-title round-trip failure, a budget-2 pack costing 4 tokens after rendering, hidden/dot-relative path loss and wrong-sibling association, and external references contributed by an excluded pnpm member. An invalid-UTF-8 read/splice fixture demonstrated preparation of replacement text without the original outside bytes; inspection of SDK backup/write established that existing file UTF-8 is not validated there. No live CLI overwrite, store integration, real agent or graph-registration run was performed; those regressions belong to the fix cards. Initial harness compilation failed on module resolution and a scratch SHA formatter; after fixing only that harness plumbing, all seven probes passed.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` passed for the documentation-only diff (no repository Cargo tests selected); `git diff --check` passed. New source links resolve; the active table and todo have matching unique identities. This pass extends audit coverage without claiming exhaustive verification of every module or platform.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T554. Audit archive, compression, JSON and guard edges
+
+Review source paths not yet covered in `archive`, `compress`, `json_tree`, `toon` and `guard`. Read each plugin's local `AGENTS.md` and `PLAN.md` first (the compression module has no `AGENTS.md`); compare concrete candidates with active, roadmap, done and idea entries before filing. Preserve the shared main checkout's dirty T522–T527 changes. This is a source audit and docs-only task.
+
+Execution plan:
+
+1. Trace archive identity/decision persistence and expansion, compression eligibility and byte preservation, JSON folding and TOON round trips, and guard match/deny paths against each module's invariants.
+2. Use focused source probes or fixtures for candidate edge cases; avoid real agents and do not modify product source.
+3. Deduplicate findings against existing cards and error evidence; add only distinct, source-confirmed fixes with implementation steps and checks, syncing `todo.md`.
+
+Check: each filed finding has a source-backed trigger and concrete reproduction; no duplicate is added; plan/todo stay synchronized; `git diff --check` and `just check` pass.
+
+Result: inspected archive block/blob/skill decisions and the pi carrier, extractive compression, JSON tree folding/rendering, TOON encoding and its test oracle, and guard read/Bash keys, mutation invalidation and skill resolution/frontmatter exemptions. Filed T555–T559 for five guard behavior defects and T560 for the test-only TOON decoder. Compared the exact triggers with T55.8/T55.9/T57.1/T322/T445/T62.1/T468 and active/roadmap/idea entries. No additional distinct archive/compress/json_tree failure was established in this pass. No product source, dependencies or ideas were changed.
+
+Evidence revision: `eb13dd7f017e96547c9498555ea9e080814cad21` (product source unchanged from `0b14b88e`). An offline Rust harness compiled actual guard key/classification helpers, skill selection/frontmatter functions, and TOON encoder/test decoder. It reproduced quoted-path and Read-cwd key collisions, three writer variants classified as cacheable, selection of a sole foreign-project skill, failure to recognize valid YAML-quoted host keys, and the quoted-comma round-trip oracle failure. The repository's serde-saphyr version parsed the quoted YAML keys successfully. A separate system sed fixture created its output file in scratch; find/git mutations, real agents and live hook integration were not run. Full guard integration tests belong to the fix cards. The harness-created manifest fixture was removed after exact-content verification.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` passed for the documentation-only diff (no Cargo tests selected); `git diff --check` passed. Source links and active task/todo identities were verified. An additional docs-check was stopped during compilation and is not claimed as a completed test; its worktree build cache was cleaned.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T547. Audit plugin docs, privacy and snapshot lifecycle edges
+
+Review previously unexamined plugin documentation ingestion/query paths, privacy and redaction boundaries, and snapshot/checkpoint/retention behavior. Compare each source-backed candidate with active, roadmap, done and idea cards before proposing a fix; preserve the shared main checkout's dirty T522–T527 changes. This task is an audit and documentation claim only.
+
+Execution plan:
+
+1. Read the relevant `src/plugins/<id>/AGENTS.md`, architecture, research and existing task cards before tracing each path.
+2. Inspect documentation ingest and retrieval identity/scope, measurement accounting, checkpoint project identity, redaction, and retention invalidation; use isolated fixtures or source-level probes where practical.
+3. Deduplicate candidates against plan, roadmap, done and ideas; file only distinct, source-confirmed findings as sequential tasks with triggers, steps and checks. Do not change product code.
+
+Check: findings have source references and concrete reproductions; no duplicate task is added; `plan.md` and `todo.md` remain synchronized; `git diff --check` and `just check` pass.
+
+Result: reviewed docs-plugin lock resolution, fetch/index/query/get and local-document ingestion, the associated store/schema and query accounting, checkpoint extraction/prefilter/render/store/restore, and project identity for session handoff. Filed T548–T553: private-text persistence, cross-workspace local docs, invalidated ids on unchanged ingestion, inconsistent token-accounting baseline, checkpoint prefilter false negatives, and the handoff project-resolver bypass. Compared exact triggers with T455, T417, T133, T154, T71.2 and I-105; their broader feature/privacy proposals do not track these failures. This pass did not claim exhaustive archive, retention, host or platform coverage.
+
+Evidence revision: `99b6753d44f8da9a8fc0dc9e22113e520cb89d7d`; product source remains unchanged from `0b14b88e`. An offline Rust harness compiled verbatim checkpoint extraction/rendering code with serde_json and the repository's shlex version, omitting only the unused SDK import. It reproduced spaced-JSON and mixed-content prompt loss by comparing filtered/unfiltered extraction, and retained a private-tagged sentinel in rendered output. The initial harness lacked shlex and failed to compile; after adding that scratch-only dependency all three probes passed. Storage, docs and project-identity effects are source-confirmed, with integration regressions assigned to each fix card. No live agent, network fetch or product code edit was involved.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` passed for the documentation-only diff (no Cargo tests selected), as did `git diff --check`. New source links resolve and the active table/todo ids were checked for equality and duplicates. No new ideas or product dependencies were added.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T540. Audit task, worktree, config, measure and graph edge cases
+
+Review previously unreviewed lifecycle and data-boundary paths in `src/tasks`, `src/worktree`, `crates/rtok-config`, `src/measure` and `src/plugins/graph`. Confirm each candidate in source and compare it with active, roadmap, completed and idea entries before filing sequential fix cards. Preserve the shared main checkout's dirty T522–T527 changes.
+
+Execution plan:
+
+1. Inspect task storage/parent completion, worktree lock and removal paths, configuration parsing, measurement ingestion, and graph project/index behavior.
+2. Check candidate failures against existing cards and recent error evidence; assign reserved sequential IDs only to distinct source-confirmed defects.
+3. Add ordered fix cards and `todo.md` rows; place broader unapproved proposals in `ideas.md`.
+
+Check: every card has a source-backed trigger, implementation steps and acceptance criteria; plan and todo stay synchronized; `just check`.
+
+Result: continued the bounded source audit across disk task identity/storage, task creation/status guards and remote pagination, worktree removal/cleanup/ownership paths, configuration layering and lenient loading, measurement transcript/cache analysis, and graph walk/watch/index/rank freshness. Filed six distinct defects as T541–T546, each with a source-backed trigger, ordered implementation steps and acceptance criteria. Existing T441.4, T35.5, T68.10, T35.4, T370 and T324 were checked for overlap; related feature cards are cross-referenced instead of duplicated. No additional sufficiently established worktree/config/measurement defect was filed in this pass. No product code, dependencies or ideas were changed.
+
+Evidence revision: `efbb220bb5826dffeef36afd88910ac3d7424aa8` (product source still matches `0b14b88e`). An offline Rust probe compiled actual `walk.rs` and verbatim watcher event functions with the real ignore crate and minimal config/extension stubs. It reproduced unrelated gitignored files entering the full walk, explicitly included files being rejected by event filtering, and glob-excluded files being accepted by event filtering. T541–T543/T546 are source-confirmed with explicit reproduction steps; their full integration regressions remain work for the fix cards. No live watcher, real agent, remote task mutation or full application index run was used.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` and `git diff --check` passed for the documentation-only change; no Cargo tests were selected. Task table/todo identities and new source link targets were checked. This is further audit coverage, not a guarantee that every module or platform is bug-free.
+
+Status: done 2026-10-11
+Model: OpenAI / GPT-6
+
+### T530. Audit remaining bug backlog across subsystems
+
+Review the repository and available failure evidence for confirmed bug classes that do not already have active, roadmap, or completed coverage. Compare findings against existing cards before assigning sequential IDs; record confirmed fixes as ordered plan cards and unresolved, unapproved propositions in `ideas.md`. Keep the main checkout's dirty T522–T527 changes intact and work from this isolated checkout.
+
+Execution plan: review subsystem boundaries and recent error evidence; verify each candidate against source and existing plan/roadmap/done/ideas entries; add distinct fix cards in severity order and reserve sequential IDs; sync the task table and `todo.md`; put uncertain candidates in `ideas.md`.
+
+Check: audit cards are deduplicated, ordered and synced; `just check`.
+
+Result: reviewed hook dispatch/resident handling, proxy shaping/routing/cache/wire parsing, archive retrieval/decisions, read rendering/dedup/search, command capture/fallback, MCP framing/expansion, memory save/revision/import, and store retention. Filed nine distinct source-confirmed defects as T531–T539, each with a concrete trigger, source locations, ordered implementation steps and acceptance checks. Added seven optional improvement proposals I-120–I-125 and I-129. No product fixes or dependency changes were made.
+
+Evidence revision: `0b14b88eb56469625eebc7e1df92ae1b77bcf2b2`. An offline Rust harness compiled verbatim functions from this tree and confirmed four direct-cache normalization collisions plus the reverse-request MCP id collision. Other findings have explicit source-derived reproduction steps; their end-to-end regression tests belong to the fix cards. The installed rtok 0.15.1 was not used as proof for the 0.17.0 source. Neither codebase-memory nor CodeGraph tooling was available, and this repository has no `.codegraph` index; discovery used the available rtok explorer/read tools and targeted source reads. This audit is not an exhaustive proof of all host/platform behavior.
+
+Validation: `CHECK_BASE=0b14b88eb56469625eebc7e1df92ae1b77bcf2b2 mise exec -- just check` passed for the actual documentation-only diff (no Cargo tests selected); `git diff --check` passed. The initial default-base run selected unrelated upstream changes and was stopped during the full gate, so it is not claimed as a completed test run. The active task table and `todo.md` match at 72 ids. Removed four stale todo entries (T372, T373, T413.1, T413.2) only after verifying their completed cards in this file.
+
+Status: done
+Model: OpenAI / GPT-6
+
 ### T455. Local dependency docs from Cargo.lock + cached docs.rs rustdoc JSON
 
 MCP-only `docs` plugin (default off): resolve exact crate versions from `Cargo.lock`, search a local FTS index of cached rustdoc JSON, fetch from docs.rs only via `rtok docs fetch`. No Context7 client, no OAuth, no embeddings, no rustdoc-types.
@@ -1040,9 +1549,9 @@ Facts (primary unless marked; checked 2026-10-11):
 
 ### T560.1. `--host codebuddy` hook dialect and `plugins/codebuddy/` tree
 
-Part of T560 (CodeBuddy Code and WorkBuddy host; the parent card and T560.2 stay in `plan.md`). CodeBuddy Code sends Claude's stdin and reads Claude's output envelope, except that a PreToolUse rewrite travels as `hookSpecificOutput.modifiedInput` (https://www.codebuddy.ai/docs/cli/hooks, checked 2026-10-11).
+Part of T560 (CodeBuddy Code and WorkBuddy host; the parent card remains in `plan.md`, and T560.2 is completed below). CodeBuddy Code sends Claude's stdin and reads Claude's output envelope, except that a PreToolUse rewrite travels as `hookSpecificOutput.modifiedInput` (https://www.codebuddy.ai/docs/cli/hooks, checked 2026-10-11).
 
-Do (2026-10-11): `dispatch_owned_strict` gets a `codebuddy` branch; `codebuddy_output` renames `updatedInput` to `modifiedInput` and passes decisions, context and `{}` through. No input adapter (stdin is already Claude's shape). `plugins/codebuddy/`: `.codebuddy-plugin/plugin.json` (version kept by `tools/plugin-versions.sh`) and `marketplace.json` (marketplace `rtok`, plugin `rtok`, source `./`), `hooks/hooks.json` with the `rtok-hook` → `rtok hook` → `scripts/hook.sh` chain, all with `--host codebuddy` and `${CODEBUDDY_PLUGIN_ROOT}`, `.mcp.json` → `rtok mcp --host codebuddy`, README with `## Docs`. The events are `codebuddy` rows in `HOOK_EVENTS` that mirror Claude's: PreToolUse `Bash`/`Read`/`Skill`, PostToolUse `*`, UserPromptSubmit, SessionStart, PreCompact, PostCompact, SessionEnd. SubagentStart is left out because the hooks page names it without an input/output section. The rows have `installer = false` until T560.2.
+Do (2026-10-11): `dispatch_owned_strict` gets a `codebuddy` branch; `codebuddy_output` renames `updatedInput` to `modifiedInput` and passes decisions, context and `{}` through. No input adapter (stdin is already Claude's shape). `plugins/codebuddy/`: `.codebuddy-plugin/plugin.json` (version kept by `tools/plugin-versions.sh`) and `marketplace.json` (marketplace `rtok`, plugin `rtok`, source `./`), `hooks/hooks.json` with the `rtok-hook` → `rtok hook` → `scripts/hook.sh` chain, all with `--host codebuddy` and `${CODEBUDDY_PLUGIN_ROOT}`, `.mcp.json` → `rtok mcp --host codebuddy`, README with `## Docs`. The events are `codebuddy` rows in `HOOK_EVENTS` that mirror Claude's: PreToolUse `Bash`/`Read`/`Skill`, PostToolUse `*`, UserPromptSubmit, SessionStart, PreCompact, PostCompact, SessionEnd. SubagentStart is left out because the hooks page names it without an input/output section. T560.2 completed the installer: those rows now set `installer = true`.
 
 Check result (2026-10-11): unit tests for the output rename and an end-to-end PreToolUse dispatch; `tests/codebuddy_plugin.rs` pins the manifest, marketplace, exact `.mcp.json`, hook commands, and runs the commands against `rtok-hook`/`rtok` shims and the missing-rtok fail-open; `hook_manifests`, `host_docs`, `plugin_versions` green; `just check`.
 
