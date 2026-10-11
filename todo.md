@@ -67,3 +67,5 @@
 - T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
 - T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T521. MiMo Desktop variant of the `mimo` host
+- T560.1. `--host codebuddy` hook dialect and `plugins/codebuddy/` tree
+- T560.2. `codebuddy` host installer (CodeBuddy Code CLI + WorkBuddy Desktop)
