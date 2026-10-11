@@ -349,7 +349,8 @@ impl Project {
 
     /// `id` and `other` touch the same files (`remove`: they no longer do). Symmetric: both tasks
     /// are written, and an edge that is already as asked is left alone. A self-edge, a missing
-    /// task or an adapter that cannot store markers writes nothing.
+    /// task or an adapter that cannot store markers writes nothing, except that `remove` clears
+    /// `id`'s side of an edge whose peer is gone, which would otherwise need a hand edit.
     pub fn conflict(&self, id: &TaskId, other: &TaskId, remove: bool) -> Result<Task> {
         if id == other {
             bail!("{id} cannot conflict with itself");
@@ -357,7 +358,17 @@ impl Project {
         self.need_markers()?;
         let _guard = self.adapter.claim_guard()?;
         let mut task = self.get(id)?;
-        let mut peer = self.get(other)?;
+        let mut peer = match self.adapter.get(other)? {
+            Some(peer) => peer,
+            None if remove => {
+                let Some(at) = task.conflicts_with.iter().position(|have| have == other) else {
+                    return Ok(task);
+                };
+                task.conflicts_with.remove(at);
+                return self.adapter.save(&task);
+            }
+            None => bail!("no task {other}"),
+        };
         let edit = |t: &mut Task, with: &TaskId| {
             let at = t.conflicts_with.iter().position(|have| have == with);
             match (remove, at) {
@@ -881,6 +892,18 @@ mod claim_tests {
         assert!(err.to_string().contains("bare tasks cannot store"), "{err}");
         assert!(bare.set_parallel(&id("R1"), true).is_err());
         assert!(bare.get(&id("R2")).unwrap().conflicts_with.is_empty());
+
+        // A peer whose file is gone leaves a stale edge that `--remove` must still clear.
+        p.conflict(&id("R1"), &id("R2"), false).unwrap();
+        std::fs::remove_file(path.join(format!("R2 - {}.md", "r2"))).unwrap();
+        assert!(p.conflict(&id("R1"), &id("R2"), false).is_err());
+        assert!(
+            p.conflict(&id("R1"), &id("R2"), true)
+                .unwrap()
+                .conflicts_with
+                .is_empty()
+        );
+        assert!(p.get(&id("R1")).unwrap().conflicts_with.is_empty());
         let _ = std::fs::remove_dir_all(&path);
     }
 
