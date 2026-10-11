@@ -28,7 +28,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rtok_agent_sdk::NO_CHANGES;
-use serde_json::{Value, json};
+use rtok_mcp::spec::{Client, EntryShape, Format as McpFormat, McpSpec};
+use serde_json::json;
 
 use super::plugin::HostPlugin;
 use super::{Agent, Kind, Mode, Support, Variant, apply, home_dir, jsonc};
@@ -203,34 +204,29 @@ pub fn default_user_dir(insiders: bool) -> PathBuf {
     home.join(".config").join(app).join("User")
 }
 
-/// The `servers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"type": "stdio", "command": cmd, "args": super::mcp_args("vscode")})
+/// `servers.rtok = {type: "stdio", command, args}` in the profile `mcp.json`, as `rtok_mcp`
+/// reads it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config, insiders: bool) -> McpSpec {
+    McpSpec {
+        client: Client::Ide,
+        ..super::mcp::host_spec(
+            "vscode",
+            mcp_path(cfg, insiders),
+            "servers",
+            McpFormat::Json,
+            EntryShape::TypedCommand,
+        )
+    }
 }
 
-/// `servers.rtok = {type: "stdio", command, args}` in the profile `mcp.json`.
+/// Write the entry into the profile `mcp.json`.
 pub fn register_mcp(cfg: &Config, insiders: bool) -> Result<String> {
-    let path = mcp_path(cfg, insiders);
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &path,
-        "servers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "vscode"),
-    )
+    super::mcp::install(cfg, &mcp_spec(cfg, insiders))
 }
 
 /// Drop `servers.rtok` from the profile `mcp.json`, unless the user edited it (T246.2).
 pub fn unregister_mcp(cfg: &Config, insiders: bool) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &mcp_path(cfg, insiders),
-        "servers",
-        NAME,
-        &mcp_entry("rtok"),
-    )
+    super::mcp::remove(cfg, &mcp_spec(cfg, insiders))
 }
 
 /// The linked plugin, one per profile: both point at `plugins/claude/` (T117 — VS Code
