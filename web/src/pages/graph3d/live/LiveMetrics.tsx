@@ -9,6 +9,7 @@ import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
 import { Sparkline } from "../../../ui/Sparkline";
 import { compact, fmt, pct } from "../../format";
+import { CountUp } from "./CountUp";
 import { emptyWindow } from "./useCalls";
 
 const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
@@ -99,39 +100,43 @@ export function LiveMetrics({
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                 <Kpi
                     label="running"
-                    value={fmt(view.running.length)}
+                    value={<CountUp value={view.running.length} />}
                     sub={view.running.length ? view.running.map((r) => r.tool).join(", ") : "idle"}
                 />
                 <Kpi
                     label="calls"
-                    value={fmt(t.calls)}
+                    value={<CountUp value={t.calls} />}
                     tone={t.failed ? "warn" : "default"}
                     sub={`${fmt(t.failed)} failed`}
                     viz={<Trend spark={t.spark} values={t.spark.calls} what="calls" />}
                 />
                 <Kpi
                     label="latency p50"
-                    value={lat ? millis(lat.p50) : "-"}
+                    value={lat ? <CountUp value={lat.p50} format={millis} /> : "-"}
                     sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
                 />
                 <Kpi
                     label="symbols returned"
-                    value={`${fmt(t.symbols_returned)} of ${fmt(t.symbols)}`}
+                    value={
+                        <>
+                            <CountUp value={t.symbols_returned} /> of <CountUp value={t.symbols} />
+                        </>
+                    }
                     sub={`${fmt(t.crossed)} across projects`}
                 />
-                <Kpi label="files touched" value={fmt(t.files_touched)} />
-                <Kpi label="projects with hits" value={fmt(t.projects_hit)} />
+                <Kpi label="files touched" value={<CountUp value={t.files_touched} />} />
+                <Kpi label="projects with hits" value={<CountUp value={t.projects_hit} />} />
                 <Kpi
                     label="fallbacks"
-                    value={fmt(t.fallbacks)}
+                    value={<CountUp value={t.fallbacks} />}
                     tone={t.fallbacks ? "warn" : "default"}
                     sub={`${fmt(t.caps)} capped`}
                 />
-                <Kpi label="tokens sent" value={compact(t.after)} />
-                <Kpi label="without rtok" value={compact(t.before)} />
+                <Kpi label="tokens sent" value={<CountUp value={t.after} format={compact} />} />
+                <Kpi label="without rtok" value={<CountUp value={t.before} format={compact} />} />
                 <Kpi
                     label="saved"
-                    value={compact(saved)}
+                    value={<CountUp value={saved} format={compact} />}
                     tone="saved"
                     sub={t.before ? pct(saved / t.before, 0) : "-"}
                     viz={<Trend spark={t.spark} values={t.spark.saved} what="tokens saved" />}
