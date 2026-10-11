@@ -26,7 +26,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T262.3 | todo | P2 | 2 | 0% | |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
-| T275 | in progress | P1 | 4 | 80% | Claude Code / claude-opus-5-5 |
+| T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 15% | Claude Code / sonnet-5.5 |
 | T276.2 | todo | P2 | 3 | 0% | |
@@ -204,7 +204,7 @@ Execution plan (lands before T277; T277 then moves the core into its crate):
 2. PR A, Claude Code and Desktop: shared MCP core in `src/agents/mcp.rs` (write/remove/status by spec), decision row amending D21, drop `code_serves_mcp` in `apply` and `installed`, Vfs tests (a)-(f) for Claude.
 3. PRs B-D, the other affected hosts in groups of at most 10 files: Copilot and Gemini (`d21_plugin_apply`); Cursor, Codex, VS Code; ZCode, Kimi, Grok. Each deletes that host's MCP branch and adds its table rows to the shared Vfs test.
 4. PR E: `doctor` warning (Fix 5), re-bless `docs/agents.md` and README MCP rows, then the creator-machine Check.
-Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. Left: PR E.
+Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. PR E merged (#483, doctor warning). Command Code, the last host that gated MCP on its plugin, is T275.2 (2026-10-11). Left: the creator-machine Check.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
