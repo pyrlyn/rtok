@@ -14,8 +14,9 @@
 use std::path::{Path, PathBuf};
 
 use rtok_mcp::config::Fs;
+use rtok_mcp::ops::{self, Mode as McpMode};
 use rtok_mcp::registry::RTOK;
-use rtok_mcp::spec::{Client, DuplicateName, EntryShape, Format, McpSpec};
+use rtok_mcp::spec::{Client, DuplicateName, EntryShape, Format, Launch, McpSpec};
 use rtok_mcp::status::Entry;
 use serde_json::Value;
 use toml_edit::{DocumentMut, Item};
@@ -267,6 +268,7 @@ fn surface(
         format,
         key_path: McpSpec::key_path(key),
         server: RTOK,
+        launch: Launch::default(),
         entry_shape: EntryShape::Command,
         duplicate_name: DuplicateName::ShowsBoth,
         plugin_serves: plugin.map(|_| RTOK.name),
@@ -384,6 +386,29 @@ impl Fs for Disk {
     fn write(&mut self, path: &Path, _: Vec<u8>) -> anyhow::Result<()> {
         anyhow::bail!("{}: MCP status is read-only", path.display())
     }
+}
+
+/// The disk [`run`] writes through: [`rtok_agent_sdk::write`] gives the atomic swap, the
+/// `_backup` copy and the dry run that every other host installer already has, so this crate's
+/// `Fs::backup` stays the no-op default.
+struct Writer<'a>(&'a rtok_agent_sdk::Apply);
+
+impl Fs for Writer<'_> {
+    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+        Disk.read(path)
+    }
+    fn write(&mut self, path: &Path, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let body = String::from_utf8(bytes)?;
+        rtok_agent_sdk::write(self.0, path, &body, "mcp entry")
+    }
+}
+
+/// Install, update or remove rtok's MCP entry for `spec` on the real disk: the one entry
+/// point a migrated host's `apply` calls (T277.1), returning the line it reports.
+pub(crate) fn run(cfg: &Config, spec: &McpSpec, mode: McpMode) -> anyhow::Result<String> {
+    let ctx = super::apply(cfg);
+    let report = ops::apply(spec, mode, &ctx, &mut Writer(&ctx), super::is_rtok_bin)?;
+    Ok(report.line())
 }
 
 /// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
