@@ -132,6 +132,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T589 | todo | P2 | 3 | 0% | |
 | T590 | todo | P2 | 3 | 0% | |
 | T592 | todo | P2 | 3 | 0% | |
+| T594 | todo | P2 | 3 | 0% | |
+| T595 | todo | P2 | 3 | 0% | |
 
 
 
@@ -663,6 +665,32 @@ Execution plan:
 3. Cover environment and project/user config layers, help/completion output, and a CLI rendering fixture that verifies Markdown bytes for an explicit --format md over configured HTML/PDF.
 
 Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
+
+### T594. Validate structured config types before persisting edits
+
+Confirmed through actual config APIs: `set_with(..., "stats.prices", "42", false)` writes the scalar and `issues` returns no errors, but Figment extraction into `Config` rejects it as an expected map. Likewise `plugins.read.allow_paths = [1]` is written and passes `issues`, then typed extraction rejects element 0 as not a path string. [check_table](crates/rtok-config/src/validate.rs#L545) skips open-map keys entirely through `is_open`, while [check_leaf](crates/rtok-config/src/validate.rs#L663) checks only that an array exists, not its element types. [set_all_with](crates/rtok-config/src/validate.rs#L100) uses those checks as its sole pre-write gate. An accepted edit can therefore leave the user file unloadable, contrary to the setter's contract. These are one incomplete structured-type validation issue; T363–365 cover other constraints, not these shapes.
+
+Execution plan:
+
+1. Add rejection tests for scalar open maps, wrongly typed map entries, and array elements, including the two reproduced commands. Assert both real and dry-run setters reject them and preserve an existing file byte-for-byte.
+2. Validate the candidate document against the actual Config field types before persistence, using a pure default-plus-candidate extraction so project/environment overrides cannot mask invalid file values. Retain semantic/range checks and useful key/line diagnostics; do not add a second independently maintained type schema.
+3. Keep free-form map names accepted while checking their container and value types. Cover valid custom model prices, benchmark paths, graph mappings, empty arrays and heterogeneous-invalid arrays; apply consistent checks to file validation.
+4. Add CLI coverage proving a rejected set leaves subsequent loading functional and valid edits still preserve comments. Rerun config/layer tests and `just check`.
+
+Check: every successful set produces a document accepted by typed config extraction, invalid structured values never replace the existing file, and free-form names remain supported. The scratch probe used the actual config crate's setter/validator plus Figment default-and-file extraction; full CLI and environment layering were not executed.
+
+### T595. Keep commented-default discovery outside TOML string payloads
+
+Confirmed with a valid multiline literal string: `[otel] service_name` contains the lines `[proxy]` and `# port = 12`, followed by the real `[proxy]` table with a commented port default. Setting `proxy.port` to 9000 updates the requested key but also removes `# ` from the unrelated service name's payload. [reveal_commented_key](crates/rtok-config/src/validate.rs#L185) calls [reveal_assignment](crates/rtok-config/src/validate.rs#L198), whose line scan treats the payload's table/header and comment as document syntax before the actual TOML edit. The output remains valid, so validation does not detect the unintended value change. Dry-run leaves disk untouched but previews the same proposed mutation. T381's default/comment preservation tests do not cover multiline string payloads.
+
+Execution plan:
+
+1. Add the multiline literal fixture and an equivalent multiline basic string, with header-shaped and assignment-shaped content. Assert that setting a different key changes only that key and preserves the parsed string value and its original bytes.
+2. Use TOML-aware source spans/token context for commented-default discovery, or restrict revival to comments proven to be outside string values. Share that context with live-key detection; avoid interpreting raw payload lines as table headers or assignments.
+3. Cover quoted/dotted table keys, inline comments, escaped quotes, CRLF, existing live keys and batch setters. Preserve the intended uncomment-in-place behavior and trailing comment/padding guarantees.
+4. Verify real and dry-run edits propose the same safe result, with dry-run writing nothing; rerun existing comment-preservation tests and `just check`.
+
+Check: arbitrary valid TOML string content cannot be modified by setting an unrelated key. The actual setter changed the fixture service name from `[proxy]\n# port = 12\n` to `[proxy]\nport = 12\n`; the requested port and ordinary-default control both became 9000. Only scratch configuration files were used.
 
 ### T592. Keep late same-second sessions from moving behind the OTel cursor
 
