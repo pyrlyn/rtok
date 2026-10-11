@@ -54,6 +54,7 @@
 - T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 - T601. Prevent an expired task-lock guard from deleting its successor's lock
 - T604. Keep literal strings distinct from JSON-tree variable references
+- T606. Preserve fitting Unicode mode files when bounding injection reads
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
