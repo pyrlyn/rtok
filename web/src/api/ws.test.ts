@@ -114,6 +114,27 @@ describe("parseFrame", () => {
     expect(parseFrame('{"type":"imported","export":{"projects":[],"nodes":[]}}')).toBeNull();
   });
 
+  test("an answer keeps the id of its request, a pushed frame never gets one, a non-text id is dropped", () => {
+    expect(parseFrame('{"type":"message","text":"no","rid":"7"}')).toEqual({
+      type: "message",
+      text: "no",
+      rid: "7",
+    });
+    const plan = { items: [], diff: "", refused: [] };
+    expect(parseFrame(JSON.stringify({ type: "doctorplan", plan, rid: "9" }))).toMatchObject({
+      rid: "9",
+    });
+    expect(parseFrame('{"type":"message","text":"no","rid":7}')).toEqual({
+      type: "message",
+      text: "no",
+    });
+    const calls = { now: 1, running: [], feed: [], heat_window_s: 300, windows: [] };
+    expect(parseFrame(JSON.stringify({ type: "calls", calls, rid: "9" }))).toEqual({
+      type: "calls",
+      calls,
+    });
+  });
+
   test("a graph frame needs its project and both lists", () => {
     const graph = { project: 3, name: "rtok", root: "/r", state: "ok", nodes: [], edges: [] };
     expect(parseFrame(JSON.stringify({ type: "graph", graph }))).toEqual({ type: "graph", graph });

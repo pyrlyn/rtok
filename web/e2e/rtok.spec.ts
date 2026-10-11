@@ -120,15 +120,23 @@ test("the plugin switch spins in its old position until the server answers", asy
 
 test("doctor apply keeps its spinner until the answer and drops it after", async ({ page }) => {
   const machine = mockMachine();
-  const frame = (type: string, key: string, body: unknown) => JSON.stringify({ type, [key]: body });
+  // The page matches an answer to its request by the id the request carried (T623).
+  const frame = (type: string, key: string, body: unknown, rid: unknown) =>
+    JSON.stringify({ type, [key]: body, rid });
   // The e2e store has nothing to fix, so the mocked machine supplies the plan; only the apply
   // is held.
   const release = await interceptSocket(page, (request) => {
-    const doctor = (request as { doctor?: { action: string; selection: Selection } }).doctor;
+    const { doctor, rid } = request as {
+      doctor?: { action: string; selection: Selection };
+      rid?: string;
+    };
     if (doctor?.action === "plan")
-      return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection)) };
+      return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection), rid) };
     if (doctor?.action === "apply")
-      return { reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection)), hold: true };
+      return {
+        reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection), rid),
+        hold: true,
+      };
     return undefined;
   });
   await page.goto("/#/doctor");

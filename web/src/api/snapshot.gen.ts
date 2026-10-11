@@ -2,7 +2,10 @@
 // types in src/web, bless the schema, then run `npm run gen:api`.
 
 /**
- * A message a client sends over `/ws`.
+ * A message a client sends over `/ws`. Any of them may carry a top-level `rid`, the id the page
+ * chose for the request (T623): the answer echoes it, so two requests of one kind stay apart even
+ * when the first outlives the page's timer. Read it with [`request_id`]; it is not part of the
+ * variants because every request has it.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ClientMessage".
@@ -85,51 +88,65 @@ export type Level2 = "overview" | "symbols";
 /**
  * A frame the server pushes besides the [`Snapshot`] itself.
  *
+ * Every frame that answers a request carries the request's `rid` back in `rid`
+ * (a refusal too), so the page matches an answer to its question and not to the next request of
+ * the same kind (T623). Pushed frames, such as [`ServerFrame::Calls`], have none.
+ *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ServerFrame".
  */
 export type ServerFrame =
   | {
+      rid?: string | null;
       text: string;
       type: "message";
     }
   | {
       id: string;
+      rid?: string | null;
       text: string;
       type: "expand";
     }
   | {
       plan: Plan;
+      rid?: string | null;
       type: "doctorplan";
     }
   | {
       fixed: Fixed;
+      rid?: string | null;
       type: "doctorfixed";
     }
   | {
       plan: Cleared;
+      rid?: string | null;
       type: "junkplan";
     }
   | {
       cleared: Cleared;
+      rid?: string | null;
       type: "junkcleared";
     }
   | {
       graph: DrillGraph;
+      rid?: string | null;
       type: "graph";
     }
   | {
       diff: DiffReport;
       project: string;
+      rid?: string | null;
       type: "diff";
     }
   | {
       file: ExportFile;
+      rid?: string | null;
       type: "export";
     }
   | {
       export: Export;
       name: string;
+      rid?: string | null;
       type: "imported";
     }
   | {

@@ -83,7 +83,7 @@ describe("junk card", () => {
         const junk = within(await screen.findByRole("region", { name: "junk" }));
 
         fireEvent.click(junk.getByRole("button", { name: "Clear safe junk" }));
-        expect(junkMessages(w.sent)).toEqual([{ junk: { action: "plan", paths: [] } }]);
+        expect(junkMessages(w.sent)).toMatchObject([{ junk: { action: "plan", paths: [] } }]);
 
         act(() => w.frame({ type: "junkplan", plan: mockJunk().plan() }));
         const plan = within(await junk.findByRole("region", { name: "junk plan" }));

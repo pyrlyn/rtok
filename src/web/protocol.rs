@@ -22,45 +22,125 @@ use crate::doctor::web::{Fixed, Plan, Selection};
 pub const SCHEMA_PATH: &str = "web/src/api/ws.schema.json";
 
 /// A frame the server pushes besides the [`Snapshot`] itself.
+///
+/// Every frame that answers a request carries the request's `rid` back in `rid`
+/// (a refusal too), so the page matches an answer to its question and not to the next request of
+/// the same kind (T623). Pushed frames, such as [`ServerFrame::Calls`], have none.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ServerFrame {
     /// A one-line notice for the operator (refused key, failed `set`, unknown archive id).
-    Message { text: String },
+    Message {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The archived payload a client asked for with [`ClientMessage::Expand`].
-    Expand { id: String, text: String },
+    Expand {
+        id: String,
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).
-    DoctorPlan { plan: Plan },
+    DoctorPlan {
+        plan: Plan,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// What a confirmed `doctor` apply did.
-    DoctorFixed { fixed: Fixed },
+    DoctorFixed {
+        fixed: Fixed,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The dry run of "clear safe junk" (T330.7): what `agents junk clear` would remove for every
     /// agent; nothing was removed.
-    JunkPlan { plan: Cleared },
+    JunkPlan {
+        plan: Cleared,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// What a confirmed junk apply removed.
-    JunkCleared { cleared: Cleared },
+    JunkCleared {
+        cleared: Cleared,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).
-    Graph { graph: DrillGraph },
-    /// The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is
-    /// how the page matches a reply to its question.
-    Diff { project: String, diff: DiffReport },
+    Graph {
+        graph: DrillGraph,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
+    /// The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's.
+    Diff {
+        project: String,
+        diff: DiffReport,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The answer to [`ClientMessage::Export`] (T329.40): the file the CLI would write.
-    Export { file: ExportFile },
+    Export {
+        file: ExportFile,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The answer to [`ClientMessage::Import`]: the saved export, parsed and checked against the
     /// schema; the page shows it read-only.
-    Imported { name: String, export: GraphExport },
+    Imported {
+        name: String,
+        export: GraphExport,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rid: Option<String>,
+    },
     /// The live calls panel's whole state (T329.15, T484): running calls, the feed and the totals
     /// of every window. Sent after [`ClientMessage::Calls`] subscribed, first at once and then
     /// when something in it changed, at most four times a second.
     Calls { calls: CallsView },
 }
 
+/// The longest request id the server echoes; a longer one is dropped rather than reflected.
+const MAX_RID_LEN: usize = 64;
+
 impl ServerFrame {
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }
+
+    /// The same answer carrying `id`, the request id it replies to. A pushed frame stays as it is.
+    pub fn answering(mut self, id: Option<String>) -> Self {
+        match &mut self {
+            Self::Message { rid, .. }
+            | Self::Expand { rid, .. }
+            | Self::DoctorPlan { rid, .. }
+            | Self::DoctorFixed { rid, .. }
+            | Self::JunkPlan { rid, .. }
+            | Self::JunkCleared { rid, .. }
+            | Self::Graph { rid, .. }
+            | Self::Diff { rid, .. }
+            | Self::Export { rid, .. }
+            | Self::Imported { rid, .. } => *rid = id,
+            Self::Calls { .. } => {}
+        }
+        self
+    }
 }
 
-/// A message a client sends over `/ws`.
+/// The request id of a raw client message: the page's correlation token (T623). Absent or longer
+/// than [`MAX_RID_LEN`] means the answer carries none.
+pub fn request_id(message: &serde_json::Value) -> Option<String> {
+    message
+        .get("rid")?
+        .as_str()
+        .filter(|rid| !rid.is_empty() && rid.len() <= MAX_RID_LEN)
+        .map(str::to_owned)
+}
+
+/// A message a client sends over `/ws`. Any of them may carry a top-level `rid`, the id the page
+/// chose for the request (T623): the answer echoes it, so two requests of one kind stay apart even
+/// when the first outlives the page's timer. Read it with [`request_id`]; it is not part of the
+/// variants because every request has it.
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(untagged)]
 pub enum ClientMessage {
@@ -285,10 +365,52 @@ mod tests {
         let f = ServerFrame::Expand {
             id: "a".into(),
             text: "b".into(),
+            rid: None,
         }
         .to_json();
         assert_eq!(f, r#"{"type":"expand","id":"a","text":"b"}"#);
-        let f = ServerFrame::Message { text: "hi".into() }.to_json();
+        let f = ServerFrame::Message {
+            text: "hi".into(),
+            rid: None,
+        }
+        .to_json();
         assert_eq!(f, r#"{"type":"message","text":"hi"}"#);
+    }
+
+    #[test]
+    fn an_answer_echoes_the_request_id_and_a_pushed_frame_does_not() {
+        let f = ServerFrame::Message {
+            text: "no".into(),
+            rid: None,
+        }
+        .answering(Some("7".into()))
+        .to_json();
+        assert_eq!(f, r#"{"type":"message","text":"no","rid":"7"}"#);
+        let f = ServerFrame::Expand {
+            id: "a".into(),
+            text: "b".into(),
+            rid: None,
+        }
+        .answering(Some("8".into()))
+        .to_json();
+        assert_eq!(f, r#"{"type":"expand","id":"a","text":"b","rid":"8"}"#);
+    }
+
+    #[test]
+    fn the_request_id_rides_beside_any_message_and_is_bounded() {
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"doctor":{"action":"plan"},"rid":"3"}"#).unwrap();
+        assert!(matches!(m, ClientMessage::Doctor { .. }));
+
+        let id = |raw: &str| request_id(&serde_json::from_str(raw).unwrap());
+        assert_eq!(id(r#"{"expand":"a","rid":"x-1"}"#).as_deref(), Some("x-1"));
+        assert_eq!(id(r#"{"expand":"a"}"#), None);
+        assert_eq!(id(r#"{"expand":"a","rid":7}"#), None);
+        assert_eq!(id(r#"{"expand":"a","rid":""}"#), None);
+        let long = format!(
+            r#"{{"expand":"a","rid":"{}"}}"#,
+            "z".repeat(MAX_RID_LEN + 1)
+        );
+        assert_eq!(id(&long), None);
     }
 }

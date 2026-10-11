@@ -5,8 +5,8 @@
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import { DataProvider } from "../api/query";
-import type { ClientMessage, Snapshot } from "../api/snapshot.gen";
-import type { Connect, Frame } from "../api/ws";
+import type { Snapshot } from "../api/snapshot.gen";
+import { answering, type Connect, type Frame, type Outgoing } from "../api/ws";
 import { createAppRouter } from "../router";
 
 export const serving =
@@ -17,9 +17,26 @@ export const serving =
         return { send: () => true, close: () => {} };
     };
 
+// The request each answer replies to.
+const ASKS: Partial<Record<Frame["type"], string>> = {
+    expand: "expand",
+    doctorplan: "doctor",
+    doctorfixed: "doctor",
+    junkplan: "junk",
+    junkcleared: "junk",
+    graph: "graph",
+    diff: "diff",
+    export: "export",
+    imported: "import",
+};
+
+/** The id of the newest request sent, of one kind when `key` names it; calls are no request. */
+const latest = (sent: Outgoing[], key?: string) =>
+    sent.findLast((m) => !("calls" in m) && (key === undefined || key in m))?.rid;
+
 /** A socket the test drives: it records what the page sends and pushes the frames it likes. */
 export function wire(first: Snapshot) {
-    const sent: ClientMessage[] = [];
+    const sent: Outgoing[] = [];
     let push: (f: Frame) => void = () => {};
     const connect: Connect = (h) => {
         push = h.onFrame;
@@ -31,8 +48,10 @@ export function wire(first: Snapshot) {
         connect,
         sent,
         push: (snapshot: Snapshot) => push({ type: "snapshot", snapshot }),
-        message: (text: string) => push({ type: "message", text }),
-        frame: (f: Frame) => push(f),
+        // A refusal answers the latest request; a write has no id, so it gets none.
+        message: (text: string) => push(answering({ type: "message", text }, latest(sent))),
+        // The server echoes the id of the request an answer replies to: the latest of its kind.
+        frame: (f: Frame) => push(answering(f, latest(sent, ASKS[f.type]))),
     };
 }
 

@@ -4,7 +4,7 @@
 
 // Offline data source (`?sample`) and the snapshot fixture shared by Storybook, Vitest and
 // offline e2e. Typed as `Snapshot`, so a schema change breaks `tsc` here instead of drifting.
-import type { Connect, Connection } from "./ws";
+import { answering, type Connect, type Connection, type Frame } from "./ws";
 import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
@@ -357,9 +357,12 @@ export const connectSample: Connect = (handlers) => {
   const connection: Connection = {
     send(message) {
       if (stopped) return false;
+      // Like the server, every answer echoes the id of the request it replies to (T623).
+      const { rid } = message;
+      const answer = (frame: Frame) => handlers.onFrame(answering(frame, rid));
       if ("expand" in message) {
         const { expand: id } = message;
-        later(() => handlers.onFrame({ type: "expand", id, text: `sample payload for ${id}` }));
+        later(() => answer({ type: "expand", id, text: `sample payload for ${id}` }));
         return true;
       }
       if ("project" in message) {
@@ -374,8 +377,8 @@ export const connectSample: Connect = (handlers) => {
         const { action, selection } = message.doctor;
         later(() =>
           action === "plan"
-            ? handlers.onFrame({ type: "doctorplan", plan: machine.plan(selection) })
-            : handlers.onFrame({ type: "doctorfixed", fixed: machine.apply(selection) }),
+            ? answer({ type: "doctorplan", plan: machine.plan(selection) })
+            : answer({ type: "doctorfixed", fixed: machine.apply(selection) }),
         );
         return true;
       }
@@ -383,8 +386,8 @@ export const connectSample: Connect = (handlers) => {
         const { action, paths } = message.junk;
         later(() =>
           action === "plan"
-            ? handlers.onFrame({ type: "junkplan", plan: junk.plan() })
-            : handlers.onFrame({ type: "junkcleared", cleared: junk.apply(paths) }),
+            ? answer({ type: "junkplan", plan: junk.plan() })
+            : answer({ type: "junkcleared", cleared: junk.apply(paths) }),
         );
         return true;
       }
@@ -394,17 +397,17 @@ export const connectSample: Connect = (handlers) => {
       }
       if ("diff" in message) {
         const { diff } = message;
-        later(() => handlers.onFrame(diffReply(diff, snapshot.projects ?? [])));
+        later(() => answer(diffReply(diff, snapshot.projects ?? [])));
         return true;
       }
       if ("graph" in message) {
         const { graph } = message;
-        later(() => handlers.onFrame(drillReply(graph, snapshot.projects ?? [])));
+        later(() => answer(drillReply(graph, snapshot.projects ?? [])));
         return true;
       }
       if ("export" in message || "import" in message) {
-        const answer = exportAnswer(message, snapshot.projects ?? []);
-        if (answer) later(() => handlers.onFrame(answer));
+        const made = exportAnswer(message, snapshot.projects ?? []);
+        if (made) later(() => answer(made));
         return true;
       }
       const { key, value } = message.set;

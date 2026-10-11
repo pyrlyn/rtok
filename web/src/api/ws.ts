@@ -32,9 +32,12 @@ export interface Handlers {
   onFrame(frame: Frame): void;
 }
 
+/** A client message with the id its answer echoes (T623); see `ClientMessage` in `protocol.rs`. */
+export type Outgoing = ClientMessage & { rid?: string };
+
 export interface Connection {
   /** `false` when the frame was not sent because the link is not open. */
-  send(message: ClientMessage): boolean;
+  send(message: Outgoing): boolean;
   close(): void;
 }
 
@@ -70,6 +73,28 @@ export function parseFrame(raw: unknown): Frame | null {
   }
   if (typeof value !== "object" || value === null) return null;
   const v = value as Record<string, unknown>;
+  const frame = parseBody(v);
+  return frame && typeof v.rid === "string" ? answering(frame, v.rid) : frame;
+}
+
+const ANSWERS = new Set<Frame["type"]>([
+  "message",
+  "expand",
+  "doctorplan",
+  "doctorfixed",
+  "junkplan",
+  "junkcleared",
+  "graph",
+  "diff",
+  "export",
+  "imported",
+]);
+
+/** The frame carrying the id of the request it answers (T623); pushed frames have none. */
+export const answering = (frame: Frame, rid: string | undefined): Frame =>
+  rid && ANSWERS.has(frame.type) ? ({ ...frame, rid } as Frame) : frame;
+
+function parseBody(v: Record<string, unknown>): Frame | null {
   switch (v.type) {
     case "message":
       return typeof v.text === "string" ? { type: "message", text: v.text } : null;

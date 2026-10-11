@@ -419,7 +419,13 @@ fn calls_subscription(text: &str) -> Option<bool> {
 
 fn inbound(state: &DashState, text: &str) -> Option<String> {
     let v: Value = serde_json::from_str(text).ok()?;
-    let set = match ClientMessage::deserialize(&v) {
+    let rid = protocol::request_id(&v);
+    answer(state, &v).map(|frame| frame.answering(rid).to_json())
+}
+
+/// The reply to one parsed client message, before it is tied to the request that asked (T623).
+fn answer(state: &DashState, v: &Value) -> Option<ServerFrame> {
+    let set = match ClientMessage::deserialize(v) {
         Ok(ClientMessage::Expand { expand: id }) => {
             let cfg = state
                 .cfg
@@ -427,7 +433,11 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone();
             return Some(match model::expand_payload(&cfg, &id, None) {
-                Some(text) => ServerFrame::Expand { id, text }.to_json(),
+                Some(text) => ServerFrame::Expand {
+                    id,
+                    text,
+                    rid: None,
+                },
                 None => message_frame(&format!("unknown archive id: {id}")),
             });
         }
@@ -548,76 +558,80 @@ pub(crate) fn project_write(_cfg: &Config, _req: protocol::ProjectRequest) -> Re
 /// T329.14: one project's drill-down. Read-only, so unlike a registry write it needs no refusal
 /// path beyond the error line.
 #[cfg(feature = "graph")]
-fn graph_reply(cfg: &Config, req: &model::DrillRequest) -> String {
+fn graph_reply(cfg: &Config, req: &model::DrillRequest) -> ServerFrame {
     let drilled = crate::plugin::Runtime::open(cfg.clone(), "web-drill")
         .and_then(|rt| crate::plugins::graph::drill::run(&rt, req));
     match drilled {
-        Ok(graph) => ServerFrame::Graph { graph }.to_json(),
+        Ok(graph) => ServerFrame::Graph { graph, rid: None },
         Err(e) => message_frame(&format!("{e:#}")),
     }
 }
 
 #[cfg(not(feature = "graph"))]
-fn graph_reply(_cfg: &Config, req: &model::DrillRequest) -> String {
+fn graph_reply(_cfg: &Config, req: &model::DrillRequest) -> ServerFrame {
     match *req {}
 }
 
 /// T329.35: Compare mode. Read-only like `graph_reply`; the old side is a ref or the text the page
 /// sent, never a path (see `DiffRequest`).
 #[cfg(feature = "graph")]
-fn diff_reply(cfg: &Config, req: model::DiffRequest) -> String {
+fn diff_reply(cfg: &Config, req: model::DiffRequest) -> ServerFrame {
     let project = req.project.clone();
     let diffed = crate::plugin::Runtime::open(cfg.clone(), "web-diff")
         .and_then(|rt| crate::plugins::graph::diff::page(&rt, &req));
     match diffed {
-        Ok(diff) => ServerFrame::Diff { project, diff }.to_json(),
+        Ok(diff) => ServerFrame::Diff {
+            project,
+            diff,
+            rid: None,
+        },
         Err(e) => message_frame(&format!("{e:#}")),
     }
 }
 
 #[cfg(not(feature = "graph"))]
-fn diff_reply(_cfg: &Config, req: model::DiffRequest) -> String {
+fn diff_reply(_cfg: &Config, req: model::DiffRequest) -> ServerFrame {
     match req {}
 }
 
 /// T329.40: the Export menu's download, from the one function `rtok graph export` runs.
 #[cfg(feature = "graph")]
-fn export_reply(cfg: &Config, req: &model::ExportRequest) -> String {
+fn export_reply(cfg: &Config, req: &model::ExportRequest) -> ServerFrame {
     let made = crate::plugin::Runtime::open(cfg.clone(), "web-export")
         .and_then(|rt| crate::plugins::graph::export::page_file(&rt, req));
     match made {
-        Ok(file) => ServerFrame::Export { file }.to_json(),
+        Ok(file) => ServerFrame::Export { file, rid: None },
         Err(e) => message_frame(&format!("{e:#}")),
     }
 }
 
 #[cfg(not(feature = "graph"))]
-fn export_reply(_cfg: &Config, req: &model::ExportRequest) -> String {
+fn export_reply(_cfg: &Config, req: &model::ExportRequest) -> ServerFrame {
     match *req {}
 }
 
 /// T329.40: the read-only import view. It only parses the text the page read, so no runtime is
 /// opened and neither the registry nor the index is touched.
 #[cfg(feature = "graph")]
-fn import_reply(req: model::ImportRequest) -> String {
+fn import_reply(req: model::ImportRequest) -> ServerFrame {
     match crate::plugins::graph::export::parse(&req.text, &req.name) {
         Ok(export) => ServerFrame::Imported {
             name: req.name,
             export,
-        }
-        .to_json(),
+            rid: None,
+        },
         Err(e) => message_frame(&format!("{e:#}")),
     }
 }
 
 #[cfg(not(feature = "graph"))]
-fn import_reply(req: model::ImportRequest) -> String {
+fn import_reply(req: model::ImportRequest) -> ServerFrame {
     match req {}
 }
 
 /// T331.12: the `doctor --fix` checklist for the page. The upgrade's origin guard covers it like
 /// `set`; only `apply` writes, through the engine's backup and refusals.
-fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
+fn doctor_reply(state: &DashState, r: &DoctorRequest) -> ServerFrame {
     let cfg = state
         .cfg
         .lock()
@@ -626,17 +640,18 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
     match r.action {
         DoctorAction::Plan => ServerFrame::DoctorPlan {
             plan: crate::doctor::web::plan_here(&cfg, &r.selection),
+            rid: None,
         },
         DoctorAction::Apply => ServerFrame::DoctorFixed {
             fixed: crate::doctor::web::apply_here(&cfg, &r.selection),
+            rid: None,
         },
     }
-    .to_json()
 }
 
 /// T330.7: "clear safe junk" for the Hosts page. The upgrade's origin guard covers it like `set`;
 /// only `apply` removes, through the same plan, re-checks and refusals as `agents junk clear`.
-fn junk_reply(state: &DashState, r: &JunkRequest) -> String {
+fn junk_reply(state: &DashState, r: &JunkRequest) -> ServerFrame {
     let cfg = state
         .cfg
         .lock()
@@ -646,14 +661,14 @@ fn junk_reply(state: &DashState, r: &JunkRequest) -> String {
     match r.action {
         JunkAction::Plan => ServerFrame::JunkPlan {
             plan: crate::agents::junk_web::plan(&cfg, &report),
+            rid: None,
         },
         JunkAction::Apply => {
             let cleared = crate::agents::junk_web::apply(&cfg, &report, &r.paths);
             crate::model::forget_junk();
-            ServerFrame::JunkCleared { cleared }
+            ServerFrame::JunkCleared { cleared, rid: None }
         }
     }
-    .to_json()
 }
 
 /// `plugins.<id>.enabled` for a catalogue id (D23: Registry, not a second list).
@@ -673,8 +688,11 @@ fn allowlisted_plugin_enabled(cfg: &Config, key: &str) -> bool {
         .any(|(m, _)| m.id == id)
 }
 
-fn message_frame(text: &str) -> String {
-    ServerFrame::Message { text: text.into() }.to_json()
+fn message_frame(text: &str) -> ServerFrame {
+    ServerFrame::Message {
+        text: text.into(),
+        rid: None,
+    }
 }
 
 #[cfg(test)]

@@ -497,7 +497,7 @@
       ]
     },
     "ClientMessage": {
-      "description": "A message a client sends over `/ws`.",
+      "description": "A message a client sends over `/ws`. Any of them may carry a top-level `rid`, the id the page\nchose for the request (T623): the answer echoes it, so two requests of one kind stay apart even\nwhen the first outlives the page's timer. Read it with [`request_id`]; it is not part of the\nvariants because every request has it.",
       "anyOf": [
         {
           "description": "Ask for the archived payload behind an archive id.",
@@ -2995,12 +2995,18 @@
       ]
     },
     "ServerFrame": {
-      "description": "A frame the server pushes besides the [`Snapshot`] itself.",
+      "description": "A frame the server pushes besides the [`Snapshot`] itself.\n\nEvery frame that answers a request carries the request's `rid` back in `rid`\n(a refusal too), so the page matches an answer to its question and not to the next request of\nthe same kind (T623). Pushed frames, such as [`ServerFrame::Calls`], have none.",
       "oneOf": [
         {
           "description": "A one-line notice for the operator (refused key, failed `set`, unknown archive id).",
           "type": "object",
           "properties": {
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "text": {
               "type": "string"
             },
@@ -3020,6 +3026,12 @@
           "properties": {
             "id": {
               "type": "string"
+            },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "text": {
               "type": "string"
@@ -3042,6 +3054,12 @@
             "plan": {
               "$ref": "#/$defs/Plan"
             },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "type": {
               "type": "string",
               "const": "doctorplan"
@@ -3058,6 +3076,12 @@
           "properties": {
             "fixed": {
               "$ref": "#/$defs/Fixed"
+            },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "type": "string",
@@ -3076,6 +3100,12 @@
             "plan": {
               "$ref": "#/$defs/Cleared"
             },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "type": {
               "type": "string",
               "const": "junkplan"
@@ -3092,6 +3122,12 @@
           "properties": {
             "cleared": {
               "$ref": "#/$defs/Cleared"
+            },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "type": "string",
@@ -3110,6 +3146,12 @@
             "graph": {
               "$ref": "#/$defs/DrillGraph"
             },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "type": {
               "type": "string",
               "const": "graph"
@@ -3121,7 +3163,7 @@
           ]
         },
         {
-          "description": "The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is\nhow the page matches a reply to its question.",
+          "description": "The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's.",
           "type": "object",
           "properties": {
             "diff": {
@@ -3129,6 +3171,12 @@
             },
             "project": {
               "type": "string"
+            },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "type": "string",
@@ -3147,6 +3195,12 @@
           "properties": {
             "file": {
               "$ref": "#/$defs/ExportFile"
+            },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "type": "string",
@@ -3167,6 +3221,12 @@
             },
             "name": {
               "type": "string"
+            },
+            "rid": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "type": "string",

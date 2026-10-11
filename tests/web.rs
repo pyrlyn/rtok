@@ -279,6 +279,48 @@ async fn ws_expand_returns_payload_and_unknown_id() {
     task.abort();
 }
 
+/// T623: an answer carries the id of the request it replies to, a refusal too, so a page whose
+/// first request timed out cannot take that late answer for the next one's.
+#[tokio::test]
+async fn ws_answers_echo_the_request_id_and_a_request_without_one_gets_none() {
+    let (_addr, state, dir, task) = serve("rid").await;
+    let ask = |m: serde_json::Value| -> serde_json::Value {
+        serde_json::from_str(&state.inbound(&m.to_string()).expect("a reply")).unwrap()
+    };
+
+    let plan = ask(serde_json::json!({"doctor": {"action": "plan"}, "rid": "7"}));
+    assert_eq!(
+        (plan["type"].as_str(), plan["rid"].as_str()),
+        (Some("doctorplan"), Some("7"))
+    );
+    let junk = ask(serde_json::json!({"junk": {"action": "plan"}, "rid": "8"}));
+    assert_eq!(
+        (junk["type"].as_str(), junk["rid"].as_str()),
+        (Some("junkplan"), Some("8"))
+    );
+
+    let missing = ask(serde_json::json!({"expand": "no-such-id", "rid": "9"}));
+    assert_eq!(
+        (missing["type"].as_str(), missing["rid"].as_str()),
+        (Some("message"), Some("9"))
+    );
+    let malformed = ask(serde_json::json!({"graph": {}, "rid": "10"}));
+    assert_eq!(
+        (malformed["type"].as_str(), malformed["rid"].as_str()),
+        (Some("message"), Some("10"))
+    );
+
+    let bare = ask(serde_json::json!({"expand": "no-such-id"}));
+    assert!(bare.get("rid").is_none(), "{bare}");
+    let long = ask(serde_json::json!({"expand": "no-such-id", "rid": "z".repeat(65)}));
+    assert!(
+        long.get("rid").is_none(),
+        "an oversized id is not reflected: {long}"
+    );
+    task.abort();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T193: a cross-site page must not upgrade `/ws`; same-origin and header-less
 /// clients (tests/CLI) keep working. Raw HTTP: asserting the upgrade status
 /// needs no WebSocket client dependency.
