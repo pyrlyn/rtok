@@ -73,7 +73,7 @@ pub fn defs() -> [ToolDef; 12] {
         },
         ToolDef {
             name: "task_parallel",
-            description: "Mark a task safe to run beside any other task; on false takes the mark off..",
+            description: "Mark a task safe to run beside any other task; on false takes the mark off.",
             input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"on":{"type":"boolean","description":"default true"}},"required":["id"]}),
         },
     ]
