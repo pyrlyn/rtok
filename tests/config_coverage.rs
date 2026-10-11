@@ -163,6 +163,12 @@ const ALLOW_KEYS: &[&str] = &[
     "doctor.yes",
     "doctor.dry_run",
     "doctor.only",
+    // T416.3: which preview one dry run prints (stat lines or the diff), a per-call choice.
+    "doctor.stat",
+    "config.init.stat",
+    "config.set.stat",
+    "memory.sync.stat",
+    "setup.stat",
     // `graph projects link|unlink --from/--both/--reason` (T329.3): which two projects one call
     // links and why, not stored settings.
     "graph.projects.link.from",
