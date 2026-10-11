@@ -118,6 +118,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T569 | todo | P2 | 3 | 0% | |
 | T570 | todo | P2 | 2 | 0% | |
 | T571 | todo | P2 | 2 | 0% | |
+| T573 | todo | P2 | 3 | 0% | |
+| T574 | todo | P2 | 2 | 0% | |
 
 
 
@@ -515,6 +517,30 @@ Execution plan:
 3. Cover CLI default output, MCP, page downloads, saved-export re-rendering and explicit CLI no-redact; verify JSON and image metadata use consistent labels.
 
 Check: neither redacted payload metadata nor the suggested filename exposes the username alias, explicit no-redact retains its documented behavior, and `just check` passes. The scope leak was reproduced with the actual helper; the filename leak is source-confirmed and its end-to-end page regression belongs to this fix.
+
+### T573. Apply terminal call state even when the live event list is capped
+
+Confirmed with actual coalesce/fold/sweep functions: [coalesce](src/web/live.rs#L134) removes the oldest events beyond the display cap, including End events for calls already present in running. [CallsStore::fold](src/web/calls_store.rs#L213) clears running entries only from the retained events. Deliver Start A and Start B, then successful End A and End B in one batch with cap=1: the summary counts two completed calls, but A remains running because its End was discarded. At 120001 ms [sweep](src/web/calls_store.rs#L282) falsely marks A interrupted. The reader advances past the dropped End, so the next poll cannot repair it. Web and [TUI](src/tui/live_calls.rs#L118) share this state path. T329.15/T329.26 intentionally allow capped display rows and sampled tool/backend/latency bars; they do not permit a completed call to become a false interruption.
+
+Execution plan:
+
+1. Add the two-start/two-end fixture and an uncapped control; assert every completed call leaves running even when its End is not a displayed row.
+2. Preserve terminal call identities independently of the capped display list, or apply lifecycle transitions before truncation. Keep bounded processing and the existing intentional display/statistics sampling contract.
+3. Cover multiple omitted ends, ends without visible starts, interleaved progress, genuinely unfinished calls, late ends after a real timeout, and web/TUI consumption of the shared batch.
+
+Check: successful omitted ends never create stale running or interrupted rows, pending calls remain visible, summaries and display caps remain correct, and `just check` passes. The isolated actual-source probe reproduced the false interruption and showed the uncapped control clearing both calls.
+
+### T574. Decode SPA asset URL paths before looking up filenames
+
+Confirmed through the actual Axum SPA router with both directory and embedded assets: [serve](src/web/spa.rs#L198) passes uri.path() directly to lookup, preserving percent escapes as literal filename text. A present assets/logo space.svg is requested as /assets/logo%20space.svg and returns 404; the same happens for filenames containing a hash, a percent sign or Unicode. An ordinary assets/plain.svg control returns 200. Neither [directory lookup](src/web/spa.rs#L117) nor embedded lookup decodes the name. T310.9 covers both sources but has no fix for encoded asset names.
+
+Execution plan:
+
+1. Add directory/embedded router fixtures for space, hash, percent and Unicode filenames, requesting their percent-encoded URLs and asserting the original bytes and MIME type.
+2. Decode the URL path exactly once before filename lookup and route classification, then validate the decoded relative path with the existing confinement rules. Handle malformed escapes/invalid text explicitly rather than silently changing a filename.
+3. Cover encoded traversal and separators, literal percent sequences without double decoding, missing assets, page fallback and negotiated compressed variants; retain the existing GET/HEAD behavior.
+
+Check: encoded URLs resolve the intended existing asset in both sources, traversal remains rejected and unknown asset URLs stay 404, and `just check` passes. Actual router probes returned 404 for all four encoded-name fixtures and 200 for the plain-name control; HEAD controls correctly returned no body.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

@@ -34,6 +34,8 @@
 - T569. Preserve each host file's undo bytes across backup deduplication and pruning
 - T570. Fail SDK writes on symlink cycles instead of replacing a link
 - T571. Redact graph-export scope metadata and suggested download names
+- T573. Apply terminal call state even when the live event list is capped
+- T574. Decode SPA asset URL paths before looking up filenames
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
