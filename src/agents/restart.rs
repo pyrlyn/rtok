@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use rtok_sys::proc::ProgressRunner;
 
 use super::{Agent, Kind, Request, Variant};
 use crate::config::Config;
@@ -40,9 +41,8 @@ pub trait Procs {
 #[cfg(target_os = "windows")]
 fn tasklist_running(name: &str) -> bool {
     let exe = image_name(name);
-    std::process::Command::new("tasklist")
-        .args(["/FI", &format!("IMAGENAME eq {exe}")])
-        .output()
+    ProgressRunner::quiet("tasklist", ["/FI", &format!("IMAGENAME eq {exe}")])
+        .run()
         .map(|o| {
             String::from_utf8_lossy(&o.stdout)
                 .to_ascii_lowercase()
@@ -58,12 +58,9 @@ fn tasklist_running(name: &str) -> bool {
 fn pgrep_running(name: &str) -> bool {
     // `pgrep` prints matching PIDs; only the exit status is wanted, so the PIDs must not
     // leak into rtok's own stdout.
-    std::process::Command::new("pgrep")
-        .args(["-x", name])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
+    ProgressRunner::quiet("pgrep", ["-x", name])
+        .run()
+        .map(|o| o.status.success())
         .unwrap_or(false)
 }
 
@@ -76,11 +73,13 @@ impl Procs for RealProcs {
     fn app_running(&self, name: &str) -> bool {
         #[cfg(target_os = "macos")]
         {
-            std::process::Command::new("osascript")
-                .args(["-e", &format!("application \"{name}\" is running")])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
-                .unwrap_or(false)
+            ProgressRunner::quiet(
+                "osascript",
+                ["-e", &format!("application \"{name}\" is running")],
+            )
+            .run()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
+            .unwrap_or(false)
         }
         #[cfg(target_os = "windows")]
         {
@@ -112,22 +111,29 @@ impl Procs for RealProcs {
         #[cfg(target_os = "macos")]
         {
             run_ok(
-                std::process::Command::new("osascript")
-                    .args(["-e", &format!("tell application \"{name}\" to quit")]),
+                ProgressRunner::new(
+                    &format!("closing {name}…"),
+                    "osascript",
+                    ["-e", &format!("tell application \"{name}\" to quit")],
+                ),
                 &format!("osascript quit {name}"),
             )
         }
         #[cfg(target_os = "windows")]
         {
             run_ok(
-                std::process::Command::new("taskkill").args(["/IM", &image_name(name), "/F"]),
+                ProgressRunner::new(
+                    &format!("closing {name}…"),
+                    "taskkill",
+                    ["/IM", &image_name(name), "/F"],
+                ),
                 &format!("taskkill {name}"),
             )
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             run_ok(
-                std::process::Command::new("killall").arg(name),
+                ProgressRunner::new(&format!("closing {name}…"), "killall", [name]),
                 &format!("killall {name}"),
             )
         }
@@ -138,29 +144,32 @@ impl Procs for RealProcs {
         {
             let _ = path;
             run_ok(
-                std::process::Command::new("open").args(["-a", name]),
+                ProgressRunner::new(&format!("reopening {name}…"), "open", ["-a", name]),
                 &format!("open -a {name}"),
             )
         }
         #[cfg(target_os = "windows")]
         {
             run_ok(
-                std::process::Command::new("cmd").args([
-                    "/C",
-                    "start",
-                    "",
-                    path.to_str().unwrap_or(name),
-                ]),
+                ProgressRunner::new(
+                    &format!("reopening {name}…"),
+                    "cmd",
+                    ["/C", "start", "", path.to_str().unwrap_or(name)],
+                ),
                 &format!("start {name}"),
             )
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            if path.exists() {
-                std::process::Command::new(path).spawn()?;
+            // The launched app keeps our terminal (as `Command::spawn` always did) and outlives
+            // this call, so there is nothing to wait on and no indicator.
+            use rtok_sys::proc::Output;
+            let launch = if path.exists() {
+                ProgressRunner::quiet(path, [] as [&OsStr; 0])
             } else {
-                std::process::Command::new("xdg-open").arg(name).spawn()?;
-            }
+                ProgressRunner::quiet("xdg-open", [name])
+            };
+            launch.output(Output::Inherit).spawn()?;
             Ok(())
         }
     }
@@ -169,11 +178,8 @@ impl Procs for RealProcs {
 /// Run `cmd` to completion and fail on a non-zero exit, carrying its stderr: `open -a` on an
 /// app that is still shutting down exits non-zero, and checking only that it started hid that
 /// failure — the app stayed closed with no warning (T434).
-fn run_ok(cmd: &mut std::process::Command, what: &str) -> Result<()> {
-    let out = cmd
-        .stdout(std::process::Stdio::null())
-        .output()
-        .with_context(|| what.to_string())?;
+fn run_ok(cmd: ProgressRunner, what: &str) -> Result<()> {
+    let out = cmd.run().with_context(|| what.to_string())?;
     if !out.status.success() {
         anyhow::bail!(
             "{what}: {} {}",
@@ -560,13 +566,41 @@ mod tests {
     #[test]
     fn run_ok_fails_on_a_non_zero_exit() {
         let err = run_ok(
-            std::process::Command::new("sh").args(["-c", "echo nope >&2; exit 3"]),
+            ProgressRunner::new("probing…", "sh", ["-c", "echo nope >&2; exit 3"]),
             "probe",
         )
         .unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("probe") && msg.contains("nope"), "{msg}");
-        run_ok(&mut std::process::Command::new("true"), "probe").unwrap();
+        run_ok(
+            ProgressRunner::new("probing…", "true", [] as [&str; 0]),
+            "probe",
+        )
+        .unwrap();
+    }
+
+    /// T276.4: the runner keeps the old `run_ok` contract: stdout is dropped, so the error
+    /// carries stderr only, and a program that is missing is an error naming the call.
+    #[cfg(unix)]
+    #[test]
+    fn run_ok_reports_stderr_not_stdout_and_a_missing_program() {
+        let err = run_ok(
+            ProgressRunner::new(
+                "probing…",
+                "sh",
+                ["-c", "echo noise; echo nope >&2; exit 3"],
+            ),
+            "probe",
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("nope") && !msg.contains("noise"), "{msg}");
+        let err = run_ok(
+            ProgressRunner::new("probing…", "rtok-no-such-program", [] as [&str; 0]),
+            "probe",
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").starts_with("probe"), "{err:#}");
     }
 
     #[test]

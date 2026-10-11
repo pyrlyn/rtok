@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! Child-process capture that never waits on a pipe's EOF: shared by `rtok run` (T235.1) and
-//! the host `--version` probe (T280).
+//! Child-process capture that never waits on a pipe's EOF, for the host `--version` probe
+//! (T280) and the exit-code rule `rtok run` shares. `rtok run` itself captures through
+//! `rtok_sys::proc::ProgressRunner::run_capped` (T276.4); T276.3 moves the probe there too and
+//! deletes the capture half of this file.
 
 use std::io::Read;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
@@ -24,65 +25,23 @@ const POLL: Duration = Duration::from_millis(10);
 pub(crate) struct Captured {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
-    #[cfg_attr(not(feature = "cmd"), allow(dead_code))]
+    #[cfg_attr(not(test), allow(dead_code))] // the probe reads stdout only; tests check the code
     pub code: Option<i32>,
-    /// Bytes read from the pipes but discarded because the `cap` of [`capture_capped`] was
-    /// full. Always 0 for [`capture`].
-    #[cfg_attr(not(feature = "cmd"), allow(dead_code))]
-    pub dropped: u64,
-}
-
-/// What the two pipe readers of one capture share: a byte budget for stdout and stderr
-/// together, and the count of bytes that did not fit.
-struct Budget {
-    left: AtomicU64,
-    dropped: AtomicU64,
-}
-
-impl Budget {
-    /// Take up to `n` bytes from the budget; the rest of `n` is counted as dropped.
-    fn take(&self, n: usize) -> usize {
-        let n = n as u64;
-        let got = self
-            .left
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
-                Some(left - left.min(n))
-            })
-            .map_or(0, |left| left.min(n));
-        self.dropped.fetch_add(n - got, Ordering::Relaxed);
-        got as usize
-    }
 }
 
 /// Run `cmd` with stdin closed and stdout/stderr piped. Waits for the process rather than for
 /// EOF (unlike `Command::output`): after it exits, what its pipes already hold is drained for
 /// up to [`DRAIN_AFTER_EXIT`], and a reader still blocked by a descendant is left behind.
 /// With `limit`, a process still running after it is killed.
-pub(crate) fn capture(cmd: Command, limit: Option<Duration>) -> std::io::Result<Captured> {
-    capture_capped(cmd, limit, None)
-}
-
-/// [`capture`] that keeps at most `cap` bytes of stdout and stderr together. Bytes past it are
-/// still read, so the child never blocks on a full pipe and exits on its own, but are counted
-/// in [`Captured::dropped`] instead of stored: `yes | head -c 10G` must not take the
-/// memory the unwrapped host command would not.
-pub(crate) fn capture_capped(
-    mut cmd: Command,
-    limit: Option<Duration>,
-    cap: Option<u64>,
-) -> std::io::Result<Captured> {
-    let budget = Arc::new(Budget {
-        left: AtomicU64::new(cap.unwrap_or(u64::MAX)),
-        dropped: AtomicU64::new(0),
-    });
+pub(crate) fn capture(mut cmd: Command, limit: Option<Duration>) -> std::io::Result<Captured> {
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
     let (tx, rx) = mpsc::channel();
-    let out = drain(child.stdout.take(), tx.clone(), Arc::clone(&budget));
-    let err = drain(child.stderr.take(), tx, Arc::clone(&budget));
+    let out = drain(child.stdout.take(), tx.clone());
+    let err = drain(child.stderr.take(), tx);
     let code = match limit {
         None => exit_code(child.wait()?),
         Some(limit) => wait_until(&mut child, Instant::now() + limit)?,
@@ -102,7 +61,6 @@ pub(crate) fn capture_capped(
         stdout: take(&out),
         stderr: take(&err),
         code,
-        dropped: budget.dropped.load(Ordering::Relaxed),
     })
 }
 
@@ -133,25 +91,17 @@ fn wait_until(child: &mut Child, deadline: Instant) -> std::io::Result<Option<i3
     }
 }
 
-/// Read `pipe` to EOF on its own thread into the returned buffer, as far as `budget` allows;
-/// signal `done` at EOF.
-fn drain(
-    pipe: Option<impl Read + Send + 'static>,
-    done: mpsc::Sender<()>,
-    budget: Arc<Budget>,
-) -> Arc<Mutex<Vec<u8>>> {
+/// Read `pipe` to EOF on its own thread into the returned buffer; signal `done` at EOF.
+fn drain(pipe: Option<impl Read + Send + 'static>, done: mpsc::Sender<()>) -> Arc<Mutex<Vec<u8>>> {
     let buf = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&buf);
     std::thread::spawn(move || {
         if let Some(mut pipe) = pipe {
             let mut chunk = [0u8; 8192];
             while let Ok(n @ 1..) = pipe.read(&mut chunk) {
-                let keep = budget.take(n);
-                if keep > 0 {
-                    sink.lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .extend_from_slice(&chunk[..keep]);
-                }
+                sink.lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .extend_from_slice(&chunk[..n]);
             }
         }
         let _ = done.send(());
@@ -206,33 +156,5 @@ mod tests {
             start.elapsed()
         );
         assert_eq!((c.stdout.as_slice(), c.code), (&b"1.2.3\n"[..], None));
-    }
-
-    /// T448: past the cap the pipe is still drained (the child finishes and keeps its exit
-    /// code), the first `cap` bytes are kept across both streams, and the rest is counted.
-    #[test]
-    fn capture_capped_keeps_the_cap_and_counts_the_rest() {
-        let mut cmd = Command::new("sh");
-        cmd.args([
-            "-c",
-            "head -c 50000 /dev/zero; head -c 7000 /dev/zero >&2; exit 3",
-        ]);
-        let c = capture_capped(cmd, None, Some(1000)).unwrap();
-        assert_eq!(c.stdout.len() + c.stderr.len(), 1000);
-        assert_eq!(c.dropped, 57_000 - 1000);
-        assert_eq!(c.code, Some(3));
-    }
-
-    /// T448: output under the cap is untouched and nothing is reported dropped.
-    #[test]
-    fn capture_capped_under_the_cap_drops_nothing() {
-        let mut cmd = Command::new("sh");
-        cmd.args(["-c", "printf abc; printf def >&2"]);
-        let c = capture_capped(cmd, None, Some(6)).unwrap();
-        assert_eq!(
-            (c.stdout.as_slice(), c.stderr.as_slice()),
-            (&b"abc"[..], &b"def"[..])
-        );
-        assert_eq!(c.dropped, 0);
     }
 }

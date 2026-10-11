@@ -6,12 +6,12 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use figment::Figment;
 use figment::providers::{Format, Toml};
+use rtok_sys::proc::{Output, ProgressRunner, Unit};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -78,10 +78,13 @@ fn dry_list(tasks: &[Task], cfg: &Config) -> String {
 
 fn table(tasks: &[Task], cfg: &Config) -> String {
     let mut by: BTreeMap<String, Acc> = BTreeMap::new();
+    let total = (tasks.len() * cfg.bench.configs.len()) as u64 * u64::from(cfg.bench.runs);
+    let mut bar = ProgressRunner::batch("bench", total, Unit::Items);
     for t in tasks {
         for (name, settings) in &cfg.bench.configs {
             let acc = by.entry(name.clone()).or_default();
-            for _ in 0..cfg.bench.runs {
+            for n in 1..=cfg.bench.runs {
+                bar.step(&format!("bench {} {name} {n}/{}…", t.id, cfg.bench.runs));
                 let usage = one(&t.prompt, settings, cfg.bench.timeout_s);
                 acc.input += usage.0;
                 acc.cache += usage.1;
@@ -89,17 +92,19 @@ fn table(tasks: &[Task], cfg: &Config) -> String {
                 acc.cost += usage.3;
                 acc.n += 1;
             }
-            if Command::new("sh")
-                .arg("-c")
-                .arg(&t.check)
-                .status()
-                .map(|s| s.success())
+            // The check's own output reaches the terminal as before; it takes milliseconds, so no
+            // indicator.
+            if ProgressRunner::quiet("sh", ["-c", t.check.as_str()])
+                .output(Output::Inherit)
+                .run()
+                .map(|o| o.status.success())
                 .unwrap_or(false)
             {
                 acc.pass += 1;
             }
         }
     }
+    bar.finish();
     write_results(&by, tasks.len(), cfg);
     let mut s = format!(
         "{:<8} {:>10} {:>10} {:>10} {:>10} {:>8}\n",
@@ -193,12 +198,15 @@ fn graph_table(file: &GraphFile, cfg: &Config) -> String {
     let mut s = String::from("id repo arm tools in out cache wall_ms cost resident pass\n");
     let runs = cfg.bench.runs;
     let mut tot = [(0u64, 0u64, 0u64, 0u64, 0u64, 0.0, 0u64, 0u32); 2];
+    let total = (file.questions.len() * GRAPH_ARMS.len()) as u64 * u64::from(runs);
+    let mut bar = ProgressRunner::batch("bench graph", total, Unit::Items);
     for q in &file.questions {
         let repo = file.repos.iter().find(|r| r.id == q.repo).unwrap();
         let re = regex::Regex::new(&q.expect).expect("checked at load");
         for (i, arm) in GRAPH_ARMS.iter().enumerate() {
             let mut a = (0u64, 0u64, 0u64, 0u64, 0u64, 0.0, 0u64, 0u32);
-            for _ in 0..runs {
+            for n in 1..=runs {
+                bar.step(&format!("bench {} {arm} {n}/{runs}…", q.id));
                 let u = graph_one(&q.prompt, Path::new(&repo.path), arm, cfg);
                 if re.is_match(&u.7) {
                     a.7 += 1;
@@ -235,6 +243,7 @@ fn graph_table(file: &GraphFile, cfg: &Config) -> String {
             tot[i].7 += a.7;
         }
     }
+    bar.finish();
     let n = (file.questions.len() as u32 * runs).max(1) as f64;
     for (i, arm) in GRAPH_ARMS.iter().enumerate() {
         let a = tot[i];
@@ -269,20 +278,21 @@ fn graph_one(
     } else {
         format!("Use only Read and Grep. Do not use MCP. {prompt}")
     };
-    let mut cmd = Command::new("claude");
-    cmd.current_dir(repo)
-        .args(["-p", &prefixed, "--output-format", "json"]);
+    let mut args: Vec<std::ffi::OsString> = ["-p", &prefixed, "--output-format", "json"]
+        .map(Into::into)
+        .into();
     let mcp = std::env::temp_dir().join(format!("rtok-bench-mcp-{}.json", std::process::id()));
     if arm == "mcp" {
         let _ = std::fs::write(
             &mcp,
             r#"{"mcpServers":{"rtok":{"command":"rtok","args":["mcp"]}}}"#,
         );
-        cmd.arg("--mcp-config").arg(&mcp);
+        args.extend(["--mcp-config".into(), mcp.into()]);
     } else {
-        cmd.args(["--allowedTools", "Read,Grep,Glob"]);
+        args.extend(["--allowedTools".into(), "Read,Grep,Glob".into()]);
     }
-    let Some(out) = run_bounded(&mut cmd, Duration::from_secs(cfg.bench.timeout_s.max(1))) else {
+    let cmd = ProgressRunner::new(&format!("running claude ({arm})…"), "claude", args).cwd(repo);
+    let Some(out) = run_bounded(cmd, Duration::from_secs(cfg.bench.timeout_s.max(1))) else {
         return z;
     };
     let v: Value = serde_json::from_slice(&out).unwrap_or(Value::Null);
@@ -379,55 +389,29 @@ fn one(prompt: &str, settings: &Path, timeout_s: u64) -> (u64, u64, u64, f64) {
     if !settings.exists() || std::env::var("RTOK_BENCH_LIVE").is_err() {
         return (0, 0, 0, 0.0);
     }
-    let mut cmd = Command::new("claude");
-    cmd.args([
-        "-p",
-        prompt,
-        "--output-format",
-        "json",
-        "--settings",
-        &settings.display().to_string(),
-    ]);
-    let Some(out) = run_bounded(&mut cmd, Duration::from_secs(timeout_s.max(1))) else {
+    let cmd = ProgressRunner::new(
+        "running claude…",
+        "claude",
+        [
+            "-p",
+            prompt,
+            "--output-format",
+            "json",
+            "--settings",
+            &settings.display().to_string(),
+        ],
+    );
+    let Some(out) = run_bounded(cmd, Duration::from_secs(timeout_s.max(1))) else {
         return (0, 0, 0, 0.0);
     };
     parse_usage(&out)
 }
 
-/// How often [`run_bounded`] checks whether the child has exited.
-const POLL: Duration = Duration::from_millis(20);
-
 /// Run `cmd` and collect its stdout, killing it once `timeout` has passed. `None` when it
-/// could not be spawned, exited badly, or was killed.
-fn run_bounded(cmd: &mut Command, timeout: Duration) -> Option<Vec<u8>> {
-    let mut child = cmd
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
-    // Drain while polling: a child that fills the pipe (64 KiB) before exiting would
-    // otherwise block on write, never exit, and be scored as a timeout.
-    let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = std::io::Read::read_to_end(&mut stdout, &mut buf);
-        buf
-    });
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break None;
-            }
-            Ok(None) => std::thread::sleep(POLL),
-            Err(_) => break None,
-        }
-    };
-    let out = reader.join().ok()?;
-    status?.success().then_some(out)
+/// could not be spawned, exited badly, or was killed. stderr is dropped, as before.
+fn run_bounded(cmd: ProgressRunner, timeout: Duration) -> Option<Vec<u8>> {
+    let out = cmd.timeout(timeout).run().ok()?;
+    out.status.success().then_some(out.stdout)
 }
 
 fn parse_usage(bytes: &[u8]) -> (u64, u64, u64, f64) {
@@ -508,10 +492,9 @@ mod tests {
     fn a_hung_run_is_killed_instead_of_hanging_the_bench() {
         // Spawn `sleep` directly: `sh -c 'sleep 30'` leaves the sleep child holding
         // the pipe after `kill` on the shell, so the reader thread waited the full 30s.
-        let mut slow = Command::new("sleep");
-        slow.arg("30");
+        let slow = ProgressRunner::quiet("sleep", ["30"]);
         let start = Instant::now();
-        assert!(run_bounded(&mut slow, Duration::from_millis(150)).is_none());
+        assert!(run_bounded(slow, Duration::from_millis(150)).is_none());
         assert!(
             start.elapsed() < Duration::from_secs(10),
             "killed, not waited out"
@@ -520,18 +503,16 @@ mod tests {
 
     #[test]
     fn a_finished_run_hands_back_its_output() {
-        let mut quick = Command::new("sh");
-        quick.arg("-c").arg("printf hello");
-        let out = run_bounded(&mut quick, Duration::from_secs(30)).expect("runs");
+        let quick = ProgressRunner::quiet("sh", ["-c", "printf hello"]);
+        let out = run_bounded(quick, Duration::from_secs(30)).expect("runs");
         assert_eq!(out, b"hello");
     }
 
     /// More than a pipe buffer of output used to deadlock the child and score as a timeout.
     #[test]
     fn a_run_past_the_pipe_buffer_is_drained_not_timed_out() {
-        let mut big = Command::new("sh");
-        big.arg("-c").arg("head -c 300000 /dev/zero");
-        let out = run_bounded(&mut big, Duration::from_secs(10)).expect("runs");
+        let big = ProgressRunner::quiet("sh", ["-c", "head -c 300000 /dev/zero"]);
+        let out = run_bounded(big, Duration::from_secs(10)).expect("runs");
         assert_eq!(out.len(), 300_000);
     }
 }

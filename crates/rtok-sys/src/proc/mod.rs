@@ -11,7 +11,8 @@ use std::ffi::OsStr;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 pub use indicator::{Hidden, Indicator, TtyIndicator, disable_progress, suspend};
@@ -19,6 +20,11 @@ pub use parse::{
     CargoProgress, GitProgress, JsonLines, Percent, ProgressCallback, ProgressParser, Stream, Unit,
     Update,
 };
+
+/// How long [`ProgressRunner::run`] keeps reading once the child has exited. A descendant it
+/// left running (`git fsmonitor--daemon`, a backgrounded server) can hold a pipe's write end for
+/// good, so waiting for end-of-file would hang.
+const DRAIN_AFTER_EXIT: Duration = Duration::from_millis(200);
 
 /// What a finished `.run()` hands back; the same shape as `Command::output`.
 pub type Captured = std::process::Output;
@@ -110,6 +116,17 @@ impl ProgressRunner {
         self
     }
 
+    /// One argument passed to the program without Windows quoting, for a `cmd.exe` body that
+    /// is already quoted for `cmd.exe`: `Command::arg` would quote it again with MSVC rules,
+    /// which `cmd.exe` does not parse. A plain `.arg` elsewhere.
+    pub fn raw_arg(mut self, arg: impl AsRef<OsStr>) -> Self {
+        #[cfg(windows)]
+        std::os::windows::process::CommandExt::raw_arg(&mut self.cmd, arg);
+        #[cfg(not(windows))]
+        self.cmd.arg(arg);
+        self
+    }
+
     /// Windows CLIs installed through npm (`npx`, `claude`) ship as `.cmd` or `.bat` shims, which
     /// `CreateProcess` cannot start and `PATHEXT` never reaches; run those through
     /// `cmd.exe /D /C`, as the shell does. A no-op elsewhere and for anything that is an `.exe`
@@ -120,7 +137,7 @@ impl ProgressRunner {
     }
 
     /// Kill the child after `limit` and fail with [`io::ErrorKind::TimedOut`]. Only the child is
-    /// killed, not what it started: a grandchild that keeps the pipes open delays `.run()`.
+    /// killed, not what it started.
     pub fn timeout(mut self, limit: Duration) -> Self {
         self.timeout = Some(limit);
         self
@@ -140,7 +157,7 @@ impl ProgressRunner {
     /// output or error lands on a clean line.
     pub fn run(mut self) -> io::Result<Captured> {
         match self.output {
-            Output::Capture | Output::Stream => self.run_piped(),
+            Output::Capture | Output::Stream => Ok(self.run_piped(None)?.0),
             Output::Inherit => Ok(Captured {
                 status: {
                     self.prepare(false);
@@ -150,6 +167,17 @@ impl ProgressRunner {
                 stderr: Vec::new(),
             }),
             Output::Detached => Err(use_spawn("a detached child")),
+        }
+    }
+
+    /// [`Self::run`] that keeps at most `cap` bytes of stdout and stderr together. Bytes past it
+    /// are still read, so the child never blocks on a full pipe, but are counted in the second
+    /// value instead of stored: `yes | head -c 10G` must not take memory the unwrapped command
+    /// would not.
+    pub fn run_capped(self, cap: u64) -> io::Result<(Captured, u64)> {
+        match self.output {
+            Output::Capture | Output::Stream => self.run_piped(Some(cap)),
+            Output::Inherit | Output::Detached => Err(use_spawn("a child that owns its output")),
         }
     }
 
@@ -183,38 +211,78 @@ impl ProgressRunner {
         };
     }
 
-    fn run_piped(mut self) -> io::Result<Captured> {
+    /// Waits for the child, not for end-of-file: after it exits, what its pipes already hold is
+    /// read for up to [`DRAIN_AFTER_EXIT`], and a reader still blocked by a descendant is left
+    /// behind with whatever it had read.
+    fn run_piped(mut self, cap: Option<u64>) -> io::Result<(Captured, u64)> {
         self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         self.prepare(true);
         let mut child = self.cmd.spawn()?;
-        let ind = match self.progress {
-            Progress::Off => Box::new(Hidden) as Box<dyn Indicator>,
-            _ => indicator::pick(&self.label),
+        let ind: Arc<dyn Indicator> = match self.progress {
+            Progress::Off => Arc::new(Hidden),
+            _ => Arc::from(indicator::pick(&self.label)),
         };
-        let parser = Mutex::new(match self.progress {
+        let parser = Arc::new(Mutex::new(match self.progress {
             Progress::Parse(p) => Some(p),
             Progress::Callback(f) => Some(Box::new(parse::Callback(f)) as Box<dyn ProgressParser>),
             _ => None,
+        }));
+        let kept = Arc::new(Kept {
+            left: AtomicU64::new(cap.unwrap_or(u64::MAX)),
+            dropped: AtomicU64::new(0),
+            forward: self.output == Output::Stream,
         });
-        let forward = self.output == Output::Stream;
-        let (out, err) = (child.stdout.take(), child.stderr.take());
-        let (ind, parser) = (&*ind, &parser);
-        let (stdout, stderr, status) = std::thread::scope(|s| {
-            let out = s.spawn(move || pump(out, Stream::Stdout, ind, parser, forward));
-            let err = s.spawn(move || pump(err, Stream::Stderr, ind, parser, forward));
-            let status = wait(&mut child, self.timeout);
+        let (done, finished) = mpsc::channel();
+        let mut sinks = Vec::new();
+        let pipes: [(Stream, Option<Box<dyn Read + Send>>); 2] = [
             (
-                out.join().unwrap_or_default(),
-                err.join().unwrap_or_default(),
-                status,
-            )
-        });
+                Stream::Stdout,
+                child.stdout.take().map(|p| Box::new(p) as _),
+            ),
+            (
+                Stream::Stderr,
+                child.stderr.take().map(|p| Box::new(p) as _),
+            ),
+        ];
+        for (which, pipe) in pipes {
+            let sink = Arc::new(Mutex::new(Vec::new()));
+            sinks.push(Arc::clone(&sink));
+            let pump = Pump {
+                which,
+                ind: Arc::clone(&ind),
+                parser: Arc::clone(&parser),
+                kept: Arc::clone(&kept),
+                sink,
+            };
+            let done = done.clone();
+            std::thread::spawn(move || {
+                pump.run(pipe);
+                let _ = done.send(());
+            });
+        }
+        drop(done);
+        let status = wait(&mut child, self.timeout);
+        let deadline = Instant::now() + DRAIN_AFTER_EXIT;
+        for _ in 0..2 {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if finished.recv_timeout(left).is_err() {
+                break;
+            }
+        }
         ind.finish();
-        Ok(Captured {
-            status: status?,
-            stdout,
-            stderr,
-        })
+        let take = |b: &Mutex<Vec<u8>>| {
+            std::mem::take(&mut *b.lock().unwrap_or_else(PoisonError::into_inner))
+        };
+        let (stdout, stderr) = (take(&sinks[0]), take(&sinks[1]));
+        let dropped = kept.dropped.load(Ordering::Relaxed);
+        Ok((
+            Captured {
+                status: status?,
+                stdout,
+                stderr,
+            },
+            dropped,
+        ))
     }
 }
 
@@ -340,43 +408,73 @@ fn wait(child: &mut Child, limit: Option<Duration>) -> io::Result<ExitStatus> {
 
 type SharedParser = Mutex<Option<Box<dyn ProgressParser>>>;
 
-/// Drain one stream: keep it (or forward it live), and feed its lines to the parser.
-fn pump(
-    reader: Option<impl Read>,
-    which: Stream,
-    ind: &dyn Indicator,
-    parser: &SharedParser,
+/// What the two readers of one run share: a byte budget for both streams together, and the count
+/// of bytes that did not fit.
+struct Kept {
+    left: AtomicU64,
+    dropped: AtomicU64,
     forward: bool,
-) -> Vec<u8> {
-    let (mut kept, mut buf) = (Vec::new(), [0u8; 8192]);
-    let Some(mut reader) = reader else {
-        return kept;
-    };
-    let mut lines = parse::Lines::default();
-    let mut feed = |line: &str| {
-        let mut slot = parser
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(update) = slot.as_mut().and_then(|p| p.feed(which, line)) {
-            ind.set(&update);
-        }
-    };
-    loop {
-        let n = match reader.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            Err(_) => break,
-        };
-        if forward {
-            ind.suspend(&mut || echo(which, &buf[..n]));
-        } else {
-            kept.extend_from_slice(&buf[..n]);
-        }
-        lines.push(&buf[..n], &mut feed);
+}
+
+impl Kept {
+    /// Take up to `n` bytes from the budget; the rest of `n` is counted as dropped.
+    fn take(&self, n: usize) -> usize {
+        let n = n as u64;
+        let got = self
+            .left
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                Some(left - left.min(n))
+            })
+            .map_or(0, |left| left.min(n));
+        self.dropped.fetch_add(n - got, Ordering::Relaxed);
+        got as usize
     }
-    lines.finish(&mut feed);
-    kept
+}
+
+/// One stream's reader: keeps it (or forwards it live), and feeds its lines to the parser.
+struct Pump {
+    which: Stream,
+    ind: Arc<dyn Indicator>,
+    parser: Arc<SharedParser>,
+    kept: Arc<Kept>,
+    sink: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Pump {
+    fn run(self, reader: Option<Box<dyn Read + Send>>) {
+        let Some(mut reader) = reader else {
+            return;
+        };
+        let mut buf = [0u8; 8192];
+        let mut lines = parse::Lines::default();
+        let mut feed = |line: &str| {
+            let mut slot = self.parser.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(update) = slot.as_mut().and_then(|p| p.feed(self.which, line)) {
+                self.ind.set(&update);
+            }
+        };
+        loop {
+            let n = match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            };
+            if self.kept.forward {
+                self.ind.suspend(&mut || echo(self.which, &buf[..n]));
+            } else {
+                let keep = self.kept.take(n);
+                if keep > 0 {
+                    self.sink
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .extend_from_slice(&buf[..keep]);
+                }
+            }
+            lines.push(&buf[..n], &mut feed);
+        }
+        lines.finish(&mut feed);
+    }
 }
 
 fn echo(which: Stream, bytes: &[u8]) {
@@ -647,5 +745,41 @@ mod tests {
             .run()
             .unwrap();
         assert_eq!(got.stdout, b"ok");
+    }
+
+    /// T276.4: a backgrounded grandchild keeps the pipes open after the shell exits; `.run()`
+    /// returns on the shell's exit with its output, not at end-of-file.
+    #[test]
+    fn a_grandchild_holding_the_pipe_does_not_hold_the_run() {
+        let start = Instant::now();
+        let got = sh("sleep 5 & printf out").run().unwrap();
+        assert!(start.elapsed() < Duration::from_secs(3));
+        assert_eq!(got.stdout, b"out");
+    }
+
+    /// T276.4: bytes past the cap are read and counted, not stored; the exit status survives.
+    #[test]
+    fn a_capped_run_keeps_the_cap_and_counts_the_rest() {
+        let (got, dropped) = sh("head -c 5000 /dev/zero | tr '\\0' x; exit 2")
+            .run_capped(1000)
+            .unwrap();
+        assert_eq!((got.stdout.len(), dropped), (1000, 4000));
+        assert_eq!(got.status.code(), Some(2));
+        let (got, dropped) = sh("printf hi").run_capped(1000).unwrap();
+        assert_eq!((got.stdout.as_slice(), dropped), (&b"hi"[..], 0));
+        let err = sh("exit 0")
+            .output(Output::Inherit)
+            .run_capped(1)
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn a_raw_arg_reaches_the_child_as_one_argument() {
+        let got = ProgressRunner::quiet("sh", ["-c"])
+            .raw_arg("printf '%s' \"$0\"")
+            .run()
+            .unwrap();
+        assert_eq!(got.stdout, b"sh");
     }
 }

@@ -3,7 +3,6 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 use crate::config::Config;
-use crate::render::with_loader;
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -76,10 +75,9 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
         config_file.as_deref(),
         bench_flags(tasks, runs, dry_run, timeout, suite),
     )?;
-    print!(
-        "{}",
-        with_loader("running bench", || crate::bench::run(&cfg))?
-    );
+    // The bar over runs lives in `bench::run` (T276.4), so no outer spinner would share the
+    // terminal with it.
+    print!("{}", crate::bench::run(&cfg)?);
 
     Ok(())
 }

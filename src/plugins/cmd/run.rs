@@ -7,7 +7,7 @@
 use crate::config::Config;
 use anyhow::{Result, bail};
 use rtok_plugin_sdk::{Archive, Class, Measurement};
-use std::process::Command;
+use rtok_sys::proc::ProgressRunner;
 
 use super::{formatters, rules};
 
@@ -144,20 +144,28 @@ fn shell(cfg: &Config) -> String {
     )
 }
 
-/// `shell` running `body`. `script_for` already quoted a cmd.exe body for cmd.exe
-/// (`"…"`, `""`); `Command::arg` would quote it again with MSVC rules (`\"`), which
-/// cmd.exe does not parse, so on Windows the body goes onto the command line as is (T83.8).
-fn shell_command(shell: &str, body: &str) -> Command {
-    let mut cmd = Command::new(shell);
+/// `shell` running `body`, with `label` beside the spinner. `script_for` already quoted a
+/// cmd.exe body for cmd.exe (`"…"`, `""`); a plain argument would be quoted again with MSVC rules
+/// (`\"`), which cmd.exe does not parse, so on Windows the body goes onto the command line as is
+/// (T83.8).
+fn shell_command(label: &str, shell: &str, body: &str) -> ProgressRunner {
     let args = shell_args(shell, body);
-    #[cfg(windows)]
-    if let (ShellKind::Cmd, Some((body, flags))) = (shell_kind(shell), args.split_last()) {
-        use std::os::windows::process::CommandExt;
-        cmd.args(flags).raw_arg(body);
-        return cmd;
+    if let (ShellKind::Cmd, Some((body, flags))) = (shell_kind(shell), args.split_last())
+        && cfg!(windows)
+    {
+        return ProgressRunner::new(label, shell, flags).raw_arg(body);
     }
-    cmd.args(args);
-    cmd
+    ProgressRunner::new(label, shell, args)
+}
+
+/// `running <command>…` for the spinner: the first line of what the host asked for, cut short.
+/// The command is untrusted text on its way to a terminal, so control characters (an escape
+/// sequence) are dropped.
+fn running_label(args: &[String]) -> String {
+    let text = args.join(" ");
+    let line = text.lines().next().unwrap_or_default().trim();
+    let label: String = line.chars().filter(|c| !c.is_control()).take(60).collect();
+    format!("running {label}…")
 }
 
 /// Flags + script body for `Command::new(shell)`.
@@ -266,11 +274,12 @@ const CAPTURE_CAP: u64 = 32 * 1024 * 1024;
 
 /// Run `cmd` and return its stdout then stderr (at most `cap` bytes together) and its exit
 /// code. A capped body ends with a notice line, so the archive says it is partial.
-fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> {
-    let out = crate::proc::capture_capped(cmd, None, Some(cap))?;
-    let (mut body, code) = (out.stdout, out.code.unwrap_or(1));
+fn capture_body(cmd: ProgressRunner, cap: u64) -> Result<(Vec<u8>, i32)> {
+    let (out, dropped) = cmd.run_capped(cap)?;
+    let code = crate::proc::exit_code(out.status).unwrap_or(1);
+    let mut body = out.stdout;
     body.extend(out.stderr);
-    if out.dropped > 0 {
+    if dropped > 0 {
         if !body.is_empty() && !body.ends_with(b"\n") {
             body.push(b'\n');
         }
@@ -278,10 +287,7 @@ fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> 
             c if c % (1024 * 1024) == 0 => format!("{} MiB", c / (1024 * 1024)),
             c => format!("{c} bytes"),
         };
-        let notice = format!(
-            "[rtok: output capped at {cap}; {} bytes not captured]\n",
-            out.dropped
-        );
+        let notice = format!("[rtok: output capped at {cap}; {dropped} bytes not captured]\n");
         body.extend_from_slice(notice.as_bytes());
     }
     Ok((body, code))
@@ -297,7 +303,8 @@ pub fn run(cfg: &Config, args: &[String], agent: Option<&str>) -> Result<i32> {
     }
     let sh = shell(cfg);
     let sh_kind = shell_kind(&sh);
-    let (body, code) = capture_body(shell_command(&sh, &script_for(sh_kind, args)), CAPTURE_CAP)?;
+    let cmd = shell_command(&running_label(args), &sh, &script_for(sh_kind, args));
+    let (body, code) = capture_body(cmd, CAPTURE_CAP)?;
     emit_filtered(cfg, args, &body, code, agent);
     Ok(code)
 }
@@ -429,8 +436,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn capture_body_caps_and_appends_the_notice() {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"]);
+        let cmd =
+            ProgressRunner::quiet("sh", ["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"]);
         let (body, code) = capture_body(cmd, 1024).unwrap();
         let notice = "[rtok: output capped at 1024 bytes; 3976 bytes not captured]\n";
         assert_eq!(code, 2);
@@ -440,11 +447,29 @@ mod tests {
     }
 
     /// T448: output within the cap is returned as is, with no notice.
+    /// T276.4: the spinner label names the command, one line, bounded, with no control bytes.
+    #[test]
+    fn the_spinner_label_is_one_clean_bounded_line() {
+        assert_eq!(running_label(&["git status".into()]), "running git status…");
+        assert_eq!(
+            running_label(&["echo".into(), "a b".into()]),
+            "running echo a b…"
+        );
+        assert_eq!(running_label(&["ls\nrm -rf x".into()]), "running ls…");
+        assert_eq!(
+            running_label(&["echo \x1b[2Jhi\x07".into()]),
+            "running echo [2Jhi…"
+        );
+        assert_eq!(
+            running_label(&["x".repeat(500)]).chars().count(),
+            8 + 60 + 1
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn capture_body_without_overflow_has_no_notice() {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", "printf hi"]);
+        let cmd = ProgressRunner::quiet("sh", ["-c", "printf hi"]);
         assert_eq!(capture_body(cmd, 1024).unwrap(), (b"hi".to_vec(), 0));
     }
 
@@ -998,7 +1023,7 @@ mod tests {
     #[test]
     fn cmd_exe_gets_the_body_verbatim() {
         let body = script_for(ShellKind::Cmd, &["echo".into(), "say \"hi\"".into()]);
-        let out = shell_command("cmd.exe", &body).output().unwrap();
+        let out = shell_command("", "cmd.exe", &body).run().unwrap();
         assert_eq!(
             String::from_utf8_lossy(&out.stdout).trim_end(),
             "\"say \"\"hi\"\"\""
