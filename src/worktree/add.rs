@@ -38,6 +38,23 @@ fn ident(what: &str, raw: &str) -> Result<String> {
     Ok(id)
 }
 
+/// Agents pass `T504 read-hook-same-path` the way the branch is named: one argument.
+/// The first token is the task id, the rest the slug. Spaces in a slug become dashes.
+/// A bare id is unchanged; a separate `slug` is joined after the rest.
+fn split_id_slug<'a>(task: &'a str, slug: Option<&str>) -> (&'a str, Option<String>) {
+    let task = task.trim();
+    let (id, rest) = task.split_once(char::is_whitespace).unwrap_or((task, ""));
+    let dashed = |s: &str| {
+        let d = s.split_whitespace().collect::<Vec<_>>().join("-");
+        (!d.is_empty()).then_some(d)
+    };
+    let slug = match (dashed(rest), slug.and_then(dashed)) {
+        (Some(rest), Some(slug)) => Some(format!("{rest}-{slug}")),
+        (rest, slug) => rest.or(slug),
+    };
+    (id, slug)
+}
+
 /// Symlinks resolved through the deepest ancestor that exists, the rest appended: a root
 /// that does not exist yet still has to be judged by where it would land.
 fn resolved(path: &Path) -> PathBuf {
@@ -61,9 +78,10 @@ pub fn plan(
     (owner, agent): (&str, Option<&str>),
     date: &str,
 ) -> Result<Plan> {
+    let (task, slug) = split_id_slug(task, slug);
     let task = ident("task id", task)?;
     let branch = match slug {
-        Some(slug) => format!("{task}-{}", ident("slug", slug)?),
+        Some(slug) => format!("{task}-{}", ident("slug", &slug)?),
         None => task.clone(),
     };
     let reason = Owner {
@@ -99,12 +117,9 @@ pub fn plan(
     let repo = main
         .file_name()
         .context("the main checkout has no directory name")?;
+    // Path is `<repo>-<task>`: an existing directory is this task's worktree (a retry).
+    // Hand the same plan back rather than fail on "one worktree per task".
     let path = root.join(format!("{}-{task}", repo.to_string_lossy()));
-    ensure!(
-        !path.exists(),
-        "{} already exists: one worktree per task",
-        path.display()
-    );
     Ok(Plan {
         path,
         branch,
@@ -131,6 +146,10 @@ pub fn run(
     let main = &worktrees.first().context("git lists no worktree")?.path;
     let temp = [std::env::temp_dir(), "/tmp".into()];
     let plan = plan(main, root, &temp, id, owner, &today()?)?;
+    // A retry of an add that already landed: the worktree is already there.
+    if plan.path.exists() {
+        return Ok(plan);
+    }
     let base = git::default_base(main);
     git::fetch(main, &base)?;
     if let Some(root) = plan.path.parent() {
@@ -177,14 +196,60 @@ mod tests {
             (OWNER, "t158")
         );
 
-        std::fs::create_dir_all(root.join("rtok-t1")).unwrap();
-        let taken = plan_in(&main, &root, ("t1", None), OWNER).unwrap_err();
-        assert!(
-            taken.to_string().contains("one worktree per task"),
-            "{taken}"
-        );
         let empty = plan_in(&main, Path::new(""), ("t2", None), OWNER).unwrap_err();
         assert!(empty.to_string().contains("is empty"), "{empty}");
+    }
+
+    /// Agents name the branch in one argument: the first token is the id, the rest the slug.
+    #[rstest]
+    #[case::logged_t504("T504 read-hook-same-path", "t504", "t504-read-hook-same-path")]
+    #[case::logged_m16_5("M16.5 test toml", "m16.5", "m16.5-test-toml")]
+    #[case::logged_m16_3(
+        "M16.3 push.rs through the config module",
+        "m16.3",
+        "m16.3-push.rs-through-the-config-module"
+    )]
+    #[case::bare_id("T504", "t504", "t504")]
+    fn one_argument_is_an_id_plus_a_slug(
+        #[case] arg: &str,
+        #[case] task: &str,
+        #[case] branch: &str,
+    ) {
+        let dir = tmp_dir("wt-split");
+        let (main, root) = (dir.join("apps/rtok"), dir.join("home/.rtok/worktrees"));
+        std::fs::create_dir_all(&main).unwrap();
+        let p = plan_in(&main, &root, (arg, None), OWNER).unwrap();
+        assert_eq!(p.task, task);
+        assert_eq!(p.branch, branch);
+    }
+
+    #[test]
+    fn spaces_in_the_slug_become_dashes() {
+        let p = plan_in(
+            Path::new("/r/rtok"),
+            Path::new("/r/_w"),
+            ("T504", Some("read hook same path")),
+            OWNER,
+        )
+        .unwrap();
+        assert_eq!(p.task, "t504");
+        assert_eq!(p.branch, "t504-read-hook-same-path");
+    }
+
+    /// A retry of an add that already landed: the same task's path is still its plan.
+    #[test]
+    fn an_existing_path_of_the_same_task_returns_the_plan() {
+        let dir = tmp_dir("wt-again");
+        let (main, root) = (dir.join("apps/rtok"), dir.join("home/.rtok/worktrees"));
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::create_dir_all(root.join("rtok-t504")).unwrap();
+        let p = plan_in(&main, &root, ("T504 read-hook-same-path", None), OWNER).unwrap();
+        assert_eq!(p.path, root.join("rtok-t504"));
+        assert_eq!(p.task, "t504");
+        assert_eq!(p.branch, "t504-read-hook-same-path");
+        let bare = plan_in(&main, &root, ("t504", None), OWNER).unwrap();
+        assert_eq!(bare.path, p.path);
+        assert_eq!(bare.task, "t504");
     }
 
     #[test]
@@ -214,7 +279,9 @@ mod tests {
     #[case::path_in_id(("../t1", None), OWNER, "task id")]
     #[case::leading_dash(("-t1", None), OWNER, "task id")]
     #[case::ref_rule(("t1.lock", None), OWNER, "task id")]
-    #[case::bad_slug(("t1", Some("two words")), OWNER, "slug")]
+    #[case::not_an_id_after_split(("../t1 rest", None), OWNER, "task id")]
+    #[case::dash_id_after_split(("-t1 rest", None), OWNER, "task id")]
+    #[case::bad_slug(("t1", Some("../evil")), OWNER, "slug")]
     #[case::no_owner(("t1", None), "", "--owner")]
     #[case::separator_in_owner(("t1", None), "a | b", "--owner")]
     #[case::non_ascii_owner(("t1", None), "Клод / sonnet", "--owner")]

@@ -11451,3 +11451,16 @@ Result: `upsert_note` records the previous title and body in `note_versions` ins
 
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
+
+### T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
+
+One argument `T504 read-hook-same-path` plans task `t504` and branch `t504-read-hook-same-path`; spaces in the slug become dashes; a bare id is unchanged. A retry of an existing same-task path returns the plan instead of `already exists: one worktree per task`. A string that is not an id after the split still fails `ident`.
+
+Check: `plan` tests for `T504 read-hook-same-path`, `M16.5 test toml`, `M16.3 push.rs through the config module`, and for an existing path of the same task; `just check`.
+
+Result: `split_id_slug` in `src/worktree/add.rs` takes the first token as the task id and the rest as the slug (whitespace runs → dashes; a separate slug is joined after the rest). `plan` no longer fails when `<repo>-<task>` already exists. `run` returns that plan early on a retry. CLI `worktree add` help documents the one-argument form. Integration tests: one-argument add, retry returns the same path, MCP `worktree_add` retry succeeds, hook refuses a non-id name.
+
+Check result: `cargo test --lib worktree::add::` 20 passed (incl. the three logged cases and `an_existing_path_of_the_same_task_returns_the_plan`); `cargo test --test worktree` 23 passed; `just full-check` 3335 passed, 8 skipped.
+
+Status: done 2026-10-11
+Model: MiMo / mimo

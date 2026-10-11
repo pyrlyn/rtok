@@ -191,8 +191,8 @@ _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '-h[Print help]' /
 '--help[Print help]' /
-':task -- Task id, e.g. `t158`; directory `<repo>-<task>`, branch `<task>/[-<slug>/]`:_default' /
-'::slug -- Optional branch suffix:_default' /
+':task -- Task id, e.g. `t158`, or `t158 read-hook-same-path` as one argument; directory `<repo>-<task>`, branch `<task>/[-<slug>/]`:_default' /
+'::slug -- Optional branch suffix (spaces become dashes, as in the one-argument form):_default' /
 && ret=0
 ;;
 (claim)
