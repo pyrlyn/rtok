@@ -10,9 +10,9 @@
 //! Crate level, not inside the `read` plugin: `plugin.rs` attributes every session through
 //! [`crate::project`] whatever features are compiled in (T154).
 
-use std::path::{Path, PathBuf};
 #[cfg(feature = "read")]
 use std::path::Component;
+use std::path::{Path, PathBuf};
 
 /// Read bytes as UTF-8 text and canonicalize (follow symlinks when the backend supports them).
 pub trait ReadFs {
