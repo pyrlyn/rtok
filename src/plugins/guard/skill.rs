@@ -118,7 +118,13 @@ fn plugin_root(manifest: &Path, plugin: &str, cwd: Option<&Path>) -> Option<Path
             only(&|i| i.get("projectPath").and_then(|p| p.as_str()).map(Path::new) == Some(c))
         })
         .or_else(|| only(&|i| i.get("scope").and_then(|s| s.as_str()) == Some("user")))
-        .or_else(|| (installs.len() == 1).then(|| &installs[0]))?;
+        // Only a record with no scope or project metadata is a legacy one; an explicit
+        // `project`/`local` entry that did not match `cwd` belongs to another project.
+        .or_else(|| {
+            installs.iter().next().filter(|i| {
+                installs.len() == 1 && i.get("scope").is_none() && i.get("projectPath").is_none()
+            })
+        })?;
     Some(PathBuf::from(chosen.get("installPath")?.as_str()?))
 }
 
@@ -349,6 +355,37 @@ mod tests {
         let two_users = r#"{"version":2,"plugins":{"pony@a":[
             {"scope":"user","installPath":"/cache/1"},{"scope":"user","installPath":"/cache/2"}]}}"#;
         assert_eq!(root_of(two_users, "pony", None), None);
+    }
+
+    /// T558: the only install on file belongs to another project, so it must not supply the
+    /// body of a skill invoked here — not even a large one the guard would archive and deny.
+    #[test]
+    fn a_sole_install_scoped_to_another_project_falls_open() {
+        let home = crate::testutil::tmp_dir("skill-foreign");
+        let plugin = home.join("private-a");
+        let skill = plugin.join("skills/big/SKILL.md");
+        std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+        std::fs::write(&skill, "x".repeat(200_000)).unwrap();
+        std::fs::create_dir_all(home.join(".claude/plugins")).unwrap();
+        let manifest = |entry: &str| {
+            let m = format!(r#"{{"version":2,"plugins":{{"pony@a":[{entry}]}}}}"#);
+            std::fs::write(home.join(".claude/plugins/installed_plugins.json"), m).unwrap();
+        };
+        let path = plugin.display();
+        let cwd = Some(Path::new("/B"));
+        for foreign in [
+            format!(r#"{{"scope":"project","projectPath":"/A","installPath":"{path}"}}"#),
+            format!(r#"{{"scope":"local","projectPath":"/A","installPath":"{path}"}}"#),
+            format!(r#"{{"scope":"project","installPath":"{path}"}}"#),
+            format!(r#"{{"projectPath":"/A","installPath":"{path}"}}"#),
+        ] {
+            manifest(&foreign);
+            assert_eq!(resolve("pony:big", cwd, &home), None, "{foreign}");
+        }
+        manifest(&format!(
+            r#"{{"scope":"project","projectPath":"/B","installPath":"{path}"}}"#
+        ));
+        assert_eq!(resolve("pony:big", cwd, &home), Some(skill));
     }
 
     #[test]
