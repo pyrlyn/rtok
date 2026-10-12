@@ -251,11 +251,11 @@ Execution plan:
 3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
 4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
 
-Chosen design: migration 0049 adds `sessions.end_seq` (next value on every end, taken in an immediate transaction like T615's `seq`); the exporter's single cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The old `sessions`/`sessions_tail` marks are dropped and the new mark starts in front of the old mark's whole second (replay over guess). Files: `crates/rtok-store/{migrations/0049*,src/otel.rs,src/sql_ext.rs,src/schema.rs}`, `src/otel/export.rs`, `tests/otel.rs`.
+Chosen design: migration 0050 adds `sessions.end_seq` (next value on every end, taken in an immediate transaction like T615's `seq`); the exporter's single cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The old `sessions`/`sessions_tail` marks are dropped and the new mark starts in front of the old mark's whole second (replay over guess). Files: `crates/rtok-store/{migrations/0049*,src/otel.rs,src/sql_ext.rs,src/schema.rs}`, `src/otel/export.rs`, `tests/otel.rs`.
 
 Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
 
-Result: migration 0049 adds `sessions.end_seq`, taken in an immediate transaction each time a session ends at a new second, and the exporter's one cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The `ROW_NUMBER` query (`SessionsPending` in `sql_ext.rs`) and the `sessions`/`sessions_tail` marks are gone. Existing databases: sessions are numbered by `(ended_at, id)` and the new mark starts in front of the old mark's whole second, so a few already-posted sessions replay with the same span ids instead of a guess losing one. Tests: `tests/otel.rs` posts a late session after an exported one in both id orders, matching the posted span's session id (the lower-id case failed on `origin/main`, the higher-id case passed as the control) and restarts the runtime; store tests cover end order, batching, a repeated end and the 0049 backfill.
+Result: migration 0050 adds `sessions.end_seq`, taken in an immediate transaction each time a session ends at a new second, and the exporter's one cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The `ROW_NUMBER` query (`SessionsPending` in `sql_ext.rs`) and the `sessions`/`sessions_tail` marks are gone. Existing databases: sessions are numbered by `(ended_at, id)` and the new mark starts in front of the old mark's whole second, so a few already-posted sessions replay with the same span ids instead of a guess losing one. Tests: `tests/otel.rs` posts a late session after an exported one in both id orders, matching the posted span's session id (the lower-id case failed on `origin/main`, the higher-id case passed as the control) and restarts the runtime; store tests cover end order, batching, a repeated end and the 0049 backfill.
 
 Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
 
@@ -786,6 +786,28 @@ Check: test with the fake/absent server for each of the five ops; existing LSP t
 Execution plan: (1) `src/plugins/graph/mod.rs`: `lsp_or_tags` wrapper (backend check, `Err` or none-answer for a name `tags_know` finds, prefix, `lsp_fallback` Measurement); each of the five tools keeps its tags body as `<op>_tags` and routes through the wrapper, the outline path guard stays outside it. (2) Tests in the same file: a manifest-less root makes `lsp::*` fail before any spawn, so no PATH access; plus direct wrapper tests for the empty-answer rule. (3) `just check`, then move the card to `done.md`.
 
 Result: with `backend = "lsp"`, `symbol`, `callers`, `impact`, `outline` and `explore` go through one `lsp_or_tags` wrapper in `src/plugins/graph/mod.rs`; an `Err` or a none-answer for a name `tags_know` finds returns the tags answer headed `(tags; lsp: <reason>)` and records `graph` / `lsp_fallback`. Tests: `lsp_backend_falls_back_to_tags_for_every_tool`, `lsp_empty_answer_falls_back_only_for_a_known_name`.
+
+### T620. Enforce LSP request deadlines during blocking transport reads
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::request](src/plugins/graph/lsp.rs#L461). Its deadline is checked before `read_msg`, but that function performs blocking pipe reads without a deadline. A matching response returns immediately without checking the elapsed deadline. An isolated probe compiled the verbatim request/framing methods against a synthetic subprocess peer: with `ready()` set to 10 ms and the peer delaying its reply by 250 ms, the request still succeeded after 675 ms wall time. A peer that stays silent can leave the call blocked instead of reaching the documented fallback.
+
+[with_session](src/plugins/graph/lsp.rs#L544) holds the shared session mutex through the call; [capability::ask](src/plugins/graph/capability.rs#L197) invokes the server closure synchronously. T376 adds fallback after a returned error, but that does not enforce a deadline on an unread pipe.
+
+Execution plan:
+
+1. Add deterministic fake-peer regressions for no reply, a delayed reply, a partial header/body and intervening notifications. Assert bounded completion and timeout classification, with a timely-response control.
+2. Make framing reads deadline-aware using one transport owner and bounded cancellation. Include writes in the request budget so a peer that stops consuming input cannot bypass the same bound.
+3. On timeout, invalidate or safely resynchronize the session, release locks and reach the existing fallback path. Verify a later request and shutdown cannot be trapped behind the expired request or consume its late response.
+4. Run focused LSP transport, capability/fallback and shutdown tests, then `just check`.
+
+Claimed design (single PR, well under 500 code lines): `Session` owns a reader thread (framing into an mpsc channel) and a writer thread (a channel into stdin), so `request` waits with `recv_timeout` on the remaining budget and a peer that neither answers nor consumes input costs at most the budget. On expiry the server is killed and reaped, so `with_session` respawns it and a late reply can never be matched to a later request; `Drop` sends `exit` through the writer channel and cannot block. Tests in `lsp.rs` use `sh` peers with bounded lifetimes, first run against the old blocking reads to prove they fail.
+
+Check: an unresponsive peer cannot hold an LSP request beyond its configured budget plus a bounded cleanup allowance. Executed evidence used extracted production request/framing code, a synthetic peer and a 10 ms timeout shim; real language servers, the full capability dispatcher and silent-peer indefinite waiting were not executed.
+
+Result: `Session` in `src/plugins/graph/lsp.rs` gives its server pipes to a reader thread and a writer thread; `request_within` waits on the reader's channel with `recv_timeout` on the remaining budget, so a silent peer, a late or partial reply, or a peer that stops reading input ends in `lsp: timeout waiting for <method>` (a `server_broke` error, so the existing tags fallback runs) within the budget. Expiry kills and reaps the server, so `with_session` respawns it and a late reply is never matched to a later request; `Drop` queues `exit` and cannot block. Fake `sh` peers cover no reply, a reply after the budget, a partial body, a header without a body, notifications, a peer that never reads (1 MiB request, and a drop with a full pipe), the expired session and timely controls; seven failed against the old blocking reads and passed after the change; `just check`.
+Status: done 2026-10-12
+
+Model: Claude Code / claude-sonnet-5-5
 
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
@@ -2242,24 +2264,6 @@ Done means: a research pass first — which hosts and APIs allow a pre-filled as
 Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
 
 Result: closed with the finding, nothing built (`research.md` §38, sources checked 2026-10-11). Claude 4.6+ rejects a prefilled assistant message; OpenAI Predicted Outputs is unsupported with `tools`; 96 % of output is tool-call input, which a text draft cannot carry; the break-even needs an accept rate above 0.2 plus the verdict cost. Reopen only if a bench can show cost per passed task falling with the pass rate held. Not covered: Claude Code and Codex request paths, Ollama, any measured local-model pass rate.
-
-### T329.51. Graph page: maximise buttons for the two parts
-
-Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
-
-Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
-
-### T329.52. Graph page: metrics collapsed to a strip under 900 px
-
-Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
-
-Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
-
-### T329.53. Graph page: count-up animation of the live numbers
-
-Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
-
-Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
 
 ### T500. TUI: live calls extras (sparklines, outside-scope mark; folded-target counter moved to T561)
 
@@ -3761,6 +3765,40 @@ Sparklines: `CallsStore::spark(window, now)` (`src/web/calls_store.rs`) spreads 
 Check: `a_sparkline_spreads_the_buckets_over_equal_slots_and_adds_up_to_the_window` (slots sum to the window's calls and saved tokens), `scope.test.ts`, `lit.test.ts` (outside scope lights nothing, folded counters), `live.test.tsx` (sparklines named for the span, the pill, the "+N more" counter on the 600-file project), stories `OutsideScope`, `Sparklines`, `FoldedCalls` (axe). `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records that the TUI pane waits for T500.
 
 Check result (2026-10-10): `just check` green, nextest `Summary [227.799s] 3301 tests run: 3301 passed (1 slow), 8 skipped`; `just spa-typecheck` clean; `just spa-test` 48 files, 427 tests passed; `just js` oxlint and oxfmt clean; `just spa-stories` 34 files, 228 tests passed; `just spa-e2e` 30 passed, 2 failed (`a 500-call burst leaves the page responsive` timed out in `rtok mcp` and `Compare against a saved export` hit the 30 s test timeout, both with load average about 20 and neither touching the code of this change).
+
+### T329.51. Graph page: maximise buttons for the two parts
+
+Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
+
+Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
+
+Result: `live/Maximise.tsx` (`useMaximised`, `MaximisablePart`) gives each part a pressed `Chip` ("Maximise explorer" / "Restore live graph"); a maximised part is a fixed overlay over the page rather than a remounted tree, so the explorer keeps its zoom and layout, and Escape restores unless something else already used it. The choice is deliberately not remembered, so a page never opens with a hidden part. Landed on main with #993 (`1839ad321`); the earlier branch version (`cdab19cb5`, a remembered `MAX_KEY` in `Split.tsx`) was dropped in the merge. Covered by `Maximise.test.tsx`, the `Split` story `Maximised` (axe) and a Playwright case.
+
+### T329.50. Graph page: running labels with elapsed counters on the live canvas
+
+Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
+
+Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
+
+Plan: (1) a label layer in the 2D and 3D live canvases fed by the running calls the metrics list already has (tool name, start time); (2) elapsed counter ticking off one shared timer, fade a few seconds after the call ends, "+N more" labels the node holding the count, none outside the scope; (3) Vitest, stories with axe, a Playwright case; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
+Result: each running call on the graph page's live canvas has a small floating label on its node in 2D and 3D with the tool name and a seconds counter on the page's one-second clock. A finished call keeps its label with its duration for 4 s and fades after 2 s; the fade is off under `prefers-reduced-motion`. A call folded into "+N more" labels the node that holds the count; calls outside the scope or beyond the 8 accents get none. One `aria-hidden` HTML overlay serves both views through `ViewApi.screenOf`; `seconds`/`millis` moved into `pages/format.ts`. Covered by Vitest (`lit`, `RunningLabels`, `live`), axe stories in dark, light and at phone width, and Playwright cases for 2D and 3D.
+
+### T329.52. Graph page: metrics collapsed to a strip under 900 px
+
+Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
+
+Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
+
+Result: `live/MetricsFold.tsx` shows running, calls and saved as one disclosure button (`aria-expanded`, `aria-controls`, "More" / "Less") under 900 px and keeps the full cards in the DOM, hidden by CSS, so the 900 px breakpoint is one media query with no resize listener; from 900 px up nothing changes. Landed on main with #993 (`1839ad321`); the branch's own strip (`bf1c181f7`: `MetricsStrip` with `useMinWidth` and a conditional render of the cards) was dropped in the merge as a duplicate. Covered by `MetricsFold.test.tsx`, the `MetricsFold` story (axe) and `e2e/metrics-fold.spec.ts`.
+
+### T329.53. Graph page: count-up animation of the live numbers
+
+Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
+
+Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
+
+Result: `web/src/ui/CountUp.tsx` (`useCountUp`, `CountUp`) eases a figure to its new value over 600 ms, draws the first value as is, jumps under `prefers-reduced-motion` and lands on the server's value itself on the last frame; while it moves the changing text is `aria-hidden` and the final figure sits in an `sr-only` span. Landed on main with #993 (`1839ad321`); the branch's copy in `live/CountUp.tsx` (`dce2e9e38`) was dropped in the merge as a duplicate. Covered by `CountUp.test.tsx` and `CountUp.stories.tsx` (axe).
 
 ## T480 — TUI: live graph calls panel
 
@@ -9280,6 +9318,30 @@ Status: done 2026-10-11
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T385.9.1. P28 compressor client on the `internal` lane and the summary cache
+
+Part of T385.9 (`docs/research/optimization.md` §3.3, `docs/llm-soft-compression.md`). A compressor client that sends one summarisation request for an archived tool result through the proxy's own `internal` lane (so the spend is tagged and T385.10 routing applies), with the compressor prompt kept as data. Summaries are stored next to the archive row, keyed by archive id and compressor version, through Diesel (a new migration; check every open branch for the next free number). A code-aware guard copies the must-keep spans (identifiers, paths, numbers, error codes; the kinds in `tests/fixtures/p28_must_keep.toml`) and rejects a summary that drops one. Config lives in the one config module, `enabled = false` by default.
+
+Done when: with the flag off nothing calls a model and no row is written; with it on and a mock upstream, a summary is stored once per archive id and version and read back; a summary that drops a must-keep span is rejected and not stored; an upstream error stores nothing and is warned, never fatal; `just check`.
+
+Check: mock-upstream tests for store, reuse, guard rejection and upstream failure; the must-keep fixture test; `just check`.
+
+Plan: (1) config section and types; (2) migration + Diesel model and store API for summaries; (3) must-keep span extraction shared with `tests/p28_must_keep.rs` (no second parser) and the guard; (4) client over the `internal` lane with a mock upstream in tests; docs en/ru/uk.
+
+Result: `[plugins.compress.llm]` (`enabled = false` by default) configures a compressor client that posts one summarisation request per archived tool result to the proxy's own `internal` lane; the prompt is data in `src/plugins/compress/prompt.toml`. Summaries live in the Diesel table `archive_summaries` (migration `0049`), keyed by archive id and version (prompt hash + model); the first writer wins and `purge_archive` drops them too. The must-keep guard (`must_keep.rs`) shares its span kinds with `tests/p28_must_keep.rs` and rejects a summary that loses a span (53 of 54 fixture spans extracted; floor 95%). Covered by `tests/compress_llm.rs` (mock upstream: store, reuse, guard rejection, upstream failure) and `tests/p28_must_keep.rs`.
+
+### T385.9.2. P28 asynchronous compression and summaries in the live zone, behind a flag
+
+Part of T385.9, after T385.9.1. When a tool result enters the archive and is eligible (outside `keep_turns`, above `min_tokens`, logs and prose before diffs and source), compression is queued off the hot path; a request never waits on it. From the next turn on, the proxy's live-zone view of that result is the cached summary plus the archive id instead of the extractive view, byte-stable across turns so the prompt cache survives; no summary yet means the extractive view (fail open). `expand <id>` still returns the original.
+
+Done when: flag off → proxy bytes identical to today; flag on → the second turn carries the summary and the third turn's prefix is byte-identical to the second; a slow mock compressor never delays a request; `expand` recovers the original; `just check`.
+
+Check: replay byte-stability, flag-off identity, slow-upstream latency and `expand` tests; `just check`.
+
+Plan: (1) eligibility and a background queue fed from the archive write path; (2) the live-zone rewrite reads the cached summary, else the extractive view; (3) tests with a slow mock compressor and a two-turn replay; docs en/ru/uk.
+
+Result: with the flag on, the compress plugin offers archive ids without a summary to a background queue (`src/plugins/compress/queue.rs`: one try per id per process, `max_in_flight` cap) that calls the compressor with the agent request's credentials. From the next request on, an archived block outside the live zone becomes `summary + expand(<id>)` when that is shorter than the archive pointer; a stored summary never changes, so the prefix stays byte-stable, and a missing summary keeps the extractive view. With the flag off `ProxyState.summaries` is `None` and the proxy's bytes are unchanged. Covered by `tests/compress_live.rs` (flag off makes no call; a failing compressor gives byte-identical bodies; the summary lands on the next turn with a byte-identical prefix and one job per id; a 4 s compressor never delays a request) and documented in `docs/llm-soft-compression.md` §8. The live Gate P28 bench is T385.9.3.
+
 ### T240. Golden files for rule families without one
 
 `rules/default.toml` has families with no pair in `tests/cmd_golden`: `curl`, `node`, `pnpm`, `sed` (re-list at claim time — any rule `match_cmd` or Rust formatter with no `.in`/`.out`). Their output shape is untested.
@@ -9583,6 +9645,17 @@ Result: `mimo` declares `PLUGIN` (`HostPlugin`, `default_install: true`, dest fr
 Check run: `just check` (full gate, `.config/nextest.toml` is a shared input) green: fmt, clippy `-D warnings`, jscpd 1.82 % of lines (budget 2 %), oxlint, pytest 32 passed, nextest 3308 passed, 8 skipped (704 s).
 
 Status: done 2026-10-10
+Model: Claude Code / sonnet-5.5
+
+### T521. MiMo Desktop variant of the `mimo` host
+
+Split from T520. No documented config path for MiMo Desktop (early access); a third-party README (https://github.com/akaradje/mimo-desktop, unverified) says Desktop reads `~/.config/mimocode/mimocode.jsonc`. Waited for the creator's run of the read-only probe `scratchpad/mimo-desktop-probe/run.sh`; done = a Desktop variant (detection plus the same config family or its own) with tests.
+
+Check: `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the app reads, tests cover it; `just check`.
+
+Result (2026-10-11): the probe was replaced by a read-only look at the vendor's own shipped app on the creator's machine (`/Applications/Xiaomi MiMo AI.app` 26.1010.101546, bundle id `com.xiaomi.mimo.desktop-ai`). Its `app.asar` holds the config resolver `MIMOCODE_HOME/config`, else `XDG_CONFIG_HOME/mimocode`, else `~/.config/mimocode`, with the files `mimocode.jsonc`, `mimocode.json`, `config.json`: the CLI's own config family (cited with the vendor docs in `research.md` section 15). So `mimo` gets a second variant, `MiMo Desktop` (`Kind::Desktop`, apps `/Applications/Xiaomi MiMo AI.app` and `~/Applications/...`), detection only: both variants install the same `mcp.rtok` and plugin link, as Kilo's do. Windows and Linux install paths of the app are unverified and not probed. Test: `the_desktop_variant_is_detected_from_its_app_and_installs_the_cli_files`; `docs/agents.md` regenerated.
+
+Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
 
 ### T528. Codex runs rtok's read-only MCP tools without an approval prompt

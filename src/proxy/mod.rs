@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use axum::Router;
@@ -86,9 +86,6 @@ pub mod wire;
 /// only to bound memory, not to reject legitimate traffic.
 const MAX_BODY_BYTES: usize = 256 * 1024 * 1024;
 
-/// TCP connect deadline; `proxy.timeout_s` bounds reads only.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-
 /// How many rtok proxies a request has passed through (T442). A second pass must not
 /// rewrite or record the request again, and a proxy whose upstream is itself must not
 /// recurse forever, so every forwarded request carries the count.
@@ -119,24 +116,6 @@ fn hops_of(headers: &HeaderMap) -> u32 {
     })
 }
 
-/// A *read* timeout, not `Client::timeout`: the latter is a deadline on the whole exchange,
-/// body stream included, so a turn that streams for longer than the budget (extended
-/// thinking, many tool calls) was cut mid-SSE with the client left without a `message_stop`.
-/// The budget bounds one read instead.
-fn build_client(timeout_s: u64) -> Result<Client> {
-    // Connecting is not streaming: a black-holed upstream used to hold the client for the
-    // whole read budget (10 minutes by default) before it saw a 502.
-    Client::builder()
-        .connect_timeout(CONNECT_TIMEOUT)
-        .read_timeout(Duration::from_secs(timeout_s.max(1)))
-        // T53.3: webpki roots instead of reqwest's platform verifier
-        // (Security.framework costs ~1.3–1.5 ms of dyld time per hook
-        // spawn); corporate CAs arrive via `SSL_CERT_FILE` (see `tls`).
-        .use_preconfigured_tls(crate::tls::preconfigured()?)
-        .build()
-        .context("reqwest client")
-}
-
 /// Shared server state: the DB, the upstream client and the effective `[proxy]` settings.
 pub struct ProxyState {
     pub store: Store,
@@ -160,19 +139,22 @@ pub struct ProxyState {
     registry: Registry,
     cfg: Config,
     cache: Mutex<semantic_cache::Cache>,
+    /// P28 model summaries (T385.9.2): `None` unless `[plugins.compress.llm] enabled`.
+    #[cfg(feature = "compress")]
+    summaries: Option<Arc<crate::plugins::compress::queue::Queue>>,
 }
 
 impl ProxyState {
     pub fn new(cfg: &Config) -> Result<Self> {
         let store = Store::open(&cfg.core.db_path)?;
         store.set_store_raw(cfg.core.store_raw);
-        let client = build_client(cfg.proxy.timeout_s)?;
+        let client = crate::tls::client(cfg.proxy.timeout_s)?;
         let mut lane_clients = HashMap::new();
         for lane in lane::Lane::ALL {
             let policy = lane.policy(&cfg.proxy.lanes);
             let secs = flex::lane_timeout_s(policy.flex, policy.timeout_s, cfg.proxy.timeout_s);
             if secs > 0 && secs != cfg.proxy.timeout_s {
-                lane_clients.insert(lane, build_client(secs)?);
+                lane_clients.insert(lane, crate::tls::client(secs)?);
             }
         }
         let mut lane_upstreams = HashMap::new();
@@ -190,6 +172,21 @@ impl ProxyState {
         // Host agent: the `[hook] host` setting (T5.1 says `core.host`, which T12 removed —
         // see plan.md §6 amendment in the T5.1 commit). Unknown slugs fall back to `other` (6).
         let host_id = store.host_id(&cfg.hook.host)?.or(Some(6));
+        // Optional like every extension: a queue that cannot start leaves the extractive view.
+        #[cfg(feature = "compress")]
+        let summaries = crate::plugins::compress::queue::Queue::new(cfg).unwrap_or_else(|e| {
+            crate::log::record(
+                cfg,
+                &store,
+                None,
+                None,
+                "warn",
+                "plugin",
+                "compress",
+                &format!("summary queue not started: {e:#}"),
+            );
+            None
+        });
         Ok(Self {
             store,
             client,
@@ -206,6 +203,8 @@ impl ProxyState {
             registry: Registry::new(cfg),
             cfg: cfg.clone(),
             cache: Mutex::new(semantic_cache::Cache::new()),
+            #[cfg(feature = "compress")]
+            summaries,
         })
     }
 
@@ -678,7 +677,7 @@ fn shape_request(
     // From here on `request_body` is what upstream sees (and what `call_io` records).
     let compressing = state.mode == "compress" && policy.compress;
     let request_body = if compressing {
-        wire.map_or(request_body.clone(), |wire| {
+        let shaped = wire.map_or(request_body.clone(), |wire| {
             compress(
                 state,
                 wire,
@@ -687,7 +686,19 @@ fn shape_request(
                 &policy,
                 request_body,
             )
-        })
+        });
+        // Drained on every pass so a thread reused for the next request starts empty.
+        #[cfg(feature = "compress")]
+        {
+            let offered = crate::plugins::compress::take_offered();
+            if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
+                queue.submit(
+                    crate::plugins::compress::llm::Auth::from_headers(headers),
+                    offered,
+                );
+            }
+        }
+        shaped
     } else {
         request_body
     };
@@ -1356,6 +1367,7 @@ fn error_response(status: StatusCode, message: &str) -> AxumResponse {
 mod tests {
     use super::*;
     use rstest::rstest;
+    use std::time::Duration;
 
     #[rstest]
     #[case("/v1/batches", false, true)]

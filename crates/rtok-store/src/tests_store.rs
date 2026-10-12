@@ -230,8 +230,8 @@ fn migration_0047_numbers_old_claims_in_their_old_order() {
 /// and the old per-second mark resumes in front of its whole second, replaying rather than
 /// guessing which tied sessions were posted.
 #[test]
-fn migration_0049_numbers_ended_sessions_and_rewinds_the_old_mark() {
-    let (dir, mut conn) = db_before_migration("0049");
+fn migration_0050_numbers_ended_sessions_and_rewinds_the_old_mark() {
+    let (dir, mut conn) = db_before_migration("0050");
     let db = dir.join("rtok.db");
     for (id, ended) in [
         ("a", Some(100_i64)),

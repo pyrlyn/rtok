@@ -51,6 +51,7 @@ const EXPECTED_VARIANTS: &[(&str, Kind, &str)] = &[
     ("gemini", Kind::Cli, "Gemini CLI"),
     ("codewhale", Kind::Cli, "CodeWhale"),
     ("mimo", Kind::Cli, "MiMo Code"),
+    ("mimo", Kind::Desktop, "MiMo Desktop"),
     ("antigravity", Kind::Cli, "Antigravity CLI"),
     ("antigravity", Kind::Desktop, "Antigravity"),
     ("devin", Kind::Cli, "Devin CLI"),

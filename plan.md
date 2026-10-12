@@ -36,14 +36,14 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
-| T329 | todo | P2 | 5 | 0% | |
-| T329.50 | in progress | P3 | 3 | 0% | MiMo / mimo |
+| T329 | in progress | P2 | 5 | 99% | Claude Code / claude-opus-5-5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
-| T385.9 | todo | P3 | 5 | 10% | |
+| T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
+| T385.9.3 | todo | P3 | 2 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 80% | |
@@ -68,7 +68,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
-| T521 | todo | P2 | 2 | 0% | |
 | T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -76,7 +75,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
 | T623 | todo | P2 | 5 | 0% | |
 
@@ -91,21 +89,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T620. Enforce LSP request deadlines during blocking transport reads
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::request](src/plugins/graph/lsp.rs#L461). Its deadline is checked before `read_msg`, but that function performs blocking pipe reads without a deadline. A matching response returns immediately without checking the elapsed deadline. An isolated probe compiled the verbatim request/framing methods against a synthetic subprocess peer: with `ready()` set to 10 ms and the peer delaying its reply by 250 ms, the request still succeeded after 675 ms wall time. A peer that stays silent can leave the call blocked instead of reaching the documented fallback.
-
-[with_session](src/plugins/graph/lsp.rs#L544) holds the shared session mutex through the call; [capability::ask](src/plugins/graph/capability.rs#L197) invokes the server closure synchronously. T376 adds fallback after a returned error, but that does not enforce a deadline on an unread pipe.
-
-Execution plan:
-
-1. Add deterministic fake-peer regressions for no reply, a delayed reply, a partial header/body and intervening notifications. Assert bounded completion and timeout classification, with a timely-response control.
-2. Make framing reads deadline-aware using one transport owner and bounded cancellation. Include writes in the request budget so a peer that stops consuming input cannot bypass the same bound.
-3. On timeout, invalidate or safely resynchronize the session, release locks and reach the existing fallback path. Verify a later request and shutdown cannot be trapped behind the expired request or consume its late response.
-4. Run focused LSP transport, capability/fallback and shutdown tests, then `just check`.
-
-Check: an unresponsive peer cannot hold an LSP request beyond its configured budget plus a bounded cleanup allowance. Executed evidence used extracted production request/framing code, a synthetic peer and a 10 ms timeout shim; real language servers, the full capability dispatcher and silent-peer indefinite waiting were not executed.
 
 ### T621. Refresh opened LSP documents after their files change
 
@@ -838,17 +821,6 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-### T329.50. Graph page: running labels with elapsed counters on the live canvas
-
-Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
-
-Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
-
-### T521. MiMo Desktop variant of the `mimo` host
-
-Split from T520. No documented config path for MiMo Desktop (early access); a third-party README (https://github.com/akaradje/mimo-desktop, unverified) says Desktop reads `~/.config/mimocode/mimocode.jsonc`. Waits for the creator's run of the read-only probe `scratchpad/mimo-desktop-probe/run.sh`; done = a Desktop variant (detection plus the same config family or its own) with tests.
-
-Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
 
 ### T522. `read` and `expand` accept the line ranges agents sent this week
 
@@ -972,6 +944,14 @@ Check: one dated `research.md` row per setting.
 optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
 
 Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
+
+Creator decision 2026-10-11: build it behind a flag that is off by default, tested against a mock upstream; the task closes only after the live Gate P28 bench (T385.9.3, needs the creator's API spend). Split (complexity 5): T385.9.1 client and cache, T385.9.2 asynchronous use in the live zone, T385.9.3 the live bench.
+
+### T385.9.3. Gate P28 live bench for the compressor
+
+Part of T385.9, after T385.9.2. `rtok bench` cost per passed task with the compressor on against the v0.1 lossless path, compressor tokens included, plus the must-keep fixture and `expand` recovery; one dated `research.md` row. Needs the creator's session and API spend (like T394), so an agent cannot run it alone. Green → T385.9 closes and the flag may become a default in a follow-up; red → the flag stays off with its number.
+
+Check: the dated `research.md` row with cost per passed task, pass rate and compressor tokens.
 
 ### T394. Run the paid live benches and record them
 

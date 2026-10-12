@@ -18,8 +18,28 @@ export interface Lit {
   folded: number;
 }
 
+/** The small floating label of one call on its node (T329.50). */
+export interface CallLabel {
+  call: string;
+  node: number;
+  tool: string;
+  /** Epoch ms the call started; the label's counter runs from here while `ms` is null. */
+  at: number;
+  /** How long a finished call ran; null while it runs. */
+  ms: number | null;
+  /** When a finished call ended: the label fades from here. */
+  endedAt: number | null;
+  failed: boolean;
+  /** The call's accent slot while it runs, so the label matches its ring. */
+  accent: number | null;
+  /** The node holds this call only because the cap folded the call's own node into "+N more". */
+  folded: boolean;
+}
+
 export interface LiveState {
   lit: Map<number, Lit>;
+  /** Running calls first, then calls that ended within `LABEL_MS`; each on the one node that shows it. */
+  labels: CallLabel[];
   /** Running calls beyond the accents: drawn as one "busy" count, not as nodes. */
   busy: number;
   /** The nodes the camera frames: running calls and calls that ended a moment ago, sorted. Empty means the overview. */
@@ -38,6 +58,10 @@ export interface LiveOptions {
 /** The accents: running calls beyond this many are only counted ("busy"). */
 export const MAX_ACCENTS = 8;
 const FAIL_FLASH_MS = 5000;
+/** A finished call's label stays at full strength this long, then fades. */
+export const LABEL_HOLD_MS = 2000;
+/** And is gone this long after the call ended. */
+export const LABEL_MS = 4000;
 /** A call that ended this long ago still holds the camera: most calls end before a frame shows them running. */
 export const FOCUS_MS = 4000;
 /** About this many recent calls on one node make it fully hot. */
@@ -78,17 +102,35 @@ export function liveState(
   const holders = scene.nodes.filter((n) => n.root).sort((a, b) => b.root.length - a.root.length);
   let group = 0;
   const fold = (target: string | null) => {
-    if (!more || !target) return;
+    if (!more || !target) return undefined;
     const holder = holders.find((n) => target === n.root || target.startsWith(`${n.root}/`));
     if (holder) at(holder.id).folded++;
     else group++;
+    return holder?.id;
   };
+  const ended: CallLabel[] = [];
+  const active: CallLabel[] = [];
   for (const r of store.feed) {
     const age = now - r.at;
     const k = key(r);
     if (r.interrupted || age > heatMs || !k || outsideScope(scope, r.project)) continue;
     const drawn = byKey.get(k);
-    if (!drawn && !overview) fold(r.target);
+    const holder = !drawn && !overview ? fold(r.target) : undefined;
+    // The label sits on one node even when the name is drawn twice.
+    const labelOn = drawn?.[0] ?? holder;
+    if (labelOn !== undefined && age <= LABEL_MS) {
+      ended.push({
+        call: r.call,
+        node: labelOn,
+        tool: r.tool,
+        at: r.at - (r.ms ?? 0),
+        ms: r.ms,
+        endedAt: r.at,
+        failed: !r.ok,
+        accent: null,
+        folded: holder !== undefined,
+      });
+    }
     for (const id of drawn ?? []) {
       if (age <= FOCUS_MS) focus.add(id);
       const l = at(id);
@@ -101,7 +143,21 @@ export function liveState(
     const k = key(r);
     if (outsideScope(scope, r.project)) return;
     const drawn = k ? byKey.get(k) : undefined;
-    if (!drawn && !overview) fold(r.target);
+    const holder = !drawn && !overview ? fold(r.target) : undefined;
+    const labelOn = drawn?.[0] ?? holder;
+    if (labelOn !== undefined) {
+      active.push({
+        call: r.call,
+        node: labelOn,
+        tool: r.tool,
+        at: r.at,
+        ms: null,
+        endedAt: null,
+        failed: false,
+        accent: slot,
+        folded: holder !== undefined,
+      });
+    }
     for (const id of drawn ?? []) {
       at(id).accents.push(slot);
       focus.add(id);
@@ -109,6 +165,7 @@ export function liveState(
   });
   return {
     lit,
+    labels: [...active, ...ended],
     busy: Math.max(0, store.running.length - MAX_ACCENTS),
     focus: [...focus].sort((a, b) => a - b),
     group,

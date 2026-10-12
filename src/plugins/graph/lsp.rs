@@ -9,8 +9,9 @@ use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -364,10 +365,19 @@ fn read_msg(r: &mut impl BufRead) -> Result<Value> {
     serde_json::from_slice(&buf).context("lsp json")
 }
 
+/// One frame from the reader thread, or the reason it stopped.
+type Frame = std::result::Result<Value, String>;
+
+/// The server's pipes belong to two threads, so a request waits on a channel with a deadline
+/// instead of on a pipe that has none (T620). A peer that stops answering, or stops reading,
+/// blocks a thread, never the caller; [`Session::expire`] then kills the server, which closes
+/// both pipes and ends the threads.
 struct Session {
     child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    /// To the writer thread that owns the server's stdin.
+    out: Sender<Value>,
+    /// From the reader thread that owns its stdout: one parsed frame, or the reason it stopped.
+    inbox: Receiver<Frame>,
     next_id: i64,
     root: PathBuf,
     opened: HashSet<String>,
@@ -375,6 +385,70 @@ struct Session {
 }
 
 impl Session {
+    fn attach(mut child: Child, root: PathBuf, err_path: PathBuf) -> Result<Self> {
+        match Self::pipes(&mut child) {
+            Ok((out, inbox)) => Ok(Self {
+                child,
+                out,
+                inbox,
+                next_id: 1,
+                root,
+                opened: HashSet::new(),
+                err_path,
+            }),
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                Err(e)
+            }
+        }
+    }
+
+    fn pipes(child: &mut Child) -> Result<(Sender<Value>, Receiver<Frame>)> {
+        let mut stdin = child.stdin.take().context("lsp stdin")?;
+        let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
+        let (out, queue) = mpsc::channel::<Value>();
+        let (frames, inbox) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("rtok-lsp-write".into())
+            .spawn(move || {
+                // A failed write ends the thread; the dropped queue then fails every later send.
+                for msg in queue {
+                    if write_msg(&mut stdin, &msg).is_err() {
+                        break;
+                    }
+                }
+            })
+            .context("lsp writer thread")?;
+        std::thread::Builder::new()
+            .name("rtok-lsp-read".into())
+            .spawn(move || {
+                loop {
+                    let frame = read_msg(&mut stdout).map_err(|e| format!("{e:#}"));
+                    let stop = frame.is_err();
+                    if frames.send(frame).is_err() || stop {
+                        break;
+                    }
+                }
+            })
+            .context("lsp reader thread")?;
+        Ok((out, inbox))
+    }
+
+    fn send(&self, msg: Value) -> Result<()> {
+        self.out
+            .send(msg)
+            .map_err(|_| anyhow::anyhow!("lsp: server input closed"))
+    }
+
+    /// The budget ran out. The server may still answer later, so it is killed and reaped:
+    /// `with_session` starts a fresh one, and no late reply can be taken for a later request.
+    fn expire(&mut self, method: &str) -> anyhow::Error {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        anyhow::anyhow!("lsp: timeout waiting for {method}")
+    }
+
     fn spawn(root: &Path) -> Result<Self> {
         let (bin, args) = pick(root)?;
         if !on_path(bin) {
@@ -397,20 +471,11 @@ impl Session {
         for (key, dir) in lsp_state_env(root) {
             server = server.env(key, dir);
         }
-        let mut child = server
+        let child = server
             .spawn()
             .with_context(|| format!("spawn {} ({bin})", path.display()))?;
-        let stdin = child.stdin.take().context("lsp stdin")?;
-        let stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
-        let mut s = Self {
-            child,
-            stdin,
-            stdout,
-            next_id: 1,
-            root: fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
-            opened: HashSet::new(),
-            err_path,
-        };
+        let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        let mut s = Self::attach(child, root, err_path)?;
         let uri = file_uri(&s.root);
         if let Err(e) = s.request(
             "initialize",
@@ -452,27 +517,27 @@ impl Session {
     }
 
     fn notify(&mut self, method: &str, params: Value) -> Result<()> {
-        write_msg(
-            &mut self.stdin,
-            &json!({"jsonrpc":"2.0","method": method, "params": params}),
-        )
+        self.send(json!({"jsonrpc":"2.0","method": method, "params": params}))
     }
 
     fn request(&mut self, method: &str, params: Value) -> Result<Value> {
+        self.request_within(method, params, ready())
+    }
+
+    fn request_within(&mut self, method: &str, params: Value, budget: Duration) -> Result<Value> {
         let id = json!(self.next_id);
         self.next_id += 1;
-        write_msg(
-            &mut self.stdin,
-            &json!({"jsonrpc":"2.0","id": id, "method": method, "params": params}),
-        )?;
-        let deadline = Instant::now() + ready();
+        self.send(json!({"jsonrpc":"2.0","id": id, "method": method, "params": params}))?;
+        let deadline = Instant::now() + budget;
         loop {
-            if Instant::now() > deadline {
-                bail!("lsp: timeout waiting for {method}");
-            }
-            let msg = match read_msg(&mut self.stdout) {
-                Ok(m) => m,
-                Err(e) => return Err(self.dead(e)),
+            let left = deadline.saturating_duration_since(Instant::now());
+            let msg = match self.inbox.recv_timeout(left) {
+                Ok(Ok(m)) => m,
+                Ok(Err(e)) => return Err(self.dead(anyhow::anyhow!(e))),
+                Err(RecvTimeoutError::Timeout) => return Err(self.expire(method)),
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(self.dead(anyhow::anyhow!("lsp: eof")));
+                }
             };
             if msg.get("method").is_some() && msg.get("id").is_some_and(|i| !i.is_null()) {
                 self.reply_server(&msg)?;
@@ -502,10 +567,7 @@ impl Session {
             }
             _ => json!(null),
         };
-        write_msg(
-            &mut self.stdin,
-            &json!({"jsonrpc":"2.0","id": id, "result": result}),
-        )
+        self.send(json!({"jsonrpc":"2.0","id": id, "result": result}))
     }
 
     fn did_open(&mut self, uri: &str) -> Result<()> {
@@ -530,7 +592,7 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        let _ = write_msg(&mut self.stdin, &json!({"jsonrpc":"2.0","method":"exit"}));
+        let _ = self.send(json!({"jsonrpc":"2.0","method":"exit"}));
         let _ = self.child.kill();
         let _ = self.child.wait();
         let _ = std::fs::remove_file(&self.err_path);
@@ -1141,7 +1203,7 @@ mod tests {
     /// The cached server outlived `rtok mcp`: it sat in a `static`, and statics never drop.
     #[test]
     fn shutdown_reaps_the_cached_server_and_its_stderr_file() {
-        let mut child = Command::new("cat")
+        let child = Command::new("cat")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -1149,20 +1211,130 @@ mod tests {
         let pid = child.id().to_string();
         let err_path = std::env::temp_dir().join(format!("rtok-lsp-test-{pid}.stderr"));
         std::fs::write(&err_path, "").unwrap();
-        let s = Session {
-            stdin: child.stdin.take().unwrap(),
-            stdout: BufReader::new(child.stdout.take().unwrap()),
-            child,
-            next_id: 1,
-            root: PathBuf::new(),
-            opened: HashSet::new(),
-            err_path: err_path.clone(),
-        };
+        let s = Session::attach(child, PathBuf::new(), err_path.clone()).unwrap();
         *SESSION.lock().unwrap_or_else(|e| e.into_inner()) = Some(("test".into(), s));
         shutdown();
         let alive = Command::new("kill").args(["-0", &pid]).status().unwrap();
         assert!(!alive.success(), "server {pid} still running");
         assert!(!err_path.exists());
+    }
+
+    /// A scripted peer: `sh -c script sh arg`, so a script can replay `$1` byte for byte.
+    /// Every script ends on its own, so a red test cannot leave a process behind.
+    fn peer(script: &str, arg: &str) -> Session {
+        let child = Command::new("sh")
+            .args(["-c", script, "sh", arg])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        Session::attach(child, PathBuf::new(), PathBuf::new()).unwrap()
+    }
+
+    fn framed(v: &Value) -> String {
+        let body = v.to_string();
+        format!("Content-Length: {}\r\n\r\n{body}", body.len())
+    }
+
+    fn reply(id: i64) -> Value {
+        json!({"jsonrpc": "2.0", "id": id, "result": {"ok": true}})
+    }
+
+    const BUDGET: Duration = Duration::from_millis(100);
+
+    fn expect_timeout(s: &mut Session, params: Value) {
+        let t0 = Instant::now();
+        let err = s
+            .request_within("textDocument/documentSymbol", params, BUDGET)
+            .expect_err("the peer never answered in time");
+        assert!(format!("{err:#}").contains("timeout"), "{err:#}");
+        assert!(server_broke(&err), "a timeout must reach the fallback path");
+        assert!(
+            t0.elapsed() < Duration::from_millis(1_800),
+            "{:?}",
+            t0.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_silent_peer_times_out_instead_of_blocking_on_the_pipe() {
+        let mut s = peer("sleep 3", "");
+        expect_timeout(&mut s, json!({}));
+    }
+
+    #[test]
+    fn a_reply_after_the_budget_is_a_timeout_not_a_success() {
+        let mut s = peer("sleep 1.5; printf '%s' \"$1\"", &framed(&reply(1)));
+        expect_timeout(&mut s, json!({}));
+    }
+
+    #[test]
+    fn a_partial_frame_does_not_hold_the_request_past_the_budget() {
+        let whole = framed(&reply(1));
+        let mut s = peer("printf '%s' \"$1\"; sleep 3", &whole[..whole.len() - 6]);
+        expect_timeout(&mut s, json!({}));
+    }
+
+    #[test]
+    fn a_header_without_a_body_does_not_hold_the_request() {
+        let mut s = peer("printf 'Content-Length: 40\\r\\n'; sleep 3", "");
+        expect_timeout(&mut s, json!({}));
+    }
+
+    #[test]
+    fn notifications_do_not_extend_the_budget() {
+        let note = framed(&json!({"jsonrpc": "2.0", "method": "$/progress", "params": {}}));
+        let script =
+            "i=0; while [ $i -lt 300 ]; do printf '%s' \"$1\"; sleep 0.01; i=$((i+1)); done";
+        let mut s = peer(script, &note);
+        expect_timeout(&mut s, json!({}));
+    }
+
+    #[test]
+    fn a_peer_that_stops_reading_cannot_block_the_write() {
+        let mut s = peer("sleep 3", "");
+        expect_timeout(&mut s, json!({"pad": "x".repeat(1 << 20)}));
+    }
+
+    #[test]
+    fn a_timely_reply_after_a_notification_succeeds() {
+        let note = framed(&json!({"jsonrpc": "2.0", "method": "window/logMessage", "params": {}}));
+        let both = format!("{note}{}", framed(&reply(1)));
+        let mut s = peer("printf '%s' \"$1\"; sleep 3", &both);
+        let got = s
+            .request_within("workspace/symbol", json!({}), Duration::from_secs(2))
+            .unwrap();
+        assert_eq!(got, json!({"ok": true}));
+    }
+
+    /// The expired server is gone, so `with_session` respawns it and its late reply can never
+    /// be taken for the answer to a later request.
+    #[test]
+    fn an_expired_session_is_reaped_and_refuses_further_requests() {
+        let mut s = peer("sleep 0.5; printf '%s' \"$1\"", &framed(&reply(1)));
+        expect_timeout(&mut s, json!({}));
+        assert!(
+            s.child.try_wait().unwrap().is_some(),
+            "server still running"
+        );
+        std::thread::sleep(Duration::from_millis(700));
+        let again = s.request_within("workspace/symbol", json!({}), Duration::from_secs(1));
+        assert!(again.is_err(), "{again:?}");
+    }
+
+    #[test]
+    fn dropping_a_session_whose_peer_stopped_reading_does_not_wait_for_it() {
+        let mut s = peer("sleep 3", "");
+        let t0 = Instant::now();
+        s.notify("textDocument/didOpen", json!({"pad": "x".repeat(1 << 20)}))
+            .unwrap();
+        drop(s);
+        assert!(
+            t0.elapsed() < Duration::from_millis(1_800),
+            "{:?}",
+            t0.elapsed()
+        );
     }
 }
 
