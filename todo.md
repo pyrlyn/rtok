@@ -111,7 +111,6 @@
 - T583.2. OpenAI output-file identity, partial-download top-up and legacy-row compatibility
 - T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
 - T586. Resolve local relative remotes before deriving project identity
-- T586.1. Resolve local relative/absolute/file-URL remotes to one absolute identity (project.rs)
 - T586.2. Reconcile persisted legacy relative keys for task counters and claims
 - T587. Let an explicit report --format md override configuration
 - T589. Track log generations without using their first line as identity

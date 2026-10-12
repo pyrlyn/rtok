@@ -11854,6 +11854,12 @@ Result: fixed by T276.4, no separate change. `run_bounded` in `src/bench.rs` now
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T586.1. Resolve local relative/absolute/file-URL remotes to one absolute identity (project.rs)
+
+Done means: `project.rs` `canonical_url` resolves a local relative, absolute or `file://` remote against the checkout to one absolute identity; multi-spelling fixtures with real git.
+
+Result: local `origin` remotes (relative path, absolute path, `file://` URL) now resolve to one absolute project key in `src/project.rs`. A relative path resolves against the main checkout, as git does; existing destinations are canonicalized, missing ones fall back to a lexical absolute path, and network and scp remotes are unchanged. Two checkouts with the same relative origin string but different repositories get distinct keys, and every spelling of one remote shares a key from main, a linked worktree or a nested cwd (real-git fixtures plus a Vfs unit test; the three real-git tests failed before the fix). Task counters and claims filed under the old relative key are reconciled in T586.2.
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.

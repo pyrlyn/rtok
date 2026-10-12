@@ -131,9 +131,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T583.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T583.2 | todo | P2 | 3 | 0% | |
 | T584 | todo | P2 | 2 | 0% | |
-| T586 | todo | P2 | 4 | 0% | |
-| T586.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
-| T586.2 | todo | P2 | 3 | 0% | |
+| T586 | todo | P2 | 4 | 50% | |
+| T586.2 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
 | T590 | todo | P2 | 3 | 0% | |
@@ -773,10 +772,6 @@ Execution plan:
 Check: different resolved local remotes never collide solely because their relative strings match, equivalent local spellings share a key, existing state is handled deliberately, and `just check` passes. The isolated harness compiled actual project resolver/normalization functions with a standard filesystem adapter; Git controls used only scratch local repositories. Store counter/claim behavior was source-traced, not exercised end to end.
 
 Planning note: Risk: step 4 may need a creator choice on how to treat an ambiguous shared legacy key; ask at claim time if the adapter cannot tell which project owns it.
-
-### T586.1. Resolve local relative/absolute/file-URL remotes to one absolute identity (project.rs)
-
-Done means: `project.rs` `canonical_url` resolves a local relative, absolute or `file://` remote against the checkout to one absolute identity; multi-spelling fixtures with real git.
 
 ### T586.2. Reconcile persisted legacy relative keys for task counters and claims
 
