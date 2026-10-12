@@ -4,6 +4,7 @@
 
 //! PreCompact checkpoint + compact restore (plan T2.5).
 
+use super::memory::redact_private;
 use rtok_plugin_sdk::{Class, Ctx, Injection, Measurement};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -212,7 +213,9 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
                 if errors.len() == 8 {
                     errors.pop_front();
                 }
-                errors.push_back(s.chars().take(200).collect());
+                // Redact before the cut: a closing tag past the 200th char would leave the
+                // opening one, and the text after it, in the stored note.
+                errors.push_back(redact_private(s).chars().take(200).collect());
             }
         });
         files.track(&v);
@@ -321,7 +324,7 @@ fn user_prompt(v: &Value) -> Option<UserText> {
     if host_injected(v) {
         return Some(UserText::Host);
     }
-    let t = strip_reminders(&raw);
+    let t = strip_reminders(&redact_private(&raw));
     let t = t.trim();
     if t.is_empty() || HOST_OPENERS.iter().any(|o| t.starts_with(o)) {
         Some(UserText::Host)
@@ -794,6 +797,8 @@ pub fn offer_session(cx: &Ctx) -> Option<Injection> {
 
 fn render_offer(cx: &Ctx, text: String) -> Option<Injection> {
     let cap = checkpoint_cap(cx);
+    // Notes written before T548 may still hold a tag; the restore must not hand it back.
+    let text = redact_private(&text).into_owned();
     let text = crate::plugin::fit_budget(cx, &text, Class::Prose, cap);
     (!text.is_empty()).then_some(Injection {
         plugin: "inject",
@@ -1433,6 +1438,79 @@ mod tests {
             .filter(|r| r.kind == "handoff")
             .count();
         assert_eq!(handoffs, 2, "one measurement per startup restore");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T548: a `<private>` block in a typed prompt or a captured error line is cut before
+    /// the checkpoint stores or restores it, even when its closing tag sits past the
+    /// 300/200-char truncation and so could not be matched afterwards.
+    #[test]
+    fn private_text_never_reaches_a_stored_or_restored_checkpoint() {
+        let long = "z".repeat(400);
+        let lines = [
+            serde_json::json!({"type":"user","message":{"content":"use <private>PRIVATE_SENTINEL</private> briefly"}}),
+            serde_json::json!({"type":"user","message":{"content":"mixed <PrIvAtE>\nPRIVATE_SENTINEL\nmultiline</pRiVaTe> case"}}),
+            serde_json::json!({"type":"user","message":{"content":format!("long <private>{long} PRIVATE_SENTINEL</private> tail")}}),
+            serde_json::json!({"type":"assistant","message":{"content":[{"type":"tool_result","content":format!("error: <private>{long} PRIVATE_SENTINEL</private>")}]}}),
+            serde_json::json!({"type":"user","message":{"content":"plain prompt stays"}}),
+        ]
+        .map(|v| v.to_string())
+        .join("\n");
+        let cp = extract(&lines);
+        assert!(!cp.render().contains("PRIVATE_SENTINEL"), "{}", cp.render());
+        assert!(
+            cp.render().contains("plain prompt stays"),
+            "{}",
+            cp.render()
+        );
+
+        let dir = std::env::temp_dir().join("rtok-t548-private-checkpoint");
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo = dir.join("privproj");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::write(repo.join("t.jsonl"), &lines).unwrap();
+        let cfg = crate::testutil::config_in(&dir);
+        let transcript = repo.join("t.jsonl");
+        let cwd = repo.display().to_string();
+        let run = |event: &str, input: serde_json::Value| {
+            let mut out = Vec::new();
+            crate::hooks::run(event, input.to_string().as_bytes(), &mut out, &cfg);
+            String::from_utf8(out).unwrap()
+        };
+        run(
+            "PreCompact",
+            serde_json::json!({"hook_event_name":"PreCompact","session_id":"t548","transcript_path":transcript,"cwd":cwd,"trigger":"auto"}),
+        );
+        run(
+            "SessionEnd",
+            serde_json::json!({"hook_event_name":"SessionEnd","session_id":"t548","transcript_path":transcript,"cwd":cwd,"reason":"clear"}),
+        );
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        for note in [
+            store
+                .latest_note("checkpoint:t548")
+                .unwrap()
+                .expect("checkpoint"),
+            store
+                .latest_session_note(Some("privproj"))
+                .unwrap()
+                .expect("session"),
+        ] {
+            assert!(!note.contains("PRIVATE_SENTINEL"), "{note}");
+            assert!(note.contains("plain prompt stays"), "{note}");
+        }
+        // A row an older build stored with the tag intact is still not restored.
+        let ctx_rt = crate::plugin::Runtime::in_memory("t548-legacy").unwrap();
+        let ctx = Ctx::new(&ctx_rt);
+        ctx.upsert_note(
+            Some("rtok"),
+            &kind(&ctx),
+            "compact",
+            "checkpoint\n- a <private>PRIVATE_SENTINEL</private> b\n",
+        )
+        .unwrap();
+        let text = offer(&ctx).expect("injection").text;
+        assert!(!text.contains("PRIVATE_SENTINEL"), "{text}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

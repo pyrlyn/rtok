@@ -31,10 +31,13 @@ static PRIVATE_TAG: LazyLock<Regex> =
 
 /// Replace each `<private>` block with `[REDACTED]` and trim. Nested tags are not balanced.
 pub fn strip_private(input: &str) -> String {
-    PRIVATE_TAG
-        .replace_all(input, "[REDACTED]")
-        .trim()
-        .to_string()
+    redact_private(input).trim().to_string()
+}
+
+/// [`strip_private`] without the trim, for text whose exact bytes matter (a stored
+/// checkpoint restored byte-stably); borrows when there is no tag.
+pub fn redact_private(input: &str) -> std::borrow::Cow<'_, str> {
+    PRIVATE_TAG.replace_all(input, "[REDACTED]")
 }
 
 /// One line in the hook index: titles only; names the MCP tools that fetch bodies (T293).
