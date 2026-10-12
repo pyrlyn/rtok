@@ -45,7 +45,9 @@ Files:
   hook open (exit 0), printing `ketch install pyrlyn/rtok`.
 - `scripts/worktree.sh` — the worktree hooks' launcher. `WorktreeCreate` must print a path, so a
   missing, failing or too-old `rtok` ends in a plain `git worktree add` instead of silence;
-  `WorktreeRemove` without `rtok` is a plain `git worktree remove`, never forced.
+  `WorktreeRemove` without `rtok` is a plain `git worktree remove`, never forced. The plain
+  fallback decodes the JSON payload with `jq` or `perl` (JSON::PP) and fails with a message when
+  neither exists, rather than guessing at escaped paths.
 - `agents/rtok-scout.md` — a `model: haiku` sub-agent (T132) scoped to the rtok MCP's `read`,
   `search`, `outline`, `explore`, `expand` tools (named `mcp__rtok__<tool>`, the plain form for
   the `mcpServers.rtok` config entry — T275, this plugin ships no `.mcp.json` of its own), so
