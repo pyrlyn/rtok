@@ -420,6 +420,21 @@ pub fn mem_save(
     body: &str,
     project: Option<&str>,
 ) -> anyhow::Result<(i32, bool)> {
+    let proj = project
+        .map(str::to_string)
+        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)));
+    save_scoped(rt, kind, title, body, proj.as_deref())
+}
+
+/// `mem_save` with the scope already decided: `None` is a global note, never an
+/// inferred cwd project. A revision uses this to keep the old note's exact scope.
+fn save_scoped(
+    rt: &crate::plugin::Runtime,
+    kind: &str,
+    title: &str,
+    body: &str,
+    proj: Option<&str>,
+) -> anyhow::Result<(i32, bool)> {
     let title = strip_private(title);
     let body = strip_private(body);
     // Same rejection an omitted title already gets at the MCP boundary (`missing `title``).
@@ -430,12 +445,9 @@ pub fn mem_save(
     if body.is_empty() {
         anyhow::bail!("missing `body`");
     }
-    let proj = project
-        .map(str::to_string)
-        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)));
     // The title is the topic key (T66.1): a re-save updates the row, recall never shows
     // a stale twin next to the new one.
-    let (id, updated) = rt.store.upsert_note(proj.as_deref(), kind, &title, &body)?;
+    let (id, updated) = rt.store.upsert_note(proj, kind, &title, &body)?;
     files::link_note(&Ctx::new(rt), id, &body);
     let embed = crate::store::embed_settings(&rt.config.plugins.memory.embed);
     rt.store.upsert_note_embedding(id, &title, &body, &embed)?;
@@ -607,7 +619,7 @@ pub fn mem_revise(
     let Some(old) = rt.store.note_row(id)? else {
         anyhow::bail!("unknown note id: {id}");
     };
-    let (new, _) = mem_save(rt, &old.kind, title, body, old.project.as_deref())?;
+    let (new, _) = save_scoped(rt, &old.kind, title, body, old.project.as_deref())?;
     if new == id {
         return Ok((new, None));
     }
@@ -997,6 +1009,37 @@ mod tests {
                 .unwrap()
                 .starts_with("jwt tokens v2"),
             "revision landed"
+        );
+    }
+
+    /// T539: a global note (no project) stays global on revise; the revision must not
+    /// infer the cwd's project, retire the global note into it, or touch a same-title
+    /// project note.
+    #[test]
+    fn revising_a_global_note_keeps_it_global() {
+        let cx = crate::plugin::Runtime::in_memory("t539-revise-global").unwrap();
+        let global = cx
+            .store
+            .insert_note(None, "note", "shared", "global body")
+            .unwrap();
+        let other = mem_save(&cx, "note", "shared", "project body", Some("other"))
+            .unwrap()
+            .0;
+        let project_of = |id| cx.store.note_row(id).unwrap().unwrap().project;
+
+        let (same, none) = mem_revise(&cx, global, "shared", "global v2").unwrap();
+        assert_eq!((same, none), (global, None));
+        assert_eq!(project_of(global), None);
+
+        let (new, retired) = mem_revise(&cx, global, "renamed", "global v3").unwrap();
+        assert_eq!(retired, Some(global));
+        assert_eq!(project_of(new), None);
+        assert_eq!(project_of(other), Some("other".to_string()));
+        assert!(
+            mem_get(&cx, other)
+                .unwrap()
+                .unwrap()
+                .starts_with("project body")
         );
     }
 
