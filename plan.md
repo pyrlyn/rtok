@@ -21,7 +21,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T132 | todo | P2 | 2 | 70% | |
+| T132 | in progress | P2 | 2 | 70% | Claude Code / claude-haiku-5-5 |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T262.3 | todo | P2 | 2 | 0% | |
@@ -42,13 +42,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T378 | todo | P3 | 3 | 0% | |
+| T378 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 20% | |
+| T396 | in progress | P3 | 2 | 20% | Claude Code / claude-sonnet-5-5 |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -69,7 +69,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
-| T436.4 | todo | P3 | 2 | 0% | |
+| T436.4 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
 | T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
@@ -80,7 +80,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T561 | todo | P3 | 3 | 0% | |
-| T562 | todo | P1 | 2 | 0% | |
+| T562 | in progress | P1 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T592 | todo | P2 | 3 | 0% | |
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
@@ -179,6 +179,9 @@ Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`br
 `research.md` §17.3(4). Make the cheap path the default one: `plugins/claude/agents/rtok-scout.md` with `model: haiku`, `tools` limited to the rtok MCP `read`, `search`, `outline`, `explore`, `expand`, and a short system prompt — ranged reads only, never a whole file over the outline threshold, answer with `path:line` citations and no file dumps. Verify the plugin `agents/` directory format against the current Claude Code docs first and add the link to the `## Docs` list in `plugins/claude/README.md`.
 Check: `rtok agents install claude` offers the agent file and removal takes it away (host matrix e2e); `tests/host_docs.rs` and `tests/agents_doc.rs` (`RTOK_BLESS=1`) green; T128's per-`agentType` split is the measurement — record `rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent in `research.md` §17 after a dated window.
 Progress (2026-09-24): `plugins/claude/agents/rtok-scout.md` ships with the plugin (`model: haiku`, the five tools under the plugin-scoped names `mcp__plugin_rtok_rtok__<tool>`); unit test on the frontmatter, install/remove e2e in `tests/claude_plugin.rs`. Left: the dated `rtok-scout` vs `Explore`/`general-purpose` read-bytes row in `research.md` §17 once a window of sessions has run with it.
+
+Execution plan (2026-10-12): read the T128 per-`agentType` sub-agent split from this machine's store over the window since 2026-09-24 and write one dated `research.md` §17 row (`rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent, with the command); no product code.
+
 ### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
 Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
@@ -985,6 +988,8 @@ Done when: a literal `search` on a 50k-file repo scans only candidate files and 
 
 Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
 
+Execution plan (2026-10-12): measure `search` p95 on the largest local repository with a dated command; at or under 200 ms close the card with the number in `research.md`; over 200 ms report back before building the prefilter.
+
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -1043,6 +1048,8 @@ From `research.md` §30 (T358.3, T358.4): the Kilo and Gemini CLI readers are "n
 Done means: each reader runs once on a real file from a machine with that host; the Copilot resume semantics are confirmed or the reader stops summing duplicate shutdowns; each `unverified` tag in §30 is resolved or kept with a date.
 
 Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
+
+Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
@@ -1224,6 +1231,8 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
+
+Execution plan (2026-10-12): 1. replace `with_loader("updating host")` in the `agents install/update` path with a per-host spinner through `rtok_sys::proc` progress (T276.1/T276.2); 2. TTY only, nothing on a pipe; 3. non-TTY test, trycmd snapshots unchanged; the manual terminal run stays for the creator.
 
 ### T477. TUI: re-index and remove projects (counterpart of the web actions)
 
