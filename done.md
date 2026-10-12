@@ -11883,6 +11883,12 @@ Check: every newly ended session is eventually selected regardless of lexical ID
 
 Result: ended sessions are exported by a durable `sessions.end_seq` sequence stamped in `Store::end_session` inside an immediate transaction; the OTel `sessions` mark is the last `end_seq` posted, so a session that ends late in an already-exported second ships whatever its id. This replaces the per-second `ROW_NUMBER` rank in `sql_ext.rs` and the `sessions_tail` mark. A Diesel migration (`20261012120002_session_end_seq`) numbers existing ended sessions by `(ended_at, id)` and rewinds the old mark to the start of its watermark second, replaying that second with stable span ids. Regressions cover both id orders (the lower-id case and ties across batches failed before the fix), retry after an HTTP 500 plus restart, more than one batch of ties, and the migration.
 
+### T576.1. Bind Doctor apply to confirmed entry identities and file versions (Rust, fake-fs tests)
+
+Done means: `src/doctor/web.rs` `prepare`/`Selection` and `src/doctor/fix.rs` `fix_found`/`fix_file` carry a preview identity and file-version evidence, and apply refuses a stale request with an explicit response; tests on a fake filesystem; `just check`.
+
+Result: Doctor web and TUI writes are bound to the confirmed preview. `Plan.confirmed` carries, per file, a SHA-256 of the bytes (reusing `store::hex_sha256`) and the entries the diff removes; `Selection.confirmed` returns it to apply, and `fix::fix_bound` refuses as stale any file or entry that is not exactly what the preview showed (a newly found file, an added, replaced or gone entry, changed bytes), while other files in the request are decided on their own evidence. `Fixed.replan` carries a fresh plan to confirm again, and the pre-write reread stays as a separate guard. Fake-filesystem tests cover each case plus a TUI checklist case; the two evidence-free drafts (an entry added after the preview was removed; a file found after the preview was written) failed first. Requests without evidence keep the old path until the page sends it (T576.2).
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.

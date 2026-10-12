@@ -120,9 +120,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T571 | todo | P2 | 2 | 0% | |
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
-| T576 | todo | P2 | 4 | 0% | |
-| T576.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
-| T576.2 | todo | P2 | 3 | 0% | |
+| T576 | todo | P2 | 4 | 50% | |
+| T576.2 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T577 | todo | P2 | 3 | 0% | |
 | T579 | todo | P2 | 3 | 0% | |
 | T580 | todo | P2 | 2 | 0% | |
@@ -666,10 +665,6 @@ Execution plan:
 Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
 
 Planning note: Web gates `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after git add for the web/ part; do .a first, .b depends on it.
-
-### T576.1. Bind Doctor apply to confirmed entry identities and file versions (Rust, fake-fs tests)
-
-Done means: `src/doctor/web.rs` `prepare`/`Selection` and `src/doctor/fix.rs` `fix_found`/`fix_file` carry a preview identity and file-version evidence, and apply refuses a stale request with an explicit response; tests on a fake filesystem; `just check`.
 
 ### T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
 

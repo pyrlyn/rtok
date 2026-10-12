@@ -100,7 +100,6 @@
 - T573. Apply terminal call state even when the live event list is capped
 - T574. Decode SPA asset URL paths before looking up filenames
 - T576. Bind Doctor web writes to the confirmed preview
-- T576.1. Bind Doctor apply to confirmed entry identities and file versions (Rust, fake-fs tests)
 - T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
 - T577. Protect nested package-manager lockfiles during junk cleanup
 - T579. Count each transcript once when scanning directory aliases
