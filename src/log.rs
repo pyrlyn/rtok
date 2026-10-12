@@ -8,12 +8,14 @@
 //! written by [`rtok_log`]; the `logs` table keeps the same lines as rows for `rtok otel`.
 //! [`record`] is the one funnel both come out of.
 
+use rtok_sys::proc::{Output, ProgressRunner};
+
 use crate::config::Config;
 use crate::store::Store;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Stdio};
 use std::thread;
 use std::time::Duration;
 
@@ -203,8 +205,8 @@ impl Tspin {
         if !wanted {
             return None;
         }
-        Command::new("tspin")
-            .arg("--print")
+        ProgressRunner::quiet("tspin", ["--print"])
+            .output(Output::Inherit)
             .stdin(Stdio::piped())
             .spawn()
             .ok()

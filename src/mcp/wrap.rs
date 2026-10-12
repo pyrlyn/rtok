@@ -16,11 +16,12 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Result, bail};
 use rtok_plugin_sdk::{Archive, Class, Measurement};
+use rtok_sys::proc::{Output, ProgressRunner};
 use serde_json::Value;
 
 use crate::config::Config;
@@ -46,8 +47,9 @@ pub fn run(cfg: &Config, argv: &[String]) -> Result<i32> {
     let Some((bin, rest)) = argv.split_first() else {
         bail!("rtok mcp: missing server command after `--`");
     };
-    let mut child = Command::new(bin)
-        .args(rest)
+    // Our stderr stays the server's: its diagnostics are not part of the protocol stream.
+    let mut child = ProgressRunner::quiet(bin, rest)
+        .output(Output::Inherit)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
