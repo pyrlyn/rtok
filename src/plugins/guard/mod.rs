@@ -12,6 +12,7 @@ use serde_json::Value;
 
 #[cfg(feature = "graph")]
 mod grep_symbol;
+mod sed;
 mod skill;
 
 /// T201: above this, `post_tool`'s sha256 + synchronous disk write (inside [`Ctx::put_archive`])
@@ -134,13 +135,7 @@ impl Plugin for Guard {
             // dependency on the `read` plugin's invalidation.
             None if matches!(ev.tool_name, "Bash" | "Edit" | "Write") => {
                 let _ = cx.clear_read_cache("bash");
-                let mutated_path = ev
-                    .tool_input
-                    .get("file_path")
-                    .or_else(|| ev.tool_input.get("path"))
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|p| !p.is_empty());
+                let mutated_path = file_arg(ev.tool_input).and_then(|p| path_identity(p, cx.cwd()));
                 match (ev.tool_name, mutated_path) {
                     ("Bash", _) => {
                         let _ = cx.clear_read_cache("read");
@@ -148,7 +143,8 @@ impl Plugin for Guard {
                     (_, Some(p)) => {
                         let _ = cx.clear_read_cache(&format!("read\t{p}"));
                     }
-                    // An Edit/Write whose path is missing can name any file: drop them all.
+                    // An Edit/Write whose path is missing, or has no stable identity
+                    // (relative without a cwd, `..`), can name any file: drop them all.
                     (_, None) => {
                         let _ = cx.clear_read_cache("read");
                     }
@@ -216,6 +212,40 @@ fn native_redirect(tool: &str, cx: &Ctx) -> Option<PreToolDecision> {
     Some(PreToolDecision::Deny { reason })
 }
 
+fn file_arg(input: &Value) -> Option<&str> {
+    input
+        .get("file_path")
+        .or_else(|| input.get("path"))
+        .and_then(Value::as_str)
+}
+
+/// One spelling for a file, shared by the Read key and the Edit/Write invalidation (T556): a
+/// relative path is resolved against the hook cwd, `.` and repeated separators are dropped.
+/// Lexical only — no file system access. `None` (no key, or clear every read) when the
+/// path is blank, relative without a cwd, or holds `..`, which a symlink makes unresolvable.
+fn path_identity(p: &str, cwd: Option<&str>) -> Option<String> {
+    use std::path::{Component, Path, PathBuf};
+    if p.trim().is_empty() {
+        return None;
+    }
+    let p = Path::new(p);
+    let joined = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        Path::new(cwd.filter(|d| !d.is_empty())?).join(p)
+    };
+    if !joined.is_absolute() || joined.components().any(|c| c == Component::ParentDir) {
+        return None;
+    }
+    Some(
+        joined
+            .components()
+            .collect::<PathBuf>()
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
 pub(crate) fn cache_key(
     tool: &str,
     input: &Value,
@@ -228,14 +258,7 @@ pub(crate) fn cache_key(
         // The `read\t` prefix is what the mutating arm below clears in one store call
         // (`clear_read_cache` deletes `x` and every `x\t…`).
         "Read" => {
-            let p = input
-                .get("file_path")
-                .or_else(|| input.get("path"))?
-                .as_str()?
-                .trim();
-            if p.is_empty() {
-                return None;
-            }
+            let p = path_identity(file_arg(input)?, cwd)?;
             // T322: a slice (`offset`/`limit`/`pages`) is a different body. The slice is a
             // suffix after the path, so the `read\t{path}` prefix clear still reaches it.
             let slice = ["offset", "limit", "pages"].map(|f| match input.get(f) {
@@ -250,9 +273,8 @@ pub(crate) fn cache_key(
             })
         }
         "Bash" => {
-            // T322: `norm_cmd` collapses newlines to spaces, which would hide a command
-            // separator (`ls\nrm x` → `ls rm x`): make each one a `;` first.
-            let c = norm_cmd(&input.get("command")?.as_str()?.replace(['\n', '\r'], " ; "));
+            // T322/T555: `None` when no safe identity exists (an unterminated quote).
+            let c = norm_cmd(input.get("command")?.as_str()?)?;
             // Only read-only commands are keyed: a repeat of `cargo test` after an Edit is
             // new information, not a duplicate.
             // A relative hop resolves against a directory the key cannot name: PostToolUse
@@ -324,14 +346,24 @@ fn segment_read_only(seg: &str) -> bool {
 fn stem_read_only(seg: &str) -> bool {
     let mut w = seg.split_whitespace();
     match super::cmd::formatters::cmd_stem(w.next().unwrap_or("")) {
-        "ls" | "cat" | "head" | "tail" | "grep" | "rg" | "find" | "tree" | "wc" | "sed" | "jq" => {
-            true
-        }
+        "ls" | "cat" | "head" | "tail" | "grep" | "rg" | "find" | "tree" | "wc" | "jq" => true,
+        // T557: a script can write (`w`) or run (`e`) from inside its quotes.
+        "sed" => shlex::split(seg).is_some_and(|w| {
+            w.split_first()
+                .is_some_and(|(_, args)| sed::read_only(args))
+        }),
         // T322: an awk program can write from inside its quotes (`system(`, `print >`,
         // `| "cmd"`), which the quote-aware redirect scan does not see.
         "awk" => !seg.contains("system(") && !seg.contains(['>', '|']),
         "git" => match w.next() {
-            Some("status" | "log" | "diff" | "show" | "rev-parse") => true,
+            // T557: `--output=<file>` (and its unambiguous abbreviations) writes a file.
+            Some("status" | "log" | "diff" | "show" | "rev-parse") => shlex::split(seg)
+                .is_some_and(|w| {
+                    !w.iter().any(|a| {
+                        let name = a.split_once('=').map_or(a.as_str(), |(n, _)| n);
+                        name.len() >= 3 && "--output".starts_with(name)
+                    })
+                }),
             // Only the listing forms: `-D`, `-m`, `-c` and `newname` mutate refs.
             Some("branch") => w.all(|a| {
                 matches!(
@@ -360,10 +392,14 @@ fn writer_marker(seg: &str) -> bool {
     toks.iter().copied().any(is_redirect)
         || has_unquoted_redirect(seg)
         || (stem == "find"
-            && toks
-                .iter()
-                .any(|t| *t == "-delete" || *t == "-exec" || t.starts_with("-exec")))
-        || (stem == "sed" && toks.iter().copied().any(sed_in_place))
+            && shlex::split(seg).is_none_or(|w| {
+                w.iter().any(|t| {
+                    // `-fprint*`/`-fls` write a file, `-ok*` asks to run a command.
+                    t == "-delete"
+                        || t == "-fls"
+                        || ["-exec", "-ok", "-fprint"].iter().any(|p| t.starts_with(p))
+                })
+            }))
         || (stem == "tail"
             && toks
                 .iter()
@@ -395,41 +431,47 @@ fn has_unquoted_redirect(seg: &str) -> bool {
     false
 }
 
-fn sed_in_place(t: &str) -> bool {
-    t == "--in-place"
-        || t.starts_with("--in-place=")
-        || (t.starts_with("-i") && !t.starts_with("--"))
-}
-
 /// Normalized Bash key body: whitespace collapsed, the `rtok run --` wrap stripped, every
 /// leading `cd … &&` hop kept verbatim and in order. Hops are relative to the shell's
 /// current directory, so `cd sub` twice is `sub/sub`, not `sub` — folding them to the last
 /// hop would key two different directories as one and deny a first-time listing.
 /// Quote-aware: `cd 'a && b' && ls` is one hop to `'a && b'`.
-fn norm_cmd(s: &str) -> String {
-    let (hops, rest) = split_cd(&strip_wrap(&collapse(s)));
-    hops.into_iter()
-        .map(|d| format!("cd {d} && "))
-        .chain([rest])
-        .collect()
+fn norm_cmd(s: &str) -> Option<String> {
+    let (hops, rest) = split_cd(&unwrap_flat(s)?)?;
+    Some(
+        hops.into_iter()
+            .map(|d| format!("cd {d} && "))
+            .chain([rest])
+            .collect(),
+    )
 }
 
 /// Splits the leading `cd <dir> &&` hops from the command. Each remainder re-runs
-/// `strip_wrap` because PostToolUse re-wraps the command the model actually ran.
-fn split_cd(s: &str) -> (Vec<String>, String) {
+/// `unwrap_flat` because PostToolUse re-wraps the command the model actually ran.
+fn split_cd(s: &str) -> Option<(Vec<String>, String)> {
     let mut hops = Vec::new();
     let mut t = s.to_string();
     while let Some((d, rest)) = strip_cd_hop(&t) {
         hops.push(d);
-        t = strip_wrap(&rest);
+        t = unwrap_flat(&rest)?;
     }
-    (hops, t)
+    Some((hops, t))
+}
+
+/// The wrapper is removed before the inner command is flattened: inside the wrapper's own
+/// quotes every byte looks like argument text, so flattening first would keep the model's
+/// insignificant whitespace and split the Pre/Post keys.
+fn unwrap_flat(s: &str) -> Option<String> {
+    flatten(&strip_wrap(&flatten(s)?))
 }
 
 /// Whether any leading `cd` hop of the normalized command is relative (`cd sub`, `cd -`,
 /// `cd $HOME/x`). Absolute means a rooted path, `~…` or a Windows drive.
 fn relative_hop(cmd: &str) -> bool {
-    split_cd(cmd).0.iter().any(|t| {
+    let Some((hops, _)) = split_cd(cmd) else {
+        return true;
+    };
+    hops.iter().any(|t| {
         let t = t
             .strip_prefix('\'')
             .and_then(|r| r.strip_suffix('\''))
@@ -447,8 +489,7 @@ fn relative_hop(cmd: &str) -> bool {
 /// Whether the command moves the host's persistent shell, so every cached listing was
 /// taken from a different directory.
 fn has_cd_hop(command: &str) -> bool {
-    let t = collapse(&command.replace(['\n', '\r'], " ; "));
-    strip_cd_hop(&strip_wrap(&t)).is_some()
+    unwrap_flat(command).is_some_and(|t| strip_cd_hop(&t).is_some())
 }
 
 /// One `cd <dir> &&` prefix: the target word (quotes kept as typed) and the remainder
@@ -525,8 +566,53 @@ fn wrap_agent_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
-fn collapse(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+/// Collapses whitespace runs to one space and turns each unquoted newline into a `;` (T322:
+/// it would otherwise hide a command separator, `ls\nrm x` → `ls rm x`). Whitespace inside
+/// quotes or behind a backslash is argument text (T555) and stays byte-for-byte. `None` for
+/// an unterminated quote: no safe identity, so no key.
+fn flatten(s: &str) -> Option<String> {
+    let mut out = String::with_capacity(s.len());
+    let (mut quote, mut gap) = (None::<char>, false);
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some('\'') => {
+                out.push(c);
+                if c == '\'' {
+                    quote = None;
+                }
+            }
+            Some(q) => {
+                out.push(c);
+                if c == '\\' {
+                    out.push(chars.next()?);
+                } else if c == q {
+                    quote = None;
+                }
+            }
+            None if c == '\n' || c == '\r' => {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push(';');
+                gap = true;
+            }
+            None if c.is_whitespace() => gap = true,
+            None => {
+                if gap && !out.is_empty() {
+                    out.push(' ');
+                }
+                gap = false;
+                out.push(c);
+                match c {
+                    '\'' | '"' => quote = Some(c),
+                    '\\' => out.extend(chars.next()),
+                    _ => {}
+                }
+            }
+        }
+    }
+    quote.is_none().then_some(out)
 }
 
 fn payload(v: &Value) -> Vec<u8> {
@@ -623,6 +709,45 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// T555: whitespace inside quotes or behind a backslash is part of an argument, so two
+    /// commands that differ only there read different files and must not share a key.
+    #[test]
+    fn bash_key_keeps_whitespace_inside_arguments() {
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, Some("/r"));
+        for (a, b) in [
+            ("cat 'a  b'", "cat 'a b'"),
+            ("cat \"a  b\"", "cat \"a b\""),
+            ("cat a\\ \\ b", "cat a\\ b"),
+            ("cat 'a\tb'", "cat 'a b'"),
+            ("cat 'a\nb'", "cat 'a b'"),
+            ("cat \"a\nb\"", "cat \"a b\""),
+            ("rtok run -- 'cat '\"'\"'a  b'\"'\"''", "cat 'a b'"),
+        ] {
+            assert!(k(a).is_some(), "{a}");
+            assert_ne!(k(a), k(b), "{a} vs {b}");
+        }
+        // The wrapper PostToolUse sees keys the same as the command PreToolUse sees.
+        assert_eq!(k("rtok run -- 'cat '\"'\"'a  b'\"'\"''"), k("cat 'a  b'"));
+        assert_eq!(k("cat 'a\nb'"), k("cat 'a\nb'"));
+        // Insignificant whitespace still collapses, and a newline outside quotes stays a `;`.
+        assert_eq!(k("cat   'a b'\t x"), k("cat 'a b' x"));
+        assert_eq!(k("rtok run -- 'cat   x'"), k("cat x"));
+        assert_ne!(k("ls\nrm x"), k("ls rm x"));
+        assert_eq!(k("ls\nrm x"), k("ls ; rm x"));
+        // No safe identity: an unterminated quote is never keyed.
+        assert_eq!(k("cat 'a  b"), None);
+    }
+
+    /// T555 at the hook layer: a cached result for one file never answers the other.
+    #[test]
+    fn quoted_whitespace_variant_is_not_denied_as_a_duplicate() {
+        let sh = Shell::new();
+        sh.ran("cat 'a  b'");
+        assert!(sh.denied("cat 'a  b'"));
+        assert!(sh.denied("cat   'a  b'"));
+        assert!(!sh.denied("cat 'a b'"));
     }
 
     /// A redirect glued to a word (`echo x>file`) is still a writer: the
@@ -946,6 +1071,74 @@ mod tests {
             tool_input: &path,
         };
         assert!(g.pre_tool(&read, &Ctx::new(&cx)).is_none());
+    }
+
+    fn read_at(cx: &crate::plugin::Runtime, input: &Value) -> bool {
+        let ev = PreToolUse {
+            tool_name: "Read",
+            tool_input: input,
+        };
+        matches!(
+            Guard.pre_tool(&ev, &Ctx::new(cx)),
+            Some(PreToolDecision::Deny { .. })
+        )
+    }
+
+    fn done(cx: &crate::plugin::Runtime, tool: &'static str, input: &Value) {
+        let resp = json!({"content": "body"});
+        let ev = PostToolUse {
+            tool_name: tool,
+            tool_input: input,
+            tool_response: &resp,
+        };
+        assert!(Guard.post_tool(&ev, &Ctx::new(cx)).is_none());
+    }
+
+    /// T556: a relative path names another file once the hook cwd differs.
+    #[test]
+    fn relative_read_is_keyed_by_its_cwd() {
+        let mut cx = setup();
+        let rel = json!({"file_path": "file.txt"});
+        cx.cwd = Some("/A".to_string());
+        done(&cx, "Read", &rel);
+        assert!(read_at(&cx, &rel));
+        cx.cwd = Some("/B".to_string());
+        assert!(!read_at(&cx, &rel), "another directory's file.txt");
+        cx.cwd = Some("/A".to_string());
+        assert!(read_at(&cx, &rel));
+        assert!(read_at(&cx, &json!({"file_path": "./file.txt"})));
+        assert!(read_at(&cx, &json!({"file_path": "/A/file.txt"})));
+        // No cwd, no identity for a relative path: never cached.
+        cx.cwd = None;
+        assert!(!read_at(&cx, &rel));
+        assert_eq!(cache_key("Read", &rel, None, None), None);
+        // `..` cannot be resolved without the file system.
+        let up = json!({"file_path": "/A/x/../file.txt"});
+        assert_eq!(cache_key("Read", &up, None, Some("/A")), None);
+    }
+
+    /// T556: every spelling of a path invalidates together, slices included; other files keep
+    /// their cache.
+    #[test]
+    fn edit_through_an_alias_invalidates_every_spelling() {
+        let mut cx = setup();
+        cx.cwd = Some("/A".to_string());
+        let rel = json!({"file_path": "./file.txt"});
+        let slice = json!({"file_path": "file.txt", "offset": 10, "limit": 5});
+        let other = json!({"file_path": "other.txt"});
+        for i in [&rel, &slice, &other] {
+            done(&cx, "Read", i);
+            assert!(read_at(&cx, i));
+        }
+        done(&cx, "Edit", &json!({"file_path": "/A/file.txt"}));
+        assert!(!read_at(&cx, &rel));
+        assert!(!read_at(&cx, &slice));
+        assert!(read_at(&cx, &other), "unrelated file keeps its cache");
+        // A relative edit with no cwd cannot name its file: drop every read.
+        cx.cwd = None;
+        done(&cx, "Edit", &json!({"file_path": "other.txt"}));
+        cx.cwd = Some("/A".to_string());
+        assert!(!read_at(&cx, &other));
     }
 
     #[test]
@@ -1311,6 +1504,73 @@ mod tests {
         assert!(k("git rev-parse HEAD").is_some());
         assert!(k("cargo metadata").is_some());
         assert!(k("cargo test").is_none());
+    }
+
+    /// T557: options and scripts that write a file or run a command are not read-only, even
+    /// when the stem is; the common listing forms keep their key.
+    #[test]
+    fn side_effect_variants_of_read_only_stems_have_no_key() {
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
+        for w in [
+            "sed 'w output' input",
+            "sed -n 'w output' input",
+            "sed -e 'w output' input",
+            "sed --expression='w output' input",
+            "sed -ne 'w output' input",
+            "sed 's/a/b/w output' input",
+            "sed 's/a/b/e' input",
+            "sed '1e touch x' input",
+            "sed 'r other' input",
+            "sed -f script input",
+            "sed --file=script input",
+            "sed --in-place s/a/b/ input",
+            "sed 's/[/]/x/w out' input",
+            "find . -fprint output",
+            "find . -fprint0 output",
+            "find . -fprintf output '%p'",
+            "find . -fls output",
+            "find . \"-fprint\" output",
+            "find . -ok rm {} ;",
+            "find . -okdir rm {} ;",
+            "git diff --output=output",
+            "git diff --output output",
+            "git log --out=output",
+            "git show '--output=output'",
+        ] {
+            assert!(k(w).is_none(), "{w}");
+        }
+        for r in [
+            "sed -n 1,40p f",
+            "sed -n '10,20p' f",
+            "sed -n '/foo/p' f",
+            "sed 's/a/b/g' f",
+            "sed -E 's/(a|b)+/x/gI;5q' f",
+            "sed -e 's/a/b/' -e '$d' f",
+            "sed -ne '2p' f",
+            "sed '/^#/d' f",
+            "find . -name '*.rs' -type f",
+            "find . -name x -print",
+            "git diff --stat",
+            "git log --oneline -5",
+            "git diff --name-only HEAD~1",
+        ] {
+            assert!(k(r).is_some(), "{r}");
+        }
+    }
+
+    /// T557 at the hook layer: a writer in disguise drops the earlier Read result and is not
+    /// itself remembered, so repeating it executes again.
+    #[test]
+    fn a_disguised_writer_invalidates_an_earlier_read() {
+        let sh = Shell::new();
+        let read = json!({"file_path": "/r/input"});
+        done(&sh.cx, "Read", &read);
+        assert!(read_at(&sh.cx, &read));
+        sh.ran("sed 'w output' input");
+        assert!(!read_at(&sh.cx, &read), "the writer may have changed it");
+        assert!(!sh.denied("sed 'w output' input"));
+        sh.ran("sed -n 1,2p input");
+        assert!(sh.denied("sed -n 1,2p input"));
     }
 
     /// T57.1 false-deny Check: a writer that shares a read-only stem must clear bash keys.
