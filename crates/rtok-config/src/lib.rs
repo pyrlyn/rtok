@@ -87,6 +87,7 @@ pub const HOSTS: &[&str] = &[
     "qwen",
     "codebuddy",
     "droid",
+    "augment",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -790,6 +791,7 @@ section! {
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
         droid: SetupDroid = SetupDroid::default(),
+        augment: SetupAugment = SetupAugment::default(),
     }
 }
 
@@ -946,6 +948,11 @@ section! {
 section! {
     /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
     SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
+}
+
+section! {
+    /// `[setup.augment]` — the Auggie CLI's user settings file (T413.8).
+    SetupAugment { settings_path: PathBuf = p("~/.augment/settings.json") }
 }
 
 section! {
@@ -1700,6 +1707,7 @@ impl Config {
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
             setup.droid.mcp_path,
+            setup.augment.settings_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

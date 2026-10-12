@@ -269,6 +269,7 @@ report.since = 30d
 setup.aider.config_path = ~/.aider.conf.yml
 setup.antigravity.cli_plugins_path = ~/.gemini/antigravity-cli/plugins
 setup.antigravity.plugins_path = ~/.gemini/config/plugins
+setup.augment.settings_path = ~/.augment/settings.json
 setup.backup = true
 setup.backup_files = 5
 setup.claude.settings_path = ~/.claude/settings.json

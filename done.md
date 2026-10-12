@@ -8788,6 +8788,17 @@ Check: the T413 per-host check (step 5) for this host.
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
 
+### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
+
+IDE extension and Auggie CLI. MCP and hooks if documented.
+
+Done: `src/agents/augment/` (one CLI variant, `auggie` on PATH): `mcpServers.rtok` in `~/.augment/settings.json` through `register_stdio_mcp` (no second copy of the JSON shape Cline, Roo, Windsurf and Droid share), `[setup.augment] settings_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS`, docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: hook commands must be script files and `PreToolUse` can only deny (no `updatedInput`), no model endpoint or key setting is documented, and Auggie plugins come from Augment's own marketplace. The IDE extension documents no config file, so it has no variant. Sources and dates in `research.md` section 32.8.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.

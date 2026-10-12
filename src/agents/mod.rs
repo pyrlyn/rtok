@@ -14,6 +14,7 @@
 
 pub mod aider;
 pub mod antigravity;
+pub mod augment;
 pub mod claude;
 pub mod cline;
 pub mod codebuddy;
@@ -112,6 +113,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
         "droid" => Some(&droid::Droid),
+        "augment" => Some(&augment::Augment),
         _ => None,
     }
 }

@@ -445,6 +445,8 @@ dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (х
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: ті самі файли (вбудований CodeBuddy Code; неперевірено)
 [setup.droid]
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: користувацький файл MCP-серверів (mcpServers)
+[setup.augment]
+settings_path = "~/.augment/settings.json"   # Auggie CLI: користувацькі налаштування, mcpServers
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)

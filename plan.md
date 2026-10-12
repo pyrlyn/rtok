@@ -52,7 +52,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -709,14 +708,6 @@ VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per docu
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
-
-### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-
-IDE extension and Auggie CLI. MCP and hooks if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Augment and Auggie docs for MCP and hooks; skip a surface whose file is not documented.
 
 ### T413.9. `rtok agents install junie` — JetBrains Junie
 

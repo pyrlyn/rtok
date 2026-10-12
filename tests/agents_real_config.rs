@@ -112,6 +112,10 @@ const HOSTS: &[Host] = &[
         id: "droid",
         files: &[".factory/mcp.json"],
     },
+    Host {
+        id: "augment",
+        files: &[".augment/settings.json"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -220,6 +224,9 @@ fn fixture(rel: &str) -> &'static str {
         | ".factory/mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
+        }
+        ".augment/settings.json" => {
+            r#"{"mcpServers":{"foreign":{"command":"x"}},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/x/stop.sh"}]}]}}"#
         }
         ".claude/settings.json" => {
             r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"other-tool run"}]}]},"env":{"KEEP":"1"}}"#
@@ -347,6 +354,7 @@ real_config_round_trip! {
     roo_keeps_the_real_mcp_settings_json => "roo",
     qwen_keeps_the_real_settings_json => "qwen",
     droid_keeps_the_real_mcp_json => "droid",
+    augment_keeps_the_real_settings_json => "augment",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

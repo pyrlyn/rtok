@@ -444,6 +444,8 @@ dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (ho
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
 [setup.droid]
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: user-level MCP servers (mcpServers)
+[setup.augment]
+settings_path = "~/.augment/settings.json"   # Auggie CLI: user settings, mcpServers
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)

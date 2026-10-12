@@ -111,6 +111,7 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
         ("antigravity", vec!["--yes"], None),
         ("devin", vec!["--yes"], Some(home.join("devin/config.json"))),
         ("droid", vec![], Some(home.join(".factory/mcp.json"))),
+        ("augment", vec![], Some(home.join(".augment/settings.json"))),
     ]
 }
 

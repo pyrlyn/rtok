@@ -316,6 +316,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.aider.config_path | ~/.aider.conf.yml | default |
 | setup.antigravity.cli_plugins_path | ~/.gemini/antigravity-cli/plugins | default |
 | setup.antigravity.plugins_path | ~/.gemini/config/plugins | default |
+| setup.augment.settings_path | ~/.augment/settings.json | default |
 | setup.backup | true | default |
 | setup.backup_files | 5 | default |
 | setup.claude.settings_path | ~/.claude/settings.json | default |
@@ -445,7 +446,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-399 keys.
+400 keys.
 
 ## Doctor
 
@@ -659,6 +660,11 @@ agents
     mcp     not installed
     proxy   not supported: Droid has no single model base-URL setting; each customModels entry carries its own baseUrl
     plugin  not supported: Droid plugins install into its own cache through `droid plugin install`; rtok ships no Droid plugin
+  augment (cli)
+    hooks   not supported: Augment hooks must be script files and PreToolUse can only deny (no updatedInput), so rtok cannot rewrite a call through them
+    mcp     not installed
+    proxy   not supported: Augment documents no model endpoint setting or bring-your-own key to point at the proxy
+    plugin  not supported: Auggie plugins come from marketplaces through `auggie plugin install`; rtok ships no Augment plugin
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked
