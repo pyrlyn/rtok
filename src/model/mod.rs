@@ -1016,7 +1016,7 @@ fn junk_page(cfg: &Config) -> Option<(String, JunkCard)> {
 /// snapshot reading that home, never the real one. Read-only: unlike `config show`, a
 /// snapshot tick never runs `ensure_user_file` — a page view must not create files.
 fn config_page_text(cfg: &Config) -> Option<String> {
-    let fig = layers::figment(&cfg.home, None, None);
+    let fig = layers::figment(&cfg.home, cfg.loaded_from.0.as_deref(), None);
     let mut out = String::new();
     for (key, value, source) in layers::entries(&fig) {
         out.push_str(&format!("{key} = {value} ({source})\n"));

@@ -722,8 +722,15 @@ impl App {
         if self.page() == "graph" && self.exporter.typing() && self.exporter_key(code) {
             return false;
         }
+        // An open `/` filter owns every printable key, `?` and `r` included (T637).
+        if self.filter_typing()
+            && (self.page() == "calls" && self.calls_key(code)
+                || self.page() == "config" && self.config_key(code))
+        {
+            return false;
+        }
         // T60.8: `?` toggles the help overlay and `r` re-reads the model before the
-        // next tick; both are global.
+        // next tick; both are global outside text entry.
         if code == KeyCode::Char('?') {
             self.help = !self.help;
             return false;
@@ -801,6 +808,19 @@ impl App {
                 }
                 false
             }
+            _ => false,
+        }
+    }
+
+    /// Whether the page's `/` filter is capturing text.
+    fn filter_typing(&self) -> bool {
+        match self.page() {
+            "calls" => self
+                .calls
+                .expand
+                .as_ref()
+                .is_some_and(|pane| pane.filtering),
+            "config" => self.config.filtering,
             _ => false,
         }
     }
@@ -1164,6 +1184,67 @@ pub(super) mod tests {
             !app.key(KeyCode::Char('r'), KeyModifiers::NONE),
             "r is not a quit"
         );
+    }
+
+    /// T637: an open filter takes `?` and `r` as text; closed, they are global again.
+    #[test]
+    fn filter_text_is_not_stolen_by_global_shortcuts() {
+        let mut cfg = config();
+        cfg.tui.tab = "config".into();
+        let mut app = App::new(&cfg);
+        assert_eq!(app.page(), "config");
+        let requested = app.requested;
+        let none = KeyModifiers::NONE;
+        app.key(KeyCode::Char('/'), none);
+        for c in "proxy?r".chars() {
+            app.key(KeyCode::Char(c), none);
+        }
+        assert_eq!(app.config_filter(), (true, "proxy?r"));
+        assert!(!app.help_open(), "? is text, not help");
+        assert_eq!(app.requested, requested, "r is text, not a refresh");
+        app.key(KeyCode::Backspace, none);
+        assert_eq!(app.config_filter().1, "proxy?");
+        assert!(
+            !app.key(KeyCode::Char('q'), none),
+            "q is text while filtering"
+        );
+        assert_eq!(app.config_filter().1, "proxy?q");
+        assert!(
+            app.key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            "Ctrl+C still quits"
+        );
+        app.key(KeyCode::Enter, none);
+        assert_eq!(app.config_filter(), (false, "proxy?q"));
+        app.key(KeyCode::Char('?'), none);
+        assert!(app.help_open(), "? is help again once the filter closes");
+        app.key(KeyCode::Char('?'), none);
+        app.key(KeyCode::Char('r'), none);
+        assert_eq!(app.requested, requested + 1, "r refreshes again");
+        app.key(KeyCode::Char('/'), none);
+        assert!(app.config_filter().0, "the filter reopens");
+
+        let mut cfg = config();
+        cfg.tui.tab = "calls".into();
+        let mut app = App::new(&cfg);
+        app.calls.expand = Some(ExpandPane {
+            id: "x".into(),
+            text: String::new(),
+            filter: String::new(),
+            filtering: false,
+            scroll: 0,
+        });
+        let requested = app.requested;
+        app.key(KeyCode::Char('/'), none);
+        for c in "a?r".chars() {
+            app.key(KeyCode::Char(c), none);
+        }
+        let pane = app.calls.expand.as_ref().unwrap();
+        assert_eq!(pane.filter, "a?r");
+        assert!(!app.help_open());
+        assert_eq!(app.requested, requested);
+        app.key(KeyCode::Esc, none);
+        app.key(KeyCode::Char('?'), none);
+        assert!(app.help_open(), "closed, ? is help");
     }
 
     /// T60.8: the KEYS table documents every page whose keys the handler claims —
