@@ -422,7 +422,8 @@ mod tests {
             let m = format!(r#"{{"version":2,"plugins":{{"pony@a":[{entry}]}}}}"#);
             std::fs::write(home.join(".claude/plugins/installed_plugins.json"), m).unwrap();
         };
-        let path = plugin.display();
+        // A Windows path holds backslashes, which JSON text must escape.
+        let path = plugin.display().to_string().replace('\\', "\\\\");
         let cwd = Some(Path::new("/B"));
         for foreign in [
             format!(r#"{{"scope":"project","projectPath":"/A","installPath":"{path}"}}"#),
