@@ -2505,6 +2505,45 @@
             "to",
             "both"
           ]
+        },
+        {
+          "description": "Re-read the project's files (T329.54). Answered at once; the row reads `indexing` until\nthe worker ends, then `ok` or `failed` with the error.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "reindex"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "project"
+          ]
+        },
+        {
+          "description": "Drop the project from the registry with its index rows; its files are never touched.\nWithout `confirmed` nothing is written and the dry run comes back as a\n[`ServerFrame::ProjectPlan`].",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "remove"
+            },
+            "confirmed": {
+              "type": "boolean",
+              "default": false
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "project",
+            "confirmed"
+          ]
         }
       ]
     },
@@ -2533,6 +2572,13 @@
         "created_at": {
           "type": "integer",
           "format": "int64"
+        },
+        "error": {
+          "description": "Why the last re-index failed, while `state` is `failed` (T329.54).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "health": {
           "description": "The 0 to 100 health score with its components, reasons and fixes (T329.19).",
@@ -3066,6 +3112,27 @@
             "type",
             "id",
             "text"
+          ]
+        },
+        {
+          "description": "What removing a project would drop (T329.54): the dry run `graph projects remove\n--dry-run` prints. Nothing was removed; the page asks the user before it sends the\nconfirmed request.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "projectplan"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "plan"
           ]
         },
         {
