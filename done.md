@@ -238,6 +238,27 @@ Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- ju
 Status: done 2026-10-11
 Model: OpenAI / GPT-6
 
+### T592. Keep late same-second sessions from moving behind the OTel cursor
+
+Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
+
+This is an uncovered case of completed T36.12's same-second delivery guarantee, not another active copy of that task. Its [integration test](tests/otel.rs#L178) uses `s1` then `s2` and checks counts, so the row-identity failure is missed. No claim is made that the backend displays duplicates: the repeated span has a stable ID, but the late session's root span is absent altogether.
+
+Execution plan:
+
+1. Add store and exporter regressions with both sessions already present, a later completion at the watermark second, and lexical ID orders in both directions. Inspect emitted session/span IDs, not just batch lengths or POST counts; the late session must be delivered and the next flush must drain.
+2. Replace the mutable rank/count cursor with durable delivery state that cannot move behind already-exported rows. Prefer a monotonic completion/outbox sequence or explicit acknowledged session identities; a timestamp plus lexical last-ID cursor alone still skips late lower IDs. Keep database access in Store and use Diesel under the existing SQL policy.
+3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
+4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
+
+Chosen design: migration 0050 adds `sessions.end_seq` (next value on every end, taken in an immediate transaction like T615's `seq`); the exporter's single cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The old `sessions`/`sessions_tail` marks are dropped and the new mark starts in front of the old mark's whole second (replay over guess). Files: `crates/rtok-store/{migrations/0049*,src/otel.rs,src/sql_ext.rs,src/schema.rs}`, `src/otel/export.rs`, `tests/otel.rs`.
+
+Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
+
+Result: migration 0050 adds `sessions.end_seq`, taken in an immediate transaction each time a session ends at a new second, and the exporter's one cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The `ROW_NUMBER` query (`SessionsPending` in `sql_ext.rs`) and the `sessions`/`sessions_tail` marks are gone. Existing databases: sessions are numbered by `(ended_at, id)` and the new mark starts in front of the old mark's whole second, so a few already-posted sessions replay with the same span ids instead of a guess losing one. Tests: `tests/otel.rs` posts a late session after an exported one in both id orders, matching the posted span's session id (the lower-id case failed on `origin/main`, the higher-id case passed as the control) and restarts the runtime; store tests cover end order, batching, a repeated end and the 0049 backfill.
+
+Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
+
 ### T623.1. Request ids on the `/ws` protocol: the server echoes `req` on every answer
 
 First half of T623, split when claimed (the whole task exceeds 500 lines: Rust protocol, schema, generated types, client queue, mocks and tests).
@@ -258,7 +279,6 @@ Check: every answer to a request that carried `req` carries the same `req`, succ
 Result: `src/web/protocol.rs` gains the `Request` and `Reply` envelopes (an optional `req`, flattened over `ClientMessage` and `ServerFrame`) and `tag_reply`; `inbound` in `src/web/mod.rs` reads `req` off the request and writes it into whatever answers it, `message` refusals and parse errors included. The committed schema and `snapshot.gen.ts` carry the new types. Nothing in the client sends `req` yet, so behavior is unchanged until T623.2. Tests: `protocol.rs` units (`tag_reply` equals the serialized envelope, requests parse with and without `req`) and `tests/web_e2e.rs::answers_echo_the_request_id_and_only_that_one` over a real socket; the e2e test fails with the tagging removed.
 
 Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
-
 
 ### T591. Audit OpenTelemetry export cursors and cumulative metrics
 
@@ -1533,6 +1553,14 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
+
+### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
+
+Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
+
+Found by the capture: Codex applies a `PreToolUse` rewrite only with `permissionDecision: "allow"` next to `updatedInput`; Claude's shape (no decision) leaves the call unchanged and marks the hook run failed. So a Codex output adapter in `src/hooks/mod.rs` adds `allow` to a rewrite and drops `updatedMcpToolOutput`, which Codex does not read.
+
+Result (2026-10-12): `hook_events.rs` carries the `codex` rows (`PreToolUse` on Bash, `PostToolUse` on `*`, `PreCompact`, `PostCompact`) as installer rows; `run_hooks` walks them through the shared Claude-layout insert/strip with the `--host codex` spelling and still recognises the old plain one, so an upgrade rewrites a T58.2 entry in place. `hooks::codex_output` adds `permissionDecision: "allow"` to a rewrite and drops `updatedMcpToolOutput`. `plugins/codex/hooks/hooks.json`, both READMEs and `AGENTS.md` follow the table; `tests/codex_plugin.rs` compares the manifest to it. Live payloads: `research.md` §40, `tests/fixtures/hooks/codex/`. Tests: `codex_output_allows_a_rewrite_and_drops_cursor_keys`, `codex_live_payloads_dispatch_under_the_codex_host`, `hooks_json_carries_the_codex_rows_and_upgrades_the_old_spelling`. Not verified: whether `allow` skips Codex's own approval prompt.
 
 ### T262.4. Copilot CLI: spawn brief on `subagentStart`
 
@@ -8804,6 +8832,12 @@ Model: Cursor / grok 4.7
 `rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
 
 Done: `src/agents/droid/` (one CLI variant, `droid` on PATH): `mcpServers.rtok` in `~/.factory/mcp.json` through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON), `[setup.droid] mcp_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (nothing about Droid's caches is documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Factory documents hooks (`research.md` section 32.3) but no tool-name list or `PreToolUse` rewrite output to build the mapping from, so a hooks task has to verify both; `customModels` carry a `baseUrl` each; the plugin needs a `plugins/droid` unit (D21). Research with sources and the 2026-10-12 check date in `research.md` section 32.3. Tests: `droid` unit tests (dry run, idempotent round trip, foreign servers kept, apply twice), `agents_install` matrix row, `droid_keeps_the_real_mcp_json` (foreign server kept byte-for-byte), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`. Per-host check: `droid` is not installed here, so no manual `--dry-run`.
+
+### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+
+Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
+
+Done: `src/agents/kiro/` with two variants, `Kiro CLI` (`kiro-cli` on PATH) and `Kiro IDE` (`/Applications/Kiro.app`, `~/Applications/Kiro.app`; other OS paths unverified, not probed). Both edit one file, `~/.kiro/settings/mcp.json`, through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON); `shared()` is true, so a plain install writes it once and lists the IDE as the CLI's sibling. `[setup.kiro] mcp_path` moves the file. Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (no caches documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: the hooks page states no exit-code or output-to-context rules for command hooks. Research with sources and the 2026-10-12 check date in `research.md` section 32.4; two doc pages disagree on the global path (`settings/mcp.json` vs `~/.kiro/mcp.json`) and the CLI-reads-the-same-file point is unverified, both recorded there. Tests: `kiro` unit tests (dry run, idempotent round trip, foreign servers kept, shared-file variants, apply twice), `agents_install` matrix row, `kiro_keeps_the_real_mcp_json`, `EXPECTED_VARIANTS` (CLI and IDE), `host_docs`, `agents_doc`. Per-host check: Kiro is not installed here (no `kiro-cli`, no `~/.kiro`), so no manual `--dry-run`.
 
 ### T413.5. `rtok agents install amp` — Amp
 
