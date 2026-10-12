@@ -5,7 +5,7 @@
 //! Optional LSP backend (T30.2). Native JSON-RPC over stdio.
 //! Spawns rust-analyzer / clangd / typescript-language-server from PATH (D6: not serena).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -320,6 +320,16 @@ fn rel(root: &Path, uri: &str) -> String {
         .unwrap_or_else(|| p.display().to_string())
 }
 
+/// How the server wants document edits: `textDocumentSync` is a kind number or an options
+/// object whose `change` is one. A server that says nothing gets close-and-reopen, which every
+/// server accepts.
+fn sync_kind(init: &Value) -> u8 {
+    let sync = &init["capabilities"]["textDocumentSync"];
+    sync.as_u64()
+        .or_else(|| sync["change"].as_u64())
+        .map_or(0, |k| k.min(2) as u8)
+}
+
 fn kind_name(k: u64) -> &'static str {
     match k {
         5 => "class",
@@ -365,6 +375,11 @@ fn read_msg(r: &mut impl BufRead) -> Result<Value> {
     serde_json::from_slice(&buf).context("lsp json")
 }
 
+struct OpenDoc {
+    version: i64,
+    text: String,
+}
+
 /// One frame from the reader thread, or the reason it stopped.
 type Frame = std::result::Result<Value, String>;
 
@@ -380,7 +395,10 @@ struct Session {
     inbox: Receiver<Frame>,
     next_id: i64,
     root: PathBuf,
-    opened: HashSet<String>,
+    /// Documents the server holds open, with the text it was last sent.
+    opened: HashMap<String, OpenDoc>,
+    /// `textDocumentSync.change` from `initialize`: 0 means the server takes no `didChange`.
+    sync_change: u8,
     err_path: PathBuf,
 }
 
@@ -393,7 +411,8 @@ impl Session {
                 inbox,
                 next_id: 1,
                 root,
-                opened: HashSet::new(),
+                opened: HashMap::new(),
+                sync_change: 0,
                 err_path,
             }),
             Err(e) => {
@@ -433,6 +452,17 @@ impl Session {
             })
             .context("lsp reader thread")?;
         Ok((out, inbox))
+    }
+
+    /// Re-sync every open document with its file. A server keeps the text it was sent and
+    /// ignores the disk, so without this `workspace/symbol` and the positions it returns would
+    /// come from the snapshot of an earlier query.
+    fn refresh_open(&mut self) -> Result<()> {
+        let uris: Vec<String> = self.opened.keys().cloned().collect();
+        for uri in uris {
+            self.did_open(&uri)?;
+        }
+        Ok(())
     }
 
     fn send(&self, msg: Value) -> Result<()> {
@@ -477,7 +507,7 @@ impl Session {
         let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
         let mut s = Self::attach(child, root, err_path)?;
         let uri = file_uri(&s.root);
-        if let Err(e) = s.request(
+        match s.request(
             "initialize",
             json!({
                 // Ours, not null: the server watches it and exits when rtok dies, even by
@@ -498,7 +528,8 @@ impl Session {
                 "workspaceFolders": [{"uri": uri, "name": "root"}]
             }),
         ) {
-            return Err(s.dead(e));
+            Ok(init) => s.sync_change = sync_kind(&init),
+            Err(e) => return Err(s.dead(e)),
         }
         s.notify("initialized", json!({}))?;
         Ok(s)
@@ -570,13 +601,39 @@ impl Session {
         self.send(json!({"jsonrpc":"2.0","id": id, "result": result}))
     }
 
+    /// Make the server's copy of `uri` the file's current text. Nothing is recorded as sent
+    /// until its notification is queued.
     fn did_open(&mut self, uri: &str) -> Result<()> {
-        if !self.opened.insert(uri.to_string()) {
+        let Ok(text) = std::fs::read_to_string(path_from_file_uri(uri)) else {
+            // Gone or unreadable: once closed the server falls back to the disk, not to a
+            // snapshot of text that no longer exists.
+            return self.close(uri);
+        };
+        let Some(doc) = self.opened.get(uri) else {
+            return self.open(uri, text, 1);
+        };
+        if doc.text == text {
             return Ok(());
         }
-        let path = path_from_file_uri(uri);
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        let language_id = match path.extension().and_then(OsStr::to_str) {
+        let version = doc.version + 1;
+        if self.sync_change == 0 {
+            self.close(uri)?;
+            return self.open(uri, text, version);
+        }
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {"uri": uri, "version": version},
+                "contentChanges": [{"text": text}]
+            }),
+        )?;
+        self.opened
+            .insert(uri.to_string(), OpenDoc { version, text });
+        Ok(())
+    }
+
+    fn open(&mut self, uri: &str, text: String, version: i64) -> Result<()> {
+        let language_id = match path_from_file_uri(uri).extension().and_then(OsStr::to_str) {
             Some("rs") => "rust",
             Some("dart") => "dart",
             _ => "plaintext",
@@ -584,9 +641,24 @@ impl Session {
         self.notify(
             "textDocument/didOpen",
             json!({"textDocument": {
-                "uri": uri, "languageId": language_id, "version": 1, "text": text
+                "uri": uri, "languageId": language_id, "version": version, "text": text
             }}),
-        )
+        )?;
+        self.opened
+            .insert(uri.to_string(), OpenDoc { version, text });
+        Ok(())
+    }
+
+    fn close(&mut self, uri: &str) -> Result<()> {
+        if !self.opened.contains_key(uri) {
+            return Ok(());
+        }
+        self.notify(
+            "textDocument/didClose",
+            json!({"textDocument": {"uri": uri}}),
+        )?;
+        self.opened.remove(uri);
+        Ok(())
     }
 }
 
@@ -616,7 +688,9 @@ fn with_session<T>(root: &Path, f: impl FnOnce(&mut Session) -> Result<T>) -> Re
         *g = None;
         *g = Some((key, Session::spawn(root)?));
     }
-    f(&mut g.as_mut().expect("session").1)
+    let s = &mut g.as_mut().expect("session").1;
+    s.refresh_open()?;
+    f(s)
 }
 
 /// Stop the cached language server (`exit`, kill, reap) and remove its stderr file.
@@ -1321,6 +1395,215 @@ mod tests {
         std::thread::sleep(Duration::from_millis(700));
         let again = s.request_within("workspace/symbol", json!({}), Duration::from_secs(1));
         assert!(again.is_err(), "{again:?}");
+    }
+
+    /// A peer that appends everything the session sends to `log`, so a test can read back the
+    /// notifications. It ends with the session's kill.
+    fn recording(dir: &Path) -> (Session, PathBuf) {
+        let log = dir.join("peer.log");
+        (peer("cat > \"$1\"", log.to_str().unwrap()), log)
+    }
+
+    /// The `(method, params)` of every frame the peer has received so far, once at least `n` of
+    /// them have arrived.
+    fn received(log: &Path, n: usize) -> Vec<(String, Value)> {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let bytes = std::fs::read(log).unwrap_or_default();
+            let mut r = std::io::Cursor::new(bytes);
+            let mut got = Vec::new();
+            while let Ok(m) = read_msg(&mut r) {
+                got.push((
+                    m["method"].as_str().unwrap_or("").to_string(),
+                    m["params"].clone(),
+                ));
+            }
+            if got.len() >= n || Instant::now() > deadline {
+                return got;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn doc_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rtok-lsp-doc-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn text_of(note: &(String, Value)) -> &str {
+        let p = &note.1["textDocument"];
+        p["text"]
+            .as_str()
+            .or(note.1["contentChanges"][0]["text"].as_str())
+            .unwrap_or("")
+    }
+
+    /// The reported defect: the second query got the first snapshot.
+    #[test]
+    fn an_edited_file_reaches_a_syncing_server_as_a_full_change() {
+        let dir = doc_dir("change");
+        let file = dir.join("a.rs");
+        std::fs::write(&file, "fn old_symbol() {}\n").unwrap();
+        let (mut s, log) = recording(&dir);
+        s.sync_change = 1;
+        let uri = file_uri(&file);
+        s.did_open(&uri).unwrap();
+        std::fs::write(&file, "fn new_symbol() {}\n").unwrap();
+        s.did_open(&uri).unwrap();
+        let got = received(&log, 2);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!(got[0].0, "textDocument/didOpen");
+        assert_eq!(text_of(&got[0]), "fn old_symbol() {}\n");
+        assert_eq!(got[1].0, "textDocument/didChange");
+        assert_eq!(got[1].1["textDocument"], json!({"uri": uri, "version": 2}));
+        assert_eq!(text_of(&got[1]), "fn new_symbol() {}\n");
+    }
+
+    #[test]
+    fn a_server_without_change_sync_gets_a_close_and_a_reopen() {
+        let dir = doc_dir("reopen");
+        let file = dir.join("a.rs");
+        std::fs::write(&file, "fn one() {}\n").unwrap();
+        let (mut s, log) = recording(&dir);
+        let uri = file_uri(&file);
+        s.did_open(&uri).unwrap();
+        std::fs::write(&file, "fn two() {}\n").unwrap();
+        s.did_open(&uri).unwrap();
+        let got = received(&log, 3);
+        let methods: Vec<_> = got.iter().map(|(m, _)| m.as_str()).collect();
+        assert_eq!(
+            methods,
+            [
+                "textDocument/didOpen",
+                "textDocument/didClose",
+                "textDocument/didOpen"
+            ]
+        );
+        assert_eq!(got[2].1["textDocument"]["version"], 2);
+        assert_eq!(text_of(&got[2]), "fn two() {}\n");
+    }
+
+    #[test]
+    fn an_unchanged_file_is_not_sent_twice() {
+        let dir = doc_dir("same");
+        let file = dir.join("a.rs");
+        std::fs::write(&file, "fn same() {}\n").unwrap();
+        let (mut s, log) = recording(&dir);
+        s.sync_change = 1;
+        let uri = file_uri(&file);
+        s.did_open(&uri).unwrap();
+        s.did_open(&uri).unwrap();
+        s.refresh_open().unwrap();
+        s.notify("probe", json!({})).unwrap();
+        let methods: Vec<_> = received(&log, 2).into_iter().map(|(m, _)| m).collect();
+        assert_eq!(methods, ["textDocument/didOpen", "probe"]);
+    }
+
+    #[test]
+    fn consecutive_edits_with_unicode_count_versions_up() {
+        let dir = doc_dir("unicode");
+        let file = dir.join("a.rs");
+        let (mut s, log) = recording(&dir);
+        s.sync_change = 2;
+        let uri = file_uri(&file);
+        let texts = [
+            "fn \u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}() {}\n",
+            "// \u{1f980}\nfn crab() {}\n",
+            "fn plain() {}\n",
+        ];
+        for t in texts {
+            std::fs::write(&file, t).unwrap();
+            s.did_open(&uri).unwrap();
+        }
+        let got = received(&log, 3);
+        assert_eq!(got.len(), 3, "{got:?}");
+        for (i, t) in texts.iter().enumerate() {
+            assert_eq!(text_of(&got[i]), *t);
+            assert_eq!(got[i].1["textDocument"]["version"], i as i64 + 1);
+        }
+    }
+
+    #[test]
+    fn a_deleted_file_is_closed_and_a_recreated_one_is_opened_again() {
+        let dir = doc_dir("delete");
+        let file = dir.join("a.rs");
+        std::fs::write(&file, "fn gone() {}\n").unwrap();
+        let (mut s, log) = recording(&dir);
+        s.sync_change = 1;
+        let uri = file_uri(&file);
+        s.did_open(&uri).unwrap();
+        std::fs::remove_file(&file).unwrap();
+        s.did_open(&uri).unwrap();
+        std::fs::write(&file, "fn back() {}\n").unwrap();
+        s.did_open(&uri).unwrap();
+        let got = received(&log, 3);
+        let methods: Vec<_> = got.iter().map(|(m, _)| m.as_str()).collect();
+        assert_eq!(
+            methods,
+            [
+                "textDocument/didOpen",
+                "textDocument/didClose",
+                "textDocument/didOpen"
+            ]
+        );
+        assert_eq!(got[2].1["textDocument"]["version"], 1);
+        assert_eq!(text_of(&got[2]), "fn back() {}\n");
+    }
+
+    /// `with_session` calls this before every query, so `workspace/symbol` and the positions it
+    /// returns come from the current text of documents opened by an earlier query.
+    #[test]
+    fn refresh_open_resyncs_documents_this_query_does_not_touch() {
+        let dir = doc_dir("refresh");
+        let (a, b) = (dir.join("a.rs"), dir.join("b.rs"));
+        std::fs::write(&a, "fn a() {}\n").unwrap();
+        std::fs::write(&b, "fn b() {}\n").unwrap();
+        let (mut s, log) = recording(&dir);
+        s.sync_change = 1;
+        s.did_open(&file_uri(&a)).unwrap();
+        s.did_open(&file_uri(&b)).unwrap();
+        std::fs::write(&a, "fn a2() {}\n").unwrap();
+        s.refresh_open().unwrap();
+        let got = received(&log, 3);
+        assert_eq!(got.len(), 3, "{got:?}");
+        assert_eq!(got[2].0, "textDocument/didChange");
+        assert_eq!(text_of(&got[2]), "fn a2() {}\n");
+    }
+
+    /// A document is only recorded as synchronized once its notification was queued.
+    #[test]
+    fn a_failed_notification_does_not_mark_the_document_synchronized() {
+        let dir = doc_dir("failed");
+        let file = dir.join("a.rs");
+        std::fs::write(&file, "fn x() {}\n").unwrap();
+        let (mut s, log) = recording(&dir);
+        let (dead, queue) = mpsc::channel();
+        drop(queue);
+        let live = std::mem::replace(&mut s.out, dead);
+        let uri = file_uri(&file);
+        assert!(s.did_open(&uri).is_err());
+        s.out = live;
+        s.did_open(&uri).unwrap();
+        let got = received(&log, 1);
+        assert_eq!(got[0].0, "textDocument/didOpen");
+    }
+
+    #[test]
+    fn the_sync_kind_is_read_from_the_initialize_result() {
+        for (caps, kind) in [
+            (json!({"textDocumentSync": 1}), 1),
+            (
+                json!({"textDocumentSync": {"openClose": true, "change": 2}}),
+                2,
+            ),
+            (json!({"textDocumentSync": {"openClose": true}}), 0),
+            (json!({"textDocumentSync": 0}), 0),
+            (json!({}), 0),
+        ] {
+            assert_eq!(sync_kind(&json!({"capabilities": caps})), kind, "{caps}");
+        }
     }
 
     #[test]

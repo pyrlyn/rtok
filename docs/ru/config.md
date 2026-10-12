@@ -444,6 +444,8 @@ dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (ho
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
 [setup.goose]
 config_path   = "~/.config/goose/config.yaml"  # Goose CLI and Desktop: extensions.rtok; Windows: %APPDATA%/Block/goose/config/config.yaml; GOOSE_PATH_ROOT: <root>/config/config.yaml
+[setup.droid]
+mcp_path      = "~/.factory/mcp.json"        # Factory Droid: пользовательский файл MCP-серверов (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)

@@ -24,6 +24,7 @@ pub mod commandcode;
 pub mod copilot;
 pub mod cursor;
 pub mod devin;
+pub mod droid;
 pub mod gemini;
 pub mod goose;
 pub mod grok;
@@ -112,6 +113,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
         "goose" => Some(&goose::Goose),
+        "droid" => Some(&droid::Droid),
         _ => None,
     }
 }

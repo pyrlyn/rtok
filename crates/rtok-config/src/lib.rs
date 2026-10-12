@@ -87,6 +87,7 @@ pub const HOSTS: &[&str] = &[
     "qwen",
     "codebuddy",
     "goose",
+    "droid",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -790,6 +791,7 @@ section! {
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
         goose: SetupGoose = SetupGoose::default(),
+        droid: SetupDroid = SetupDroid::default(),
     }
 }
 
@@ -947,6 +949,11 @@ section! {
         dir: PathBuf = p("~/.codebuddy"),
         workbuddy_dir: PathBuf = p("~/.workbuddy"),
     }
+}
+
+section! {
+    /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
+    SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
 }
 
 section! {
@@ -1701,6 +1708,7 @@ impl Config {
             setup.goose.config_path,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
+            setup.droid.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
