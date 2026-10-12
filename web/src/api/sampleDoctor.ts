@@ -5,7 +5,9 @@
 // A mocked machine for the doctor fix flow (T331.12): the same request/answer shape as the
 // server, over three fixed findings, so the page and its tests run without a host. It mirrors
 // the server's rules (shared files start unselected, a keep swap moves the removal to the other
-// copy) but removes nothing real; `apply` only reports what it would have written.
+// copy) but removes nothing real; `apply` only reports what it would have written. Like the
+// server it refuses a write that carries no preview evidence, and answers a write whose files
+// changed since the preview (T576.2) with the new plan instead of a result.
 import type { Fixed, Item, Plan, Ref, Selection } from "./snapshot.gen";
 
 const USER = "/home/me/.claude/settings.json";
@@ -38,7 +40,16 @@ export interface MockMachine {
   apply(selection: Selection): Fixed;
 }
 
-export function mockMachine(): MockMachine {
+export interface MockOptions {
+  /** How many applies find the files changed since the preview, before one goes through. */
+  stale?: number;
+}
+
+export function mockMachine({ stale = 0 }: MockOptions = {}): MockMachine {
+  let version = 1;
+  let driftsLeft = stale;
+  // One evidence file stands for "what the diff showed"; a drift bumps its version.
+  const evidence = () => ({ files: [{ source: USER, version: `v${version}`, entries: [] }] });
   const items = (sel: Selection): Item[] => {
     // The last swap names the copy that stays; the other one is the removable entry.
     const kept = sel.keep.at(-1)?.source === USER ? USER : PROJECT;
@@ -63,27 +74,37 @@ export function mockMachine(): MockMachine {
     }));
   };
   const chosen = (sel: Selection) => items(sel).filter((i) => i.selected);
-  return {
-    plan(sel) {
-      const picked = chosen(sel);
-      const files = [...new Set(picked.map((i) => i.source))];
-      const diff = files
-        .map(
-          (f) =>
-            `--- ${f}\n+++ ${f}\n${picked
-              .filter((i) => i.source === f)
-              .map((i) => `-  ${i.path}: ${i.label}`)
-              .join("\n")}`,
-        )
-        .join("\n");
-      return { items: items(sel), diff, refused: [], confirmed: { files: [] } };
-    },
-    apply(sel) {
-      const picked = chosen(sel);
-      return {
-        code: 0,
-        text: `${picked.length} ${picked.length === 1 ? "entry" : "entries"} removed from ${new Set(picked.map((i) => i.source)).size} file(s); backups kept in _backup/\n`,
-      };
-    },
+  const plan = (sel: Selection): Plan => {
+    const picked = chosen(sel);
+    const files = [...new Set(picked.map((i) => i.source))];
+    const diff = files
+      .map(
+        (f) =>
+          `--- ${f}\n+++ ${f}\n${picked
+            .filter((i) => i.source === f)
+            .map((i) => `-  ${i.path}: ${i.label}`)
+            .join("\n")}`,
+      )
+      .join("\n");
+    return { items: items(sel), diff, refused: [], confirmed: evidence() };
   };
+  const apply = (sel: Selection): Fixed => {
+    const shown = sel.confirmed?.files[0]?.version;
+    if (!shown || shown !== `v${version}` || driftsLeft > 0) {
+      if (shown && driftsLeft > 0) {
+        driftsLeft -= 1;
+        version += 1;
+      }
+      const text = shown
+        ? `${USER} changed since the preview; nothing was written, review the changes and confirm again\n`
+        : "refused: this request carries no preview to bind the write to, so nothing was written\n";
+      return { code: 1, text, replan: plan({ ...sel, confirmed: null }) };
+    }
+    const picked = chosen(sel);
+    return {
+      code: 0,
+      text: `${picked.length} ${picked.length === 1 ? "entry" : "entries"} removed from ${new Set(picked.map((i) => i.source)).size} file(s); backups kept in _backup/\n`,
+    };
+  };
+  return { plan, apply };
 }

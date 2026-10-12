@@ -4,7 +4,14 @@
 
 import { describe, expect, test } from "vitest";
 import type { Item, Plan } from "../api/snapshot.gen";
-import { fixReducer, initialFix, selectedCount, type FixAction, type FixState } from "./fixState";
+import {
+  applyRequest,
+  fixReducer,
+  initialFix,
+  selectedCount,
+  type FixAction,
+  type FixState,
+} from "./fixState";
 
 const ref = (source: string, path = "hooks.Stop[0]") => ({ source, path });
 
@@ -42,9 +49,17 @@ describe("doctor fix reducer", () => {
 
   test("a plan for an older selection is dropped", () => {
     const s = run(initialFix, { type: "toggle", ref: ref("/p") });
-    const late = fixReducer(s, { type: "planned", seq: 0, plan: plan(item("/u", true)) });
+    const late = fixReducer(s, {
+      type: "planned",
+      seq: 0,
+      plan: plan(item("/u", true)),
+    });
     expect(late).toBe(s);
-    const fresh = fixReducer(s, { type: "planned", seq: s.seq, plan: plan(item("/u", true)) });
+    const fresh = fixReducer(s, {
+      type: "planned",
+      seq: s.seq,
+      plan: plan(item("/u", true)),
+    });
     expect(fresh.phase).toBe("ready");
     expect(selectedCount(fresh.plan)).toBe(1);
   });
@@ -55,9 +70,17 @@ describe("doctor fix reducer", () => {
   });
 
   test("confirming needs something selected and a change withdraws it", () => {
-    const none = run(initialFix, { type: "planned", seq: 0, plan: plan(item("/p", false)) });
+    const none = run(initialFix, {
+      type: "planned",
+      seq: 0,
+      plan: plan(item("/p", false)),
+    });
     expect(fixReducer(none, { type: "ask" }).phase).toBe("ready");
-    const ready = run(initialFix, { type: "planned", seq: 0, plan: plan(item("/u", true)) });
+    const ready = run(initialFix, {
+      type: "planned",
+      seq: 0,
+      plan: plan(item("/u", true)),
+    });
     const asked = fixReducer(ready, { type: "ask" });
     expect(asked.phase).toBe("confirming");
     expect(fixReducer(asked, { type: "cancel" }).phase).toBe("ready");
@@ -65,15 +88,25 @@ describe("doctor fix reducer", () => {
   });
 
   test("only a confirmed request is applied, and a finished one ignores edits", () => {
-    const ready = run(initialFix, { type: "planned", seq: 0, plan: plan(item("/u", true)) });
+    const ready = run(initialFix, {
+      type: "planned",
+      seq: 0,
+      plan: plan(item("/u", true)),
+    });
     expect(fixReducer(ready, { type: "applying" }).phase).toBe("ready");
     const applying = run(ready, { type: "ask" }, { type: "applying" });
     expect(applying.phase).toBe("applying");
     expect(fixReducer(applying, { type: "toggle", ref: ref("/u") })).toBe(applying);
-    const done = fixReducer(applying, { type: "applied", fixed: { text: "ok", code: 0 } });
+    const done = fixReducer(applying, {
+      type: "applied",
+      fixed: { text: "ok", code: 0 },
+    });
     expect(done.phase).toBe("done");
     expect(fixReducer(done, { type: "keep", ref: ref("/u") })).toBe(done);
-    expect(fixReducer(done, { type: "again" })).toMatchObject({ phase: "loading", plan: null });
+    expect(fixReducer(done, { type: "again" })).toMatchObject({
+      phase: "loading",
+      plan: null,
+    });
   });
 
   test("a failed request shows the error and keeps the selection", () => {
@@ -84,5 +117,67 @@ describe("doctor fix reducer", () => {
     );
     expect(s).toMatchObject({ phase: "error", error: "connection closed" });
     expect(s.selection.toggled).toEqual([ref("/p")]);
+  });
+
+  const evidence = (version: string): Plan["confirmed"] => ({
+    files: [
+      {
+        source: "/u",
+        version,
+        entries: [{ path: "hooks.Stop[0]", kind: "broken-hook", command: "/gone.sh" }],
+      },
+    ],
+  });
+  const shown = (version: string): Plan => ({
+    ...plan(item("/u", true)),
+    confirmed: evidence(version),
+  });
+
+  test("the write carries the evidence of the plan on screen with the user's changes", () => {
+    const s = run(
+      initialFix,
+      { type: "toggle", ref: ref("/p") },
+      { type: "planned", seq: 1, plan: shown("v1") },
+    );
+    expect(applyRequest(s)).toEqual({
+      keep: [],
+      toggled: [ref("/p")],
+      confirmed: evidence("v1"),
+    });
+    // The delta itself stays free of evidence: a plan request never claims a preview.
+    expect(s.selection.confirmed).toBeUndefined();
+    // A new plan replaces the evidence along with the diff.
+    const next = run(
+      s,
+      { type: "toggle", ref: ref("/p") },
+      { type: "planned", seq: 2, plan: shown("v2") },
+    );
+    expect(applyRequest(next).confirmed).toEqual(evidence("v2"));
+  });
+
+  test("a stale answer shows its message and the fresh plan and asks again", () => {
+    const applying = run(
+      initialFix,
+      { type: "planned", seq: 0, plan: shown("v1") },
+      { type: "ask" },
+      { type: "applying" },
+    );
+    const text = "settings.json changed since the preview; nothing was written";
+    const s = fixReducer(applying, {
+      type: "applied",
+      fixed: { text, code: 1, replan: shown("v2") },
+    });
+    expect(s).toMatchObject({ phase: "ready", error: text, result: null });
+    expect(applyRequest(s).confirmed).toEqual(evidence("v2"));
+    // No automatic re-apply: only a new ask and applying reaches the server again.
+    expect(fixReducer(s, { type: "applying" })).toBe(s);
+    const again = run(s, { type: "ask" });
+    expect(again.phase).toBe("confirming");
+    const written = run(
+      again,
+      { type: "applying" },
+      { type: "applied", fixed: { text: "ok", code: 0 } },
+    );
+    expect(written).toMatchObject({ phase: "done", error: null });
   });
 });

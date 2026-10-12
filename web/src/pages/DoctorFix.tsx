@@ -13,7 +13,7 @@ import { Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { Result } from "../ui/Result";
 import { Spinner } from "../ui/Spinner";
-import { fixReducer, initialFix, selectedCount, type FixState } from "./fixState";
+import { applyRequest, fixReducer, initialFix, selectedCount, type FixState } from "./fixState";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -37,7 +37,7 @@ export function DoctorFix() {
 
     const confirm = () => {
         dispatch({ type: "applying" });
-        api.doctorApply(selection).then(
+        api.doctorApply(applyRequest(state)).then(
             (fixed) => dispatch({ type: "applied", fixed }),
             (e) => dispatch({ type: "failed", error: message(e) }),
         );

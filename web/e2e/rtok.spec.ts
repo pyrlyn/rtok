@@ -154,6 +154,45 @@ test("doctor apply keeps its spinner until the answer and drops it after", async
   await expect(fix.locator("[aria-busy]")).toHaveCount(0);
 });
 
+test("doctor apply sends the preview evidence and a stale answer asks for a new confirmation", async ({
+  page,
+}) => {
+  // The e2e store has nothing to fix, so the mocked machine plays the server, and its first
+  // apply finds the file changed since the preview.
+  const machine = mockMachine({ stale: 1 });
+  const frame = (type: string, key: string, body: unknown, rid: unknown) =>
+    JSON.stringify({ type, [key]: body, rid });
+  const applied: Selection[] = [];
+  await interceptSocket(page, (request) => {
+    const { doctor, rid } = request as {
+      doctor?: { action: string; selection: Selection };
+      rid?: string;
+    };
+    if (doctor?.action === "plan")
+      return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection), rid) };
+    if (doctor?.action === "apply") {
+      applied.push(doctor.selection);
+      return { reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection), rid) };
+    }
+    return undefined;
+  });
+  await page.goto("/#/doctor");
+  const fix = page.getByRole("region", { name: "fix" });
+  await fix.getByRole("button", { name: /^Fix selected/ }).click();
+  await fix.getByRole("button", { name: "Confirm" }).click();
+
+  await expect(fix).toContainText("changed since the preview");
+  await expect(fix.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+  expect(applied).toHaveLength(1);
+  expect(applied[0]?.confirmed?.files[0]?.version).toBe("v1");
+
+  await fix.getByRole("button", { name: /^Fix selected/ }).click();
+  await fix.getByRole("button", { name: "Confirm" }).click();
+  await expect(fix.getByRole("status")).toContainText("entries removed");
+  expect(applied).toHaveLength(2);
+  expect(applied[1]?.confirmed?.files[0]?.version).toBe("v2");
+});
+
 test("clear safe junk plans without deleting and deletes only on the confirmed message", async ({
   page,
   rtok,

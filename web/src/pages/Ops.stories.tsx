@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { connectSample, sampleSnapshot } from "../api/sample";
+import { mockMachine } from "../api/sampleDoctor";
 import { Doctor } from "./Doctor";
 import { Logs } from "./Logs";
 import { Sessions } from "./Sessions";
@@ -46,6 +47,31 @@ export const DoctorFixFlow: StoryObj = {
         await expect(panel.getByText("Write 3 entries?")).toBeVisible();
         await userEvent.click(panel.getByRole("button", { name: "Confirm" }));
         await expect(await panel.findByRole("status")).toHaveTextContent("3 entries removed");
+    },
+};
+
+// A file changed between the preview and the confirmation (T576.2): nothing is written, the page
+// shows why and the new plan, and writes only after a second confirmation.
+export const DoctorFixStale: StoryObj = {
+    ...story(
+        () => <Doctor />,
+        (handlers) => connectSample(handlers, () => mockMachine({ stale: 1 })),
+    ),
+    play: async ({ canvasElement }) => {
+        const panel = within(await within(canvasElement).findByRole("region", { name: "fix" }));
+        await userEvent.click(await panel.findByRole("button", { name: /Fix selected/ }));
+        await userEvent.click(panel.getByRole("button", { name: "Confirm" }));
+
+        await expect(await panel.findByText(/changed since the preview/)).toBeVisible();
+        // The plan is back for review: no result, no automatic second write.
+        await expect(panel.queryByRole("status")).toBeNull();
+        await expect(panel.queryByRole("button", { name: "Confirm" })).toBeNull();
+        await expect(panel.getByLabelText("diff")).toBeVisible();
+
+        await userEvent.click(await panel.findByRole("button", { name: /Fix selected/ }));
+        await expect(panel.getByText("Write 2 entries?")).toBeVisible();
+        await userEvent.click(panel.getByRole("button", { name: "Confirm" }));
+        await expect(await panel.findByRole("status")).toHaveTextContent("2 entries removed");
     },
 };
 

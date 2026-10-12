@@ -3,7 +3,9 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 // State of the "Fix selected" panel (T331.12). The server owns the checklist and its defaults,
-// so the page keeps only what the user changed since them: a request is always that delta.
+// so the page keeps only what the user changed since them: a request is always that delta. The
+// write also carries the evidence of the plan the user was shown (T576.2), so the server writes
+// that and nothing it found since; an answer that says the files moved on replaces the plan.
 import type { Fixed, Plan, Ref, Selection } from "../api/snapshot.gen";
 
 export type FixPhase = "loading" | "ready" | "confirming" | "applying" | "done" | "error";
@@ -42,6 +44,11 @@ export const refKey = (r: Ref) => `${r.source}\u0000${r.path}`;
 
 const same = (a: Ref) => (b: Ref) => refKey(a) === refKey(b);
 
+// What the write sends: the user's changes plus the evidence of the plan on screen.
+export function applyRequest(state: FixState): Selection {
+  return state.plan ? { ...state.selection, confirmed: state.plan.confirmed } : state.selection;
+}
+
 export function selectedCount(plan: Plan | null): number {
   return plan ? plan.items.filter((i) => i.selected).length : 0;
 }
@@ -58,7 +65,10 @@ export function fixReducer(state: FixState, action: FixAction): FixState {
     case "keep":
       // The server recomputes the defaults after a swap, so the old toggles no longer
       // say what they did; the swap starts the selection over from the new defaults.
-      return reselect(state, { keep: [...state.selection.keep, action.ref], toggled: [] });
+      return reselect(state, {
+        keep: [...state.selection.keep, action.ref],
+        toggled: [],
+      });
     case "planned":
       if (action.seq !== state.seq) return state;
       return { ...state, plan: action.plan, phase: "ready", error: null };
@@ -71,7 +81,17 @@ export function fixReducer(state: FixState, action: FixAction): FixState {
     case "applying":
       return state.phase === "confirming" ? { ...state, phase: "applying" } : state;
     case "applied":
-      return { ...state, phase: "done", result: action.fixed, error: null };
+      // Nothing was written: the files differ from the diff the user confirmed. Show why and
+      // the plan as it is now, and wait for a new confirmation.
+      return action.fixed.replan
+        ? {
+            ...state,
+            plan: action.fixed.replan,
+            phase: "ready",
+            result: null,
+            error: action.fixed.text,
+          }
+        : { ...state, phase: "done", result: action.fixed, error: null };
     case "failed":
       return { ...state, phase: "error", error: action.error };
     case "again":

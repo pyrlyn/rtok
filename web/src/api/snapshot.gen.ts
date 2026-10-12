@@ -254,8 +254,8 @@ export interface DoctorRequest {
  */
 export interface Selection {
   /**
-   * The `confirmed` of the plan the user saw. Absent from a client that predates it, whose
-   * write is then not bound to any preview.
+   * The `confirmed` of the plan the user saw. A plan request leaves it out; an apply without it
+   * is refused, because a write that is not bound to a preview can touch what no one saw.
    */
   confirmed?: Confirmed | null;
   /**
@@ -1993,8 +1993,8 @@ export interface Score1 {
  */
 export interface Selection1 {
   /**
-   * The `confirmed` of the plan the user saw. Absent from a client that predates it, whose
-   * write is then not bound to any preview.
+   * The `confirmed` of the plan the user saw. A plan request leaves it out; an apply without it
+   * is refused, because a write that is not bound to a preview can touch what no one saw.
    */
   confirmed?: Confirmed | null;
   /**

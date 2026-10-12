@@ -389,12 +389,16 @@ pub(super) mod tests {
         };
         let twin = machine(USER_DUP);
         put(&twin, PROJECT, PROJECT_DUP);
+        let bound = Selection {
+            confirmed: Some(web_plan(&twin, &sel).confirmed),
+            ..sel
+        };
         web::apply(
             &cfg(),
             &probes(&twin),
             &twin,
             &web::default_opts(&cfg()),
-            &sel,
+            &bound,
         );
         assert_eq!(text(&m, PROJECT), text(&twin, PROJECT));
         // The user's file, comment included, is untouched.

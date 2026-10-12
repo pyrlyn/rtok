@@ -9,7 +9,8 @@
 //! what it showed ([`Confirmed`]) and writes nothing; `apply` writes through `fix_bound`, with its
 //! backup, re-read and refusals. When the request carries that evidence, a file or an entry that is
 //! not exactly what the preview showed is refused as stale and a fresh plan comes back instead
-//! (T576.1), so a finding that appeared after the preview is never written on its confirmation.
+//! (T576.1), so a finding that appeared after the preview is never written on its confirmation;
+//! a request without the evidence is refused outright (T576.2).
 
 use std::collections::BTreeSet;
 
@@ -38,8 +39,8 @@ pub struct Selection {
     /// Entries whose selection is the opposite of their default.
     #[serde(default)]
     pub toggled: Vec<Ref>,
-    /// The `confirmed` of the plan the user saw. Absent from a client that predates it, whose
-    /// write is then not bound to any preview.
+    /// The `confirmed` of the plan the user saw. A plan request leaves it out; an apply without it
+    /// is refused, because a write that is not bound to a preview can touch what no one saw.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed: Option<Confirmed>,
 }
@@ -151,8 +152,19 @@ pub fn plan(cfg: &Config, p: &Probes, w: &dyn Writer, o: &Opts, sel: &Selection)
 
 /// Write the selection. The caller sends this only for the page's explicit confirmation.
 pub fn apply(cfg: &Config, p: &Probes, w: &dyn Writer, o: &Opts, sel: &Selection) -> Fixed {
+    // The pages are embedded in this binary and always send the evidence, so a request without it
+    // is a stale or foreign client; the unbound path stays for `doctor --fix`, which is no web.
+    let Some(confirmed) = sel.confirmed.as_ref() else {
+        return Fixed {
+            text: "refused: this request carries no preview to bind the write to, so nothing was \
+                   written; review the changes below and confirm them again\n"
+                .into(),
+            code: 1,
+            replan: Some(plan(cfg, p, w, o, sel)),
+        };
+    };
     let (found, off) = prepare(cfg, p, o, sel);
-    let report = fix::fix_bound(cfg, p, w, true, o, found, &off, sel.confirmed.as_ref());
+    let report = fix::fix_bound(cfg, p, w, true, o, found, &off, Some(confirmed));
     // The new plan carries the user's deltas but not the old evidence, and selects what the
     // defaults select: the page shows it and asks again.
     let replan = report.stale().then(|| {
@@ -245,8 +257,7 @@ mod tests {
     fn apply_writes_the_selection_after_a_backup_and_only_that() {
         let m = machine(BROKEN);
         put(&m, PROJECT, BROKEN);
-        let sel = Selection::default();
-        let done = apply(&cfg(), &probes(&m), &m, &opts(), &sel);
+        let done = apply_confirmed(&m, &Selection::default());
         assert_eq!(done.code, 0, "{}", done.text);
         assert!(done.text.contains("1 entry removed"), "{}", done.text);
         assert!(!text(&m, SETTINGS).contains("old.sh"));
@@ -259,7 +270,7 @@ mod tests {
         };
         let m = machine(BROKEN);
         put(&m, PROJECT, BROKEN);
-        apply(&cfg(), &probes(&m), &m, &opts(), &sel);
+        apply_confirmed(&m, &sel);
         assert!(!text(&m, PROJECT).contains("old.sh"));
     }
 
@@ -282,7 +293,7 @@ mod tests {
         assert_eq!(swapped.items.len(), 1);
         assert!(swapped.items[0].shared && swapped.items[0].selected);
         assert_eq!(swapped.items[0].kept_in.as_deref(), Some(SETTINGS));
-        apply(&cfg(), &probes(&m), &m, &opts(), &sel);
+        apply_confirmed(&m, &sel);
         assert!(text(&m, SETTINGS).contains("/h/.claude/settings.json"));
         assert!(!text(&m, PROJECT).contains("Stop"));
     }
@@ -296,7 +307,7 @@ mod tests {
             toggled: vec![at("/nowhere")],
             ..Selection::default()
         };
-        let done = apply(&cfg(), &probes(&m), &m, &opts(), &sel);
+        let done = apply_confirmed(&m, &sel);
         assert!(done.text.contains("1 entry removed"), "{}", done.text);
         assert!(!text(&m, SETTINGS).contains("old.sh"));
     }
@@ -312,7 +323,11 @@ mod tests {
         let plan = plan(&c, &probes(&m), &m, &opts(), &Selection::default());
         assert!(plan.items.is_empty(), "{:?}", plan.items);
         assert!(plan.refused[0].contains("TOML hook files are not edited yet"));
-        apply(&c, &probes(&m), &m, &opts(), &Selection::default());
+        let bound = Selection {
+            confirmed: Some(plan.confirmed),
+            ..Selection::default()
+        };
+        apply(&c, &probes(&m), &m, &opts(), &bound);
         assert_eq!(text(&m, "/h/.kimi-code/config.toml"), toml);
     }
 
@@ -328,6 +343,33 @@ mod tests {
             ..sel.clone()
         };
         (bound, preview)
+    }
+
+    /// Preview and confirm in one step, for tests about what a confirmed write does.
+    fn apply_confirmed(m: &Machine, sel: &Selection) -> Fixed {
+        apply(&cfg(), &probes(m), m, &opts(), &confirm(m, sel).0)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_apply_without_the_preview_evidence_is_refused_and_writes_nothing() {
+        let m = machine(BROKEN);
+        put(&m, PROJECT, BROKEN);
+        let done = apply(&cfg(), &probes(&m), &m, &opts(), &Selection::default());
+        assert_eq!(done.code, 1, "{}", done.text);
+        assert!(done.text.contains("no preview"), "{}", done.text);
+        assert_eq!(text(&m, SETTINGS), BROKEN);
+        assert_eq!(text(&m, PROJECT), BROKEN);
+        assert!(m.backups.borrow().is_empty());
+        // The page gets the plan to review and confirm with its evidence.
+        let fresh = done.replan.expect("a refused apply returns the plan");
+        assert!(!fresh.confirmed.files.is_empty());
+        let again = Selection {
+            confirmed: Some(fresh.confirmed),
+            ..Selection::default()
+        };
+        assert_eq!(apply(&cfg(), &probes(&m), &m, &opts(), &again).code, 0);
+        assert!(!text(&m, SETTINGS).contains("old.sh"));
     }
 
     #[cfg(unix)]

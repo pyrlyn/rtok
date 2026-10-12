@@ -3058,7 +3058,7 @@
       "type": "object",
       "properties": {
         "confirmed": {
-          "description": "The `confirmed` of the plan the user saw. Absent from a client that predates it, whose\nwrite is then not bound to any preview.",
+          "description": "The `confirmed` of the plan the user saw. A plan request leaves it out; an apply without it\nis refused, because a write that is not bound to a preview can touch what no one saw.",
           "anyOf": [
             {
               "$ref": "#/$defs/Confirmed"

@@ -342,7 +342,11 @@ describe("doctor requests", () => {
       toggled: [{ source: "/work/app/.claude/settings.json", path: "hooks.Stop[0].hooks[0]" }],
     });
     expect(flipped.diff).toContain("/work/app");
-    const done = await api.doctorApply({ keep: [], toggled: [] });
+    // Like the server, the sample machine writes only what a preview's evidence names.
+    const bare = await api.doctorApply({ keep: [], toggled: [] });
+    expect(bare).toMatchObject({ code: 1 });
+    expect(bare.replan?.items).toHaveLength(3);
+    const done = await api.doctorApply({ keep: [], toggled: [], confirmed: first.confirmed });
     expect(done).toMatchObject({ code: 0 });
     expect(done.text).toContain("2 entries removed");
   });

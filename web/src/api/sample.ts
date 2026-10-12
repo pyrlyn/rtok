@@ -7,7 +7,7 @@
 import { answering, type Connect, type Connection, type Frame } from "./ws";
 import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
-import { mockMachine } from "./sampleDoctor";
+import { mockMachine, type MockMachine } from "./sampleDoctor";
 import { mockJunk, sampleJunkCard } from "./sampleJunk";
 import { diffReply } from "./sampleDiff";
 import { exportAnswer } from "./sampleExport";
@@ -336,9 +336,14 @@ export const sampleSnapshot: Snapshot = {
 export const isSampleRequested = (search: string): boolean =>
   new URLSearchParams(search).has("sample");
 
-export const connectSample: Connect = (handlers) => {
+// `makeMachine` lets a story script the doctor flow (a file that changes between the preview and
+// the apply); every other caller gets the plain mocked machine.
+export const connectSample = (
+  handlers: Parameters<Connect>[0],
+  makeMachine: () => MockMachine = mockMachine,
+): Connection => {
   let snapshot = structuredClone(sampleSnapshot);
-  const machine = mockMachine();
+  const machine = makeMachine();
   const junk = mockJunk();
   let stopped = false;
   // Frames land on a microtask so callers can register a reply handler after `send`.
