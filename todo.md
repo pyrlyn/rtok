@@ -23,7 +23,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.50. Graph page: running labels with elapsed counters on the live canvas
-- T329.54. Web actions: re-index and remove project, with a job tracker for indexing/failed states
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
@@ -54,7 +53,6 @@
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T477. TUI: re-index and remove projects (counterpart of the web actions)
 - T521. MiMo Desktop variant of the `mimo` host
 - T640. File and directory work through `fs-kit`
 - T522. `read` and `expand` accept the line ranges agents sent this week
@@ -63,4 +61,3 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
-- T561. TUI: folded-target counter in a one-project view
