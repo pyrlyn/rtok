@@ -288,6 +288,7 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
     let codewhale = !grok && cfg.hook.host == "codewhale";
     let cline = !grok && cfg.hook.host == "cline";
     let codebuddy = !grok && cfg.hook.host == "codebuddy";
+    let codex = !grok && cfg.hook.host == "codex";
     if grok {
         input.adapt_grok(event);
     } else if cursor {
@@ -362,7 +363,29 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
         let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
         return Ok(codebuddy_output(&parsed));
     }
+    if codex {
+        let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
+        return Ok(codex_output(&parsed));
+    }
     Ok(out)
+}
+
+/// Codex (https://learn.chatgpt.com/docs/hooks, fetched 2026-10-12; `research.md` section 40)
+/// sends Claude's stdin and reads Claude's envelope, with two differences found live on
+/// codex-cli 0.162.1. A `PreToolUse` rewrite takes effect only next to
+/// `permissionDecision: "allow"` (without it the hook run is marked failed and the original
+/// call runs), and `updatedMcpToolOutput`, a Cursor key, is not read. Context, denials and `{}`
+/// pass through.
+pub fn codex_output(out: &HookOutput) -> Vec<u8> {
+    let mut out = out.clone();
+    out.updated_mcp_tool_output = None;
+    if let Some(h) = out.hook_specific_output.as_mut() {
+        h.updated_mcp_tool_output = None;
+        if h.updated_input.is_some() && h.permission_decision.is_none() {
+            h.permission_decision = Some("allow".into());
+        }
+    }
+    serde_json::to_vec(&out).unwrap_or_else(|_| b"{}".to_vec())
 }
 
 /// CodeBuddy Code (https://www.codebuddy.ai/docs/cli/hooks, checked 2026-10-11) sends Claude's
@@ -1299,6 +1322,94 @@ mod tests {
             "{v}"
         );
         assert!(h.get("updatedInput").is_none(), "{v}");
+    }
+
+    #[test]
+    fn codex_output_allows_a_rewrite_and_drops_cursor_keys() {
+        let json = |b: Vec<u8>| serde_json::from_slice::<serde_json::Value>(&b).unwrap();
+        assert_eq!(
+            json(codex_output(&HookOutput::default())),
+            serde_json::json!({})
+        );
+        let rewrite = pre_out(
+            None,
+            Some("rtok"),
+            Some(serde_json::json!({"command": "rtok run -- ls"})),
+        );
+        assert_eq!(
+            json(codex_output(&rewrite)),
+            serde_json::json!({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "rtok",
+                "updatedInput": {"command": "rtok run -- ls"}
+            }})
+        );
+        // A denial and plain context are Claude's shape already.
+        for out in [pre_out(Some("deny"), Some("guard"), None), post_out("ctx")] {
+            assert_eq!(
+                json(codex_output(&out)),
+                serde_json::to_value(&out).unwrap()
+            );
+        }
+        let mut mcp = post_out("ctx");
+        mcp.hook_specific_output
+            .as_mut()
+            .unwrap()
+            .updated_mcp_tool_output = Some(serde_json::json!({"content": []}));
+        assert_eq!(
+            json(codex_output(&mcp)),
+            serde_json::to_value(post_out("ctx")).unwrap()
+        );
+    }
+
+    /// The payloads Codex sent live (`tests/fixtures/hooks/codex/`, `research.md` section 40)
+    /// parse, reach the Bash plugins and come back in the shape Codex reads.
+    #[test]
+    fn codex_live_payloads_dispatch_under_the_codex_host() {
+        let dir = unique_dir("rtok-hook-codex");
+        let mut cfg = cline_cfg(&dir);
+        cfg.hook.host = "codex".into();
+        let fixture = |name: &str| {
+            std::fs::read(format!(
+                "{}/tests/fixtures/hooks/codex/{name}.json",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap()
+        };
+        let mut pre: serde_json::Value = serde_json::from_slice(&fixture("pre_tool_bash")).unwrap();
+        pre["tool_input"]["command"] = "git status".into();
+        let out =
+            dispatch_owned_strict(&serde_json::to_vec(&pre).unwrap(), "PreToolUse", &cfg).unwrap();
+        let h = &serde_json::from_slice::<serde_json::Value>(&out).unwrap()["hookSpecificOutput"];
+        assert_eq!(h["permissionDecision"], "allow", "{h}");
+        assert!(
+            h["updatedInput"]["command"]
+                .as_str()
+                .unwrap()
+                .starts_with("rtok run"),
+            "{h}"
+        );
+        for (event, name) in [
+            ("PreToolUse", "pre_tool_bash"),
+            ("PostToolUse", "post_tool_bash"),
+            ("PreToolUse", "pre_tool_spawn_agent"),
+        ] {
+            let out = dispatch_owned_strict(&fixture(name), event, &cfg).unwrap();
+            assert!(
+                serde_json::from_slice::<serde_json::Value>(&out)
+                    .unwrap()
+                    .is_object(),
+                "{name}"
+            );
+        }
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        let session = store
+            .session_row("019ad000-0000-7000-8000-000000000001")
+            .unwrap()
+            .expect("the hook run left a session row");
+        assert_eq!(session.0.as_deref(), Some("codex"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
