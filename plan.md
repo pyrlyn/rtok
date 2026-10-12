@@ -126,8 +126,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T580 | todo | P2 | 2 | 0% | |
 | T581 | todo | P2 | 2 | 0% | |
 | T584 | todo | P2 | 2 | 0% | |
-| T586 | todo | P2 | 4 | 50% | |
-| T586.2 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
 | T590 | todo | P2 | 3 | 0% | |
@@ -726,25 +724,6 @@ Execution plan:
 3. Add a mock streaming regression ending after a split UTF-8 chunk, plus a small configurable capture-limit fixture. Verify retained counters/tier reach the store, missing final output counters remain explicitly partial, original response bytes are forwarded unchanged and truncated responses still cannot enter the semantic cache.
 
 Check: a damaged or incomplete trailing SSE event cannot erase earlier complete usage/tier events, genuinely absent counters remain unknown, and `just check` passes. The isolated probe exercised actual wire/Anthropic extraction functions with synthetic byte prefixes; transport cancellation, the 256 MiB cap and store persistence were source-traced rather than exercised end to end.
-
-### T586. Resolve local relative remotes before deriving project identity
-
-Confirmed with separate Git repositories: [project_key_with](src/project.rs#L42) passes the origin string into [canonical_url](src/project.rs#L120) without its checkout context. Two checkouts at a/checkout and b/checkout, each configured with origin ../remote.git, target different bare repositories but both receive the key ../remote. Git ls-remote controls returned different fixture refs, while the actual project resolver returned equal keys. Replacing A's relative URL with the absolute path of the same remote also changed its key. [Task projects](src/tasks/run.rs#L56) use this key for counters, and [claim injection](src/hooks/mod.rs#L162) uses it to select project claims. Unrelated repositories can therefore share a namespace, while alternate spellings of one local remote split it. T441.3's canonical origin identity has no relative-path exception or existing fix for this case.
-
-Execution plan:
-
-1. Add two-checkout fixtures with identical relative origin strings resolving to different repositories; assert distinct keys. Add relative/absolute/file-URL spellings of the same local remote and assert one identity, using real Git resolution as a control.
-2. Distinguish local filesystem remotes from network URL and scp forms before normalization. Resolve relative local paths with the proper checkout context, canonicalize existing destinations and provide a stable absolute fallback for missing ones. Preserve filesystem case semantics and validate linked-worktree behavior against the existing shared-project contract.
-3. Cover nested cwd, dot segments, symlinks, spaces and supported Windows path forms without regressing network remote normalization. Verify task-counter and claim lookups remain isolated between different repositories.
-4. Handle persisted old keys explicitly: seed/reconcile counters from the intended project's adapter as needed, and avoid blindly migrating an ambiguous shared relative key into every project. Test compatibility without silently resetting IDs or moving unrelated claim rows.
-
-Check: different resolved local remotes never collide solely because their relative strings match, equivalent local spellings share a key, existing state is handled deliberately, and `just check` passes. The isolated harness compiled actual project resolver/normalization functions with a standard filesystem adapter; Git controls used only scratch local repositories. Store counter/claim behavior was source-traced, not exercised end to end.
-
-Planning note: Risk: step 4 may need a creator choice on how to treat an ambiguous shared legacy key; ask at claim time if the adapter cannot tell which project owns it.
-
-### T586.2. Reconcile persisted legacy relative keys for task counters and claims
-
-Done means: persisted old keys in task counters (`tasks/run.rs`) and claims (`hooks/mod.rs`) are reconciled to the new identity without resetting ids; an ambiguous shared legacy key may need the creator's choice at claim time (see the card).
 
 ### T587. Let an explicit report --format md override configuration
 

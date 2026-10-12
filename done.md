@@ -11875,6 +11875,29 @@ Done means: `project.rs` `canonical_url` resolves a local relative, absolute or 
 
 Result: local `origin` remotes (relative path, absolute path, `file://` URL) now resolve to one absolute project key in `src/project.rs`. A relative path resolves against the main checkout, as git does; existing destinations are canonicalized, missing ones fall back to a lexical absolute path, and network and scp remotes are unchanged. Two checkouts with the same relative origin string but different repositories get distinct keys, and every spelling of one remote shares a key from main, a linked worktree or a nested cwd (real-git fixtures plus a Vfs unit test; the three real-git tests failed before the fix). Task counters and claims filed under the old relative key are reconciled in T586.2.
 
+### T586.2. Reconcile persisted legacy relative keys for task counters and claims
+
+Done means: persisted old keys in task counters (`tasks/run.rs`) and claims (`hooks/mod.rs`) are reconciled to the new identity without resetting ids; an ambiguous shared legacy key may need the creator's choice at claim time (see the card).
+
+Result: `project::project_keys` returns the current project key plus the pre-T586.1 key when the two differ (local-path and `file://` origins); the old algorithm is the former `canonical_url` body split out as `remote_key`, shared by both paths. Claim rows are still read by `claim_injection` and removed by release and finish under both keys (Diesel `eq_any` in `rtok-store` `task_claims.rs`), while new rows are written only under the new key; legacy rows are never copied or moved, so an ambiguous shared `../remote` key cannot leak into other projects. Task counters need no migration (they re-seed from the adapter's highest id, proved by a test), and the double-claim guard is the adapter's assignee, which T586.1 never affected. Fail-first: the SessionStart claim line for a legacy-key claim was missing before the fix. The `src/hooks/mod.rs` hunk landed in the T276.5 commit (`ad6aa3e06`) because both agents edited that file; keep the two commits together.
+
+### T586. Resolve local relative remotes before deriving project identity
+
+Confirmed with separate Git repositories: [project_key_with](src/project.rs#L42) passes the origin string into [canonical_url](src/project.rs#L120) without its checkout context. Two checkouts at a/checkout and b/checkout, each configured with origin ../remote.git, target different bare repositories but both receive the key ../remote. Git ls-remote controls returned different fixture refs, while the actual project resolver returned equal keys. Replacing A's relative URL with the absolute path of the same remote also changed its key. [Task projects](src/tasks/run.rs#L56) use this key for counters, and [claim injection](src/hooks/mod.rs#L162) uses it to select project claims. Unrelated repositories can therefore share a namespace, while alternate spellings of one local remote split it. T441.3's canonical origin identity has no relative-path exception or existing fix for this case.
+
+Execution plan:
+
+1. Add two-checkout fixtures with identical relative origin strings resolving to different repositories; assert distinct keys. Add relative/absolute/file-URL spellings of the same local remote and assert one identity, using real Git resolution as a control.
+2. Distinguish local filesystem remotes from network URL and scp forms before normalization. Resolve relative local paths with the proper checkout context, canonicalize existing destinations and provide a stable absolute fallback for missing ones. Preserve filesystem case semantics and validate linked-worktree behavior against the existing shared-project contract.
+3. Cover nested cwd, dot segments, symlinks, spaces and supported Windows path forms without regressing network remote normalization. Verify task-counter and claim lookups remain isolated between different repositories.
+4. Handle persisted old keys explicitly: seed/reconcile counters from the intended project's adapter as needed, and avoid blindly migrating an ambiguous shared relative key into every project. Test compatibility without silently resetting IDs or moving unrelated claim rows.
+
+Check: different resolved local remotes never collide solely because their relative strings match, equivalent local spellings share a key, existing state is handled deliberately, and `just check` passes. The isolated harness compiled actual project resolver/normalization functions with a standard filesystem adapter; Git controls used only scratch local repositories. Store counter/claim behavior was source-traced, not exercised end to end.
+
+Planning note: Risk: step 4 may need a creator choice on how to treat an ambiguous shared legacy key; ask at claim time if the adapter cannot tell which project owns it.
+
+Result: closed by T586.1 (local relative, absolute and `file://` remotes resolve to one absolute project key against the main checkout; network and scp remotes unchanged) and T586.2 (claims filed under the pre-T586.1 key are still read and removed; counters re-seed from the adapter). Filesystem case semantics for local-path keys stay lower-cased as before, since changing them would rekey every existing absolute key.
+
 ### T583.1. Result identity and unique persistence for Anthropic Batch results (migration, Store, record)
 
 Done means: a Diesel migration in `rtok-store` giving `call_log` a uniqueness rule for a result identity, an identity for Anthropic `custom_id` results in `proxy/batch_results.rs`, and `record` that does not insert twice; pricing and lane aggregates checked; `just check`.
