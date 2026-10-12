@@ -83,6 +83,7 @@ lang: ru
 | `gemini` | yes | hooks | не найдено | `worktree_add` |
 | `cline` | yes | hooks | нет (контрольные точки, а не рабочие деревья) | `worktree_add` |
 | `roo` | no | MCP | ещё не проверено | `worktree_add` |
+| `droid` | no | MCP | ещё не проверено | `worktree_add` |
 | `qwen` | yes | hooks | ещё не проверено | `worktree_add` |
 | `codebuddy` | yes | hooks | ещё не проверено | `worktree_add` |
 | `codewhale` | yes | hooks | не задокументировано | `worktree_add` |
