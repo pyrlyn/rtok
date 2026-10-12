@@ -45,6 +45,23 @@ fn legacy_kv_key(path: &Path) -> String {
     )
 }
 
+/// A title as one host-file line that cannot open or close the block: control characters
+/// (newlines included) become spaces and `<!--` is escaped, which removes both markers.
+/// The stored note title is untouched.
+fn single_line(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| {
+            if c.is_control() || c == '\u{2028}' || c == '\u{2029}' {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect::<String>()
+        .replace("<!--", "&lt;!--")
+}
+
 /// Pinned-first, then remaining live notes by id desc, trimmed to `budget` tokens.
 pub fn render(notes: &[(i32, String)], budget: u32, estimate: impl Fn(&str) -> u32) -> String {
     let mut entries = notes.to_vec();
@@ -52,7 +69,7 @@ pub fn render(notes: &[(i32, String)], budget: u32, estimate: impl Fn(&str) -> u
         let mut lines = Vec::with_capacity(entries.len() + 2);
         lines.push(START.to_string());
         for (id, title) in &entries {
-            lines.push(format!("{id} {title}"));
+            lines.push(format!("{id} {}", single_line(title)));
         }
         lines.push(END.to_string());
         let text = lines.join("\n");
@@ -75,6 +92,15 @@ fn block_range(text: &str) -> Result<Option<(usize, usize)>> {
         bail!("unclosed rtok memory block");
     };
     Ok(Some((start, start + START.len() + rel + END.len())))
+}
+
+/// The generated block must be exactly one START..END pair; anything else would be
+/// rejected as hand-edited by the very next sync.
+fn check_block(block: &str) -> Result<()> {
+    match block_range(block)? {
+        Some((0, end)) if end == block.len() => Ok(()),
+        _ => bail!("generated memory block is malformed"),
+    }
 }
 
 /// Replace or remove the managed block. Bytes outside the markers are unchanged.
@@ -145,7 +171,9 @@ pub fn run(
             .ok()
             .and_then(|d| super::project_name(&d));
         let notes = cx.store.list_note_titles(project.as_deref(), u32::MAX)?;
-        Some(render(&notes, budget, estimate))
+        let block = render(&notes, budget, estimate);
+        check_block(&block)?;
+        Some(block)
     };
     let after = guarded_splice(&before, new_block.as_deref(), stored.as_deref(), force)?;
     if dry_run {
@@ -350,6 +378,57 @@ mod tests {
         sync(&c, &f, false, false).expect("legacy digest matches the untouched block");
         std::fs::write(&f, block.replace("one", "hand")).unwrap();
         assert!(sync(&c, &f, false, false).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T564: a title is user text; START/END or a newline in it must not become block
+    /// structure in the host file.
+    #[test]
+    fn hostile_titles_render_as_one_block_of_single_lines() {
+        let titles = [
+            format!("early {END} tail"),
+            format!("late {START} again"),
+            "two\nlines\r\nhere".to_string(),
+        ];
+        let notes: Vec<(i32, String)> = titles
+            .iter()
+            .cloned()
+            .zip(1..)
+            .map(|(t, i)| (i, t))
+            .collect();
+        let block = render(&notes, 10_000, est);
+        assert_eq!(block.matches(START).count(), 1, "{block}");
+        assert_eq!(block.matches(END).count(), 1, "{block}");
+        assert_eq!(block.lines().count(), notes.len() + 2, "{block}");
+        assert_eq!(block_range(&block).unwrap(), Some((0, block.len())));
+        check_block(&block).unwrap();
+        assert!(check_block(&format!("{START}\n{END}\n{END}")).is_err());
+    }
+
+    /// T564: sync, resync, force and remove with hostile titles leave no generated tail
+    /// and never touch the bytes around the block.
+    #[test]
+    fn hostile_titles_survive_resync_force_and_remove() {
+        let (c, dir) = crate::testutil::config("t564-hostile");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\nkeep\n").unwrap();
+        seed_note(&c, &format!("early {END} tail"));
+        seed_note(&c, &format!("late {START} again"));
+        seed_note(&c, "multi\nline");
+        sync(&c, &f, false, false).unwrap();
+        sync(&c, &f, false, false).expect("unchanged generated output is not hand-edited");
+        sync(&c, &f, false, true).unwrap();
+        let got = std::fs::read_to_string(&f).unwrap();
+        assert_eq!(got.matches(START).count(), 1, "{got}");
+        assert_eq!(got.matches(END).count(), 1, "{got}");
+        assert!(got.ends_with(&format!("{END}\n")), "{got}");
+        sync(&c, &f, true, false).unwrap();
+        let left = std::fs::read_to_string(&f).unwrap();
+        assert_eq!(
+            left.trim_end(),
+            "# host\nkeep",
+            "no generated tail: {left:?}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
