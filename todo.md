@@ -53,7 +53,6 @@
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T521. MiMo Desktop variant of the `mimo` host
 - T640. File and directory work through `fs-kit`
 - T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
