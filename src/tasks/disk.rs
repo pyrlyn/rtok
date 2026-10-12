@@ -7,7 +7,7 @@
 //! diffable in the repository. Done and closed tasks move to `<dir>/done/` (§8), so the plan is
 //! a directory listing. Writes are temp file + rename.
 
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -24,9 +24,6 @@ const SLUG_MAX: usize = 48;
 /// How a claim waits for another process's lock before giving up.
 const LOCK_TRIES: u32 = 50;
 const LOCK_WAIT: Duration = Duration::from_millis(20);
-
-/// A lock older than this is a crashed process. The next claim removes it and takes over.
-const LOCK_STALE: Duration = Duration::from_secs(10);
 
 pub struct DiskAdapter {
     dir: PathBuf,
@@ -57,19 +54,15 @@ struct Head {
     parallel: bool,
 }
 
-/// Removes `<dir>/.claim.lock` when the claim finishes, including on panic.
+/// Holds the OS lock on `<dir>/.claim.lock`. The lock goes with the handle (dropped on panic,
+/// released by the kernel when the process dies), and the file is never unlinked, so a late
+/// release cannot remove a successor's lock.
 #[derive(Debug)]
 struct DiskGuard {
-    path: PathBuf,
+    _file: File,
 }
 
 impl ClaimLock for DiskGuard {}
-
-impl Drop for DiskGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
 
 impl DiskAdapter {
     /// Tasks live in `dir` (`[tasks.disk] dir` joined to the project root).
@@ -233,40 +226,27 @@ impl TaskAdapter for DiskAdapter {
     }
 }
 
-/// `<dir>/.claim.lock`, created with `create_new`. A lock whose mtime is older than
-/// [`LOCK_STALE`] is removed and taken; a live one is waited out.
+/// An exclusive `flock` on the stable `<dir>/.claim.lock`, polled for a bounded time. A holder
+/// that is paused keeps the lock, so a waiter gets the "locked" error instead of racing it; a
+/// crashed holder's lock is released by the OS, so no leftover file ever blocks a claim.
 fn lock_claim(dir: &Path) -> Result<DiskGuard> {
     std::fs::create_dir_all(dir).with_context(|| format!("disk tasks: {}", dir.display()))?;
     let path = dir.join(".claim.lock");
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .with_context(|| format!("disk tasks: {}", path.display()))?;
     for _ in 0..LOCK_TRIES {
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(file) => {
-                drop(file);
-                return Ok(DiskGuard { path });
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                if lock_is_stale(&path) {
-                    let _ = std::fs::remove_file(&path);
-                    continue;
-                }
-                thread::sleep(LOCK_WAIT);
-            }
-            Err(e) => {
-                return Err(e).with_context(|| format!("disk tasks: {}", path.display()));
-            }
+        if rtok_sys::try_lock_exclusive(&file)
+            .with_context(|| format!("disk tasks: {}", path.display()))?
+        {
+            return Ok(DiskGuard { _file: file });
         }
+        thread::sleep(LOCK_WAIT);
     }
     bail!("disk tasks: {} is locked", path.display())
-}
-
-fn lock_is_stale(path: &Path) -> bool {
-    let Ok(meta) = std::fs::metadata(path) else {
-        return true;
-    };
-    let Ok(modified) = meta.modified() else {
-        return false;
-    };
-    modified.elapsed().is_ok_and(|age| age > LOCK_STALE)
 }
 
 fn now() -> i64 {
@@ -614,18 +594,14 @@ mod tests {
     }
 
     #[test]
-    fn a_stale_claim_lock_is_taken_and_a_live_one_is_kept() {
+    fn a_leftover_lock_file_is_taken_and_a_held_one_is_kept() {
         let dir = tmp("lock");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(".claim.lock");
-        let file = std::fs::File::create(&path).unwrap();
-        file.set_modified(SystemTime::now() - Duration::from_secs(11))
-            .unwrap();
-        drop(file);
+        std::fs::File::create(&path).unwrap();
         let guard = lock_claim(&dir).unwrap();
-        assert!(path.is_file());
         drop(guard);
-        assert!(!path.exists(), "the guard removes the lock");
+        assert!(path.is_file(), "the lock file is stable, never unlinked");
 
         let held = lock_claim(&dir).unwrap();
         let err = lock_claim(&dir).unwrap_err();
@@ -633,6 +609,66 @@ mod tests {
         drop(held);
         let again = lock_claim(&dir).unwrap();
         drop(again);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_old_lock_file_does_not_let_a_second_claimant_in() {
+        let dir = tmp("lock-held-old");
+        let a = lock_claim(&dir).unwrap();
+        // A paused holder looks "stale" by mtime; the lock must still exclude.
+        let file = OpenOptions::new()
+            .write(true)
+            .open(dir.join(".claim.lock"))
+            .unwrap();
+        file.set_modified(SystemTime::now() - Duration::from_secs(11))
+            .unwrap();
+        drop(file);
+        let err = lock_claim(&dir).unwrap_err();
+        assert!(err.to_string().contains("locked"), "{err}");
+        drop(a);
+        // A's release leaves the file and the exclusion free for the next claimant.
+        let b = lock_claim(&dir).unwrap();
+        let err = lock_claim(&dir).unwrap_err();
+        assert!(err.to_string().contains("locked"), "{err}");
+        drop(b);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Child half of [`a_killed_holder_releases_the_lock`]: holds the lock until killed.
+    #[test]
+    fn lock_holder_child() {
+        let Ok(dir) = std::env::var("RTOK_DISK_LOCK_CHILD") else {
+            return;
+        };
+        let _guard = lock_claim(Path::new(&dir)).unwrap();
+        std::fs::write(Path::new(&dir).join("child-ready"), "").unwrap();
+        thread::sleep(Duration::from_secs(60));
+    }
+
+    #[test]
+    fn a_killed_holder_releases_the_lock() {
+        use std::process::Command;
+
+        let dir = tmp("lock-kill");
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tasks::disk::tests::lock_holder_child"])
+            .env("RTOK_DISK_LOCK_CHILD", &dir)
+            .spawn()
+            .unwrap();
+        let ready = dir.join("child-ready");
+        for _ in 0..500 {
+            if ready.exists() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(ready.exists(), "child never locked");
+        let err = lock_claim(&dir).unwrap_err();
+        assert!(err.to_string().contains("locked"), "{err}");
+        child.kill().unwrap();
+        child.wait().unwrap();
+        drop(lock_claim(&dir).unwrap());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
