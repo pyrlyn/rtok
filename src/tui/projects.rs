@@ -90,6 +90,8 @@ pub(super) enum Key {
     Handled,
     /// The user confirmed: write this, then report the plan's outcome.
     Write(ProjectRequest, String),
+    /// Open the one-project view on this registry row, or close it when it is already open.
+    Drill(i32, String),
 }
 
 #[derive(Default)]
@@ -238,6 +240,10 @@ impl ProjectsState {
                     plan: format!("select {}", row.name),
                 };
                 return Key::Handled;
+            }
+            KeyCode::Char('d') => {
+                self.status.clear();
+                return Key::Drill(row.id, row.name.clone());
             }
             KeyCode::Char(c @ ('l' | 'u')) => {
                 let verb = if c == 'l' { Verb::Link } else { Verb::Unlink };

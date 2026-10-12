@@ -450,6 +450,20 @@ fn live_extras_are_on_the_page_and_in_the_tui() {
         view.contains("store.spark("),
         "the frame's sparklines are the store's series"
     );
+    // T561: the counter needs the nodes of a one-project view, which both surfaces take from the
+    // one `drill::run` and the page's cap, so the pane cannot count against a second picture.
+    let drill = read("src/tui/drill.rs");
+    let drill = drill.split("#[cfg(all(test").next().unwrap();
+    assert!(
+        read("src/web/mod.rs").contains("graph::drill::run(")
+            && drill.contains("drill::run(")
+            && !drill.contains("limit:"),
+        "both surfaces draw the one-project view from drill::run at its default cap"
+    );
+    assert!(
+        read("src/tui/app.rs").contains("(\"graph\", \"d\", \"drill\")"),
+        "the TUI's KEYS table documents the one-project view key"
+    );
 }
 
 /// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page

@@ -482,9 +482,13 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
             links: r.links.iter().map(|l| l.0).collect(),
         })
         .collect();
-    // The Graph tab has no drill-down, so the scope is the selected project's.
-    app.live()
-        .render(frame, calls, scope_names(&scope_rows, None).as_ref());
+    let drill = app.drill();
+    app.live().render(
+        frame,
+        calls,
+        scope_names(&scope_rows, drill.project()).as_ref(),
+        drill.drawn(),
+    );
     if rows.is_empty() {
         return frame.render_widget(graph_page(app), area);
     }
@@ -532,8 +536,10 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
         &mut cursor,
     );
     frame.render_widget(Paragraph::new(detail), breakdown);
+    let plan = state.note(&rows);
+    let plan = if plan.is_empty() { drill.note() } else { &plan };
     frame.render_widget(
-        Paragraph::new(Line::styled(state.note(&rows), Style::new().fg(WARN))),
+        Paragraph::new(Line::styled(plan.to_owned(), Style::new().fg(WARN))),
         note,
     );
     frame.render_widget(

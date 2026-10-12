@@ -14,6 +14,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 
 use super::compare::Compare;
 use super::doctor_fix::{DoctorFix, Engine, Keyed};
+use super::drill::Drill;
 use super::exporter::Exporter;
 use super::junk_clear::{self, JunkClear};
 use super::live_calls::LiveCalls;
@@ -71,6 +72,7 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("compare", "Esc", "close"),
     ("graph", "e", "export graph"),
     ("graph", "v", "view saved export"),
+    ("graph", "d", "drill"),
     ("export", "↑/↓", "choose field"),
     ("export", "Space", "change format, level, redact"),
     ("export", "type", "file to write, or export to view"),
@@ -121,6 +123,8 @@ pub struct App {
     projects: projects::ProjectsState,
     /// The Graph page's compare view (T485).
     compare: Compare,
+    /// The Graph page's one-project view (T561).
+    drill: Drill,
     /// The Graph page's export form and saved-export view (T329.41).
     exporter: Exporter,
     /// Whether the `?` help overlay is up (T60.8).
@@ -251,6 +255,7 @@ impl App {
             config: ConfigState::default(),
             projects: projects::ProjectsState::default(),
             compare: Compare::default(),
+            drill: Drill::default(),
             exporter: Exporter::default(),
             help: false,
             worker: None,
@@ -355,6 +360,7 @@ impl App {
     pub fn poll(&mut self) {
         self.live.poll(self.page() == "graph");
         self.compare.poll();
+        self.drill.poll();
         self.exporter.poll();
         let Some(latest) = self.worker.as_ref().and_then(|w| w.rx.try_iter().last()) else {
             return;
@@ -516,6 +522,10 @@ impl App {
                 self.projects.set_status(status);
                 self.request();
             }
+            Key::Drill(id, name) => {
+                self.drill
+                    .toggle(id, name, &self.cfg, self.worker.is_some());
+            }
         }
         true
     }
@@ -532,6 +542,10 @@ impl App {
 
     pub(super) fn compare(&self) -> &Compare {
         &self.compare
+    }
+
+    pub(super) fn drill(&self) -> &Drill {
+        &self.drill
     }
 
     /// The Graph page's export form (T329.41); one panel is open at a time, so a key goes to
