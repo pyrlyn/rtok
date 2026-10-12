@@ -690,6 +690,17 @@ pub struct UsageSlice {
     pub output: i64,
 }
 
+/// One Batch result's counters bound for `usage` ([`Store::insert_usage_rows`], T583.1).
+#[derive(Debug, Clone, Copy)]
+pub struct NewUsage<'a> {
+    /// Provider-scoped identity of the result; `None` writes a row nothing can dedupe against.
+    pub key: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub api: &'a str,
+    /// `[input, cache_create, cache_read, output]`, the same four counters as `insert_usage`.
+    pub legs: [i64; 4],
+}
+
 /// One `usage` row (proxy ground truth, T5.1).
 #[derive(Debug)]
 pub struct UsageRow {

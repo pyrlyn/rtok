@@ -164,6 +164,7 @@ diesel::table! {
     }
 }
 
+// 20261012120001 (T583.1): `result_key`, the Batch result a row was read from, UNIQUE.
 diesel::table! {
     usage (id) {
         id -> Integer,
@@ -176,6 +177,7 @@ diesel::table! {
         output -> BigInt,
         call_id -> Nullable<Integer>,
         api -> Text,
+        result_key -> Nullable<Text>,
     }
 }
 

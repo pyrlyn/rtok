@@ -256,38 +256,43 @@ impl Store {
     }
 
     /// Many `usage` rows for one call in a single transaction — a Batch results file (T385.4)
-    /// carries one per request. Each row is `(model, api, [input, cache_create, cache_read,
-    /// output])`, the same four counters as [`Store::insert_usage`].
+    /// carries one per request. A row whose [`NewUsage::key`] is already stored is skipped, so
+    /// reading the same results twice (T583.1) adds each request's counters once, and the unique
+    /// index makes that hold across concurrent fetches. Returns how many rows were written.
     pub fn insert_usage_rows(
         &self,
         session: &str,
         call_id: i32,
-        rows: &[(Option<&str>, &str, [i64; 4])],
-    ) -> Result<()> {
+        rows: &[NewUsage<'_>],
+    ) -> Result<usize> {
         let mut conn = self.lock()?;
-        conn.transaction(|conn| -> Result<()> {
-            // 8 binds per row, well under SQLite's 32766-variable cap per statement.
+        conn.transaction(|conn| -> Result<usize> {
+            let mut written = 0;
+            // 9 binds per row, well under SQLite's 32766-variable cap per statement.
             for chunk in rows.chunks(500) {
                 let values: Vec<_> = chunk
                     .iter()
-                    .map(|(model, api, [input, cache_create, cache_read, output])| {
+                    .map(|row| {
+                        let [input, cache_create, cache_read, output] = row.legs;
                         (
                             usage::session.eq(session),
-                            usage::model.eq(*model),
-                            usage::api.eq(*api),
-                            usage::input.eq(*input),
-                            usage::cache_create.eq(*cache_create),
-                            usage::cache_read.eq(*cache_read),
-                            usage::output.eq(*output),
+                            usage::model.eq(row.model),
+                            usage::api.eq(row.api),
+                            usage::input.eq(input),
+                            usage::cache_create.eq(cache_create),
+                            usage::cache_read.eq(cache_read),
+                            usage::output.eq(output),
                             usage::call_id.eq(call_id),
+                            usage::result_key.eq(row.key),
                         )
                     })
                     .collect();
-                diesel::insert_into(usage::table)
+                written += diesel::insert_into(usage::table)
                     .values(&values)
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
             }
-            Ok(())
+            Ok(written)
         })
     }
 

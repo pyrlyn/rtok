@@ -82,8 +82,12 @@ async fn usage_rows(store: &Store, n: usize) -> Vec<UsageRow> {
 
 /// For the cases that expect no row: let the post-response bookkeeping finish first.
 async fn settle(store: &Store, kind: &str) {
+    settle_calls(store, kind, 1).await;
+}
+
+async fn settle_calls(store: &Store, kind: &str, n: i64) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    while store.count_kind(kind).expect("count") < 1 {
+    while store.count_kind(kind).expect("count") < n {
         assert!(tokio::time::Instant::now() < deadline, "no {kind} row");
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
@@ -130,6 +134,49 @@ async fn anthropic_results_become_usage_rows_and_skip_bad_lines() {
         ]
     );
     assert_eq!(state.store.count_kind("api_request:batch").unwrap(), 1);
+    task.abort();
+}
+
+/// T583.1: fetching the same results again is a second observable call but the same billed
+/// requests, so it adds no usage; the same `custom_id`s in another batch are other requests.
+#[tokio::test]
+async fn refetching_anthropic_results_does_not_count_them_twice() {
+    let up = MockServer::start();
+    serve(
+        &up,
+        "/v1/messages/batches/msgbatch_1/results",
+        200,
+        ANTHROPIC_JSONL,
+    );
+    serve(
+        &up,
+        "/v1/messages/batches/msgbatch_2/results",
+        200,
+        ANTHROPIC_JSONL,
+    );
+    let (addr, state, task) = proxy_server("batch-results-replay", |cfg| {
+        cfg.proxy.upstream = up.base_url();
+        cfg.proxy.batch.parse_results = true;
+    })
+    .await;
+    for _ in 0..2 {
+        let (_, body) = fetch(&addr, "/v1/messages/batches/msgbatch_1/results").await;
+        assert_eq!(body, ANTHROPIC_JSONL, "a replay is forwarded as is too");
+    }
+    settle_calls(&state.store, "api_request:batch", 2).await;
+    assert_eq!(
+        usage_rows(&state.store, 2).await.len(),
+        2,
+        "replay double-counted"
+    );
+
+    fetch(&addr, "/v1/messages/batches/msgbatch_2/results").await;
+    settle_calls(&state.store, "api_request:batch", 3).await;
+    assert_eq!(
+        usage_rows(&state.store, 4).await.len(),
+        4,
+        "another batch is new work"
+    );
     task.abort();
 }
 
