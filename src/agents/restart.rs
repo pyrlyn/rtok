@@ -708,6 +708,7 @@ mod tests {
             "OpenCode Desktop" => "OpenCode",
             "Roo Code" => "Visual Studio Code",
             "Goose" => "Goose",
+            "Continue" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
             "Warp" => "Warp",

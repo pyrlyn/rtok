@@ -66,6 +66,8 @@ lang: uk
 | [`junie`](https://github.com/pyrlyn/rtok/blob/main/src/agents/junie/README.md) | Junie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`amp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/amp/README.md) | Amp | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`warp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/warp/README.md) | Warp | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 Таблицю генерує з коду хостів (`src/agents/<host>/mod.rs` і каталогу плагінів) тест `tests/agents_doc.rs`, який падає, коли вона застаріла. Після зміни хоста, додавання нового чи зміни інтерфейсів плагіна згенеруйте її заново:

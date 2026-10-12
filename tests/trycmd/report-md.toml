@@ -327,6 +327,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.codewhale.dir | ~/.codewhale | default |
 | setup.codex.config_path | ~/.codex/config.toml | default |
 | setup.commandcode.dir | ~/.commandcode | default |
+| setup.continue.config_path | ~/.continue/config.yaml | default |
 | setup.copilot.dir | ~/.copilot | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |

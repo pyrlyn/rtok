@@ -22,6 +22,8 @@ pub mod codewhale;
 pub mod codex;
 pub mod command;
 pub mod commandcode;
+#[path = "continue/mod.rs"]
+pub mod continue_dev;
 pub mod copilot;
 pub mod cursor;
 pub mod devin;
@@ -66,6 +68,7 @@ pub mod usage;
 pub mod vscode;
 pub mod warp;
 pub mod windsurf;
+mod yaml_text;
 pub mod zcode;
 pub mod zed;
 
@@ -122,6 +125,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "kiro" => Some(&kiro::Kiro),
         "amp" => Some(&amp::Amp),
         "warp" => Some(&warp::Warp),
+        "continue" => Some(&continue_dev::Continue),
         _ => None,
     }
 }

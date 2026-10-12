@@ -73,6 +73,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".kiro/settings",
         ".config/amp",
         ".warp",
+        ".continue",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -117,7 +118,8 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n\
               [setup.amp]\nsettings_path = \"{h}/.config/amp/settings.json\"\n\
               [setup.warp]\nmcp_path = \"{h}/.warp/.mcp.json\"\n\
-              [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n"
+              [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n\
+              [setup.continue]\nconfig_path = \"{h}/.continue/config.yaml\"\n"
         ),
     )
     .unwrap();

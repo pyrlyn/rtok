@@ -91,6 +91,7 @@ lang: ru
 | `qwen` | yes | hooks | ещё не проверено | `worktree_add` |
 | `codebuddy` | yes | hooks | ещё не проверено | `worktree_add` |
 | `goose` | no | MCP | ещё не проверено | `worktree_add` |
+| `continue` | no | MCP | ещё не проверено | `worktree_add` |
 | `codewhale` | yes | hooks | не задокументировано | `worktree_add` |
 | `aider` | no | нет | нет | только CLI |
 | `zed` | no | MCP | треды могут указывать на созданное вами рабочее дерево | `worktree_adopt` |
