@@ -2590,6 +2590,19 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
 
+### 32.3 Factory Droid (T413.3, checked 2026-10-12)
+
+Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirect from the vendor's own host); the links below are the new host. The CLI binary is `droid` (https://docs.factory.com/cli/getting-started/quickstart).
+
+- User-level MCP file: `~/.factory/mcp.json`; servers added with `droid mcp add` go there. A project `.factory/mcp.json` and ancestor-folder files exist for servers shared by a repository. https://docs.factory.com/cli/configuration/mcp
+- Stdio entry: `mcpServers.<name>` with `command`, `args`, `env`; `type` is `"stdio"`, `"http"` or `"sse"` and optional for stdio, which is the default. `disabled` is a boolean (default `false`). Same page.
+- Hooks: events `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Notification`, `Stop`, `SubagentStop`, `PreCompact`, `SessionStart`, `SessionEnd`. User file `~/.factory/hooks.json` is keyed directly by event name (no wrapping `hooks` key); if it is absent, the `hooks` key of `settings.json` is read. Command objects are `{type: "command", command, timeout}` with `timeout` in seconds (default 60). Exit 2 blocks on `PreToolUse`; `hookSpecificOutput.additionalContext` adds context after `PostToolUse` and on `SessionStart`. https://docs.factory.com/cli/configuration/hooks-guide
+- The docs name no tool list for matchers and no `PreCompact` or `SubagentStart` output shape, so rtok has no checked mapping of Droid's tool names or of its `PreToolUse` rewrite output. Hooks stay `Support::No`; a hooks task has to verify both first.
+- Plugins: `.factory-plugin/plugin.json`, `hooks/hooks.json`, `mcp.json` at the plugin root, installed into Droid's cache with `droid plugin install <plugin@marketplace> --scope user`; the page names no directory. https://docs.factory.com/cli/configuration/plugins. No Droid plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`.
+- Custom models: `customModels[]` in `~/.factory/settings.json`, each entry with its own `baseUrl`; no single endpoint setting, so proxy stays out. https://docs.factory.com/cli/configuration/byok
+- Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
+- No Desktop app is documented, so there is one CLI variant.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

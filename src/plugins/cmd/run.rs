@@ -7,7 +7,7 @@
 use crate::config::Config;
 use anyhow::{Result, bail};
 use rtok_plugin_sdk::{Archive, Class, Measurement};
-use std::process::Command;
+use rtok_sys::proc::{ProgressRunner, exit_code};
 
 use super::{formatters, rules};
 
@@ -147,17 +147,27 @@ fn shell(cfg: &Config) -> String {
 /// `shell` running `body`. `script_for` already quoted a cmd.exe body for cmd.exe
 /// (`"…"`, `""`); `Command::arg` would quote it again with MSVC rules (`\"`), which
 /// cmd.exe does not parse, so on Windows the body goes onto the command line as is (T83.8).
-fn shell_command(shell: &str, body: &str) -> Command {
-    let mut cmd = Command::new(shell);
+fn shell_command(shell: &str, body: &str, label: &str) -> ProgressRunner {
     let args = shell_args(shell, body);
     #[cfg(windows)]
     if let (ShellKind::Cmd, Some((body, flags))) = (shell_kind(shell), args.split_last()) {
-        use std::os::windows::process::CommandExt;
-        cmd.args(flags).raw_arg(body);
-        return cmd;
+        return ProgressRunner::new(label, shell, flags).raw_arg(body);
     }
-    cmd.args(args);
-    cmd
+    ProgressRunner::new(label, shell, args)
+}
+
+/// The spinner message of `rtok run`: the command as typed, cut so a long script keeps the
+/// line on one row.
+fn running_label(args: &[String]) -> String {
+    let text = args.join(" ");
+    let line: String = text
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(60)
+        .collect();
+    format!("running {line}…")
 }
 
 /// Flags + script body for `Command::new(shell)`.
@@ -266,11 +276,11 @@ const CAPTURE_CAP: u64 = 32 * 1024 * 1024;
 
 /// Run `cmd` and return its stdout then stderr (at most `cap` bytes together) and its exit
 /// code. A capped body ends with a notice line, so the archive says it is partial.
-fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> {
-    let out = crate::proc::capture_capped(cmd, None, Some(cap))?;
-    let (mut body, code) = (out.stdout, out.code.unwrap_or(1));
+fn capture_body(cmd: ProgressRunner, cap: u64) -> Result<(Vec<u8>, i32)> {
+    let (out, dropped) = cmd.run_capped(cap)?;
+    let (mut body, code) = (out.stdout, exit_code(out.status).unwrap_or(1));
     body.extend(out.stderr);
-    if out.dropped > 0 {
+    if dropped > 0 {
         if !body.is_empty() && !body.ends_with(b"\n") {
             body.push(b'\n');
         }
@@ -278,10 +288,7 @@ fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> 
             c if c % (1024 * 1024) == 0 => format!("{} MiB", c / (1024 * 1024)),
             c => format!("{c} bytes"),
         };
-        let notice = format!(
-            "[rtok: output capped at {cap}; {} bytes not captured]\n",
-            out.dropped
-        );
+        let notice = format!("[rtok: output capped at {cap}; {dropped} bytes not captured]\n");
         body.extend_from_slice(notice.as_bytes());
     }
     Ok((body, code))
@@ -297,7 +304,8 @@ pub fn run(cfg: &Config, args: &[String], agent: Option<&str>) -> Result<i32> {
     }
     let sh = shell(cfg);
     let sh_kind = shell_kind(&sh);
-    let (body, code) = capture_body(shell_command(&sh, &script_for(sh_kind, args)), CAPTURE_CAP)?;
+    let cmd = shell_command(&sh, &script_for(sh_kind, args), &running_label(args));
+    let (body, code) = capture_body(cmd, CAPTURE_CAP)?;
     emit_filtered(cfg, args, &body, code, agent);
     Ok(code)
 }
@@ -434,8 +442,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn capture_body_caps_and_appends_the_notice() {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"]);
+        let cmd = ProgressRunner::new(
+            "t…",
+            "sh",
+            ["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"],
+        );
         let (body, code) = capture_body(cmd, 1024).unwrap();
         let notice = "[rtok: output capped at 1024 bytes; 3976 bytes not captured]\n";
         assert_eq!(code, 2);
@@ -448,9 +459,17 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn capture_body_without_overflow_has_no_notice() {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", "printf hi"]);
+        let cmd = ProgressRunner::new("t…", "sh", ["-c", "printf hi"]);
         assert_eq!(capture_body(cmd, 1024).unwrap(), (b"hi".to_vec(), 0));
+    }
+
+    #[test]
+    fn the_spinner_names_the_command_on_one_short_line() {
+        let a = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(running_label(&a(&["cargo", "test"])), "running cargo test…");
+        assert_eq!(running_label(&a(&["a\nb"])), "running a…");
+        let long = running_label(&a(&[&"x".repeat(100)]));
+        assert_eq!(long.chars().count(), "running ".len() + 60 + 1, "{long}");
     }
 
     #[test]
@@ -1031,7 +1050,7 @@ mod tests {
     #[test]
     fn cmd_exe_gets_the_body_verbatim() {
         let body = script_for(ShellKind::Cmd, &["echo".into(), "say \"hi\"".into()]);
-        let out = shell_command("cmd.exe", &body).output().unwrap();
+        let out = shell_command("cmd.exe", &body, "t…").run().unwrap();
         assert_eq!(
             String::from_utf8_lossy(&out.stdout).trim_end(),
             "\"say \"\"hi\"\"\""
