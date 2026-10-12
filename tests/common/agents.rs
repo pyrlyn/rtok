@@ -67,6 +67,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".qwen",
         ".codebuddy",
         ".workbuddy",
+        ".config/goose",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -104,7 +105,8 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n\
               [setup.roo]\nmcp_path = \"{h}/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json\"\n\
               [setup.qwen]\ndir = \"{h}/.qwen\"\n\
-              [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n"
+              [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n\
+              [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n"
         ),
     )
     .unwrap();

@@ -696,6 +696,7 @@ mod tests {
             "Kimi Code Desktop" => "Kimi Code",
             "OpenCode Desktop" => "OpenCode",
             "Roo Code" => "Visual Studio Code",
+            "Goose" => "Goose",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
             "Windsurf" => "Windsurf",

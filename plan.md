@@ -52,9 +52,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -1062,14 +1061,6 @@ Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plug
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
-
-### T413.6. `rtok agents install goose` — Goose
-
-Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Block's docs for the MCP config file; hooks only if a payload is documented. MCP-only host via the existing stdio or local helper, whichever the file matches.
 
 ### T413.7. `rtok agents install continue` — Continue
 
