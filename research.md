@@ -2776,3 +2776,26 @@ Also: wrong-draft anchoring (the verifier accepts plausible code it would not ha
 
 Reopen only if a bench could show **cost per passed task falling with the pass rate held**: that needs a host path that lets a verifier accept a draft without re-emitting it (for example a new prefill-like or edit-by-reference API, or a draft delivered as a tool result the model can apply by id), plus a local model whose measured accept rate `a` on this workload clears the break-even in 37.4 with thinking tokens included. Neither exists in the sources checked today. Reliability: every row above is a vendor page or the repository's own file, fetched 2026-10-11; the llama.cpp thread is community-run but primary for its own numbers. No blog or forum fact is used. The break-even is arithmetic on published prices, not a measurement.
 
+
+## 39. `search` latency on large repositories (T378 gate, measured 2026-10-12)
+
+Question: is `search` p95 above 200 ms on a large repository, the gate that decides whether T378 (trigram prefilter) is built? `search` is `src/plugins/read/search.rs::search`: a single-threaded `ignore::WalkBuilder` walk, each file read and run through the regex line by line, early exit at `plugins.read.search_max` hits (50 by default). No divan bench covers `search` (`benches/` has `graph.rs` only), and the CLI has no `search` command, so the timing drives the same function through `rtok mcp` over stdio.
+
+Setup: `rtok 0.17.0`, `cargo build --release --bin rtok` at commit `bf88f07e2` (branch `c23b5-work`), Apple M3 Max, 16 cores, 64 GiB, macOS arm64. One long-lived `rtok mcp` process per root (as a host runs it), one discarded warm-up call per query, then 20 timed `tools/call search` round trips (25 on stator), wall time per call with `time.perf_counter`, p50/p95 by linear interpolation. The 1-minute load average was about 20 during the runs (other agents on the machine), so absolute numbers are pessimistic and noisy. Script: scratchpad `bench_search.py` (not committed).
+
+No local repository has 50k files: the largest tracked trees are `apps/stator` (1 995 files by `git ls-files`), `apps/weft` (1 941), `apps/rtok` (1 624) and `apps/rtok-flakes` (1 563). So two roots were timed. "Real" is `apps/stator` as is. "Large" is a scratchpad tree of 66 493 regular files, 3.0 GB, built from the `git ls-files` content of eight local repositories (stator, weft, rtok-flakes, translate, slint-bindings, rtok, runa, ketch), seven `cp -c -R` copies of it. It is synthetic (duplicated content, tracked `.gitignore` files still apply), so it measures walk plus scan cost per file, not a real monorepo.
+
+| Root | Query | Hits | Runs | p50 | p95 | max |
+| --- | --- | --- | --- | --- | --- | --- |
+| stator, 1 995 files | `the` | 50 (cap) | 25 | 2.9 ms | 3.3 ms | 3.4 ms |
+| stator | `TODO` | 11 | 25 | 122.7 ms | 151.9 ms | 159.8 ms |
+| stator | `unwrap_or_default` | 0 | 25 | 120.9 ms | 156.6 ms | 189.7 ms |
+| stator | `zzqxnotfound_9f3a` (absent) | 0 | 25 | 117.5 ms | 130.2 ms | 131.5 ms |
+| large, 66 493 files | `the` | 50 (cap) | 20 | 1.5 ms | 1.9 ms | 1.9 ms |
+| large | `TODO` | 50 (cap) | 20 | 7.7 ms | 10.7 ms | 13.7 ms |
+| large | `unwrap_or_default` | 50 (cap) | 20 | 124.1 ms | 136.8 ms | 145.4 ms |
+| large | `zzqxnotfound_9f3a` (absent) | 0 | 20 | 18 397 ms | 30 379 ms | 33 937 ms |
+
+Reading: a query that finds `cap` hits early stops the walk and stays far under 200 ms on any size. A query with few or no hits reads every file: about 120 ms on a 2 000-file repository (inside the gate), 15-34 s on 66 000 files (about 150x over the gate), roughly linear in files and bytes. Command: `python3 -I bench_search.py target/release/rtok <root> 20 'the' 'TODO' 'unwrap_or_default' 'zzqxnotfound_9f3a'`, run from the scratchpad.
+
+**Gate verdict (2026-10-12): not met, T378 stays open.** On the real repositories available (about 2 000 files) the absent-literal p95 is 130-157 ms, so p95 is at most 200 ms and the card's close-with-number clause would apply there. On a 66k-file tree the worst case (a literal with no or few hits) is p95 30 s, far above 200 ms. The card's own target is a 50k-file repository, so the gate resolves to "p95 > 200 ms": the prefilter is justified for that size, but the evidence for it is a synthetic tree, and I-95 (parallel walk) has not shipped, so the before/after Check the card names is still missing. The creator decides whether to build T378 on this number, run a real 50k-file repository first, or close the card at the 2 000-file scale.
