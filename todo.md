@@ -20,7 +20,6 @@
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
 - T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
-- T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
