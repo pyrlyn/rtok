@@ -1,5 +1,4 @@
 - T592. Keep late same-second sessions from moving behind the OTel cursor
-- T621. Refresh opened LSP documents after their files change
 - T623. Correlate web replies across request timeouts and retries
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
