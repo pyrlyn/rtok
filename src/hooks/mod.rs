@@ -2206,10 +2206,19 @@ mod tests {
         assert_eq!(out, out2, "byte-stable across two runs of the same session");
     }
 
-    /// T442: SessionStart names the claim in one line and records no measurement of its own.
-    #[test]
-    fn session_start_names_the_claimed_task() {
-        let dir = std::env::temp_dir().join(format!("rtok-claim-hook-{}", std::process::id()));
+    /// A checkout with an origin, a SessionStart event inside it, and the agent that event
+    /// registers.
+    fn claim_fixture(
+        name: &str,
+    ) -> (
+        std::path::PathBuf,
+        Vec<u8>,
+        HookInput,
+        Runtime,
+        String,
+        String,
+    ) {
+        let dir = std::env::temp_dir().join(format!("rtok-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".git")).unwrap();
         std::fs::write(
@@ -2217,7 +2226,7 @@ mod tests {
             "[remote \"origin\"]\n\turl = https://github.com/me/claim-hook.git\n",
         )
         .unwrap();
-        let (stdin, input, mut cx) = session_start_fixture("t442-claim");
+        let (stdin, input, mut cx) = session_start_fixture(name);
         cx.cwd = Some(dir.display().to_string());
         let host = cx.host_id().unwrap();
         let agent = cx
@@ -2225,6 +2234,13 @@ mod tests {
             .register_agent(host, &cx.session, None, cx.cwd.as_deref(), None)
             .unwrap();
         let key = crate::project::project_key(&dir).unwrap();
+        (dir, stdin, input, cx, agent, key)
+    }
+
+    /// T442: SessionStart names the claim in one line and records no measurement of its own.
+    #[test]
+    fn session_start_names_the_claimed_task() {
+        let (dir, stdin, input, cx, agent, key) = claim_fixture("t442-claim");
         cx.store
             .upsert_task_claim(&key, "R4", &agent, "Ship it\nmore")
             .unwrap();
@@ -2236,6 +2252,24 @@ mod tests {
         );
         assert!(!additional_context(&out).contains("more"));
         assert!(cx.store.list_measurements("task_claim").unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T615: claims made in one second name the one made last, and a re-claim moves it to
+    /// the front with its current title.
+    #[test]
+    fn session_start_names_the_latest_claim_made_within_one_second() {
+        let (dir, stdin, input, cx, agent, key) = claim_fixture("t615-claim");
+        let claim =
+            |id: &str, title: &str| cx.store.upsert_task_claim(&key, id, &agent, title).unwrap();
+        claim("R1", "first");
+        claim("R2", "second");
+        let ctx = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(ctx.contains("task R2 second"), "{ctx}");
+        claim("R1", "first, retitled\nmore");
+        let ctx = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(ctx.contains("task R1 first, retitled"), "{ctx}");
+        assert!(!ctx.contains("task R2"), "{ctx}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

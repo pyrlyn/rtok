@@ -451,6 +451,7 @@ diesel::table! {
 }
 
 // 0034 (T442): the claim SessionStart names. The file or the issue stays the source of truth.
+// 0047 (T615): `seq`, the claim's place in the order claims were made.
 diesel::table! {
     task_claims (project, task_id) {
         project -> Text,
@@ -458,6 +459,7 @@ diesel::table! {
         agent_id -> Text,
         title -> Text,
         since -> BigInt,
+        seq -> BigInt,
     }
 }
 

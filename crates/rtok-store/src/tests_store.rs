@@ -197,6 +197,35 @@ fn migration_0015_adds_lifecycle_columns_to_a_previous_schema_db() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// T615: claims written before `seq` existed keep the order the old query gave them
+/// (newest `since`, ties by task id) once 0047 numbers them.
+#[test]
+fn migration_0047_numbers_old_claims_in_their_old_order() {
+    let (dir, mut conn) = db_before_migration("0047");
+    let db = dir.join("rtok.db");
+    for (id, since) in [("R1", 100_i64), ("R2", 100), ("R3", 50), ("R4", 200)] {
+        diesel::insert_into(schema::task_claims::table)
+            .values((
+                schema::task_claims::project.eq("p"),
+                schema::task_claims::task_id.eq(id),
+                schema::task_claims::agent_id.eq("a"),
+                schema::task_claims::title.eq(id),
+                schema::task_claims::since.eq(since),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    drop(conn);
+    let store = Store::open(&db).unwrap();
+    let mut seen = Vec::new();
+    while let Some(claim) = store.latest_task_claim("p", "a").unwrap() {
+        store.clear_task_claim("p", &claim.task_id).unwrap();
+        seen.push(claim.task_id);
+    }
+    assert_eq!(seen, ["R4", "R1", "R2", "R3"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn upsert_same_title_with_a_new_body_keeps_the_old_body_in_history() {
     let store = Store::open_in_memory().unwrap();
