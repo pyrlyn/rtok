@@ -33,8 +33,11 @@ const TAKEN_RETRIES: usize = 3;
 /// One project's tasks: where they are stored, the counter they are numbered from and the
 /// prefix new ids get.
 pub struct Project {
-    /// The counter key, [`crate::project::project_key`].
+    /// The counter key, [`crate::project::project_key`]. New rows are written under it.
     pub key: String,
+    /// The pre-T586.1 key, when it differs (T586.2): claim rows filed under it are still
+    /// read and removed, never written.
+    pub legacy_key: Option<String>,
     /// The checkout's root: `.rtok.toml` and the disk adapter's directory live here.
     pub root: PathBuf,
     pub prefix: String,
@@ -53,8 +56,9 @@ impl Project {
     /// The project `cwd` belongs to, with the adapter `[tasks]` names.
     pub fn open(cfg: &crate::config::Tasks, cwd: &Path) -> Result<Self> {
         let root = git_root(cwd).context("rtok task: not inside a git checkout")?;
-        let key = crate::project::project_key(cwd)
+        let keys = crate::project::project_keys(cwd)
             .context("rtok task: cannot tell which project this checkout is")?;
+        let key = keys.key.clone();
         let name = crate::project::project_name(cwd);
         let prefix = resolve_prefix(&cfg.prefix, name.as_deref())?;
         let adapter: Box<dyn TaskAdapter> = match cfg.adapter.as_str() {
@@ -89,7 +93,9 @@ impl Project {
             }
             other => bail!("rtok task: unknown [tasks] adapter {other:?}"),
         };
-        Ok(Self::with_adapter(key, root, prefix, adapter))
+        let mut project = Self::with_adapter(key, root, prefix, adapter);
+        project.legacy_key = keys.legacy;
+        Ok(project)
     }
 
     pub fn with_adapter(
@@ -100,10 +106,16 @@ impl Project {
     ) -> Self {
         Self {
             key,
+            legacy_key: None,
             root,
             prefix,
             adapter,
         }
+    }
+
+    /// Where a claim row may sit: the current key, then the legacy one.
+    fn claim_keys(&self) -> Vec<&str> {
+        crate::project::read_keys(&self.key, self.legacy_key.as_deref())
     }
 
     pub fn adapter(&self) -> &dyn TaskAdapter {
@@ -173,7 +185,7 @@ impl Project {
             Some(s) => {
                 let task = set_status(self.adapter(), id, s, force)?;
                 if !s.is_active() {
-                    store.clear_task_claim(&self.key, &id.to_string())?;
+                    store.clear_task_claim(&self.claim_keys(), &id.to_string())?;
                 }
                 Ok(task)
             }
@@ -310,7 +322,7 @@ impl Project {
         } else {
             task
         };
-        store.clear_task_claim(&self.key, &id.to_string())?;
+        store.clear_task_claim(&self.claim_keys(), &id.to_string())?;
         Ok(task)
     }
 
@@ -907,6 +919,135 @@ mod claim_tests {
         let _ = std::fs::remove_dir_all(&path);
     }
 
+    /// A checkout whose pre-T586.1 key was `../remote`.
+    fn legacy_project(path: &Path) -> Project {
+        let mut p = project(path);
+        p.key = "/home/me/remote".into();
+        p.legacy_key = Some("../remote".into());
+        p
+    }
+
+    fn task(p: &Project, task_id: &str) {
+        p.adapter()
+            .create(
+                &NewTask {
+                    title: task_id.into(),
+                    description: String::new(),
+                    parent: None,
+                },
+                &id(task_id),
+            )
+            .unwrap();
+    }
+
+    /// T586.2: new claims go under the new key only; a claim filed under the legacy key is
+    /// still the agent's latest, goes away on release or finish, and nothing is copied or
+    /// moved.
+    #[test]
+    fn legacy_claim_rows_are_read_and_removed_but_never_written() {
+        let path = dir("legacy-claim");
+        let store = Store::open_in_memory().unwrap();
+        let now = ready::unix_now();
+        let me = agent(&store, "me", now);
+        let p = legacy_project(&path);
+        task(&p, "R1");
+        task(&p, "R2");
+        let keys = p.claim_keys();
+        assert_eq!(keys, ["/home/me/remote", "../remote"]);
+
+        store
+            .upsert_task_claim("../remote", "R1", &me, "Legacy")
+            .unwrap();
+        assert_eq!(
+            store
+                .latest_task_claim(&keys, &me)
+                .unwrap()
+                .unwrap()
+                .task_id,
+            "R1"
+        );
+
+        p.claim(&store, Some(&id("R2")), &me).unwrap();
+        // Same-second rows tie on `since`, so the key is asserted on its own.
+        let written = store
+            .latest_task_claim(&["/home/me/remote"], &me)
+            .unwrap()
+            .unwrap();
+        assert_eq!(written.task_id, "R2");
+        assert!(
+            store
+                .latest_task_claim(&["../remote"], &me)
+                .unwrap()
+                .is_some_and(|row| row.task_id == "R1"),
+            "the legacy row is left alone by a new claim"
+        );
+
+        p.release(&store, &id("R2"), &me, false).unwrap();
+        p.status(&store, &id("R1"), Some(Status::Done), true)
+            .unwrap();
+        assert!(store.latest_task_claim(&keys, &me).unwrap().is_none());
+
+        store
+            .upsert_task_claim("../remote", "R2", &me, "Legacy")
+            .unwrap();
+        p.release(&store, &id("R2"), &me, false).unwrap();
+        assert!(store.latest_task_claim(&keys, &me).unwrap().is_none());
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    /// Without a legacy key a project reads and removes its own rows only.
+    #[test]
+    fn a_project_without_a_legacy_key_ignores_other_keys() {
+        let path = dir("no-legacy-claim");
+        let store = Store::open_in_memory().unwrap();
+        let me = agent(&store, "me", ready::unix_now());
+        let p = project(&path);
+        task(&p, "R1");
+        store
+            .upsert_task_claim("../remote", "R1", &me, "Other repo")
+            .unwrap();
+        assert_eq!(p.claim_keys(), ["proj"]);
+        assert!(
+            store
+                .latest_task_claim(&p.claim_keys(), &me)
+                .unwrap()
+                .is_none()
+        );
+        p.release(&store, &id("R1"), &me, false).unwrap();
+        assert!(
+            store
+                .latest_task_claim(&["../remote"], &me)
+                .unwrap()
+                .is_some()
+        );
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    /// T586.2: counters need no migration. A counter filed under the legacy key is not read;
+    /// the new key is re-seeded from the adapter's highest id, so ids do not restart.
+    #[test]
+    fn counters_continue_from_the_adapter_under_the_new_key() {
+        let path = dir("legacy-counter");
+        let store = Store::open_in_memory().unwrap();
+        let p = legacy_project(&path);
+        for n in ["R1", "R2", "R7"] {
+            task(&p, n);
+        }
+        store.seed_task_counter("../remote", None, 2).unwrap();
+        let created = p
+            .create(
+                &store,
+                &NewTask {
+                    title: "next".into(),
+                    description: String::new(),
+                    parent: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(created.id, id("R8"));
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
     #[test]
     fn a_missing_agent_row_can_be_taken_and_a_block_writes_nothing_on_a_cycle() {
         let path = dir("block");
@@ -994,7 +1135,7 @@ mod claim_tests {
             .unwrap();
         assert!(
             store
-                .latest_task_claim("proj", &live)
+                .latest_task_claim(&["proj"], &live)
                 .unwrap()
                 .is_none_or(|row| row.task_id != "R1")
         );

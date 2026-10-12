@@ -61,24 +61,26 @@ impl Store {
         Ok(())
     }
 
-    /// Forget the claim on `task_id`. Missing is fine: a release of an unclaimed task and a
-    /// second finish both land here.
-    pub fn clear_task_claim(&self, project: &str, task_id: &str) -> Result<()> {
+    /// Forget the claim on `task_id` under every key in `projects` (the project's key and its
+    /// legacy one, T586.2). Missing is fine: a release of an unclaimed task and a second
+    /// finish both land here.
+    pub fn clear_task_claim(&self, projects: &[&str], task_id: &str) -> Result<()> {
         let mut conn = self.lock()?;
         diesel::delete(
             task_claims::table
-                .filter(task_claims::project.eq(project))
+                .filter(task_claims::project.eq_any(projects))
                 .filter(task_claims::task_id.eq(task_id)),
         )
         .execute(&mut *conn)?;
         Ok(())
     }
 
-    /// The claim `agent` made most recently in `project`, for the SessionStart line.
-    pub fn latest_task_claim(&self, project: &str, agent: &str) -> Result<Option<TaskClaim>> {
+    /// The claim `agent` made most recently under any key in `projects`, for the SessionStart
+    /// line. The newest row wins, so a claim under the current key outranks a legacy one.
+    pub fn latest_task_claim(&self, projects: &[&str], agent: &str) -> Result<Option<TaskClaim>> {
         let mut conn = self.lock()?;
         Ok(task_claims::table
-            .filter(task_claims::project.eq(project))
+            .filter(task_claims::project.eq_any(projects))
             .filter(task_claims::agent_id.eq(agent))
             .order((task_claims::since.desc(), task_claims::task_id.asc()))
             .select((
@@ -116,14 +118,14 @@ mod tests {
         store
             .upsert_task_claim("p", "R1", "agent", "First again")
             .unwrap();
-        let latest = store.latest_task_claim("p", "agent").unwrap().unwrap();
+        let latest = store.latest_task_claim(&["p"], "agent").unwrap().unwrap();
         assert_eq!(latest.task_id, "R1");
         assert_eq!(latest.title, "First again");
-        assert!(store.latest_task_claim("p", "other").unwrap().is_none());
-        store.clear_task_claim("p", "R1").unwrap();
-        let left = store.latest_task_claim("p", "agent").unwrap().unwrap();
+        assert!(store.latest_task_claim(&["p"], "other").unwrap().is_none());
+        store.clear_task_claim(&["p"], "R1").unwrap();
+        let left = store.latest_task_claim(&["p"], "agent").unwrap().unwrap();
         assert_eq!(left.task_id, "R2");
-        store.clear_task_claim("p", "R2").unwrap();
-        assert!(store.latest_task_claim("p", "agent").unwrap().is_none());
+        store.clear_task_claim(&["p"], "R2").unwrap();
+        assert!(store.latest_task_claim(&["p"], "agent").unwrap().is_none());
     }
 }

@@ -36,17 +36,49 @@ pub(crate) fn project_name_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> 
 /// protocol they cloned with; without an `origin`, the main checkout's path. A linked worktree
 /// resolves to its main checkout's key.
 pub fn project_key(cwd: &Path) -> Option<String> {
-    project_key_with(&HostFs, cwd)
+    project_keys(cwd).map(|k| k.key)
 }
 
-pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
+/// A project's current key and, when state was filed under a different one before T586.1, the
+/// legacy key it may still sit under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectKeys {
+    pub key: String,
+    /// The pre-T586.1 key of a local-path `origin` (`../remote.git` → `../remote`); `None`
+    /// when it equals `key`. Several repositories can share it, so it is only ever read.
+    pub legacy: Option<String>,
+}
+
+/// Keys to read persisted rows under, current first.
+pub fn read_keys<'a>(key: &'a str, legacy: Option<&'a str>) -> Vec<&'a str> {
+    std::iter::once(key).chain(legacy).collect()
+}
+
+pub fn project_keys(cwd: &Path) -> Option<ProjectKeys> {
+    project_keys_with(&HostFs, cwd)
+}
+
+pub(crate) fn project_keys_with(fs: &impl ReadFs, cwd: &Path) -> Option<ProjectKeys> {
     let common = common_git_dir(fs, cwd)?;
     let main = common.parent()?;
-    if let Some(url) = origin_url(fs, &common).and_then(|u| canonical_url(fs, main, &u)) {
-        return Some(url);
-    }
-    let main = fs.canonicalize(main).unwrap_or_else(|| main.to_path_buf());
-    Some(main.to_string_lossy().into_owned())
+    let origin = origin_url(fs, &common);
+    let key = origin
+        .as_deref()
+        .and_then(|u| canonical_url(fs, main, u))
+        .unwrap_or_else(|| {
+            let main = fs.canonicalize(main).unwrap_or_else(|| main.to_path_buf());
+            main.to_string_lossy().into_owned()
+        });
+    let legacy = origin
+        .as_deref()
+        .and_then(remote_key)
+        .filter(|legacy| *legacy != key);
+    Some(ProjectKeys { key, legacy })
+}
+
+#[cfg(test)]
+pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
+    project_keys_with(fs, cwd).map(|k| k.key)
 }
 
 /// `<main>/.git` of the checkout `cwd` lies in, through a linked worktree's `commondir`.
@@ -122,6 +154,12 @@ fn canonical_url(fs: &impl ReadFs, main: &Path, url: &str) -> Option<String> {
     if let Some(path) = local_path(url.trim()) {
         return Some(local_key(fs, main, &path));
     }
+    remote_key(url)
+}
+
+/// `host/owner/repo` of a remote URL taken at face value, without looking at the filesystem:
+/// the key of a network or scp remote, and what every local remote was keyed as before T586.1.
+fn remote_key(url: &str) -> Option<String> {
     let url = url.trim().trim_end_matches('/');
     let url = url.strip_suffix(".git").unwrap_or(url);
     let (rest, scp) = match url.split_once("://") {
@@ -320,6 +358,34 @@ mod tests {
         let key = project_key_with(&vfs, Path::new("/home/me/local-only"));
         assert_eq!(key.as_deref(), Some("/home/me/local-only"));
         assert_eq!(project_key_with(&vfs, Path::new("/home/me")), None);
+    }
+
+    /// T586.2: only a local-path origin has a pre-T586.1 key to fall back to.
+    #[rstest]
+    #[case("../remote.git", Some("../remote"))]
+    #[case("./sub/../o/", Some("./sub/../o"))]
+    #[case("file:///srv/My%20Repo.git", Some("/srv/my%20repo"))]
+    #[case("/srv/git/rtok.git", None)]
+    #[case("git@github.com:Me/rtok.git", None)]
+    #[case("https://host/a/b.git", None)]
+    fn legacy_key_exists_only_where_the_key_changed(
+        #[case] url: &str,
+        #[case] legacy: Option<&str>,
+    ) {
+        let keys = project_keys_with(&fixture(url), Path::new("/home/me/rtok")).unwrap();
+        assert_eq!(keys.legacy.as_deref(), legacy);
+        assert_ne!(Some(keys.key.as_str()), legacy);
+        let read = read_keys(&keys.key, keys.legacy.as_deref());
+        assert_eq!(read.len(), 1 + usize::from(legacy.is_some()));
+        assert_eq!(read[0], keys.key);
+    }
+
+    #[test]
+    fn a_checkout_without_origin_has_no_legacy_key() {
+        let mut vfs = Vfs::new();
+        vfs.write("/home/me/local-only/.git/HEAD", "ref: refs/heads/main\n");
+        let keys = project_keys_with(&vfs, Path::new("/home/me/local-only")).unwrap();
+        assert_eq!(keys.legacy, None);
     }
 
     /// Real-git fixtures (T586.1): a seed repo, bare remotes cloned from it and checkouts
