@@ -161,13 +161,15 @@ pub fn page(cfg: &Config) -> TasksPage {
         REMOTE_TTL
     };
     let home = cfg.home.clone();
+    let file = cfg.loaded_from.0.clone();
     let fallback = cfg.clone();
     TASKS
         .get(ttl, move || {
             // Re-read the layers each time: `.rtok.toml` is edited by `rtok task init` while the
             // page is open, and the page must follow it without a restart.
             // `load_from` would write a missing `config.toml`: a read-only page creates nothing.
-            let cfg = layers::load(&home, None, None).unwrap_or(fallback);
+            // The file the process was started with stays selected (`--config`, `RTOK_CONFIG`).
+            let cfg = layers::load(&home, file.as_deref(), None).unwrap_or(fallback);
             match std::env::current_dir() {
                 Ok(cwd) => read(&cfg, &cwd, configured(&cfg)),
                 Err(e) => TasksPage::say(
@@ -182,7 +184,7 @@ pub fn page(cfg: &Config) -> TasksPage {
 /// Whether any config layer above the built-in defaults sets a `[tasks]` key. The defaults alone
 /// would open the disk adapter in a project that never asked for tasks.
 fn configured(cfg: &Config) -> bool {
-    let fig = layers::figment(&cfg.home, None, None);
+    let fig = layers::figment(&cfg.home, cfg.loaded_from.0.as_deref(), None);
     layers::sourced(&fig)
         .iter()
         .any(|(key, _, source)| key.starts_with("tasks.") && source != "default")
@@ -440,5 +442,28 @@ mod tests {
         let page = ready("disk", Vec::new());
         assert_eq!(page.state, TasksState::Ready);
         assert!(page.text.contains("rtok task create"), "{}", page.text);
+    }
+
+    /// T630: the page judges `[tasks]` by the file the process was started with, not by the
+    /// default `<home>/config.toml`.
+    #[test]
+    fn configured_follows_the_selected_config_file() {
+        let home = crate::testutil::tmp_dir("tasks-cfg");
+        let custom = home.join("custom.toml");
+        std::fs::write(&custom, "[tasks]\nprefix = \"Z\"\n").unwrap();
+        let cfg = layers::load(&home, Some(&custom), None).unwrap();
+        assert_eq!(cfg.tasks.prefix, "Z");
+        assert!(configured(&cfg), "the explicit file sets [tasks]");
+
+        // A different default file must not win over the selected one.
+        std::fs::write(home.join("config.toml"), "[tasks]\nprefix = \"A\"\n").unwrap();
+        let reloaded = layers::load(&home, cfg.loaded_from.0.as_deref(), None).unwrap();
+        assert_eq!(reloaded.tasks.prefix, "Z");
+
+        let plain = layers::load(&home, None, None).unwrap();
+        assert!(configured(&plain), "the default file still counts");
+        std::fs::write(home.join("config.toml"), "").unwrap();
+        let plain = layers::load(&home, None, None).unwrap();
+        assert!(!configured(&plain), "defaults alone are not configured");
     }
 }
