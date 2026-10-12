@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,555 @@
+@@ -0,0 +1,557 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -391,6 +391,8 @@ target/tmp/t60-2-config-init.toml
 +[setup.codebuddy]
 +# dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (hooks), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR moves it
 +# workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
++[setup.droid]
++# mcp_path      = "~/.factory/mcp.json"        # Factory Droid: user-level MCP servers (mcpServers)
 +
 +[expand]                              # rtok expand <id>
 +# max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
@@ -560,7 +562,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 555 insertions(+)
+1 file changed, 557 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

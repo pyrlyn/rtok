@@ -8717,6 +8717,17 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.3. `rtok agents install droid` — Factory Droid
+
+`rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
+
+Done: `src/agents/droid/` (one CLI variant, `droid` on PATH): `mcpServers.rtok` in `~/.factory/mcp.json` through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON), `[setup.droid] mcp_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (nothing about Droid's caches is documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Factory documents hooks (`research.md` section 32.3) but no tool-name list or `PreToolUse` rewrite output to build the mapping from, so a hooks task has to verify both; `customModels` carry a `baseUrl` each; the plugin needs a `plugins/droid` unit (D21). Research with sources and the 2026-10-12 check date in `research.md` section 32.3. Tests: `droid` unit tests (dry run, idempotent round trip, foreign servers kept, apply twice), `agents_install` matrix row, `droid_keeps_the_real_mcp_json` (foreign server kept byte-for-byte), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`. Per-host check: `droid` is not installed here, so no manual `--dry-run`.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
