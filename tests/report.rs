@@ -768,3 +768,62 @@ fn explicit_format_md_overrides_configured_format() {
     }
     let _ = fs::remove_dir_all(&h);
 }
+
+fn measure(
+    store: &rtok::store::Store,
+    plugin: &'static str,
+    kind: &'static str,
+    before_bytes: u64,
+    id: &str,
+) {
+    store
+        .insert_measurement(
+            "sinks",
+            &rtok::Measurement {
+                plugin,
+                kind,
+                before_bytes,
+                after_bytes: 1,
+                est_before: (before_bytes / 4) as u32,
+                est_after: 1,
+                ref_id: Some(id.to_string()),
+                call_id: None,
+            },
+        )
+        .unwrap();
+}
+
+/// T581: ten larger archive rows (no actionable switch) must not push a smaller read, cmd
+/// or MCP sink out of the top-ten before the recommendation filters by class.
+#[test]
+fn top_sinks_survive_larger_non_actionable_rows() {
+    let h = home("top-sinks-filter");
+    let cfg = rtok::config::Config::load_from(&h).expect("config");
+    let store = rtok::store::Store::open(&cfg.core.db_path).expect("store");
+    store
+        .upsert_session("sinks", None, None, None, Some("proxy"))
+        .unwrap();
+    for i in 0..10 {
+        measure(&store, "archive", "pointer", 100_000, &format!("arch{i}"));
+    }
+    measure(&store, "read", "read", 50, "src/small.rs");
+    measure(&store, "cmd", "filter", 40, "cargo:1");
+    measure(&store, "cmd", "wrap", 30, "srv/tool:1");
+    let out = rtok(&["report"], &h);
+    for sink in ["read src/small.rs", "cmd cargo", "mcp srv/tool"] {
+        assert!(
+            out.contains(&format!("{sink} cost")),
+            "{sink} missing\n{out}"
+        );
+    }
+    assert!(!out.contains("archive arch"), "{out}");
+
+    // More than ten eligible sinks: only the ten largest are named.
+    for i in 0..12 {
+        measure(&store, "read", "read", 1_000 + i, &format!("big{i}.rs"));
+    }
+    let out = rtok(&["report"], &h);
+    assert_eq!(out.matches("read big").count(), 10, "{out}");
+    assert!(!out.contains("read src/small.rs cost"), "{out}");
+    let _ = fs::remove_dir_all(&h);
+}
