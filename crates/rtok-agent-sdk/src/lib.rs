@@ -311,13 +311,14 @@ pub fn write(apply: &Apply, path: &Path, body: &str, report: &str) -> Result<()>
     if !apply.writes(report) {
         return Ok(());
     }
+    // Before the backup: `exists()` follows a cycle and says false, so a cycle must fail first.
+    let target = link_target(path)?;
     if apply.backup {
         backup(path, apply.backup_files)?;
     }
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).ok();
     }
-    let target = link_target(path);
     write_atomic(&target, body).with_context(|| target.display().to_string())
 }
 
@@ -325,19 +326,34 @@ pub fn write(apply: &Apply, path: &Path, body: &str, report: &str) -> Result<()>
 /// link whose target is not there yet), and the rename then replaced the link with a plain
 /// file; following the links by hand writes the target and keeps the link. A target whose
 /// directory is gone fails the write instead of being created.
-fn link_target(path: &Path) -> PathBuf {
+///
+/// A chain that never ends (a cycle, or more links than the kernel follows) is an error, not
+/// the last link: handing that link on would let the rename replace it with a regular file.
+fn link_target(path: &Path) -> Result<PathBuf> {
     let mut p = path.to_path_buf();
     // 40: the kernel's own ELOOP limit, so a cycle ends.
     for _ in 0..40 {
         if let Ok(real) = fs::canonicalize(&p) {
-            return real;
+            return Ok(real);
         }
         match fs::read_link(&p) {
             Ok(next) => p = p.parent().unwrap_or(Path::new("")).join(next),
-            Err(_) => break,
+            Err(_) => {
+                // Not a link: a missing file is the dangling end, a plain file is the target.
+                return match fs::symlink_metadata(&p) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                        Err(e).with_context(|| p.display().to_string())
+                    }
+                    _ => Ok(p),
+                };
+            }
         }
     }
-    p
+    anyhow::bail!(
+        "{}: symlink chain does not resolve (a cycle or more than 40 links); rtok will not \
+         replace a link with a file",
+        path.display()
+    )
 }
 
 /// [`write`]'s atomic swap: write `body` to a sibling temp file, copy `target`'s
@@ -1727,6 +1743,67 @@ mod tests {
             fs::read_to_string(dir.join("dots/real.json")).unwrap(),
             "{}\n"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T570: a link chain that never reaches a file used to end at the 40th hop, and the
+    /// rename then replaced a link with a regular file (and repointed its partner).
+    #[cfg(unix)]
+    #[test]
+    fn write_refuses_a_symlink_cycle_and_leaves_every_link_alone() {
+        use std::os::unix::fs::symlink;
+        let dir = tmp("cycle");
+        let (a, b, me) = (dir.join("a"), dir.join("b"), dir.join("me"));
+        symlink("b", &a).unwrap();
+        symlink("a", &b).unwrap();
+        symlink("me", &me).unwrap();
+        let backups = Apply {
+            backup: true,
+            ..apply()
+        };
+        for link in [&a, &me] {
+            let err = write(&backups, link, "{}\n", "+ something").unwrap_err();
+            assert!(err.to_string().contains("symlink"), "{err:#}");
+        }
+        for (link, to) in [(&a, "b"), (&b, "a"), (&me, "me")] {
+            assert_eq!(fs::read_link(link).unwrap(), Path::new(to));
+        }
+        assert!(!dir.join(BACKUP_DIR).exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T570: acyclic chains, relative and absolute, still update the real file under the links.
+    #[cfg(unix)]
+    #[test]
+    fn write_follows_a_chain_of_links_to_the_real_file() {
+        use std::os::unix::fs::symlink;
+        let dir = tmp("chain");
+        fs::create_dir_all(dir.join("dots")).unwrap();
+        let real = dir.join("dots/real.json");
+        fs::write(&real, "{}\n").unwrap();
+        let (mid, top) = (dir.join("dots/mid.json"), dir.join("top.json"));
+        symlink("real.json", &mid).unwrap();
+        symlink(&mid, &top).unwrap();
+
+        write(&apply(), &top, "{\"a\":1}\n", "+ something").unwrap();
+
+        assert_eq!(fs::read_link(&top).unwrap(), mid);
+        assert_eq!(fs::read_link(&mid).unwrap(), Path::new("real.json"));
+        assert_eq!(fs::read_to_string(&real).unwrap(), "{\"a\":1}\n");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T570: a link into a directory that does not exist fails the write; the link stays.
+    #[cfg(unix)]
+    #[test]
+    fn write_through_a_link_into_a_missing_directory_fails_and_keeps_the_link() {
+        let dir = tmp("missing-parent");
+        let link = dir.join("linked.json");
+        std::os::unix::fs::symlink("gone/real.json", &link).unwrap();
+
+        assert!(write(&apply(), &link, "{}\n", "+ something").is_err());
+
+        assert_eq!(fs::read_link(&link).unwrap(), Path::new("gone/real.json"));
         let _ = fs::remove_dir_all(dir);
     }
 
