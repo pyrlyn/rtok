@@ -53,6 +53,7 @@ pub(crate) mod mcp;
 pub mod mimo;
 pub mod omp;
 pub mod opencode;
+pub mod openhands;
 mod outdated;
 pub mod pi;
 pub mod plugin;
