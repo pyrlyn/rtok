@@ -13872,6 +13872,60 @@ Check: `section_page_numbers_match_heading_pages`.
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T562. Abort memory sync when an existing host file cannot be read
+
+Source-confirmed: [sync read](src/plugins/memory/sync.rs#L119) uses read_to_string(...).unwrap_or_default(), treating every read error as an empty file. An existing CLAUDE.md containing an invalid UTF-8 byte therefore bypasses the managed-block guard; a normal sync prepares only the new memory block and [backs up and overwrites](src/plugins/memory/sync.rs#L138) the original, losing all outside content from the active host file. A backup does not make this replacement correct. A missing file is the only read failure that should enter the create path.
+
+Execution plan:
+
+1. Add a scratch host-file fixture with ordinary outside text and an invalid UTF-8 byte; assert sync fails and preserves the original bytes and stored digest.
+2. Handle NotFound explicitly as a new file; propagate all other read failures before rendering, backups, writes or digest updates.
+3. Cover unreadable files where permissions allow a reliable fixture, dry-run/remove/force variants, and successful creation of a genuinely missing file.
+
+Check: failed reads never replace or remove host content or change sync metadata; existing valid managed-block behavior and `just check` pass. The isolated read/splice probe establishes the lossy replacement text; the live CLI write regression remains part of this fix.
+
+Result: `run()` in `src/plugins/memory/sync.rs` reads the host file through `fs_kit::read::text_or_empty`, which treats only NotFound as empty and returns every other error with the path before rendering, backups, writes or digest updates. Dry-run, remove and force share the same read.
+
+Check: `a_non_utf8_host_file_aborts_sync_without_touching_anything`, `a_non_utf8_host_file_keeps_an_existing_digest`, `an_unreadable_host_file_aborts_sync_without_touching_anything` (unix, skips as root) failed before and pass after; `a_missing_host_file_is_still_created`; `plugins::memory` (94) and trycmd green.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T132. Ship a Haiku scout agent definition with the Claude Code plugin
+`research.md` §17.3(4). Make the cheap path the default one: `plugins/claude/agents/rtok-scout.md` with `model: haiku`, `tools` limited to the rtok MCP `read`, `search`, `outline`, `explore`, `expand`, and a short system prompt — ranged reads only, never a whole file over the outline threshold, answer with `path:line` citations and no file dumps. Verify the plugin `agents/` directory format against the current Claude Code docs first and add the link to the `## Docs` list in `plugins/claude/README.md`.
+Check: `rtok agents install claude` offers the agent file and removal takes it away (host matrix e2e); `tests/host_docs.rs` and `tests/agents_doc.rs` (`RTOK_BLESS=1`) green; T128's per-`agentType` split is the measurement — record `rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent in `research.md` §17 after a dated window.
+Progress (2026-09-24): `plugins/claude/agents/rtok-scout.md` ships with the plugin (`model: haiku`, the five tools under the plugin-scoped names `mcp__plugin_rtok_rtok__<tool>`); unit test on the frontmatter, install/remove e2e in `tests/claude_plugin.rs`. Left: the dated `rtok-scout` vs `Explore`/`general-purpose` read-bytes row in `research.md` §17 once a window of sessions has run with it.
+
+Execution plan (2026-10-12): read the T128 per-`agentType` sub-agent split from this machine's store over the window since 2026-09-24 and write one dated `research.md` §17 row (`rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent, with the command); no product code.
+
+Result: `research.md` §17.4 has the dated row (2026-10-12, `rtok stats --since 18d --json`, 77 sessions since 2026-09-24): per sub-agent tool-result bytes are 53,342 for `rtok:rtok-scout` (n = 2), 140,390 for Explore (42) and 184,206 for general-purpose (1,057). n = 2 is too small to compare, and T128's read column counts native Read only, so the scout's MCP reads show as 0; the scout stays as shipped.
+
+Check: The row cites the command, window, counts and caveats. Measured by Claude Code / claude-haiku-5-5.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
+
+From the Empryo study (idea-only, clean-room; Empryo `trigram.ts`: per-file trigram sets, candidate files = intersection of the query's literal trigrams). `search` (`src/plugins/read/search.rs:92`) walks and scans every file. Gate: I-95 (parallel walk) measures `search` p95 on a large repo first; if it is ≤ 200 ms, close this card with the number.
+
+Plan: per-root trigram posting lists (`file_id` bitmaps, `roaring` only with a `Cargo.toml` justification, else sorted `Vec<u32>`) built in the graph index pass for text files ≤ 1 MB; queries with a literal of ≥ 3 bytes scan only candidate files; regexes without a usable literal take the full scan.
+
+Done when: a literal `search` on a 50k-file repo scans only candidate files and returns the same hits.
+
+Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
+
+Execution plan (2026-10-12): measure `search` p95 on the largest local repository with a dated command; at or under 200 ms close the card with the number in `research.md`; over 200 ms report back before building the prefilter.
+
+Progress (2026-10-12, `research.md` §39): `search` through `rtok mcp` at bf88f07e2, load ~20. Real repos top out at ~2k files (apps/stator 1,995): p95 ≤ 157 ms. A synthetic 66,493-file tree (local repos cloned 7×): capped queries ≤ 137 ms, an absent literal p95 30.4 s, linear in file count. No real ≥ 50k-file repo here. Creator decision: build the prefilter on the synthetic number, find a real 50k-file repo first, or close at the 2k scale.
+
+Result: Closed by its gate without a prefilter (creator: decide as best, 2026-10-12). `research.md` §39: `search` through `rtok mcp` at bf88f07e2 has p95 ≤ 157 ms on the largest real local repos (~2k files, apps/stator 1,995). No real ≥ 50k-file repo exists here; a synthetic 66,493-file tree shows capped queries ≤ 137 ms and an absent literal at p95 30.4 s, linear in file count. A per-root trigram index is not justified at the sizes rtok runs on; the large-tree cost is noted on I-95 (parallel walk) as the cheaper first step.
+
+Check: Dated row with binary commit, roots, file counts, queries, runs, p50/p95 and commands; no product code.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
 ### T353. MCP parameter tolerance: `a,b` line ranges and missing-param errors
 
 Found 2026-10-02 in `~/.rtok/errors.log`: `read` rejects `invalid line range \`N,N\`` (14) and `\`N, N\`` (3) — T172 only stripped quotes; `search` fails with `missing \`pattern\`` (8), `read` with `missing \`path\`` (2), `symbol` with `missing \`name\`` (1); `outline` says `No such file or directory (os error 2)` (6) without the path.

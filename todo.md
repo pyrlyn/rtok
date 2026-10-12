@@ -1,4 +1,3 @@
-- T562. Abort memory sync when an existing host file cannot be read
 - T592. Keep late same-second sessions from moving behind the OTel cursor
 - T620. Enforce LSP request deadlines during blocking transport reads
 - T621. Refresh opened LSP documents after their files change
@@ -6,7 +5,6 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
-- T132. Ship a Haiku scout agent definition with the Claude Code plugin
 - T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
@@ -28,7 +26,6 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
-- T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
