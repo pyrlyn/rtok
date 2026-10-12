@@ -2603,6 +2603,15 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
 - No Desktop app is documented, so there is one CLI variant.
 
+### 32.13 Trae (T413.13, checked 2026-10-12)
+
+Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide/add-mcp-servers, fetched 2026-10-12. Result: no installer; the documented user-level surface has no file path.
+
+- Project MCP servers: an `mcp.json` in a `.trae/` directory under the project root (step "Set up project MCP servers"). That file belongs to the project, so setup never writes it.
+- User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
+- VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
+- Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.
