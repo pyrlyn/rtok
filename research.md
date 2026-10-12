@@ -2620,6 +2620,14 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - `.continue/mcpServers/` is documented for a workspace only ("top level of your workspace"); no global equivalent is documented, so it is not written. Rules and hooks: the docs name `rules` in `config.yaml` but no hook events, so the hooks module stays off.
 - Extension and CLI ids: VS Code `Continue.continue` (https://github.com/continuedev/continue/blob/main/extensions/vscode/package.json: `publisher` `Continue`, `name` `continue`); JetBrains `com.github.continuedev.continueintellijextension` (`extensions/intellij/gradle.properties`); `cn` is the `bin` of `@continuedev/cli` (`extensions/cli/package.json`). The Desktop variant is detected through the VS Code app, as Roo's is; a JetBrains-only install is not detected.
 
+### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
+
+Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.
+
+- Succession: "Kiro CLI is the next update of the Q CLI"; staying on Q Developer CLI means "new features and fixes will only be available for Kiro CLI". The page gives no end-of-support date for the Q CLI. Kiro CLI was available from 2025-11-17, and auto-update users were moved to it on 2025-11-24. https://kiro.dev/docs/upgrade-guides/migrating-from-q/ (page updated 2026-08-04)
+- MCP file: the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` and skips servers that conflict. Kiro CLI does not modify existing `.amazonq` folders, keeps reading project `.amazonq` configuration, and prefers `.kiro` when both exist. Same page. T413.4 should treat `~/.kiro/settings/mcp.json` as the user MCP file and write nothing to `.amazonq`.
+- Q Developer IDE plugins: no primary source checked, so no IDE variant. Third-party posts about their end of support are leads only (unverified).
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

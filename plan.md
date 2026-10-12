@@ -29,7 +29,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
-| T276.4 | todo | P2 | 4 | 0% | |
 | T276.6 | todo | P2 | 3 | 0% | |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
@@ -52,7 +51,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -72,7 +70,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T592 | todo | P2 | 3 | 0% | |
-| T623 | todo | P2 | 5 | 0% | |
+| T623.2 | todo | P2 | 3 | 0% | |
 
 
 
@@ -86,20 +84,17 @@ Existing tasks, including uncommitted T522–T527 in the shared checkout, were c
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
 
-### T623. Correlate web replies across request timeouts and retries
+### T623.2. Match `/ws` replies to their request by `req` in the web client
 
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
-
-A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+Second half of T623; needs T623.1. The client sends a fresh `req` with every doctor/junk/graph/diff/export/import request and resolves a pending promise only for the frame carrying its `req`.
 
 Execution plan:
 
-1. Add deterministic timeout/retry tests for two requests with different selections; the late first reply must never resolve the second promise. Include same-project graph/diff and export/import variants sharing this queue.
-2. Add request identifiers to the client/server protocol and echo them in successful and failed answers. Match pending promises by identifier and operation; update generated types and protocol tests together.
-3. Ignore replies for expired requests, isolate reconnect generations and retain bounded pending-state cleanup. Verify timely requests, concurrent requests and connection closure.
-4. Run focused API/protocol and Doctor UI tests, then `just check`.
+1. `web/src/api/query.tsx`: replace the kind/key match in `settleDoctor` with the `req` match, ignore replies for expired or unknown requests, fail only the request a `message` frame names (a `message` without `req` still fails every request in flight), keep a counter that survives reconnects so an old socket's late frame cannot match.
+2. `web/src/api/ws.ts` `parseFrame` keeps `req`; `sample.ts`, `sampleDrill/Diff/Export.ts` and `web/e2e/rtok.spec.ts` echo it.
+3. Tests: fake-clock timeout/retry with two different selections (plan A times out, plan B sent, late A frame must not resolve B), same-project graph/diff and export/import variants, concurrent requests, connection closure; focused Doctor UI tests. Run `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
 
-Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
+Check: every resolved promise receives only its own request's answer, including after a timeout, and `just check` passes.
 
 ### T592. Keep late same-second sessions from moving behind the OTel cursor
 
@@ -323,12 +318,6 @@ Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this car
 Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cli` / `spawn_cli` / `app_version` and `doctor.rs::spawn_mcp` / `mcp_command` go through `ProgressRunner`; `proc::suspend` replaces the T81 `interactive` switch so `rtok agents install/update/remove` shows step loaders and the plugin question stays readable; `probing MCP server <name>…` with a bar when more than one server. Starts after T275, T277 and T279 land (same spawn helpers). Unblocks T436.4. Depends on T276.1, T276.2.
 
 Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
-
-### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
-
-Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
-
-Check: the T276 card's Check lines for items 4 and 5; `just check`.
 
 ### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 
@@ -707,14 +696,6 @@ Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
-
-### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
-
-Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: AWS docs first. If the CLI is the Kiro CLI, close into T413.4 with the citation. Otherwise an MCP installer for the documented file only.
 
 ### T413.11. `rtok agents install crush` — Crush
 
