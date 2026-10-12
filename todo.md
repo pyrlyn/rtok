@@ -1,5 +1,4 @@
 - T592. Keep late same-second sessions from moving behind the OTel cursor
-- T621. Refresh opened LSP documents after their files change
 - T623. Correlate web replies across request timeouts and retries
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
@@ -32,7 +31,6 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.3. `rtok agents install droid` — Factory Droid
 - T413.5. `rtok agents install amp` — Amp
 - T413.6. `rtok agents install goose` — Goose
 - T413.7. `rtok agents install continue` — Continue

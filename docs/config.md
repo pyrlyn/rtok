@@ -442,6 +442,8 @@ dir           = "~/.qwen"                    # settings.json (hooks, mcpServers)
 [setup.codebuddy]
 dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (hooks), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR moves it
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
+[setup.droid]
+mcp_path      = "~/.factory/mcp.json"        # Factory Droid: user-level MCP servers (mcpServers)
 [setup.kiro]
 mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 
