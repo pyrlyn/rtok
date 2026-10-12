@@ -1603,6 +1603,8 @@ dependencies = [
 [[package]]
 name = "fs-kit"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce7c1d8e448538e4054724fc0978228824b84b74f499069665cccc99b09a9a1"
 dependencies = [
  "dunce",
 ]
