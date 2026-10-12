@@ -607,6 +607,10 @@ clink.argmatcher("rtok")
               :addarg({})
               :addflags({ "--from" .. clink.argmatcher():addarg({}), "--both", "--dry-run", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
               :adddescriptions({ ["--from"] = "Unlink from this project instead of the selected one", ["--both"] = "Also remove the link the other way", ["--dry-run"] = "Show the links that would go; remove nothing", ["--json"] = "JSON instead of a table", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+            "reindex" .. clink.argmatcher()
+              :addarg({})
+              :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+              :adddescriptions({ ["--json"] = "JSON instead of a table", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
             "remove" .. clink.argmatcher()
               :addarg({})
               :addflags({ "--dry-run", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
@@ -617,13 +621,14 @@ clink.argmatcher("rtok")
                 "select" .. clink.argmatcher(),
                 "link" .. clink.argmatcher(),
                 "unlink" .. clink.argmatcher(),
+                "reindex" .. clink.argmatcher(),
                 "remove" .. clink.argmatcher(),
                 "help" .. clink.argmatcher()
               })
-              :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["remove"] = "Drop a project and its index rows; its files are never touched", ["help"] = "Print this message or the help of the given subcommand(s)" })
+              :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["reindex"] = "Re-read a project's files into its index (the page's /"Index now/")", ["remove"] = "Drop a project and its index rows; its files are never touched", ["help"] = "Print this message or the help of the given subcommand(s)" })
           })
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["remove"] = "Drop a project and its index rows; its files are never touched", ["help"] = "Print this message or the help of the given subcommand(s)", ["--json"] = "JSON instead of a table", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["reindex"] = "Re-read a project's files into its index (the page's /"Index now/")", ["remove"] = "Drop a project and its index rows; its files are never touched", ["help"] = "Print this message or the help of the given subcommand(s)", ["--json"] = "JSON instead of a table", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "review" .. clink.argmatcher()
           :addflags({ "--since" .. clink.argmatcher():addarg({}), "--staged", "--json", "--project" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--since"] = "Diff against this ref", ["--staged"] = "Staged files only (`git diff --cached --name-only`)", ["--json"] = "JSON instead of the text list", ["--project"] = "Project id or directory instead of the cwd (see `rtok graph projects`)", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
@@ -648,9 +653,10 @@ clink.argmatcher("rtok")
                 "select" .. clink.argmatcher(),
                 "link" .. clink.argmatcher(),
                 "unlink" .. clink.argmatcher(),
+                "reindex" .. clink.argmatcher(),
                 "remove" .. clink.argmatcher()
               })
-              :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["remove"] = "Drop a project and its index rows; its files are never touched" }),
+              :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["reindex"] = "Re-read a project's files into its index (the page's /"Index now/")", ["remove"] = "Drop a project and its index rows; its files are never touched" }),
             "review" .. clink.argmatcher(),
             "diff" .. clink.argmatcher(),
             "export" .. clink.argmatcher(),
@@ -880,9 +886,10 @@ clink.argmatcher("rtok")
                 "select" .. clink.argmatcher(),
                 "link" .. clink.argmatcher(),
                 "unlink" .. clink.argmatcher(),
+                "reindex" .. clink.argmatcher(),
                 "remove" .. clink.argmatcher()
               })
-              :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["remove"] = "Drop a project and its index rows; its files are never touched" }),
+              :adddescriptions({ ["add"] = "Register a directory as a project (a known one only refreshes its last-used time)", ["select"] = "Make a project the selected one; the page and later the CLI answer for it", ["link"] = "Link a project into the selected one's graph scope (indexes it when it never was)", ["unlink"] = "Remove a link; an auto link stays removed on re-index", ["reindex"] = "Re-read a project's files into its index (the page's /"Index now/")", ["remove"] = "Drop a project and its index rows; its files are never touched" }),
             "review" .. clink.argmatcher(),
             "diff" .. clink.argmatcher(),
             "export" .. clink.argmatcher(),

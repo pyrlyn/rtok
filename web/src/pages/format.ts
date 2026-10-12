@@ -55,4 +55,10 @@ export function ago(ts: number, now: number): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+/** A running call's elapsed time, whole seconds. */
+export const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
+
+export const millis = (ms: number) =>
+  ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+
 export const nowSecs = (): number => Math.floor(Date.now() / 1000);

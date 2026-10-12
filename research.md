@@ -1456,6 +1456,20 @@ everything below was checked on 2026-10-10 against primary sources.
 - MiMo Desktop: still no documented config path. A third-party README
   (https://github.com/akaradje/mimo-desktop, **unverified**) says Desktop reads
   `~/.config/mimocode/mimocode.jsonc`; T521 waits for a read-only probe on the creator's machine.
+- MiMo Desktop, resolved (T521, 2026-10-11). The vendor docs still name no Desktop path: the intro
+  of https://mimo.xiaomi.com/mimocode/start says MiMo Code runs "in the terminal, the desktop
+  app, and IDE extensions", and https://mimo.xiaomi.com/mimocode/config-files lists `default_agent`
+  as "applied across all interfaces (TUI / `mimo run` / desktop / GitHub Action)"; the config-overrides
+  page (all fetched 2026-10-11) lists the global dir as `$XDG_CONFIG_HOME/mimocode/`, i.e.
+  `~/.config/mimocode/`, with `MIMOCODE_HOME` moving it to `$MIMOCODE_HOME/config/`. The vendor's
+  own shipped app is the primary source for Desktop: `Xiaomi MiMo AI.app` 26.1010.101546 (bundle
+  id `com.xiaomi.mimo.desktop-ai`, updater feed `https://mimocode-cdn.xiaomimimo.com/mimocode/mimodesktopai/`,
+  read-only inspection of `Contents/Resources/app.asar` and `app-update.yml` on 2026-10-11)
+  contains `const KM=["mimocode.jsonc","mimocode.json","config.json"]` and a resolver that
+  returns the first existing file of `MIMOCODE_HOME/config`, else `XDG_CONFIG_HOME/mimocode`, else
+  `~/.config/mimocode`: the CLI's config family. The third-party README is therefore confirmed on
+  the path but not needed. The Windows and Linux install paths of the app are not verified, so
+  only the two macOS app paths are probed.
 
 ## 16. Token savings beyond the shipped surface (2026-09-21)
 
@@ -2575,6 +2589,19 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - `model.baseUrl` is "Not intended to be set by hand — use the `/model` picker or a `modelProviders` entry". Proxy stays out. https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
+
+### 32.3 Factory Droid (T413.3, checked 2026-10-12)
+
+Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirect from the vendor's own host); the links below are the new host. The CLI binary is `droid` (https://docs.factory.com/cli/getting-started/quickstart).
+
+- User-level MCP file: `~/.factory/mcp.json`; servers added with `droid mcp add` go there. A project `.factory/mcp.json` and ancestor-folder files exist for servers shared by a repository. https://docs.factory.com/cli/configuration/mcp
+- Stdio entry: `mcpServers.<name>` with `command`, `args`, `env`; `type` is `"stdio"`, `"http"` or `"sse"` and optional for stdio, which is the default. `disabled` is a boolean (default `false`). Same page.
+- Hooks: events `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Notification`, `Stop`, `SubagentStop`, `PreCompact`, `SessionStart`, `SessionEnd`. User file `~/.factory/hooks.json` is keyed directly by event name (no wrapping `hooks` key); if it is absent, the `hooks` key of `settings.json` is read. Command objects are `{type: "command", command, timeout}` with `timeout` in seconds (default 60). Exit 2 blocks on `PreToolUse`; `hookSpecificOutput.additionalContext` adds context after `PostToolUse` and on `SessionStart`. https://docs.factory.com/cli/configuration/hooks-guide
+- The docs name no tool list for matchers and no `PreCompact` or `SubagentStart` output shape, so rtok has no checked mapping of Droid's tool names or of its `PreToolUse` rewrite output. Hooks stay `Support::No`; a hooks task has to verify both first.
+- Plugins: `.factory-plugin/plugin.json`, `hooks/hooks.json`, `mcp.json` at the plugin root, installed into Droid's cache with `droid plugin install <plugin@marketplace> --scope user`; the page names no directory. https://docs.factory.com/cli/configuration/plugins. No Droid plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`.
+- Custom models: `customModels[]` in `~/.factory/settings.json`, each entry with its own `baseUrl`; no single endpoint setting, so proxy stays out. https://docs.factory.com/cli/configuration/byok
+- Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
+- No Desktop app is documented, so there is one CLI variant.
 
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 

@@ -443,6 +443,8 @@ dir           = "~/.qwen"                    # settings.json (хуки, mcpServe
 [setup.codebuddy]
 dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (хуки), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR переносить каталог
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: ті самі файли (вбудований CodeBuddy Code; неперевірено)
+[setup.droid]
+mcp_path      = "~/.factory/mcp.json"        # Factory Droid: користувацький файл MCP-серверів (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)
@@ -591,6 +593,17 @@ min_rows = 5
 
 [plugins.compress]
 enabled = true                        # екстрактивні зведення заархівованого виводу інструментів; працює лише в proxy.mode = "compress"
+
+[plugins.compress.llm]
+enabled           = false             # P28: model summaries of archived output via the internal lane; needs proxy.mode = "compress"
+url               = ""                # where the compressor posts; empty = this proxy (proxy.bind:proxy.port)
+model             = "claude-haiku-4-5"
+max_input_bytes   = 65536             # larger archived results keep the extractive view
+max_output_tokens = 512
+max_spans         = 64                # more must-keep spans than this keep the extractive view
+max_in_flight     = 2                 # compressor calls at once
+timeout_s         = 60
+code              = false             # also summarise diffs and source; off = logs and prose only
 
 [plugins.docs]
 enabled        = false                # локальний rustdoc з Cargo.lock + кешований JSON docs.rs (T455)

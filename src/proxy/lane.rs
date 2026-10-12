@@ -14,8 +14,7 @@ use axum::http::HeaderMap;
 
 use crate::config::{LanePolicy, Lanes, RouteRule, RoutingPolicy};
 
-/// Request header naming the lane; stripped before the request goes upstream.
-pub const HEADER: &str = "x-rtok-lane";
+pub use crate::lane::HEADER;
 const PREFIX: &str = "/lane/";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

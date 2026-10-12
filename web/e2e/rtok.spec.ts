@@ -385,6 +385,42 @@ test("the 3D live canvas takes no input and its camera holds a call from another
   await expect(live).not.toHaveAttribute("data-framed", /.+/, { timeout: 15_000 });
 });
 
+test("a graph call from another process shows its label on the 2D node, which fades after the call", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const label = page.getByTestId("run-label");
+  // The call has usually ended before a frame shows it running: the label then carries its duration.
+  await expect(async () => {
+    callers(rtok);
+    await expect(label.first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(label.first()).toHaveText(/^callers( \d+(\.\d)? ?(ms|s))?$/);
+  await expect(label).toHaveCount(0, { timeout: 15_000 });
+});
+
+test("a graph call from another process shows its label on the 3D node", async ({ page, rtok }) => {
+  await viewing(page, "3d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  await expect(
+    page.getByTestId("graph-live-3d").or(page.getByText(/3D unavailable/)),
+  ).toBeVisible();
+  test.skip(
+    (await page.getByText(/3D unavailable/).count()) > 0,
+    "WebGL is not available in this browser",
+  );
+  const label = page.getByTestId("run-label");
+  await expect(async () => {
+    callers(rtok);
+    await expect(label.first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(label).toHaveCount(0, { timeout: 15_000 });
+});
+
 test("the splitter keeps its place and the hidden state across a reload and stops the stream", async ({
   page,
   rtok,
@@ -597,4 +633,37 @@ test("a project with tasks shows them on the board, a subtask under its parent, 
   await expect(page.getByRole("region", { name: child! })).toBeVisible();
   // Read-only: nothing on the page is a form control that could change a task.
   await expect(page.getByRole("main").getByRole("switch")).toHaveCount(0);
+});
+
+test("the node menu re-indexes a project and removes it only after the plan is confirmed", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addGitProject("lib.rs", "fn kept() {}\nfn caller() {\n    kept();\n}\n");
+  expect(rtok.projects().map((p) => p.state)).toEqual(["not indexed"]);
+  await page.goto("/#/graph");
+  const node = (label: RegExp) => page.locator("[data-testid=node-2d]").and(page.getByLabel(label));
+  await expect(node(/^proj, not indexed/)).toBeVisible();
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Re-index" }).click();
+  await expect(node(/^proj, ok/)).toBeVisible({ timeout: 20_000 });
+  expect(rtok.projects().map((p) => p.state)).toEqual(["ok"]);
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  const plan = page.getByRole("region", { name: "remove proj" });
+  await expect(plan.getByText(/files untouched/)).toBeVisible();
+  await plan.getByRole("button", { name: "Cancel" }).click();
+  expect(rtok.projects()).toHaveLength(1);
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  await page
+    .getByRole("region", { name: "remove proj" })
+    .getByRole("button", { name: /^Remove proj/ })
+    .click();
+  await expect(node(/^proj/)).toHaveCount(0);
+  expect(rtok.projects()).toHaveLength(0);
 });

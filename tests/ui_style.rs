@@ -154,3 +154,17 @@ fn a_wait_draws_nothing_on_a_pipe() {
         }
     }
 }
+
+/// T276.4: `rtok run` shows `running <command>…` while the command works, but only on a
+/// terminal; on a pipe (a host's shell tool) its bytes are the command's output and nothing else.
+#[test]
+fn rtok_run_draws_no_spinner_on_a_pipe() {
+    let home = home("run");
+    let out = rtok(
+        &home,
+        &["run", "--", "sh", "-c", "printf hi; sleep 0.3"],
+        &[],
+    );
+    assert_eq!(stdout(&out), "hi\n");
+    assert!(out.stderr.is_empty(), "{:?}", out.stderr);
+}
