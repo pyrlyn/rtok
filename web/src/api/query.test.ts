@@ -14,7 +14,7 @@ import {
   type Api,
 } from "./query";
 import { connectSample, isSampleRequested, sampleSnapshot } from "./sample";
-import type { Snapshot } from "./snapshot.gen";
+import type { Cleared, Request, Snapshot } from "./snapshot.gen";
 import type { Connect, Connection, Frame, Handlers } from "./ws";
 
 // A scripted connection: the test plays the server by calling the captured handlers.
@@ -27,7 +27,17 @@ function scripted() {
     close: () => handlers.onState("closed"),
   };
   const connect: Connect = (h) => ((handlers = h), connection);
-  return { connect, sent, server: () => handlers, setOpen: (v: boolean) => (open = v) };
+  // The server's answer to the i-th request sent: the frame under that request's `req`.
+  const req = (i: number) => (sent[i] as Request).req as number;
+  const answer = (i: number, frame: Frame) => handlers.onFrame({ ...frame, req: req(i) } as Frame);
+  return {
+    connect,
+    sent,
+    req,
+    answer,
+    server: () => handlers,
+    setOpen: (v: boolean) => (open = v),
+  };
 }
 
 let queryClient: QueryClient;
@@ -285,36 +295,143 @@ describe("?sample source", () => {
 
 describe("doctor requests", () => {
   const selection = { keep: [], toggled: [{ source: "/p", path: "hooks.Stop[0]" }] };
+  const other = { keep: [], toggled: [{ source: "/q", path: "hooks.Stop[1]" }] };
   const plan = { items: [], diff: "", refused: [], token: "t1" };
+  const fixed = { text: "done", code: 0, replan: null };
 
-  test("a plan and an apply each wait for their own frame, in the order asked", async () => {
+  test("a plan and an apply each wait for the frame that echoes their req", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const planned = api.doctorPlan(selection);
     const applied = api.doctorApply(selection, "t1");
     expect(s.sent).toEqual([
-      { doctor: { action: "plan", selection, confirmed: null } },
-      { doctor: { action: "apply", selection, confirmed: "t1" } },
+      { doctor: { action: "plan", selection, confirmed: null }, req: expect.any(Number) },
+      { doctor: { action: "apply", selection, confirmed: "t1" }, req: expect.any(Number) },
     ]);
-    s.server().onFrame({ type: "doctorfixed", fixed: { text: "done", code: 0, replan: null } });
-    s.server().onFrame({ type: "doctorplan", plan });
+    expect(s.req(0)).not.toBe(s.req(1));
+    s.answer(1, { type: "doctorfixed", fixed });
+    s.answer(0, { type: "doctorplan", plan });
     await expect(planned).resolves.toEqual(plan);
-    await expect(applied).resolves.toEqual({ text: "done", code: 0, replan: null });
+    await expect(applied).resolves.toEqual(fixed);
   });
 
-  test("a refusal, a closed link and a missing link fail the request", async () => {
+  test("a late answer to a timed-out plan cannot resolve the next plan", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const lost = expect(api.doctorPlan(selection)).rejects.toThrow("doctorplan timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await lost;
+
+    const retried = api.doctorPlan(other);
+    const late = { ...plan, token: "from-a" };
+    s.answer(0, { type: "doctorplan", plan: late });
+    let settled = false;
+    void retried.then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    s.answer(1, { type: "doctorplan", plan: { ...plan, token: "from-b" } });
+    await expect(retried).resolves.toMatchObject({ token: "from-b" });
+  });
+
+  test("a frame of another kind, without a req or with an unknown one settles nothing", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const planned = api.doctorPlan(selection);
+    s.answer(0, { type: "doctorfixed", fixed });
+    s.server().onFrame({ type: "doctorplan", plan });
+    s.server().onFrame({ type: "doctorplan", plan, req: 999 });
+    let settled = false;
+    void planned.then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    s.answer(0, { type: "doctorplan", plan });
+    await expect(planned).resolves.toEqual(plan);
+  });
+
+  test("a refusal fails the request it names and no other one", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const refused = api.doctorPlan(selection);
-    s.server().onFrame({ type: "message", text: "doctor needs an action and a selection" });
+    const waiting = api.doctorPlan(other);
+    s.answer(0, { type: "message", text: "doctor needs an action and a selection" });
     await expect(refused).rejects.toThrow("doctor needs");
+    s.answer(1, { type: "doctorplan", plan });
+    await expect(waiting).resolves.toEqual(plan);
+  });
+
+  test("a refusal of an expired request is dropped; an untagged one fails writes, not requests", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const lost = expect(api.doctorPlan(selection)).rejects.toThrow("timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await lost;
+
+    const planned = api.doctorPlan(other);
+    const write = api.set({ key: "proxy.enabled", value: true });
+    s.answer(0, { type: "message", text: "late refusal" });
+    s.server().onFrame({ type: "message", text: "refused key proxy.enabled" });
+    await expect(write).rejects.toThrow("refused key");
+    s.answer(1, { type: "doctorplan", plan });
+    await expect(planned).resolves.toEqual(plan);
+  });
+
+  test("a closed link and a missing link fail the request", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
     const dropped = api.doctorApply(selection, "t1");
     s.server().onState("closed");
     await expect(dropped).rejects.toThrow("connection closed");
     s.setOpen(false);
     await expect(api.doctorPlan(selection)).rejects.toThrow("not connected");
+  });
+
+  test("request ids continue across a reconnect, so the old socket's frame matches nothing", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const before = expect(api.doctorPlan(selection)).rejects.toThrow("connection closed");
+    s.server().onState("closed");
+    await before;
+    api.reconnect();
+    const after = api.doctorPlan(selection);
+    expect(s.req(1)).toBeGreaterThan(s.req(0));
+    s.answer(0, { type: "doctorplan", plan: { ...plan, token: "old socket" } });
+    s.answer(1, { type: "doctorplan", plan });
+    await expect(after).resolves.toEqual(plan);
+  });
+
+  test("the junk plan and its apply are told apart by req", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const cleared = { items: [], planned_bytes: 0, freed_bytes: 0 } as unknown as Cleared;
+    const planned = api.junkPlan();
+    const applied = api.junkApply(["/a"]);
+    s.answer(1, { type: "junkcleared", cleared: { ...cleared, freed_bytes: 7 } });
+    s.answer(0, { type: "junkplan", plan: cleared });
+    await expect(planned).resolves.toBe(cleared);
+    await expect(applied).resolves.toMatchObject({ freed_bytes: 7 });
+  });
+
+  test("the project plan is settled by req, whichever project the frame names", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const first = api.projectPlan("1");
+    const second = api.projectPlan("1");
+    s.answer(1, { type: "projectplan", project: "1", plan: "second" });
+    s.answer(0, { type: "projectplan", project: "1", plan: "first" });
+    await expect(first).resolves.toEqual({ project: "1", plan: "first" });
+    await expect(second).resolves.toEqual({ project: "1", plan: "second" });
   });
 
   test("the sample machine plans with the terminal defaults and applies the selection", async () => {
@@ -356,32 +473,46 @@ describe("doctor requests", () => {
 
 describe("drill requests", () => {
   const request = { project: "1", expand: [], focus: null, depth: null, limit: null, query: "" };
-  const frame = (project: number) =>
-    ({ type: "graph", graph: { project, nodes: [], edges: [] } }) as unknown as Frame;
+  const frame = (project: number, more = 0) =>
+    ({ type: "graph", graph: { project, nodes: [], edges: [], more } }) as unknown as Frame;
 
-  test("a frame settles the request of its own project, whatever the order", async () => {
+  test("each frame settles the request it echoes, whatever the order", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const one = api.drill(request);
     const two = api.drill({ ...request, project: "2" });
     expect(s.sent).toHaveLength(2);
-    s.server().onFrame(frame(2));
-    s.server().onFrame(frame(1));
+    s.answer(1, frame(2));
+    s.answer(0, frame(1));
     await expect(two).resolves.toMatchObject({ project: 2 });
     await expect(one).resolves.toMatchObject({ project: 1 });
   });
 
-  test("two requests for one project are answered in the order asked", async () => {
+  test("two requests for one project are told apart, and the second may answer first", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const first = api.drill(request);
     const second = api.drill({ ...request, limit: 1000 });
-    s.server().onFrame({ type: "graph", graph: { project: 1, more: 7 } } as unknown as Frame);
-    s.server().onFrame({ type: "graph", graph: { project: 1, more: 0 } } as unknown as Frame);
+    s.answer(1, frame(1, 0));
+    s.answer(0, frame(1, 7));
     await expect(first).resolves.toMatchObject({ more: 7 });
     await expect(second).resolves.toMatchObject({ more: 0 });
+  });
+
+  test("a late frame of a timed-out drill cannot resolve the retry for the same project", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const lost = expect(api.drill(request)).rejects.toThrow("graph timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await lost;
+    const retry = api.drill({ ...request, limit: 5 });
+    s.answer(0, frame(1, 7));
+    s.answer(1, frame(1, 2));
+    await expect(retry).resolves.toMatchObject({ more: 2 });
   });
 
   test("a refusal fails the request, and so does a missing link", async () => {
@@ -389,7 +520,7 @@ describe("drill requests", () => {
     const api = createApi(queryClient, s.connect);
     api.open();
     const refused = api.drill(request);
-    s.server().onFrame({ type: "message", text: "unknown project 1" });
+    s.answer(0, { type: "message", text: "unknown project 1" });
     await expect(refused).rejects.toThrow("unknown project");
     s.setOpen(false);
     await expect(api.drill(request)).rejects.toThrow("not connected");
@@ -411,17 +542,31 @@ describe("diff requests", () => {
   const frame = (project: string, from: string) =>
     ({ type: "diff", project, diff: { from, to: "working", projects: [] } }) as unknown as Frame;
 
-  test("a frame settles the request of its own project", async () => {
+  test("each frame settles the request it echoes", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const one = api.diff(request);
     const two = api.diff({ ...request, project: "2" });
-    expect(s.sent[0]).toEqual({ diff: request });
-    s.server().onFrame(frame("2", "v2"));
-    s.server().onFrame(frame("1", "v1"));
+    expect(s.sent[0]).toEqual({ diff: request, req: expect.any(Number) });
+    s.answer(1, frame("2", "v2"));
+    s.answer(0, frame("1", "v1"));
     await expect(two).resolves.toMatchObject({ from: "v2" });
     await expect(one).resolves.toMatchObject({ from: "v1" });
+  });
+
+  test("two diffs of one project against different refs are told apart", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const lost = expect(api.diff({ ...request, from: ["v1"] })).rejects.toThrow("diff timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await lost;
+    const retry = api.diff({ ...request, from: ["v2"] });
+    s.answer(0, frame("1", "v1"));
+    s.answer(1, frame("1", "v2"));
+    await expect(retry).resolves.toMatchObject({ from: "v2" });
   });
 
   test("a refusal fails the request, and a drill frame of the same project does not settle it", async () => {
@@ -429,12 +574,64 @@ describe("diff requests", () => {
     const api = createApi(queryClient, s.connect);
     api.open();
     const refused = api.diff(request);
-    s.server().onFrame({
+    s.answer(0, {
       type: "graph",
       graph: { project: 1, nodes: [], edges: [] },
     } as unknown as Frame);
-    s.server().onFrame({ type: "message", text: "1 is not a git repository" });
+    s.answer(0, { type: "message", text: "1 is not a git repository" });
     await expect(refused).rejects.toThrow("not a git repository");
+  });
+});
+
+describe("export and import requests", () => {
+  const exportRequest = {
+    project: "1",
+    format: "json",
+    level: "overview",
+    depth: null,
+    focus: null,
+    scale: null,
+    transparent: false,
+  } as const;
+  const file = (name: string) =>
+    ({ type: "export", file: { name, mime: "application/json", data: "e30=" } }) as Frame;
+  const imported = (name: string) =>
+    ({
+      type: "imported",
+      name,
+      export: { projects: [], nodes: [], edges: [] },
+    }) as unknown as Frame;
+
+  test("concurrent exports and an import each get their own answer", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const json = api.exportGraph(exportRequest);
+    const svg = api.exportGraph({ ...exportRequest, format: "svg" });
+    const opened = api.importGraph({ name: "a.json", text: "{}" });
+    s.answer(2, imported("a.json"));
+    s.answer(1, file("graph.svg"));
+    s.answer(0, file("graph.json"));
+    await expect(json).resolves.toMatchObject({ name: "graph.json" });
+    await expect(svg).resolves.toMatchObject({ name: "graph.svg" });
+    await expect(opened).resolves.toMatchObject({ name: "a.json" });
+  });
+
+  test("a late export cannot resolve the retry, and an import refusal names its import", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const lost = expect(api.exportGraph(exportRequest)).rejects.toThrow("export timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await lost;
+    const retry = api.exportGraph({ ...exportRequest, format: "svg" });
+    const bad = api.importGraph({ name: "b.json", text: "nope" });
+    s.answer(0, file("graph.json"));
+    s.answer(2, { type: "message", text: "b.json is not a graph export" });
+    s.answer(1, file("graph.svg"));
+    await expect(bad).rejects.toThrow("not a graph export");
+    await expect(retry).resolves.toMatchObject({ name: "graph.svg" });
   });
 });
 

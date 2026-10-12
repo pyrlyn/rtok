@@ -83,8 +83,11 @@ async function interceptSocket(page: Page, rule: (request: unknown) => Rule | un
   await page.routeWebSocket(/\/ws$/, (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
-      const { reply, hold } = rule(JSON.parse(String(message))) ?? {};
-      const deliver = () => (reply === undefined ? server.send(message) : ws.send(reply));
+      const request = JSON.parse(String(message));
+      const { reply, hold } = rule(request) ?? {};
+      // The page matches an answer to its request by `req`, so a canned reply echoes it.
+      const answer = () => JSON.stringify({ ...JSON.parse(reply ?? "{}"), req: request.req });
+      const deliver = () => (reply === undefined ? server.send(message) : ws.send(answer()));
       if (hold) void gate.then(deliver);
       else deliver();
     });

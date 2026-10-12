@@ -280,6 +280,14 @@ Result: `src/web/protocol.rs` gains the `Request` and `Reply` envelopes (an opti
 
 Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
 
+### T623.2. Match `/ws` replies to their request by `req` in the web client
+
+Second half of T623; needs T623.1. The client sends a fresh `req` with every doctor/junk/project-plan/graph/diff/export/import request and resolves a pending promise only for the frame carrying its `req`, so the late answer of a request that timed out can no longer resolve the next request of the same kind.
+
+Result: `createApi` in `web/src/api/query.tsx` numbers each of those requests from a counter that is never reset (so it survives a reconnect) and settles the queue entry whose `req` and answer kind both match; a frame with an unknown, expired or missing `req`, or of the wrong kind, is dropped. A `message` that carries a `req` fails only that request (an expired one is ignored). A `message` without one belongs to a write or an expand and fails only those, where it used to fail every request in flight, so a refused `set` no longer aborts a doctor apply that is still being worked on; a closed socket still fails everything. The kind-plus-project matching (`key`) is gone. `parseFrame` keeps a numeric `req` on the frame, and `replyTo` in `web/src/api/ws.ts` is the one helper that tags a frame with a request's `req`; the sample server, `drillServer`, the `wire` test helper and the e2e socket interceptor use it. Tests: `query.test.ts` (fake-clock timeout then retry with two different selections, drill refs and exports, concurrent requests answered out of order, same-project drill/diff, refusal naming its request, expired refusal, untagged refusal, close, reconnect id continuity, wrong kind) and `ws.test.ts` (`req` parsing and `replyTo`).
+
+Status: done 2026-10-13 · Model: Claude Code / claude-sonnet-5-5
+
 ### T591. Audit OpenTelemetry export cursors and cumulative metrics
 
 Source audit only; no product code changed. Reviewed OTel export selection and watermark advancement, stream failure isolation, span/log mapping, metric sums and encoding against the module design and existing tests. This was a sampled audit; retention and all transport/platform behavior were not exhaustively verified.
