@@ -173,6 +173,7 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "t
 axum = { version = "0.8.9", features = ["ws"] } # dashboard WebSocket (P19); proxy HTTP unchanged
 rust-embed = { version = "8.12", default-features = false, features = ["debug-embed", "interpolate-folder-path"] } # the React SPA inside the binary, every profile (T310.9)
 mime_guess = "2" # Content-Type for the SPA's files, embedded or read from RTOK_WEB_DIST
+percent-encoding = "2" # decode SPA asset URL paths (T574); already in the lock via url/reqwest
 futures-util = "0.3.34"
 ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] } # `rtok tui`, the terminal rendering of the D23 model (T15.1); default backend is crossterm; the feature gives Paragraph::line_count, the exact wrapped-row count the panel scroll range needs (T619)
 inquire = { version = "0.9", default-features = false, features = ["crossterm"] } # `rtok completions` shell picker (T408): maintained (0.9.4, 2026-02), most-used prompt crate; shares the crossterm 0.29 copy below, no fuzzy/macros

@@ -481,6 +481,108 @@ async fn page_routes_fall_back_to_the_index_but_api_and_files_do_not() {
     let _ = std::fs::remove_dir_all(&dist);
 }
 
+/// T574: a browser sends `assets/logo space.svg` as `logo%20space.svg`; the lookup needs the file
+/// name, not the escape. Raw requests where the client library would normalise the path itself.
+async fn raw_status(addr: &str, method: &str, target: &str) -> u16 {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = tokio::net::TcpStream::connect(addr).await.expect("connect");
+    let req = format!("{method} {target} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+    stream.write_all(req.as_bytes()).await.expect("write");
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw).await.expect("read");
+    String::from_utf8_lossy(&raw)
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .expect("status line")
+}
+
+#[tokio::test]
+async fn percent_encoded_asset_urls_resolve_the_file_they_name() {
+    let dist = fixture_dist("encoded");
+    let names = [
+        "logo space.svg",
+        "a#b.svg",
+        "100%.svg",
+        "caf\u{e9}.svg",
+        "a%20b.svg",
+        "plain.svg",
+    ];
+    for name in names {
+        std::fs::write(
+            dist.join("assets").join(name),
+            format!("<svg id=\"{name}\"/>"),
+        )
+        .unwrap();
+    }
+    std::fs::write(dist.join("assets/logo space.svg.br"), b"BR-LOGO").unwrap();
+    let secret = std::env::temp_dir().join(format!("rtok-secret-{}.txt", std::process::id()));
+    std::fs::write(&secret, "secret").unwrap();
+    let (addr, task) = serve_assets("encoded", Assets::Dir(dist.clone())).await;
+    let get = |path: &str| reqwest::get(format!("http://{addr}{path}"));
+
+    for (url, name) in [
+        ("/assets/plain.svg", "plain.svg"),
+        ("/assets/logo%20space.svg", "logo space.svg"),
+        ("/assets/a%23b.svg", "a#b.svg"),
+        ("/assets/100%25.svg", "100%.svg"),
+        ("/assets/caf%C3%A9.svg", "caf\u{e9}.svg"),
+        // Decoded once: `%2520` is the literal text `%20`, not a space.
+        ("/assets/a%2520b.svg", "a%20b.svg"),
+    ] {
+        let res = get(url).await.expect(url);
+        assert_eq!(res.status(), 200, "{url}");
+        assert_eq!(res.headers()["content-type"], "image/svg+xml", "{url}");
+        assert_eq!(
+            res.text().await.unwrap(),
+            format!("<svg id=\"{name}\"/>"),
+            "{url}"
+        );
+    }
+    // `%20` names "a b.svg", which does not exist, even though "a%20b.svg" does.
+    assert_eq!(get("/assets/a%20b.svg").await.unwrap().status(), 404);
+    assert_eq!(get("/assets/no%20such.svg").await.unwrap().status(), 404);
+
+    let br = reqwest::Client::new()
+        .get(format!("http://{addr}/assets/logo%20space.svg"))
+        .header("accept-encoding", "br")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(br.headers()["content-encoding"], "br");
+    assert_eq!(br.bytes().await.unwrap().as_ref(), b"BR-LOGO");
+    assert_eq!(
+        raw_status(&addr, "HEAD", "/assets/logo%20space.svg").await,
+        200
+    );
+
+    // Encoded traversal and separators never leave `assets/`; malformed text is refused outright.
+    let outside = format!("rtok-secret-{}.txt", std::process::id());
+    assert_eq!(
+        raw_status(&addr, "GET", &format!("/%2e%2e/{outside}")).await,
+        404
+    );
+    assert_eq!(
+        raw_status(&addr, "GET", &format!("/assets/%2E%2E/%2e%2e/{outside}")).await,
+        404
+    );
+    for bad in [
+        "/assets%2Fplain.svg",
+        "/assets/..%2F..%2Fplain.svg",
+        "/assets%5Cplain.svg",
+        "/assets/plain.svg%00",
+        "/assets/100%.svg",
+        "/assets/%zz.svg",
+        "/assets/%FF.svg",
+    ] {
+        assert_eq!(raw_status(&addr, "GET", bad).await, 400, "{bad}");
+    }
+    task.abort();
+    let _ = std::fs::remove_dir_all(&dist);
+    let _ = std::fs::remove_file(&secret);
+}
+
 #[tokio::test]
 async fn a_dist_without_an_index_says_so_and_keeps_the_api_up() {
     let dist = fixture_dist("noindex");
