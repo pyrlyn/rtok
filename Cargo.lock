@@ -4333,6 +4333,7 @@ dependencies = [
  "rust-embed",
  "rustls",
  "rustls-pemfile",
+ "same-file",
  "schemars",
  "semver",
  "serde",
