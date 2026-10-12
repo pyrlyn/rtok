@@ -230,6 +230,11 @@ export interface SetRequest {
  */
 export interface DoctorRequest {
   action: DoctorAction;
+  /**
+   * For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with
+   * one the files no longer produce, nothing is written and a fresh plan comes back.
+   */
+  confirmed: string | null;
   selection: Selection;
 }
 /**
@@ -399,6 +404,11 @@ export interface Plan {
    * Selected entries the engine will not remove, with why.
    */
   refused: string[];
+  /**
+   * Names this preview (its selected entries and their diff): `apply` writes only when the
+   * token it is given is the one the fresh rescan produces.
+   */
+  token: string;
 }
 /**
  * One line of the checklist.
@@ -439,6 +449,11 @@ export interface Fixed {
    * 1 when a selected entry was skipped or failed.
    */
   code: number;
+  /**
+   * Set when nothing was written because the files no longer match the confirmed preview:
+   * the fresh preview, which needs its own confirmation.
+   */
+  replan: Plan | null;
   text: string;
 }
 /**

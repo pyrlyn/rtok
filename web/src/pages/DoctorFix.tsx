@@ -37,7 +37,8 @@ export function DoctorFix() {
 
     const confirm = () => {
         dispatch({ type: "applying" });
-        api.doctorApply(selection).then(
+        // The token names the preview the user is looking at: the server writes only that one.
+        api.doctorApply(selection, state.plan?.token ?? "").then(
             (fixed) => dispatch({ type: "applied", fixed }),
             (e) => dispatch({ type: "failed", error: message(e) }),
         );
