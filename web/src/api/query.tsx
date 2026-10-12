@@ -54,7 +54,21 @@ export interface Imported {
     export: Export;
 }
 
-type Answer = Plan | Fixed | Cleared | DrillGraph | DiffReport | ExportFile | Imported;
+/** What removing a project would drop, in the words of `graph projects remove --dry-run` (T329.54). */
+export interface ProjectPlan {
+    project: string;
+    plan: string;
+}
+
+type Answer =
+    | Plan
+    | Fixed
+    | Cleared
+    | DrillGraph
+    | DiffReport
+    | ExportFile
+    | Imported
+    | ProjectPlan;
 
 export interface Api {
     open(): void;
@@ -65,6 +79,8 @@ export interface Api {
     expand(id: string): Promise<string>;
     set(request: SetRequest): Promise<void>;
     project(request: ProjectRequest): Promise<void>;
+    /** The dry run of removing a project; nothing is removed until a confirmed `project` request. */
+    projectPlan(project: string): Promise<ProjectPlan>;
     doctorPlan(selection: Selection): Promise<Plan>;
     // `confirmed` is the token of the plan the user saw; the server writes only that preview.
     doctorApply(selection: Selection, confirmed: string): Promise<Fixed>;
@@ -104,6 +120,7 @@ interface PendingDoctor {
         | "doctorfixed"
         | "junkplan"
         | "junkcleared"
+        | "projectplan"
         | "graph"
         | "diff"
         | "export"
@@ -239,6 +256,13 @@ export function createApi(
             case "doctorfixed":
                 settleDoctor("doctorfixed", frame.fixed);
                 return;
+            case "projectplan":
+                settleDoctor(
+                    "projectplan",
+                    { project: frame.project, plan: frame.plan },
+                    frame.project,
+                );
+                return;
             case "junkplan":
                 settleDoctor("junkplan", frame.plan);
                 return;
@@ -324,6 +348,13 @@ export function createApi(
         },
         set: (request) => write({ set: request }),
         project: (request) => write({ project: request }),
+        projectPlan: (project) =>
+            askDoctor<ProjectPlan>(
+                "projectplan",
+                { project: { action: "remove", project, confirmed: false } },
+                project,
+                WRITE_TIMEOUT_MS,
+            ),
         doctorPlan: (selection) =>
             askDoctor<Plan>("doctorplan", {
                 doctor: { action: "plan", selection, confirmed: null },
@@ -425,6 +456,10 @@ export function useSetMutation() {
 export function useProjectMutation() {
     const api = useApi();
     return useWrite<ProjectRequest>("project", (request) => api.project(request));
+}
+
+export function useProjectPlan(): Pick<Api, "projectPlan"> {
+    return useApi();
 }
 
 export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {

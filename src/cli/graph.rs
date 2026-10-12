@@ -196,6 +196,11 @@ pub(super) enum ProjectsCmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Re-read a project's files into its index (the page's "Index now")
+    Reindex {
+        /// Project id or directory
+        project: String,
+    },
     /// Drop a project and its index rows; its files are never touched
     Remove {
         /// Project id or directory
@@ -278,6 +283,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                 None => Action::List,
                 Some(ProjectsCmd::Add { path }) => Action::Add(path),
                 Some(ProjectsCmd::Select { project }) => Action::Select(project),
+                Some(ProjectsCmd::Reindex { project }) => Action::Reindex(project),
                 Some(ProjectsCmd::Remove { project, .. }) => Action::Remove(project),
                 Some(ProjectsCmd::Link {
                     project,

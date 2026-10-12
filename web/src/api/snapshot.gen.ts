@@ -61,6 +61,15 @@ export type ProjectRequest =
       both: boolean;
       from: string;
       to: string;
+    }
+  | {
+      action: "reindex";
+      project: string;
+    }
+  | {
+      action: "remove";
+      confirmed: boolean;
+      project: string;
     };
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -97,6 +106,11 @@ export type ServerFrame =
       id: string;
       text: string;
       type: "expand";
+    }
+  | {
+      plan: string;
+      project: string;
+      type: "projectplan";
     }
   | {
       plan: Plan;
@@ -1589,6 +1603,10 @@ export interface ProjectRow {
    */
   backend?: Capability | null;
   created_at: number;
+  /**
+   * Why the last re-index failed, while `state` is `failed` (T329.54).
+   */
+  error?: string | null;
   health: Score;
   id: number;
   index: ProjectIndex | null;

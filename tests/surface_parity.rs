@@ -1074,6 +1074,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "changes the registry; the selector is T329.12",
     ),
     (
+        "graph projects reindex",
+        "changes the index; the Graph page's node menu and the TUI's `i` key run the same function (T329.54, T477)",
+    ),
+    (
         "graph projects link",
         "changes the registry; the selector is T329.12",
     ),

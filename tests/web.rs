@@ -696,6 +696,63 @@ async fn ws_project_select_link_and_unlink_reach_the_next_snapshot_and_a_bad_id_
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// T329.54: re-index answers at once and the row reads `indexing` then `ok`; remove answers the
+/// dry run first and drops the project only for the confirmed request.
+#[tokio::test]
+async fn ws_reindex_runs_on_a_worker_and_remove_needs_its_confirmation() {
+    let (_addr, state, dir, task) = serve("reindex-remove").await;
+    let root = dir.join("a");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("lib.rs"), "fn used() {}\nfn also() {}\n").unwrap();
+    let rt = rtok::plugin::Runtime::open(Config::load_from(&dir).unwrap(), "web-test").unwrap();
+    let id = rt
+        .store
+        .register_project(&root, rtok::store::Origin::Manual)
+        .unwrap()
+        .id
+        .to_string();
+    let rows = |state: &DashState| -> Vec<serde_json::Value> {
+        let snap: serde_json::Value = serde_json::from_str(&state.snapshot_json()).unwrap();
+        snap["projects"].as_array().expect("projects").clone()
+    };
+    let send = |m: serde_json::Value| state.inbound(&m.to_string());
+    assert_eq!(rows(&state)[0]["state"], "not indexed");
+
+    let started = send(serde_json::json!({"project": {"action": "reindex", "project": id}}));
+    assert!(started.is_none(), "a started job answers with the snapshot");
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while rows(&state)[0]["state"] == "indexing" {
+        assert!(std::time::Instant::now() < end, "the worker never finished");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(rows(&state)[0]["state"], "ok");
+    assert!(rows(&state)[0]["index"]["rows"].as_i64().unwrap() >= 2);
+
+    let plan = send(serde_json::json!({"project": {"action": "remove", "project": id}}));
+    let plan: serde_json::Value = serde_json::from_str(&plan.expect("the plan")).unwrap();
+    assert_eq!(plan["type"], "projectplan");
+    assert_eq!(plan["project"], id);
+    assert!(plan["plan"].as_str().unwrap().contains("files untouched"));
+    assert_eq!(
+        rows(&state).len(),
+        1,
+        "an unconfirmed remove writes nothing"
+    );
+
+    let gone = send(
+        serde_json::json!({"project": {"action": "remove", "project": id, "confirmed": true}}),
+    );
+    assert!(gone.is_none());
+    assert!(rows(&state).is_empty());
+    assert!(root.join("lib.rs").exists(), "files are never touched");
+
+    let bad = send(serde_json::json!({"project": {"action": "reindex", "project": "9999"}}));
+    let bad: serde_json::Value = serde_json::from_str(&bad.expect("refused")).unwrap();
+    assert_eq!(bad["type"], "message");
+    task.abort();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T329.14: the drill-down request answers with a `graph` frame; an unknown project and a request
 /// that names none are a `message`, and nothing is written.
 #[tokio::test]
