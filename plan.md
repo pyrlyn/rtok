@@ -77,6 +77,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T592 | todo | P2 | 3 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
 | T623 | todo | P2 | 5 | 0% | |
+| T645 | in progress | P1 | 3 | 10% | Claude Code / sonnet-5.5 |
 
 
 
@@ -165,7 +166,7 @@ Execution (2026-09-27): (1) a probe kit in the session scratchpad (never committ
 
 `research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
 
-Blocked (found 2026-09-24 while claiming): the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`), and rtok installs no `PreToolUse` hook for Codex (only `PreCompact`/`PostCompact`), so a Codex brief would always be empty. Needs Codex `PreToolUse` wiring first (idea I-88), which the creator has not approved.
+Blocked until T645 lands (found 2026-09-24 while claiming): the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`), and rtok installs no `PreToolUse` hook for Codex before T645. Codex names file edits `apply_patch` and has no `Read` tool, so the ledger must read those rows too.
 
 Check: a Codex `SubagentStart` payload through `rtok hook` returns the brief in Codex's shape (test); `just check` green.
 
@@ -1057,3 +1058,13 @@ Plan:
 5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
 
 Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
+
+### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
+
+Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
+
+Found by the capture: Codex applies a `PreToolUse` rewrite only with `permissionDecision: "allow"` next to `updatedInput`; Claude's shape (no decision) leaves the call unchanged and marks the hook run failed. So a Codex output adapter in `src/hooks/mod.rs` adds `allow` to a rewrite and drops `updatedMcpToolOutput`, which Codex does not read.
+
+Execution: (1) `research.md` §40: sources and payloads. (2) `hook_events.rs`: Codex rows `PreToolUse Bash`, `PostToolUse *`, `PreCompact`, `PostCompact`, all installer rows. (3) `src/agents/codex/mod.rs`: `run_hooks` walks those rows with the `--host codex` spelling and still recognises the old plain spelling, so an upgrade rewrites it in place. (4) `src/hooks/mod.rs`: `codex_output`. (5) `plugins/codex/hooks/hooks.json`, its README and `AGENTS.md`, `tests/codex_plugin.rs`. (6) Tests: fixtures replay through `rtok hook`, the adapter, install/remove and upgrade of the old spelling.
+
+Check: `just check` green; a Codex `PreToolUse` payload replays through `rtok hook PreToolUse --host codex` and a Bash rewrite comes back with `permissionDecision: "allow"`; an old plain-spelling `hooks.json` is rewritten in place on install; the plugin manifest equals the `codex` rows of `hook_events.rs`.
