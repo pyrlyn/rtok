@@ -136,7 +136,10 @@ pub fn docs_query(
         .store
         .search_doc_items(name, &ver, query, limit, snippet)?;
     let considered: Vec<i32> = hits.iter().map(|h| h.id).collect();
-    let before_bytes = rt.store.doc_items_docs_len(&considered).unwrap_or(0);
+    // The saving's before side is the full text of everything considered, before snippet and
+    // budget trimming, for bytes and tokens alike.
+    let bodies = rt.store.doc_items_docs(&considered).unwrap_or_default();
+    let before_bytes = bodies.iter().map(|d| d.len() as u64).sum();
     let mut kept = Vec::new();
     for h in &hits {
         let next = json!({"id": h.id, "path": h.path, "kind": h.kind, "snippet": h.snippet});
@@ -151,14 +154,7 @@ pub fn docs_query(
     let text = serde_json::to_string(&kept).unwrap_or_else(|_| "[]".into());
     if !kept.is_empty() {
         let after_bytes = text.len() as u64;
-        let est_before = rt.estimate(
-            &hits
-                .iter()
-                .map(|h| h.snippet.as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-            Class::Prose,
-        );
+        let est_before = rt.estimate(&bodies.join("\n"), Class::Prose);
         let est_after = rt.estimate(&text, Class::Prose);
         let _ = rt.record(&Measurement {
             plugin: "docs",
@@ -451,6 +447,66 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             rows.iter().any(|r| r.kind == "query"),
             "query records a Measurement"
         );
+    }
+
+    fn ids_of(out: &str) -> Vec<i64> {
+        serde_json::from_str::<Vec<Value>>(out)
+            .unwrap_or_else(|_| panic!("{out}"))
+            .iter()
+            .map(|h| h["id"].as_i64().unwrap())
+            .collect()
+    }
+
+    /// T551: the saving's before side is the full text of everything the query considered,
+    /// in bytes and in tokens, whatever the snippet length or the output budget keeps.
+    #[test]
+    fn query_measurement_uses_one_full_body_baseline() {
+        let bodies: Vec<String> = (0..3)
+            .map(|i| {
+                format!(
+                    "Deserialize variant {i}. {}",
+                    "long explanation text ".repeat(120)
+                )
+            })
+            .collect();
+        let seed = |rt: &Runtime| {
+            let items: Vec<_> = bodies
+                .iter()
+                .enumerate()
+                .map(|(i, d)| (format!("serde::D{i}"), "trait".to_string(), d.clone()))
+                .collect();
+            rt.store
+                .replace_doc_crate("serde", "1.0.210", "sha", 1, 0, &items)
+                .unwrap();
+        };
+        let all = bodies.join("\n");
+        for max_tokens in [800, 60] {
+            let mut rt = runtime("docs-meas");
+            seed(&rt);
+            rt.config.plugins.docs.snippet_chars = 30;
+            rt.config.plugins.docs.max_tokens = max_tokens;
+            let out = docs_query(&rt, "serde", Some("1.0.210"), "Deserialize").unwrap();
+            assert!(!ids_of(&out).is_empty(), "{out}");
+            let rows = rt.store.list_measurements("docs").unwrap();
+            assert_eq!(rows.len(), 1, "one row per returned query");
+            let r = &rows[0];
+            assert_eq!(u64::try_from(r.before_bytes).unwrap(), all.len() as u64 - 2);
+            assert_eq!(
+                u64::try_from(r.est_before).unwrap(),
+                u64::from(rt.estimate(&all, Class::Prose))
+            );
+            assert_eq!(u64::try_from(r.after_bytes).unwrap(), out.len() as u64);
+            assert_eq!(
+                u64::try_from(r.est_after).unwrap(),
+                u64::from(rt.estimate(&out, Class::Prose))
+            );
+            assert!(r.est_before > r.est_after);
+        }
+        let rt = runtime("docs-meas-none");
+        seed(&rt);
+        let out = docs_query(&rt, "serde", Some("1.0.210"), "absentword").unwrap();
+        assert_eq!(out, "[]");
+        assert!(rt.store.list_measurements("docs").unwrap().is_empty());
     }
 
     #[test]

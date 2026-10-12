@@ -101,17 +101,18 @@ impl Store {
             .map_err(Into::into)
     }
 
-    /// Bytes of `docs` for the FTS hits that were considered (before a token-budget trim).
-    pub fn doc_items_docs_len(&self, ids: &[i32]) -> Result<u64> {
+    /// Full `docs` bodies of the FTS hits that were considered (before snippet and token
+    /// trimming), in id order: the one baseline both byte and token accounting measure.
+    pub fn doc_items_docs(&self, ids: &[i32]) -> Result<Vec<String>> {
         if ids.is_empty() {
-            return Ok(0);
+            return Ok(Vec::new());
         }
         let mut conn = self.lock()?;
-        let rows: Vec<String> = doc_items::table
+        Ok(doc_items::table
             .filter(doc_items::id.eq_any(ids))
+            .order(doc_items::id.asc())
             .select(doc_items::docs)
-            .load(&mut *conn)?;
-        Ok(rows.iter().map(|d| d.len() as u64).sum())
+            .load(&mut *conn)?)
     }
 
     /// Replace the cached crate row and its items in one transaction.
