@@ -54,7 +54,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T413.13 | todo | P3 | 2 | 0% | |
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
