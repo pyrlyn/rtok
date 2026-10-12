@@ -371,11 +371,14 @@ export const connectSample: Connect = (handlers) => {
         return true;
       }
       if ("doctor" in message) {
-        const { action, selection } = message.doctor;
+        const { action, selection, confirmed } = message.doctor;
         later(() =>
           action === "plan"
             ? handlers.onFrame({ type: "doctorplan", plan: machine.plan(selection) })
-            : handlers.onFrame({ type: "doctorfixed", fixed: machine.apply(selection) }),
+            : handlers.onFrame({
+                type: "doctorfixed",
+                fixed: machine.apply(selection, confirmed ?? ""),
+              }),
         );
         return true;
       }

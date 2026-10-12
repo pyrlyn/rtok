@@ -71,6 +71,16 @@ export function fixReducer(state: FixState, action: FixAction): FixState {
     case "applying":
       return state.phase === "confirming" ? { ...state, phase: "applying" } : state;
     case "applied":
+      // Nothing was written because the files no longer match what the user confirmed: the
+      // fresh preview replaces the old one and has to be confirmed in its own right.
+      if (action.fixed.replan) {
+        return {
+          ...state,
+          plan: action.fixed.replan,
+          phase: "ready",
+          error: action.fixed.text.trim(),
+        };
+      }
       return { ...state, phase: "done", result: action.fixed, error: null };
     case "failed":
       return { ...state, phase: "error", error: action.error };

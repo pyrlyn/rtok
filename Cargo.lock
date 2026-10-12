@@ -4321,6 +4321,7 @@ dependencies = [
  "notify",
  "owo-colors",
  "pathdiff",
+ "percent-encoding",
  "portable-pty",
  "printpdf",
  "proptest",

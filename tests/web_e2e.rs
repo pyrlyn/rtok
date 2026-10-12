@@ -316,8 +316,20 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
     assert!(plan["plan"]["diff"].as_str().unwrap().contains("old.sh"));
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), broken);
 
+    // T576: an apply that does not name the previewed plan writes nothing and answers with one.
     ws.send(Message::text(format!(
         r#"{{"doctor":{{"action":"apply",{none}}}}}"#
+    )))
+    .await
+    .expect("send unbound apply");
+    let refused = next_of(&mut ws, "doctorfixed").await;
+    assert_eq!(refused["fixed"]["code"], 1, "{refused}");
+    assert_eq!(refused["fixed"]["replan"]["token"], plan["plan"]["token"]);
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), broken);
+
+    let token = plan["plan"]["token"].as_str().expect("token");
+    ws.send(Message::text(format!(
+        r#"{{"doctor":{{"action":"apply",{none},"confirmed":"{token}"}}}}"#
     )))
     .await
     .expect("send apply");

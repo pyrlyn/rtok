@@ -216,11 +216,11 @@ impl CallsStore {
             .iter()
             .filter(|e| e.phase == EventPhase::End)
             .collect();
-        let done: HashSet<&str> = ends.iter().map(|e| e.call.as_str()).collect();
+        // From the batch, not its rows: an end the display cap cut still finished its call.
+        let done: HashSet<&str> = batch.ended.iter().map(String::as_str).collect();
+        self.running.retain(|r| !done.contains(r.call.as_str()));
         for e in &batch.events {
-            if e.phase == EventPhase::End {
-                self.running.retain(|r| r.call != e.call);
-            } else if !done.contains(e.call.as_str()) {
+            if e.phase != EventPhase::End && !done.contains(e.call.as_str()) {
                 // A progress event refreshes the call but keeps its start time and its place in the list.
                 let at = self
                     .running
@@ -565,6 +565,7 @@ pub(crate) mod fixtures {
         CallBatch {
             head: events.len() as i64,
             omitted,
+            ended: ends.iter().map(|e| e.call.clone()).collect(),
             callers: Default::default(),
             summary: CallSummary {
                 starts: events
@@ -912,6 +913,97 @@ mod tests {
             .map(|r| (&r.call[..], r.interrupted))
             .collect();
         assert_eq!(marks, [("a", false)], "a late end replaces the mark");
+    }
+
+    /// T573: a poll's events through the real `coalesce` with the display cap `cap`.
+    fn polled(store: &mut CallsStore, cap: usize, events: Vec<(&str, EventPhase)>, now: i64) {
+        let events = events
+            .into_iter()
+            .enumerate()
+            .map(|(i, (call, phase))| {
+                let mut e = if phase == EventPhase::End {
+                    end(call, 10, 4)
+                } else {
+                    event(call)
+                };
+                e.phase = phase;
+                e.id = i as i64 + 1;
+                e
+            })
+            .collect();
+        store.fold(&super::super::live::coalesce(events, cap).unwrap(), now);
+    }
+
+    #[test]
+    fn an_end_the_display_cap_cut_still_clears_its_call_and_never_becomes_interrupted() {
+        use EventPhase::{End, Progress, Start};
+        let burst = || {
+            vec![
+                ("a", Start),
+                ("b", Start),
+                ("a", Progress),
+                ("a", End),
+                ("b", End),
+            ]
+        };
+        for cap in [100, 1] {
+            let mut s = CallsStore::default();
+            polled(&mut s, cap, burst(), T);
+            assert!(s.running.is_empty(), "cap {cap}: both calls ended");
+            assert_eq!(s.all.calls, 2, "cap {cap}");
+            s.sweep(T + INTERRUPT_MS + 1);
+            assert!(
+                s.feed.iter().all(|r| !r.interrupted),
+                "cap {cap}: no false interruption"
+            );
+        }
+
+        // The end of a call started in an earlier poll, and one with no start at all.
+        let mut s = CallsStore::default();
+        polled(&mut s, 1, vec![("a", Start), ("b", Start)], T);
+        polled(&mut s, 1, vec![("a", End), ("b", End), ("z", End)], T + 1);
+        assert!(s.running.is_empty());
+        assert_eq!(s.all.calls, 3);
+        s.sweep(T + INTERRUPT_MS + 2);
+        assert!(s.feed.iter().all(|r| !r.interrupted));
+    }
+
+    #[test]
+    fn a_call_with_no_end_stays_visible_when_ended_rows_crowd_the_cap() {
+        use EventPhase::{End, Start};
+        let mut s = CallsStore::default();
+        polled(
+            &mut s,
+            1,
+            vec![
+                ("p", Start),
+                ("a", Start),
+                ("a", End),
+                ("b", Start),
+                ("b", End),
+            ],
+            T,
+        );
+        let running: Vec<_> = s.running.iter().map(|r| &r.call[..]).collect();
+        assert_eq!(running, ["p"], "the unfinished call survives the cut");
+        s.sweep(T + INTERRUPT_MS + 1);
+        assert!(s.feed.iter().any(|r| r.call == "p" && r.interrupted));
+    }
+
+    #[test]
+    fn a_capped_end_after_a_real_timeout_replaces_the_interrupted_mark() {
+        use EventPhase::{End, Start};
+        let mut s = CallsStore::default();
+        polled(&mut s, 1, vec![("a", Start)], T);
+        s.sweep(T + INTERRUPT_MS + 1);
+        assert!(s.feed[0].interrupted);
+        polled(
+            &mut s,
+            1,
+            vec![("a", End), ("b", End)],
+            T + INTERRUPT_MS + 2,
+        );
+        assert!(s.feed.iter().all(|r| !(r.call == "a" && r.interrupted)));
     }
 
     #[test]
