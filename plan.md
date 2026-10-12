@@ -20,8 +20,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
-| T131 | todo | P2 | 3 | 70% | |
-| T132 | todo | P2 | 2 | 70% | |
+| T131 | todo | P2 | 1 | 70% | |
+| T132 | todo | P2 | 1 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T262.3 | todo | P2 | 2 | 0% | |
@@ -30,27 +30,36 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
-| T276.5 | todo | P2 | 3 | 0% | |
-| T276.6 | todo | P2 | 3 | 0% | |
+| T276.5 | todo | P2 | 4 | 0% | |
+| T276.6 | todo | P2 | 4 | 0% | |
 | T277 | in progress | P2 | 5 | 60% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
-| T329 | todo | P2 | 5 | 0% | |
+| T329 | todo | P2 | 2 | 0% | |
+| T329.54 | todo | P2 | 4 | 0% | |
 | T329.50 | todo | P3 | 3 | 0% | |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T378 | todo | P3 | 3 | 0% | |
+| T378 | todo | P3 | 4 | 0% | |
+| T378.1 | todo | P3 | 2 | 0% | |
+| T378.2 | todo | P3 | 3 | 0% | |
+| T378.3 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.3 | todo | P1 | 3 | 20% | |
+| T385.3 | todo | P1 | 4 | 20% | |
+| T385.3.1 | todo | P1 | 3 | 0% | |
+| T385.3.2 | todo | P1 | 2 | 0% | |
 | T385.9 | todo | P3 | 5 | 10% | |
+| T385.9.1 | todo | P3 | 4 | 0% | |
+| T385.9.2 | todo | P3 | 4 | 0% | |
+| T385.9.3 | todo | P3 | 3 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T413 | todo | P2 | 3 | 0% | |
+| T413 | todo | P2 | 1 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
@@ -65,26 +74,26 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | todo | P3 | 1 | 0% | |
+| T414.7 | todo | P3 | 2 | 0% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.3 | todo | P2 | 2 | 0% | |
+| T436.3 | todo | P2 | 3 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
 | T531 | todo | P2 | 2 | 0% | |
 | T532 | todo | P1 | 3 | 0% | |
 | T533 | todo | P1 | 3 | 0% | |
-| T534 | todo | P2 | 2 | 0% | |
+| T534 | todo | P2 | 3 | 0% | |
 | T535 | todo | P2 | 2 | 0% | |
 | T536 | todo | P2 | 2 | 0% | |
 | T537 | todo | P2 | 2 | 0% | |
 | T538 | todo | P2 | 2 | 0% | |
 | T539 | todo | P2 | 2 | 0% | |
 | T541 | todo | P1 | 2 | 0% | |
-| T542 | todo | P2 | 3 | 0% | |
+| T542 | todo | P2 | 2 | 0% | |
 | T543 | todo | P2 | 2 | 0% | |
-| T544 | todo | P2 | 2 | 0% | |
+| T544 | todo | P2 | 3 | 0% | |
 | T545 | todo | P2 | 3 | 0% | |
 | T546 | todo | P2 | 2 | 0% | |
 | T548 | todo | P1 | 2 | 0% | |
@@ -92,14 +101,17 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T550 | todo | P2 | 2 | 0% | |
 | T551 | todo | P2 | 2 | 0% | |
 | T552 | todo | P2 | 2 | 0% | |
-| T553 | todo | P2 | 2 | 0% | |
+| T553 | todo | P2 | 3 | 0% | |
 | T555 | todo | P2 | 2 | 0% | |
 | T556 | todo | P2 | 3 | 0% | |
 | T557 | todo | P2 | 3 | 0% | |
 | T558 | todo | P2 | 2 | 0% | |
 | T559 | todo | P2 | 2 | 0% | |
-| T560 | todo | P3 | 2 | 0% | |
-| T561 | todo | P3 | 3 | 0% | |
+| T640 | todo | P3 | 2 | 0% | |
+| T641 | todo | P3 | 4 | 0% | |
+| T641.1 | todo | P3 | 3 | 0% | |
+| T641.2 | todo | P3 | 3 | 0% | |
+| T641.3 | todo | P3 | 2 | 0% | |
 | T562 | todo | P1 | 2 | 0% | |
 | T563 | todo | P2 | 2 | 0% | |
 | T564 | todo | P2 | 2 | 0% | |
@@ -111,18 +123,24 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T571 | todo | P2 | 2 | 0% | |
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
-| T576 | todo | P2 | 3 | 0% | |
+| T576 | todo | P2 | 4 | 0% | |
+| T576.1 | todo | P2 | 3 | 0% | |
+| T576.2 | todo | P2 | 3 | 0% | |
 | T577 | todo | P2 | 3 | 0% | |
 | T579 | todo | P2 | 3 | 0% | |
 | T580 | todo | P2 | 2 | 0% | |
 | T581 | todo | P2 | 2 | 0% | |
-| T583 | todo | P2 | 3 | 0% | |
+| T583 | todo | P2 | 4 | 0% | |
+| T583.1 | todo | P2 | 3 | 0% | |
+| T583.2 | todo | P2 | 3 | 0% | |
 | T584 | todo | P2 | 2 | 0% | |
-| T586 | todo | P2 | 3 | 0% | |
+| T586 | todo | P2 | 4 | 0% | |
+| T586.1 | todo | P2 | 3 | 0% | |
+| T586.2 | todo | P2 | 3 | 0% | |
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
 | T590 | todo | P2 | 3 | 0% | |
-| T592 | todo | P2 | 3 | 0% | |
+| T592 | todo | P2 | 4 | 0% | |
 | T594 | todo | P2 | 3 | 0% | |
 | T595 | todo | P2 | 3 | 0% | |
 | T597 | todo | P1 | 3 | 0% | |
@@ -130,20 +148,20 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T601 | todo | P2 | 3 | 0% | |
 | T604 | todo | P2 | 3 | 0% | |
 | T606 | todo | P2 | 3 | 0% | |
-| T608 | todo | P3 | 3 | 0% | |
+| T608 | todo | P3 | 2 | 0% | |
 | T609 | todo | P3 | 3 | 0% | |
-| T611 | todo | P2 | 3 | 0% | |
+| T611 | todo | P2 | 2 | 0% | |
 | T613 | todo | P2 | 3 | 0% | |
 | T615 | todo | P2 | 3 | 0% | |
 | T617 | todo | P2 | 3 | 0% | |
-| T618 | todo | P1 | 3 | 0% | |
+| T618 | todo | P1 | 2 | 0% | |
 | T619 | todo | P2 | 3 | 0% | |
-| T622 | todo | P2 | 3 | 0% | |
+| T622 | todo | P2 | 2 | 0% | |
 | T624 | todo | P3 | 2 | 0% | |
-| T625 | todo | P1 | 3 | 0% | |
+| T625 | todo | P1 | 2 | 0% | |
 | T626 | todo | P2 | 3 | 0% | |
 | T627 | todo | P1 | 3 | 0% | |
-| T628 | todo | P2 | 3 | 0% | |
+| T628 | todo | P2 | 2 | 0% | |
 | T629 | todo | P2 | 3 | 0% | |
 | T630 | todo | P2 | 3 | 0% | |
 | T631 | todo | P3 | 3 | 0% | |
@@ -152,9 +170,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T634 | todo | P2 | 2 | 0% | |
 | T635 | todo | P2 | 3 | 0% | |
 | T636 | todo | P2 | 3 | 0% | |
-| T637 | todo | P2 | 3 | 0% | |
+| T637 | todo | P2 | 2 | 0% | |
 | T638 | todo | P2 | 3 | 0% | |
-| T639 | todo | P2 | 3 | 0% | |
+| T639 | todo | P2 | 2 | 0% | |
 
 
 
@@ -180,6 +198,8 @@ Execution plan:
 
 Check: the second read's reference expands to the archived bytes, the response meets its length contract, and `just check` passes.
 
+Planning note: correction to the plan above: the full 64-char id leaves only 16 of the 80 chars, so "unchanged since <id> (N lines)" never fits; choose in the first test either dropping the line count or documenting a longer cap for this one message, and pin the chosen shape in the test (do not add prefix lookup).
+
 ### T532. Preserve typed content and message fields in the direct cache key
 
 Source-confirmed on `0b14b88e`: [`messages_text` / `block_text`](src/proxy/semantic_cache.rs#L368) flatten structured requests into strings before hashing. `tool_result.is_error`, message `name`, and `image_url.detail` are omitted. For example, otherwise identical single-user requests with the same image URL and `detail: "low"` versus `"high"` produce identical CachePrompts. A text block containing `tool_result t: OK` also has the same flattened text as `{type:"tool_result", tool_use_id:"t", content:"OK"}`. With semantic cache enabled, the direct tier returns the first response for the second request before an upstream call. This is distinct from completed T55.14/T212/T303/T323: those added fields but retained lossy flattening.
@@ -194,6 +214,8 @@ Execution plan:
 
 Check: all differing fixture pairs miss the direct cache, exact replay still hits, reordered object keys retain the same key, and `just check` passes.
 
+Planning note: Add that `messages` becomes canonical typed values while the semantic text extraction used by `embed_vector` stays separate, so the semantic tier keeps working.
+
 ### T533. Scope cached responses to the resolved upstream request target
 
 Source-confirmed on `0b14b88e`: [`handle`](src/proxy/mod.rs#L407) looks up a shared cache before resolving the target at line 430. [`CachePrompt`](src/proxy/semantic_cache.rs#L22) includes provider/model/body/caller but no upstream URL, path, query or HTTP method. [`upstream_for`](src/proxy/mod.rs#L224) supports different upstreams per lane. Two cache-enabled lanes with identical shaping policy, body and credentials but different upstreams therefore share a direct key: warming endpoint A can cause a request intended for B to return A's answer without contacting B. This remains possible with `cache_by_provider` and `cache_by_model` both enabled; T323 isolated callers, not routing destinations.
@@ -205,6 +227,8 @@ Execution plan:
 3. Test differing paths/queries as well as lane upstreams; exact replay to one endpoint must still hit.
 
 Check: B receives its first request after A was warmed, each endpoint returns its own bytes, same-target replay hits, and `just check` passes.
+
+Planning note: Reuse the `with_caller` pattern at `semantic_cache.rs:419`: a `with_target(method, resolved_url_hash)`, hash the resolved target so credential-bearing queries are never stored; move the `join_upstream` call above the lookup and reuse its result for the request and the fill.
 
 ### T534. Validate expand ranges against the payload before freezing decisions
 
@@ -218,6 +242,8 @@ Execution plan:
 
 Check: all failed ranges leave state unchanged; successful expansion still freezes once and records the intended cost; `just check` passes.
 
+Planning note: Split `fetch` into a read-only `peek` plus a `commit_expand`; also cover `model::expand_payload`, a third caller; keep `fetch` as peek+commit for json_tree/hooks tests.
+
 ### T535. Record the first full or ranged read when its output is capped
 
 Source-confirmed on `0b14b88e`: [`read_with`](src/plugins/read/mod.rs#L171) calls `cap`, which passes `None` to [`cap_impl`](src/plugins/read/mod.rs#L270) and writes no Measurement. The subsequent render measurement only handles map/signatures/stripped modes. A fresh `full` or `lines` read exceeding `read.max_chars` is archived and shortened but produces no read saving row. Generic MCP token rows compare the arguments with the response and do not repair this missing Measurement. T300 covers outlines and stripped output; search/tree already use `cap_recording`.
@@ -230,6 +256,8 @@ Execution plan:
 
 Check: capped fresh full/lines reads have exactly one correct Measurement, existing rendering/dedup accounting does not double count, and `just check` passes.
 
+Planning note: cap_impl at src/plugins/read/mod.rs:270 takes `kind: Option`; pass the pre-cap rendered text as `before` and record from the read_with call site when the cap fired and no other Measurement is written for that path.
+
 ### T536. Preserve raw command bytes when storage fails open
 
 Source-confirmed on `0b14b88e`: [`emit_filtered_to`](src/plugins/cmd/run.rs#L323) creates a lossy UTF-8 view before opening the runtime. Both the runtime-open failure at line 332 and the archive-write failure at line 393 print that lossy view. With a body containing byte `0xff` and an unavailable database/archive, the fallback outputs UTF-8 replacement bytes instead; no usable archive can restore the input. The normal successful archive path already preserves binary bytes, so its tests do not cover this fallback.
@@ -241,6 +269,8 @@ Execution plan:
 3. Keep the successful formatter/archive path and tiny-body behavior unchanged; verify no dead archive pointer is emitted on failure.
 
 Check: the original bytes survive both failure branches, the command status is preserved, and `just check` passes.
+
+Planning note: src/plugins/cmd/run.rs:330 lossy view is the only conversion; write `body` bytes in both fail-open branches.
 
 ### T537. Keep MCP pending calls when the server sends its own request
 
@@ -256,6 +286,8 @@ Execution plan:
 
 Check: the server request does not remove the client call, the later large result is shortened and expandable with one measurement, and `just check` passes.
 
+Planning note: take_call at src/mcp/wrap.rs:207 only needs a "has result or error, no method" guard before remove.
+
 ### T538. Do not let skipped memory imports reserve unseen body hashes
 
 Source-confirmed on `0b14b88e`: [`memory::import::run`](src/plugins/memory/import.rs#L94) inserts a body's hash into `seen` before checking whether the topic key is already occupied. Seed local topic A with body `old`; import A with body `new`, then free topic B with body `new`. A is correctly skipped to protect the local note, but B is also skipped because A already reserved `new` in memory, although no stored note has that body. The reported result is zero insertions; reversing the input order permits B. The same false skip affects dry-run.
@@ -268,6 +300,8 @@ Execution plan:
 
 Check: B is imported regardless of the skipped A's position, A keeps `old`, dry-run matches actual import, a second import is idempotent, and `just check` passes.
 
+Planning note: src/plugins/memory/import.rs:63/95: move `seen.insert` after the topic-occupied check.
+
 ### T539. Preserve a global note's project scope when revising it
 
 Source-confirmed on `0b14b88e`: [`mem_revise`](src/plugins/memory/mod.rs#L598) passes `old.project.as_deref()` to `mem_save`. For a global note (`project = NULL`), that becomes `None`, which [`mem_save`](src/plugins/memory/mod.rs#L430) interprets as infer the current working directory's project. Global notes are supported by [`memory import`](src/plugins/memory/import.rs#L30), whose optional project is stored without cwd inference. Import a global note, then revise it while inside a repository: the replacement becomes repository-scoped and the global note is retired, even when the title is unchanged. It may also upsert an existing same-title project note.
@@ -279,6 +313,8 @@ Execution plan:
 3. Cover global, explicit-project and inferred-project creation plus revision; keep privacy stripping, embeddings and note history on the same write path.
 
 Check: global revisions stay global, unrelated project notes are untouched, ordinary creation still infers cwd, and `just check` passes.
+
+Planning note: src/plugins/memory/mod.rs:607 passes old.project via Option, which means "infer"; add an inner save taking a resolved Option<project> and have mem_save call it.
 
 **Docs/checkpoint audit (T547).** T548–T553 are confirmed against `99b6753d`
 (product source unchanged from `0b14b88e`). Address the private-text persistence
@@ -300,6 +336,8 @@ Execution plan:
 
 Check: private content is absent from both persisted and restored checkpoint/session bodies, ordinary memory redaction remains intact, and `just check` passes.
 
+Planning note: The only scrubber is `strip_private` in src/plugins/memory/mod.rs:27-35, and src/plugins/checkpoint.rs does not use it; add: scrub before truncation, or alternatively once at Runtime::upsert_note in src/plugin.rs:468 so every note writer is covered; pick one and say why in the commit.
+
 ### T549. Scope local llms documentation to its workspace
 
 Source-confirmed: [ingest_llms](src/plugins/docs/mod.rs#L191) writes every workspace to the same `("llms", "local")` cache key. [docs_resolve/query](src/plugins/docs/mod.rs#L91) reads that key even when ingestion finds no local file. [replace_doc_crate](crates/rtok-store/src/docs.rs#L118) replaces all items with that name/version, with no workspace dimension. Query workspace A's llms.txt, then query `llms` in B with the same rtok home and no llms file: B receives A's documentation. If B has its own file, it overwrites A's cache. T455 introduced workspace docs but did not isolate their storage.
@@ -312,6 +350,8 @@ Execution plan:
 
 Check: each workspace sees only its own local documents, absence reports an uncached/empty result according to the tool contract, shared crate caches still work, and `just check` passes. Reproduction is source-derived.
 
+Planning note: The "llms"/"local" key is hardcoded at src/plugins/docs/mod.rs:93-117; a workspace-hashed version string needs no migration; do before T550.
+
 ### T550. Preserve returned doc ids when unchanged local docs are re-ingested
 
 Source-confirmed: every [ingest_llms](src/plugins/docs/mod.rs#L200) call calculates a SHA but unconditionally calls replace_doc_crate. That method deletes and reinserts the items; [doc_items](crates/rtok-store/migrations/0039_docs_fts/up.sql#L12) uses generated integer primary keys. Seed one local section (id 1), fetch a crate whose item gets id 2, then run docs_resolve or docs_query with the unchanged local file present: the local section is recreated at id 3. [docs_get](src/plugins/docs/mod.rs#L177) on the previously returned id 1 now fails. An unrelated read invalidates the handle even though its source bytes did not change. This is distinct from T549's cross-workspace namespace.
@@ -323,6 +363,8 @@ Execution plan:
 3. Verify repeated resolves and unrelated crate queries preserve local item ids and FTS rows; changed bytes must still refresh the affected document. Coordinate the cache key with T549.
 
 Check: docs_get keeps resolving ids from unchanged local documents across repeated reads, actual edits are searchable, and `just check` passes. Source-derived reproduction; generated-id behavior is visible in the schema and replacement path.
+
+Planning note: doc_crates already has a sha256 column, crates/rtok-store/src/docs.rs:122; add a store getter and skip replace_doc_crate when it matches; sequence after T549 because it uses the same key.
 
 ### T551. Estimate docs-query savings against the same full content as byte accounting
 
@@ -350,6 +392,8 @@ Execution plan:
 
 Check: semantically equivalent valid JSONL yields identical checkpoint content regardless of formatting, mixed typed text survives, host-only content remains excluded, and `just check` passes.
 
+Planning note: worth_parsing is at src/plugins/checkpoint.rs:261.
+
 ### T553. Use the shared project resolver for session checkpoint handoff
 
 Source-confirmed: [project_of_cx](src/plugins/checkpoint.rs#L737) returns git_root's directory basename, while [project::project_name](src/project.rs#L19) resolves origin names and linked worktrees to the main project's identity. Both save_session and offer_session use the former, and [latest_session_note](crates/rtok-store/src/note_store.rs#L320) requires an exact project match. End a session in main checkout `repo`, then start one in its linked worktree `repo-fix`: the saved `repo` handoff is not found under `repo-fix`, although normal memory/session attribution treats them as one project. T133/T154 implemented the shared resolver, but this handoff path still bypasses it.
@@ -362,9 +406,9 @@ Execution plan:
 
 Check: linked worktrees share the intended project handoff consistently with ordinary memory, unrelated project notes remain excluded, and `just check` passes. Source-derived reproduction; no real agent session was started.
 
-**Guard/encoding audit (T554).** T555–T560 were confirmed against `eb13dd7f`
+**Guard/encoding audit (T554).** T555–T559 and T640 (filed as T560, renumbered after an id collision) were confirmed against `eb13dd7f`
 (product source unchanged from `0b14b88e`). T555–T559 are guard behavior defects;
-T560 is explicitly a test-oracle defect, not a production decoder failure.
+T640 is explicitly a test-oracle defect, not a production decoder failure.
 Each was compared with completed T55.8/T55.9/T57.1/T322/T445/T62.1/T468 and
 the active backlog. The related features do not track these exact triggers.
 
@@ -379,6 +423,8 @@ Execution plan:
 3. Cover single/double quotes, literal tabs/newlines inside arguments, escaped spaces and supported rtok run wrappers; retain dedup for equivalent outside-quote whitespace.
 
 Check: different paths never collide, ordinary equivalent repeats still deny with the correct archive, and `just check` passes. The probe confirmed key equality; full hook regression is part of the fix.
+
+Planning note: Collapse at src/plugins/guard/mod.rs:528 and norm_cmd at :409 are quote-unaware; make collapse quote-aware.
 
 ### T556. Resolve guard Read and invalidation paths against the same cwd
 
@@ -406,6 +452,8 @@ Execution plan:
 
 Check: all demonstrated writers return no dedup key, their post-tool events invalidate prior results, safe readers retain expected dedup, and `just check` passes.
 
+Planning note: stem_read_only at src/plugins/guard/mod.rs:324 and writer_marker at :357 are the shared classification layer.
+
 ### T558. Fail open for a sole skill installation scoped to another project
 
 Confirmed by an actual-source function probe: [plugin_root](src/plugins/guard/skill.rs#L116) first looks for the current project or a user installation, then accepts any single remaining installation. A manifest containing only `scope: "project", projectPath: "/A", installPath: "/private-A-plugin"` returns that path even for cwd /B. With skill digest enabled and a sufficiently large file there, the guard archives A's skill body and denies B's invocation using the wrong installation. The single-entry fallback intended for legacy unscoped records does not distinguish an explicitly foreign project. T62.1's existing legacy and multi-install tests do not cover this case.
@@ -417,6 +465,8 @@ Execution plan:
 3. Retain matching-project precedence, user fallback, genuine legacy single entries and ambiguous-marketplace fail-open behavior.
 
 Check: an unrelated project cannot supply the denied skill's body, supported matching/legacy cases still resolve, and `just check` passes. The probe tested path selection; the full digest check belongs to the fix.
+
+Planning note: plugin_root, src/plugins/guard/skill.rs:98.
 
 ### T559. Recognize YAML-quoted host keys before digesting skills
 
@@ -432,7 +482,9 @@ Execution plan:
 
 Check: equivalent YAML spellings receive the same exemption, host behavior is not lost through a digest denial, and `just check` passes.
 
-### T560. Make the TOON test decoder handle quoted comma cells
+Planning note: host_keys at src/plugins/guard/skill.rs:157 uses line prefixes; parse the frontmatter block with serde-saphyr and fail open on error.
+
+### T640. Make the TOON test decoder handle quoted comma cells
 
 Confirmed by an actual-source round-trip probe: [encode_cell](src/plugins/toon/mod.rs#L188) correctly quotes a string containing a comma, but the test-only [decode](src/plugins/toon/mod.rs#L225) unconditionally splits each row on every comma. The accepted table `[{"a":"x,y","b":1,"c":true}]` encodes to a three-column row and decodes to None because the oracle sees four cells. The round-trip cases at line 375 omit commas. T468 intentionally kept this decoder as the losslessness oracle after removing it from release code; this task repairs that verification path and makes no production-decoder/data-loss claim.
 
@@ -443,6 +495,31 @@ Execution plan:
 3. Add generated round-trip coverage combining commas, quotes, backslashes, control characters, empty strings and scalar-looking strings, and check declared row/column counts.
 
 Check: decode(encode(table)) equals the original for all accepted generated fixtures, valid comma cells pass, malformed rows are rejected, and `just check` passes. This is a P3 test-quality defect.
+
+### T641. TUI: folded-target counter in a one-project view
+
+Left over from T500. `CallsStore::folded_counters(drawn, more, scope, now)` and the pane's "folded calls" lines (`{label} · {n} folded`) exist, but the TUI has no one-project drill view, so nothing fills `LiveCalls.drawn`/`more` and the counter never shows. Give the TUI a one-project view that supplies the drawn nodes and `more`, then wire it in and drop the `#[cfg(test)]` `set_drawn`.
+
+Check: in the one-project view the pane lists folded targets on their nearest drawn ancestor, else on the "+N more" group; TUI test; `tests/surface_parity.rs`; `just check`.
+
+Execution plan:
+
+1. Prefer reusing the web node-selection logic (find where the SPA builds `drawn`) in a shared module rather than duplicating it.
+2. Add a drill state to App (src/tui/app.rs) selected from the projects table, and a render path in src/tui/view.rs::render_graph.
+3. Feed `LiveCalls.drawn` / `more` from that view; remove `set_drawn` from non-test code and keep a test-only constructor.
+4. TUI tests for ancestor and "+N more" placement; `tests/surface_parity.rs`; `just check`.
+
+### T641.1. TUI: one-project node supply (DrawnNode list, cap and `more`) from the graph/index data
+
+Done means: a shared module (reusing the web node-selection logic rather than a copy) that supplies the drawn nodes with a cap and the `more` count for one project.
+
+### T641.2. TUI: one-project drill view, keys and rendering
+
+Depends on T641.1. Done means: a drill state in `App` (`src/tui/app.rs`) entered from the projects table, rendered by `src/tui/view.rs::render_graph`, with key navigation and TUI tests for ancestor and "+N more" placement.
+
+### T641.3. TUI: wire the folded counter, delete the `cfg(test)` `set_drawn`, update surface_parity
+
+Depends on T641.2. Done means: `LiveCalls.drawn` and `more` come from the drill view, `set_drawn` is gone from non-test code (a test-only constructor stays), and `tests/surface_parity.rs` is updated; `just check`.
 
 
 ### T562. Abort memory sync when an existing host file cannot be read
@@ -457,6 +534,8 @@ Execution plan:
 
 Check: failed reads never replace or remove host content or change sync metadata; existing valid managed-block behavior and `just check` pass. The isolated read/splice probe establishes the lossy replacement text; the live CLI write regression remains part of this fix.
 
+Planning note: src/plugins/memory/sync.rs:119.
+
 ### T563. Key memory-sync protection by the complete destination path
 
 Source-confirmed: [kv_key](src/plugins/memory/sync.rs#L28) stores a block digest under `memory.sync.sha:<basename>`. Sync A/CLAUDE.md with one note set, then B/CLAUDE.md with another, using the same store. The second sync replaces the first file's digest. Re-syncing unchanged A now [fails as hand-edited](src/plugins/memory/sync.rs#L93); removing B also deletes the shared guard state. T69.6 established the hand-edit guard but does not cover this cross-file identity collision.
@@ -468,6 +547,8 @@ Execution plan:
 3. Cover removal of either destination, same-file relative/absolute spellings and legacy-key handling without falsely trusting unrelated host content.
 
 Check: one destination's sync/removal cannot invalidate another's protection; genuine hand edits still require force; `just check` passes.
+
+Planning note: kv_key at src/plugins/memory/sync.rs:28.
 
 ### T564. Keep memory-sync note titles from becoming block delimiters
 
@@ -553,6 +634,8 @@ Execution plan:
 
 Check: neither redacted payload metadata nor the suggested filename exposes the username alias, explicit no-redact retains its documented behavior, and `just check` passes. The scope leak was reproduced with the actual helper; the filename leak is source-confirmed and its end-to-end page regression belongs to this fix.
 
+Planning note: Step 3 touches the page download path; if web/src changes, also run `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
+
 ### T573. Apply terminal call state even when the live event list is capped
 
 Confirmed with actual coalesce/fold/sweep functions: [coalesce](src/web/live.rs#L134) removes the oldest events beyond the display cap, including End events for calls already present in running. [CallsStore::fold](src/web/calls_store.rs#L213) clears running entries only from the retained events. Deliver Start A and Start B, then successful End A and End B in one batch with cap=1: the summary counts two completed calls, but A remains running because its End was discarded. At 120001 ms [sweep](src/web/calls_store.rs#L282) falsely marks A interrupted. The reader advances past the dropped End, so the next poll cannot repair it. Web and [TUI](src/tui/live_calls.rs#L118) share this state path. T329.15/T329.26 intentionally allow capped display rows and sampled tool/backend/latency bars; they do not permit a completed call to become a false interruption.
@@ -588,6 +671,16 @@ Execution plan:
 3. Wire the preview evidence through the web protocol and page state; cover toggles, kept-copy swaps, shared-file defaults, reordered/replaced entries, stale requests and backup/write failures. Retain the immediate pre-write reread as a separate safeguard.
 
 Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
+
+Planning note: Web gates `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after git add for the web/ part; do .a first, .b depends on it.
+
+### T576.1. Bind Doctor apply to confirmed entry identities and file versions (Rust, fake-fs tests)
+
+Done means: `src/doctor/web.rs` `prepare`/`Selection` and `src/doctor/fix.rs` `fix_found`/`fix_file` carry a preview identity and file-version evidence, and apply refuses a stale request with an explicit response; tests on a fake filesystem; `just check`.
+
+### T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
+
+Depends on T576.1. Done means: the web protocol types and `web/src/pages/DoctorFix.tsx` send the preview evidence back and show the stale-request answer; stories and e2e; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after `git add`.
 
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
@@ -650,6 +743,14 @@ Execution plan:
 
 Check: downloading existing results cannot inflate provider-token totals or estimated Batch costs; distinct billed requests still count independently, and `just check` passes. The probe used actual Batch record/parse functions with a plain-append Store fixture matching the source INSERT semantics; Diesel, HTTP and provider integration were source-traced, not executed.
 
+### T583.1. Result identity and unique persistence for Anthropic Batch results (migration, Store, record)
+
+Done means: a Diesel migration in `rtok-store` giving `call_log` a uniqueness rule for a result identity, an identity for Anthropic `custom_id` results in `proxy/batch_results.rs`, and `record` that does not insert twice; pricing and lane aggregates checked; `just check`.
+
+### T583.2. OpenAI output-file identity, partial-download top-up and legacy-row compatibility
+
+Done means: an identity for OpenAI output-file results, a partial download that tops up without double counting, and old rows without an identity still read correctly; tests for each; `just check`.
+
 ### T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
 
 Confirmed with actual wire parsers: [usage_from_response](src/proxy/wire.rs#L370) and [service_tier_from_response](src/proxy/wire.rs#L395) validate the entire captured buffer as UTF-8 before reading any events. A complete Anthropic message_start containing input_tokens=100 and service_tier=standard is lost when a later content delta ends after only the first byte of a multibyte character. Both parsers return None; the same prefix cut before that character and the full-body control preserve the earlier values. [The tee](src/proxy/mod.rs#L558) retains arbitrary byte prefixes on a capture cap, upstream error or client disconnect. [finish](src/proxy/mod.rs#L1082) then records an all-zero usage row and omits the tier despite having a complete earlier usage event. T323's acknowledged capture limit and no-partial-cache rule do not require discarding complete events already retained; T326 covers terminal provider events, not this decoding failure.
@@ -674,6 +775,16 @@ Execution plan:
 4. Handle persisted old keys explicitly: seed/reconcile counters from the intended project's adapter as needed, and avoid blindly migrating an ambiguous shared relative key into every project. Test compatibility without silently resetting IDs or moving unrelated claim rows.
 
 Check: different resolved local remotes never collide solely because their relative strings match, equivalent local spellings share a key, existing state is handled deliberately, and `just check` passes. The isolated harness compiled actual project resolver/normalization functions with a standard filesystem adapter; Git controls used only scratch local repositories. Store counter/claim behavior was source-traced, not exercised end to end.
+
+Planning note: Risk: step 4 may need a creator choice on how to treat an ambiguous shared legacy key; ask at claim time if the adapter cannot tell which project owns it.
+
+### T586.1. Resolve local relative/absolute/file-URL remotes to one absolute identity (project.rs)
+
+Done means: `project.rs` `canonical_url` resolves a local relative, absolute or `file://` remote against the checkout to one absolute identity; multi-spelling fixtures with real git.
+
+### T586.2. Reconcile persisted legacy relative keys for task counters and claims
+
+Done means: persisted old keys in task counters (`tasks/run.rs`) and claims (`hooks/mod.rs`) are reconciled to the new identity without resetting ids; an ambiguous shared legacy key may need the creator's choice at claim time (see the card).
 
 ### T587. Let an explicit report --format md override configuration
 
@@ -758,6 +869,8 @@ Execution plan:
 
 Check: the complete reproduced outer code block is byte-for-byte unchanged. An isolated executable imported the actual compression module by path, reproduced the four-backtick mutation, and passed ordinary triple-fence and double-backtick inline controls. This is a P3 library/benchmark defect, not observed production hook corruption; the native compression helper is not currently wired into those hooks.
 
+Planning note: compress_prose still searches "```" via rest.find at src/modes/compress.rs:85-90; fence tracking by line + opener length is a rewrite of that loop.
+
 ### T611. Decode serialized Copilot tool arguments before hook dispatch
 
 GitHub's [Copilot CLI hook tutorial](https://docs.github.com/en/copilot/tutorials/copilot-cli-hooks#understand-the-pretooluse-input), checked 2026-10-11, documents `toolArgs` as a JSON string requiring parsing before accessing its fields. [HookInput::adapt_copilot](src/hooks/types.rs#L134) instead assigns that `Value` directly to `tool_input`. For `toolName: "bash"` and `toolArgs: "{\"command\":\"git status\"}"`, adaptation produces `tool_name = "Bash"` but leaves `tool_input` a string. The [main-argument reader](src/hooks/mod.rs#L138) returns `None`; similarly, a serialized `view` input with `path` gives [guard::cache_key](src/plugins/guard/mod.rs#L219) no Read key. Object-valued versions of the same fixtures work. Consequently the documented CLI payload bypasses argument-dependent duplicate-read handling and loses command/path activity detail even though the tool name was normalized correctly.
@@ -831,6 +944,8 @@ Execution plan:
 
 Check: a complete private block remains private regardless of its position or length. The probe compiled the verbatim production synthesizer, imported the actual scrubber, and used real Store migrations/public methods; the full-block scrub, short-block and Unicode-cap controls passed. The full hook/capture integration was source-traced, not executed.
 
+Planning note: Also scrub the title source text before truncate, observe.rs:165, so private text cannot reach the title.
+
 ### T619. Scroll wrapped TUI panel results by rendered rows
 
 Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with the actual [Panel](src/tui/panel.rs#L144) and Ratatui's test backend. The shown-result key handler passes `lines.len()` to `scroll_key`, which caps the offset at the number of logical lines minus one. [render](src/tui/panel.rs#L199) enables paragraph wrapping and applies that offset in rendered rows. A one-line result that wraps beyond the viewport therefore has a maximum offset of zero: even 100 PageDown events leave the same first rows visible and its tail inaccessible. A directly scrolled Paragraph renders the tail, and the unwrapped multi-line control scrolls normally. Compare/export result and error text share this panel.
@@ -843,6 +958,8 @@ Execution plan:
 4. Run focused TUI panel and caller tests, then `just check`.
 
 Check: every rendered result row is reachable using the existing navigation keys. The isolated probe imported the production panel with small surrounding UI shims and used a real Ratatui buffer; it did not execute an interactive terminal session or graph backend.
+
+Planning note: Check whether the ratatui version needs the unstable rendered-line-info feature for Paragraph::line_count; if so compute wrapped rows with unicode-width instead.
 
 ### T622. Preserve non-text blocks when the pi extension compresses tool output
 
@@ -887,6 +1004,8 @@ Execution plan:
 
 Check: an invalid existing Grok file is never replaced by generated configuration. The executed probe covered parsing, registration and the real SDK filesystem write with backups; real CLI dispatch and OS permission failures were not exercised.
 
+Planning note: T277.2 already moved the write to rtok_mcp::ops; add the regression through register_mcp and make `load` return NotFound -> empty doc, any other read/parse error -> Err with path.
+
 ### T626. Match Aider proxy ownership by URL authority
 
 Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [is_ours_value](src/agents/aider/mod.rs#L149). Ownership accepts `localhost` or `127.0.0.1` anywhere in the value, plus the configured port anywhere with a non-digit boundary. [strip_ours](src/agents/aider/mod.rs#L213) consequently deletes an unrelated `openai-api-base: https://api.example/localhost:8790/v1` when the rtok port is 8790, even though the URL authority is `api.example`. The same predicate reports that endpoint as rtok-installed.
@@ -928,6 +1047,8 @@ Execution plan:
 
 Check: a newer semantic version is not hidden by the lexical order of cache folder names. Executed evidence used the exact selector over real temporary directories; host activation and update commands were not run.
 
+Planning note: Use semver::Version for ordering, fallback to name order for unparseable dirs.
+
 ### T629. Reopen previously closed hosts when a later preflight fails
 
 Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [with_restart](src/agents/restart.rs#L289). The loop closes each running desktop immediately after its `would_change` check. If a later host's check returns an error, `?` exits before the reopen loop. A probe compiling this exact orchestration with fake processes recorded only `quit:First` when the second host's preflight failed; the write callback was never reached. A write-error control recorded both quits and both reopens. T141/T434 cover ordinary restart and write/quit failures, not a later preflight error after partial shutdown.
@@ -940,6 +1061,8 @@ Execution plan:
 4. Run restart/install orchestration tests and `just check`.
 
 Check: every successfully closed app is reopened even if a subsequent host cannot be planned. Executed evidence used the real orchestration function with injected process/config seams; OS process control was not exercised.
+
+Planning note: Preflight loop is src/agents/restart.rs:304-335, would_change(...)? at :318 runs after the earlier host is already quit; simplest is a first pass that runs all would_change checks, then the quit pass.
 
 ### T630. Preserve the selected config file in operator pages
 
@@ -980,6 +1103,8 @@ Execution plan:
 
 Check: no chart row crosses the bottom margin. The executed probe checked the current source constants and arithmetic; an actual PDF renderer/viewer was not run in this audit.
 
+Planning note: Same file as T633, src/report/pdf.rs; do T632 then T633 in sequence to avoid conflicts.
+
 ### T633. Include the contents page in printed PDF page numbers
 
 Source-confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536`: [render](src/report/pdf.rs#L52) prepends one contents page, and section bookmarks use `start + 2`, but [toc_page](src/report/pdf.rs#L171) prints `start + 1`. A section starting on content index zero is physically on page 2 while the contents says page 1; subsequent section numbers have the same offset. This is separate from T632's chart-height calculation.
@@ -992,6 +1117,8 @@ Execution plan:
 4. Run PDF/report tests and `just check`.
 
 Check: every contents entry points to the page that actually starts the section. The source-arithmetic probe confirmed the one-page discrepancy; viewer navigation was not executed.
+
+Planning note: Sequence after T632, same file.
 
 ### T634. Keep PyPI dry-run behavior independent of flag order
 
@@ -1018,6 +1145,10 @@ Execution plan:
 4. Run hook-script/fallback tests and `just check` on supported shell platforms.
 
 Check: Git receives the decoded path exactly and removal does not silently skip an escaped path. Executed evidence ran the verbatim `field` function through POSIX sh with synthetic JSON; real Git worktree creation/removal and Windows were not run.
+
+Planning note: After the decision, replace `field` at worktree.sh:26 and test with fake git argv capture.
+
+Needs the creator: the sh fallback in plugins/claude/scripts/worktree.sh runs when rtok is missing, so which JSON decoder it may assume is a contract decision (jq, python3, node, or a pure-POSIX unescaper limited to \" \\ \/ and \uXXXX).
 
 ### T636. Limit Claude legacy proxy migration to owned endpoints
 
@@ -1071,6 +1202,8 @@ Execution plan:
 
 Check: keyboard navigation never leaves the Calls cursor outside its visible list. The executed probe used the production table function and real TestBackend; row data and formatting/theme dependencies were small fixtures, and full App navigation was source-traced.
 
+Planning note: Reuse the Sessions TableState pattern at view.rs:524.
+
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 
 Confirmed with the actual [text](crates/rtok-store/src/sanitize.rs#L70) and [body](crates/rtok-store/src/sanitize.rs#L34) functions: put ANSI reset `ESC [ 0 m` or U+200B between `system-` and `reminder` in an opening tag, followed by `hidden</system-reminder>\nvisible`. The first pass removes the noise but leaves `<system-reminder>hidden</system-reminder>\nvisible`; the second returns only `visible`. JSON string values show the same change on a second body pass. `text` removes wrappers before character cleanup, so cleanup can create a wrapper after the removal stage has finished. This violates T431's explicit idempotence requirement and the [property test's invariant](crates/rtok-store/src/sanitize.rs#L290). No existing card covers this composition case; T432's upstream cleaner intentionally retains wrappers and is a separate contract.
@@ -1096,6 +1229,8 @@ Execution plan:
 4. Cover restart and upgrade callers, unavailable identity information, malformed state, nonpositive PIDs and concurrent service replacement using fakes. Rerun demon/platform tests and `just check`.
 
 Check: stale state never authorizes a signal to a different process, including forced shutdown; valid owned services still stop and restart. The scratch probe compiled actual Service/State, file/read, targets and stop functions with a recording-only process adapter. State `since=1` sent TERM to both simulated reused PIDs in normal mode and KILL in force mode, then removed the state; the missing-state control sent nothing. No OS process was signalled, and real kernel PID reuse or full CLI integration was not exercised.
+
+Planning note: Scope: step 2's per-process birth token is the expensive part and needs new rtok-sys API; the pre-boot check reuses boot_time() and is the cheap first commit within the task; if the birth token pushes past 500 lines, split it off as T597.a at claim time.
 
 ### T594. Validate structured config types before persisting edits
 
@@ -1183,6 +1318,8 @@ Execution plan:
 
 Check: no operation on the malformed R1 overwrites R2 or removes either fixture; valid task lifecycle tests and `just check` pass. This reproduction is source-derived; an end-to-end regression remains part of the fix.
 
+Planning note: src/tasks/disk.rs has no id-mismatch check today; add it in the shared scan/find path.
+
 ### T542. Invalidate graph rows when an extension's grammar mapping changes
 
 Source-confirmed: [extractor_fingerprint](src/plugins/graph/index.rs#L417) hashes compiled queries and INDEX_VERSION but no configured extension map. [run_with](src/plugins/graph/index.rs#L111) therefore reuses old stats after changing `plugins.graph.extensions`; its stat gate skips unchanged files. Even touching the file reaches the [SHA gate](src/plugins/graph/index.rs#L346), which returns Same before consulting the new grammar. Index `sample.tpl` containing `fn old() {}` with `tpl = "rust"`, change only the mapping to `tpl = "py"`, then index again: the old Rust definition survives. T35.5 covers extractor upgrades; T68.10 added configurable mappings without including them in freshness.
@@ -1195,6 +1332,13 @@ Execution plan:
 
 Check: the mapped file's symbols match the current grammar after reindex without a source edit; unchanged configuration still skips; `just check` passes. Source-derived reproduction, not an executed integration test.
 
+Execution plan:
+
+1. Failing test: index a `.tpl` file mapped to rust, remap to py, reindex without touching the source; assert the old rust symbol is gone (once with unchanged mtime, once touched).
+2. Make `extractor_fingerprint` take the effective extension map (`matcher.extensions()`), fold it in sorted order; build the matcher before computing `current_fp` at index.rs:111.
+3. Check `run_changed_with` (index.rs:213) uses the same fingerprint or compares it; add a test that equal maps in different insertion order do not rebuild.
+4. `just check`.
+
 ### T543. Make stale-fingerprint dry runs predict the actual cold reindex
 
 Source-confirmed: [run_with](src/plugins/graph/index.rs#L113) clears stale symbol rows only when `!dry_run`, then reads the existing stats unconditionally. With an old stored fingerprint and unchanged indexed files, dry-run takes the stat skip gate and reports no new rows; an actual run clears those stats and parses the same files. This violates the dry-run's would-be indexing report independently of T542's missing configuration input.
@@ -1206,6 +1350,8 @@ Execution plan:
 3. Compare predicted indexed/inserted counts with the real cold run and assert the dry-run left symbols, fingerprint, timestamps and rank unchanged; retain warm dry-run behavior.
 
 Check: stale-fingerprint dry-run predicts the real reindex and performs no writes; `just check` passes. Source-derived reproduction.
+
+Planning note: Coordinate with T542 in the same function run_with; do T542 first or merge carefully.
 
 ### T544. Keep unrelated gitignored files excluded when graph include is nonempty
 
@@ -1221,6 +1367,8 @@ Execution plan:
 
 Check: only the explicitly included ignored subtree returns, ordinary source remains eligible, unrelated ignored source stays out, and `just check` passes.
 
+Planning note: Try per-include override globs first, as at walk.rs:40; if the crate precedence still revives sibling ignored dirs, walk the include roots separately and union the results; T545 reuses the result.
+
 ### T545. Apply full-walk include and glob-exclude rules to watcher events
 
 Confirmed in source and an isolated Rust probe: [absorb_event](src/plugins/graph/watch.rs#L193) rejects gitignored paths before considering configured includes. Conversely, [Matcher::is_excluded](src/plugins/graph/walk.rs#L69) treats exclude patterns as literal prefixes, while the full walker interprets globs. Thus a file explicitly included from a gitignored subtree is indexed initially but its edits are ignored; a path matching `**/generated/**` is excluded from the full index but accepted as a watcher event and passed to incremental indexing. These are the event-path regressions of T68.10, distinct from T544's blanket full-walk whitelist.
@@ -1235,6 +1383,8 @@ Execution plan:
 
 Check: full and incremental paths agree on eligibility for both fixtures, existing watcher debounce tests and `just check` pass.
 
+Planning note: Do after T544; both change the eligibility logic in walk.rs.
+
 ### T546. Refresh stored file ranks after deletion or zero-symbol replacement
 
 Source-confirmed: [run_changed](src/plugins/graph/index.rs#L238) removes deleted files' symbol rows but refreshes the derived rank document only when `report.inserted > 0` (line 290). Replacing the last definition with an empty file also reports zero inserted symbols: [replace_one](crates/rtok-store/src/symbols.rs#L234) deletes old symbols, writes a freshness sentinel and returns zero. [run_with](src/plugins/graph/index.rs#L192) has the same zero-symbol replacement gap: its later missing-file deletion count is zero because the path remains in the keep set. [rank::map/render](src/plugins/graph/rank.rs#L221) renders definitions from the stored document without checking current symbols or files. Index a sole `a.rs` defining `old`, then delete it via the incremental path or empty it and reindex: the map still lists `a.rs: old`. A later unchanged full scan does not repair the already-existing rank document. The symbols themselves are removed correctly; this is not T324's rejected stale-symbol candidate.
@@ -1247,23 +1397,45 @@ Execution plan:
 
 Check: the map never serves the removed definition after a successful update, subsequent warm indexing stays consistent, and `just check` passes. Source-derived reproduction; no full index runtime was executed during the audit.
 
+Planning note: Guards at src/plugins/graph/index.rs:205 and :290; add a "changed" flag from replace_one in crates/rtok-store/src/symbols.rs:234 instead of relying on report.inserted.
+
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
 Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.
 Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
+
+Planning note: Left items only: dated window, net row in `research.md` §17, flip default only if net tokens saved > 0.
+
+Needs the creator: flag on for a dated window (code, cost row and `brief`/`no brief` split already shipped per the card's Progress); then the net goes to `research.md` §17.
 ### T132. Ship a Haiku scout agent definition with the Claude Code plugin
 `research.md` §17.3(4). Make the cheap path the default one: `plugins/claude/agents/rtok-scout.md` with `model: haiku`, `tools` limited to the rtok MCP `read`, `search`, `outline`, `explore`, `expand`, and a short system prompt — ranged reads only, never a whole file over the outline threshold, answer with `path:line` citations and no file dumps. Verify the plugin `agents/` directory format against the current Claude Code docs first and add the link to the `## Docs` list in `plugins/claude/README.md`.
 Check: `rtok agents install claude` offers the agent file and removal takes it away (host matrix e2e); `tests/host_docs.rs` and `tests/agents_doc.rs` (`RTOK_BLESS=1`) green; T128's per-`agentType` split is the measurement — record `rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent in `research.md` §17 after a dated window.
 Progress (2026-09-24): `plugins/claude/agents/rtok-scout.md` ships with the plugin (`model: haiku`, the five tools under the plugin-scoped names `mcp__plugin_rtok_rtok__<tool>`); unit test on the frontmatter, install/remove e2e in `tests/claude_plugin.rs`. Left: the dated `rtok-scout` vs `Explore`/`general-purpose` read-bytes row in `research.md` §17 once a window of sessions has run with it.
+
+Planning note: Read per-`agentType` split from `rtok stats` after the window, record the row.
+
+Needs the creator: a dated window of sessions with `rtok-scout` installed (file, install/remove e2e and frontmatter test already shipped per Progress).
 ### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
 Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
 Check: a dated row in `research.md` §3 with the Claude Code version, the payload sent and what the transcript shows, per tool kind. Honoured → the `AGENTS.md` rule line and I-91 are put to the creator with the row; not honoured → I-91 closes with the date.
 Progress (2026-09-25, `research.md` §3 "T134"): Claude Code 2.1.267; the CLI hooks page lists no `updatedToolOutput` for `PostToolUse` (only `additionalContext`, `systemMessage`, `terminalSequence`), the Agent SDK page does. The live run is blocked in agent sessions (`claude -p` fails with an expired OAuth session, as in T53.1); left: the creator runs the scratch probe (hook logging the payload and returning `updatedToolOutput`, one Bash / Read / MCP call on `--model haiku`) from a real terminal, and the per-tool verdict goes into the row.
+
+Planning note: Card plan is right; creator runs it, agent writes the per-tool dated row into `research.md` §3 and puts the I-91 / AGENTS.md rule decision to the creator.
+
+Needs the creator: run the scratch probe from a real terminal (`claude -p` OAuth is expired in agent sessions): hook returning `hookSpecificOutput.updatedToolOutput` for one Bash, one Read, one MCP call on `--model haiku`.
 ### T124. Realized `tools_rewrite` saving as a dated `research.md` row
 6.2 % (T59.5) is the ceiling, not a saving: no dated row shows what `[proxy.tools_rewrite]` removes with the default `max_description_tokens = 60`. Precondition, by the creator: turn it on for this machine's proxy for at least 20 sessions. Then sum the `kind = tools_rewrite` Measurement rows against session input for the same window (`rtok stats` / `rtok gain`, dated command in the row), and write one row into `research.md` §2 next to the T59.5 row; update `docs/comparison.md` only if it cites the number. If the realized share is under the 3 % gate, say so in the row and leave the default off.
 Check: the row cites the command, date, sessions, before/after tokens and the share; no number in prose without it.
+
+Execution plan:
+
+1. After the creator's window: `rtok stats` / `rtok gain` for the dated window; sum `tools_rewrite` before/after vs session input.
+2. Add one dated row to `research.md` §2 next to the T59.5 row (command, date, sessions, before/after tokens, share); say "under the 3 % gate, default stays off" if so.
+3. Touch `docs/comparison.md` only if it cites the 6.2 % number; `just check`.
+
+Needs the creator: turn `[proxy.tools_rewrite]` on for this machine's proxy for >=20 sessions (card precondition), then an agent can sum the `kind = tools_rewrite` Measurement rows.
 
 ### T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 
@@ -1284,6 +1456,16 @@ Execution (2026-09-27): (1) a probe kit in the session scratchpad (never committ
 Blocked (found 2026-09-24 while claiming): the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`), and rtok installs no `PreToolUse` hook for Codex (only `PreCompact`/`PostCompact`), so a Codex brief would always be empty. Needs Codex `PreToolUse` wiring first (idea I-88), which the creator has not approved.
 
 Check: a Codex `SubagentStart` payload through `rtok hook` returns the brief in Codex's shape (test); `just check` green.
+
+Execution plan:
+
+1. After I-88 lands: add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's event list (`src/agents/codex/`).
+2. Make `rtok hook SubagentStart` answer in Codex's shape (stdout / hook-specific context per `research.md` §23).
+3. Test: Codex `SubagentStart` payload through `rtok hook` returns the brief; installer fixture lists the event; `agents_doc`/`host_docs`; `just check`.
+
+Blocked by: I-88 (idea, not approved: Codex `PreToolUse` wiring; without it `ledger()` in `src/plugins/memory/handoff.rs` is always empty for Codex).
+
+Needs the creator: approve I-88.
 
 ### T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 
@@ -1459,17 +1641,44 @@ Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cl
 
 Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
 
+Execution plan:
+
+1. Wait for T275/T277/T279 to merge; rebase.
+2. `src/agents/mod.rs`: `spawn_cli` (:391), `run_cli` (:405), `app_version` (:447) and the `Command::new` at :1583 go through `rtok_sys::proc::ProgressRunner` (Windows shim logic moves into the runner, already `raw_arg`-capable from T276.4).
+3. `src/doctor.rs`: `mcp_command` (:1390) / `spawn_mcp` via the runner; `Batch` over servers when >1 (`probing MCP server <name>…`).
+4. `apply_hosts` in `src/cli`: step loaders, `proc::suspend` (exists, `crates/rtok-sys/src/proc/indicator.rs:25`) around the plugin question; remove any remaining T81 interactive switch (grep shows none left in `src/cli.rs`, confirm).
+5. Tests: non-TTY run asserts no spinner bytes (extend `tests/progress_sites.rs`), own `sh` fakes; `just check`.
+
+Blocked by: T275, T277, T279 (all in progress and edit the same `agents/mod.rs` spawn helpers; the card itself says it starts after them).
+
 ### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
 
 Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
 
 Check: hook latency budget unchanged (fail open, 10 ms); `just check`.
 
+Execution plan:
+
+1. Convert `demon.rs` (`Detached` children, `Inherit` for upgrade, `Capture` for `sysctl`), `log.rs` (`Inherit`), `otel/export.rs` (`Detached`), `mcp/wrap.rs` (`Detached`/`Stream`, hidden).
+2. Convert `plugins/graph/lsp.rs` (`on_path`, `rustup which`, server spawn via `.spawn()`), `graph/mod.rs` (git calls at :1483, :2119), `graph/watch.rs` (hidden).
+3. Convert `hooks/mod.rs` and `bin/rtok-hook.rs` last, and confirm `rtok-hook` stays free of `indicatif` / TTY probing so the 10 ms fail-open budget holds (`tests/latency.rs`).
+4. Tests: own `sh` fakes per site, `Hidden` writes nothing, existing demon/LSP tests green; `just check` plus `cargo test --release --test latency -- --test-threads=1`.
+
 ### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 
 Split from T276 (migration plan steps 4-6, 2026-10-11, D16): delete `with_loader` and the T81 switch in `cli.rs`, `render::loader` / `render::spinner` (`graph index` moves to a `Batch` over files), drop `indicatif` from the root crate, add `disallowed-methods = ["std::process::Command::new"]` to `clippy.toml` with an `#[allow]` only inside `crates/rtok-sys`, update the contributor notes in `docs/` and `CHANGELOG.md`. Closes T276. Depends on T276.2 to T276.5.
 
 Check: `just check` fails on a stray `Command::new` outside `crates/rtok-sys`.
+
+Execution plan:
+
+1. Migrate the three stray production sites above through `ProgressRunner` (`Hidden`/`Capture`).
+2. Move the non-process spinners to a small helper in `rtok_sys::proc` (e.g. `with_spinner`) and delete `render::loader`/`render::spinner`/`progress::with_loader`, the T81 switch, and `indicatif` from the root `Cargo.toml` (+ `toolchain.md`); `graph index` (`src/cli/graph.rs:219`) becomes a `Batch` over files.
+3. Add `clippy.toml` `disallowed-methods = ["std::process::Command::new"]`; `#[allow]` only inside `crates/rtok-sys` and `build.rs`; keep tests out of the ban (e.g. `-A clippy::disallowed_methods` on the `--all-targets` clippy line and a separate `clippy --workspace --lib --bins -D clippy::disallowed_methods` in the `justfile`), and say why in a comment.
+4. Docs contributor note ("run external programs only through `proc::ProgressRunner`"), en/ru/uk if the note exists in `docs/`, `CHANGELOG.md`, `rust.md`/`toolchain.md` rows.
+5. Test: a stray `Command::new` in a scratch non-test file fails the clippy line; `just check`.
+
+Blocked by: T276.3, T276.5 (the card depends on T276.2 to T276.5: the ban turns on only after every call site is converted).
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 
@@ -1952,17 +2161,43 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
+Execution plan:
+
+1. Create T329.54 and take T329.50; T477 waits on T329.54.
+2. When both are done, walk the card's Check list against the tests in `done.md` subtasks and `web/e2e`, note any uncovered bullet as a new subtask, then close the epic into `done.md`.
+
+### T329.54. Web actions: re-index and remove project, with a job tracker for indexing/failed states
+
+The web graph page has no way to re-index ("Index now") or remove a project: `ProjectRequest` in `src/web/protocol.rs` has only Select/Link/Unlink, `project_write` in `src/web/mod.rs` has no such arm, and `web/src/pages/graph3d/ProjectsOverview.tsx` says they "arrive with T329.20", which shipped link/unlink only. Done means: protocol variants and `project_write` arms that call the same functions as the CLI commands (remove shows the plan, writes nothing without confirmation), a SPA node menu with both actions, a job tracker that gives the `indexing` and `failed` states (see the T329.12 deviations in `done.md`), state markers on the nodes, and docs en/ru/uk.
+
+Check: web and Rust tests for both actions and the tracker states, Playwright for the node menu; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`. Unblocks T477.
+
 ### T329.50. Graph page: running labels with elapsed counters on the live canvas
 
 Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
 
 Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
 
+Execution plan:
+
+1. `web/src/pages/graph3d/live/lit.ts`: extend `Lit` with the running calls' labels (`Running.tool`, `Running.at`, already in `snapshot.gen.ts:830`) and a short post-end fade entry from `store.feed` (age <= a few seconds); calls outside `scope` and folded calls (on the holder node, via the existing `fold`) follow the existing rules.
+2. `Scene2D.tsx` (near `data-running`, :309): SVG text label next to the node with a ticking elapsed counter derived from the `now` prop; fade via CSS `motion-safe`.
+3. `stage3d.ts` (already uses Sprites, :382 accents): a camera-facing sprite label updated per frame, disposed with the node (`dispose.test.ts`).
+4. Tests: `lit.test.ts` (label present, fades, none outside scope, folded call labels holder), stories with axe in `LiveSection.stories.tsx`, Playwright for 2D and 3D; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
 ### T521. MiMo Desktop variant of the `mimo` host
 
 Split from T520. No documented config path for MiMo Desktop (early access); a third-party README (https://github.com/akaradje/mimo-desktop, unverified) says Desktop reads `~/.config/mimocode/mimocode.jsonc`. Waits for the creator's run of the read-only probe `scratchpad/mimo-desktop-probe/run.sh`; done = a Desktop variant (detection plus the same config family or its own) with tests.
 
 Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
+
+Execution plan:
+
+1. With the probe result: write a `research.md` row with the primary source and date (the third-party README stays "unverified").
+2. Add a Desktop variant to the `mimo` host in `src/agents/mimo/` (detection from the app, same config family or its own path), `[setup.mimo]` path in config, `docs/config.md`, `docs/agents.md` row.
+3. `agents_install` matrix row against fake homes; `agents_doc`, `host_docs`, `just check`.
+
+Needs the creator: run the read-only probe `scratchpad/mimo-desktop-probe/run.sh` (it is not in this checkout) on a machine with MiMo Desktop and hand over the result.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 
@@ -1979,6 +2214,10 @@ Execution plan (after T352 lands — it adds `drop_vanished_symbol_roots` to ret
 Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of follow-up Grep/Read on the same name within 3 calls (`guard/grep_symbol` rows against the transcripts). At most 25 % means propose default-on to the creator; above it, keep the flag opt-in and record why. Also re-measure the PreToolUse hook p95 on an idle machine (`cargo test --release --test latency -- --test-threads=1`; the flag-on test is `latency_hook_grep_symbol_answer_p95_under_10ms`); on 2026-10-06 the load average was 46 and even the baseline run failed the 10 ms gate. Record the result as a dated row in `research.md` §29.5.
 
 Check: a dated `research.md` §29.5 row with the follow-up share and the idle-machine p95 (under 10 ms); `just check`.
+
+Planning note: After the window: join `guard/grep_symbol` rows to transcripts, compute the share of follow-up Grep/Read within 3 calls; run `cargo test --release --test latency -- --test-threads=1` idle; one dated row in `research.md` §29.5; `just check`.
+
+Needs the creator: opt-in `plugins.guard.grep_symbol` for a dated window on the real machine and an idle machine for the p95 run (`tests/latency.rs:243`).
 
 ### T370. SessionStart repo map ranked by file-level personalized PageRank
 
@@ -2009,6 +2248,26 @@ Done when: a literal `search` on a 50k-file repo scans only candidate files and 
 
 Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
 
+Execution plan:
+
+1. T378.1: divan bench in `benches/` for `search` on a large tree; record p50/p95; stop and close if <= 200 ms.
+2. T378.2: Diesel migration (no raw SQL outside the migration), build sorted `Vec<u32>` postings per root for text files <= 1 MB in the graph index pass, incremental update with the file watcher; record index size growth.
+3. T378.3: in `search.rs` (:92) take candidates for literals >= 3 bytes, fall back to the full scan for regexes without a literal; equivalence test prefiltered vs full over a fixture; bench -50 % p95; `just check`.
+
+Needs the creator: approve and run I-95 first (still an unapproved idea in `ideas.md:88`; nothing measures `search` p95 on a large repo yet, and the card closes with a number if it is <= 200 ms).
+
+### T378.1. Baseline `search` p95 on a 50k-file repo (decides go/no-go)
+
+Done means: a divan bench in `benches/` for `search` on a large tree with p50/p95 recorded; if p95 is <= 200 ms the task closes here with that number and T378.2/T378.3 are dropped.
+
+### T378.2. Trigram postings table and build in the index pass
+
+Depends on T378.1 (go decision). Done means: a Diesel migration (no raw SQL outside the migration), sorted `Vec<u32>` postings per root for text files <= 1 MB built in the graph index pass, incremental update with the file watcher, and the index size growth recorded.
+
+### T378.3. Prefiltered `search` path, equivalence test and divan bench
+
+Depends on T378.2. Done means: `src/plugins/read/search.rs` takes candidate files from the postings for literals >= 3 bytes and falls back to the full scan for regexes without a literal; an equivalence test (prefiltered vs full scan) over a fixture; the bench shows -50 % p95; `just check`.
+
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -2038,11 +2297,47 @@ optimization.md §5. `rtok bench` cost per passed task for each setting on and o
 
 Check: one dated `research.md` row per setting.
 
+Execution plan:
+
+1. Read PR #562 / `df2a13ba` for reusable overlay code before writing any.
+2. Add `suite = "settings"` in `src/bench.rs` (+ `[bench]` config, `docs/config.md`): arms = setting off/on, cost per passed task via `stats --price`, pass rate.
+3. Offline test with own fake `claude` (no real agent): table shape, arm order, dry-run.
+4. After the creator's run: dated rows in `research.md`; settings with net saving and pass rate held become default-on in a follow-up task; `just check`.
+
+Needs the creator: API spend for the live arms (same blocker as T394); the offline harness can be coded without it.
+
+### T385.3.1. `rtok bench` settings suite: per-setting on/off arms from config overlays, dry-run table, offline test
+
+Done means: `suite = "settings"` in `src/bench.rs` (with `[bench]` config and `docs/config.md`) whose arms are each setting off/on, reporting cost per passed task via `stats --price` and pass rate; an offline test with an own fake `claude` (table shape, arm order, dry-run); `just check`. Needs no API spend.
+
+### T385.3.2. Live runs and one dated `research.md` row per setting (creator spend)
+
+Depends on T385.3.1. Done means: the creator runs the suite with API spend; one dated `research.md` row per setting; settings with net saving and a held pass rate become default-on in a follow-up task.
+
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
 optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arXiv 2510.00615 as the agent-context variant) runs on the `internal` lane, asynchronously, cached per archive id; the agent lane never waits for it; the original stays expandable. Only if T385.8 clears Gate P28.
 
 Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
+
+Execution plan:
+
+1. Creator decides go/no-go on the 3.3-5.2 % ceiling and the backend runtime.
+2. If go: T385.9.1 in `src/proxy/` (lane policy in `lane.rs`), cache table through Diesel; T385.9.2 behind a feature flag; T385.9.3 reuses `tests/fixtures/p28_must_keep.toml` and `tests/p28_must_keep.rs`.
+
+Needs the creator: go/no-go. T385.8 (done) measured a ceiling of 3.3-5.2 % of input tokens (6.54 % eligible, 98.4 % cache hit, tokens not dollars) so Gate P28 is not shown to clear, and the Gate needs the paid bench (T385.3/T394).
+
+### T385.9.1. `Compressor` trait, async worker on the `internal` lane and per-archive-id cache
+
+Done means: a `Compressor` trait and an async worker in `src/proxy/` (lane policy in `lane.rs`) with a per-archive-id cache table through Diesel; the agent lane never waits and the original stays expandable. Starts only after the creator says go (see the card).
+
+### T385.9.2. First compressor backend (LLMLingua-class or ACON-style)
+
+Depends on T385.9.1. The backend runtime is a dependency decision for the creator. Done means: one backend behind a feature flag.
+
+### T385.9.3. Gate P28 run: must-keep fixture plus bench vs v0.1 lossless
+
+Depends on T385.9.2. Done means: Gate P28 run with `tests/fixtures/p28_must_keep.toml` and `tests/p28_must_keep.rs` plus the paid bench against v0.1 lossless; the result recorded.
 
 ### T394. Run the paid live benches and record them
 
@@ -2052,6 +2347,10 @@ Done means: one dated row per suite in §2 (nudges off/on, T9.2 legacy vs rtok, 
 
 Check: the rows are in §2 and `docs/comparison.md`; the gates are marked.
 
+Planning note: The Done-means list is concrete; per suite run the command, record `claude --version`, mean tokens, `stats --price`, pass rate in `research.md` §2 and `docs/comparison.md`, mark Gate P9 / P8b clause 4.
+
+Needs the creator: the creator's Claude session and API spend (agent sandbox cannot run them, OAuth expired).
+
 ### T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 
 From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real Claude Code session (hooks, MCP and proxy) exported as a single trace with an `invoke_agent` root and `chat {model}` spans, checked in SigNoz and Maple. `roadmap.md` says these clauses are Gate P18, but P18 in `done.md` has no such clause, so the item is orphaned. Needs a SigNoz or Maple account.
@@ -2059,6 +2358,10 @@ From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real
 Done means: the `docs/otel.md` recipe for each backend is run with the proxy in front of a live session; the trace shape and `rtok_tokens_total` are recorded in §2 with a date, or the clause is dropped explicitly with the reason.
 
 Check: dated rows in §2 for both backends, or the dropped clause in `roadmap.md`.
+
+Planning note: Run each `docs/otel.md` recipe, record trace shape and `rtok_tokens_total` in `research.md` §2 with a date, or drop the clause in `roadmap.md` with the reason.
+
+Needs the creator: a SigNoz or Maple account and a live session through the proxy.
 
 ### T396. Verify the usage readers against real files
 
@@ -2068,6 +2371,14 @@ Done means: each reader runs once on a real file from a machine with that host; 
 
 Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
+Execution plan:
+
+1. Run each reader (`src/measure/usage/*.rs`, e.g. `usage/copilot.rs`) once on a real file and diff against the host's own numbers.
+2. Settle Copilot `inputTokens` vs `tokenDetails` and resumed-session shutdown totals (stop summing duplicates if cumulative).
+3. One fixture per confirmed shape under `tests/fixtures`, update the `unverified` tags in `research.md` §30 with dates; `just check`.
+
+Needs the creator: real Kilo, Gemini CLI, Copilot CLI and pi session files from machines that have them; Grok `signals.json` source needs the creator's answer on §30.7.
+
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
 From `research.md` §18.2 (T157): every non-interactive reader opens a relative-link worktree, but VS Code, Zed, Cursor and lazygit are untested, so the setting stays opt-in. It is the setting that would have prevented the 18 GB orphaned `graph-perf` worktree.
@@ -2075,6 +2386,10 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
+
+Planning note: One dated row per editor in `research.md` §18.2; if all pass, add the setting to the `worktrees` skill and `AGENTS.md` per T157's Check.
+
+Needs the creator: a real machine with VS Code, Zed, Cursor and lazygit to open a `worktree.useRelativePaths` worktree.
 
 ### T413. More agent hosts: popular agents rtok does not install into yet
 
@@ -2089,6 +2404,10 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
 
 Check: every sub-task below is closed in `done.md` with its per-host check.
+
+Planning note: On the last sub-task: verify each is in `done.md` with its per-host check, then move T413 to `done.md`.
+
+Blocked by: T413.3 to T413.15 (all in progress, Cursor; this card is the container and closes when the per-host sub-tasks are in `done.md`).
 
 ### T413.3. `rtok agents install droid` — Factory Droid
 
@@ -2208,6 +2527,12 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
+Execution plan:
+
+1. Find the script that made `web/screenshots/` (ask the creator or `git log` of #447); if gone, add a small Playwright spec or script over the `?sample` pages for the same names/sizes/themes, with webp conversion.
+2. Re-shoot; `brand/README.md` "Known gaps" (:139) and `brand/PROVENANCE.md` "Adopting in each surface" (:52-69) mark the web admin adopted; confirm no `web/` file duplicates a `brand/` file (the T414 Check).
+3. `just check`; web gates (`just spa-test`, `just spa-stories`, `just spa-e2e`) if `web/src` changes.
+
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -2243,17 +2568,39 @@ Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` 
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
 
+Execution plan:
+
+1. New neutral crate in `packages/crates` (verb table = union, `icon(verb) -> Option<&str>`, `ICON_WIDTH`, `gutter`, tests for icon per verb, fallback, width); its release goes through that repo's pipeline, not by hand.
+2. Ketch: replace its copy at `ui.rs:340-395` with the crate, keep `Tone` fallback local; its tests green.
+3. rtok: `src/ui/style.rs` uses the crate, `Kind::emoji` stays; `tests/ui_style.rs` and trycmd snapshots unchanged (no output change); add `rust.md` and `toolchain.md` rows; `just check`.
+
 ### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
+Execution plan:
+
+1. After T276.3: in `src/cli/agents.rs` / `src/agents/command.rs:161` drop `with_loader("updating host")` and show one spinner per host through `ProgressRunner` (a `Batch` over hosts when >1).
+2. Non-TTY test asserts no spinner bytes; trycmd snapshots unchanged; creator's manual `rtok agents install` in a terminal; `just check`.
+
+Blocked by: T276.3 (the T276.3 card says it unblocks this one).
+
 ### T477. TUI: re-index and remove projects (counterpart of the web actions)
 
 T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
 
 Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
+
+Execution plan:
+
+1. After T329.54: add the shared "re-index" and "remove" functions' call sites in `src/tui/projects.rs` (verbs next to Select/Link/Unlink, `plan_for` :115, confirm stage, keys table so `the_key_hints_are_the_keys_table` stays green).
+2. Remove: show the plan from the T416.4 preview of `Action::Remove` (`src/plugins/graph/projects.rs:364-379`), confirm key, then `Action::Remove`; decline writes nothing.
+3. Re-index: run the same function as the CLI/web on a worker thread with a channel, progress on the status line (`set_status`), old data readable meanwhile.
+4. Tests on a fixture project (stale -> indexed equals CLI; remove only after confirm; decline no change); `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
+
+Blocked by: T329.54 (the web re-index and remove actions this card mirrors; T476 is done).
 
 ## Reference
 
@@ -2437,9 +2784,3 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
-
-### T561. TUI: folded-target counter in a one-project view
-
-Left over from T500. `CallsStore::folded_counters(drawn, more, scope, now)` and the pane's "folded calls" lines (`{label} · {n} folded`) exist, but the TUI has no one-project drill view, so nothing fills `LiveCalls.drawn`/`more` and the counter never shows. Give the TUI a one-project view that supplies the drawn nodes and `more`, then wire it in and drop the `#[cfg(test)]` `set_drawn`.
-
-Check: in the one-project view the pane lists folded targets on their nearest drawn ancestor, else on the "+N more" group; TUI test; `tests/surface_parity.rs`; `just check`.

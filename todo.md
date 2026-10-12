@@ -1,3 +1,65 @@
+- T124. Realized `tools_rewrite` saving as a dated `research.md` row
+- T131. Measure the spawn brief: cost row and on/off re-read share
+- T132. Ship a Haiku scout agent definition with the Claude Code plugin
+- T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
+- T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
+- T262.3. Codex: spawn brief on `SubagentStart`
+- T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
+- T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
+- T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
+- T276. Spinner audit: every place rtok runs an external command and the user waits for its output
+- T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
+- T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
+- T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
+- T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
+- T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
+- T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
+- T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
+- T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
+- T329. Graph page: project selector, auto-added projects and linked projects (epic)
+- T329.54. Web actions: re-index and remove project, with a job tracker for indexing/failed states
+- T329.50. Graph page: running labels with elapsed counters on the live canvas
+- T356. Never index `$HOME` or `/` as a graph root
+- T369.1. Measure grep_symbol follow-up rate after an opt-in window
+- T370. SessionStart repo map ranked by file-level personalized PageRank
+- T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
+- T378.1. Baseline `search` p95 on a 50k-file repo (decides go/no-go)
+- T378.2. Trigram postings table and build in the index pass
+- T378.3. Prefiltered `search` path, equivalence test and divan bench
+- T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
+- T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
+- T385.3.1. `rtok bench` settings suite: per-setting on/off arms from config overlays, dry-run table, offline test
+- T385.3.2. Live runs and one dated `research.md` row per setting (creator spend)
+- T385.9. P28 Phase 2: async compressor on the `internal` lane
+- T385.9.1. `Compressor` trait, async worker on the `internal` lane and per-archive-id cache
+- T385.9.2. First compressor backend (LLMLingua-class or ACON-style)
+- T385.9.3. Gate P28 run: must-keep fixture plus bench vs v0.1 lossless
+- T394. Run the paid live benches and record them
+- T395. One real session as one OpenTelemetry trace in SigNoz and Maple
+- T396. Verify the usage readers against real files
+- T398. Probe editors on a `worktree.useRelativePaths` worktree
+- T413. More agent hosts: popular agents rtok does not install into yet
+- T413.3. `rtok agents install droid` — Factory Droid
+- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+- T413.5. `rtok agents install amp` — Amp
+- T413.6. `rtok agents install goose` — Goose
+- T413.7. `rtok agents install continue` — Continue
+- T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
+- T413.9. `rtok agents install junie` — JetBrains Junie
+- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
+- T413.11. `rtok agents install crush` — Crush
+- T413.12. `rtok agents install warp` — Warp
+- T413.13. `rtok agents install trae` — Trae
+- T413.14. `rtok agents install openhands` — OpenHands
+- T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
+- T414. Web dashboard restyle on the brand pack, built from `brand/` sources
+- T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
+- T416. Shared `change-preview` crate for dry-run output
+- T428. SessionStart hook back under the 10 ms budget
+- T436.3. Shared operation-icon crate for rtok and ketch
+- T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
+- T477. TUI: re-index and remove projects (counterpart of the web actions)
+- T521. MiMo Desktop variant of the `mimo` host
 - T531. Make the archive reference returned by read dedup expandable
 - T532. Preserve typed content and message fields in the direct cache key
 - T533. Scope cached responses to the resolved upstream request target
@@ -24,7 +86,11 @@
 - T557. Reject side-effect variants of nominally read-only shell commands
 - T558. Fail open for a sole skill installation scoped to another project
 - T559. Recognize YAML-quoted host keys before digesting skills
-- T560. Make the TOON test decoder handle quoted comma cells
+- T640. Make the TOON test decoder handle quoted comma cells
+- T641. TUI: folded-target counter in a one-project view
+- T641.1. TUI: one-project node supply (DrawnNode list, cap and `more`) from the graph/index data
+- T641.2. TUI: one-project drill view, keys and rendering
+- T641.3. TUI: wire the folded counter, delete the `cfg(test)` `set_drawn`, update surface_parity
 - T562. Abort memory sync when an existing host file cannot be read
 - T563. Key memory-sync protection by the complete destination path
 - T564. Keep memory-sync note titles from becoming block delimiters
@@ -37,13 +103,19 @@
 - T573. Apply terminal call state even when the live event list is capped
 - T574. Decode SPA asset URL paths before looking up filenames
 - T576. Bind Doctor web writes to the confirmed preview
+- T576.1. Bind Doctor apply to confirmed entry identities and file versions (Rust, fake-fs tests)
+- T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
 - T577. Protect nested package-manager lockfiles during junk cleanup
 - T579. Count each transcript once when scanning directory aliases
 - T580. Include report metadata and anchors in the AI output budget
 - T581. Filter actionable report sinks before applying the top-ten limit
 - T583. Make Batch result accounting idempotent across downloads
+- T583.1. Result identity and unique persistence for Anthropic Batch results (migration, Store, record)
+- T583.2. OpenAI output-file identity, partial-download top-up and legacy-row compatibility
 - T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
 - T586. Resolve local relative remotes before deriving project identity
+- T586.1. Resolve local relative/absolute/file-URL remotes to one absolute identity (project.rs)
+- T586.2. Reconcile persisted legacy relative keys for task counters and claims
 - T587. Let an explicit report --format md override configuration
 - T589. Track log generations without using their first line as identity
 - T590. Preserve filesystem semantics for parent segments after symlinks
@@ -80,59 +152,3 @@
 - T637. Route filter text before global TUI shortcuts
 - T638. Bound benchmark output draining after the child exits
 - T639. Keep the selected Calls row visible in the TUI
-- T124. Realized `tools_rewrite` saving as a dated `research.md` row
-
-- T131. Measure the spawn brief: cost row and on/off re-read share
-- T132. Ship a Haiku scout agent definition with the Claude Code plugin
-- T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
-
-- T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
-- T262.3. Codex: spawn brief on `SubagentStart`
-- T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
-- T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
-- T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
-- T276. Spinner audit: every place rtok runs an external command and the user waits for its output
-- T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
-- T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
-- T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
-- T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
-- T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
-- T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
-- T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
-- T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
-- T329. Graph page: project selector, auto-added projects and linked projects (epic)
-- T329.50. Graph page: running labels with elapsed counters on the live canvas
-- T356. Never index `$HOME` or `/` as a graph root
-- T369.1. Measure grep_symbol follow-up rate after an opt-in window
-- T370. SessionStart repo map ranked by file-level personalized PageRank
-- T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
-- T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
-- T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
-- T385.9. P28 Phase 2: async compressor on the `internal` lane
-- T394. Run the paid live benches and record them
-- T395. One real session as one OpenTelemetry trace in SigNoz and Maple
-- T396. Verify the usage readers against real files
-- T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T413. More agent hosts: popular agents rtok does not install into yet
-- T413.3. `rtok agents install droid` — Factory Droid
-- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
-- T413.5. `rtok agents install amp` — Amp
-- T413.6. `rtok agents install goose` — Goose
-- T413.7. `rtok agents install continue` — Continue
-- T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-- T413.9. `rtok agents install junie` — JetBrains Junie
-- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
-- T413.11. `rtok agents install crush` — Crush
-- T413.12. `rtok agents install warp` — Warp
-- T413.13. `rtok agents install trae` — Trae
-- T413.14. `rtok agents install openhands` — OpenHands
-- T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
-- T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-- T416. Shared `change-preview` crate for dry-run output
-- T428. SessionStart hook back under the 10 ms budget
-- T436.3. Shared operation-icon crate for rtok and ketch
-- T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T477. TUI: re-index and remove projects (counterpart of the web actions)
-- T521. MiMo Desktop variant of the `mimo` host
-- T561. TUI: folded-target counter in a one-project view
