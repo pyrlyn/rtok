@@ -444,6 +444,8 @@ dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (ho
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
 [setup.droid]
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: пользовательский файл MCP-серверов (mcpServers)
+[setup.kiro]
+mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 [setup.openhands]
 mcp_path      = "~/.openhands/mcp.json"     # OpenHands: пользовательский файл MCP-серверов (mcpServers)
 

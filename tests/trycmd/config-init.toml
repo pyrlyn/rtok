@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,570 @@
+@@ -0,0 +1,572 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -393,6 +393,8 @@ target/tmp/t60-2-config-init.toml
 +# workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
 +[setup.droid]
 +# mcp_path      = "~/.factory/mcp.json"        # Factory Droid: user-level MCP servers (mcpServers)
++[setup.kiro]
++# mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 +[setup.openhands]
 +# mcp_path      = "~/.openhands/mcp.json"     # OpenHands: user-level MCP servers (mcpServers)
 +
@@ -575,7 +577,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 570 insertions(+)
+1 file changed, 572 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.
