@@ -8,13 +8,30 @@
 //! already archived by `archive` are replaced in-context with a deterministic extractive
 //! summary. The archive row is unchanged; `expand <id>` always returns the original bytes.
 
+use std::cell::RefCell;
+
 use serde_json::Value;
+
+pub mod llm;
+pub mod must_keep;
+pub mod queue;
 
 use rtok_plugin_sdk::{
     Class, Ctx, DashboardPage, Manifest, Measurement, Plugin, Surface, ToolResultRef, WireRequest,
 };
 
 pub struct Compress;
+
+thread_local! {
+    // The proxy filter runs on one blocking thread per request and has no handle to the proxy,
+    // so the ids it wants summarised wait here until `take_offered` hands them to the queue.
+    static OFFERED: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The archive ids this thread's last proxy filter pass found without a stored summary.
+pub(crate) fn take_offered() -> Vec<String> {
+    OFFERED.with(|o| std::mem::take(&mut *o.borrow_mut()))
+}
 
 impl Plugin for Compress {
     fn manifest(&self) -> Manifest {
@@ -66,16 +83,20 @@ fn summarize_block(tool_use_id: &str, content: &mut Value, cx: &Ctx) -> Option<M
     if pointer != d.pointer {
         return None;
     }
-    let bytes = cx
-        .get_archive(&d.archive_id)
-        .map_err(|e| cx.log("error", "plugin", "compress", &format!("get: {e}")))
-        .ok()?
-        .ok_or_else(|| {
-            cx.log("error", "plugin", "compress", "missing archive payload");
-        })
-        .ok()?;
-    let text = String::from_utf8_lossy(&bytes);
-    let summary = extractive_summary(&d.archive_id, &text);
+    let summary = match stored_view(&d.archive_id, pointer.len(), cx) {
+        Some(view) => view,
+        None => {
+            let bytes = cx
+                .get_archive(&d.archive_id)
+                .map_err(|e| cx.log("error", "plugin", "compress", &format!("get: {e}")))
+                .ok()?
+                .ok_or_else(|| {
+                    cx.log("error", "plugin", "compress", "missing archive payload");
+                })
+                .ok()?;
+            extractive_summary(&d.archive_id, &String::from_utf8_lossy(&bytes))
+        }
+    };
     if summary.len() >= pointer.len() {
         return None;
     }
@@ -91,6 +112,32 @@ fn summarize_block(tool_use_id: &str, content: &mut Value, cx: &Ctx) -> Option<M
     };
     *content = Value::String(summary);
     Some(m)
+}
+
+/// The model summary of `archive_id`, as the block the agent sees (T385.9.2). A summary never
+/// changes once stored, so the block is byte-stable from the turn it first appears. While none
+/// exists the id is offered to the background queue and the caller keeps the extractive view;
+/// a summary that would not be shorter than the pointer is no saving and is not used.
+fn stored_view(archive_id: &str, pointer_len: usize, cx: &Ctx) -> Option<String> {
+    let llm = cx.plugin_config::<crate::config::Compress>("compress").llm;
+    if !llm.enabled {
+        return None;
+    }
+    let summary = match cx.archive_summary(archive_id, &llm::version(&llm.model)) {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            OFFERED.with(|o| o.borrow_mut().push(archive_id.to_string()));
+            return None;
+        }
+        Err(e) => {
+            cx.log("error", "plugin", "compress", &format!("summary: {e}"));
+            return None;
+        }
+    };
+    let short = &archive_id[..archive_id.len().min(12)];
+    let view =
+        format!("[compress {short}]\ntype: tool_output\nsummary: {summary}\nexpand({archive_id})");
+    (view.len() < pointer_len).then_some(view)
 }
 
 /// Deterministic extractive ranker — no network, no LLM (D12). Each source line shows up at
@@ -271,5 +318,47 @@ mod tests {
         assert!(facts.starts_with("\n- ERROR: boom"), "{s}");
         assert!(s.len() < 1000, "long lines must be clipped: {}", s.len());
         assert_eq!(s.matches("src/big.rs").count(), 1, "{s}");
+    }
+
+    #[test]
+    fn a_stored_summary_replaces_the_extractive_view_and_a_missing_one_is_offered() {
+        let mut cx = cx("llm", true);
+        cx.config.plugins.compress.llm.enabled = true;
+        let mut values: Vec<Value> = (1..=6)
+            .map(|n| Value::String(big(&format!("t{n}"))))
+            .collect();
+        archive_rewrite(refs(&mut values), &Ctx::new(&cx));
+        let id = cx
+            .archive_decision("tu-1")
+            .unwrap()
+            .expect("decision")
+            .archive_id;
+        let _ = take_offered();
+
+        let mut waiting = values.clone();
+        rewrite(refs(&mut waiting), &Ctx::new(&cx));
+        assert!(waiting[0].as_str().unwrap().contains("narrative:"));
+        assert!(take_offered().contains(&id), "no summary yet: offered");
+
+        let version = llm::version(&cx.config.plugins.compress.llm.model);
+        cx.store
+            .put_archive_summary(&id, &version, "ran 400 lines of shell output")
+            .unwrap();
+        let mut ready = values.clone();
+        rewrite(refs(&mut ready), &Ctx::new(&cx));
+        let view = ready[0].as_str().unwrap();
+        assert!(
+            view.contains("summary: ran 400 lines of shell output"),
+            "{view}"
+        );
+        assert!(view.ends_with(&format!("expand({id})")));
+        assert!(
+            !take_offered().contains(&id),
+            "a summarised id is not offered"
+        );
+
+        let mut again = values.clone();
+        rewrite(refs(&mut again), &Ctx::new(&cx));
+        assert_eq!(again, ready, "the view is byte-stable");
     }
 }
