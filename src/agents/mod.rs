@@ -26,6 +26,7 @@ pub mod continue_dev;
 pub mod copilot;
 pub mod cursor;
 pub mod devin;
+pub mod droid;
 pub mod gemini;
 pub mod goose;
 pub mod grok;
@@ -114,6 +115,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "roo" => Some(&roo::Roo),
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
+        "droid" => Some(&droid::Droid),
         "goose" => Some(&goose::Goose),
         "continue" => Some(&continue_dev::Continue),
         _ => None,

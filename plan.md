@@ -48,7 +48,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
@@ -73,7 +72,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T592 | todo | P2 | 3 | 0% | |
-| T621 | todo | P2 | 5 | 0% | |
 | T623 | todo | P2 | 5 | 0% | |
 
 
@@ -87,21 +85,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T621. Refresh opened LSP documents after their files change
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::did_open](src/plugins/graph/lsp.rs#L511). The first query reads a file and sends `textDocument/didOpen` with version 1. Subsequent calls return immediately if the URI is already in `opened`, before reading the file again. [with_session](src/plugins/graph/lsp.rs#L544) reuses the same live server for the workspace; the module sends no document-change or close notification. Editing a file between queries therefore leaves the peer with the original open-document text.
-
-The isolated probe opened a temporary file containing `old_symbol`, changed it to `new_symbol`, and called the actual `did_open` implementation again. A synthetic protocol peer reported only one notification, still carrying `old_symbol`. This affects repeated queries in a resident MCP session; restarting a server happens to refresh the initial snapshot. T376's lifecycle/fallback work does not cover edits to an already opened document.
-
-Execution plan:
-
-1. Add a fake-peer test that opens, edits and re-queries one URI in the same session; assert the peer receives the new content before the query. Keep an unchanged-file control.
-2. Track each opened document's content/version and send the appropriate full-content change or close/reopen sequence when it changes, respecting the negotiated synchronization capability. Do not mark a document as synchronized before its notification succeeds.
-3. Cover consecutive edits, Unicode, deletion/read failure and session replacement; ensure query results and source ranges cannot silently refer to the old snapshot.
-4. Run focused document synchronization and repeated graph-query tests, then `just check`.
-
-Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
 
 ### T623. Correlate web replies across request timeouts and retries
 
@@ -692,14 +675,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
 
 Check: every sub-task below is closed in `done.md` with its per-host check.
-
-### T413.3. `rtok agents install droid` — Factory Droid
-
-`rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: primary Factory docs for the MCP entry and any hook file; write only documented keys; `src/agents/droid/` plus the host matrix.
 
 ### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 

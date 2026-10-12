@@ -86,6 +86,7 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "droid",
     "goose",
     "continue",
 ];
@@ -790,6 +791,7 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        droid: SetupDroid = SetupDroid::default(),
         goose: SetupGoose = SetupGoose::default(),
         r#continue: SetupContinue = SetupContinue::default(),
     }
@@ -956,6 +958,11 @@ section! {
         dir: PathBuf = p("~/.codebuddy"),
         workbuddy_dir: PathBuf = p("~/.workbuddy"),
     }
+}
+
+section! {
+    /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
+    SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
 }
 
 section! {
@@ -1710,6 +1717,7 @@ impl Config {
             setup.goose.config_path,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
+            setup.droid.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
