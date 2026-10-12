@@ -959,6 +959,14 @@
         "action": {
           "$ref": "#/$defs/DoctorAction"
         },
+        "confirmed": {
+          "description": "For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with\none the files no longer produce, nothing is written and a fresh plan comes back.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "selection": {
           "$ref": "#/$defs/Selection",
           "default": {
@@ -969,7 +977,8 @@
       },
       "required": [
         "action",
-        "selection"
+        "selection",
+        "confirmed"
       ]
     },
     "DrillEdge": {
@@ -1467,13 +1476,25 @@
           "type": "integer",
           "format": "int32"
         },
+        "replan": {
+          "description": "Set when nothing was written because the files no longer match the confirmed preview:\nthe fresh preview, which needs its own confirmation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "text": {
           "type": "string"
         }
       },
       "required": [
         "text",
-        "code"
+        "code",
+        "replan"
       ]
     },
     "Format": {
@@ -2105,12 +2126,17 @@
           "items": {
             "type": "string"
           }
+        },
+        "token": {
+          "description": "Names this preview (its selected entries and their diff): `apply` writes only when the\ntoken it is given is the one the fresh rescan produces.",
+          "type": "string"
         }
       },
       "required": [
         "items",
         "diff",
-        "refused"
+        "refused",
+        "token"
       ]
     },
     "Planned": {

@@ -106,6 +106,7 @@ Project programs and direct packages from the manifests.
 | figment | local | https://crates.io/crates/figment | Config |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |
 | globset | local | https://crates.io/crates/globset | T329.7: workspace member globs of project references; already in the tree through `ignore` |
+| same-file | local | https://crates.io/crates/same-file | T589: `logs watch` tells a rotated log from the file it was reading by file identity (inode / Windows file index); already in the tree through `ignore` |
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
@@ -123,6 +124,7 @@ Project programs and direct packages from the manifests.
 | notify | local | https://crates.io/crates/notify | Rust dependency |
 | owo-colors | local | https://crates.io/crates/owo-colors | Rust dependency |
 | pathdiff | local | https://crates.io/crates/pathdiff | Relative path between two paths |
+| percent-encoding | local | https://crates.io/crates/percent-encoding | T574: decode percent-escaped SPA asset URL paths |
 | printpdf | local | https://crates.io/crates/printpdf | Rust dependency |
 | proptest | local | https://crates.io/crates/proptest | T331.5: property test that `doctor --fix` leaves every byte outside the removed hook unchanged |
 | portable-pty | local | https://crates.io/crates/portable-pty | T331.7: pseudo-terminal for the `doctor --fix` checklist test (dev-dependency) |

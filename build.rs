@@ -34,14 +34,41 @@ fn main() {
         };
         println!("cargo:rustc-link-arg-bins={arg}");
     }
-    // Rebuild when HEAD moves; skip the hints when there is no repository (a missing
-    // path would make cargo rerun this script on every build).
-    for p in [".git/HEAD", ".git/refs/heads", ".git/packed-refs"] {
-        if Path::new(p).exists() {
-            println!("cargo:rerun-if-changed={p}");
+    git_rerun_hints();
+    web_bundle();
+}
+
+/// Rebuild when HEAD moves. In a linked worktree `.git` is a file: HEAD lives in the
+/// worktree's own git directory while branches and `packed-refs` live in the common one, so ask
+/// git where they are. Only existing paths are named: a missing one makes cargo rerun this
+/// script on every build, and a source archive without a repository has none.
+fn git_rerun_hints() {
+    let dirs = Command::new("git")
+        .args([
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-dir",
+            "--git-common-dir",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let mut dirs = dirs.lines().map(Path::new);
+    let (git_dir, common) = match (dirs.next(), dirs.next()) {
+        (Some(git_dir), Some(common)) => (git_dir, common),
+        _ => (Path::new(".git"), Path::new(".git")),
+    };
+    for p in [
+        git_dir.join("HEAD"),
+        common.join("refs/heads"),
+        common.join("packed-refs"),
+    ] {
+        if p.exists() {
+            println!("cargo:rerun-if-changed={}", p.display());
         }
     }
-    web_bundle();
 }
 
 /// The built SPA `src/web/spa.rs` embeds.

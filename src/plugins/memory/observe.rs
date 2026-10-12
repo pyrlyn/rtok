@@ -148,15 +148,18 @@ fn extract_files(tool_name: &str, input: &Value) -> Vec<String> {
     out
 }
 
-/// Build the stored observation from a tool call. Input and output are truncated
+/// Build the stored observation from a tool call. Input and output are scrubbed, then truncated
 /// before they are joined so a large tool result is not copied into the note.
 pub fn synthesize(tool_name: &str, hook: &str, input: &Value, output: &Value) -> Synthesized {
     let is_error = output.get("is_error").and_then(Value::as_bool) == Some(true)
         || output.get("error").is_some();
     let input_str = stringify(input);
     let output_str = stringify(output);
-    let narrative_parts = [truncate(&input_str, 200), truncate(&output_str, 200)]
+    // Scrub the whole field first: a cut after the scrubber would drop a private block's closing
+    // tag or a secret's tail and leave the rest readable.
+    let narrative_parts = [input_str, output_str]
         .into_iter()
+        .map(|s| truncate(&strip_private(&s), 200))
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" | ");
@@ -170,7 +173,7 @@ pub fn synthesize(tool_name: &str, hook: &str, input: &Value, output: &Value) ->
             },
             TITLE_MAX,
         ),
-        narrative: strip_private(&truncate(&narrative_parts, NARRATIVE_MAX)),
+        narrative: truncate(&narrative_parts, NARRATIVE_MAX),
         files: extract_files(tool_name, input),
     }
 }
@@ -302,6 +305,23 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// T617: the store now yields each file-linked observation once, so fusion keeps both
+    /// distinct hits and still boosts one that is in the text list as well.
+    #[test]
+    fn fusion_keeps_distinct_file_hits_and_boosts_cross_list_ones() {
+        let hit = |id| ObsHit {
+            id,
+            title: "t".into(),
+            session_id: "s".into(),
+            snippet: String::new(),
+        };
+        let linked = [hit(2), hit(1)];
+        let ids =
+            |lists: &[&[ObsHit]]| -> Vec<i32> { rrf_obs(lists, 10).iter().map(|h| h.id).collect() };
+        assert_eq!(ids(&[&[], &linked]), vec![2, 1]);
+        assert_eq!(ids(&[&[hit(1)], &linked]), vec![1, 2]);
+    }
+
     #[test]
     fn bash_becomes_a_short_command_observation() {
         let s = synthesize(
@@ -314,6 +334,35 @@ mod tests {
         assert_eq!(s.title, "Bash");
         assert!(s.narrative.contains("cargo test"), "{}", s.narrative);
         assert!(s.narrative.chars().count() <= NARRATIVE_MAX);
+    }
+
+    /// T618: truncation used to cut a long private block's closing tag (and a secret's tail)
+    /// before the scrubber ran, leaving the private prefix in the stored narrative.
+    #[test]
+    fn private_content_is_scrubbed_before_truncation_cuts_its_delimiters() {
+        let long = |body: &str| format!("<private>{body}{}</private> public", "z".repeat(300));
+        let secret = format!("{}sk-ant-{}", "x".repeat(190), "a".repeat(30));
+        let cases = [
+            (json!({"command": long("SYNTH_INPUT")}), json!("ok")),
+            (json!({"command": "echo"}), json!(long("SYNTH_OUTPUT"))),
+            (json!({"command": "echo"}), json!(secret)),
+            (json!({"command": secret}), json!("ok")),
+        ];
+        for (input, output) in cases {
+            let s = synthesize("Bash", "post_tool_use", &input, &output);
+            for leak in ["SYNTH_", "<private>", "sk-ant-"] {
+                assert!(!s.narrative.contains(leak), "{leak} in {}", s.narrative);
+            }
+            assert!(s.narrative.chars().count() <= NARRATIVE_MAX);
+        }
+        let s = synthesize(
+            "Bash",
+            "post_tool_use",
+            &json!({"command": "echo"}),
+            &json!(long("SYNTH_OUTPUT")),
+        );
+        assert!(s.narrative.contains("[REDACTED]"), "{}", s.narrative);
+        assert!(s.narrative.contains("public"), "{}", s.narrative);
     }
 
     #[test]

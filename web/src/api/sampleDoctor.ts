@@ -35,7 +35,7 @@ const brokenIn = (source: string, shared: boolean): Item => ({
 
 export interface MockMachine {
   plan(selection: Selection): Plan;
-  apply(selection: Selection): Fixed;
+  apply(selection: Selection, confirmed: string): Fixed;
 }
 
 export function mockMachine(): MockMachine {
@@ -63,24 +63,32 @@ export function mockMachine(): MockMachine {
     }));
   };
   const chosen = (sel: Selection) => items(sel).filter((i) => i.selected);
+  const plan = (sel: Selection): Plan => {
+    const picked = chosen(sel);
+    const files = [...new Set(picked.map((i) => i.source))];
+    const diff = files
+      .map(
+        (f) =>
+          `--- ${f}\n+++ ${f}\n${picked
+            .filter((i) => i.source === f)
+            .map((i) => `-  ${i.path}: ${i.label}`)
+            .join("\n")}`,
+      )
+      .join("\n");
+    const token = [...picked.map((i) => i.source + i.path), diff].join("\0");
+    return { items: items(sel), diff, refused: [], token };
+  };
   return {
-    plan(sel) {
-      const picked = chosen(sel);
-      const files = [...new Set(picked.map((i) => i.source))];
-      const diff = files
-        .map(
-          (f) =>
-            `--- ${f}\n+++ ${f}\n${picked
-              .filter((i) => i.source === f)
-              .map((i) => `-  ${i.path}: ${i.label}`)
-              .join("\n")}`,
-        )
-        .join("\n");
-      return { items: items(sel), diff, refused: [] };
-    },
-    apply(sel) {
+    plan,
+    apply(sel, confirmed) {
+      const now = plan(sel);
+      // The real server refuses a confirmation of a preview the files no longer produce.
+      if (now.token !== confirmed) {
+        return { code: 1, text: "The files changed since the preview.\n", replan: now };
+      }
       const picked = chosen(sel);
       return {
+        replan: null,
         code: 0,
         text: `${picked.length} ${picked.length === 1 ? "entry" : "entries"} removed from ${new Set(picked.map((i) => i.source)).size} file(s); backups kept in _backup/\n`,
       };

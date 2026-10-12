@@ -160,6 +160,7 @@ rmcp = { version = "3.2", features = ["transport-streamable-http-server"] } # st
 subtle = "2.6" # constant-time bearer-token compare for `rtok mcp --http` (T401); already in the tree via rustls
 url = { workspace = true } # file:// MCP roots → path (T263)
 ignore = "0.4" # gitignore-aware walk for search/tree (T4.5)
+same-file = "1.0" # T589: `logs watch` tells a rotated log file from the one it was reading by file identity, not by its text; already in the tree through `ignore`
 globset = { workspace = true } # workspace member globs of project references (T329.7)
 serde-saphyr = "1.3.0" # `pnpm-workspace.yaml` of project references (T329.7); maintained, serde_yaml is deprecated
 notify = "9.0.0-rc.5" # recursive file watching for the graph background indexer (T8.16); 9 drops windows-sys 0.60 (T223)
@@ -172,8 +173,9 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "t
 axum = { version = "0.8.9", features = ["ws"] } # dashboard WebSocket (P19); proxy HTTP unchanged
 rust-embed = { version = "8.12", default-features = false, features = ["debug-embed", "interpolate-folder-path"] } # the React SPA inside the binary, every profile (T310.9)
 mime_guess = "2" # Content-Type for the SPA's files, embedded or read from RTOK_WEB_DIST
+percent-encoding = "2" # decode SPA asset URL paths (T574); already in the lock via url/reqwest
 futures-util = "0.3.34"
-ratatui = "0.30.2" # `rtok tui`, the terminal rendering of the D23 model (T15.1); default backend is crossterm
+ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] } # `rtok tui`, the terminal rendering of the D23 model (T15.1); default backend is crossterm; the feature gives Paragraph::line_count, the exact wrapped-row count the panel scroll range needs (T619)
 inquire = { version = "0.9", default-features = false, features = ["crossterm"] } # `rtok completions` shell picker (T408): maintained (0.9.4, 2026-02), most-used prompt crate; shares the crossterm 0.29 copy below, no fuzzy/macros
 crossterm = "0.29" # key and tick events for the TUI loop (T15.1); same major as ratatui 0.30's backend, so one copy links
 reqwest = { version = "0.13.4", default-features = false, features = ["stream", "rustls", "blocking"] } # blocking: the sync task adapters (T441.7)

@@ -8,12 +8,15 @@
 //! written by [`rtok_log`]; the `logs` table keeps the same lines as rows for `rtok otel`.
 //! [`record`] is the one funnel both come out of.
 
+use rtok_sys::proc::{Output, ProgressRunner};
+
 use crate::config::Config;
 use crate::store::Store;
+use same_file::Handle;
 use std::fs;
-use std::io::{ErrorKind, Write};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Stdio};
 use std::thread;
 use std::time::Duration;
 
@@ -203,8 +206,8 @@ impl Tspin {
         if !wanted {
             return None;
         }
-        Command::new("tspin")
-            .arg("--print")
+        ProgressRunner::quiet("tspin", ["--print"])
+            .output(Output::Inherit)
             .stdin(Stdio::piped())
             .spawn()
             .ok()
@@ -320,8 +323,7 @@ pub fn watch<W: Write>(
     // `tail_with`, with the rotated history above it) and the follow state. A line written
     // after this read is new to both; a line in it is old to both — never shown twice, never
     // skipped.
-    let live = whole_lines_of(&cfg.log.path);
-    let mut follow = Follow::primed(&live);
+    let (mut follow, live) = Follow::primed(&cfg.log.path);
     let mut window: Vec<String> = tail_with(&live, &cfg.log.path, n); // newest first
     let mut shown = window.len(); // rows already printed; piped rows keep counting past them
     let mut first = true;
@@ -366,15 +368,15 @@ pub fn watch<W: Write>(
 }
 
 /// Incremental reader for the live log file across rotations (T24.3). Reads only `path` — the
-/// rotated siblings are history `rtok logs` already shows — and detects T24.0's rotation
-/// (`path` renamed to `path.1`, the next write recreating `path`) by content, not inode: the
-/// file at `path` is the one we were reading iff its first line is ours and it holds at least
-/// as many lines. Anything else is a new file, read from its start — after carrying the tail of
-/// ours over from wherever the rename left it.
+/// rotated siblings are history `rtok logs` already shows. It keeps the file it was reading
+/// open (T589): a rotation (T24.0: `path` renamed to `path.1`, the next write recreating
+/// `path`) is `path` no longer naming that file, by file identity and not by what the lines say
+/// — two generations can open with the same line — and the unread tail of the old file comes
+/// off the open handle, wherever the rename left it or even once retention has deleted it.
 #[derive(Default)]
 pub struct Follow {
-    first: Option<String>, // the first line of the file we were reading
-    consumed: usize,       // of its lines, the ones already returned
+    reading: Option<Handle>, // the file we were reading
+    consumed: usize,         // of its lines, the ones already returned
 }
 
 impl Follow {
@@ -382,59 +384,84 @@ impl Follow {
         Self::default()
     }
 
-    /// A follow already caught up with `live`: every line of it counts as shown, matching the
-    /// first screen built from the same read — one read for both, so the two cannot disagree
-    /// about what was on disk and repeat or lose the line written between two reads.
-    pub fn primed(live: &[String]) -> Self {
-        Self {
-            first: live.first().cloned(),
-            consumed: live.len(),
-        }
+    /// A follow already caught up with `path`, and the lines it holds: every one of them counts
+    /// as shown, matching the first screen built from the same read — one read for both, so
+    /// the two cannot disagree about what was on disk and repeat or lose the line written
+    /// between two reads. A file that is not there yet primes an empty follow.
+    pub fn primed(path: &Path) -> (Self, Vec<String>) {
+        let Some((handle, live)) = open_lines(path) else {
+            return (Self::new(), Vec::new());
+        };
+        let consumed = live.len();
+        let follow = Self {
+            reading: Some(handle),
+            consumed,
+        };
+        (follow, live)
     }
 
     /// The lines of `path` written since the last call, oldest first. A file renamed away and
-    /// not yet recreated reads as empty and keeps its state — the state is what names the old
-    /// file in `.1` when the carry comes — so whatever appears at `path` next is read as the
-    /// new file it is.
+    /// not yet recreated reads as empty and keeps its state, so whatever appears at `path`
+    /// next is read as the new file it is.
     pub fn poll(&mut self, path: &Path) -> Vec<String> {
-        let mut lines = match fs::read(path) {
-            Ok(bytes) => whole_lines(&bytes),
-            // A file that is not there (renamed away, T24.0) reads as empty and keeps its
-            // state: the state is what names the old file in `.1` when the carry comes. A file
-            // that cannot be read now is a delay, not a rotation.
-            Err(_) => return Vec::new(),
+        // A file that is not there (renamed away, T24.0) or cannot be read now is a delay,
+        // not a rotation.
+        let Some((handle, mut lines)) = open_lines(path) else {
+            return Vec::new();
         };
-        let ours = self.first.as_deref() == lines.first().map(String::as_str);
-        if ours && lines.len() >= self.consumed {
-            let at = self.consumed;
+        if self.reading.as_ref() == Some(&handle) {
+            // Fewer lines than consumed: the same file was truncated in place; start over.
+            let at = if lines.len() >= self.consumed {
+                self.consumed
+            } else {
+                0
+            };
             self.consumed = lines.len();
             return lines.split_off(at); // `split_off` truncates, so the count comes first
         }
-        // A rotation: carry the tail of the file we were reading out of its rotated siblings —
-        // a rotation between two polls must cost no line — then read the newcomer from its
-        // start. `nth` runs newest-old first, so the pieces reverse into chronology.
+        // A rotation: carry the tail of the file we were reading — a rotation between two polls
+        // must cost no line — then read the newcomer from its start. `nth` runs newest-old
+        // first, so the generations that rotated past us between polls reverse into chronology.
         let mut pieces: Vec<Vec<String>> = Vec::new();
         for i in 1.. {
-            let mut sibling = match fs::read(nth(path, i)) {
-                Ok(bytes) => whole_lines(&bytes),
-                Err(_) => break, // rotation is contiguous (`tail` counts on that too)
+            // Rotation is contiguous (`tail` counts on that too).
+            let Some((sibling, sibling_lines)) = open_lines(&nth(path, i)) else {
+                break;
             };
-            if sibling.first().map(String::as_str) == self.first.as_deref() {
-                let at = self.consumed.min(sibling.len());
-                pieces.push(sibling.split_off(at)); // ours: only what we had not returned
-                break; // older files were fully returned before they rotated
+            if self.reading.as_ref() == Some(&sibling) {
+                break; // ours: older files were fully returned before they rotated
             }
-            pieces.push(sibling); // rotated past us between polls: all of it is new
+            pieces.push(sibling_lines); // rotated past us between polls: all of it is new
         }
         pieces.reverse();
-        *self = Self {
-            first: lines.first().cloned(),
-            consumed: lines.len(), // the newcomer is returned whole, so all of it is consumed
-        };
-        let mut fresh = pieces.concat();
+        let mut fresh = Vec::new();
+        if let Some(old) = self.reading.as_mut()
+            && let Some(mut tail) = read_lines(old.as_file_mut())
+        {
+            fresh = tail.split_off(self.consumed.min(tail.len())); // only what we had not returned
+        }
+        fresh.extend(pieces.concat());
+        // The newcomer is returned whole, so all of it is consumed.
+        self.consumed = lines.len();
+        self.reading = Some(handle);
         fresh.extend(lines);
         fresh
     }
+}
+
+/// Open `path` and read its whole lines through that one handle, so the identity and the lines
+/// describe the same file even if `path` is renamed between the two.
+fn open_lines(path: &Path) -> Option<(Handle, Vec<String>)> {
+    let mut handle = Handle::from_path(path).ok()?;
+    let lines = read_lines(handle.as_file_mut())?;
+    Some((handle, lines))
+}
+
+fn read_lines(file: &mut fs::File) -> Option<Vec<String>> {
+    let mut bytes = Vec::new();
+    file.seek(SeekFrom::Start(0)).ok()?;
+    file.read_to_end(&mut bytes).ok()?;
+    Some(whole_lines(&bytes))
 }
 
 /// Whole lines of a byte string, dropping a half-written tail: the sink's `writeln!` lands as
@@ -754,7 +781,7 @@ mod tests {
     /// `Follow::primed` over the same read `watch` makes: everything on disk now is the first
     /// screen's to show, not the loop's to emit.
     fn primed_at(path: &Path) -> Follow {
-        Follow::primed(&whole_lines_of(path))
+        Follow::primed(path).0
     }
 
     #[test]
@@ -819,6 +846,71 @@ mod tests {
             !got.iter().any(|l| l.contains("already-emitted")),
             "no line twice: {got:?}"
         );
+    }
+
+    fn append_raw(path: &Path, text: &str) {
+        let mut f = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+        f.write_all(text.as_bytes()).unwrap();
+    }
+
+    /// T589: a new generation that opens with the same line, and as many lines, is still a new file.
+    #[test]
+    fn a_rotation_is_not_missed_when_both_generations_start_alike() {
+        let dir = tmp("follow-same-first");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rtok.log");
+        append_raw(&path, "same\nold-shown\n");
+        let mut f = primed_at(&path);
+        append_raw(&path, "old-unseen\n");
+        fs::rename(&path, nth(&path, 1)).unwrap();
+        append_raw(&path, "same\nnew-unseen\n");
+        assert_eq!(f.poll(&path), ["old-unseen", "same", "new-unseen"]);
+        assert!(f.poll(&path).is_empty());
+    }
+
+    /// T589: an empty replacement between polls must not make the next poll replay the old file.
+    #[test]
+    fn an_empty_replacement_keeps_the_generation_boundary() {
+        let dir = tmp("follow-empty-gen");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rtok.log");
+        append_raw(&path, "same\nold-shown\n");
+        let mut f = primed_at(&path);
+        append_raw(&path, "old-unseen\n");
+        fs::rename(&path, nth(&path, 1)).unwrap();
+        fs::write(&path, "").unwrap();
+        assert_eq!(f.poll(&path), ["old-unseen"]);
+        assert!(f.poll(&path).is_empty());
+        append_raw(&path, "same\n");
+        assert_eq!(f.poll(&path), ["same"], "no replay of the rotated file");
+        append_raw(&path, "half-written");
+        assert!(
+            f.poll(&path).is_empty(),
+            "a line is a line once its newline lands"
+        );
+    }
+
+    /// T589: the unread tail of the old file survives retention deleting it, and a file
+    /// truncated in place is read again from its start.
+    #[test]
+    fn the_old_tail_survives_deletion_and_truncation_restarts() {
+        let dir = tmp("follow-deleted");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rtok.log");
+        append_raw(&path, "a\nb\n");
+        let mut f = primed_at(&path);
+        append_raw(&path, "c\n");
+        fs::remove_file(&path).unwrap(); // rotated off and deleted before the next poll
+        append_raw(&path, "d\n");
+        assert_eq!(f.poll(&path), ["c", "d"]);
+        append_raw(&path, "d2\n");
+        assert_eq!(f.poll(&path), ["d2"]);
+        fs::write(&path, "e\n").unwrap(); // truncated in place: same file, fewer lines
+        assert_eq!(f.poll(&path), ["e"]);
     }
 
     #[test]

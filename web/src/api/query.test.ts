@@ -285,22 +285,22 @@ describe("?sample source", () => {
 
 describe("doctor requests", () => {
   const selection = { keep: [], toggled: [{ source: "/p", path: "hooks.Stop[0]" }] };
-  const plan = { items: [], diff: "", refused: [] };
+  const plan = { items: [], diff: "", refused: [], token: "t1" };
 
   test("a plan and an apply each wait for their own frame, in the order asked", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const planned = api.doctorPlan(selection);
-    const applied = api.doctorApply(selection);
+    const applied = api.doctorApply(selection, "t1");
     expect(s.sent).toEqual([
-      { doctor: { action: "plan", selection } },
-      { doctor: { action: "apply", selection } },
+      { doctor: { action: "plan", selection, confirmed: null } },
+      { doctor: { action: "apply", selection, confirmed: "t1" } },
     ]);
-    s.server().onFrame({ type: "doctorfixed", fixed: { text: "done", code: 0 } });
+    s.server().onFrame({ type: "doctorfixed", fixed: { text: "done", code: 0, replan: null } });
     s.server().onFrame({ type: "doctorplan", plan });
     await expect(planned).resolves.toEqual(plan);
-    await expect(applied).resolves.toEqual({ text: "done", code: 0 });
+    await expect(applied).resolves.toEqual({ text: "done", code: 0, replan: null });
   });
 
   test("a refusal, a closed link and a missing link fail the request", async () => {
@@ -310,7 +310,7 @@ describe("doctor requests", () => {
     const refused = api.doctorPlan(selection);
     s.server().onFrame({ type: "message", text: "doctor needs an action and a selection" });
     await expect(refused).rejects.toThrow("doctor needs");
-    const dropped = api.doctorApply(selection);
+    const dropped = api.doctorApply(selection, "t1");
     s.server().onState("closed");
     await expect(dropped).rejects.toThrow("connection closed");
     s.setOpen(false);
@@ -332,9 +332,25 @@ describe("doctor requests", () => {
       toggled: [{ source: "/work/app/.claude/settings.json", path: "hooks.Stop[0].hooks[0]" }],
     });
     expect(flipped.diff).toContain("/work/app");
-    const done = await api.doctorApply({ keep: [], toggled: [] });
+    const done = await api.doctorApply({ keep: [], toggled: [] }, first.token);
     expect(done).toMatchObject({ code: 0 });
     expect(done.text).toContain("2 entries removed");
+  });
+
+  test("the sample machine writes nothing for a confirmation of another preview", async () => {
+    const api = createApi(queryClient, connectSample);
+    api.open();
+    const none = { keep: [], toggled: [] };
+    const first = await api.doctorPlan(none);
+    const flipped = {
+      keep: [],
+      toggled: [{ source: "/work/app/.claude/settings.json", path: "hooks.Stop[0].hooks[0]" }],
+    };
+    const refused = await api.doctorApply(flipped, first.token);
+    expect(refused).toMatchObject({ code: 1 });
+    expect(refused.replan?.diff).toContain("/work/app");
+    expect(refused.text).not.toContain("removed");
+    await expect(api.doctorApply(none, "")).resolves.toMatchObject({ code: 1 });
   });
 });
 

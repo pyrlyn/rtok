@@ -145,7 +145,7 @@ impl HookInput {
         if self.tool_input.is_none()
             && let Some(args) = self.extra.remove("toolArgs")
         {
-            self.tool_input = Some(args);
+            self.tool_input = Some(decode_tool_args(args));
         }
         if self.tool_response.is_none()
             && let Some(result) = self.extra.remove("toolResult")
@@ -478,6 +478,19 @@ fn take_jsonish(extra: &mut Map<String, Value>, key: &str) -> Option<Value> {
     match v {
         Value::String(s) => serde_json::from_str(&s).ok().or(Some(Value::String(s))),
         other => Some(other),
+    }
+}
+
+/// The Copilot CLI documents `toolArgs` as a JSON *string*; the plugins read `tool_input` as
+/// an object. Only a string that parses to an object is replaced, so a malformed or
+/// non-object payload reaches them exactly as it arrived.
+fn decode_tool_args(args: Value) -> Value {
+    match args {
+        Value::String(s) => match serde_json::from_str::<Map<String, Value>>(&s) {
+            Ok(obj) => Value::Object(obj),
+            Err(_) => Value::String(s),
+        },
+        other => other,
     }
 }
 
@@ -819,6 +832,56 @@ mod tests {
         assert_eq!(after.tool_name.as_deref(), Some("Read"));
         assert!(after.post_tool().is_some());
         assert_eq!(copilot_tool_name("web_search"), "web_search");
+    }
+
+    /// T611: the documented Copilot CLI payload carries `toolArgs` as a JSON string.
+    #[test]
+    fn copilot_decodes_serialized_tool_args() {
+        let adapted = |event: &str, tool: &str, args: Value| {
+            let mut input: HookInput = serde_json::from_value(serde_json::json!({
+                "sessionId": "cp-3", "toolName": tool, "toolArgs": args
+            }))
+            .unwrap();
+            input.adapt_copilot(event);
+            input
+        };
+        for event in ["preToolUse", "PreToolUse", "postToolUse", "PostToolUse"] {
+            let want = serde_json::json!({"command": "git status"});
+            let from_string = adapted(event, "bash", Value::String(want.to_string()));
+            let from_object = adapted(event, "bash", want.clone());
+            assert_eq!(from_string.tool_input, Some(want), "{event}");
+            assert_eq!(from_string.tool_input, from_object.tool_input, "{event}");
+        }
+
+        let file = crate::testutil::native_abs("/repo/a.rs");
+        let view = adapted(
+            "preToolUse",
+            "view",
+            Value::String(serde_json::json!({ "path": file }).to_string()),
+        );
+        let key =
+            crate::plugins::guard::cache_key("Read", view.tool_input.as_ref().unwrap(), None, None);
+        // Absolute: since T556 a relative path without a cwd has no guard identity.
+        assert_eq!(key, Some(format!("read\t{file}")));
+
+        // Fail open: anything that is not a JSON object arrives untouched.
+        for raw in ["{\"command\":", "42", "\"x\"", ""] {
+            let odd = adapted("preToolUse", "bash", Value::String(raw.into()));
+            assert_eq!(odd.tool_input, Some(Value::String(raw.into())), "{raw:?}");
+        }
+        assert!(
+            adapted("preToolUse", "bash", Value::Null)
+                .tool_input
+                .is_some()
+        );
+
+        // An already normalized `tool_input` keeps precedence over `toolArgs`.
+        let mut both: HookInput = serde_json::from_value(serde_json::json!({
+            "tool_input": {"command": "ls"}, "toolArgs": "{\"command\":\"pwd\"}"
+        }))
+        .unwrap();
+        both.adapt_copilot("preToolUse");
+        assert_eq!(both.tool_input.as_ref().unwrap()["command"], "ls");
     }
 
     /// Payloads as https://docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks gives them,

@@ -19,7 +19,7 @@ Five MCP tools instead of seventy-eight, and no per-turn banner.
   `path:line: snippet` (≤ 120 chars).
 - `tree(path, depth=2)` — compact listing with sizes.
 - Re-read dedup: same session, same path, same sha256, same mode/range →
-  `unchanged since <archive_id> (N lines)` (≤ 13 estimated tokens on the T58.1 fixture).
+  `unchanged id <archive_id>` (full 64-char id so `expand` resolves it; ≤ 23 estimated tokens on the T58.1 fixture).
 - Changed re-read (T58.1): a later `read` of a file that changed since the last archive
   returns a unified diff plus `previous <id>` / `expand <id>` of the full file, when the
   diff is below `delta_max_ratio` of the file (default 0.6). Measured 2026-09-18

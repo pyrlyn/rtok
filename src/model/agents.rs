@@ -292,6 +292,46 @@ mod tests {
         );
     }
 
+    /// T613: a session whose first observed event was a sub-agent's still shows its real main
+    /// agent, with the sub-agent nested under it and hidden once it ended.
+    #[test]
+    fn a_session_seen_first_through_a_sub_agent_keeps_its_main_agent() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let sub = store
+            .register_agent(claude, "s1", Some("sub"), Some("/repo"), Some("Bash: ls"))
+            .unwrap();
+        let main = store
+            .register_agent(claude, "s1", None, Some("/repo"), None)
+            .unwrap();
+        let rows = store.agents_of_sessions(&["s1".to_string()]).unwrap();
+        let live = session_views(
+            vec![session("s1", None)],
+            &rows,
+            i64::MAX - 1,
+            i64::MAX / 2,
+            true,
+        );
+        let agent = live[0].agent.as_ref().expect("session agent");
+        assert_eq!(agent.detail.id, main, "the main row represents the session");
+        let subs: Vec<_> = agent
+            .sub_agents
+            .iter()
+            .map(|s| s.detail.id.as_str())
+            .collect();
+        assert_eq!(subs, [sub.as_str()]);
+
+        store.end_agent(&sub, 5).unwrap();
+        let rows = store.agents_of_sessions(&["s1".to_string()]).unwrap();
+        let hidden = session_views(vec![session("s1", None)], &rows, 100, 600, false);
+        let agent = hidden[0].agent.as_ref().unwrap();
+        assert_eq!(
+            agent.detail.id, main,
+            "an ended orphan cannot hide the session"
+        );
+        assert!(agent.sub_agents.is_empty());
+    }
+
     #[test]
     fn state_follows_the_idle_rule() {
         assert_eq!(AgentState::of(None, 990, 1000, 60), AgentState::Live);

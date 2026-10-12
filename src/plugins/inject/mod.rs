@@ -122,25 +122,26 @@ fn read_mode(
     budget: u32,
     rate: f32,
 ) -> Option<String> {
-    let mut f = match std::fs::File::open(path) {
+    let f = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(_) => return builtin.map(str::to_string),
     };
-    let cap = (f64::from(budget) * f64::from(rate)).ceil() as usize + 1;
-    let mut buf = vec![0u8; cap];
-    let mut n = 0usize;
-    while n < cap {
-        match f.read(&mut buf[n..]) {
-            Ok(0) => break,
-            Ok(k) => n += k,
-            Err(_) => return builtin.map(str::to_string),
-        }
+    // The estimator budgets characters, not bytes: keep one character past what fits (so the
+    // fitter still sees an overshoot) and allow UTF-8's widest scalar per character.
+    let chars = (f64::from(budget) * f64::from(rate)).ceil() as usize + 1;
+    let mut buf = Vec::new();
+    let read = f.take(chars.saturating_mul(4) as u64).read_to_end(&mut buf);
+    if read.is_err() {
+        return builtin.map(str::to_string);
     }
-    let mut body = String::from_utf8_lossy(&buf[..n]).into_owned();
-    while body.len() > cap {
-        body.pop();
+    // A read that stops inside a scalar leaves a partial tail; drop it rather than let the
+    // lossy decode turn it into a replacement character.
+    if let Err(e) = std::str::from_utf8(&buf)
+        && e.error_len().is_none()
+    {
+        buf.truncate(e.valid_up_to());
     }
-    Some(body)
+    Some(String::from_utf8_lossy(&buf).chars().take(chars).collect())
 }
 
 /// Pick injections in priority order until the budget. A candidate that starts
@@ -425,5 +426,98 @@ mod tests {
             .unwrap_or("");
         assert!(!ctx.contains("# terse"), "{ctx}");
         assert!(!ctx.contains("# yagni"), "{ctx}");
+    }
+
+    fn mode_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("rtok-t606-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The estimator counts characters, the old read cap counted bytes: a mode that fits the
+    /// token budget lost its tail whenever its characters were wider than one byte.
+    #[test]
+    fn read_mode_keeps_a_fitting_multibyte_mode_whole() {
+        let dir = mode_dir("read");
+        let cx = crate::plugin::Runtime::in_memory("t606").unwrap();
+        let tail = "\nKEEP_THIS_TAIL\n";
+        for (label, unit, n) in [
+            ("ascii", "x", 3000),
+            ("two", "ж", 3000),
+            ("three", "世", 3000),
+            ("four", "😀", 3000),
+        ] {
+            let text = format!("{}{tail}", unit.repeat(n));
+            assert!(cx.estimate(&text, Class::Prose) <= 800, "{label} must fit");
+            let path = dir.join(format!("{label}.md"));
+            std::fs::write(&path, &text).unwrap();
+            assert_eq!(
+                read_mode(&path, None, 800, 4.2).as_deref(),
+                Some(text.as_str()),
+                "{label}"
+            );
+        }
+        let missing = dir.join("missing.md");
+        assert_eq!(
+            read_mode(&missing, Some("builtin"), 800, 4.2).as_deref(),
+            Some("builtin")
+        );
+        assert_eq!(read_mode(&missing, None, 800, 4.2), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_mode_bounds_a_huge_multibyte_file_on_a_character_boundary() {
+        let dir = mode_dir("huge");
+        let path = dir.join("huge.md");
+        std::fs::write(&path, "😀".repeat(1 << 18)).unwrap();
+        // 800 tokens * 4.2 = 3360 characters, plus the one extra that lets the fitter see the overshoot.
+        let body = read_mode(&path, None, 800, 4.2).unwrap();
+        assert_eq!(body.chars().count(), 3361);
+        assert!(!body.contains('\u{fffd}'), "cut inside a character");
+        assert_eq!(read_mode(&path, None, 0, 4.2).unwrap().chars().count(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn session_start_keeps_the_tail_of_a_fitting_unicode_mode() {
+        let dir = mode_dir("hook");
+        let tail = "KEEP_THIS_TAIL";
+        std::fs::write(
+            dir.join("uni.md"),
+            format!("{}\n{tail}\n", "😀".repeat(1000)),
+        )
+        .unwrap();
+        let mut cfg = crate::testutil::config_in(&dir);
+        cfg.plugins.inject.modes_dir = dir.clone();
+        cfg.plugins.inject.modes = vec!["uni".into()];
+        let run = |event: &str, extra: serde_json::Value| {
+            let mut ev = serde_json::json!({"hook_event_name": event, "session_id": "t606"});
+            ev.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            let mut out = Vec::new();
+            crate::hooks::run(event, ev.to_string().as_bytes(), &mut out, &cfg);
+            serde_json::from_slice::<serde_json::Value>(&out)
+                .ok()
+                .and_then(|v| {
+                    v.pointer("/hookSpecificOutput/additionalContext")?
+                        .as_str()
+                        .map(str::to_string)
+                })
+                .unwrap_or_default()
+        };
+        let start = serde_json::json!({"source": "startup"});
+        let (once, twice) = (
+            run("SessionStart", start.clone()),
+            run("SessionStart", start),
+        );
+        assert_eq!(once, twice);
+        assert!(once.contains(tail), "{once}");
+        assert!(!once.contains("dropped:inject"), "{once}");
+        let prompt = run("UserPromptSubmit", serde_json::json!({"prompt": "hi"}));
+        assert!(!prompt.contains(tail), "{prompt}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -628,7 +628,11 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
             plan: crate::doctor::web::plan_here(&cfg, &r.selection),
         },
         DoctorAction::Apply => ServerFrame::DoctorFixed {
-            fixed: crate::doctor::web::apply_here(&cfg, &r.selection),
+            fixed: crate::doctor::web::apply_here(
+                &cfg,
+                &r.selection,
+                r.confirmed.as_deref().unwrap_or_default(),
+            ),
         },
     }
     .to_json()

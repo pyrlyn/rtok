@@ -12,10 +12,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use rtok_plugin_sdk::Ctx;
+use rtok_sys::proc::{Output, ProgressRunner};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -227,10 +228,9 @@ fn each_blob(
     if entries.is_empty() {
         return Ok(());
     }
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["cat-file", "--batch"])
+    let mut child = ProgressRunner::quiet("git", ["cat-file", "--batch"])
+        .cwd(root)
+        .output(Output::Inherit)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -1256,6 +1256,7 @@ mod tests {
     use crate::store::{LinkKind, Origin};
     use serde_json::json;
     use std::fs;
+    use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
         let ok = Command::new("git")
