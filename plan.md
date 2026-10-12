@@ -496,15 +496,19 @@ Execution plan:
 
 ### T641.1. TUI: one-project node supply (DrawnNode list, cap and `more`) from the graph/index data
 
-Done means: a shared module (reusing the web node-selection logic rather than a copy) that supplies the drawn nodes with a cap and the `more` count for one project.
+Check: a shared module (reusing the web node-selection logic rather than a copy) that supplies the drawn nodes with a cap and the `more` count for one project.
 
 ### T641.2. TUI: one-project drill view, keys and rendering
 
-Depends on T641.1. Done means: a drill state in `App` (`src/tui/app.rs`) entered from the projects table, rendered by `src/tui/view.rs::render_graph`, with key navigation and TUI tests for ancestor and "+N more" placement.
+Depends on T641.1.
+
+Check: a drill state in `App` (`src/tui/app.rs`) entered from the projects table, rendered by `src/tui/view.rs::render_graph`, with key navigation and TUI tests for ancestor and "+N more" placement.
 
 ### T641.3. TUI: wire the folded counter, delete the `cfg(test)` `set_drawn`, update surface_parity
 
-Depends on T641.2. Done means: `LiveCalls.drawn` and `more` come from the drill view, `set_drawn` is gone from non-test code (a test-only constructor stays), and `tests/surface_parity.rs` is updated; `just check`.
+Depends on T641.2.
+
+Check: `LiveCalls.drawn` and `more` come from the drill view, `set_drawn` is gone from non-test code (a test-only constructor stays), and `tests/surface_parity.rs` is updated; `just check`.
 
 
 ### T562. Abort memory sync when an existing host file cannot be read
@@ -2136,15 +2140,19 @@ Needs the creator: approve and run I-95 first (still an unapproved idea in `idea
 
 ### T378.1. Baseline `search` p95 on a 50k-file repo (decides go/no-go)
 
-Done means: a divan bench in `benches/` for `search` on a large tree with p50/p95 recorded; if p95 is <= 200 ms the task closes here with that number and T378.2/T378.3 are dropped.
+Check: a divan bench in `benches/` for `search` on a large tree with p50/p95 recorded; if p95 is <= 200 ms the task closes here with that number and T378.2/T378.3 are dropped.
 
 ### T378.2. Trigram postings table and build in the index pass
 
-Depends on T378.1 (go decision). Done means: a Diesel migration (no raw SQL outside the migration), sorted `Vec<u32>` postings per root for text files <= 1 MB built in the graph index pass, incremental update with the file watcher, and the index size growth recorded.
+Depends on T378.1 (go decision).
+
+Check: a Diesel migration (no raw SQL outside the migration), sorted `Vec<u32>` postings per root for text files <= 1 MB built in the graph index pass, incremental update with the file watcher, and the index size growth recorded.
 
 ### T378.3. Prefiltered `search` path, equivalence test and divan bench
 
-Depends on T378.2. Done means: `src/plugins/read/search.rs` takes candidate files from the postings for literals >= 3 bytes and falls back to the full scan for regexes without a literal; an equivalence test (prefiltered vs full scan) over a fixture; the bench shows -50 % p95; `just check`.
+Depends on T378.2.
+
+Check: `src/plugins/read/search.rs` takes candidate files from the postings for literals >= 3 bytes and falls back to the full scan for regexes without a literal; an equivalence test (prefiltered vs full scan) over a fixture; the bench shows -50 % p95; `just check`.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
@@ -2186,11 +2194,13 @@ Needs the creator: API spend for the live arms (same blocker as T394); the offli
 
 ### T385.3.1. `rtok bench` settings suite: per-setting on/off arms from config overlays, dry-run table, offline test
 
-Done means: `suite = "settings"` in `src/bench.rs` (with `[bench]` config and `docs/config.md`) whose arms are each setting off/on, reporting cost per passed task via `stats --price` and pass rate; an offline test with an own fake `claude` (table shape, arm order, dry-run); `just check`. Needs no API spend.
+Check: `suite = "settings"` in `src/bench.rs` (with `[bench]` config and `docs/config.md`) whose arms are each setting off/on, reporting cost per passed task via `stats --price` and pass rate; an offline test with an own fake `claude` (table shape, arm order, dry-run); `just check`. Needs no API spend.
 
 ### T385.3.2. Live runs and one dated `research.md` row per setting (creator spend)
 
-Depends on T385.3.1. Done means: the creator runs the suite with API spend; one dated `research.md` row per setting; settings with net saving and a held pass rate become default-on in a follow-up task.
+Depends on T385.3.1.
+
+Check: the creator runs the suite with API spend; one dated `research.md` row per setting; settings with net saving and a held pass rate become default-on in a follow-up task.
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
