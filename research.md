@@ -2603,6 +2603,18 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
 - No Desktop app is documented, so there is one CLI variant.
 
+### 32.4 Kiro IDE and CLI (T413.4, checked 2026-10-12)
+
+- MCP files: `~/.kiro/settings/mcp.json` (user, "applies globally across all workspaces") and `.kiro/settings/mcp.json` (workspace); both merged, workspace wins. Loading priority on the same page: agent config (`mcpServers` field of the agent JSON, no path given), workspace file, global file. https://kiro.dev/docs/mcp/configuration/
+- Stdio entry: `mcpServers.<name>` with `command` (required), `args`, `env`, `disabled`, `autoApprove`, `disabledTools`. Same page. rtok writes `{command, args}` only.
+- Surfaces: the configuration page and https://kiro.dev/docs/mcp/ carry IDE, CLI and Web tabs, but the fetched text has the file paths under the IDE tab only and states no per-surface path; the page has a Windows note for "Kiro CLI V2" about how stdio commands launch. So the CLI is taken to read the same two files, **unverified** against the CLI itself.
+- Conflict: https://kiro.dev/docs/mcp/registry/ lists "Global: ~/.kiro/mcp.json" and "Workspace: .kiro/mcp.json" for the same scopes. The configuration page is the reference for the file format, so the installer uses `settings/mcp.json`; `[setup.kiro] mcp_path` redirects it. The old `/docs/cli/mcp/` pages are redirects to the unified pages.
+- CLI: binary `kiro-cli`, install `curl -fsSL https://cli.kiro.dev/install | bash`. https://kiro.dev/docs/cli/ . The page names no config directory and no `mcp add` syntax.
+- IDE app: the installation page says to "drag Kiro from Applications to the Trash", so the macOS bundle is `/Applications/Kiro.app` (bundle id not documented); no Windows or Linux install folder is named, so only macOS paths are probed. https://kiro.dev/docs/getting-started/installation/
+- Hooks: JSON files in `.kiro/hooks/` (project) and, for CLI V3, `~/.kiro/hooks/`; each has `version: "v1"` and a `hooks` array of `{name, trigger, matcher, action: {type, command | prompt}, timeout (default 60), enabled}`; triggers named include `PostFileSave`, `PreToolUse`, `PostToolUse`, `Stop`. The command receives session context as JSON on stdin. The page states no exit-code rules and no way for command output to reach the agent's context. https://kiro.dev/docs/hooks/ . Hooks stay `Support::No`.
+- No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
+- Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
+
 ### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
 
 Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.

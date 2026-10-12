@@ -24,6 +24,7 @@ index|observations_dedup|observations|CREATE INDEX observations_dedup ON observa
 index|observations_project_ts|observations|CREATE INDEX observations_project_ts ON observations (project, ts)
 index|project_links_to|project_links|CREATE INDEX project_links_to ON project_links(to_id)
 index|projects_one_selected|projects|CREATE UNIQUE INDEX projects_one_selected ON projects(selected) WHERE selected = 1
+index|sessions_end_seq|sessions|CREATE INDEX sessions_end_seq ON sessions(end_seq)
 index|sqlite_autoindex___diesel_schema_migrations_1|__diesel_schema_migrations|
 index|sqlite_autoindex_agents_1|agents|
 index|sqlite_autoindex_archive_1|archive|
@@ -103,7 +104,7 @@ table|project_links|project_links|CREATE TABLE project_links ( from_id INTEGER N
 table|projects|projects|CREATE TABLE projects ( id INTEGER PRIMARY KEY, root TEXT NOT NULL UNIQUE, name TEXT, origin TEXT NOT NULL CHECK (origin IN ('manual', 'session', 'worktree', 'mcp', 'reference')), created_at INTEGER NOT NULL DEFAULT (unixepoch()), last_used_at INTEGER NOT NULL DEFAULT (unixepoch()), selected INTEGER NOT NULL DEFAULT 0 CHECK (selected IN (0, 1)) )
 table|providers|providers|CREATE TABLE providers ( id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()) )
 table|read_cache|read_cache|CREATE TABLE read_cache ( session TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT NOT NULL, ts INTEGER NOT NULL DEFAULT (unixepoch()), archive_id TEXT, PRIMARY KEY (session, path) )
-table|sessions|sessions|CREATE TABLE sessions ( id TEXT PRIMARY KEY, host_id INTEGER REFERENCES hosts(id), project TEXT, cwd TEXT, source TEXT, started_at INTEGER NOT NULL DEFAULT (unixepoch()), ended_at INTEGER )
+table|sessions|sessions|CREATE TABLE sessions ( id TEXT PRIMARY KEY, host_id INTEGER REFERENCES hosts(id), project TEXT, cwd TEXT, source TEXT, started_at INTEGER NOT NULL DEFAULT (unixepoch()), ended_at INTEGER , end_seq BIGINT NOT NULL DEFAULT 0)
 table|symbol_stale|symbol_stale|CREATE TABLE symbol_stale ( root TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY (root, path) )
 table|symbols|symbols|CREATE TABLE symbols ( id INTEGER PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, line INTEGER NOT NULL, is_def INTEGER NOT NULL, file_sha TEXT NOT NULL , root TEXT NOT NULL DEFAULT '', mtime BIGINT NOT NULL DEFAULT 0, size BIGINT NOT NULL DEFAULT 0, end_line INTEGER NOT NULL DEFAULT 0, scope TEXT NOT NULL DEFAULT '', start_byte INTEGER NOT NULL DEFAULT 0, end_byte INTEGER NOT NULL DEFAULT 0, content_hash TEXT NOT NULL DEFAULT '', signature TEXT NOT NULL DEFAULT '', doc TEXT NOT NULL DEFAULT '')
 table|symbols_fts|symbols_fts|CREATE VIRTUAL TABLE symbols_fts USING fts5 ( name, signature, doc, content = 'symbols', content_rowid = 'id' )

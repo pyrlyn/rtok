@@ -68,6 +68,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".codebuddy",
         ".workbuddy",
         ".factory",
+        ".kiro/settings",
         ".warp",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
@@ -108,6 +109,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.qwen]\ndir = \"{h}/.qwen\"\n\
               [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n\
               [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n\
+              [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n\
               [setup.warp]\nmcp_path = \"{h}/.warp/.mcp.json\"\n"
         ),
     )

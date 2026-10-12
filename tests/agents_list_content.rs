@@ -61,6 +61,8 @@ const EXPECTED_VARIANTS: &[(&str, Kind, &str)] = &[
     ("codebuddy", Kind::Cli, "CodeBuddy Code"),
     ("codebuddy", Kind::Desktop, "WorkBuddy"),
     ("droid", Kind::Cli, "Factory Droid"),
+    ("kiro", Kind::Cli, "Kiro CLI"),
+    ("kiro", Kind::Desktop, "Kiro IDE"),
     ("warp", Kind::Desktop, "Warp"),
 ];
 
