@@ -184,7 +184,7 @@ describe("drill-down page", () => {
         mountRouted(w.connect, "/graph?p=1");
         const status = await screen.findByText("Reading the index…");
         expect(status.getAttribute("aria-busy")).toBe("true");
-        act(() => w.frame(drillReply(graphs(w.sent)[0]!, snapshot().projects!)));
+        act(() => w.answer(drillReply(graphs(w.sent)[0]!, snapshot().projects!)));
         expect(await list()).toBeTruthy();
         expect(screen.queryByText("Reading the index…")).toBeNull();
     });
@@ -194,7 +194,7 @@ describe("drill-down page", () => {
         mountRouted(w.connect, "/graph?p=1");
         const asks = () => graphs(w.sent).length;
         await waitFor(() => expect(asks()).toBe(1));
-        act(() => w.frame(drillReply(graphs(w.sent)[0]!, snapshot().projects!)));
+        act(() => w.answer(drillReply(graphs(w.sent)[0]!, snapshot().projects!)));
         await list();
 
         const moved = snapshot(
