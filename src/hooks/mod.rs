@@ -2036,6 +2036,27 @@ mod tests {
         assert_eq!(child_row.host_session_id, "agent-sess-2");
     }
 
+    /// T613: the first event a store sees of a session may be a sub-agent's; the main
+    /// window's event after it must find the sub-agent already nested under it.
+    #[test]
+    fn a_sub_agent_event_before_the_main_one_still_nests_under_the_main_row() {
+        let (v, stdin, input, cx) = agent_fixture("agent-sess-late-main");
+        let mut child = v.clone();
+        child["agent_id"] = serde_json::Value::String("sub-1".into());
+        let child_stdin = serde_json::to_vec(&child).unwrap();
+        let child_input: HookInput = serde_json::from_slice(&child_stdin).unwrap();
+        let _ = dispatch(&child_stdin, &child_input, &cx);
+        let _ = dispatch(&stdin, &input, &cx);
+        let _ = dispatch(&child_stdin, &child_input, &cx);
+
+        let host_id = cx.host_id().unwrap();
+        let main = cx.store.main_agent(host_id, &cx.session).unwrap().unwrap();
+        let kids = cx.store.agent_children(&main).unwrap();
+        assert_eq!(kids.len(), 1, "{kids:?}");
+        let rows = cx.store.agents_of_sessions(&[cx.session.clone()]).unwrap();
+        assert_eq!(rows.iter().filter(|r| r.parent_id.is_none()).count(), 1);
+    }
+
     #[test]
     fn session_end_ends_the_agent_row() {
         let (v, stdin, input, cx) = agent_fixture("agent-sess-3");
