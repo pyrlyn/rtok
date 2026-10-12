@@ -81,7 +81,10 @@ fn local_remote(url: &str) -> Option<String> {
 /// paths start at the main checkout, which a linked worktree shares. Case is kept: the
 /// filesystem, not rtok, decides whether two spellings are one directory.
 fn local_key(fs: &impl ReadFs, main: &Path, path: &str) -> String {
-    let abs = normalize(main, Path::new(path));
+    // Normalising the whole join rebuilds `main` too: a main checkout reached through a
+    // worktree's `commondir` and one reached from cwd can differ in separators on Windows,
+    // and a missing remote never reaches `canonicalize` to even them out.
+    let abs = normalize(Path::new(""), &main.join(path));
     let abs = fs.canonicalize(&abs).unwrap_or(abs);
     let abs = abs.to_string_lossy();
     let abs = abs.trim_end_matches(['/', '\\']);
