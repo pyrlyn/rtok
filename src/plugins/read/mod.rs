@@ -20,7 +20,9 @@ use rtok_plugin_sdk::{
 // `ReadFs` and the lexical `normalize` live at crate level since T154: `project` needs them
 // with this plugin compiled out.
 pub use crate::fs;
+#[cfg(test)]
 use crate::fs::normalize;
+use crate::fs::normalize_following;
 
 pub mod cache;
 pub mod hook;
@@ -155,7 +157,6 @@ pub(crate) fn read_with(
         &key,
         abs.to_string_lossy().as_ref(),
         payload,
-        body.lines().count(),
         force_delta,
     ) {
         return Ok(hit);
@@ -169,7 +170,6 @@ pub(crate) fn read_with(
         return Ok(msg);
     }
     let _ = cache::remember(cx, &key, payload);
-    let out = cap(cx, body)?;
     // T300: `map`/`signatures` measure the same way `stripped` already does — raw file vs
     // the text actually returned — but only on this fresh-render path; `cache::hit` and
     // `identical_result` above already recorded their own row (kind `dedup`/`delta`) and
@@ -179,6 +179,13 @@ pub(crate) fn read_with(
         "signatures" => Some("signatures"),
         _ if stripped_src.is_some() => Some("stripped"),
         _ => None,
+    };
+    // T535: a full or ranged view has no render row, so the cap is its only saving. The
+    // outline modes record against the raw file below; a second row here would double count.
+    let out = if render_kind.is_some() {
+        cap(cx, body)?
+    } else {
+        cap_recording(cx, body, "read_cap")?
     };
     if let Some(kind) = render_kind
         && (out.len() as u64) < (raw.len() as u64)
@@ -216,9 +223,9 @@ pub(crate) fn resolve_with(
         .map(|r| fs.canonicalize(&r).unwrap_or(r))
         .collect();
     let abs = if path.is_absolute() {
-        normalize(Path::new("/"), path)
+        normalize_following(fs, Path::new("/"), path)
     } else {
-        normalize(&roots[0], path)
+        normalize_following(fs, &roots[0], path)
     };
     // Lexical allow, then (when the path exists) reject symlink escapes past the root.
     let check = fs.canonicalize(&abs).unwrap_or_else(|| abs.clone());
@@ -383,6 +390,36 @@ pub(crate) mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// T535: a fresh `full` or `lines` read cut by `max_chars` is a saving and gets its row;
+    /// one that fits does not.
+    #[rstest]
+    #[case("full", None)]
+    #[case("lines", Some("1-3000"))]
+    fn a_capped_fresh_read_records_one_row(#[case] mode: &str, #[case] range: Option<&str>) {
+        let (cx, dir) = cx("cap-row");
+        let p = dir.join("big.txt");
+        let blob: String = (0..3000).map(|i| format!("line{i}\n")).collect();
+        fs::write(&p, &blob).unwrap();
+        let path = p.to_str().unwrap();
+        let out = read(&Ctx::new(&cx), path, mode, range).unwrap();
+        let rows = cx.store.list_measurements("read").unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        let r = &rows[0];
+        assert_eq!(r.kind, "read_cap");
+        assert_eq!(r.after_bytes as usize, out.len());
+        assert!(r.before_bytes > r.after_bytes);
+        let id = r.ref_id.clone().unwrap();
+        assert_eq!(id, archive_id(&out));
+        let full = crate::expand::fetch(&cx, &id).unwrap().unwrap();
+        assert_eq!(full.len() as i64, r.before_bytes);
+
+        let small = dir.join("small.txt");
+        fs::write(&small, "a\nb\n").unwrap();
+        let _ = read(&Ctx::new(&cx), small.to_str().unwrap(), "full", None).unwrap();
+        assert_eq!(cx.store.measurement_count("read").unwrap(), 1);
+        let _ = fs::remove_dir_all(dir);
+    }
+
     fn archive_id(out: &str) -> &str {
         const PRE: &str = "… archived ";
         const SUF: &str = " …";
@@ -444,6 +481,57 @@ pub(crate) mod tests {
         }
         #[cfg(not(unix))]
         let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T590: `..` after a symlink is the parent of the link's target, as a native lookup
+    /// reads it — not the link's own parent. The guard judges that target, and a path that
+    /// does not exist yet follows the same rule.
+    #[cfg(unix)]
+    #[test]
+    fn parent_segments_after_a_symlink_follow_the_target() {
+        let (cx, dir) = cx("t590-parent");
+        let root = crate::fs::canon(&dir);
+        let nested = root.join("a/nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(root.join("a/target.txt"), "from a\n").unwrap();
+        fs::write(root.join("target.txt"), "from root\n").unwrap();
+        fs::write(root.join("only-in-root.txt"), "root only\n").unwrap();
+        std::os::unix::fs::symlink(&nested, root.join("link")).unwrap();
+        let read_at = |p: &str| read(&Ctx::new(&cx), p, "full", None);
+        let abs = |p: &str| root.join(p).to_string_lossy().into_owned();
+
+        // The same file native lookup reads, relative to the process cwd or absolute.
+        let native = fs::read_to_string(root.join("link/../target.txt")).unwrap();
+        assert_eq!(native, "from a\n");
+        let got = resolve(&root, Path::new("link/../target.txt"), &[]).unwrap();
+        assert_eq!(fs::read_to_string(&got).unwrap(), native);
+        assert_eq!(read_at(&abs("link/../target.txt")).unwrap(), "1:from a");
+        // Controls: a plain `..` and a direct path keep their meaning.
+        // (Same bytes as the read above, so the session answers with the dedup line.)
+        assert!(
+            read_at(&abs("a/nested/../target.txt"))
+                .unwrap()
+                .starts_with(cache::DEDUP_PREFIX)
+        );
+        assert_eq!(read_at(&abs("target.txt")).unwrap(), "1:from root");
+        // A name that exists only beside the link must not be found through it.
+        assert!(read_at(&abs("link/../only-in-root.txt")).is_err());
+        let missing = resolve(&root, Path::new("link/../only-in-root.txt"), &[]).unwrap();
+        assert!(missing.starts_with(root.join("a")), "{missing:?}");
+
+        // A link inside the root to a directory outside it: its parent is outside too.
+        let outside = crate::fs::canon(&dir)
+            .parent()
+            .unwrap()
+            .join(format!("rtok-t590-outside-{}", std::process::id()));
+        fs::create_dir_all(outside.join("deep")).unwrap();
+        fs::write(outside.join("secret.txt"), "secret\n").unwrap();
+        fs::write(root.join("secret.txt"), "inside\n").unwrap();
+        std::os::unix::fs::symlink(outside.join("deep"), root.join("out")).unwrap();
+        let err = resolve(&root, Path::new("out/../secret.txt"), &[]).unwrap_err();
+        let _ = fs::remove_dir_all(&outside);
+        assert!(err.to_string().contains("outside cwd"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
 

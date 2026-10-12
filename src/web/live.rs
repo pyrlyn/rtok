@@ -18,7 +18,7 @@
 //! The table keeps the newest 5000 rows, so an older call is gone from the store and from the
 //! totals. A socket that subscribes while a poller runs starts from the totals so far.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -58,6 +58,9 @@ pub struct CallBatch {
     pub events: Vec<GraphEvent>,
     /// Events cut because the batch held more than the poll's cap (the oldest go first).
     pub omitted: u32,
+    /// Every call with an end in the poll, including the ones whose end row was cut: the
+    /// display cap must not decide whether a call is still running.
+    pub ended: BTreeSet<String>,
     pub summary: CallSummary,
     /// The newest event id the batch covers.
     pub head: i64,
@@ -105,7 +108,7 @@ pub struct CallSummary {
 pub fn coalesce(events: Vec<GraphEvent>, cap: usize) -> Option<CallBatch> {
     let head = events.last()?.id;
     let mut summary = CallSummary::default();
-    let ended: HashSet<String> = events
+    let ended: BTreeSet<String> = events
         .iter()
         .filter(|e| e.phase == EventPhase::End)
         .map(|e| e.call.clone())
@@ -136,10 +139,20 @@ pub fn coalesce(events: Vec<GraphEvent>, cap: usize) -> Option<CallBatch> {
         .filter(|e| e.phase == EventPhase::End || !ended.contains(&e.call))
         .collect();
     let omitted = kept.len().saturating_sub(cap);
-    kept.drain(..omitted);
+    // Ended rows are history and a call still running is state, so the oldest ended rows go
+    // first and an unfinished call is cut only when there are more of them than the cap.
+    let mut cut = vec![false; kept.len()];
+    let ended_first = (0..kept.len()).filter(|&i| kept[i].phase == EventPhase::End);
+    let running_after = (0..kept.len()).filter(|&i| kept[i].phase != EventPhase::End);
+    for i in ended_first.chain(running_after).take(omitted) {
+        cut[i] = true;
+    }
+    let mut cut_it = cut.into_iter();
+    kept.retain(|_| !cut_it.next().unwrap_or(false));
     Some(CallBatch {
         events: kept,
         omitted: u32::try_from(omitted).unwrap_or(u32::MAX),
+        ended,
         summary,
         head,
         callers: BTreeMap::new(),

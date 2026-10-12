@@ -10,6 +10,8 @@
 //! Crate level, not inside the `read` plugin: `plugin.rs` attributes every session through
 //! [`crate::project`] whatever features are compiled in (T154).
 
+#[cfg(feature = "read")]
+use std::path::Component;
 use std::path::{Path, PathBuf};
 
 /// Read bytes as UTF-8 text and canonicalize (follow symlinks when the backend supports them).
@@ -36,6 +38,37 @@ impl ReadFs for HostFs {
 /// Lexical join of `path` onto `root`; not clamped, so confinement stays at the boundary —
 /// `read::resolve_with` rejects anything outside the allow-roots via `under()`.
 pub(crate) use fs_kit::path::normalize;
+
+/// [`normalize`] with the filesystem's meaning of `..`: before a parent segment pops, the
+/// prefix built so far is replaced by its canonical path when it exists, so `link/../x` names
+/// the parent of the link's target, as a native lookup does (T590). A prefix that does not
+/// exist yet pops lexically, so a missing path still normalises. Not in `fs_kit`: the lookup
+/// goes through [`ReadFs`] so tests run on the in-memory filesystem.
+#[cfg(feature = "read")]
+pub(crate) fn normalize_following(fs: &impl ReadFs, root: &Path, path: &Path) -> PathBuf {
+    let mut out = if path.is_absolute() {
+        PathBuf::new()
+    } else {
+        root.to_path_buf()
+    };
+    for c in path.components() {
+        match c {
+            // Push, do not replace: on Windows `C:\foo` is Prefix("C:") then RootDir, and
+            // replacing wiped the drive.
+            Component::RootDir => out.push(Component::RootDir.as_os_str()),
+            Component::Prefix(p) => out = PathBuf::from(p.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if let Some(real) = fs.canonicalize(&out) {
+                    out = real;
+                }
+                out.pop();
+            }
+            Component::Normal(s) => out.push(s),
+        }
+    }
+    out
+}
 
 // Path identity lives in `rtok-store` so the store and the host share one definition
 // (Windows case, `\\?\`). Re-exported here at the old paths.

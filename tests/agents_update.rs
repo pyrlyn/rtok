@@ -12,7 +12,8 @@
 mod common;
 
 use common::agents::{
-    backups, claude_log, codex_log, json, rtok, rtok_without_claude, tmp, write_cfg,
+    backups, claude_log, codex_log, json, raw_without_claude, rtok, rtok_without_claude, tmp,
+    write_cfg,
 };
 use std::fs;
 
@@ -356,4 +357,26 @@ fn install_leaves_an_enabled_codex_plugin_alone() {
     seed_codex_plugin(&home);
     rtok(&["agents", "install", "codex"], &cfg, &home);
     assert_eq!(codex_log(&home), "");
+}
+
+/// T436.4: the per-host bar of `agents install` and `agents update` draws nothing when stderr
+/// is a pipe — no carriage return, no escape sequence, no bar text — on either stream.
+#[test]
+fn install_and_update_draw_no_bar_on_a_pipe() {
+    let home = tmp("update-pipe-bar");
+    let cfg = write_cfg(&home);
+    for args in [
+        ["agents", "install", "claude,cursor", "--cli"],
+        ["agents", "update", "claude,cursor", "--cli"],
+    ] {
+        let out = raw_without_claude(&args, &cfg, &home);
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        for stream in [&out.stdout, &out.stderr] {
+            let text = String::from_utf8_lossy(stream);
+            assert!(
+                !text.contains(['\r', '\u{1b}']) && !text.contains("updating hosts"),
+                "{args:?}: {text:?}"
+            );
+        }
+    }
 }

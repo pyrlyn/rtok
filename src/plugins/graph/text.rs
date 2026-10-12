@@ -75,9 +75,7 @@ pub(crate) fn applies(cx: &Ctx, root: &Path) -> bool {
 fn has_grammar(cx: &Ctx, root: &Path) -> bool {
     let matcher = Matcher::new(root, &cx.plugin_config::<crate::config::Graph>("graph"));
     matcher
-        .walk_builder(root)
-        .build()
-        .filter_map(Result::ok)
+        .walk()
         .any(|e| e.file_type().is_some_and(|t| t.is_file()) && matcher.indexable(e.path()))
 }
 
@@ -93,7 +91,7 @@ fn files(cx: &Ctx, root: &Path) -> Result<impl Iterator<Item = (String, String)>
         .search_max_bytes;
     let base: PathBuf = root.to_path_buf();
     Ok(
-        text_files(Matcher::new(root, &graph).walk_builder(root), max).map(move |(path, text)| {
+        text_files(Matcher::new(root, &graph).walk(), max).map(move |(path, text)| {
             let rel = path.strip_prefix(&base).unwrap_or(&path);
             let shown = rel.to_string_lossy();
             let shown = if cfg!(windows) {

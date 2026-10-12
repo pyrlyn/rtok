@@ -9,13 +9,14 @@ use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use rtok_plugin_sdk::{Class, Ctx, Measurement};
+use rtok_sys::proc::{Output, ProgressRunner};
 use serde_json::{Value, json};
 
 use super::cap;
@@ -45,10 +46,8 @@ pub fn on_path(bin: &str) -> bool {
 /// `rustup which rust-analyzer` names the toolchain binary. It fails when the component
 /// is not installed, which is the case a rustup proxy or mise shim must not pass for.
 fn rustup_component_path() -> Option<PathBuf> {
-    let o = Command::new("rustup")
-        .args(["which", "rust-analyzer"])
-        .stderr(Stdio::null())
-        .output()
+    let o = ProgressRunner::quiet("rustup", ["which", "rust-analyzer"])
+        .run()
         .ok()?;
     if !o.status.success() {
         return None;
@@ -228,7 +227,7 @@ pub(crate) fn lsp_state_root(root: &Path) -> PathBuf {
 
 /// Pin XDG_* and PUB_CACHE on `cmd` under [`lsp_state_root`] so rust-analyzer / dart never
 /// create files in the invoking user's real cache.
-fn confine_lsp_state(cmd: &mut Command, root: &Path) {
+fn lsp_state_env(root: &Path) -> [(&'static str, PathBuf); 4] {
     let base = lsp_state_root(root);
     let cache = base.join("cache");
     let data = base.join("data");
@@ -237,10 +236,12 @@ fn confine_lsp_state(cmd: &mut Command, root: &Path) {
     for d in [&cache, &data, &state, &pub_cache] {
         let _ = std::fs::create_dir_all(d);
     }
-    cmd.env("XDG_CACHE_HOME", &cache)
-        .env("XDG_DATA_HOME", &data)
-        .env("XDG_STATE_HOME", &state)
-        .env("PUB_CACHE", &pub_cache);
+    [
+        ("XDG_CACHE_HOME", cache),
+        ("XDG_DATA_HOME", data),
+        ("XDG_STATE_HOME", state),
+        ("PUB_CACHE", pub_cache),
+    ]
 }
 
 fn percent_encode_path(s: &str) -> String {
@@ -381,23 +382,22 @@ impl Session {
         }
         let path = resolve_bin(bin);
         let err_path = std::env::temp_dir().join(format!("rtok-lsp-{}.stderr", std::process::id()));
-        let mut cmd = Command::new(&path);
-        cmd.args(args)
+        let stderr = match std::fs::File::create(&err_path) {
+            Ok(f) => Stdio::from(f),
+            Err(_) => Stdio::null(),
+        };
+        let mut server = ProgressRunner::quiet(&path, args)
+            .output(Output::Inherit)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .current_dir(root);
+            .stderr(stderr)
+            .cwd(root);
         // Language servers inherit the process env and would otherwise write into the
         // invoking user's `~/.cache` / pub-cache. Pin XDG + PUB_CACHE under the workspace.
-        confine_lsp_state(&mut cmd, root);
-        match std::fs::File::create(&err_path) {
-            Ok(f) => {
-                cmd.stderr(Stdio::from(f));
-            }
-            Err(_) => {
-                cmd.stderr(Stdio::null());
-            }
+        for (key, dir) in lsp_state_env(root) {
+            server = server.env(key, dir);
         }
-        let mut child = cmd
+        let mut child = server
             .spawn()
             .with_context(|| format!("spawn {} ({bin})", path.display()))?;
         let stdin = child.stdin.take().context("lsp stdin")?;
@@ -1102,6 +1102,7 @@ pub(crate) fn outline(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     /// LSP 3.17 `SymbolKind`: 10 is Enum, 11 is Interface (11 used to read as "enum").
     #[test]

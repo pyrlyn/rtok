@@ -153,3 +153,169 @@ fn worktree_launcher_fallback_names_the_worktree_exactly_as_the_host_does() {
     assert_eq!(branch, "worktree-foo");
     let _ = fs::remove_dir_all(&tmp);
 }
+
+/// T635: the fallback hooks read `cwd`, `name` and `worktree_path` out of a JSON payload, so a
+/// path holding a quote, a backslash or non-ASCII text must reach Git exactly as decoded. A fake
+/// `git` on PATH logs its argv (each argument in `<>`, one line per call) instead of running.
+#[cfg(unix)]
+mod fallback_payload {
+    use super::*;
+    use std::io::Write as _;
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::process::{Command, Stdio};
+
+    struct Run {
+        ok: bool,
+        stdout: String,
+        stderr: String,
+        git: Vec<String>,
+    }
+
+    fn find(tool: &str) -> Option<PathBuf> {
+        ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"]
+            .iter()
+            .map(|d| PathBuf::from(d).join(tool))
+            .find(|p| p.is_file())
+    }
+
+    /// Runs the launcher with no rtok anywhere. `tools` are the only programs besides the fake
+    /// `git` that PATH offers, so a case can leave `jq` or `perl` out.
+    fn launch(case: &str, event: &str, payload: &str, tools: &[&str]) -> Run {
+        let tmp = rtok::testutil::tmp_dir(&format!("worktree-payload-{case}"));
+        let bin = tmp.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        for t in tools.iter().chain(&["cat", "tr", "sed"]) {
+            std::os::unix::fs::symlink(find(t).expect("tool exists"), bin.join(t)).unwrap();
+        }
+        let log = tmp.join("git.log");
+        let git = bin.join("git");
+        fs::write(
+            &git,
+            format!(
+                "#!/bin/sh\nfor a in \"$@\"; do printf '<%s>' \"$a\" >> '{log}'; done\n\
+                 printf '\\n' >> '{log}'\ncase \"$3\" in rev-parse) echo /fake/root ;; esac\n",
+                log = log.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let script = plugins().join("claude/scripts/worktree.sh");
+        let mut child = Command::new("/bin/sh")
+            .arg(&script)
+            .arg(event)
+            .env("HOME", &tmp)
+            .env("PATH", &bin)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let stdin = child.stdin.take().unwrap();
+        { stdin }.write_all(payload.as_bytes()).unwrap();
+        let out = child.wait_with_output().unwrap();
+        let git = fs::read_to_string(&log).unwrap_or_default();
+        let run = Run {
+            ok: out.status.success(),
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+            git: git.lines().map(str::to_string).collect(),
+        };
+        let _ = fs::remove_dir_all(&tmp);
+        run
+    }
+
+    const PATHS: [&str; 5] = [
+        "/tmp/plain",
+        "/tmp/with space",
+        "/tmp/quote\"dir",
+        "/tmp/back\\slash\\n",
+        "/tmp/\u{fc}n\u{ef}code \u{1f600}",
+    ];
+
+    /// Every parser the launcher may use, each alone on PATH.
+    fn parsers() -> Vec<&'static str> {
+        ["jq", "perl"]
+            .into_iter()
+            .filter(|t| find(t).is_some())
+            .collect()
+    }
+
+    #[test]
+    fn create_passes_the_decoded_cwd_to_git() {
+        assert!(
+            !parsers().is_empty(),
+            "this machine has neither jq nor perl"
+        );
+        for parser in parsers() {
+            for (i, cwd) in PATHS.iter().enumerate() {
+                let payload = serde_json::json!({"cwd": cwd, "name": "foo"}).to_string();
+                let r = launch(
+                    &format!("create-{parser}-{i}"),
+                    "WorktreeCreate",
+                    &payload,
+                    &[parser],
+                );
+                assert!(r.ok, "{parser} {cwd}: {}", r.stderr);
+                assert_eq!(
+                    r.git[0],
+                    format!("<-C><{cwd}><rev-parse><--show-toplevel>"),
+                    "{parser}"
+                );
+                assert_eq!(r.stdout, "/fake/root/.claude/worktrees/foo\n");
+            }
+        }
+    }
+
+    #[test]
+    fn create_slugs_a_name_that_holds_json_escapes() {
+        for parser in parsers() {
+            let payload = serde_json::json!({"cwd": "/tmp/p", "name": "a\"b/c"}).to_string();
+            let r = launch(
+                &format!("slug-{parser}"),
+                "WorktreeCreate",
+                &payload,
+                &[parser],
+            );
+            assert!(r.ok, "{}", r.stderr);
+            assert_eq!(r.stdout, "/fake/root/.claude/worktrees/a-b-c\n", "{parser}");
+        }
+    }
+
+    #[test]
+    fn remove_finds_and_removes_a_worktree_whose_path_needs_escaping() {
+        for parser in parsers() {
+            for (i, cwd) in PATHS.iter().enumerate() {
+                let case = format!("remove-{parser}-{i}");
+                let tmp = rtok::testutil::tmp_dir(&format!("worktree-payload-dir-{case}"));
+                let dir = tmp.join(format!("wt-{}", PATHS[i].rsplit('/').next().unwrap()));
+                fs::create_dir_all(&dir).unwrap();
+                let payload = serde_json::json!({"cwd": cwd, "worktree_path": dir}).to_string();
+                let r = launch(&case, "WorktreeRemove", &payload, &[parser]);
+                assert!(r.ok, "{parser} {dir:?}: {}", r.stderr);
+                let want = format!("<-C><{cwd}><worktree><remove><{}>", dir.display());
+                assert_eq!(r.git, [want], "{parser}");
+                let _ = fs::remove_dir_all(&tmp);
+            }
+        }
+    }
+
+    #[test]
+    fn an_unreadable_payload_or_no_parser_fails_loudly_and_runs_no_git() {
+        for parser in parsers() {
+            let r = launch(
+                &format!("bad-{parser}"),
+                "WorktreeCreate",
+                "{\"cwd\": ",
+                &[parser],
+            );
+            assert!(!r.ok && r.git.is_empty(), "{parser}: {:?}", r.git);
+        }
+        let payload = serde_json::json!({"cwd": "/tmp/p", "name": "foo"}).to_string();
+        for event in ["WorktreeCreate", "WorktreeRemove"] {
+            let r = launch(&format!("none-{event}"), event, &payload, &[]);
+            assert!(!r.ok && r.git.is_empty(), "{event}: {:?}", r.git);
+            assert!(r.stderr.contains("jq or perl"), "{}", r.stderr);
+        }
+    }
+}

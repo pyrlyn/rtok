@@ -197,7 +197,10 @@ fn absorb_event(
     pending: &mut HashSet<PathBuf>,
     rescan: &mut bool,
 ) -> bool {
-    if git_path(&p) || ig.matched_path_or_any_parents(&p, p.is_dir()).is_ignore() {
+    // An explicit `include` revives an ignored path in the full walk, so it must here too.
+    if git_path(&p)
+        || (ig.matched_path_or_any_parents(&p, p.is_dir()).is_ignore() && !matcher.is_included(&p))
+    {
         return false;
     }
     if relevant(&p, matcher) {
@@ -498,6 +501,49 @@ mod tests {
             &mut rescan
         ));
         assert_eq!(pending.len(), 1);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T545: events answer to the rules the full walk applies. A file included out of a
+    /// gitignored subtree is delivered, one a glob exclude covers is not, and an ignored file
+    /// nobody included stays out.
+    #[test]
+    fn events_follow_the_walks_include_and_exclude_rules() {
+        let (_rt, dir) = mk("watch-eligibility");
+        fs::create_dir_all(dir.join(".git")).unwrap();
+        fs::write(dir.join(".gitignore"), "wanted/\nunwanted/\n").unwrap();
+        let cases = [
+            ("wanted/a.rs", true),
+            ("wanted/generated/g.rs", false),
+            ("unwanted/a.rs", false),
+            ("src/generated/g.rs", false),
+            ("src/lib.rs", true),
+        ];
+        for (path, _) in cases {
+            fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
+            fs::write(dir.join(path), "fn f() {}\n").unwrap();
+        }
+        let matcher = crate::plugins::graph::walk::Matcher::new(
+            &dir,
+            &Graph {
+                include: vec!["wanted/".into()],
+                exclude: vec!["**/generated/**".into()],
+                ..Default::default()
+            },
+        );
+        let ig = gitignore(&dir);
+        let walked: HashSet<PathBuf> = matcher
+            .walk()
+            .map(|e| e.into_path())
+            .filter(|p| p.is_file() && matcher.indexable(p))
+            .collect();
+        for (path, want) in cases {
+            let (mut pending, mut rescan) = (HashSet::new(), false);
+            let path = dir.join(path);
+            let taken = absorb_event(path.clone(), &ig, &matcher, &mut pending, &mut rescan);
+            assert_eq!((taken, pending.contains(&path)), (want, want), "{path:?}");
+            assert_eq!(walked.contains(&path), want, "walk disagrees on {path:?}");
+        }
         let _ = fs::remove_dir_all(dir);
     }
 

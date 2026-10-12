@@ -249,6 +249,12 @@ pub fn plan(
             out.push(item(a.name, i.kind, &i.path, i.bytes, i.evidence, note, ""));
         }
     }
+    // A lockfile inside a folder stays, so the folder does too (T577).
+    for p in out.iter_mut().filter(|p| p.planned) {
+        if let Some(why) = holds_lockfile(p) {
+            (p.planned, p.action, p.note) = (false, "skip", why);
+        }
+    }
     // A folder shared with a running agent stays, whichever owner was listed first.
     let busy: Vec<String> = out
         .iter()
@@ -277,6 +283,57 @@ fn protected(cfg: &Config) -> Vec<PathBuf> {
     out.iter().map(|p| real(p)).collect()
 }
 
+/// A package-manager lockfile at any depth under `dir`, by the names in [`PACKAGE_LOCKS`]. A
+/// link is never entered. `Err` when the walk could not finish (unreadable folder, `deadline`),
+/// because an unknown answer must not read as "none".
+fn lockfile_under(dir: &Path, deadline: Instant) -> Result<Option<PathBuf>, String> {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        if Instant::now() >= deadline {
+            return Err(format!("lockfile scan of {} timed out", dir.display()));
+        }
+        let entries =
+            std::fs::read_dir(&d).map_err(|e| format!("cannot read {}: {e}", d.display()))?;
+        for e in entries {
+            let e = e.map_err(|e| format!("cannot read {}: {e}", d.display()))?;
+            let kind = e
+                .file_type()
+                .map_err(|e| format!("cannot check {}: {e}", d.display()))?;
+            let name = e.file_name();
+            if name.to_str().is_some_and(|n| PACKAGE_LOCKS.contains(&n)) {
+                return Ok(Some(
+                    e.path()
+                        .strip_prefix(dir)
+                        .unwrap_or(&e.path())
+                        .to_path_buf(),
+                ));
+            }
+            if kind.is_dir() {
+                stack.push(e.path());
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Why a removal of `p` would also take a lockfile, or could not be ruled out, shared by the
+/// plan and the re-check. A worktree is a source tree whose lockfiles are its own and goes
+/// through `git worktree remove`; an archive is the store's own retention. Neither is walked.
+fn holds_lockfile(p: &Planned) -> Option<String> {
+    let path = Path::new(&p.path);
+    if matches!(p.kind, "archive" | junk_worktrees::KIND) || !path.is_dir() {
+        return None;
+    }
+    match lockfile_under(path, Instant::now() + AGENT_SCAN_LIMIT) {
+        Ok(None) => None,
+        Ok(Some(lock)) => Some(format!(
+            "holds a package-manager lockfile: {}",
+            lock.display()
+        )),
+        Err(why) => Some(format!("{why}: not cleared")),
+    }
+}
+
 /// Why `p` must stay now, and whether that is a failure ("already gone" is not).
 fn recheck(p: &Planned, keep: &[PathBuf], now: SystemTime) -> Option<(String, bool)> {
     let path = Path::new(&p.path);
@@ -298,6 +355,8 @@ fn recheck(p: &Planned, keep: &[PathBuf], now: SystemTime) -> Option<(String, bo
         Some("changed since plan: its real path moved".into())
     } else if PACKAGE_LOCKS.contains(&name) || keep.iter().any(|k| k.starts_with(&here)) {
         Some("is or holds a protected file (store, settings, lockfile)".into())
+    } else if let Some(held) = holds_lockfile(p) {
+        Some(held)
     } else if p.evidence == TAG && !is_cache_dir(path) {
         Some("no longer a tagged cache".into())
     } else {
@@ -799,15 +858,92 @@ mod tests {
         assert_eq!(c.freed_bytes, 20);
         let text = to_text(&c, &View::test(false, false));
         assert!(
-            text.contains("claude cache: freed 10 B of 20 B planned"),
+            text.contains("claude cache: freed 10 B of 10 B planned"),
             "{text}"
         );
-        // The symlink item (10 B) is only planned where the test can make one.
-        let planned = if cfg!(unix) { 70 } else { 60 };
+        // The symlink item (10 B) is only planned where the test can make one; the folder holding
+        // the store is no longer planned at all, since it also holds the lockfile (T577).
+        let planned = if cfg!(unix) { 60 } else { 50 };
         assert!(
             text.ends_with(&format!("Freed 20 B of {planned} B planned\n")),
             "{text}"
         );
+    }
+
+    /// T577: a folder holding a package-manager lockfile at any depth is refused whole, at
+    /// planning and again right before the delete (a lockfile may appear after the preview);
+    /// a folder without one is cleared as before.
+    #[test]
+    fn a_folder_holding_a_nested_lockfile_is_neither_planned_nor_emptied() {
+        let (cfg, dir) = crate::testutil::config("junk-clear-nested-lock");
+        let p = |n: &str| dir.join(n);
+        put(&p("direct/Cargo.lock"), 10);
+        put(&p("deep/a/b/yarn.lock"), 10);
+        put(&p("deep/blob"), 10);
+        put(&p("clean/sub/blob"), 10);
+        put(&p("late/blob"), 10);
+        for d in ["direct", "deep", "clean", "late"] {
+            age_files(&p(d), 2 * DAY);
+        }
+        let items = ["direct", "deep", "clean", "late"]
+            .map(|d| item("cache", &p(d), EXTRA))
+            .to_vec();
+        let r = report(vec![row("claude", items)]);
+        let mut planned = plan(
+            &cfg,
+            &r,
+            &filter(&["claude"], &[]),
+            SystemTime::now(),
+            &idle,
+        );
+        let by = |planned: &[Planned], n: &str| {
+            let hit = planned.iter().find(|x| x.path.ends_with(n)).unwrap();
+            (hit.action, hit.planned, hit.note.clone())
+        };
+        let why = "holds a package-manager lockfile";
+        for (d, lock) in [("direct", "Cargo.lock"), ("deep", "a/b/yarn.lock")] {
+            let (action, is_planned, note) = by(&planned, d);
+            assert_eq!((action, is_planned), ("skip", false), "{d}");
+            let lock = lock.replace('/', std::path::MAIN_SEPARATOR_STR);
+            assert!(note.starts_with(why) && note.contains(&lock), "{note}");
+        }
+        assert_eq!(by(&planned, "clean").0, "clear");
+
+        put(&p("late/x/Cargo.lock"), 10);
+        age_files(&p("late"), 2 * DAY);
+        apply(&cfg, &mut planned, &Filter::default(), SystemTime::now());
+
+        assert_eq!(by(&planned, "clean"), ("clear", true, "removed".into()));
+        assert!(!p("clean/sub").exists() && p("clean").is_dir());
+        let late = by(&planned, "late");
+        assert_eq!((late.0, late.1), ("skip", true));
+        assert!(late.2.starts_with(why), "{}", late.2);
+        for kept in ["direct/Cargo.lock", "deep/a/b/yarn.lock", "deep/blob"] {
+            assert!(p(kept).is_file(), "{kept}");
+        }
+        assert!(p("late/blob").is_file() && p("late/x/Cargo.lock").is_file());
+    }
+
+    /// T577: the walk never follows a link, and a folder it cannot read is refused, not guessed.
+    #[cfg(unix)]
+    #[test]
+    fn the_lockfile_walk_ignores_links_and_refuses_what_it_cannot_read() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_cfg, dir) = crate::testutil::config("junk-clear-lock-walk");
+        put(&dir.join("outside/Cargo.lock"), 1);
+        put(&dir.join("cache/blob"), 1);
+        std::os::unix::fs::symlink(dir.join("outside"), dir.join("cache/link")).unwrap();
+        let far = Instant::now() + Duration::from_secs(60);
+        assert_eq!(lockfile_under(&dir.join("cache"), far), Ok(None));
+        let closed = dir.join("cache/closed");
+        std::fs::create_dir_all(&closed).unwrap();
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let readable = std::fs::read_dir(&closed).is_ok();
+        let res = lockfile_under(&dir.join("cache"), far);
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Running as root reads everything; the refusal is only observable otherwise.
+        assert!(readable || res.is_err(), "{res:?}");
+        assert!(lockfile_under(&dir.join("cache"), Instant::now()).is_err());
     }
 
     /// A live rtok session of a host is how a test fakes a running agent: no process probe.

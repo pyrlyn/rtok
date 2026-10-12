@@ -55,6 +55,8 @@ pub struct ProgressRunner {
     progress: Progress,
     timeout: Option<Duration>,
     stdin: Option<Stdio>,
+    stdout: Option<Stdio>,
+    stderr: Option<Stdio>,
     shim: bool,
 }
 
@@ -75,6 +77,8 @@ impl ProgressRunner {
             progress: Progress::Unknown,
             timeout: None,
             stdin: None,
+            stdout: None,
+            stderr: None,
             shim: false,
         }
     }
@@ -107,6 +111,19 @@ impl ProgressRunner {
     /// Without this a piped or detached child gets a closed stdin; an inherited one keeps ours.
     pub fn stdin(mut self, stdin: Stdio) -> Self {
         self.stdin = Some(stdin);
+        self
+    }
+
+    /// `.spawn()` only: where the child's stdout goes instead of what its [`Output`] mode gives
+    /// (a pipe for a language server's protocol stream while its stderr is a file or ours).
+    pub fn stdout(mut self, stdout: Stdio) -> Self {
+        self.stdout = Some(stdout);
+        self
+    }
+
+    /// `.spawn()` only: see [`ProgressRunner::stdout`].
+    pub fn stderr(mut self, stderr: Stdio) -> Self {
+        self.stderr = Some(stderr);
         self
     }
 
@@ -165,6 +182,12 @@ impl ProgressRunner {
                 self.cmd.stdout(Stdio::null()).stderr(Stdio::null());
             }
             Output::Inherit => {}
+        }
+        if let Some(stdout) = self.stdout.take() {
+            self.cmd.stdout(stdout);
+        }
+        if let Some(stderr) = self.stderr.take() {
+            self.cmd.stderr(stderr);
         }
         self.prepare(self.output != Output::Inherit);
         self.cmd.spawn()
@@ -489,6 +512,20 @@ mod tests {
         );
         let inherited = sh("exit 0").output(Output::Inherit).run().unwrap();
         assert!(inherited.status.success());
+    }
+
+    #[test]
+    fn spawn_takes_explicit_stdout_and_stderr_over_the_mode_defaults() {
+        let mut child = sh("cat; printf err >&2")
+            .output(Output::Inherit)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(b"in").unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert_eq!((out.stdout.as_slice(), out.stderr.len()), (&b"in"[..], 0));
     }
 
     #[test]

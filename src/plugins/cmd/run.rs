@@ -327,11 +327,19 @@ fn emit_filtered_to(
             let _ = out.write_all(b"\n");
         }
     };
+    // The fallbacks below print the command's own bytes: `before` is a lossy UTF-8 view, and
+    // with no archive to restore from, a replaced `0xff` is lost for good (T536).
+    let write_raw = |out: &mut dyn std::io::Write| {
+        let _ = out.write_all(body);
+        if !body.is_empty() && !body.ends_with(b"\n") {
+            let _ = out.write_all(b"\n");
+        }
+    };
     let cx = match crate::plugin::Runtime::open(cfg.clone(), "run") {
         Ok(cx) => cx,
         Err(_) => {
             // Fail open on the CLI path too: never swallow the command's output (D4).
-            write_text(out, &before);
+            write_raw(out);
             return;
         }
     };
@@ -356,10 +364,7 @@ fn emit_filtered_to(
     // lossless-by-default holds), and record a zero-saving row so the ledger stays honest.
     let pointer_line = trailer(&id, lines);
     if body.len() <= pointer_line.len() {
-        let _ = out.write_all(body);
-        if !body.is_empty() && !body.ends_with(b"\n") {
-            let _ = out.write_all(b"\n");
-        }
+        write_raw(out);
         let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
         let _ = cx.record(&Measurement {
             plugin: "cmd",
@@ -391,7 +396,7 @@ fn emit_filtered_to(
         // The archive keeps the command's bytes, not the lossy `String` used to filter
         // and print them: `expand` must return what the command wrote, including invalid UTF-8.
         if cx.put_archive_for(body, agent).is_err() {
-            write_text(out, &before);
+            write_raw(out);
             return;
         }
     }
@@ -900,6 +905,34 @@ mod tests {
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert!(rows[0].est_before > rows[0].est_after, "{rows:?}\n{shown}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T536: when the store cannot open, or cannot take the archive file, the command's own
+    /// bytes reach the host — not their lossy UTF-8 rendering — with the usual trailing newline.
+    #[rstest::rstest]
+    #[case::store_will_not_open(false)]
+    #[case::archive_write_fails(true)]
+    fn raw_bytes_survive_a_failing_store(#[case] store_opens: bool) {
+        let (mut c, dir) = cfg("raw-fallback");
+        let blocker = dir.join("blocker");
+        fs::write(&blocker, b"a file, not a directory").unwrap();
+        if store_opens {
+            c.core.archive_dir = blocker;
+        } else {
+            c.core.db_path = blocker.join("rtok.db");
+        }
+        let mut body = Vec::new();
+        for i in 0..400 {
+            body.extend_from_slice(format!("line {i} \u{e9}").as_bytes());
+            body.extend_from_slice(&[0xff, b'\n']);
+        }
+        body.extend_from_slice(b"no newline at the end\xff");
+        let mut printed = Vec::new();
+        emit_filtered_to(&c, &["echo".into()], &body, 0, None, &mut printed);
+        let mut expect = body.clone();
+        expect.push(b'\n');
+        assert_eq!(printed, expect);
         let _ = fs::remove_dir_all(&dir);
     }
 

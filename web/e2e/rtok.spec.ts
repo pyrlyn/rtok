@@ -124,11 +124,20 @@ test("doctor apply keeps its spinner until the answer and drops it after", async
   // The e2e store has nothing to fix, so the mocked machine supplies the plan; only the apply
   // is held.
   const release = await interceptSocket(page, (request) => {
-    const doctor = (request as { doctor?: { action: string; selection: Selection } }).doctor;
+    const doctor = (
+      request as { doctor?: { action: string; selection: Selection; confirmed: string | null } }
+    ).doctor;
     if (doctor?.action === "plan")
       return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection)) };
     if (doctor?.action === "apply")
-      return { reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection)), hold: true };
+      return {
+        reply: frame(
+          "doctorfixed",
+          "fixed",
+          machine.apply(doctor.selection, doctor.confirmed ?? ""),
+        ),
+        hold: true,
+      };
     return undefined;
   });
   await page.goto("/#/doctor");

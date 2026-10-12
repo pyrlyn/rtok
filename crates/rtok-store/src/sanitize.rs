@@ -9,6 +9,7 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
+#[cfg(test)]
 use regex::Regex;
 use serde_json::Value;
 
@@ -21,8 +22,19 @@ const WRAPPERS: [&str; 4] = [
     "local-command-caveat",
 ];
 
+/// `(<t>, </t>)` per wrapper, built once: [`strip`] looks for them at every `<`.
+static TAGS: LazyLock<Vec<(String, String)>> = LazyLock::new(|| {
+    WRAPPERS
+        .iter()
+        .map(|t| (format!("<{t}>"), format!("</{t}>")))
+        .collect()
+});
+
 /// One alternative per tag: the regex crate has no backreferences, and a shared alternation
-/// would let `<a>` close on `</b>`. The newlines after a block go with it.
+/// would let `<a>` close on `</b>`. The newlines after a block go with it. Only the oracle
+/// the tests compare [`unwrap`] against, kept out of the shipped code so the check stays
+/// independent of it.
+#[cfg(test)]
 static WRAPPER: LazyLock<Regex> = LazyLock::new(|| {
     let alts: Vec<String> = WRAPPERS.iter().map(|t| format!("<{t}>.*?</{t}>")).collect();
     Regex::new(&format!("(?s)(?:{})\n*", alts.join("|"))).expect("static wrapper regex")
@@ -68,12 +80,75 @@ pub fn strings(value: &mut Value, clean: fn(&str) -> Cow<'_, str>) -> bool {
 /// `s` without wrapper blocks, escapes, control and zero-width characters, with LF line
 /// ends, no trailing spaces or tabs, and at most one blank line in a row.
 pub fn text(s: &str) -> Cow<'_, str> {
-    let unwrapped = WRAPPER.replace_all(s, "");
-    let clean = whitespace(&characters(&unwrapped, true));
+    // Characters first: noise inside a tag (`<system-ESC[0mreminder>`) must be gone before
+    // the tag is looked for, or the first call leaves a wrapper the second one removes.
+    let clean = whitespace(&unwrap(&characters(s, true)));
     match clean == s {
         true => Cow::Borrowed(s),
         false => Cow::Owned(clean),
     }
+}
+
+/// `s` without wrapper blocks and the newlines after each. Each block is `<t>` to the first
+/// later `</t>` of the same tag, as a lazy regex takes it, and removing blocks can join their
+/// neighbours into a new tag (`<system-<task-notification>…</task-notification>reminder>`).
+/// So [`strip`] repeats on its own output until a pass removes nothing: the result is the
+/// regex fixed point, and a tag counts only when it is whole in the text its pass reads, never
+/// when a later removal in the same pass would have made it whole. A tag left open stays.
+fn unwrap(s: &str) -> Cow<'_, str> {
+    let mut cur = Cow::Borrowed(s);
+    // Each repeat removes at least one whole block (over 30 bytes), so the loop ends, and
+    // plain input takes one or two passes: only a removal that joins a tag asks for another.
+    // Crafted input that nests joins k deep costs k linear passes, at most one per block,
+    // so quadratic in the worst case and linear for anything a host really sends.
+    while let Some(next) = strip(&cur) {
+        cur = Cow::Owned(next);
+    }
+    cur
+}
+
+/// One left-to-right pass: the leftmost `<t>…</t>` at each step, plus the newlines after it,
+/// is dropped and the scan resumes after it. `None` when nothing was removed.
+fn strip(s: &str) -> Option<String> {
+    if !s.contains("</") {
+        return None;
+    }
+    // Where each closer last starts: an opener after it can never match, which keeps a
+    // flood of unclosed openers linear instead of one search to the end of `s` each.
+    let last: Vec<Option<usize>> = TAGS
+        .iter()
+        .map(|(_, closing)| s.rfind(closing.as_str()))
+        .collect();
+    let mut out = String::new();
+    let (mut kept, mut at) = (0, 0);
+    while let Some(lt) = s[at..].find('<') {
+        let start = at + lt;
+        at = start + 1;
+        let rest = &s[start..];
+        let Some((i, (opening, closing))) = TAGS
+            .iter()
+            .enumerate()
+            .find(|(_, (opening, _))| rest.starts_with(opening.as_str()))
+        else {
+            continue;
+        };
+        let body = start + opening.len();
+        if !last[i].is_some_and(|l| l >= body) {
+            continue;
+        }
+        let Some(q) = s[body..].find(closing.as_str()) else {
+            continue;
+        };
+        let end = body + q + closing.len();
+        out.push_str(&s[kept..start]);
+        at = end + s[end..].bytes().take_while(|b| *b == b'\n').count();
+        kept = at;
+    }
+    if kept == 0 {
+        return None;
+    }
+    out.push_str(&s[kept..]);
+    Some(out)
 }
 
 /// `s` without escapes, control and zero-width characters and nothing else (T432): wrappers,
@@ -209,6 +284,27 @@ mod tests {
     )]
     #[case::unclosed_kept("<system-reminder> x", "<system-reminder> x")]
     #[case::other_tags_kept("<task-id>b1</task-id>", "<task-id>b1</task-id>")]
+    #[case::ansi_inside_open_tag(
+        "<system-\u{1b}[0mreminder>hidden</system-reminder>\nvisible",
+        "visible"
+    )]
+    #[case::zero_width_inside_open_tag(
+        "<system-\u{200b}reminder>hidden</system-reminder>\nvisible",
+        "visible"
+    )]
+    #[case::noise_inside_close_tag(
+        "<system-reminder>hidden</system\u{feff}-reminder>\nvisible",
+        "visible"
+    )]
+    #[case::block_removal_joins_a_tag(
+        "<system-<task-notification>x</task-notification>reminder>hidden</system-reminder>\nvisible",
+        "visible"
+    )]
+    #[case::block_removal_joins_a_close(
+        "<system-reminder>a<system-reminder>b</system-<task-notification>x</task-notification>reminder>\nvisible",
+        "visible"
+    )]
+    #[case::unclosed_open_kept_after_cleanup("<system-\u{200b}reminder> x", "<system-reminder> x")]
     fn text_drops_each_kind_of_noise(#[case] input: &str, #[case] want: &str) {
         let got = text(input);
         assert_eq!(got, want, "{input:?}");
@@ -287,7 +383,62 @@ mod tests {
         assert_eq!(got["hook_event_name"], "UserPromptSubmit");
     }
 
+    #[test]
+    fn json_bodies_reach_the_canonical_form_in_one_pass() {
+        let raw = br#"{"prompt":"<system-\u001b[0mreminder>hidden</system-reminder>\nvisible"}"#;
+        let once = body(raw).into_owned();
+        assert_eq!(once, br#"{"prompt":"visible"}"#);
+        assert_eq!(&*body(&once), &once[..], "a second pass changes nothing");
+    }
+
+    /// The old shape of the cleaner: strip wrappers to a fixed point, then characters.
+    /// [`unwrap`] must agree with it on every input, including joined tag fragments.
+    fn by_fixed_point(s: &str) -> String {
+        let mut cur = characters(s, true);
+        loop {
+            let next = WRAPPER.replace_all(&cur, "").into_owned();
+            if next == cur {
+                return whitespace(&cur);
+            }
+            cur = next;
+        }
+    }
+
+    /// Found by the proptest below: pass 1 of the oracle removes the `ci-monitor-event` block
+    /// and the separate `<system-reminder></system-reminder>` pair after it, while the opener
+    /// that the removal joins (`<system-` + `reminder>`) has no closer left for pass 2.
+    #[test]
+    fn a_joined_opener_does_not_pair_with_a_later_closer() {
+        let s = [
+            "<system-",
+            "<ci-monitor-event>",
+            "</ci-monitor-event>",
+            "reminder>",
+        ]
+        .concat()
+            + "<system-reminder></system-reminder>";
+        assert_eq!(by_fixed_point(&s), "<system-reminder>");
+        assert_eq!(text(&s), "<system-reminder>");
+    }
+
     proptest::proptest! {
+        /// Fragments of wrapper tags, noise and text, so tags are cut, joined and nested on
+        /// purpose rather than by accident.
+        #[test]
+        fn wrappers_agree_with_the_fixed_point(parts in proptest::collection::vec(
+            proptest::sample::select(vec![
+                "<system-", "reminder>", "</system-", "<task-notification>", "</task-notification>",
+                "<system-reminder>", "</system-reminder>", "\u{200b}", "\u{1b}[0m", "\n", "x", " ",
+                "<ci-monitor-event>", "</ci-monitor-event>",
+            ]),
+            0..24,
+        )) {
+            let s: String = parts.concat();
+            let got = text(&s).into_owned();
+            proptest::prop_assert_eq!(&got, &by_fixed_point(&s));
+            proptest::prop_assert_eq!(text(&got), got.as_str());
+        }
+
         /// Cleaning is idempotent and never panics on arbitrary text, escapes and wrappers
         /// included, and its output never holds what it removes.
         #[test]

@@ -140,7 +140,7 @@ fn read_dedup_on_second_mcp_read() {
         .collect();
     let (first, second) = (&texts[0], &texts[1]);
     assert!(first.contains("line one"), "{first}");
-    assert!(second.contains("unchanged since"), "{second}");
+    assert!(second.contains("unchanged id "), "{second}");
     assert!(kinds(&home, "read").iter().any(|k| k == "dedup"));
 }
 #[test]

@@ -1000,4 +1000,46 @@ mod claim_tests {
         );
         let _ = std::fs::remove_dir_all(&path);
     }
+
+    /// T615: claims taken one after another by the same agent, and a re-claim of the first,
+    /// leave the store naming the last one claimed — whatever the spelling of the ids.
+    #[test]
+    fn the_stored_claim_follows_the_last_claim_made() {
+        let path = dir("order");
+        let store = Store::open_in_memory().unwrap();
+        let live = agent(&store, "live", ready::unix_now());
+        let adapter = project(&path);
+        for (n, title) in [("R1", "First"), ("R2", "Second")] {
+            adapter
+                .adapter()
+                .create(
+                    &NewTask {
+                        title: title.into(),
+                        description: String::new(),
+                        parent: None,
+                    },
+                    &id(n),
+                )
+                .unwrap();
+        }
+        let latest = || {
+            store
+                .latest_task_claim("proj", &live)
+                .unwrap()
+                .unwrap()
+                .task_id
+        };
+        project(&path)
+            .claim(&store, Some(&id("R1")), &live)
+            .unwrap();
+        project(&path)
+            .claim(&store, Some(&id("R2")), &live)
+            .unwrap();
+        assert_eq!(latest(), "R2");
+        project(&path)
+            .claim(&store, Some(&id("R1")), &live)
+            .unwrap();
+        assert_eq!(latest(), "R1", "a same-agent re-claim moves to the front");
+        let _ = std::fs::remove_dir_all(&path);
+    }
 }
