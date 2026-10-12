@@ -5,7 +5,7 @@
 //! GitHub Copilot CLI (T358.3). `session-state/<session>/events.jsonl` is the host's event
 //! log. The per-request `assistant.usage` event is ephemeral (the SDK schema marks it as
 //! never persisted), so the only token counts on disk are the `modelMetrics` of the
-//! `session.shutdown` event: one total per model for the whole run (github/copilot-sdk
+//! `session.shutdown` event: one total per model for the whole session (github/copilot-sdk
 //! `nodejs/src/generated/session-events.ts` at 5b2d7cd, see `research.md`).
 //!
 //! That makes this reader coarser than the others: a session lands on the day it ended,
@@ -18,8 +18,8 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-/// Every `session.shutdown` model total under `dirs`, and the first log that could not be
-/// read.
+/// The last `session.shutdown` model totals of each session under `dirs`, and the first log
+/// that could not be read.
 pub(super) fn slices(
     dirs: &[PathBuf],
     since: i64,
@@ -50,8 +50,11 @@ fn session(path: &Path, text: &str, since: i64) -> Vec<UsageSlice> {
         .and_then(Path::file_name)
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let mut out = Vec::new();
-    // Most of a log is tool and hook events: only the shutdown line is parsed.
+    // Most of a log is tool and hook events: only the shutdown line is parsed. A resumed
+    // session appends another shutdown whose totals are session-wide (the SDK documents them
+    // as "across all requests"), so only the last one counts: summing would count the earlier
+    // runs again on every resume.
+    let mut last = None;
     for line in text.lines().filter(|l| l.contains("\"session.shutdown\"")) {
         let Ok(v) = serde_json::from_str::<Value>(line) else {
             continue;
@@ -59,12 +62,17 @@ fn session(path: &Path, text: &str, since: i64) -> Vec<UsageSlice> {
         if v.get("type").and_then(Value::as_str) != Some("session.shutdown") {
             continue;
         }
-        let ts = jsonl::line_ts(&v);
-        let Some(models) = v.pointer("/data/modelMetrics").and_then(Value::as_object) else {
-            continue;
-        };
-        for (model, metric) in models {
-            out.extend(super::slice(
+        if let Some(models) = v.pointer("/data/modelMetrics").and_then(Value::as_object) {
+            last = Some((jsonl::line_ts(&v), models.clone()));
+        }
+    }
+    let Some((ts, models)) = last else {
+        return Vec::new();
+    };
+    models
+        .iter()
+        .filter_map(|(model, metric)| {
+            super::slice(
                 "copilot",
                 "github",
                 &id,
@@ -72,10 +80,9 @@ fn session(path: &Path, text: &str, since: i64) -> Vec<UsageSlice> {
                 ts,
                 legs(metric),
                 since,
-            ));
-        }
-    }
-    out
+            )
+        })
+        .collect()
 }
 
 /// `[input, cache write, cache read, output]` of one model's metric. `tokenDetails` is the
@@ -212,6 +219,60 @@ mod tests {
         let legs = |r: &UsageSlice| (r.input, r.cache_create, r.cache_read, r.output);
         assert_eq!(legs(&rows[0]), (700, 0, 600, 80));
         assert_eq!(legs(&rows[1]), (150, 0, 50, 9));
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// SDK 6be623b: shutdown `modelMetrics` are totals "across all requests" and the block is
+    /// session-wide, so a resumed session's second shutdown already holds the first run.
+    #[test]
+    fn a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all() {
+        let d = std::env::temp_dir().join(format!("rtok-usage-cop-rs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        for s in ["sess-a", "sess-b", "sess-c"] {
+            std::fs::create_dir_all(d.join(s)).unwrap();
+        }
+        let line = |ts: &str, m: Value| shutdown(ts, json!({"gpt-x": m}));
+        // The second shutdown includes the first run (100 + 40 in, 7 + 3 out), plus a
+        // checkpoint and resume event between them that carry no totals.
+        let resumed = [
+            line("2026-09-02T10:00:00Z", metric(100, 0, 0, 7)),
+            json!({"type":"session.resume","data":{"eventCount":9}}).to_string(),
+            json!({"type":"session.usage_checkpoint","data":{"totalNanoAiu":5}}).to_string(),
+            line("2026-09-03T10:00:00Z", metric(140, 0, 0, 10)),
+        ]
+        .join("\n");
+        std::fs::write(d.join("sess-a/events.jsonl"), resumed).unwrap();
+        // One shutdown is unchanged; a different session is a separate total.
+        std::fs::write(
+            d.join("sess-b/events.jsonl"),
+            line("2026-09-02T10:00:00Z", metric(50, 0, 0, 5)),
+        )
+        .unwrap();
+        // A later unparsable or model-less shutdown must not hide the earlier totals.
+        std::fs::write(
+            d.join("sess-c/events.jsonl"),
+            [
+                line("2026-09-02T10:00:00Z", metric(30, 0, 0, 2)),
+                "{\"type\":\"session.shutdown\",\"data\":{}}".into(),
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let (mut rows, _) = slices(std::slice::from_ref(&d), 0, SystemTime::UNIX_EPOCH);
+        rows.sort_by(|a, b| a.session.cmp(&b.session));
+        let got: Vec<_> = rows
+            .iter()
+            .map(|r| (r.session.as_str(), r.input, r.output, r.ts))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("sess-a", 140, 10, 1_788_429_600),
+                ("sess-b", 50, 5, 1_788_343_200),
+                ("sess-c", 30, 2, 1_788_343_200),
+            ]
+        );
         std::fs::remove_dir_all(&d).ok();
     }
 }
