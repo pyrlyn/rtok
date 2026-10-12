@@ -80,7 +80,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T561 | todo | P3 | 3 | 0% | |
-| T642 | in progress | P2 | 2 | 10% | Claude Code / claude-opus-5-5 |
 | T562 | todo | P1 | 2 | 0% | |
 | T592 | todo | P2 | 3 | 0% | |
 | T620 | todo | P1 | 5 | 0% | |
@@ -1427,20 +1426,6 @@ Plan:
 5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
 
 Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
-
-### T642. The e2e harness waits for every process `rtok web` started before removing its home
-
-`just spa-e2e` failed once (2026-10-12) in "offline takes the whole screen when the server stops; Reconnect brings it back": `Rtok.dispose()` threw `ENOTEMPTY, Directory not empty` on the temp home. `stop()` waits for `rtok web` alone, but a cold snapshot spawns children that outlive it: the doctor probe `rtok mcp` (`doctor::list_tools` → `mcp_roundtrip`, same `RTOK_HOME`) and `git -C <home> …` from the worktree scan. A `rtok mcp` that starts after its parent died creates `rtok.db-wal` and `rtok.db-shm` in the home root while `rmSync` walks it. The offline test is the one that stops the server right after `live`, mid-snapshot. Sampling `rtok web`'s children in the suite showed both `rtok mcp` and `git` at stop time, and `lsof +D <home>` found orphaned `git`/`xcodebuild` there after `stop()` returned.
-
-Done: `stop()` returns only after every process the test's `rtok web` started has exited; `dispose()` removes the home with no retry.
-
-Plan:
-
-1. `web/e2e/group.ts`: spawn a process as the leader of its own process group (`detached: true`); stop it by sending SIGTERM to the group, SIGKILL after 5 s, then poll `kill(-pgid, 0)` until `ESRCH`. Only that group is signalled. A worker that exits early kills the groups it still owns.
-2. `web/e2e/rtok.ts`: `start()` and `stop()` go through it.
-3. `web/e2e/group.spec.ts`: a `sh` leader whose child keeps recreating a file in a temp dir; after the stop the child is gone and the dir is removed and stays removed. Fails against the old stop (only the leader waited for).
-
-Check: `group.spec.ts` fails before the fix and passes after; `just spa-e2e` green; the offline test with `--repeat-each` green.
 
 ### T561. TUI: folded-target counter in a one-project view
 
