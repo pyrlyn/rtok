@@ -1883,6 +1883,15 @@ fn install_prefix(exe: &Path) -> Option<&Path> {
         .flatten()
 }
 
+/// Sort key that puts a `0.10.0` or `v0.10.0` directory after `0.9.0` (SemVer precedence, not
+/// name order). A name that does not parse sorts before every version and falls back to name
+/// order among its kind, so the choice stays deterministic. The newest is last.
+pub(crate) fn version_dir_key(dir: &std::path::Path) -> (Option<semver::Version>, String) {
+    let name = dir.file_name().unwrap_or_default().to_string_lossy();
+    let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
+    (ver, name.into_owned())
+}
+
 /// ketch installs the full package under `<root>/store/rtok/vX.Y.Z/` and only
 /// copies the binary into `<root>/bin/`. Prefer the version that matches this
 /// build; otherwise take the newest store folder that still has `rel`.
@@ -1902,14 +1911,7 @@ fn ketch_store_plugin(
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .map(|e| e.path())
         .collect();
-    // Newest last: by semver (`v0.1.10` > `v0.1.9`); a name that does not parse sorts before
-    // every version and falls back to name order among its kind.
-    let key = |p: &std::path::PathBuf| {
-        let name = p.file_name().unwrap_or_default().to_string_lossy();
-        let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
-        (ver, name.into_owned())
-    };
-    entries.sort_by_cached_key(key);
+    entries.sort_by_cached_key(|p| version_dir_key(p));
     for dir in entries.into_iter().rev() {
         let candidate = join_rel(&dir, rel);
         if candidate.exists() {

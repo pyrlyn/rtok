@@ -229,6 +229,58 @@ fn newest_child_dir(base: &Path) -> Option<PathBuf> {
         .filter(|e| e.path().is_dir())
         .map(|e| e.path())
         .collect();
-    dirs.sort();
+    dirs.sort_by_cached_key(|p| super::version_dir_key(p));
     dirs.pop()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cache_with(name: &str, dirs: &[&str]) -> PathBuf {
+        let home =
+            std::env::temp_dir().join(format!("rtok-plugin-cache-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let base = home.join(PLUGIN_CACHE);
+        for d in dirs {
+            std::fs::create_dir_all(base.join(d)).unwrap();
+            let json = format!(r#"{{"version": "{d}"}}"#);
+            std::fs::write(base.join(d).join("plugin.json"), json).unwrap();
+        }
+        // A file beside the version folders is not a candidate, however high its name sorts.
+        std::fs::write(base.join("zzz.txt"), "x").unwrap();
+        home
+    }
+
+    /// T628: the cached copy is the highest SemVer, not the last name in sort order.
+    #[test]
+    fn the_newest_cached_version_wins_by_semver_not_by_name() {
+        for (case, dirs, want) in [
+            ("minor", &["0.9.0", "0.10.0"][..], "0.10.0"),
+            ("patch", &["0.1.9", "0.1.10", "0.1.2"][..], "0.1.10"),
+            ("pre", &["0.10.0-rc.1", "0.10.0", "0.9.9"][..], "0.10.0"),
+            ("build", &["0.9.0+b9", "0.10.0+b1"][..], "0.10.0+b1"),
+            ("junk", &["latest", "0.2.0", "tmp"][..], "0.2.0"),
+            ("junk-only", &["tmp", "latest"][..], "tmp"),
+        ] {
+            let home = cache_with(case, dirs);
+            let probe = cache_probe(home.clone(), Source::Github);
+            assert!(
+                probe
+                    .version_file
+                    .starts_with(home.join(PLUGIN_CACHE).join(want)),
+                "{case}: {probe:?}",
+                probe = probe.version_file
+            );
+            let _ = std::fs::remove_dir_all(home);
+        }
+    }
+
+    #[test]
+    fn the_cache_probe_reads_the_manifest_of_the_newest_copy() {
+        let home = cache_with("manifest", &["0.9.0", "0.10.0"]);
+        let probe = cache_probe(home.clone(), Source::Local);
+        assert_eq!(probe.host_record_version.as_deref(), Some("0.10.0"));
+        let _ = std::fs::remove_dir_all(home);
+    }
 }
