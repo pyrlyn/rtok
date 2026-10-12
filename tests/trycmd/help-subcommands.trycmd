@@ -1195,7 +1195,7 @@ Usage: rtok report [OPTIONS]
 
 Options:
       --config <PATH>    User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --format <FORMAT>  Output format [default: md] [possible values: md, html, pdf]
+      --format <FORMAT>  Output format [possible values: md, html, pdf]
       --out <PATH>       Write to this path instead of stdout
       --since <SINCE>    How far back the report reads (`30d`, `24h`)
       --ai               Model-shaped rendering of the same document instead of `--format`
