@@ -1,5 +1,4 @@
 - T562. Abort memory sync when an existing host file cannot be read
-- T592. Keep late same-second sessions from moving behind the OTel cursor
 - T620. Enforce LSP request deadlines during blocking transport reads
 - T621. Refresh opened LSP documents after their files change
 - T623. Correlate web replies across request timeouts and retries
