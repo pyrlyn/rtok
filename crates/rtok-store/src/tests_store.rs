@@ -573,6 +573,82 @@ fn request_bodies_are_saved_clean_unless_store_raw() {
     assert_eq!(req.as_deref(), Some(dirty));
 }
 
+/// T599: a wrapper that only appears once noise is gone is removed on the first save, on the
+/// plain and the split hook path, so a body cleaned again stays as saved; `store_raw` keeps
+/// the bytes, and size and sha describe whatever was saved.
+#[test]
+fn a_wrapper_hidden_by_noise_is_removed_before_saving() {
+    let dir = std::env::temp_dir().join(format!("rtok-io-hidden-{}", std::process::id()));
+    let (store, id) = io_fixture(&dir);
+    let dirty = "{\"prompt\":\"<system-\\u001b[0mreminder>hidden</system-reminder>\\nvisible\"}";
+    let saved = |store: &Store, id: i32| -> (String, i64, String) {
+        let mut conn = store.lock().unwrap();
+        call_io::table
+            .filter(call_io::call_id.eq(id))
+            .select((
+                call_io::request_json.assume_not_null(),
+                call_io::request_bytes,
+                call_io::request_sha256.assume_not_null(),
+            ))
+            .first(&mut *conn)
+            .unwrap()
+    };
+    store
+        .insert_call_io(id, Some(dirty.as_bytes()), None, 65536, None)
+        .unwrap();
+    let (req, bytes, sha) = saved(&store, id);
+    assert_eq!(req, r#"{"prompt":"visible"}"#);
+    assert_eq!(bytes, req.len() as i64);
+    assert_eq!(sha, hex_sha256(req.as_bytes()));
+    assert_eq!(&*crate::sanitize::body(req.as_bytes()), req.as_bytes());
+
+    let hook = format!(r#"{{"session_id":"s1",{}"#, &dirty[1..]);
+    let hook_id = store
+        .insert_call(
+            "s1",
+            "hook",
+            "hook",
+            None,
+            None,
+            None,
+            None,
+            Some("UserPromptSubmit"),
+        )
+        .unwrap();
+    store
+        .insert_hook_call_io(hook_id, hook.as_bytes(), None, 65536)
+        .unwrap();
+    let (req, bytes, sha) = saved(&store, hook_id);
+    assert_eq!(req, r#"{"prompt":"visible"}"#);
+    assert_eq!((bytes, sha), (req.len() as i64, hex_sha256(req.as_bytes())));
+    let back = store.call_io_request(hook_id).unwrap().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&back).unwrap(),
+        serde_json::json!({"session_id": "s1", "prompt": "visible"})
+    );
+
+    store.set_store_raw(true);
+    let raw_id = store
+        .insert_call(
+            "s1",
+            "hook",
+            "hook",
+            None,
+            None,
+            None,
+            None,
+            Some("UserPromptSubmit"),
+        )
+        .unwrap();
+    store
+        .insert_hook_call_io(raw_id, hook.as_bytes(), None, 65536)
+        .unwrap();
+    assert_eq!(
+        store.call_io_request(raw_id).unwrap().unwrap(),
+        hook.as_bytes()
+    );
+}
+
 #[test]
 fn write_api_round_trip_and_spill() {
     let dir = std::env::temp_dir().join(format!("rtok-io-{}", std::process::id()));
