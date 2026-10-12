@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::Context;
+use figment::Figment;
+use figment::providers::{Format, Serialized, Toml};
 use figment::value::{Dict, Value as FigValue};
 
 use crate::Result;
@@ -42,7 +44,42 @@ pub fn issues_in(path: &Path, text: &str) -> Vec<String> {
     let mut errors = Vec::new();
     check_table(path, text, "", doc.as_table(), &schema, &mut errors);
     check_graph_maps(path, text, doc.as_table(), &mut errors);
+    // The walk above sees keys, not the shapes of the open maps or the elements of arrays, so a
+    // file it accepts can still fail `Config::load`. Only when it found nothing else: the typed
+    // error would repeat what it already named.
+    if errors.is_empty() {
+        check_typed(path, text, doc.as_table(), &mut errors);
+    }
     errors
+}
+
+/// Extract `Config` from defaults plus this file alone, so project and environment layers
+/// cannot mask a value the user file gets wrong. The same extraction `Config::load` ends in
+/// decides, so no second type schema is kept in step by hand.
+fn check_typed(path: &Path, src: &str, doc: &dyn TableLike, errors: &mut Vec<String>) {
+    let extracted = Figment::from(Serialized::defaults(Config::default()))
+        .merge(Toml::string(src))
+        .extract::<Config>();
+    let Err(err) = extracted else { return };
+    for e in err {
+        // The failing item, else the deepest table that exists on the way to it.
+        let mut item: Option<&Item> = None;
+        let mut table = Some(doc);
+        for part in &e.path {
+            let Some(found) = table.and_then(|t| t.get(part)) else {
+                break;
+            };
+            item = Some(found);
+            table = found.as_table_like();
+        }
+        let at = item.map_or_else(|| format!("{}:1", path.display()), |i| loc(path, src, i));
+        let key = e.path.join(".");
+        if key.is_empty() {
+            errors.push(format!("{at}: {}", e.kind));
+        } else {
+            errors.push(format!("{at}: {key}: {}", e.kind));
+        }
+    }
 }
 
 fn check_graph_maps(path: &Path, src: &str, doc: &dyn TableLike, errors: &mut Vec<String>) {
@@ -837,6 +874,73 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// T594: a value the key walk accepts but typed extraction refuses is rejected before the
+    /// write, in the real and the dry-run setter, and the existing file keeps its bytes.
+    #[test]
+    fn set_refuses_values_typed_extraction_rejects() {
+        let home = tmp("typed");
+        let (path, _) = Config::init_maybe(&home, None, false, false).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        for (key, raw, want) in [
+            ("stats.prices", "42", "stats.prices"),
+            ("stats.prices.custom", "\"x\"", "stats.prices.custom"),
+            (
+                "plugins.read.allow_paths",
+                "[1]",
+                "plugins.read.allow_paths",
+            ),
+            (
+                "plugins.read.allow_paths",
+                "[\"a\", 2]",
+                "plugins.read.allow_paths",
+            ),
+            ("bench.configs.mine", "7", "bench.configs.mine"),
+        ] {
+            for dry_run in [true, false] {
+                let err = set(&home, key, raw, dry_run).unwrap_err().to_string();
+                assert!(err.contains(want), "{key}={raw} dry={dry_run}: {err}");
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), before, "{key}={raw}");
+        }
+        assert!(Config::load_from(&home).is_ok(), "the file still loads");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// T594: free-form names stay accepted, and a valid edit keeps the file's comments.
+    #[test]
+    fn set_keeps_free_form_maps_and_arrays_usable() {
+        let home = tmp("typed-ok");
+        let (path, _) = Config::init_maybe(&home, None, false, false).unwrap();
+        std::fs::write(&path, "# keep me\n[proxy]\nport = 8790 # port\n").unwrap();
+        for (key, raw) in [
+            ("stats.prices.my-model", "{ input = 1.0, output = 2.0 }"),
+            ("bench.configs.mine", "\"/tmp/x\""),
+            ("plugins.graph.extensions.zig", "\"c\""),
+            ("plugins.read.allow_paths", "[]"),
+            ("plugins.read.allow_paths", "[\"/tmp\"]"),
+        ] {
+            set(&home, key, raw, false).unwrap_or_else(|e| panic!("{key}={raw}: {e}"));
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with("# keep me\n"), "{text}");
+        assert!(text.contains("port = 8790 # port"), "{text}");
+        assert!(Config::load_from(&home).is_ok());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// T594: `validate` names the key and its line, not just the first failing field.
+    #[test]
+    fn validate_reports_the_typed_error_with_key_and_line() {
+        let errs = issues_in(Path::new("c.toml"), "[stats]\nprices = 42\n");
+        assert_eq!(errs.len(), 1, "{errs:?}");
+        assert!(errs[0].starts_with("c.toml:2: stats.prices: "), "{errs:?}");
+        let errs = issues_in(Path::new("c.toml"), "[plugins.read]\nallow_paths = [1]\n");
+        assert!(
+            errs[0].starts_with("c.toml:2: plugins.read.allow_paths"),
+            "{errs:?}"
+        );
     }
 
     /// `set` swaps in a new file (new inode) instead of truncating the old one in place, so a
