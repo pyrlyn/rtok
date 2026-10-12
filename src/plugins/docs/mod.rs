@@ -88,10 +88,21 @@ fn not_cached(name: &str) -> String {
     format!("not cached: rtok docs fetch {name}")
 }
 
+/// Version a workspace's `llms.txt` is cached under: the canonical cwd after `local:`, so
+/// workspaces sharing one store never see each other's text. Callers still say `local`.
+fn local_version() -> String {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    format!("local:{}", cwd.display())
+}
+
 pub fn docs_resolve(rt: &crate::plugin::Runtime, name: &str) -> Result<String> {
     let _ = ingest_llms(rt);
     if name == "llms" {
-        let cached = rt.store.doc_crate_cached("llms", "local").unwrap_or(false);
+        let cached = rt
+            .store
+            .doc_crate_cached("llms", &local_version())
+            .unwrap_or(false);
         return Ok(json!({"name":"llms","version":"local","cached":cached}).to_string());
     }
     let text = match std::fs::read_to_string(lock_path()) {
@@ -113,8 +124,8 @@ pub fn docs_query(
 ) -> Result<String> {
     let _ = ingest_llms(rt);
     let ver = match version {
-        Some(v) if !v.is_empty() => v.to_string(),
-        _ if name == "llms" => "local".into(),
+        Some(v) if !v.is_empty() && !(name == "llms" && v == "local") => v.to_string(),
+        _ if name == "llms" => local_version(),
         _ => {
             let text = match std::fs::read_to_string(lock_path()) {
                 Ok(t) => t,
@@ -183,25 +194,29 @@ pub fn docs_get(rt: &crate::plugin::Runtime, id: i32) -> Result<String> {
     }
 }
 
-/// Split `llms.txt` / `llms-full.txt` on heading lines; crate `llms` version `local`.
+/// Split `llms.txt` / `llms-full.txt` on heading lines into crate `llms`, filed under this
+/// workspace's [`local_version`]. A missing
+/// or empty source drops the workspace's cache so it reports uncached, not stale text.
 fn ingest_llms(rt: &crate::plugin::Runtime) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let path = ["llms-full.txt", "llms.txt"]
+    let version = local_version();
+    let body = ["llms-full.txt", "llms.txt"]
         .iter()
         .map(|n| cwd.join(n))
-        .find(|p| p.is_file());
-    let Some(path) = path else {
+        .find(|p| p.is_file())
+        .map(std::fs::read_to_string)
+        .transpose()?;
+    let items = body.as_deref().map(split_llms).unwrap_or_default();
+    let (Some(body), false) = (body, items.is_empty()) else {
+        if rt.store.doc_crate_cached("llms", &version)? {
+            rt.store.delete_doc_crate("llms", &version)?;
+        }
         return Ok(());
     };
-    let body = std::fs::read_to_string(&path)?;
     let sha = crate::store::hex_sha256(body.as_bytes());
-    let items = split_llms(&body);
-    if items.is_empty() {
-        return Ok(());
-    }
     let now = i64::try_from(crate::log::now()).unwrap_or(0);
     rt.store
-        .replace_doc_crate("llms", "local", &sha, 0, now, &items)?;
+        .replace_doc_crate("llms", &version, &sha, 0, now, &items)?;
     Ok(())
 }
 
@@ -353,20 +368,27 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         rt
     }
 
-    fn with_lock_cwd<T>(lock_text: &str, f: impl FnOnce() -> T) -> T {
-        let _guard = CWD.lock().unwrap();
+    /// A fresh directory holding `files`.
+    fn temp_workspace(files: &[(&str, &str)]) -> PathBuf {
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "rtok-docs-lock-{}-{}",
+            "rtok-docs-ws-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        let _ = std::fs::create_dir_all(&dir);
-        std::fs::write(dir.join("Cargo.lock"), lock_text).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, body) in files {
+            std::fs::write(dir.join(name), body).unwrap();
+        }
+        dir
+    }
+
+    /// `f` with `dir` as the process cwd, which is what scopes the plugin to a workspace.
+    fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
+        let _guard = CWD.lock().unwrap_or_else(|e| e.into_inner());
         let prev = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&dir).unwrap();
+        std::env::set_current_dir(dir).unwrap();
         struct Restore(PathBuf);
         impl Drop for Restore {
             fn drop(&mut self) {
@@ -374,7 +396,12 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             }
         }
         let _restore = Restore(prev);
-        let out = f();
+        f()
+    }
+
+    fn with_lock_cwd<T>(lock_text: &str, f: impl FnOnce() -> T) -> T {
+        let dir = temp_workspace(&[("Cargo.lock", lock_text)]);
+        let out = in_dir(&dir, f);
         let _ = std::fs::remove_dir_all(&dir);
         out
     }
@@ -455,6 +482,60 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             .iter()
             .map(|h| h["id"].as_i64().unwrap())
             .collect()
+    }
+
+    /// T549: two workspaces sharing one store each see only their own `llms.txt`; a workspace
+    /// without one sees nothing, and an old unscoped `("llms", "local")` row is nobody's.
+    #[test]
+    fn local_llms_docs_are_scoped_to_their_workspace() {
+        let rt = runtime("docs-ws");
+        let a = temp_workspace(&[("llms.txt", "# Alpha\nMARKER_ALPHA body\n")]);
+        let b = temp_workspace(&[]);
+        rt.store
+            .replace_doc_crate(
+                "llms",
+                "local",
+                "old",
+                0,
+                0,
+                &[("Legacy".into(), "llms".into(), "MARKER_LEGACY".into())],
+            )
+            .unwrap();
+        let query =
+            |dir: &PathBuf, q: &str| in_dir(dir, || docs_query(&rt, "llms", None, q).unwrap());
+        let cached = |dir: &PathBuf| {
+            let out = in_dir(dir, || docs_resolve(&rt, "llms").unwrap());
+            serde_json::from_str::<Value>(&out).unwrap()["cached"]
+                .as_bool()
+                .unwrap()
+        };
+
+        assert_eq!(ids_of(&query(&a, "MARKER_ALPHA")).len(), 1);
+        assert!(cached(&a));
+        assert!(!cached(&b), "B has no llms file");
+        assert_eq!(
+            query(&b, "MARKER_ALPHA"),
+            "not cached: rtok docs fetch llms"
+        );
+        assert_eq!(query(&a, "MARKER_LEGACY"), "[]");
+
+        std::fs::write(b.join("llms.txt"), "# Beta\nMARKER_BETA body\n").unwrap();
+        assert_eq!(query(&b, "MARKER_ALPHA"), "[]");
+        assert_eq!(ids_of(&query(&b, "MARKER_BETA")).len(), 1);
+        assert_eq!(
+            ids_of(&query(&a, "MARKER_ALPHA")).len(),
+            1,
+            "B did not overwrite A"
+        );
+        assert_eq!(query(&a, "MARKER_BETA"), "[]");
+
+        std::fs::remove_file(a.join("llms.txt")).unwrap();
+        assert!(!cached(&a), "a deleted source is no longer served");
+        std::fs::write(a.join("llms.txt"), "# Alpha\nMARKER_AGAIN body\n").unwrap();
+        assert_eq!(ids_of(&query(&a, "MARKER_AGAIN")).len(), 1);
+        for d in [a, b] {
+            let _ = std::fs::remove_dir_all(d);
+        }
     }
 
     /// T551: the saving's before side is the full text of everything the query considered,

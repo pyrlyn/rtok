@@ -164,4 +164,24 @@ impl Store {
             Ok(n)
         })
     }
+
+    /// Drop a cached crate row and its items (a local source that disappeared).
+    pub fn delete_doc_crate(&self, name: &str, version: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        conn.transaction(|conn| {
+            diesel::delete(
+                doc_items::table
+                    .filter(doc_items::crate_name.eq(name))
+                    .filter(doc_items::version.eq(version)),
+            )
+            .execute(conn)?;
+            diesel::delete(
+                doc_crates::table
+                    .filter(doc_crates::name.eq(name))
+                    .filter(doc_crates::version.eq(version)),
+            )
+            .execute(conn)?;
+            Ok(())
+        })
+    }
 }
