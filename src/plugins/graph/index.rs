@@ -129,10 +129,7 @@ pub fn run_with(
     let mut keep = HashSet::new();
     let mut jobs = Vec::new();
     let matcher = super::walk::Matcher::new(&root, &graph_cfg);
-    for entry in matcher.walk_builder(&root).build() {
-        let Ok(entry) = entry else {
-            continue;
-        };
+    for entry in matcher.walk() {
         if !entry.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
