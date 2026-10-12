@@ -49,6 +49,7 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
 /// prefix built so far is replaced by its canonical path when it exists, so `link/../x` names
 /// the parent of the link's target, as a native lookup does (T590). A prefix that does not
 /// exist yet pops lexically, so a missing path still normalises.
+#[cfg(feature = "read")]
 pub(crate) fn normalize_following(fs: &impl ReadFs, root: &Path, path: &Path) -> PathBuf {
     join_with(root, path, |out| {
         if let Some(real) = fs.canonicalize(out) {
