@@ -26,7 +26,6 @@
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
-- T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.9. P28 Phase 2: async compressor on the `internal` lane

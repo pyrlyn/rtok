@@ -41,13 +41,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T378 | todo | P3 | 3 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 70% | |
+| T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -957,20 +956,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
 
-### T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
-
-From the Empryo study (idea-only, clean-room; Empryo `trigram.ts`: per-file trigram sets, candidate files = intersection of the query's literal trigrams). `search` (`src/plugins/read/search.rs:92`) walks and scans every file. Gate: I-95 (parallel walk) measures `search` p95 on a large repo first; if it is ≤ 200 ms, close this card with the number.
-
-Plan: per-root trigram posting lists (`file_id` bitmaps, `roaring` only with a `Cargo.toml` justification, else sorted `Vec<u32>`) built in the graph index pass for text files ≤ 1 MB; queries with a literal of ≥ 3 bytes scan only candidate files; regexes without a usable literal take the full scan.
-
-Done when: a literal `search` on a 50k-file repo scans only candidate files and returns the same hits.
-
-Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
-
-Execution plan (2026-10-12): measure `search` p95 on the largest local repository with a dated command; at or under 200 ms close the card with the number in `research.md`; over 200 ms report back before building the prefilter.
-
-Progress (2026-10-12, `research.md` §39): `search` through `rtok mcp` at bf88f07e2, load ~20. Real repos top out at ~2k files (apps/stator 1,995): p95 ≤ 157 ms. A synthetic 66,493-file tree (local repos cloned 7×): capped queries ≤ 137 ms, an absent literal p95 30.4 s, linear in file count. No real ≥ 50k-file repo here. Creator decision: build the prefilter on the synthetic number, find a real 50k-file repo first, or close at the 2k scale.
-
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -1032,7 +1017,7 @@ Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
 Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
 
-Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Left: a resumed Copilot session (the SDK docs point to cumulative shutdown totals, so summing would double count; reader unchanged without a real file), a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (creator decision).
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (creator decision).
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
