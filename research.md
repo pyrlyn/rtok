@@ -1651,6 +1651,31 @@ Caveats: path-level match (no range or sha), parent reads counted over the whole
 4. **A cheap scout by construction.** A shipped agent definition (`model: haiku`, tools limited to rtok MCP `read`/`search`/`outline`/`explore`/`expand`, answer = `path:line` citations) makes the cheap path the default one → T132; measured by T128's per-`agentType` split.
 5. Not pursued: `fork` (parent model, parent-sized context — the opposite of cheap); shrinking the `Agent` result (0.7 %, T59.6 stands). Parked as ideas: sibling cache-prefix sharing (I-89), sibling findings board (I-90), `updatedToolOutput` (I-91).
 
+### 17.4 rtok-scout vs Explore and general-purpose (T132, 2026-10-12)
+
+Command: `rtok stats --since 18d --json` (read-only; rtok 0.15.1, fe170a431). The table view `rtok stats --since 18d` prints the same split. Window: 2026-09-24 (the day `rtok-scout` shipped) to 2026-10-12. `--since` counts back from the run's clock, so the start is the same time of day on 2026-09-24. Store: this machine's `~/.claude/projects`, 77 sessions. Source: `.subagents.by_type` (T128). Per-agent values are floored.
+
+| agentType | Sub-agents | Tool-result B per agent | Native Read B per agent | Re-read B per agent |
+| --- | --- | --- | --- | --- |
+| `Explore` (all models) | 42 | 140,390 | 8,303 | 1,420 |
+| `general-purpose` (all models) | 1,057 | 184,206 | 41,579 | 2,642 |
+| `rtok:rtok-scout` | 2 | 53,342 | 0 | 0 |
+
+Totals behind the averages: `Explore` 5,896,395 tool-result B, 348,757 Read B, 59,665 re-read B. `general-purpose` 194,705,798 / 43,949,032 / 2,792,842. `rtok-scout` 106,685 / 0 / 0.
+
+Haiku-only rows: `Explore | haiku` 6 agents, 89,571 tool-result B and 7,587 Read B per agent. `general-purpose | haiku` 80 agents, 19,734 and 2,542.
+
+Tokens are not split by agentType. The JSON carries usage only for the whole sub-agent tree: input 214,319, cache read 14,492,408,114, cache write 370,826,742, output 2,243,658. A per-type token split would need T128 to add usage per type.
+
+Caveats:
+- `rtok-scout` has 2 sub-agents, too few to compare with 42 or 1,057.
+- Its five tools are MCP (`mcp__plugin_rtok_rtok__*`). The T128 read column counts native `Read` results only, so its 0 B is structural, not a saving. The tool-result column does count MCP output, but it also includes search and outline output.
+- The scout's meta has no model (`-`), so the model split cannot place it.
+- The store is live. The table run differed slightly from the JSON run (`general-purpose | haiku` tool-result 1,580,442 B, tree input 214,341), so rows drift by a few KB between runs.
+- `general-purpose` mixes models (329 opus, 554 sonnet). Compare within one model only.
+
+Verdict: no decision on the default. The two scout sub-agents used 53 KB of tool results each, against 140 KB for `Explore` and 184 KB for `general-purpose`, but n = 2 and the read column cannot see MCP reads. Keep `rtok-scout` as shipped and re-measure once it has a usable sample. T128's split must also count MCP reads per agentType before the read column can compare them.
+
 ## 18. Git worktrees: accumulation, ownership, build artifacts (2026-09-21)
 
 Creator question: worktrees pile up, nobody knows whose they are, names are random, and they fill the disk. Not a token saving — no `Measurement` row and no public number follows from this section.
