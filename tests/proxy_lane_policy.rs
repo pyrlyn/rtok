@@ -291,6 +291,83 @@ async fn the_semantic_cache_serves_the_agent_lane_only_by_default() {
     task.abort();
 }
 
+/// T533: the cache key names the upstream request target. Two cache-enabled lanes that send
+/// the same body and credentials to different upstreams must each reach their own upstream,
+/// and a replay to one target still hits.
+#[tokio::test]
+async fn cached_responses_are_scoped_to_the_upstream_target() {
+    let (a, b) = (MockServer::start(), MockServer::start());
+    fn mock_for<'a>(server: &'a MockServer, answer: &'static str) -> httpmock::Mock<'a> {
+        server.mock(move |when, then| {
+            when.method(POST).path("/v1/messages");
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(answer);
+        })
+    }
+    let ma = mock_for(
+        &a,
+        r#"{"type":"message","from":"a","usage":{"input_tokens":1,"output_tokens":2}}"#,
+    );
+    let mb = mock_for(
+        &b,
+        r#"{"type":"message","from":"b","usage":{"input_tokens":1,"output_tokens":2}}"#,
+    );
+    let (addr, state, task) = proxy_server("lane-policy-cache-target", |cfg| {
+        cfg.proxy.upstream = a.base_url();
+        cfg.proxy.lanes.internal.upstream = b.base_url();
+        cfg.proxy.lanes.internal.semantic_cache = true;
+        cfg.plugins.proxy.semantic_cache.enabled = true;
+    })
+    .await;
+    let body = br#"{"model":"claude-test","messages":[{"role":"user","content":"hi"}]}"#.to_vec();
+    let text = |lane: Option<&'static str>| {
+        let (addr, body) = (addr.clone(), body.clone());
+        async move {
+            let mut req = reqwest::Client::new()
+                .post(format!("http://{addr}/v1/messages"))
+                .header("content-type", "application/json")
+                .body(body);
+            if let Some(lane) = lane {
+                req = req.header("x-rtok-lane", lane);
+            }
+            req.send()
+                .await
+                .expect("request")
+                .text()
+                .await
+                .expect("body")
+        }
+    };
+    let wait_usage = |n: i64| {
+        let store = &state.store;
+        async move {
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+            while store.count_usage().expect("usage rows") < n {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "usage {n} never appeared"
+                );
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        }
+    };
+    assert!(text(None).await.contains(r#""from":"a""#));
+    wait_usage(1).await;
+    assert!(
+        text(Some("internal")).await.contains(r#""from":"b""#),
+        "the warm entry for upstream A must not answer a request bound for B"
+    );
+    wait_usage(2).await;
+    ma.assert_calls(1);
+    mb.assert_calls(1);
+    assert!(text(None).await.contains(r#""from":"a""#));
+    assert!(text(Some("internal")).await.contains(r#""from":"b""#));
+    ma.assert_calls(1);
+    mb.assert_calls(1);
+    task.abort();
+}
+
 #[tokio::test]
 async fn a_lane_timeout_bounds_only_that_lane() {
     let server = MockServer::start();

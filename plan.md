@@ -79,8 +79,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T532 | todo | P1 | 3 | 0% | |
-| T533 | todo | P1 | 3 | 0% | |
 | T536 | todo | P2 | 2 | 0% | |
 | T537 | todo | P2 | 2 | 0% | |
 | T538 | todo | P2 | 2 | 0% | |
@@ -174,32 +172,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T532. Preserve typed content and message fields in the direct cache key
-
-Source-confirmed on `0b14b88e`: [`messages_text` / `block_text`](src/proxy/semantic_cache.rs#L368) flatten structured requests into strings before hashing. `tool_result.is_error`, message `name`, and `image_url.detail` are omitted. For example, otherwise identical single-user requests with the same image URL and `detail: "low"` versus `"high"` produce identical CachePrompts. A text block containing `tool_result t: OK` also has the same flattened text as `{type:"tool_result", tool_use_id:"t", content:"OK"}`. With semantic cache enabled, the direct tier returns the first response for the second request before an upstream call. This is distinct from completed T55.14/T212/T303/T323: those added fields but retained lossy flattening.
-
-Validation: an offline Rust harness compiled verbatim `messages_text`, `content_text`, `block_text` and `canonical_json` from this revision; all four differing pairs above returned equal message fields. Other CachePrompt inputs were held equal. This proves the normalization collision, not an end-to-end proxy run.
-
-Execution plan:
-
-1. Add paired-request fixtures for image detail, tool-result error status, participant name and literal text versus typed tool content. Assert distinct direct keys and two upstream calls.
-2. Build the direct key from canonical structured message/content values, keeping type tags, field boundaries and response-affecting fields. Keep semantic text extraction separate.
-3. Retain key-order equivalence and the existing caller/model/tool-schema isolation tests; do not broaden cache eligibility.
-
-Check: all differing fixture pairs miss the direct cache, exact replay still hits, reordered object keys retain the same key, and `just check` passes.
-
-### T533. Scope cached responses to the resolved upstream request target
-
-Source-confirmed on `0b14b88e`: [`handle`](src/proxy/mod.rs#L407) looks up a shared cache before resolving the target at line 430. [`CachePrompt`](src/proxy/semantic_cache.rs#L22) includes provider/model/body/caller but no upstream URL, path, query or HTTP method. [`upstream_for`](src/proxy/mod.rs#L224) supports different upstreams per lane. Two cache-enabled lanes with identical shaping policy, body and credentials but different upstreams therefore share a direct key: warming endpoint A can cause a request intended for B to return A's answer without contacting B. This remains possible with `cache_by_provider` and `cache_by_model` both enabled; T323 isolated callers, not routing destinations.
-
-Execution plan:
-
-1. Reproduce with two local upstream servers returning distinct sentinel responses and two lanes that permit cache reads/fills.
-2. Resolve the effective target before lookup and include a consistent target/method namespace in both lookup and fill. Avoid retaining raw credentials or credential-bearing query strings in cache metadata; reuse hashing.
-3. Test differing paths/queries as well as lane upstreams; exact replay to one endpoint must still hit.
-
-Check: B receives its first request after A was warmed, each endpoint returns its own bytes, same-target replay hits, and `just check` passes.
 
 ### T536. Preserve raw command bytes when storage fails open
 
