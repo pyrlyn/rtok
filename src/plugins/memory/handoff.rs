@@ -111,14 +111,7 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
                 .and_then(|i| i.get("command"))
                 .and_then(|c| c.as_str());
             for path in patch.map(patch_paths).unwrap_or_default() {
-                let path = match std::path::Path::new(&path).is_absolute() {
-                    true => path,
-                    false => std::path::Path::new(cwd)
-                        .join(&path)
-                        .to_string_lossy()
-                        .into_owned(),
-                };
-                note(path);
+                note(under_cwd(cwd, &path));
             }
             continue;
         }
@@ -174,6 +167,22 @@ fn patch_paths(patch: &str) -> Vec<String> {
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty())
         .collect()
+}
+
+/// A patch header path made absolute under `cwd`. Patch headers are `/`-separated, so the
+/// join uses the cwd's own separator rather than `Path::join`, which on Windows would give a
+/// mixed `/repo\src/a.rs` that never matches the same file read through `Read`.
+fn under_cwd(cwd: &str, path: &str) -> String {
+    if path.starts_with(['/', '\\']) || std::path::Path::new(path).is_absolute() {
+        return path.to_string();
+    }
+    let sep = if cwd.contains('\\') && !cwd.contains('/') {
+        '\\'
+    } else {
+        '/'
+    };
+    let path = path.replace(['/', '\\'], &sep.to_string());
+    format!("{}{sep}{path}", cwd.trim_end_matches(['/', '\\']))
 }
 
 /// Widens each touch to the innermost indexed definition that encloses it (T130.3), newest
@@ -456,6 +465,15 @@ mod tests {
         ] {
             assert!(text.lines().any(|l| l == path), "{path} in\n{text}");
         }
+    }
+
+    #[test]
+    fn a_patch_path_takes_the_separator_of_its_cwd() {
+        assert_eq!(under_cwd("/repo", "src/a.rs"), "/repo/src/a.rs");
+        assert_eq!(under_cwd("/repo/", "src/a.rs"), "/repo/src/a.rs");
+        assert_eq!(under_cwd(r"C:\repo", "src/a.rs"), r"C:\repo\src\a.rs");
+        assert_eq!(under_cwd("/repo", "/abs/old.rs"), "/abs/old.rs");
+        assert_eq!(under_cwd(r"C:\repo", r"\abs\old.rs"), r"\abs\old.rs");
     }
 
     #[test]
