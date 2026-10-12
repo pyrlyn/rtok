@@ -119,8 +119,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T571 | todo | P2 | 2 | 0% | |
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
-| T576 | todo | P2 | 4 | 50% | |
-| T576.2 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T577 | todo | P2 | 3 | 0% | |
 | T579 | todo | P2 | 3 | 0% | |
 | T580 | todo | P2 | 2 | 0% | |
@@ -646,24 +644,6 @@ Execution plan:
 3. Cover encoded traversal and separators, literal percent sequences without double decoding, missing assets, page fallback and negotiated compressed variants; retain the existing GET/HEAD behavior.
 
 Check: encoded URLs resolve the intended existing asset in both sources, traversal remains rejected and unknown asset URLs stay 404, and `just check` passes. Actual router probes returned 404 for all four encoded-name fixtures and 200 for the plain-name control; HEAD controls correctly returned no body.
-
-### T576. Bind Doctor web writes to the confirmed preview
-
-Confirmed in the selection path: [Selection](src/doctor/web.rs#L31) carries only kept-copy swaps and toggles, and [prepare](src/doctor/web.rs#L80) rebuilds candidates and default selections on both plan and apply. Preview a removable broken hook A in a user-level settings file, then add another removable broken hook B before confirming the original preview. With the original empty selection delta, B is also selected during apply although the page confirmed only A. [DoctorFix confirmation](web/src/pages/DoctorFix.tsx#L38) sends the deltas without preview identities or file versions. [fix_found](src/doctor/fix.rs#L284) edits the fresh selected findings; [fix_file's reread](src/doctor/fix.rs#L366) compares bytes read within that apply request, not those shown in the earlier preview. T331.12's fresh rescan prevents use of stale findings but does not bind writes to the confirmed diff.
-
-Execution plan:
-
-1. Add a fake-filesystem plan/apply regression: preview A, introduce B, submit the original confirmation and assert B is untouched. Cover insertion in the same file and a newly discovered file, plus an unchanged-preview success control.
-2. Carry an explicit set of confirmed identities and content/version evidence from the preview into apply. Revalidate the selected entries and affected files before writing; refuse a changed preview and return a fresh plan requiring confirmation. Do not auto-select findings discovered after the preview or treat a reused array position as the same entry.
-3. Wire the preview evidence through the web protocol and page state; cover toggles, kept-copy swaps, shared-file defaults, reordered/replaced entries, stale requests and backup/write failures. Retain the immediate pre-write reread as a separate safeguard.
-
-Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
-
-Planning note: Web gates `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after git add for the web/ part; do .a first, .b depends on it.
-
-### T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
-
-Depends on T576.1. Done means: the web protocol types and `web/src/pages/DoctorFix.tsx` send the preview evidence back and show the stale-request answer; stories and e2e; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after `git add`.
 
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 

@@ -11875,6 +11875,28 @@ Done means: `project.rs` `canonical_url` resolves a local relative, absolute or 
 
 Result: local `origin` remotes (relative path, absolute path, `file://` URL) now resolve to one absolute project key in `src/project.rs`. A relative path resolves against the main checkout, as git does; existing destinations are canonicalized, missing ones fall back to a lexical absolute path, and network and scp remotes are unchanged. Two checkouts with the same relative origin string but different repositories get distinct keys, and every spelling of one remote shares a key from main, a linked worktree or a nested cwd (real-git fixtures plus a Vfs unit test; the three real-git tests failed before the fix). Task counters and claims filed under the old relative key are reconciled in T586.2.
 
+### T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
+
+Depends on T576.1. Done means: the web protocol types and `web/src/pages/DoctorFix.tsx` send the preview evidence back and show the stale-request answer; stories and e2e; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after `git add`.
+
+Result: the DoctorFix page keeps `plan.confirmed` of the plan on screen and sends it as `selection.confirmed` on apply (`applyRequest` in `web/src/pages/fixState.ts`); an answer carrying `replan` shows the stale message from `fixed.text`, replaces the plan and waits for a new confirmation, with no automatic re-apply. `doctor::web::apply`, shared by the web route and the TUI, refuses a request without the evidence: nothing is written and a fresh plan comes back; the embedded SPA always sends it and the `doctor --fix` CLI path is unchanged. The sample machine mirrors the refusal and the stale answer, so the `DoctorFixStale` story and an e2e run the stale flow. Fail-first: with the guard disabled the new Rust test wrote the file (code 0 instead of 1).
+
+### T576. Bind Doctor web writes to the confirmed preview
+
+Confirmed in the selection path: [Selection](src/doctor/web.rs#L31) carries only kept-copy swaps and toggles, and [prepare](src/doctor/web.rs#L80) rebuilds candidates and default selections on both plan and apply. Preview a removable broken hook A in a user-level settings file, then add another removable broken hook B before confirming the original preview. With the original empty selection delta, B is also selected during apply although the page confirmed only A. [DoctorFix confirmation](web/src/pages/DoctorFix.tsx#L38) sends the deltas without preview identities or file versions. [fix_found](src/doctor/fix.rs#L284) edits the fresh selected findings; [fix_file's reread](src/doctor/fix.rs#L366) compares bytes read within that apply request, not those shown in the earlier preview. T331.12's fresh rescan prevents use of stale findings but does not bind writes to the confirmed diff.
+
+Execution plan:
+
+1. Add a fake-filesystem plan/apply regression: preview A, introduce B, submit the original confirmation and assert B is untouched. Cover insertion in the same file and a newly discovered file, plus an unchanged-preview success control.
+2. Carry an explicit set of confirmed identities and content/version evidence from the preview into apply. Revalidate the selected entries and affected files before writing; refuse a changed preview and return a fresh plan requiring confirmation. Do not auto-select findings discovered after the preview or treat a reused array position as the same entry.
+3. Wire the preview evidence through the web protocol and page state; cover toggles, kept-copy swaps, shared-file defaults, reordered/replaced entries, stale requests and backup/write failures. Retain the immediate pre-write reread as a separate safeguard.
+
+Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
+
+Planning note: Web gates `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e` after git add for the web/ part; do .a first, .b depends on it.
+
+Result: closed by T576.1 (per-file SHA-256 and removed-entry evidence in `Plan.confirmed`, `fix::fix_bound` refuses stale files and entries, `Fixed.replan` returns a fresh plan) and T576.2 (the page carries the evidence and handles the replan; web and TUI applies without evidence are refused). Doctor web writes now apply only what the confirmed preview showed.
+
 ### T586.2. Reconcile persisted legacy relative keys for task counters and claims
 
 Done means: persisted old keys in task counters (`tasks/run.rs`) and claims (`hooks/mod.rs`) are reconciled to the new identity without resetting ids; an ambiguous shared legacy key may need the creator's choice at claim time (see the card).

@@ -98,8 +98,6 @@
 - T571. Redact graph-export scope metadata and suggested download names
 - T573. Apply terminal call state even when the live event list is capped
 - T574. Decode SPA asset URL paths before looking up filenames
-- T576. Bind Doctor web writes to the confirmed preview
-- T576.2. Carry preview evidence through the DoctorFix page and web protocol (TSX, stories/e2e)
 - T577. Protect nested package-manager lockfiles during junk cleanup
 - T579. Count each transcript once when scanning directory aliases
 - T580. Include report metadata and anchors in the AI output budget
