@@ -159,18 +159,20 @@ fn decide(cx: &Ctx, name: &str, body: &str, cap: u64) -> Option<PreToolDecision>
     Some(PreToolDecision::Deny { reason })
 }
 
-/// True when the YAML frontmatter names a key the host applies at invocation.
+/// True when the YAML frontmatter names a key the host applies at invocation. The mapping is
+/// parsed, so `"model":` and `'allowed-tools':` count like the bare spelling; frontmatter
+/// that does not parse as a plain string-keyed mapping is treated as exempt (fail open).
 fn host_keys(body: &str) -> bool {
     let Some(rest) = body.strip_prefix("---") else {
         return false;
     };
     let end = rest.find("\n---").unwrap_or(rest.len());
-    rest[..end].lines().any(|l| {
-        HOST_KEYS.iter().any(|k| {
-            l.strip_prefix(k)
-                .is_some_and(|r| r.trim_start().starts_with(':'))
-        })
-    })
+    let yaml = &rest[..end];
+    if yaml.trim().is_empty() {
+        return false;
+    }
+    serde_saphyr::from_str::<std::collections::HashMap<String, serde::de::IgnoredAny>>(yaml)
+        .map_or(true, |m| HOST_KEYS.iter().any(|k| m.contains_key(*k)))
 }
 
 /// Cut at a char boundary with an ellipsis.
@@ -235,6 +237,55 @@ mod tests {
         assert!(decide(&cx, "s", &keyed, 8192).is_none());
         assert!(!host_keys(&body(1)));
         assert!(host_keys("---\nmodel:  haiku\n---\n# x"));
+    }
+
+    /// T559: the exemption is about the frontmatter mapping's keys, not their YAML spelling,
+    /// and an unreadable frontmatter is never digested.
+    #[test]
+    fn host_keys_are_recognised_whatever_their_yaml_spelling() {
+        let cx = crate::testutil::runtime("skill-yaml").0;
+        let cx = Ctx::new(&cx);
+        let filler = body(300);
+        let filler = filler
+            .split_once("---\n")
+            .unwrap()
+            .1
+            .split_once("---\n")
+            .unwrap()
+            .1;
+        for fm in [
+            "model: haiku",
+            "\"model\": haiku",
+            "'allowed-tools': Bash",
+            "\"context\": fork",
+            "'agent': Explore",
+            "name: x\r\nmodel: haiku\r\n",
+            "name: x\nallowed-tools:\n  - Bash\n",
+            "name: x\n\"model\" :   haiku",
+            "{model: haiku}",
+            "name: [unclosed",
+            "name: a\nname: b",
+            "- just\n- a list",
+        ] {
+            let skill = format!("---\n{fm}\n---\n{filler}");
+            assert!(skill.len() > 8192);
+            assert!(host_keys(&skill), "{fm}");
+            assert!(decide(&cx, "s", &skill, 8192).is_none(), "{fm}");
+        }
+        for fm in [
+            "name: x",
+            "name: x\ndescription: \"pick the model and allowed-tools: later\"",
+            "name: x\nmetadata:\n  model: nested\n",
+            "\"name\": x\n'description': y",
+            "",
+        ] {
+            let skill = format!("---\n{fm}\n---\n{filler}");
+            assert!(!host_keys(&skill), "{fm}");
+            assert!(decide(&cx, "s", &skill, 8192).is_some(), "{fm}");
+        }
+        // Prose that merely mentions a host key, and no frontmatter at all.
+        let prose = format!("# Notes\nmodel: not frontmatter\n{filler}");
+        assert!(!host_keys(&prose));
     }
 
     #[test]
