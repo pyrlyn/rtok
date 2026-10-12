@@ -11755,6 +11755,17 @@ Result: `crates/rtok-sys/src/proc/` gains `ProgressRunner::batch(label, total, u
 Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
 
+### T436.3. Shared operation-icon crate for rtok and ketch
+
+Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
+
+Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
+
+Result: the crate is `operation-icons` in `packages/crates` (listepo/crates-packages #56): `OPERATION_ICONS`, `icon`, `icon_in` (a caller's own rows after the shared ones), `ICON_WIDTH`, `padding` and `gutter`, with unit tests for every verb, the order of `uninstall` and `install`, the fallback and the width. `src/ui/style.rs` keeps only what is rtok's: `Kind`, the rows from `index` to `stop` (`OWN_ICONS`, looked up after the shared table, so the lookup order is unchanged) and the fallback to the `Kind` icon. ketch's `src/ui.rs` drops its own table, `ICON_WIDTH` and padding for the same crate. `unicode-width` moved to dev-dependencies in both (only the width tests use it). No output change: `tests/ui_style.rs` and the trycmd snapshots are untouched and green.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
