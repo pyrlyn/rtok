@@ -1,4 +1,3 @@
-- T531. Make the archive reference returned by read dedup expandable
 - T532. Preserve typed content and message fields in the direct cache key
 - T533. Scope cached responses to the resolved upstream request target
 - T534. Validate expand ranges against the payload before freezing decisions

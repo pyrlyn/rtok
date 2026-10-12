@@ -363,7 +363,7 @@ struct Server {
 impl Server {
     fn new(cfg: &Config) -> Result<Self> {
         // One session per process: `read_cache` rows are keyed by session and never expire, so
-        // the literal "mcp" made every `rtok mcp` process answer `unchanged since <sha>` for a
+        // the literal "mcp" made every `rtok mcp` process answer `unchanged id <sha>` for a
         // file only another conversation had read. The surface stays "mcp" (see `record`).
         let cx = Runtime::open(cfg.clone(), format!("mcp-{}", std::process::id()))?;
         // T351: sibling worktrees and client roots pass the path guard in this process only.

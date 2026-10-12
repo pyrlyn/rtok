@@ -79,7 +79,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T531 | todo | P2 | 2 | 0% | |
 | T532 | todo | P1 | 3 | 0% | |
 | T533 | todo | P1 | 3 | 0% | |
 | T534 | todo | P2 | 2 | 0% | |
@@ -177,18 +176,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T531. Make the archive reference returned by read dedup expandable
-
-Source-confirmed on `0b14b88e`: [`dedup_line`](src/plugins/read/cache.rs#L65) formats a 64-character archive id, then always shortens it to eight characters to meet the 80-character output limit. Even a one-line file produces a full form longer than 80 characters. [`Store::get_archive`](crates/rtok-store/src/archive_rows.rs#L402) performs an exact primary-key lookup; neither CLI nor MCP expand resolves prefixes. Read a file twice in one session, copy the id from `unchanged since <8 chars>`, then expand it: the lookup has no matching row. The bytes exist, but the returned reference cannot retrieve them. T4.4 introduced the short display; T354 documents full ids but does not make this reference usable.
-
-Execution plan:
-
-1. Add a regression using the id parsed from the second read response, not the full id fetched from the database.
-2. Prefer a compact dedup message containing the full id within the existing budget; reuse the archive reference convention instead of introducing ambiguous prefix lookup.
-3. Exercise CLI and MCP expansion of that exact reference, including large line counts; retain one dedup Measurement.
-
-Check: the second read's reference expands to the archived bytes, the response meets its length contract, and `just check` passes.
 
 ### T532. Preserve typed content and message fields in the direct cache key
 

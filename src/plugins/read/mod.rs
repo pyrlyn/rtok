@@ -155,7 +155,6 @@ pub(crate) fn read_with(
         &key,
         abs.to_string_lossy().as_ref(),
         payload,
-        body.lines().count(),
         force_delta,
     ) {
         return Ok(hit);
