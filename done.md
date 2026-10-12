@@ -8777,6 +8777,17 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.9. `rtok agents install junie` — JetBrains Junie
+
+Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
+
+Done: `src/agents/junie/` CLI-only, MCP-only host (`junie`). `mcpServers.rtok` → `rtok mcp --host junie` goes into `~/.junie/mcp/mcp.json` through the shared `register_stdio_mcp` / `unregister_stdio_mcp` (no second copy); `[setup.junie] mcp_path` overrides the file (the docs name no variable that moves `~/.junie`). The project `.junie/mcp/mcp.json` is committed with repositories, so setup never writes it. No IDE variant: the plugin's MCP page names no file. Hooks stay `Support::No`: the only documented hook event is `SessionStart`. Research in `research.md` §32.9 (checked 2026-10-12); host registered in `HOSTS`, `agent_for`, `mcp::rows`, `junk_map::NO_ROWS`, the config section and default, `docs/agents.md`, `docs/agents-and-worktrees.md`, `audit-coverage.md`, the trycmd snapshots and the host tests.
+
+Check: `agents::junie` unit tests (dry run, idempotent stdio entry, foreign servers kept, `apply` via the trait), `agents_real_config` (`junie_keeps_the_real_mcp_json`), `host_docs`, `agents_list_content`, config-init / config-show / report-md snapshots.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.

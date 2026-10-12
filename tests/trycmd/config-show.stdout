@@ -287,6 +287,7 @@ setup.force = false
 setup.gemini.dir = ~/.gemini
 setup.grok.config_path = ~/.grok/config.toml
 setup.hook_timeout_s = 5
+setup.junie.mcp_path = 
 setup.kilo.config_path = ~/.config/kilo/kilo.json
 setup.kimi.config_path = ~/.kimi-code/config.toml
 setup.mcp = true

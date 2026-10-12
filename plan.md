@@ -54,7 +54,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -726,14 +725,6 @@ IDE extension and Auggie CLI. MCP and hooks if documented.
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Augment and Auggie docs for MCP and hooks; skip a surface whose file is not documented.
-
-### T413.9. `rtok agents install junie` — JetBrains Junie
-
-Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
 
 ### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 

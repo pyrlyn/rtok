@@ -2590,6 +2590,14 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
 
+### 32.9 JetBrains Junie (T413.9, checked 2026-10-12)
+
+- CLI binary `junie`. User MCP file `~/.junie/mcp/mcp.json`, project file `.junie/mcp/mcp.json`. A stdio server is `mcpServers.<name>` with `command`, `args`, optional `env`; a remote one uses `url` and `headers`. The page shows no `type` key and names no environment variable that moves the directory (only the CLI options `--mcp-default-locations` and `--mcp-location <path>`). https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html
+- Config files: user `~/.junie/config.json`, project `<project-root>/.junie/config.json` (read only for a trusted project), extra files via `--config-location` or `JUNIE_CONFIG_LOCATION`. The page names no variable that relocates `~/.junie`. https://junie.jetbrains.com/docs/junie-cli-configuration.html
+- Hooks: a `hooks` object in `~/.junie/config.json`; hooks in the default project config are ignored. The only documented event is `SessionStart` (matcher `startup` or `resume`, command hook, `timeout` seconds, default 10). There is no tool-use event, so rtok's hooks have nothing to attach to. https://junie.jetbrains.com/docs/junie-cli-hooks.html
+- IDE plugin: the MCP settings page describes the IDE settings dialog and gives no file path, so there is no IDE variant. https://junie.jetbrains.com/docs/junie-plugin-mcp-settings.html
+- Proxy and plugin directory: neither page documents a model base-URL file or a linkable plugin directory. Both stay `Support::No`.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

@@ -65,6 +65,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         "devin",
         "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings",
         ".qwen",
+        ".junie/mcp",
         ".codebuddy",
         ".workbuddy",
     ] {
@@ -103,6 +104,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               cli_plugins_path = \"{h}/.gemini/antigravity-cli/plugins\"\n\
               [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n\
               [setup.roo]\nmcp_path = \"{h}/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json\"\n\
+              [setup.junie]\nmcp_path = \"{h}/.junie/mcp/mcp.json\"\n\
               [setup.qwen]\ndir = \"{h}/.qwen\"\n\
               [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n"
         ),
