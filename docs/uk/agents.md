@@ -69,6 +69,7 @@ lang: uk
 | [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`crush`](https://github.com/pyrlyn/rtok/blob/main/src/agents/crush/README.md) | Crush | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`openhands`](https://github.com/pyrlyn/rtok/blob/main/src/agents/openhands/README.md) | OpenHands | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 Таблицю генерує з коду хостів (`src/agents/<host>/mod.rs` і каталогу плагінів) тест `tests/agents_doc.rs`, який падає, коли вона застаріла. Після зміни хоста, додавання нового чи зміни інтерфейсів плагіна згенеруйте її заново:

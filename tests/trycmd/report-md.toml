@@ -349,6 +349,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.omp.extensions_path | ~/.omp/agent/extensions | default |
 | setup.omp.mcp_path | ~/.omp/agent/mcp.json | default |
 | setup.opencode.config_path | ~/.config/opencode/opencode.json | default |
+| setup.openhands.mcp_path | ~/.openhands/mcp.json | default |
 | setup.pi.extensions_path | ~/.pi/agent/extensions | default |
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |

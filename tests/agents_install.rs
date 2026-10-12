@@ -116,6 +116,7 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
         ("amp", vec![], Some(home.join(".config/amp/settings.json"))),
         ("warp", vec![], Some(home.join(".warp/.mcp.json"))),
         ("crush", vec![], Some(home.join(".config/crush/crush.json"))),
+        ("openhands", vec![], Some(home.join(".openhands/mcp.json"))),
     ]
 }
 

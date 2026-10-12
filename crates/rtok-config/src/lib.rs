@@ -94,6 +94,7 @@ pub const HOSTS: &[&str] = &[
     "warp",
     "continue",
     "crush",
+    "openhands",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -804,6 +805,7 @@ section! {
         warp: SetupWarp = SetupWarp::default(),
         r#continue: SetupContinue = SetupContinue::default(),
         crush: SetupCrush = SetupCrush::default(),
+        openhands: SetupOpenhands = SetupOpenhands::default(),
     }
 }
 
@@ -1001,6 +1003,11 @@ section! {
     /// `[setup.crush]` — Crush's global JSON config (T413.11). `CRUSH_GLOBAL_CONFIG` or
     /// `XDG_CONFIG_HOME` move it; this key is the override.
     SetupCrush { config_path: PathBuf = p("~/.config/crush/crush.json") }
+}
+
+section! {
+    /// `[setup.openhands]` — OpenHands's user-level MCP file (T413.14).
+    SetupOpenhands { mcp_path: PathBuf = p("~/.openhands/mcp.json") }
 }
 
 section! {
@@ -1761,6 +1768,7 @@ impl Config {
             setup.amp.settings_path,
             setup.warp.mcp_path,
             setup.crush.config_path,
+            setup.openhands.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

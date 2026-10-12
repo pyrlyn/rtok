@@ -458,6 +458,8 @@ mcp_path      = "~/.warp/.mcp.json"          # Warp: user-level MCP servers (mcp
 config_path   = "~/.continue/config.yaml"        # Continue (VS Code, JetBrains, cn): mcpServers item rtok; Windows: %USERPROFILE%/.continue/; CONTINUE_GLOBAL_DIR moves it
 [setup.crush]
 config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rtok); CRUSH_GLOBAL_CONFIG or XDG_CONFIG_HOME move it
+[setup.openhands]
+mcp_path      = "~/.openhands/mcp.json"     # OpenHands: user-level MCP servers (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)

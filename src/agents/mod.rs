@@ -68,6 +68,7 @@ pub mod task_list;
 pub mod usage;
 pub mod vscode;
 pub mod warp;
+pub mod openhands;
 pub mod windsurf;
 mod yaml_text;
 pub mod zcode;
@@ -128,6 +129,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "amp" => Some(&amp::Amp),
         "warp" => Some(&warp::Warp),
         "continue" => Some(&continue_dev::Continue),
+        "openhands" => Some(&openhands::OpenHands),
         _ => None,
     }
 }
