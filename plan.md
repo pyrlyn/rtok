@@ -21,18 +21,17 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T132 | in progress | P2 | 2 | 70% | Claude Code / claude-sonnet-5-5 |
+| T132 | todo | P2 | 2 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T262.3 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T262.3 | todo | P2 | 2 | 0% | |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
 | T276.4 | todo | P2 | 4 | 0% | |
-| T276.5 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T276.6 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T276.6 | todo | P2 | 3 | 0% | |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -70,8 +69,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
-| T436.4 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T477 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T436.4 | todo | P3 | 2 | 0% | |
+| T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
 | T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -80,83 +79,29 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T537 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T538 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T539 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T541 | in progress | P1 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T542 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T543 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T544 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T545 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T546 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T548 | in progress | P1 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T549 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T550 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T551 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T552 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T553 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T555 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T556 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T557 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T558 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T559 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T560 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T561 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T561 | todo | P3 | 3 | 0% | |
 | T562 | todo | P1 | 2 | 0% | |
-| T563 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T564 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T565 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T566 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T567 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T569 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T570 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T571 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T573 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T574 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T576 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T577 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T579 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T580 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T581 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T586 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T587 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T589 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T592 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T594 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T595 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T597 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T599 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T601 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T592 | todo | P2 | 3 | 0% | |
 | T604 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T606 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T608 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T609 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T611 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T613 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T615 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T617 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T618 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T619 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
-| T622 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T623 | todo | P2 | 5 | 0% | |
-| T624 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T625 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T626 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T627 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T628 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T629 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T630 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T631 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T632 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T633 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T634 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T635 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T636 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T637 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T638 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T639 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -169,196 +114,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T537. Keep MCP pending calls when the server sends its own request
-
-Source-confirmed on `0b14b88e`: [`take_call`](src/mcp/wrap.rs#L207) removes a client pending call for any server frame with the same `id`, without checking whether the frame is a response. After client `tools/call` id 7, a server `sampling/createMessage` request id 7 consumes the tool name; the eventual tool result id 7 is then forwarded without compression or its archive/measurement. Request ids in opposite directions must not be treated as one response namespace. The existing `pending_matches_tool_call_ids_only` test covers numeric versus string ids, not reverse requests.
-
-Validation: an offline Rust harness compiled verbatim `note_call` and `take_call` from this revision. The server request returned the pending tool name; the later response returned `None`. Full transport validation remains part of the fix.
-
-Execution plan:
-
-1. Extend the framing fixture with an in-flight client tool call, a server request using the same numeric id, and the eventual tool response.
-2. Consume pending state only for response-shaped frames; preserve server requests/notifications byte-for-byte.
-3. Cover server requests with string ids, error responses and unrelated notifications; a genuine success/error response must drain its pending entry once.
-
-Check: the server request does not remove the client call, the later large result is shortened and expandable with one measurement, and `just check` passes.
-
-### T538. Do not let skipped memory imports reserve unseen body hashes
-
-Source-confirmed on `0b14b88e`: [`memory::import::run`](src/plugins/memory/import.rs#L94) inserts a body's hash into `seen` before checking whether the topic key is already occupied. Seed local topic A with body `old`; import A with body `new`, then free topic B with body `new`. A is correctly skipped to protect the local note, but B is also skipped because A already reserved `new` in memory, although no stored note has that body. The reported result is zero insertions; reversing the input order permits B. The same false skip affects dry-run.
-
-Execution plan:
-
-1. Add this two-line fixture in both orders, with an existing local A, for dry-run and actual import.
-2. Check body/topic eligibility before reserving either; reserve both only for an accepted simulated or successful insertion. Handle the concurrent insert returning `None` without poisoning later rows.
-3. Preserve idempotency, the local-topic-wins rule and intentional dedup against bodies that really exist.
-
-Check: B is imported regardless of the skipped A's position, A keeps `old`, dry-run matches actual import, a second import is idempotent, and `just check` passes.
-
-### T539. Preserve a global note's project scope when revising it
-
-Source-confirmed on `0b14b88e`: [`mem_revise`](src/plugins/memory/mod.rs#L598) passes `old.project.as_deref()` to `mem_save`. For a global note (`project = NULL`), that becomes `None`, which [`mem_save`](src/plugins/memory/mod.rs#L430) interprets as infer the current working directory's project. Global notes are supported by [`memory import`](src/plugins/memory/import.rs#L30), whose optional project is stored without cwd inference. Import a global note, then revise it while inside a repository: the replacement becomes repository-scoped and the global note is retired, even when the title is unchanged. It may also upsert an existing same-title project note.
-
-Execution plan:
-
-1. Seed a global note and a separate same-title project note. Revise the global id from a repository cwd with both unchanged and changed titles.
-2. Separate an already-resolved optional project from the user-facing infer-project default; reuse one save implementation while preserving the old note's exact scope.
-3. Cover global, explicit-project and inferred-project creation plus revision; keep privacy stripping, embeddings and note history on the same write path.
-
-Check: global revisions stay global, unrelated project notes are untouched, ordinary creation still infers cwd, and `just check` passes.
-
-**Docs/checkpoint audit (T547).** T548–T553 are confirmed against `99b6753d`
-(product source unchanged from `0b14b88e`). Address the private-text persistence
-case first; the remaining fixes are independent except that T549/T550 share the
-local documentation ingestion path. Related completed feature tasks are cited
-below; these are newly identified failure cases, not copies of those features.
-
-### T548. Redact private text before storing and restoring checkpoints
-
-Confirmed in source and a function probe: [user_prompt](src/plugins/checkpoint.rs#L311) keeps private-tagged text, [render](src/plugins/checkpoint.rs#L122) reproduces it, and [write](src/plugins/checkpoint.rs#L687) passes the rendered body directly to upsert_note. Neither [Runtime::upsert_note](src/plugin.rs#L468) nor [Store::upsert_note](crates/rtok-store/src/note_store.rs#L155) strips it. A compact user record containing `use <private>PRIVATE_SENTINEL</private> briefly` therefore persists the sentinel in checkpoint/session notes and exposes it again on restoration. This violates the private-tag invariant in `src/plugins/memory/AGENTS.md`, despite ordinary mem_save/import already redacting.
-
-Validation: an offline Rust probe compiled the verbatim checkpoint extraction/rendering code and asserted that the private sentinel survives. Persistence/restoration is source-confirmed through write → upsert → render_offer; no live hook or database integration was run.
-
-Execution plan:
-
-1. Add PreCompact and SessionEnd fixtures with private text in prompts and captured errors; assert the stored note and restored injection never contain the sentinel.
-2. Reuse the existing private-tag scrubber at the checkpoint text boundary before truncating captured strings, so a closing tag beyond the prompt/error length limit cannot evade redaction.
-3. Cover mixed-case, multiline and long private blocks; retain ordinary prompt/path/action output, budgets and byte stability for nonprivate fixtures.
-
-Check: private content is absent from both persisted and restored checkpoint/session bodies, ordinary memory redaction remains intact, and `just check` passes.
-
-### T549. Scope local llms documentation to its workspace
-
-Source-confirmed: [ingest_llms](src/plugins/docs/mod.rs#L191) writes every workspace to the same `("llms", "local")` cache key. [docs_resolve/query](src/plugins/docs/mod.rs#L91) reads that key even when ingestion finds no local file. [replace_doc_crate](crates/rtok-store/src/docs.rs#L118) replaces all items with that name/version, with no workspace dimension. Query workspace A's llms.txt, then query `llms` in B with the same rtok home and no llms file: B receives A's documentation. If B has its own file, it overwrites A's cache. T455 introduced workspace docs but did not isolate their storage.
-
-Execution plan:
-
-1. Use two temporary workspace roots sharing one store: A has a unique local marker, B initially has no file and then a different marker. Assert neither resolve nor query in B exposes A's content.
-2. Give local documents a canonical workspace namespace, consistently applied during ingestion, cache checks and queries; keep downloaded crate/version documents globally reusable.
-3. Reconcile missing or empty local sources within their namespace and test workspace switching, deletion and recreation. Keep old unscoped local rows from being treated as the current workspace's docs.
-
-Check: each workspace sees only its own local documents, absence reports an uncached/empty result according to the tool contract, shared crate caches still work, and `just check` passes. Reproduction is source-derived.
-
-### T550. Preserve returned doc ids when unchanged local docs are re-ingested
-
-Source-confirmed: every [ingest_llms](src/plugins/docs/mod.rs#L200) call calculates a SHA but unconditionally calls replace_doc_crate. That method deletes and reinserts the items; [doc_items](crates/rtok-store/migrations/0039_docs_fts/up.sql#L12) uses generated integer primary keys. Seed one local section (id 1), fetch a crate whose item gets id 2, then run docs_resolve or docs_query with the unchanged local file present: the local section is recreated at id 3. [docs_get](src/plugins/docs/mod.rs#L177) on the previously returned id 1 now fails. An unrelated read invalidates the handle even though its source bytes did not change. This is distinct from T549's cross-workspace namespace.
-
-Execution plan:
-
-1. Add the interleaved local-ingest/crate-fetch/local-resolve fixture, retaining the id from the first local query and calling docs_get afterward.
-2. Compare the current source SHA and scope with cached metadata and make unchanged ingestion a no-op, with the check/write sequence safe against concurrent ingestion.
-3. Verify repeated resolves and unrelated crate queries preserve local item ids and FTS rows; changed bytes must still refresh the affected document. Coordinate the cache key with T549.
-
-Check: docs_get keeps resolving ids from unchanged local documents across repeated reads, actual edits are searchable, and `just check` passes. Source-derived reproduction; generated-id behavior is visible in the schema and replacement path.
-
-### T551. Estimate docs-query savings against the same full content as byte accounting
-
-Source-confirmed: [docs_query](src/plugins/docs/mod.rs#L138) sets before_bytes from the full documentation bodies of all considered hits, but est_before at line 154 estimates only their already-truncated snippets. est_after estimates the returned JSON. For one long document with a short snippet, most of the reduction is absent from token accounting and JSON metadata can make the reported token saving negative while bytes show a large reduction. T455 requires a query Measurement; this card fixes the inconsistent before basis rather than adding another row.
-
-Execution plan:
-
-1. Seed a long cached document with a small snippet limit and query it under a fixed estimator. Assert before_bytes and est_before describe the same full set of considered bodies, and after values describe the actual response.
-2. Obtain full-body token estimates through the existing store/runtime boundary before snippet and output-budget trimming; avoid duplicating the query Measurement.
-3. Cover multiple hits, budget-trimmed hits and no-result queries; retain the documented definition of considered content and the current query output.
-
-Check: token and byte baselines refer to the same pre-trim content, exactly one row records a returned query result, and `just check` passes. Source-derived accounting defect; no measured saving is claimed by this audit.
-
-### T552. Keep checkpoint prefilter equivalent for spaced and mixed-content JSONL
-
-Confirmed by a function probe: [worth_parsing](src/plugins/checkpoint.rs#L261) requires the literal substring `"type":"user"` and rejects any otherwise ordinary user record containing `"tool_use_id"`. A valid one-line `{"type": "user", "message": {"content": "ship the patch"}}` loses its prompt, as does a compact user record containing both a tool_result and a typed text block. [user_text](src/plugins/checkpoint.rs#L386) correctly extracts text from both if the prefilter is bypassed. Completed T417 filters host-written prompts; these are uncovered false negatives in the prefilter's promised superset, not a request to undo that host filter.
-
-Validation: an offline Rust probe compiled the verbatim extraction code and compared filter=true/false for both records. Only the filtered run lost the prompt; the equivalent compact text-only record survived.
-
-Execution plan:
-
-1. Extend the prefilter equivalence fixtures with optional JSON whitespace, mixed text/tool-result blocks, reordered keys and escaped field names.
-2. Make the cheap filter conservative: ambiguous records must reach the structural parser; do not use tool_use_id presence as proof that no typed text exists.
-3. Compare extracted prompts, counts, paths, skills and errors with filtering disabled; preserve T417's host-envelope exclusions and the existing large-transcript performance check.
-
-Check: semantically equivalent valid JSONL yields identical checkpoint content regardless of formatting, mixed typed text survives, host-only content remains excluded, and `just check` passes.
-
-### T553. Use the shared project resolver for session checkpoint handoff
-
-Source-confirmed: [project_of_cx](src/plugins/checkpoint.rs#L737) returns git_root's directory basename, while [project::project_name](src/project.rs#L19) resolves origin names and linked worktrees to the main project's identity. Both save_session and offer_session use the former, and [latest_session_note](crates/rtok-store/src/note_store.rs#L320) requires an exact project match. End a session in main checkout `repo`, then start one in its linked worktree `repo-fix`: the saved `repo` handoff is not found under `repo-fix`, although normal memory/session attribution treats them as one project. T133/T154 implemented the shared resolver, but this handoff path still bypasses it.
-
-Execution plan:
-
-1. Add a main/linked-worktree fixture and an origin name different from the checkout basename. Save a session checkpoint in one checkout and restore it from the other.
-2. Reuse project::project_name for both saving and looking up session handoffs. Define a narrow compatibility path for existing basename-scoped handoffs without searching unrelated projects.
-3. Exercise both handoff directions, subdirectories and non-git cwd; preserve the opt-in handoff flag, session-local compact restore and injection budget.
-
-Check: linked worktrees share the intended project handoff consistently with ordinary memory, unrelated project notes remain excluded, and `just check` passes. Source-derived reproduction; no real agent session was started.
-
-**Guard/encoding audit (T554).** T555–T560 were confirmed against `eb13dd7f`
-(product source unchanged from `0b14b88e`). T555–T559 are guard behavior defects;
-T560 is explicitly a test-oracle defect, not a production decoder failure.
-Each was compared with completed T55.8/T55.9/T57.1/T322/T445/T62.1/T468 and
-the active backlog. The related features do not track these exact triggers.
-
-### T555. Preserve quoted whitespace in guard command identities
-
-Confirmed by an actual-source function probe: [cache_key](src/plugins/guard/mod.rs#L255) passes command text through [norm_cmd/collapse](src/plugins/guard/mod.rs#L409), whose split_whitespace/join normalizes inside quotes too. `cat 'a  b'` and `cat 'a b'` therefore produce the same nonempty Bash key in one cwd, although they read distinct files. After the first result is archived, [pre_tool](src/plugins/guard/mod.rs#L57) can deny the first execution of the second command and offer the wrong file's result. T55.9/T445 preserved cd/cwd distinctions but not quoted argument bytes.
-
-Execution plan:
-
-1. Add two files with different contents and one versus two spaces in their names; cache the first command's result and assert the second command is allowed.
-2. Preserve quoted and escaped argument bytes when normalizing keys; only collapse syntactically insignificant whitespace. Fail open when the existing shell helpers cannot establish a safe identity.
-3. Cover single/double quotes, literal tabs/newlines inside arguments, escaped spaces and supported rtok run wrappers; retain dedup for equivalent outside-quote whitespace.
-
-Check: different paths never collide, ordinary equivalent repeats still deny with the correct archive, and `just check` passes. The probe confirmed key equality; full hook regression is part of the fix.
-
-### T556. Resolve guard Read and invalidation paths against the same cwd
-
-Confirmed by an actual-source key probe and source tracing: [cache_key's Read arm](src/plugins/guard/mod.rs#L230) stores only the trimmed input path and slice, ignoring cwd. A Read of `file.txt` in /A and one in /B produce the same key. An intervening absolute `cd /B && ls` only clears Bash keys in [post_tool](src/plugins/guard/mod.rs#L108), so it does not prevent the false Read denial. Separately, Edit/Write clears the literal `read\t{path}` prefix at line 149: an absolute edit does not invalidate a prior relative/./ spelling of the same file. T55.8 added invalidation and T322 added slices; neither establishes shared path identity.
-
-Execution plan:
-
-1. Add same-session fixtures for equal relative names under two cwd values and for Read("./file.txt") followed by Edit of its absolute path.
-2. Reuse one path-identity function for Read keys and Edit/Write invalidation, resolving relative paths against the hook cwd without reading file bodies. Preserve meaningful filename whitespace; fail open when relative identity cannot be established.
-3. Keep slice and agent/window namespaces distinct, ensure equivalent path spellings invalidate together, and retain the hook's metadata-only budget.
-
-Check: changing cwd allows the new file's first read, editing through an alias invalidates all affected slices, unrelated files retain their cache, and `just check` passes.
-
-### T557. Reject side-effect variants of nominally read-only shell commands
-
-Confirmed by actual-source classification probes: [stem_read_only/writer_marker](src/plugins/guard/mod.rs#L324) accepts `sed 'w output' input`, `find . -fprint output`, and `git diff --output=output` as cacheable. It only checks selected writer markers such as sed -i, find -delete/-exec and redirection. These accepted variants write files, so their PostToolUse stores a dedup key instead of invalidating earlier reads; repeating them can be denied and previous file results can remain stale. T57.1/T322 cover other writer forms, not these options/scripts.
-
-Validation: all three variants returned nonempty keys in an offline actual-source Rust probe. A separate system sed run in a temporary directory created a nonempty output file from the first example. The find/git side effects were not executed during the audit.
-
-Execution plan:
-
-1. Add classification regressions for sed's write/execute script commands, find output actions and git output-file options, plus a hook fixture proving a writer invalidates an earlier Read result.
-2. Tighten eligibility at the shared classification layer: use a conservative supported read-only subset and reject write/execute forms or ambiguous script/option parsing. Reuse existing shell parsing helpers.
-3. Retain common safe sed/grep/find/git listing cases; assert writer variants are allowed to execute again and clear stale read/Bash keys.
-
-Check: all demonstrated writers return no dedup key, their post-tool events invalidate prior results, safe readers retain expected dedup, and `just check` passes.
-
-### T558. Fail open for a sole skill installation scoped to another project
-
-Confirmed by an actual-source function probe: [plugin_root](src/plugins/guard/skill.rs#L116) first looks for the current project or a user installation, then accepts any single remaining installation. A manifest containing only `scope: "project", projectPath: "/A", installPath: "/private-A-plugin"` returns that path even for cwd /B. With skill digest enabled and a sufficiently large file there, the guard archives A's skill body and denies B's invocation using the wrong installation. The single-entry fallback intended for legacy unscoped records does not distinguish an explicitly foreign project. T62.1's existing legacy and multi-install tests do not cover this case.
-
-Execution plan:
-
-1. Add a sole foreign-project installation fixture and assert resolution fails open; include a large skill file to prove no archive/denial is generated for it.
-2. Restrict the legacy fallback to records without contradictory scope/project metadata; never select an explicitly nonmatching project just because it is the only entry.
-3. Retain matching-project precedence, user fallback, genuine legacy single entries and ambiguous-marketplace fail-open behavior.
-
-Check: an unrelated project cannot supply the denied skill's body, supported matching/legacy cases still resolve, and `just check` passes. The probe tested path selection; the full digest check belongs to the fix.
-
-### T559. Recognize YAML-quoted host keys before digesting skills
-
-Confirmed by an actual-source probe: [host_keys](src/plugins/guard/skill.rs#L157) checks raw line prefixes, so valid frontmatter such as `"model": value` or `'allowed-tools': value` bypasses the exemption. [decide](src/plugins/guard/skill.rs#L125) then archives and denies an oversized skill whose host-applied model/tool/context behavior must be preserved. The T62.1 contract is semantic frontmatter key presence, not a particular YAML spelling.
-
-Validation: the probe parsed quoted model/allowed-tools keys with the repository's serde-saphyr version and confirmed host_keys returns false for the same valid YAML.
-
-Execution plan:
-
-1. Add oversized-skill fixtures with single/double-quoted top-level host keys and assert no digest denial or saving row.
-2. Inspect the frontmatter mapping with the existing YAML parser, preserving host behavior for allowed-tools/model/context/agent; malformed or ambiguous frontmatter must fail open.
-3. Cover unquoted keys, CRLF and ordinary prose mentioning those words, while retaining digest behavior for valid frontmatter without host-affecting keys.
-
-Check: equivalent YAML spellings receive the same exemption, host behavior is not lost through a digest denial, and `just check` passes.
 
 ### T560. Make the TOON test decoder handle quoted comma cells
 
@@ -385,42 +140,6 @@ Execution plan:
 
 Check: failed reads never replace or remove host content or change sync metadata; existing valid managed-block behavior and `just check` pass. The isolated read/splice probe establishes the lossy replacement text; the live CLI write regression remains part of this fix.
 
-### T563. Key memory-sync protection by the complete destination path
-
-Source-confirmed: [kv_key](src/plugins/memory/sync.rs#L28) stores a block digest under `memory.sync.sha:<basename>`. Sync A/CLAUDE.md with one note set, then B/CLAUDE.md with another, using the same store. The second sync replaces the first file's digest. Re-syncing unchanged A now [fails as hand-edited](src/plugins/memory/sync.rs#L93); removing B also deletes the shared guard state. T69.6 established the hand-edit guard but does not cover this cross-file identity collision.
-
-Execution plan:
-
-1. Add a two-directory fixture sharing one store; sync different blocks and verify each file can be re-synced without force.
-2. Derive the state key from a stable normalized absolute destination identity, consistently handling aliases and not falling back to another file's basename digest.
-3. Cover removal of either destination, same-file relative/absolute spellings and legacy-key handling without falsely trusting unrelated host content.
-
-Check: one destination's sync/removal cannot invalidate another's protection; genuine hand edits still require force; `just check` passes.
-
-### T564. Keep memory-sync note titles from becoming block delimiters
-
-Source-confirmed: [render](src/plugins/memory/sync.rs#L36) interpolates saved titles verbatim between its markers; [mem_save](src/plugins/memory/mod.rs#L420) accepts nonempty titles containing those markers. A title containing `<!-- /rtok:memory -->` creates an early END. The whole rendered block is hashed when saved, but [block_range](src/plugins/memory/sync.rs#L53) stops at the title's END: the next ordinary sync rejects its own unchanged output as hand-edited. A forced sync leaves the old title tail and actual closing marker behind. A title containing START instead makes the generated file look like multiple blocks.
-
-Execution plan:
-
-1. Add render/save/resync fixtures with START, END and multiline titles; demonstrate rejection of an unchanged generated block and the leftover tail after force.
-2. Encode titles in the host-file presentation so they cannot emit structural markers; preserve the stored note title and define a deterministic single-line representation.
-3. Validate generated block structure before writing and cover repeat sync, remove, force, budget accounting and preservation of bytes outside the genuine block.
-
-Check: generated output has exactly one structural marker pair, normal repeated sync succeeds, and force/remove leave no generated tail; `just check` passes.
-
-### T565. Include serialized metadata and separators in mem_pack's budget
-
-Source-confirmed: [pack_notes](src/plugins/memory/pack.rs#L104) budgets tier text and a fixed separator cost, but [render](src/plugins/memory/pack.rs#L256) adds an id/tier header and separators afterwards. [mem_pack](src/plugins/memory/mod.rs#L461) returns that larger string without enforcing max_tokens again, contrary to the memory plugin invariant. With the four-characters-per-token estimator, hit (1, "a", "b"), no body and max_tokens=2, the pack reports 2 used tokens while the rendered text "1\tabstract\n1 a\nb" costs 4. T460 covers tier selection, not final serialization overhead.
-
-Execution plan:
-
-1. Add the minimal budget-2 fixture and multi-note cases asserting the estimate of the complete returned string stays within the requested effective budget.
-2. Budget the same serialized representation that will be returned, including headers, newlines and separators, when admitting or deepening entries.
-3. Derive used_tokens from the final representation; cover all tiers, Unicode, estimator settings and budgets too small for even one complete entry.
-
-Check: estimate(render(pack)) <= max_tokens for every fixture, used_tokens agrees with the returned payload, note entries remain complete, and `just check` passes.
-
 ### T566. Preserve leading dots in memory note-file mentions
 
 Source-confirmed: [clean](src/plugins/memory/files.rs#L56) strips periods from both ends of a path token. ".env" becomes "env" and is discarded by [mentioned](src/plugins/memory/files.rs#L95); "./src/lib.rs" becomes "/src/lib.rs" and is rejected as outside the fixture root. Worse, ".config/file" becomes "config/file" and links the wrong existing sibling if both exist. This affects note linking and prompt-driven recall. T374/T452 specify those features but do not track this normalization defect.
@@ -432,54 +151,6 @@ Execution plan:
 3. Cover Markdown/backtick mentions, trailing punctuation, line ranges, hidden-directory collisions and traversal rejection in both note linking and prompt recall.
 
 Check: no-dot siblings are never substituted for explicitly named dot paths, valid mentions remain root-relative, outside paths stay excluded, and `just check` passes.
-
-### T567. Apply negative pnpm workspace patterns before reading members
-
-Source-confirmed: [members](src/project/refs.rs#L122) discards patterns beginning with ! instead of subtracting their matches. With packages/* and !packages/skip, an excluded packages/skip/package.json is still read by [npm discovery](src/project/refs/npm.rs#L44); its external file: dependency is returned and can be automatically registered by graph following. The [pnpm packages specification](https://pnpm.io/settings#packages) explicitly supports negative exclusions. This reproduces with single-level globs, independently of the recursive-glob limitation already acknowledged by T329.7.
-
-Execution plan:
-
-1. Add included and excluded sibling packages with distinct external dependencies; verify discovery returns only the included package's dependency.
-2. Apply negative pnpm patterns to the selected member set before recording members or reading their dependencies, following pnpm semantics rather than silently dropping exclusions.
-3. Cover multiple positives/negatives, overlapping patterns, nested exclusions and root-package inclusion; keep behavior of other manifest formats explicit.
-
-Check: excluded members contribute neither references nor missing-reference warnings/auto-projects, included members still resolve, and `just check` passes.
-
-### T569. Preserve each host file's undo bytes across backup deduplication and pruning
-
-Confirmed with actual SDK functions: [backup_at](crates/rtok-agent-sdk/src/lib.rs#L181) skips a copy if any file in the shared _backup directory has identical bytes, regardless of basename. [prune_backups](crates/rtok-agent-sdk/src/lib.rs#L103) subsequently prunes generations of one basename without knowing other files depend on that copy. Create A.json and B.json with the same original text; with backup_files=1, write A1 to A, B1 to B, then A2 to A. B's backup was skipped, and the final A write removes the only copy of B's original bytes. T72 intentionally introduced basename-agnostic dedup and T249 per-basename pruning, but neither tracks this interaction.
-
-Execution plan:
-
-1. Add the two-file/three-write fixture using SDK write with backup enabled and a retention cap of 1; assert both files retain their required undo content.
-2. Make deduplication and retention share an ownership model. Prefer independent per-basename backup identity unless cross-file ownership is explicitly tracked; never treat a foreign file's prunable copy as sufficient protection.
-3. Cover repeated same-content writes, different basenames, same-second suffixes, lowered caps and cleanup via stale_backups; preserve intentional no-op behavior without losing another file's recovery bytes.
-
-Check: pruning A cannot delete B's only required undo content; repeated installs remain idempotent, the retention cap remains well-defined per file, and `just check` passes. The isolated fixture exercised real SDK backup/write/prune functions against scratch files.
-
-### T570. Fail SDK writes on symlink cycles instead of replacing a link
-
-Confirmed on Unix with actual SDK functions: [link_target](crates/rtok-agent-sdk/src/lib.rs#L327) stops after 40 unsuccessful resolution attempts and returns the still-unresolved symlink. [write](crates/rtok-agent-sdk/src/lib.rs#L309) then calls [write_atomic](crates/rtok-agent-sdk/src/lib.rs#L352), whose rename replaces that symlink with a regular file. For cycle-a -> cycle-b -> cycle-a, write with backups enabled succeeds, replaces cycle-a, and makes cycle-b point to the new content; backup was skipped because exists() follows the cycle and returns false. This violates the SDK promise to preserve dotfile-manager symlinks. Existing dangling-link support does not cover loops.
-
-Execution plan:
-
-1. Add self-loop and two-link-cycle scratch fixtures; assert SDK write returns an error and preserves every link target byte-for-byte.
-2. Return a Result from target resolution and reject cycles, exhausted hop limits and unresolved non-missing-path errors before atomic replacement; distinguish a supported dangling target from an unresolved link.
-3. Cover valid relative/absolute link chains, a dangling final target with an existing parent, a missing target parent, dry-run and backup-enabled writes. Do not weaken valid dotfile-manager support.
-
-Check: cyclic or over-limit chains never become regular files and produce a clear error, supported acyclic targets still update without replacing their links, and `just check` passes. The destructive behavior was reproduced only on isolated Unix fixtures.
-
-### T571. Redact graph-export scope metadata and suggested download names
-
-Confirmed by the actual redaction helper: [collect](src/plugins/graph/export.rs#L335) copies member names into meta.scope, but [redact](src/plugins/graph/export.rs#L351) rewrites projects[].name without touching meta.scope. With home /Users/alice and project alias alice, the default export reports `projects[0].name = <user>` and meta.redacted = true while meta.scope still contains alice. The page's [download name](src/plugins/graph/export.rs#L587) independently uses the original scope name, yielding rtok-graph-alice-overview.json even when export contents are redacted. T329.16/T329.40 promise default redaction and downloads but do not track these remaining copies.
-
-Execution plan:
-
-1. Add the username-as-project-alias fixture and assert the complete serialized redacted export contains no original alias; add a page-file assertion for its suggested download name.
-2. Apply the same redaction policy to scope labels and derive the download name from a redacted display identity. Keep IDs, edges and non-sensitive names stable.
-3. Cover CLI default output, MCP, page downloads, saved-export re-rendering and explicit CLI no-redact; verify JSON and image metadata use consistent labels.
-
-Check: neither redacted payload metadata nor the suggested filename exposes the username alias, explicit no-redact retains its documented behavior, and `just check` passes. The scope leak was reproduced with the actual helper; the filename leak is source-confirmed and its end-to-end page regression belongs to this fix.
 
 ### T573. Apply terminal call state even when the live event list is capped
 
@@ -517,18 +188,6 @@ Execution plan:
 
 Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
 
-### T577. Protect nested package-manager lockfiles during junk cleanup
-
-Confirmed with an isolated directory fixture: [recheck](src/agents/junk_clear.rs#L278) compares PACKAGE_LOCKS only with the candidate's own basename. Its protected-path list contains the store and host settings paths, not discovered descendant lockfiles. An eligible explicitly configured cache containing nested/Cargo.lock passes recheck, then [remove](src/agents/junk_clear.rs#L334) recursively discards its children and deletes that lockfile. The cache root remains, while the same Cargo.lock checked directly is refused. [extra_items](src/agents/junk_review.rs#L169) accepts the configured cache root; the plan's D36/age/running gates do not add a descendant-lockfile check. This contradicts completed T330.4's promise to refuse a path that is or holds a package-manager lockfile; T330.5.1's explicit exclude globs do not supply the missing automatic protection.
-
-Execution plan:
-
-1. Add scratch-tree cleanup regressions for an eligible extra cache with direct-child and deeper Cargo.lock files. Assert the parent is refused and all contents remain; retain controls for a direct lockfile, a cache without protected descendants, settings/store descendants and CACHEDIR.TAG.
-2. Share a bounded descendant-protection check between planning and the immediate pre-delete recheck. Match the existing PACKAGE_LOCKS set, never follow symlinks, and refuse deletion when inspection fails or times out. Protect the entire removal candidate if it contains a protected lockfile.
-3. Cover tagged build/cache roots, extra cache roots and recursively removed temp entries, a lockfile appearing after preview, all supported package lock names, unreadable subtrees and trash/permanent-delete paths. Preserve existing store/settings and exclude protections and clear refusal reasons.
-
-Check: no planned recursive deletion or cache emptying removes a protected descendant lockfile, unknown inspection results remain non-destructive, and `just check` passes. The actual recheck/newest/usage-walk/remove functions and permanent-delete branch reproduced the loss; a synthetic clock made the fixture older than the settle window. This was not a full report/CLI or trash integration test.
-
 ### T579. Count each transcript once when scanning directory aliases
 
 Confirmed by the actual [paths_with_ext](src/measure/codex.rs#L28) walker: a root with real/s.jsonl returns one path; adding alias pointing to real returns two paths that canonicalize to the same file. The walker follows directory symlinks through Path::is_dir and has no visited-directory or file-identity set. [Codex requests](src/measure/codex.rs#L77), [Claude usage](src/measure/usage.rs#L115) and [stats collect](src/measure/stats.rs#L1098) parse and accumulate each returned path; a path-keyed transcript cache does not remove these aliases. Thus a single recorded request/session can contribute twice to usage and statistics. T135 addresses avoiding repeated parsing of unchanged paths, not alias deduplication.
@@ -565,19 +224,6 @@ Execution plan:
 
 Check: unrelated archive/injection rows cannot hide eligible read/cmd/MCP recommendations, the largest eligible sinks remain ranked correctly, and `just check` passes. The scratch probe compiled actual report_sinks/sink_label/sink_switch and top_sinks with an in-memory Store fixture and a catalogue subset containing the relevant real plugins; it was not a Diesel or CLI integration test.
 
-### T586. Resolve local relative remotes before deriving project identity
-
-Confirmed with separate Git repositories: [project_key_with](src/project.rs#L42) passes the origin string into [canonical_url](src/project.rs#L120) without its checkout context. Two checkouts at a/checkout and b/checkout, each configured with origin ../remote.git, target different bare repositories but both receive the key ../remote. Git ls-remote controls returned different fixture refs, while the actual project resolver returned equal keys. Replacing A's relative URL with the absolute path of the same remote also changed its key. [Task projects](src/tasks/run.rs#L56) use this key for counters, and [claim injection](src/hooks/mod.rs#L162) uses it to select project claims. Unrelated repositories can therefore share a namespace, while alternate spellings of one local remote split it. T441.3's canonical origin identity has no relative-path exception or existing fix for this case.
-
-Execution plan:
-
-1. Add two-checkout fixtures with identical relative origin strings resolving to different repositories; assert distinct keys. Add relative/absolute/file-URL spellings of the same local remote and assert one identity, using real Git resolution as a control.
-2. Distinguish local filesystem remotes from network URL and scp forms before normalization. Resolve relative local paths with the proper checkout context, canonicalize existing destinations and provide a stable absolute fallback for missing ones. Preserve filesystem case semantics and validate linked-worktree behavior against the existing shared-project contract.
-3. Cover nested cwd, dot segments, symlinks, spaces and supported Windows path forms without regressing network remote normalization. Verify task-counter and claim lookups remain isolated between different repositories.
-4. Handle persisted old keys explicitly: seed/reconcile counters from the intended project's adapter as needed, and avoid blindly migrating an ambiguous shared relative key into every project. Test compatibility without silently resetting IDs or moving unrelated claim rows.
-
-Check: different resolved local remotes never collide solely because their relative strings match, equivalent local spellings share a key, existing state is handled deliberately, and `just check` passes. The isolated harness compiled actual project resolver/normalization functions with a standard filesystem adapter; Git controls used only scratch local repositories. Store counter/claim behavior was source-traced, not exercised end to end.
-
 ### T587. Let an explicit report --format md override configuration
 
 Confirmed through actual Clap argument parsing and [report_flags](src/cli/report.rs#L32): [Args.format](src/cli/report.rs#L63) defaults to Md, and the flag layer treats every Md value as omitted. With report.format=html in a lower-precedence config layer, explicitly passing --format md produces no format override and the effective value remains html; --format pdf correctly overrides it. [run](src/cli/report.rs#L89) merges this flag layer and selects the renderer using cfg.report.format. Thus the explicit CLI request can produce HTML or PDF instead of Markdown. D12 and docs/config.md promise flags override configuration; T22.1/T22.2 and T60 do not cover explicit selection of the built-in default.
@@ -589,21 +235,6 @@ Execution plan:
 3. Cover environment and project/user config layers, help/completion output, and a CLI rendering fixture that verifies Markdown bytes for an explicit --format md over configured HTML/PDF.
 
 Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
-
-### T601. Prevent an expired task-lock guard from deleting its successor's lock
-
-Confirmed with actual [lock_claim](src/tasks/disk.rs#L219) and [DiskGuard::drop](src/tasks/disk.rs#L64): A acquires `.claim.lock`; after the real stale interval, B takes over while A's guard still exists. Dropping A unconditionally unlinks the shared pathname, deleting B's fresh lock. C then acquires immediately while B still holds its guard, bypassing the normal rejection of fresh-lock contenders. A slow or paused holder can trigger this; no process crash is required. [Project::claim](src/tasks/run.rs#L224) relies on that guard to protect read/check/save, so the broken exclusion can permit conflicting task writes.
-
-T442 explicitly chose ten-second stale takeover; that timeout policy alone is not filed again. The uncovered defect is the previous owner's release removing its successor's lock. The [existing stale/fresh test](src/tasks/disk.rs#L517) ages an ownerless file and never keeps the displaced guard alive. T541 concerns filename/frontmatter mismatches, not lock ownership.
-
-Execution plan:
-
-1. Add a deterministic A/B/C regression around takeover and delayed release. Assert A's release cannot remove B's lock and C cannot enter B's protected section. Keep fresh-contention and release/reacquisition controls.
-2. Use an ownership-safe cross-process lock, preferably the existing platform file-lock abstraction, with a stable lock file and guard-owned handle. If leases remain necessary, add ownership and write fencing; a pathname existence check followed by unlink alone still races with replacement.
-3. Define recovery for paused and crashed holders so an expired writer cannot resume protected writes concurrently with its successor. Preserve bounded wait/error behavior and coordinate claim, release, status and other disk mutations through the same mechanism.
-4. Add isolated multi-process claim/save tests with delayed and terminated owners. Verify only one claimant wins and later guard release cannot expose another writer's critical section, then run task/disk tests and `just check`.
-
-Check: releasing an older guard never removes a newer holder's exclusion, and protected task writes remain serialized. The scratch executable compiled actual guard/acquisition/staleness functions and used real temporary lock files and an 11-second wait; it held A/B/C guards in one process to reproduce the exact interleaving. Full task writes, multiple OS processes and remote adapters were not exercised.
 
 ### T604. Keep literal strings distinct from JSON-tree variable references
 
@@ -661,51 +292,6 @@ Execution plan:
 
 Check: the complete reproduced outer code block is byte-for-byte unchanged. An isolated executable imported the actual compression module by path, reproduced the four-backtick mutation, and passed ordinary triple-fence and double-backtick inline controls. This is a P3 library/benchmark defect, not observed production hook corruption; the native compression helper is not currently wired into those hooks.
 
-### T611. Decode serialized Copilot tool arguments before hook dispatch
-
-GitHub's [Copilot CLI hook tutorial](https://docs.github.com/en/copilot/tutorials/copilot-cli-hooks#understand-the-pretooluse-input), checked 2026-10-11, documents `toolArgs` as a JSON string requiring parsing before accessing its fields. [HookInput::adapt_copilot](src/hooks/types.rs#L134) instead assigns that `Value` directly to `tool_input`. For `toolName: "bash"` and `toolArgs: "{\"command\":\"git status\"}"`, adaptation produces `tool_name = "Bash"` but leaves `tool_input` a string. The [main-argument reader](src/hooks/mod.rs#L138) returns `None`; similarly, a serialized `view` input with `path` gives [guard::cache_key](src/plugins/guard/mod.rs#L219) no Read key. Object-valued versions of the same fixtures work. Consequently the documented CLI payload bypasses argument-dependent duplicate-read handling and loses command/path activity detail even though the tool name was normalized correctly.
-
-This is distinct from T262.5, which stores already adapted host input for ledger consumers: storing this adapter's output still stores a string instead of parsed arguments. The existing Copilot adapter tests use object-valued `toolArgs`, so they miss the documented CLI representation. No claim is made that all Copilot versions or transports send identical argument types.
-
-Execution plan:
-
-1. Add adapter regressions for JSON-string and object `toolArgs` on PreToolUse and PostToolUse. Assert equal normalized argument objects for equivalent inputs, including `command` and `path`, while existing `tool_input` retains precedence.
-2. Decode serialized arguments at the host adapter boundary, reusing the existing JSON-like field handling where appropriate instead of duplicating it. Preserve object inputs, unknown fields and fail-open behavior for malformed/non-object arguments; do not replace a valid existing normalized input.
-3. Add dispatch-level coverage showing that a serialized read can populate and consult the guard cache and that command/path activity summaries retain their main argument. Check that ledger storage receives the normalized object, retaining T262.5's behavior.
-4. Retain malformed-string, absent-argument and already-normalized controls, cover the installed Copilot event spellings, then run focused hook/guard tests and `just check`.
-
-Check: equivalent documented string and supported object payloads reach consumers with equivalent argument objects. The isolated executable compiled the actual HookInput struct/serde, Copilot adapter and naming helpers, main-argument reader, and Read cache-key branch. The unused Bash-only key helpers were panic-only stubs and were never called. No real Copilot process, complete hook dispatch, persistent store or end-to-end guard denial was exercised; those effects were source-traced, with integration tests prescribed above.
-
-### T613. Attach sub-agents when their main agent is registered later
-
-Confirmed on `2d91199fdb507af71eedbcf1b7ed127a06b39784` using the actual in-memory Store. Register a sub-agent with `register_agent(host, session, Some("sub-1"), ...)` before that session's main row, then register the main agent and repeat the sub-agent registration. [register_agent](crates/rtok-store/src/agents.rs#L202) initially obtains no parent from `main_agent_id`, inserts `parent_id = NULL`, and its conflict-update fields never repair that parent. The repeated call returns the same sub-agent id but leaves it unattached; `agent_children(main)` is empty. Hook dispatch directly passes the input's sub-agent key to this method, so the first observed event of a session being a sub-agent event is not rejected or repaired by the caller.
-
-The broken relation also affects [session_views](src/model/agents.rs#L73). Both rows become roots, and the first root matching the host/session is selected as the session's main agent. The probe registered the child more than one second earlier to make the store's ordering deterministic: `agents_of_sessions` returned it first, and the actual model selected it instead of the real main row. This can display the wrong agent identity/activity/state and omit the intended child relationship. T282's existing parent test registers the main row first; T284 covers ordinary nesting, and T324 covers revival on repeat registration. None covers a late main row repairing an existing child.
-
-Execution plan:
-
-1. Add store regressions for sub-agent-first registration, subsequent main registration and child re-registration. Assert stable ids, exactly one main row and correct `parent_id`/`agent_children` results. Retain the main-first control and isolate host/session identities.
-2. Establish the parent relation in the registry layer for either arrival order. Ensure or reconcile the main row and repair existing unparented sub-agent rows through typed Diesel operations, without changing a legitimate relationship or clearing activity/status fields. Make the operation safe under concurrent registrations and partial failures.
-3. Add model and hook-dispatch regressions for a first observed sub-agent event followed by a main event. Assert that the true main agent is selected and the child is nested; include ended/live filtering so an orphan's state cannot hide or mislabel the session. Preserve same-id repeat behavior and existing T324 revival semantics.
-4. Cover pre-existing orphan rows through the chosen reconciliation path without requiring their ids to change. Run focused store/agent/model/hook tests and `just check`.
-
-Check: event arrival order no longer changes parentage or which agent represents the session. The isolated executable linked the actual `rtok-store` crate, used its in-memory migrations and public methods, imported actual agent-view types and compiled the production pure model functions. The two orders and repeated-registration controls were executed without raw SQL or mocked store behavior. SessionTotals were synthetic; full CLI output, live hosts, real agents and concurrent OS processes were not exercised.
-
-### T615. Preserve claim order when tasks are claimed in the same second
-
-Confirmed on `e8d36a0c6fdfb27f37ca97ceb33e6230bee545d1` with the actual in-memory Store. [upsert_task_claim](crates/rtok-store/src/task_claims.rs#L36) records `since` in whole Unix seconds, while [latest_task_claim](crates/rtok-store/src/task_claims.rs#L78) sorts by `since DESC, task_id ASC`. Claim `R1` and then `R2` for the same project/agent within one second: the method returns `R1` and its old title. Re-claiming `R2` within that second still returns `R1`. The existing test claims `R1`, `R2`, then `R1` again, so its expected result coincides with the lexical tie-break and misses the defect.
-
-The task runner writes this row after a successful claim and on a same-agent re-claim ([claim_held](src/tasks/run.rs#L245)); it does not restrict an agent to one active task. [claim_injection](src/hooks/mod.rs#L159) uses the result directly for the SessionStart/PostCompact task line, despite its explicit newest-row contract. Fast successive claims can therefore inject the earlier task instead of the task most recently selected. This is separate from T601's disk lock ownership race and T592's OTel cursor ordering.
-
-Execution plan:
-
-1. Add deterministic store regressions for equal-second `R1` then `R2`, the reverse order, and re-claiming either existing row. Assert last successful claim order, not lexical ID order; keep separate-second, project/agent isolation and release-fallback controls.
-2. Persist an ordering value that advances on every successful claim and re-claim, including updates of existing rows. Use typed Diesel operations and a transaction-safe ordering scheme; retain `since` for elapsed-time/display semantics. Include a compatible migration and deterministic handling of pre-existing ties.
-3. Cover the runner-to-hook path so SessionStart/PostCompact select the latest claimed task and its current first-line title, including rapid re-claims. Preserve release/finish cleanup and the injection budget.
-4. Run focused task-claim, runner and hook tests and `just check`.
-
-Check: selecting the latest claim is independent of task ID spelling when timestamps tie. The isolated probe used real Store migrations and public APIs, checked that all reproducing writes occurred in one wall-clock second, and exercised re-claim, release fallback, project/agent isolation and separate-second controls. No raw SQL, full hook dispatch, live host or concurrent process was exercised; the injected-text effect was source-traced.
-
 ### T617. Limit file-linked observation recall after deduplicating observations
 
 Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with actual Store migrations and public APIs. [observations_for_files](crates/rtok-store/src/observations.rs#L122) joins `observation_files` to `observations`, then orders and limits joined rows without making observation IDs distinct. Insert an older observation linked to `a.rs`, then a newer one linked to both `a.rs` and `b.rs`; querying both paths with limit 2 returns the newer ID twice and omits the older matching observation. [obs_for_prompt](src/plugins/memory/mod.rs#L299) feeds these rows into [rrf_obs](src/plugins/memory/observe.rs#L180), which both gives duplicate IDs extra rank contributions and merges them after the store limit has already discarded other hits. The real ranking helper reduces this fixture to one hit despite two eligible observations.
@@ -733,19 +319,6 @@ Execution plan:
 4. Run focused privacy, observation/capture and memory recall tests and `just check`.
 
 Check: a complete private block remains private regardless of its position or length. The probe compiled the verbatim production synthesizer, imported the actual scrubber, and used real Store migrations/public methods; the full-block scrub, short-block and Unicode-cap controls passed. The full hook/capture integration was source-traced, not executed.
-
-### T619. Scroll wrapped TUI panel results by rendered rows
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with the actual [Panel](src/tui/panel.rs#L144) and Ratatui's test backend. The shown-result key handler passes `lines.len()` to `scroll_key`, which caps the offset at the number of logical lines minus one. [render](src/tui/panel.rs#L199) enables paragraph wrapping and applies that offset in rendered rows. A one-line result that wraps beyond the viewport therefore has a maximum offset of zero: even 100 PageDown events leave the same first rows visible and its tail inaccessible. A directly scrolled Paragraph renders the tail, and the unwrapped multi-line control scrolls normally. Compare/export result and error text share this panel.
-
-Execution plan:
-
-1. Add a small-viewport regression with one long result line and a distinctive tail. Send Down/PageDown and assert the tail becomes visible; retain the ordinary multi-line control.
-2. Calculate or maintain the scroll range from wrapped rows at the current content width and viewport height. Share that geometry between rendering and navigation rather than capping against the logical input line count.
-3. Clamp the offset when resizing or replacing the result; cover Unicode, blank lines, narrow terminals, short results, Up/PageUp and the compare/export result paths.
-4. Run focused TUI panel and caller tests, then `just check`.
-
-Check: every rendered result row is reachable using the existing navigation keys. The isolated probe imported the production panel with small surrounding UI shims and used a real Ratatui buffer; it did not execute an interactive terminal session or graph backend.
 
 ### T620. Enforce LSP request deadlines during blocking transport reads
 
@@ -777,21 +350,6 @@ Execution plan:
 
 Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
 
-### T622. Preserve non-text blocks when the pi extension compresses tool output
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [pi tool_result](plugins/pi/extensions/rtok.ts#L143). The handler joins only text blocks for `rtok filter`, then returns a replacement content array containing only the compressed text. A successful transformation of a text-plus-image result therefore drops the image; its bytes were never sent to the filter and cannot be recovered from that text's archive. The omp installer links the same package. T70.1 covers text replacement, not preservation of mixed content.
-
-A Vitest probe imported the actual extension with a synthetic registrar and mocked child-process transport. A text/image fixture returned only compressed text; unchanged-output and subprocess-failure controls returned no replacement.
-
-Execution plan:
-
-1. Add a mixed-content regression for text, image and other host-supported blocks, alongside text-only, unchanged and failure controls.
-2. Preserve every non-text block and its ordering when replacing text, or conservatively pass mixed content through until a lossless mapping is available. Do not claim that archiving only the joined text preserves the whole result.
-3. Cover multiple text blocks separated by images, empty text, unknown block types and the shared omp package path.
-4. Run extension/package parity tests and `just check`.
-
-Check: successful compression cannot remove or alter non-text tool-result blocks. Evidence used the actual extension under Vitest; no real pi/omp process or model was invoked.
-
 ### T623. Correlate web replies across request timeouts and retries
 
 Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
@@ -806,114 +364,6 @@ Execution plan:
 4. Run focused API/protocol and Doctor UI tests, then `just check`.
 
 Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
-
-### T624. Retain the trace ID in the OTel integration-check extractor
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [otel-check.sh](tools/otel-check.sh#L72). After `rg` matches a complete `"traceID":"<32 hex digits>"` field, `sed 's/.*"//;s/"$//'` greedily removes everything through the final quote. Even a valid trace therefore becomes an empty ID and the following check fails before trace validation. Running the exact pipeline on `0123456789abcdef0123456789abcdef` produced an empty result; the malformed-ID control was also empty. T53.4 introduced the check but does not cover this extraction defect.
-
-Execution plan:
-
-1. Add an offline fixture test proving that a valid Jaeger response yields the exact trace ID and a missing/invalid ID fails clearly.
-2. Parse the response structurally using an existing available JSON parser, and explicitly select a valid trace ID rather than depending on quote stripping or compact JSON formatting.
-3. Cover compact/pretty JSON, multiple traces, empty data and malformed responses; keep these checks independent of Docker.
-4. Run the extractor tests and `just check`; run the existing Docker-backed OTel check when that environment is available.
-
-Check: a valid returned trace can reach the existing trace-validation stage. Only the exact extraction pipeline was executed with synthetic JSON; the Docker/collector/Jaeger integration was not run.
-
-### T625. Preserve invalid Grok configuration when installing MCP
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Grok load](src/agents/grok/mod.rs#L295): a TOML parse error becomes a default empty document. When Claude MCP does not already cover Grok, [register_mcp](src/agents/grok/mod.rs#L209) inserts its server into that empty document and writes it over the existing configuration. An unrelated syntax error therefore discards the user's provider/settings text instead of stopping the edit.
-
-An isolated probe compiled the verbatim registration/loader functions with a temporary config path and the real agent SDK writer. A fixture containing a user provider followed by an unfinished array was replaced by an MCP-only document. The original bytes survived in the enabled backup; a valid-provider control retained its content. Configuration and Claude-coverage dependencies were shimmed, and no real host was started.
-
-Execution plan:
-
-1. Add a malformed-existing-TOML regression through the Grok registration path. Require an error and byte-for-byte preservation of the original file; retain missing-file and valid-file controls.
-2. Make loading distinguish a missing config from read/UTF-8/parse errors, propagating errors with the path instead of substituting an empty document. Reuse the existing strict TOML loader where its contract fits.
-3. Verify install/remove/compatibility checks cannot turn a read failure into an empty writable config; test backup-disabled operation, permission failures where supported and idempotent valid installs.
-4. Run focused Grok and host-config preservation tests, then `just check`.
-
-Check: an invalid existing Grok file is never replaced by generated configuration. The executed probe covered parsing, registration and the real SDK filesystem write with backups; real CLI dispatch and OS permission failures were not exercised.
-
-### T626. Match Aider proxy ownership by URL authority
-
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [is_ours_value](src/agents/aider/mod.rs#L149). Ownership accepts `localhost` or `127.0.0.1` anywhere in the value, plus the configured port anywhere with a non-digit boundary. [strip_ours](src/agents/aider/mod.rs#L213) consequently deletes an unrelated `openai-api-base: https://api.example/localhost:8790/v1` when the rtok port is 8790, even though the URL authority is `api.example`. The same predicate reports that endpoint as rtok-installed.
-
-An isolated Rust probe compiled the actual parser, predicate and remover: the foreign endpoint disappeared while an unrelated `model` line remained. A conventional foreign endpoint was kept and rtok's exact loopback endpoint was removed. T559 concerns quoted YAML keys, not URL ownership; the existing foreign-base-URL test does not cover loopback text outside the authority.
-
-Execution plan:
-
-1. Add ownership/removal regressions for loopback strings and port-like text in paths, queries, userinfo and foreign hostnames. Assert foreign configuration remains byte-for-byte unchanged.
-2. Parse the endpoint and compare its actual scheme, host and port against the supported rtok ownership contract. Preserve exact configured URL recognition and intentional loopback aliases; do not infer ownership from arbitrary substrings.
-3. Use the same predicate for installed-state detection and removal. Cover IPv6 loopback if supported, malformed URLs, port-prefix collisions and quoted YAML values without duplicating T559's parser work.
-4. Run focused Aider detection/removal tests and `just check`.
-
-Check: a foreign URL containing loopback-looking text outside its authority is neither reported as rtok's proxy nor removed. Executed evidence used extracted production parsing/removal code; full CLI file edits and real Aider were not run.
-
-### T627. Preserve JSONC separators when removing an item with a trailing comment
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the verbatim production JSONC editor. [excise_member](src/agents/jsonc.rs#L241) skips whitespace but not comments when looking for the following comma. Removing `rtok` from `{"servers":{"rtok":1 /*keep*/,"other":2}}` returns `{"servers":{ /*keep*/,"other":2}}`, which no longer parses. The array equivalent, removing `"rtok worktree adopt" /*keep*/,` before another command, also leaves a leading comma. [Cursor post-create removal](src/agents/post_create.rs#L129) passes that result to `save` without validating it again; the ordinary MCP `remove_entry` wrapper instead rejects it before writing. T328 fixed replacement token boundaries, and T331.5 introduced shared removal coverage; neither records this comment-before-separator counterexample.
-
-Execution plan:
-
-1. Add object and array regressions with first/middle/last owned elements, block and line comments, trailing commas and multiple removals. Assert valid output, preserved foreign values and comments, and byte stability outside the removed span.
-2. Make separator selection aware of JSONC trivia through the existing parser/scanner; share the correction between object and array removals.
-3. Validate the final edited document before post-create settings can be written, preserving original bytes on errors. Exercise Cursor and the Devin/Windsurf caller with temporary files.
-4. Run JSONC, Doctor removal and post-create preservation tests, then `just check`.
-
-Check: removal leaves a parseable document containing the unrelated entry/command. Executed evidence compiled the actual editor and passed no-comment and last-element controls; the post-create filesystem write was source-traced, not executed against a real host.
-
-### T628. Select cached plugin versions by version precedence
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536`: [newest_child_dir](src/agents/plugin_install.rs#L225) sorts directory paths lexicographically and pops the last. An isolated fixture containing `0.9.0` and `0.10.0` selects `0.9.0`. [cache_probe](src/agents/plugin_install.rs#L190) uses this for Codex and CodeBuddy installed-version detection, so the outdated/list paths can report an older cached copy even when the newer copy exists. T328 corrected the separate `ketch_store_plugin` resolver; this still-unfixed cache selector does not use that ordering.
-
-Execution plan:
-
-1. Add installed-version probes containing `0.9.0`, `0.10.0`, prereleases, build metadata, malformed names and unrelated files; assert which manifest/version record supplies the result.
-2. Prefer an authoritative active-install record wherever the host supplies one. For the documented newest-cache fallback, apply SemVer precedence and an explicit deterministic fallback for unparseable names.
-3. Reuse the existing version parsing/order policy rather than adding another independent comparator. Verify Codex and CodeBuddy list/outdated behavior and keep receipt precedence intact.
-4. Run plugin-install/version/outdated tests and `just check`.
-
-Check: a newer semantic version is not hidden by the lexical order of cache folder names. Executed evidence used the exact selector over real temporary directories; host activation and update commands were not run.
-
-### T629. Reopen previously closed hosts when a later preflight fails
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [with_restart](src/agents/restart.rs#L289). The loop closes each running desktop immediately after its `would_change` check. If a later host's check returns an error, `?` exits before the reopen loop. A probe compiling this exact orchestration with fake processes recorded only `quit:First` when the second host's preflight failed; the write callback was never reached. A write-error control recorded both quits and both reopens. T141/T434 cover ordinary restart and write/quit failures, not a later preflight error after partial shutdown.
-
-Execution plan:
-
-1. Add an orchestration regression with two running desktop hosts and an error in the second preflight. Assert no host remains closed and no write occurs.
-2. Complete fallible preflight checks before shutting down any app, or use guaranteed cleanup for every successfully closed app on every exit path. Preserve existing warnings and best-effort reopen semantics.
-3. Cover failures on first/middle/last hosts, dry run, no-restart, CLI-only hosts and write errors without launching real applications.
-4. Run restart/install orchestration tests and `just check`.
-
-Check: every successfully closed app is reopened even if a subsequent host cannot be planned. Executed evidence used the real orchestration function with injected process/config seams; OS process control was not exercised.
-
-### T630. Preserve the selected config file in operator pages
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` with the actual `rtok-config` crate. [page](src/model/tasks.rs#L156) reloads layers using `(&home, None, None)` and [configured](src/model/tasks.rs#L184) repeats that selection, dropping `cfg.loaded_from`. A custom file supplied through `--config` with task prefix `Z` loads correctly, but the verbatim `configured` helper returns false when the default file has no tasks section. If the default file instead specifies prefix `A`, the page's reload selects `A`; a control passing `loaded_from` retains `Z`. The board can consequently report an unconfigured project or use different task settings from the CLI launched with the same explicit config. The Config page's [config_page_text](src/model/mod.rs#L1019) calls the same `figment(&cfg.home, None, None)`, so it also displays values and provenance from the wrong file (source-traced). T441.13.7's refresh behavior does not cover this source-selection case.
-
-Execution plan:
-
-1. Add task-page refresh regressions for an explicit config file with no default file and with a conflicting default task configuration. Compare the board's settings and rows, and the Config page's values/provenance, with the CLI using that same config.
-2. Carry the original selected config path through both refresh and provenance checks, reusing `Config::loaded_from`. Preserve reloading of project-level `.rtok.toml` changes.
-3. Cover default-file, `RTOK_CONFIG`, explicit `--config`, missing/invalid files and fallback behavior without process-global environment mutation in tests.
-4. Run config-layer/task-page tests and `just check`.
-
-Check: task-page refresh and Config page rendering use the same selected user file as the process that created them. Executed evidence used real config extraction and the exact provenance predicate; background polling and browser rendering were source-traced, not run.
-
-### T631. Track the real Git metadata when embedding a worktree build SHA
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the actual [build script](build.rs#L39) in a minimal temporary Cargo package and a real linked Git worktree. `.git` is a file there, so none of `.git/HEAD`, `.git/refs/heads`, `.git/packed-refs` exists and no Git rerun hint is emitted. After an initial build and an empty commit advancing HEAD, a second `cargo run` still prints the old embedded SHA. The fixture reported new HEAD `86a42649a` while the binary retained `81b95850e`. Other rerun directives keep Cargo from using its broad default source scan. T10.4's version embedding and T310's SPA hints do not cover linked-worktree Git metadata.
-
-Execution plan:
-
-1. Add an isolated incremental-build regression with a linked worktree: build, advance HEAD without touching sources, build again and compare the embedded SHA with Git.
-2. Resolve the actual per-worktree Git directory and common directory through Git, and watch HEAD plus the current loose ref/packed refs as appropriate. Support detached HEAD and ordinary checkouts.
-3. Keep source archives without Git working, avoid always-dirty missing-path hints, and cover checkout/ref changes as well as ordinary commits.
-4. Run build/version tests and `just check`.
-
-Check: an incremental worktree build embeds its current HEAD rather than a stale commit. The reproduction ran Cargo and Git with the production build.rs; the full rtok binary and release packaging were not rebuilt.
 
 ### T632. Use rendered chart height when paginating PDF reports
 
@@ -941,136 +391,6 @@ Execution plan:
 
 Check: every contents entry points to the page that actually starts the section. The source-arithmetic probe confirmed the one-page discrepancy; viewer navigation was not executed.
 
-### T634. Keep PyPI dry-run behavior independent of flag order
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` by running the actual [publisher](tools/pypi-publish.sh#L18) with temporary artifacts and fake git/cargo/twine executables. Both options overwrite one `mode` variable: `--dry-run --testpypi` invokes `twine upload --repository-url https://test.pypi.org/legacy/`, whereas the reverse order and `--dry-run` alone only invoke `twine check`. A dry run can therefore upload if the repository-selection flag follows it. No network upload occurred in the probe.
-
-Execution plan:
-
-1. Add a fake-twine command test for both flag orders, repeated flags and each standalone option. Require every invocation containing `--dry-run` to perform no upload.
-2. Store repository selection and dry-run state independently, or reject the combination explicitly before any publishing command. Keep the target repository visible in dry-run output.
-3. Preserve version/artifact validation and production wheel completeness checks for the chosen target; verify validation failures never upload.
-4. Run publisher script checks and `just check`.
-
-Check: flag order cannot turn a requested dry run into a publishing operation. The actual shell script ran with synthetic distribution files and a logging-only twine stub; package validity and registry authentication were not exercised.
-
-### T635. Decode JSON paths in Claude worktree fallback hooks
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [field](plugins/claude/scripts/worktree.sh#L26). The sed expression copies the JSON string's encoded bytes and stops at an escaped quote. Given a JSON-encoded cwd `/tmp/quote"dir`, it returns `/tmp/quote\`; a cwd containing one backslash retains the JSON escape pair. [WorktreeCreate](plugins/claude/scripts/worktree.sh#L49) passes that wrong path to `git -C` in its fallback. Removal's directory check can silently skip the actual worktree for the same reason. D31/T159 require a functioning fallback, and absolute paths are not restricted to characters that avoid JSON escaping.
-
-Execution plan:
-
-1. Add script regressions with plain, spaced, quoted, backslash-containing and Unicode paths, using a missing/old rtok fallback and fake Git argv capture.
-2. Decode the hook payload with a real JSON parser available under the supported fallback contract; do not replace one partial unescaper with another. Explicitly handle unavailable parsing and malformed fields.
-3. Test create cwd/name and remove cwd/worktree_path independently, preserving slug sanitation, dirty-worktree refusal and stdout's single-path contract.
-4. Run hook-script/fallback tests and `just check` on supported shell platforms.
-
-Check: Git receives the decoded path exactly and removal does not silently skip an escaped path. Executed evidence ran the verbatim `field` function through POSIX sh with synthetic JSON; real Git worktree creation/removal and Windows were not run.
-
-### T636. Limit Claude legacy proxy migration to owned endpoints
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the actual [retarget_proxy](src/agents/claude/migrate.rs#L94). `agents install claude --replace --yes` rewrites any `ANTHROPIC_BASE_URL` containing `8788` or `8787`, wherever those digits occur. The foreign URL `https://api.example/v1/8788` becomes `https://api.example/v1/8790`. The migration also hardcodes its destination instead of receiving the configured endpoint. T10.9's normal removal contract is related, but this is the separate legacy migration entry point; T626 affects Aider's ownership predicate.
-
-Execution plan:
-
-1. Add migration fixtures for genuine legacy loopback endpoints and foreign URLs with matching digits in hosts, paths, queries and userinfo. Assert foreign values are unchanged.
-2. Parse and verify the legacy endpoint's actual authority before retargeting, using the established ownership policy and supported loopback aliases.
-3. Pass the effective configured proxy destination into migration, preserving endpoint structure deliberately rather than globally replacing digit strings. Cover nondefault ports and idempotence.
-4. Run Claude migration and host-config preservation tests and `just check`.
-
-Check: migration retargets only recognized legacy rtok-related endpoints to the effective destination. The extracted production helper reproduced foreign-path mutation and passed an ordinary foreign-URL control; full installer dispatch and live Claude were not run.
-
-### T637. Route filter text before global TUI shortcuts
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [App::key](src/tui/app.rs#L715). The global `r`/`?` branches run before the Config and Calls filter handlers. An isolated compiled probe using the verbatim routing prefix and [config_key](src/tui/app.rs#L483) typed `proxy?` into an active Config filter and obtained `poxy`, one refresh and an opened help overlay. Calling the filter handler directly preserves `proxy?`. The Calls filter is reached after the same global branches (source-traced). T60.8 establishes global help/refresh outside text entry; its tests do not exercise active filters. The existing compare/export typing exceptions already demonstrate the needed precedence. This is separate from T619's wrapped-row scrolling.
-
-Execution plan:
-
-1. Add App-level regressions typing `proxy?` and ordinary text into Config and Calls filters; assert exact text and no refresh/help side effects.
-2. Dispatch active text-entry handlers before ordinary global shortcuts, keeping Ctrl+C and the documented finish/cancel keys deliberate. Reuse the compare/export routing convention.
-3. Keep `r` and `?` functional outside text entry and cover closing a filter, reopening it, Backspace and switching pages.
-4. Run TUI state/rendering tests and `just check`.
-
-Check: every printable filter character reaches its input without firing an unrelated command. The executed probe compiled the actual routing prefix and Config handler with unrelated page/model methods stubbed; a full interactive terminal and Calls input were not run.
-
-### T638. Bound benchmark output draining after the child exits
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [run_bounded](src/bench.rs#L402). The deadline controls only child polling; the subsequent `reader.join()` waits without a limit for stdout EOF. With the actual extracted function, a synthetic `sh -c 'sleep 0.8 & printf parent; exit 0'` and a 100 ms limit took 816 ms, waiting for the descendant after the direct child had exited. The ordinary `printf control` case returned its complete output. A longer-lived inherited pipe can stall the benchmark indefinitely. T235.1 and the host-version follow-up fixed command capture through `src/proc.rs`; this separate benchmark helper still implements its own unbounded drain. T620 concerns LSP request framing, not this process reader.
-
-Execution plan:
-
-1. Add hermetic subprocess regressions for an exited child whose descendant holds stdout, a child exceeding its deadline, nonzero exit and ordinary complete output. Never launch a real agent.
-2. Reuse the shared bounded capture mechanism in `src/proc.rs`, preserving the benchmark's success/timeout result semantics and imposing a finite post-exit drain.
-3. Reap the direct child on errors and timeout, and check both ordinary and graph benchmark callers. Keep capture output bounded where the shared API supports it.
-4. Run benchmark/process tests and `just check`.
-
-Check: the benchmark finishes within its deadline plus a documented finite drain allowance even when descendants retain stdout. The reproduction compiled the actual helper and ran synthetic shell children on macOS; no live benchmark agent or Windows process path was run.
-
-### T639. Keep the selected Calls row visible in the TUI
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [render_calls](src/tui/view.rs#L609) and [calls_table](src/tui/view.rs#L654). The cursor advances through all snapshot rows, but the renderer uses a stateless `Table` with no offset; selection only changes a row's style. A Ratatui 0.30.2 TestBackend probe of the actual `calls_table`, with 15 rows in a 100-by-5 area, renders row 0 and highlights it when selected. Selecting row 10 still renders row 0, hides row 10 and leaves no highlighted row on screen. T15.5 added the Calls cursor and details; T60.10 fixed viewport tracking for Sessions, not Calls. T619 is the independent wrapped-result panel issue.
-
-Execution plan:
-
-1. Add a Calls rendering regression navigating beyond a short viewport and back, asserting that the selected row remains visible and highlighted.
-2. Use Ratatui table state or the existing derived-offset convention to scroll the Calls list to its cursor, accounting for its header and border.
-3. Cover terminal resize, snapshot shrink, empty rows and opening the detail/expand panes, which reduce the list height. Keep selection and details on the same call.
-4. Run TUI state/rendering tests and `just check`.
-
-Check: keyboard navigation never leaves the Calls cursor outside its visible list. The executed probe used the production table function and real TestBackend; row data and formatting/theme dependencies were small fixtures, and full App navigation was source-traced.
-
-### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
-
-Confirmed with the actual [text](crates/rtok-store/src/sanitize.rs#L70) and [body](crates/rtok-store/src/sanitize.rs#L34) functions: put ANSI reset `ESC [ 0 m` or U+200B between `system-` and `reminder` in an opening tag, followed by `hidden</system-reminder>\nvisible`. The first pass removes the noise but leaves `<system-reminder>hidden</system-reminder>\nvisible`; the second returns only `visible`. JSON string values show the same change on a second body pass. `text` removes wrappers before character cleanup, so cleanup can create a wrapper after the removal stage has finished. This violates T431's explicit idempotence requirement and the [property test's invariant](crates/rtok-store/src/sanitize.rs#L290). No existing card covers this composition case; T432's upstream cleaner intentionally retains wrappers and is a separate contract.
-
-Execution plan:
-
-1. Add deterministic text and JSON regressions for both reproduced tag/noise combinations, asserting one-pass normalization and `clean(clean(x)) == clean(x)`. Retain plain-wrapper, unchanged-byte and invalid-UTF-8 controls.
-2. Order or combine character and wrapper processing so the result reaches the documented canonical form in one call. Account for transformations that expose new syntax; avoid an unbounded repeated-regex loop over large inputs.
-3. Extend property inputs to deliberately combine noise inside wrapper names and adjacent/nested wrapper boundaries instead of relying on accidental random coverage. Preserve non-wrapper text and keep `terminal_noise`'s distinct whitespace/wrapper behavior.
-4. Add storage-path coverage for ordinary and split hook bodies with `store_raw` on/off. Ensure persisted bytes, sizes and hashes refer to the final cleaned representation, then run sanitizer/store tests and `just check`.
-
-Check: repeated stored-body sanitation no longer changes the reproduced inputs, raw storage stays byte-for-byte and the terminal-only cleaner keeps wrappers. The offline probe imported the actual sanitizer module without modification; no database, production replay, host record or upstream request was exercised. This is a P3 normalization-contract defect, not evidence of a privacy leak or observed production data loss.
-
-### T597. Reject stale demon process identities before stopping services
-
-Confirmed in [stop](src/demon.rs#L208): a saved state file is enough to send TERM or KILL to its supervisor and child PIDs; the timestamp is never checked. A state left over from an earlier boot can therefore cause `demon stop`, `demon kill`, or the stop phase of `demon restart` to terminate unrelated processes after those positive PIDs are reused. [start](src/demon.rs#L154) and [quiesce](src/demon.rs#L263) already guard stale retirement with the boot time, but stop bypasses that protection. [process_term/process_kill](crates/rtok-sys/src/lib.rs#L48) validate positive PIDs, not process identity. T73 covers start/quiesce around upgrade; no active card covers this stop-path gap.
-
-Execution plan:
-
-1. Add deterministic tests with pre-boot state and reused positive PID identities for normal stop, forced kill and restart. Use a recording process adapter and assert no signal reaches unrelated processes; retain missing-state and valid-live-service controls.
-2. Apply one shared stale-state/identity check before any initial or escalation signal. Reject pre-boot records and handle unknown boot information conservatively; do not let force mode bypass ownership checks. For current-boot PID reuse, verify a process birth token or equivalent platform identity rather than treating liveness alone as ownership.
-3. Retire stale metadata with an explicit result while preserving any concurrently published new supervisor state. Keep stop-marker ordering and the valid-service shutdown/escalation behavior; revalidate identity before escalation to avoid signalling a newly reused PID.
-4. Cover restart and upgrade callers, unavailable identity information, malformed state, nonpositive PIDs and concurrent service replacement using fakes. Rerun demon/platform tests and `just check`.
-
-Check: stale state never authorizes a signal to a different process, including forced shutdown; valid owned services still stop and restart. The scratch probe compiled actual Service/State, file/read, targets and stop functions with a recording-only process adapter. State `since=1` sent TERM to both simulated reused PIDs in normal mode and KILL in force mode, then removed the state; the missing-state control sent nothing. No OS process was signalled, and real kernel PID reuse or full CLI integration was not exercised.
-
-### T594. Validate structured config types before persisting edits
-
-Confirmed through actual config APIs: `set_with(..., "stats.prices", "42", false)` writes the scalar and `issues` returns no errors, but Figment extraction into `Config` rejects it as an expected map. Likewise `plugins.read.allow_paths = [1]` is written and passes `issues`, then typed extraction rejects element 0 as not a path string. [check_table](crates/rtok-config/src/validate.rs#L545) skips open-map keys entirely through `is_open`, while [check_leaf](crates/rtok-config/src/validate.rs#L663) checks only that an array exists, not its element types. [set_all_with](crates/rtok-config/src/validate.rs#L100) uses those checks as its sole pre-write gate. An accepted edit can therefore leave the user file unloadable, contrary to the setter's contract. These are one incomplete structured-type validation issue; T363–365 cover other constraints, not these shapes.
-
-Execution plan:
-
-1. Add rejection tests for scalar open maps, wrongly typed map entries, and array elements, including the two reproduced commands. Assert both real and dry-run setters reject them and preserve an existing file byte-for-byte.
-2. Validate the candidate document against the actual Config field types before persistence, using a pure default-plus-candidate extraction so project/environment overrides cannot mask invalid file values. Retain semantic/range checks and useful key/line diagnostics; do not add a second independently maintained type schema.
-3. Keep free-form map names accepted while checking their container and value types. Cover valid custom model prices, benchmark paths, graph mappings, empty arrays and heterogeneous-invalid arrays; apply consistent checks to file validation.
-4. Add CLI coverage proving a rejected set leaves subsequent loading functional and valid edits still preserve comments. Rerun config/layer tests and `just check`.
-
-Check: every successful set produces a document accepted by typed config extraction, invalid structured values never replace the existing file, and free-form names remain supported. The scratch probe used the actual config crate's setter/validator plus Figment default-and-file extraction; full CLI and environment layering were not executed.
-
-### T595. Keep commented-default discovery outside TOML string payloads
-
-Confirmed with a valid multiline literal string: `[otel] service_name` contains the lines `[proxy]` and `# port = 12`, followed by the real `[proxy]` table with a commented port default. Setting `proxy.port` to 9000 updates the requested key but also removes `# ` from the unrelated service name's payload. [reveal_commented_key](crates/rtok-config/src/validate.rs#L185) calls [reveal_assignment](crates/rtok-config/src/validate.rs#L198), whose line scan treats the payload's table/header and comment as document syntax before the actual TOML edit. The output remains valid, so validation does not detect the unintended value change. Dry-run leaves disk untouched but previews the same proposed mutation. T381's default/comment preservation tests do not cover multiline string payloads.
-
-Execution plan:
-
-1. Add the multiline literal fixture and an equivalent multiline basic string, with header-shaped and assignment-shaped content. Assert that setting a different key changes only that key and preserves the parsed string value and its original bytes.
-2. Use TOML-aware source spans/token context for commented-default discovery, or restrict revival to comments proven to be outside string values. Share that context with live-key detection; avoid interpreting raw payload lines as table headers or assignments.
-3. Cover quoted/dotted table keys, inline comments, escaped quotes, CRLF, existing live keys and batch setters. Preserve the intended uncomment-in-place behavior and trailing comment/padding guarantees.
-4. Verify real and dry-run edits propose the same safe result, with dry-run writing nothing; rerun existing comment-preservation tests and `just check`.
-
-Check: arbitrary valid TOML string content cannot be modified by setting an unrelated key. The actual setter changed the fixture service name from `[proxy]\n# port = 12\n` to `[proxy]\nport = 12\n`; the requested port and ordinary-default control both became 9000. Only scratch configuration files were used.
-
 ### T592. Keep late same-second sessions from moving behind the OTel cursor
 
 Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
@@ -1085,102 +405,6 @@ Execution plan:
 4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
 
 Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
-
-### T589. Track log generations without using their first line as identity
-
-Confirmed with actual [Follow::poll](src/log.rs#L399): matching first lines and sufficient line count make a rotated replacement look like the previous file. Prime a reader with `same\nold-shown\n`, append `old-unseen`, rotate to `.1`, then create `same\nnew-unseen\n`: polling returns nothing, losing the old tail and both replacement rows. A second manifestation occurs when the replacement exists but is empty: polling carries the old tail and resets `first` to None; after the replacement receives its first line, polling replays the whole rotated file, including previously shown rows. [State replacement](src/log.rs#L430) loses the generation boundary. T24.3 covers ordinary rotation, missing-path gaps and storms with distinct first lines, not either fixture. These are one identity/state defect, not two cards.
-
-Execution plan:
-
-1. Add deterministic follow tests for matching first lines across rotations and an empty or partial-line replacement between polls. Assert every complete line is returned once in chronological order, including the unread tail of the old file.
-2. Track file generations with a reliable filesystem identity or retained file handle and consumed position, using the existing platform abstractions where possible. Do not infer identity from log text; retain the carry boundary after observing an empty replacement.
-3. Cover consecutive rotations, retention exhaustion, missing/unreadable intervals, truncation and partial writes. Preserve the shared initial-screen snapshot contract and define any unavoidable loss when the old generation has already been deleted.
-4. Exercise watch integration with a scratch rotating writer and rerun the existing rotation/first-screen tests on supported platforms.
-
-Check: retained generations neither lose nor replay complete rows in either fixture, existing follow ordering remains intact, and `just check` passes. The offline probe compiled actual Follow and whole-line functions with local scratch files; full CLI/watch scheduling was source-traced, not executed.
-
-**Continued source audit (T540).** T541–T546 were confirmed against source at
-`efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss
-case T541 first. T542/T543 concern index freshness; T544/T545 concern filtering
-and should share eligibility logic; T546 concerns the derived rank document.
-Completed T68.10/T35.5 and active T370 describe intended behavior, but do not
-track these concrete failure cases. These cards record defects, not implemented fixes.
-
-### T541. Reject disk task filename and frontmatter identity mismatches
-
-Source-confirmed: [disk scan/find](src/tasks/disk.rs#L81) accepts a valid task id in the filename without comparing it to the parsed frontmatter id. Lookup selects by filename, but [place/write](src/tasks/disk.rs#L116) chooses the destination using the frontmatter id and title, then deletes the original file. Create a valid `R2 - target.md`, then a manually copied `R1 - copy.md` whose frontmatter says `id: R2`, `title: target` and has a different body. Setting R1 to in-progress overwrites R2's file with the copied body and removes R1. A malformed identity must be rejected before any mutation. T441.4 shipped the adapter; it does not validate this consistency boundary.
-
-Execution plan:
-
-1. Add a two-file fixture with the mismatch above; assert get/list/status reject the inconsistent task and preserve both files byte-for-byte.
-2. Validate filename id against frontmatter id in the shared disk read path and return an error naming the offending path and ids before write/move operations.
-3. Cover mismatches in active and done directories, status changes and claim/save; retain valid renames, moves and case-normalized ids.
-
-Check: no operation on the malformed R1 overwrites R2 or removes either fixture; valid task lifecycle tests and `just check` pass. This reproduction is source-derived; an end-to-end regression remains part of the fix.
-
-### T542. Invalidate graph rows when an extension's grammar mapping changes
-
-Source-confirmed: [extractor_fingerprint](src/plugins/graph/index.rs#L417) hashes compiled queries and INDEX_VERSION but no configured extension map. [run_with](src/plugins/graph/index.rs#L111) therefore reuses old stats after changing `plugins.graph.extensions`; its stat gate skips unchanged files. Even touching the file reaches the [SHA gate](src/plugins/graph/index.rs#L346), which returns Same before consulting the new grammar. Index `sample.tpl` containing `fn old() {}` with `tpl = "rust"`, change only the mapping to `tpl = "py"`, then index again: the old Rust definition survives. T35.5 covers extractor upgrades; T68.10 added configurable mappings without including them in freshness.
-
-Execution plan:
-
-1. Add a fixture that changes the mapping after an initial index, with unchanged source bytes; exercise both unchanged and changed mtime.
-2. Include a deterministic representation of the effective extension-to-grammar mapping in index freshness and invalidate the affected cached rows before either skip gate. Reuse the same policy for full and incremental entry points.
-3. Verify equivalent map insertion orders do not rebuild, while mapping changes re-extract and remove obsolete symbols; retain warm-index skipping.
-
-Check: the mapped file's symbols match the current grammar after reindex without a source edit; unchanged configuration still skips; `just check` passes. Source-derived reproduction, not an executed integration test.
-
-### T543. Make stale-fingerprint dry runs predict the actual cold reindex
-
-Source-confirmed: [run_with](src/plugins/graph/index.rs#L113) clears stale symbol rows only when `!dry_run`, then reads the existing stats unconditionally. With an old stored fingerprint and unchanged indexed files, dry-run takes the stat skip gate and reports no new rows; an actual run clears those stats and parses the same files. This violates the dry-run's would-be indexing report independently of T542's missing configuration input.
-
-Execution plan:
-
-1. Seed an indexed fixture and a deliberately obsolete fingerprint. Snapshot the store, run dry-run, then run the actual index on the same fixture.
-2. When the fingerprint is stale, bypass old stat/SHA reuse for the simulated run without deleting rows or changing metadata.
-3. Compare predicted indexed/inserted counts with the real cold run and assert the dry-run left symbols, fingerprint, timestamps and rank unchanged; retain warm dry-run behavior.
-
-Check: stale-fingerprint dry-run predicts the real reindex and performs no writes; `just check` passes. Source-derived reproduction.
-
-### T544. Keep unrelated gitignored files excluded when graph include is nonempty
-
-Confirmed in source and an isolated Rust probe: [Matcher::new](src/plugins/graph/walk.rs#L27) adds the positive override `**` before any configured includes. Override whitelists take precedence over gitignore, so this revives every ignored file, not only the requested subtree. With `.gitignore` containing `wanted/` and `unwanted/`, and include containing only `wanted/`, the full walk returns both `wanted/a.rs` and `unwanted/a.rs`. This can index large ignored trees and pollute graph results. T68.10 intended selective inclusion, not disabling ignore rules globally.
-
-Validation: the offline probe compiled this revision's actual `walk.rs` with the real `ignore` crate, plus minimal configuration/extension-support stubs. It asserted both paths were returned. No repository index or live watcher was run.
-
-Execution plan:
-
-1. Add a real-repository fixture with two ignored subtrees, one explicit include and ordinary nonignored source.
-2. Replace the blanket whitelist with eligibility handling that preserves normal gitignore behavior while admitting explicit includes; share the override interpretation with T545.
-3. Cover no includes, nested patterns and include/exclude precedence without restricting ordinary supported source to the include list.
-
-Check: only the explicitly included ignored subtree returns, ordinary source remains eligible, unrelated ignored source stays out, and `just check` passes.
-
-### T545. Apply full-walk include and glob-exclude rules to watcher events
-
-Confirmed in source and an isolated Rust probe: [absorb_event](src/plugins/graph/watch.rs#L193) rejects gitignored paths before considering configured includes. Conversely, [Matcher::is_excluded](src/plugins/graph/walk.rs#L69) treats exclude patterns as literal prefixes, while the full walker interprets globs. Thus a file explicitly included from a gitignored subtree is indexed initially but its edits are ignored; a path matching `**/generated/**` is excluded from the full index but accepted as a watcher event and passed to incremental indexing. These are the event-path regressions of T68.10, distinct from T544's blanket full-walk whitelist.
-
-Validation: the same offline probe compiled verbatim `gitignore`, `git_path`, `relevant` and `absorb_event` functions alongside actual `walk.rs`. It asserted rejection of the explicitly included file and acceptance of the glob-excluded file. This tests event filtering, not OS notification delivery or a database update.
-
-Execution plan:
-
-1. Add paired full-walk/event fixtures for an included ignored file and a glob-excluded supported file.
-2. Reuse a consistent eligibility decision for walking, event intake and incremental indexing, with the same include/exclude precedence; preserve directory-rescan and .git exclusions.
-3. Exercise edit and deletion events: included paths refresh/remove their symbols, excluded paths never enter the index, and irrelevant files do not reset the quiet window.
-
-Check: full and incremental paths agree on eligibility for both fixtures, existing watcher debounce tests and `just check` pass.
-
-### T546. Refresh stored file ranks after deletion or zero-symbol replacement
-
-Source-confirmed: [run_changed](src/plugins/graph/index.rs#L238) removes deleted files' symbol rows but refreshes the derived rank document only when `report.inserted > 0` (line 290). Replacing the last definition with an empty file also reports zero inserted symbols: [replace_one](crates/rtok-store/src/symbols.rs#L234) deletes old symbols, writes a freshness sentinel and returns zero. [run_with](src/plugins/graph/index.rs#L192) has the same zero-symbol replacement gap: its later missing-file deletion count is zero because the path remains in the keep set. [rank::map/render](src/plugins/graph/rank.rs#L221) renders definitions from the stored document without checking current symbols or files. Index a sole `a.rs` defining `old`, then delete it via the incremental path or empty it and reindex: the map still lists `a.rs: old`. A later unchanged full scan does not repair the already-existing rank document. The symbols themselves are removed correctly; this is not T324's rejected stale-symbol candidate.
-
-Execution plan:
-
-1. Seed symbols and a rank document; separately test an incremental deletion and full/incremental replacement with zero extracted rows.
-2. Track whether index contents changed independently of the number of inserted rows, and refresh or invalidate the derived document after successful removals/replacements.
-3. Assert the rendered map and stored rank paths/definitions drop obsolete entries immediately; retain warm no-change behavior and the existing rank-rebuild failure fallback.
-
-Check: the map never serves the removed definition after a successful update, subsequent warm indexing stays consistent, and `just check` passes. Source-derived reproduction; no full index runtime was executed during the audit.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
@@ -1399,12 +623,6 @@ Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no 
 Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
 
 Check: the T276 card's Check lines for items 4 and 5; `just check`.
-
-### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
-
-Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
-
-Check: hook latency budget unchanged (fail open, 10 ms); `just check`.
 
 ### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 
