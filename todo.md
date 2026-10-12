@@ -1,4 +1,3 @@
-- T536. Preserve raw command bytes when storage fails open
 - T537. Keep MCP pending calls when the server sends its own request
 - T538. Do not let skipped memory imports reserve unseen body hashes
 - T539. Preserve a global note's project scope when revising it
