@@ -87,6 +87,7 @@ pub const HOSTS: &[&str] = &[
     "qwen",
     "codebuddy",
     "goose",
+    "continue",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -790,6 +791,7 @@ section! {
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
         goose: SetupGoose = SetupGoose::default(),
+        r#continue: SetupContinue = SetupContinue::default(),
     }
 }
 
@@ -937,6 +939,13 @@ section! {
     /// `[setup.goose]` — Goose's `config.yaml`, where `extensions.rtok` goes (T413.6). Desktop
     /// and CLI read the same file; `GOOSE_PATH_ROOT` moves it to `<root>/config/config.yaml`.
     SetupGoose { config_path: PathBuf = p("~/.config/goose/config.yaml") }
+}
+
+section! {
+    /// `[setup.continue]` — Continue's user `config.yaml`, where the `rtok` item of `mcpServers`
+    /// goes (T413.7). The VS Code and JetBrains extensions and `cn` read the same file;
+    /// `CONTINUE_GLOBAL_DIR` moves it, and this key is the override.
+    SetupContinue { config_path: PathBuf = p("~/.continue/config.yaml") }
 }
 
 section! {
@@ -1712,6 +1721,11 @@ impl Config {
             plugins.wasm.dir,
             worktree.root,
         );
+        // `continue` is a keyword, so `stringify!` would spell the key `setup.r#continue`.
+        out.push((
+            "setup.continue.config_path".into(),
+            &mut self.setup.r#continue.config_path,
+        ));
         out.extend(
             self.bench
                 .configs

@@ -15,7 +15,6 @@
 //! own event names, tool names (`shell`, `edit`) and decision shape. rtok has no adapter for
 //! that payload, so the hooks module stays off until one exists.
 
-use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
@@ -23,6 +22,7 @@ use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::{NO_CHANGES, judge_owned, runs_bin};
 use serde_json::{Map, Value, json};
 
+use super::yaml_text::{eol_of, indent_of, read_or_empty, scalar, skippable, splice, text};
 use super::{
     Agent, Kind, Mode, Support, Variant, apply, apply_mcp_only, is_rtok_bin, mcp_args, mcp_summary,
     rtok_command, support_mcp_only,
@@ -73,19 +73,6 @@ fn core(v: &Value) -> Value {
     Value::Object(kept)
 }
 
-/// A scalar as YAML text: plain when that is unambiguous, else a double-quoted string (JSON's
-/// escapes are valid YAML ones), so a Windows path or a path with spaces survives.
-fn scalar(s: &str) -> String {
-    let plain = !s.is_empty()
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '/' | '-'));
-    if plain {
-        s.to_string()
-    } else {
-        serde_json::to_string(s).unwrap_or_else(|_| format!("\"{s}\""))
-    }
-}
-
 /// The `rtok:` block, `indent` columns in, one line per `eol`.
 fn render(indent: usize, cmd: &str, eol: &str) -> String {
     let (p, q) = (" ".repeat(indent), " ".repeat(indent + 2));
@@ -101,19 +88,6 @@ fn render(indent: usize, cmd: &str, eol: &str) -> String {
     .iter()
     .map(|l| format!("{l}{eol}"))
     .collect()
-}
-
-fn text(line: &str) -> &str {
-    line.trim_end_matches(['\n', '\r'])
-}
-
-fn indent_of(line: &str) -> usize {
-    text(line).len() - text(line).trim_start_matches(' ').len()
-}
-
-fn skippable(line: &str) -> bool {
-    let t = text(line).trim_start();
-    t.is_empty() || t.starts_with('#')
 }
 
 /// Where `extensions:` and its `rtok` child sit, as line numbers.
@@ -195,29 +169,6 @@ fn parse_block(lines: &[&str]) -> Result<Value> {
     root.get("rtok")
         .cloned()
         .context("extensions.rtok is empty")
-}
-
-fn read_or_empty(path: &Path) -> Result<String> {
-    match fs::read_to_string(path) {
-        Ok(raw) => Ok(raw),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(e).with_context(|| path.display().to_string()),
-    }
-}
-
-fn eol_of(raw: &str) -> &'static str {
-    if raw.contains("\r\n") { "\r\n" } else { "\n" }
-}
-
-/// `lines` with `range` swapped for `block`; a last kept line without a newline gets one first.
-fn splice(lines: &[&str], range: Range<usize>, block: &str, eol: &str) -> String {
-    let mut out: String = lines[..range.start].concat();
-    if !block.is_empty() && !out.is_empty() && !out.ends_with('\n') {
-        out.push_str(eol);
-    }
-    out.push_str(block);
-    out.push_str(&lines[range.end..].concat());
-    out
 }
 
 /// `extensions.rtok` in Goose's `config.yaml`.
@@ -330,6 +281,7 @@ impl Agent for Goose {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn cfg(name: &str, dry: bool) -> (Config, PathBuf) {
         super::super::test_scratch_cfg("goose", name, "config.yaml", dry, |c, path| {

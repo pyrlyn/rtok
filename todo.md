@@ -35,7 +35,6 @@
 - T413.3. `rtok agents install droid` — Factory Droid
 - T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 - T413.5. `rtok agents install amp` — Amp
-- T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.9. `rtok agents install junie` — JetBrains Junie
 - T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI

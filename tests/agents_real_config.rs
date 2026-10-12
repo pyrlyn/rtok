@@ -112,6 +112,10 @@ const HOSTS: &[Host] = &[
         id: "goose",
         files: &[".config/goose/config.yaml"],
     },
+    Host {
+        id: "continue",
+        files: &[".continue/config.yaml"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -236,6 +240,9 @@ fn fixture(rel: &str) -> &'static str {
         ".config/goose/config.yaml" => {
             "# KEEP: foreign\nGOOSE_PROVIDER: openai\nextensions:\n  developer:\n    type: builtin\n    name: developer\n    enabled: true\nGOOSE_MODE: auto\n"
         }
+        ".continue/config.yaml" => {
+            "# KEEP: foreign\nname: Mine\nversion: 1.0.0\nschema: v1\nmodels:\n  - name: other\n    provider: ollama\n    model: llama\nmcpServers:\n  - name: foreign\n    command: npx\n    args:\n      - x\nrules:\n  - be brief\n"
+        }
         ".config/zed/settings.json" => {
             // KEEP is last and has no trailing comma: install inserts `,\n  context_servers`
             // at the root brace (KEEP's line unchanged), and remove takes that comma with
@@ -349,6 +356,7 @@ real_config_round_trip! {
     roo_keeps_the_real_mcp_settings_json => "roo",
     qwen_keeps_the_real_settings_json => "qwen",
     goose_keeps_the_real_config_yaml => "goose",
+    continue_keeps_the_real_config_yaml => "continue",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

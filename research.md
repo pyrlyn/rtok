@@ -2599,6 +2599,14 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
 - Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
 
+### 32.7 Continue (T413.7, checked 2026-10-12)
+
+- Config file: https://docs.continue.dev/customize/deep-dives/configuration (source `docs/customize/deep-dives/configuration.mdx` in https://github.com/continuedev/continue) — `~/.continue/config.yaml` on macOS and Linux, `%USERPROFILE%\.continue\config.yaml` on Windows. `cn` defaults to the same file: https://docs.continue.dev/cli/configuration (`docs/cli/configuration.mdx`). `CONTINUE_GLOBAL_DIR` moves the directory: `core/util/paths.ts` and `extensions/cli` in the same repository (checked on `main`). The installer follows it only through `[setup.continue] config_path`.
+- Required top-level properties of a config: https://docs.continue.dev/reference (`docs/reference.mdx`) — `name`, `version`, `schema`; every other property is optional. A file rtok creates carries exactly those three plus `mcpServers`.
+- `mcpServers` shape: https://docs.continue.dev/customize/deep-dives/mcp (`docs/customize/deep-dives/mcp.mdx`) — a list of items; a stdio item is `name`, `type: stdio`, `command`, `args`, optional `env`; the reference adds `cwd` and `connectionTimeout`. `cn` treats an item with `command` as stdio (`extensions/cli/src/services/MCPService.ts`).
+- `.continue/mcpServers/` is documented for a workspace only ("top level of your workspace"); no global equivalent is documented, so it is not written. Rules and hooks: the docs name `rules` in `config.yaml` but no hook events, so the hooks module stays off.
+- Extension and CLI ids: VS Code `Continue.continue` (https://github.com/continuedev/continue/blob/main/extensions/vscode/package.json: `publisher` `Continue`, `name` `continue`); JetBrains `com.github.continuedev.continueintellijextension` (`extensions/intellij/gradle.properties`); `cn` is the `bin` of `@continuedev/cli` (`extensions/cli/package.json`). The Desktop variant is detected through the VS Code app, as Roo's is; a JetBrains-only install is not detected.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

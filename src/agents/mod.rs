@@ -21,6 +21,8 @@ pub mod codewhale;
 pub mod codex;
 pub mod command;
 pub mod commandcode;
+#[path = "continue/mod.rs"]
+pub mod continue_dev;
 pub mod copilot;
 pub mod cursor;
 pub mod devin;
@@ -61,6 +63,7 @@ pub mod task_list;
 pub mod usage;
 pub mod vscode;
 pub mod windsurf;
+mod yaml_text;
 pub mod zcode;
 pub mod zed;
 
@@ -112,6 +115,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
         "goose" => Some(&goose::Goose),
+        "continue" => Some(&continue_dev::Continue),
         _ => None,
     }
 }

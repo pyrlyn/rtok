@@ -51,7 +51,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -717,14 +716,6 @@ Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plug
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
-
-### T413.7. `rtok agents install continue` — Continue
-
-VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
 
 ### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 

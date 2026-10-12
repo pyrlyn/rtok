@@ -60,6 +60,8 @@ lang: uk
 | [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | WorkBuddy | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`goose`](https://github.com/pyrlyn/rtok/blob/main/src/agents/goose/README.md) | Goose CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`goose`](https://github.com/pyrlyn/rtok/blob/main/src/agents/goose/README.md) | Goose | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 Таблицю генерує з коду хостів (`src/agents/<host>/mod.rs` і каталогу плагінів) тест `tests/agents_doc.rs`, який падає, коли вона застаріла. Після зміни хоста, додавання нового чи зміни інтерфейсів плагіна згенеруйте її заново:
