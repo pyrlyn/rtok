@@ -95,6 +95,7 @@ pub const HOSTS: &[&str] = &[
     "continue",
     "crush",
     "openhands",
+    "augment",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -806,6 +807,7 @@ section! {
         r#continue: SetupContinue = SetupContinue::default(),
         crush: SetupCrush = SetupCrush::default(),
         openhands: SetupOpenhands = SetupOpenhands::default(),
+        augment: SetupAugment = SetupAugment::default(),
     }
 }
 
@@ -1008,6 +1010,11 @@ section! {
 section! {
     /// `[setup.openhands]` — OpenHands's user-level MCP file (T413.14).
     SetupOpenhands { mcp_path: PathBuf = p("~/.openhands/mcp.json") }
+}
+
+section! {
+    /// `[setup.augment]` — the Auggie CLI's user settings file (T413.8).
+    SetupAugment { settings_path: PathBuf = p("~/.augment/settings.json") }
 }
 
 section! {
@@ -1769,6 +1776,7 @@ impl Config {
             setup.warp.mcp_path,
             setup.crush.config_path,
             setup.openhands.mcp_path,
+            setup.augment.settings_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

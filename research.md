@@ -2699,6 +2699,18 @@ OpenHands CLI. All facts are from the vendor's docs (docs.openhands.dev), fetche
 - Install: `uv tool install openhands --python 3.12`, or `curl -fsSL https://install.openhands.dev/install.sh | sh` for an executable binary; both put an `openhands` command on PATH, https://docs.openhands.dev/openhands/usage/cli/installation. Detection is the `openhands` binary; no `--version` flag is relied on.
 - A model endpoint setting and a plugin format for rtok were not checked, so proxy and plugin stay `Support::No`.
 
+### 32.8 Augment Auggie CLI (T413.8, checked 2026-10-12)
+
+The CLI binary is `auggie`; the IDE extension keeps MCP servers behind a settings panel and documents no file, so there is one CLI variant. https://docs.augmentcode.com/cli/reference
+
+- User-level MCP file: `~/.augment/settings.json`, key `mcpServers`; `auggie mcp add <name> --command <bin> --args "<args>" --env K=V` writes it. https://docs.augmentcode.com/cli/integrations
+- Stdio entry: `command`, `args`, `env`. The settings examples omit `type`; only the `add-json` example carries `"type":"stdio"`. Same page.
+- Hooks: events `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`, `SessionEnd`, under a `hooks` key of `settings.json` (user `~/.augment/settings.json`, project `.augment/settings.json` and `.augment/settings.local.json`, system `/etc/augment/settings.json`). Entries are `{matcher, hooks: [{type: "command", command, timeout}]}` with `timeout` in milliseconds (default 60000). https://docs.augmentcode.com/cli/hooks
+- A hook command must be a script path ending in `.sh` (executable, with a shebang), `.ps1`, `.cmd` or `.bat`, so a plain `rtok hook ...` command line is not accepted. `PreToolUse` supports only `permissionDecision: "deny"` (`allow` and `ask` are reserved) and `updatedInput` is not implemented, so rtok's command rewrite has no path. Hooks stay `Support::No`. Same page.
+- Matcher tool names (case-sensitive regex): `launch-process`, `view`, `str-replace-editor`, `save-file`, `remove-files`, `web-fetch`, `web-search`, `codebase-retrieval`, `github-api`, `linear`; MCP tools as `mcp:<regex>`. Same page.
+- Plugins: `auggie plugin marketplace add`, `auggie plugin install`, `--plugin-dir`; Augment's own marketplace format. No Augment plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`. https://docs.augmentcode.com/cli/reference
+- The CLI reference documents no model endpoint, bring-your-own-key setting or config-directory environment variable, so proxy stays out.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

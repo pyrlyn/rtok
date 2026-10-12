@@ -317,6 +317,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.amp.settings_path | ~/.config/amp/settings.json | default |
 | setup.antigravity.cli_plugins_path | ~/.gemini/antigravity-cli/plugins | default |
 | setup.antigravity.plugins_path | ~/.gemini/config/plugins | default |
+| setup.augment.settings_path | ~/.augment/settings.json | default |
 | setup.backup | true | default |
 | setup.backup_files | 5 | default |
 | setup.claude.settings_path | ~/.claude/settings.json | default |

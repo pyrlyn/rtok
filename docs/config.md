@@ -460,6 +460,8 @@ config_path   = "~/.continue/config.yaml"        # Continue (VS Code, JetBrains,
 config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rtok); CRUSH_GLOBAL_CONFIG or XDG_CONFIG_HOME move it
 [setup.openhands]
 mcp_path      = "~/.openhands/mcp.json"     # OpenHands: user-level MCP servers (mcpServers)
+[setup.augment]
+settings_path = "~/.augment/settings.json"   # Auggie CLI: user settings, mcpServers
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
