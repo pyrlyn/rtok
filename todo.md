@@ -66,3 +66,4 @@
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
 - T561. TUI: folded-target counter in a one-project view
+- T642. The e2e harness waits for every process `rtok web` started before removing its home
