@@ -11836,6 +11836,21 @@ Execution plan: route the 3 `bench.rs` sites (a `Batch` over runs plus `Capture`
 
 Result: `rtok bench`, `rtok run` and the desktop restart in `agents/restart.rs` run their children through `ProgressRunner`. `rtok bench` shows a bar over runs with a spinner per `claude -p` (the outer `with_loader` is gone); `rtok run` captures through the runner, so the buffered wait shows `running <command>…` on a terminal (control characters stripped from the label). The runner gained `run_capped` (shared byte cap with a dropped count, the old T448 cap), a return at child exit with a 200 ms pipe drain instead of waiting for pipe EOF (a backgrounded grandchild no longer holds a run), and `raw_arg` for the cmd.exe body; `capture_capped` left `src/proc.rs`. `restart.rs` closes and reopens apps with `closing …` and `reopening …` spinners and `quiet` probes. Pipes, CI and `--json` keep byte-identical stdout and stderr (`tests/progress_sites.rs`).
 
+### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
+
+Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
+
+Check: hook latency budget unchanged (fail open, 10 ms); `just check`.
+
+Execution plan:
+
+1. Convert `demon.rs` (`Detached` children, `Inherit` for upgrade, `Capture` for `sysctl`), `log.rs` (`Inherit`), `otel/export.rs` (`Detached`), `mcp/wrap.rs` (`Detached`/`Stream`, hidden).
+2. Convert `plugins/graph/lsp.rs` (`on_path`, `rustup which`, server spawn via `.spawn()`), `graph/mod.rs` (git calls at :1483, :2119), `graph/watch.rs` (hidden).
+3. Convert `hooks/mod.rs` and `bin/rtok-hook.rs` last, and confirm `rtok-hook` stays free of `indicatif` / TTY probing so the 10 ms fail-open budget holds (`tests/latency.rs`).
+4. Tests: own `sh` fakes per site, `Hidden` writes nothing, existing demon/LSP tests green; `just check` plus `cargo test --release --test latency -- --test-threads=1`.
+
+Result: `demon.rs` (supervisor `Detached`, service child `Capture` via `.spawn()`, `ketch` / `rtok-update` / `RTOK_UPDATE_CMD` `Inherit`, `sysctl` quiet `Capture`), `log.rs` (`tspin`, `Inherit` with a piped stdin), `otel/export.rs` and `hooks/mod.rs` (detached flush and deferred `SessionEnd` child), `bin/rtok-hook.rs` (fallback `rtok hook`, `Inherit`), `mcp/wrap.rs`, and the graph LSP server, `rustup which`, `git_stdout_result` and `git cat-file --batch` now go through `rtok_sys::proc::ProgressRunner`. The runner gained `Output::Pipes` (caller-driven stdin and stdout pipes, stderr ours or a file via `.stderr()`, `.spawn()` only) for the LSP server, `cat-file --batch` and the MCP wrapper; none of these shows an indicator, and hook paths stay free of TTY probing. Tests: a `Pipes` unit test in `proc`, and `tests/progress_sites.rs` asserts `rtok demon upgrade` passes the updater's streams through untouched on a pipe; existing demon, LSP, MCP-wrap, logs, otel and hook suites stay green. Raw `Command::new` remains in `agents/` and `doctor.rs` (T276.3) and in test code (T276.6 decides the ban's scope).
+
 ### T638. Bound benchmark output draining after the child exits
 
 Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [run_bounded](src/bench.rs#L402). The deadline controls only child polling; the subsequent `reader.join()` waits without a limit for stdout EOF. With the actual extracted function, a synthetic `sh -c 'sleep 0.8 & printf parent; exit 0'` and a 100 ms limit took 816 ms, waiting for the descendant after the direct child had exited. The ordinary `printf control` case returned its complete output. A longer-lived inherited pipe can stall the benchmark indefinitely. T235.1 and the host-version follow-up fixed command capture through `src/proc.rs`; this separate benchmark helper still implements its own unbounded drain. T620 concerns LSP request framing, not this process reader.
@@ -11888,6 +11903,27 @@ Result: ended sessions are exported by a durable `sessions.end_seq` sequence sta
 Done means: `src/doctor/web.rs` `prepare`/`Selection` and `src/doctor/fix.rs` `fix_found`/`fix_file` carry a preview identity and file-version evidence, and apply refuses a stale request with an explicit response; tests on a fake filesystem; `just check`.
 
 Result: Doctor web and TUI writes are bound to the confirmed preview. `Plan.confirmed` carries, per file, a SHA-256 of the bytes (reusing `store::hex_sha256`) and the entries the diff removes; `Selection.confirmed` returns it to apply, and `fix::fix_bound` refuses as stale any file or entry that is not exactly what the preview showed (a newly found file, an added, replaced or gone entry, changed bytes), while other files in the request are decided on their own evidence. `Fixed.replan` carries a fresh plan to confirm again, and the pre-write reread stays as a separate guard. Fake-filesystem tests cover each case plus a TUI checklist case; the two evidence-free drafts (an entry added after the preview was removed; a file found after the preview was written) failed first. Requests without evidence keep the old path until the page sends it (T576.2).
+
+### T583.2. OpenAI output-file identity, partial-download top-up and legacy-row compatibility
+
+Done means: an identity for OpenAI output-file results, a partial download that tops up without double counting, and old rows without an identity still read correctly; tests for each; `just check`.
+
+Result: OpenAI output-file results carry an identity `openai/<output file id>/<custom_id>` (the line `id` as fallback), taken from `/v1/files/{id}/content` through one shared `path_id` helper and stored in the existing `usage.result_key`. A replayed or partial-then-full download of the same output file counts each result once, while the same custom_ids in another output file still count; no migration was needed. Rows written before keys existed, paths without a file id and lines with neither `custom_id` nor `id` keep NULL keys and append and aggregate as before. Tests: a fail-first proxy replay test (double-counted before the fix), plus unit tests for replay, a distinct file, top-up after a cut download, the line-id fallback, keyless appends and legacy rows beside keyed ones.
+
+### T583. Make Batch result accounting idempotent across downloads
+
+Confirmed in the recording path: [batch_results::record](src/proxy/batch_results.rs#L56) inserts every parsed successful result under the current GET call_id. [ResultUsage](src/proxy/batch_results.rs#L90) retains model/API/counters but drops the result/custom_id, and record receives no batch or output-file identity. Fetching the same result again therefore adds the same counters under a new call. [Store insertion](crates/rtok-store/src/call_log.rs#L261) is a plain INSERT and [lane totals](crates/rtok-store/src/call_log.rs#L509) sum both copies; Batch model pricing also consumes these rows. In the isolated probe, one result with 100 input and 20 output tokens produced 120 after the first recording and 240 after replay, without another inference request. T385.4 covers recording result lines and T385.12.1 prices Batch usage, but neither implements replay identity. Refusing an existing CLI output path does not prevent another GET or a fetch to another file.
+
+Execution plan:
+
+1. Add store/proxy regressions that download the same successful Batch artifact twice under distinct call IDs and assert one usage contribution per original result. Keep both download calls observable; cover Anthropic results and OpenAI output-file downloads.
+2. Preserve a stable, provider-scoped batch/file/result identity through parsing and recording. Scope it to the upstream/account as needed so identical custom IDs in different jobs are not collapsed; do not deduplicate solely by usage values or response text.
+3. Persist the result identity and usage contribution atomically through Diesel with a uniqueness rule that survives concurrent fetches and restarts. Let later downloads add previously unrecorded complete results after a partial/truncated download; keep malformed/error lines uncounted and preserve response bytes.
+4. Verify lane/model/pricing aggregates remain unchanged on replay but grow for distinct results and jobs. Define compatibility for older rows lacking result identity without guessing which historical entries represent the same request.
+
+Check: downloading existing results cannot inflate provider-token totals or estimated Batch costs; distinct billed requests still count independently, and `just check` passes. The probe used actual Batch record/parse functions with a plain-append Store fixture matching the source INSERT semantics; Diesel, HTTP and provider integration were source-traced, not executed.
+
+Result: closed by T583.1 (Anthropic Batch results keyed by batch id and custom_id, unique nullable `usage.result_key`, `on_conflict_do_nothing` inserts) and T583.2 (OpenAI output-file results keyed by file id and custom_id, legacy NULL-key rows unchanged). Replayed and partial-then-full downloads count each result once for both providers.
 
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 

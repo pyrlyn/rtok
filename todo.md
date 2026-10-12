@@ -9,7 +9,6 @@
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
 - T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
-- T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
 - T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
@@ -105,8 +104,6 @@
 - T579. Count each transcript once when scanning directory aliases
 - T580. Include report metadata and anchors in the AI output budget
 - T581. Filter actionable report sinks before applying the top-ten limit
-- T583. Make Batch result accounting idempotent across downloads
-- T583.2. OpenAI output-file identity, partial-download top-up and legacy-row compatibility
 - T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
 - T586. Resolve local relative remotes before deriving project identity
 - T586.2. Reconcile persisted legacy relative keys for task counters and claims
