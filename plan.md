@@ -127,9 +127,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T579 | todo | P2 | 3 | 0% | |
 | T580 | todo | P2 | 2 | 0% | |
 | T581 | todo | P2 | 2 | 0% | |
-| T583 | todo | P2 | 4 | 0% | |
-| T583.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
-| T583.2 | todo | P2 | 3 | 0% | |
+| T583 | todo | P2 | 4 | 50% | |
+| T583.2 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T584 | todo | P2 | 2 | 0% | |
 | T586 | todo | P2 | 4 | 50% | |
 | T586.2 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
@@ -737,10 +736,6 @@ Execution plan:
 4. Verify lane/model/pricing aggregates remain unchanged on replay but grow for distinct results and jobs. Define compatibility for older rows lacking result identity without guessing which historical entries represent the same request.
 
 Check: downloading existing results cannot inflate provider-token totals or estimated Batch costs; distinct billed requests still count independently, and `just check` passes. The probe used actual Batch record/parse functions with a plain-append Store fixture matching the source INSERT semantics; Diesel, HTTP and provider integration were source-traced, not executed.
-
-### T583.1. Result identity and unique persistence for Anthropic Batch results (migration, Store, record)
-
-Done means: a Diesel migration in `rtok-store` giving `call_log` a uniqueness rule for a result identity, an identity for Anthropic `custom_id` results in `proxy/batch_results.rs`, and `record` that does not insert twice; pricing and lane aggregates checked; `just check`.
 
 ### T583.2. OpenAI output-file identity, partial-download top-up and legacy-row compatibility
 

@@ -11860,6 +11860,12 @@ Done means: `project.rs` `canonical_url` resolves a local relative, absolute or 
 
 Result: local `origin` remotes (relative path, absolute path, `file://` URL) now resolve to one absolute project key in `src/project.rs`. A relative path resolves against the main checkout, as git does; existing destinations are canonicalized, missing ones fall back to a lexical absolute path, and network and scp remotes are unchanged. Two checkouts with the same relative origin string but different repositories get distinct keys, and every spelling of one remote shares a key from main, a linked worktree or a nested cwd (real-git fixtures plus a Vfs unit test; the three real-git tests failed before the fix). Task counters and claims filed under the old relative key are reconciled in T586.2.
 
+### T583.1. Result identity and unique persistence for Anthropic Batch results (migration, Store, record)
+
+Done means: a Diesel migration in `rtok-store` giving `call_log` a uniqueness rule for a result identity, an identity for Anthropic `custom_id` results in `proxy/batch_results.rs`, and `record` that does not insert twice; pricing and lane aggregates checked; `just check`.
+
+Result: `usage` now carries a unique, nullable `result_key` (migration `20261012120001_usage_result_key`), and Anthropic Batch results are keyed `anthropic/<batch id>/<custom_id>` with the batch id taken from the results path. `record` writes through `Store::insert_usage_rows` with `on_conflict_do_nothing`, so a replayed or longer download adds only results not yet recorded, while the same custom_ids in another batch still count. Rows written before this change and rows without an identity (OpenAI output files, a path with no batch id) keep NULL keys and append as before; T583.2 covers them. Tests: a fail-first proxy replay test (4 rows before the fix, 2 after), unit tests for replay, a distinct batch, a top-up download and keyless rows, with lane and per-model totals asserted unchanged on replay.
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
