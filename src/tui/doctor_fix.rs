@@ -21,7 +21,7 @@ use crate::doctor::web::{self, Fixed, Plan, Ref, Selection};
 /// The plan and the write, injected so tests run them on an in-memory machine instead of the
 /// creator's real host configs.
 type PlanFn = Box<dyn Fn(&Config, &Selection) -> Plan>;
-type ApplyFn = Box<dyn Fn(&Config, &Selection) -> Fixed>;
+type ApplyFn = Box<dyn Fn(&Config, &Selection, &str) -> Fixed>;
 
 pub(super) struct Engine {
     plan: PlanFn,
@@ -39,7 +39,7 @@ impl Engine {
     #[cfg(test)]
     pub(super) fn new(
         plan: impl Fn(&Config, &Selection) -> Plan + 'static,
-        apply: impl Fn(&Config, &Selection) -> Fixed + 'static,
+        apply: impl Fn(&Config, &Selection, &str) -> Fixed + 'static,
     ) -> Self {
         Self {
             plan: Box::new(plan),
@@ -67,6 +67,8 @@ pub(super) struct DoctorFix {
     /// The apply key was pressed once; the next key decides.
     confirm: bool,
     done: Option<Fixed>,
+    /// Why the last confirmation wrote nothing: the files no longer matched the plan shown.
+    stale: Option<String>,
 }
 
 impl DoctorFix {
@@ -79,6 +81,7 @@ impl DoctorFix {
             cursor: 0,
             confirm: false,
             done: None,
+            stale: None,
         }
     }
 
@@ -90,6 +93,7 @@ impl DoctorFix {
             // A fresh checklist each time: the last one's toggles describe a list that may be gone.
             (self.sel, self.plan, self.cursor) = (Selection::default(), None, 0);
             (self.confirm, self.done, self.open) = (false, None, true);
+            self.stale = None;
             self.replan(cfg);
             return Keyed::Taken;
         }
@@ -101,9 +105,7 @@ impl DoctorFix {
             // Only an explicit `y` writes; every other key declines and is spent doing so.
             self.confirm = false;
             return if code == KeyCode::Char('y') {
-                self.done = Some((self.engine.apply)(cfg, &self.sel));
-                self.plan = None;
-                Keyed::Wrote
+                self.write(cfg)
             } else {
                 Keyed::Taken
             };
@@ -120,7 +122,24 @@ impl DoctorFix {
         Keyed::Taken
     }
 
+    /// Writes what the plan on screen shows. When the files no longer match it nothing is
+    /// written and the plan is replaced by the fresh one, which needs its own `y`.
+    fn write(&mut self, cfg: &Config) -> Keyed {
+        let token = self.plan.as_ref().map(|p| p.token.clone());
+        let fixed = (self.engine.apply)(cfg, &self.sel, token.as_deref().unwrap_or_default());
+        if let Some(fresh) = fixed.replan {
+            self.plan = Some(fresh);
+            self.stale = Some(fixed.text);
+            self.cursor = self.cursor.min(self.last());
+            return Keyed::Taken;
+        }
+        self.done = Some(fixed);
+        self.plan = None;
+        Keyed::Wrote
+    }
+
     fn replan(&mut self, cfg: &Config) {
+        self.stale = None;
         self.plan = Some((self.engine.plan)(cfg, &self.sel));
         self.cursor = self.cursor.min(self.last());
     }
@@ -181,6 +200,12 @@ impl DoctorFix {
             lines.push(Line::styled(head, Style::new().fg(color).bold()));
             lines.extend(done.text.lines().map(|l| Line::from(l.to_owned())));
         } else if let Some(plan) = &self.plan {
+            if let Some(why) = &self.stale {
+                lines.push(Line::styled(
+                    why.trim_end().to_owned(),
+                    Style::new().fg(WARN),
+                ));
+            }
             lines.push(if self.confirm {
                 let n = self.chosen();
                 let msg = format!("Remove {n} selected entries? y = apply, any other key = cancel");
@@ -259,7 +284,16 @@ pub(super) mod tests {
         let (a, b) = (Rc::clone(m), Rc::clone(m));
         Engine::new(
             move |_, sel| web_plan(&a, sel),
-            move |_, sel| web::apply(&cfg(), &probes(&b), &*b, &web::default_opts(&cfg()), sel),
+            move |_, sel, token| {
+                web::apply(
+                    &cfg(),
+                    &probes(&b),
+                    &*b,
+                    &web::default_opts(&cfg()),
+                    sel,
+                    token,
+                )
+            },
         )
     }
 
@@ -391,6 +425,7 @@ pub(super) mod tests {
             &twin,
             &web::default_opts(&cfg()),
             &sel,
+            &web_plan(&twin, &sel).token,
         );
         assert_eq!(text(&m, PROJECT), text(&twin, PROJECT));
         // The user's file, comment included, is untouched.
@@ -416,5 +451,23 @@ pub(super) mod tests {
             asking.contains("Remove 1 selected entries? y = apply"),
             "{asking}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_entry_that_appeared_while_the_checklist_was_open_needs_its_own_confirmation() {
+        let two = r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/h/gone/old.sh"}]}, {"hooks": [{"type": "command", "command": "/h/gone/other.sh"}]}]}}"#;
+        let (m, mut f) = fresh(BROKEN, None);
+        send(&mut f, &[KeyCode::Char('f'), KeyCode::Enter]);
+        put(&m, SETTINGS, two);
+        assert_eq!(send(&mut f, &[KeyCode::Char('y')]), [Keyed::Taken]);
+        assert!(f.done.is_none());
+        assert_eq!(text(&m, SETTINGS), two, "nothing was written");
+        assert_eq!(f.plan.as_ref().unwrap().items.len(), 2);
+        let shown = format!("{:?}", f.paragraph().unwrap());
+        assert!(shown.contains("changed since the preview"), "{shown}");
+        let keys = [KeyCode::Enter, KeyCode::Char('y')];
+        assert_eq!(send(&mut f, &keys)[1], Keyed::Wrote);
+        assert!(!text(&m, SETTINGS).contains("other.sh"));
     }
 }

@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use change_preview::Preview;
 use clap::{Command, ValueEnum};
 
 use super::Shell;
@@ -151,26 +152,77 @@ fn source_line(script: &Path) -> String {
     format!(". \"{}\"  # rtok completions", script.display())
 }
 
+/// The profile with the source line appended; `None` when it is already there.
+fn profile_with(old: &str, line: &str) -> Option<String> {
+    if old.lines().any(|l| l == line) {
+        return None;
+    }
+    let sep = if old.is_empty() || old.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    Some(format!("{old}{sep}{line}\n"))
+}
+
+/// The profile without the source line; `None` when it is not there.
+fn profile_without(old: &str, line: &str) -> Option<String> {
+    old.lines().any(|l| l == line).then(|| {
+        old.split_inclusive('\n')
+            .filter(|l| l.trim_end_matches(['\r', '\n']) != line)
+            .collect()
+    })
+}
+
+fn script_body(shell: Shell, cmd: Command) -> Result<String> {
+    let mut body = Vec::new();
+    super::generate(shell, cmd, &mut body);
+    String::from_utf8(body).context("completion script is not UTF-8")
+}
+
+/// What [`install`] would change, as the shared diff. Writes nothing.
+pub fn preview_install(shell: Shell, cmd: Command, places: &Places) -> Result<Preview> {
+    let (script, _) = places.script(shell)?;
+    let mut preview = Preview::default();
+    preview.edit(&script, &read(&script)?, &script_body(shell, cmd)?);
+    if shell == Shell::Powershell {
+        let profile = places.ps_profile();
+        let old = read(&profile)?;
+        if let Some(new) = profile_with(&old, &source_line(&script)) {
+            preview.edit(&profile, &old, &new);
+        }
+    }
+    Ok(preview)
+}
+
+/// What [`uninstall`] would remove or rewrite. Writes nothing.
+pub fn preview_uninstall(shell: Shell, places: &Places) -> Result<Preview> {
+    let (script, _) = places.script(shell)?;
+    let mut preview = Preview::default();
+    if let Ok(meta) = std::fs::metadata(&script) {
+        preview.remove(&script, meta.len(), 1);
+    }
+    if shell == Shell::Powershell {
+        let profile = places.ps_profile();
+        let old = read(&profile)?;
+        if let Some(new) = profile_without(&old, &source_line(&script)) {
+            preview.edit(&profile, &old, &new);
+        }
+    }
+    Ok(preview)
+}
+
 /// Write the script (and the PowerShell profile line); one report line per file.
 pub fn install(shell: Shell, cmd: Command, places: &Places) -> Result<Vec<String>> {
     let (script, note) = places.script(shell)?;
-    let mut body = Vec::new();
-    super::generate(shell, cmd, &mut body);
-    let body = String::from_utf8(body).context("completion script is not UTF-8")?;
+    let body = script_body(shell, cmd)?;
     let mut lines = vec![write_if_changed(&script, &body)?];
     if shell == Shell::Powershell {
         let profile = places.ps_profile();
-        let line = source_line(&script);
         let old = read(&profile)?;
-        if old.lines().any(|l| l == line) {
-            lines.push(format!("unchanged {}", profile.display()));
-        } else {
-            let sep = if old.is_empty() || old.ends_with('\n') {
-                ""
-            } else {
-                "\n"
-            };
-            lines.push(write_if_changed(&profile, &format!("{old}{sep}{line}\n"))?);
+        match profile_with(&old, &source_line(&script)) {
+            None => lines.push(format!("unchanged {}", profile.display())),
+            Some(new) => lines.push(write_if_changed(&profile, &new)?),
         }
     }
     lines.extend(note);
@@ -189,14 +241,9 @@ pub fn uninstall(shell: Shell, places: &Places) -> Result<Vec<String>> {
     }
     if shell == Shell::Powershell {
         let profile = places.ps_profile();
-        let line = source_line(&script);
         let old = read(&profile)?;
-        if old.lines().any(|l| l == line) {
-            let kept: String = old
-                .split_inclusive('\n')
-                .filter(|l| l.trim_end_matches(['\r', '\n']) != line)
-                .collect();
-            rtok_agent_sdk::write_atomic(&profile, &kept)?;
+        if let Some(kept) = profile_without(&old, &source_line(&script)) {
+            fs_kit::write::atomic(&profile, &kept)?;
             lines.push(format!("updated {}", profile.display()));
         }
     }
@@ -204,22 +251,16 @@ pub fn uninstall(shell: Shell, places: &Places) -> Result<Vec<String>> {
 }
 
 fn read(path: &Path) -> Result<String> {
-    match std::fs::read_to_string(path) {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(e).with_context(|| format!("read {}", path.display())),
-    }
+    Ok(fs_kit::read::text_or_empty(path)?)
 }
 
 fn write_if_changed(path: &Path, body: &str) -> Result<String> {
-    if read(path)? == body {
-        return Ok(format!("unchanged {}", path.display()));
-    }
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    }
-    rtok_agent_sdk::write_atomic(path, body)?;
-    Ok(format!("wrote {}", path.display()))
+    let verb = if fs_kit::write::if_changed(path, body)? {
+        "wrote"
+    } else {
+        "unchanged"
+    };
+    Ok(format!("{verb} {}", path.display()))
 }
 
 #[cfg(test)]

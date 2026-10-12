@@ -13,7 +13,6 @@ use anyhow::{Context, Result, bail};
 use super::link::shell_agent;
 use super::{Mode, OutdatedSelection, Request, installed_hosts, print_human, report};
 use crate::config::Config;
-use crate::render::with_loader;
 use crate::store::{AgentDetail, Store};
 use crate::ui::style;
 
@@ -146,22 +145,12 @@ pub fn update(
     apply_hosts(&mut cfg, &req, args.no_restart)
 }
 
-/// Run `req` with the loader and desktop-restart handling every `agents` writer shares.
+/// Run `req` with the desktop-restart handling every `agents` writer shares.
 fn apply_hosts(cfg: &mut Config, req: &Request, no_restart: bool) -> Result<()> {
-    // T81: `agents::run` may ask the plugin question mid-run, and a loader ticking on
-    // stderr redraws right over a prompt — the question turns invisible and the wait for
-    // its answer reads as a hang. A spinner must never share a terminal with a question,
-    // so interactive runs render no loader; pipes and CI (which can never be asked) keep it.
-    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
     // T141: closes a running desktop app before the write if it would change that host's
     // config, and reopens it after; CLI-only hosts just get a "restart your session" note.
-    let out = if interactive {
-        super::restart::run(cfg, req, no_restart)?
-    } else {
-        with_loader("updating host", || {
-            super::restart::run(cfg, req, no_restart)
-        })?
-    };
+    // The per-host bar lives in `agents::run`, which knows when a question may be asked (T81).
+    let out = super::restart::run(cfg, req, no_restart)?;
     crate::log::stdout(&out);
     // T279 step 3/6 "Failure": a Claude reinstall that removed the old plugin and then failed
     // to install the new one must not exit 0 like every other `claude` degrade — the host is

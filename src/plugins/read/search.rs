@@ -25,7 +25,7 @@ fn strip_prefix_ci(path: &Path, prefix: &Path) -> Option<PathBuf> {
     crate::fs::strip_prefix(path, prefix)
 }
 
-/// Canonical walk base: `dunce::canonicalize(cwd)`, or `cwd` when it does not
+/// Canonical walk base: `fs_kit::path::canonicalize(cwd)`, or `cwd` when it does not
 /// exist. `search`/`tree` compute this once per call (T59.2) — `display_rel`
 /// takes the base instead of paying the syscalls per hit or row.
 fn canonical_base_with(fs: &impl super::fs::ReadFs, cwd: &Path) -> PathBuf {
@@ -69,12 +69,10 @@ pub(crate) fn skip_git(e: &ignore::DirEntry) -> bool {
 /// at a time. T55.5: a file over `max_bytes` is skipped before it is read, so a multi-GB blob
 /// cannot spike MCP memory. Shared by `search` and the graph text backend (T329.10).
 pub(crate) fn text_files(
-    walk: WalkBuilder,
+    walk: impl Iterator<Item = ignore::DirEntry>,
     max_bytes: u64,
 ) -> impl Iterator<Item = (PathBuf, String)> {
-    walk.build()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+    walk.filter(|e| e.file_type().is_some_and(|t| t.is_file()))
         .filter_map(move |e| {
             if fs::metadata(e.path()).ok()?.len() > max_bytes {
                 return None;
@@ -103,7 +101,7 @@ pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<S
     let mut hits = Vec::new();
     let mut walk = WalkBuilder::new(&root);
     walk.hidden(false).filter_entry(skip_git);
-    let mut files = text_files(walk, cfg.search_max_bytes);
+    let mut files = text_files(walk.build().filter_map(Result::ok), cfg.search_max_bytes);
     // Checked before the next file is read, so a full result set never costs another read.
     while hits.len() < cap {
         let Some((path, text)) = files.next() else {

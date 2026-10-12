@@ -8,26 +8,22 @@ use std::path::Path;
 
 use rtok_plugin_sdk::{Class, Ctx, Measurement, PostToolUse};
 
+/// Also matched by `measure::stats` to recognise a result that carries rtok's own trace.
+pub const DEDUP_PREFIX: &str = "unchanged id ";
+
 pub fn key(path: &str, mode: &str, range: Option<&str>) -> String {
     format!("{path}\t{mode}\t{}", range.unwrap_or(""))
 }
 
 /// Unchanged re-read → one line; changed re-read → unified diff when it is below
 /// `read.delta_max_ratio` of the file (T58.1). `force_delta` is MCP `mode=diff`.
-pub fn hit(
-    cx: &Ctx,
-    key: &str,
-    path: &str,
-    body: &[u8],
-    lines: usize,
-    force_delta: bool,
-) -> Option<String> {
+pub fn hit(cx: &Ctx, key: &str, path: &str, body: &[u8], force_delta: bool) -> Option<String> {
     let (Some(id), _) = cx.get_read_cache(key).ok().flatten()? else {
         return None;
     };
     let prev = cx.get_archive(&id).ok().flatten()?;
     if prev.as_slice() == body {
-        return Some(dedup_line(cx, &id, body, lines));
+        return Some(dedup_line(cx, &id, body));
     }
     let cfg = cx.plugin_config::<crate::config::Read>("read");
     if !cfg.delta && !force_delta {
@@ -35,7 +31,7 @@ pub fn hit(
     }
     let before = std::str::from_utf8(&prev).ok()?;
     let after = std::str::from_utf8(body).ok()?;
-    let diff = crate::render::unified_diff(Path::new(path), before, after);
+    let diff = change_preview::unified_diff(Path::new(path), before, after);
     if diff.is_empty() || body.is_empty() {
         return None;
     }
@@ -62,13 +58,10 @@ pub fn hit(
     Some(msg)
 }
 
-fn dedup_line(cx: &Ctx, id: &str, body: &[u8], lines: usize) -> String {
-    let msg = format!("unchanged since {id} ({lines} lines)");
-    let msg = if msg.len() < 80 {
-        msg
-    } else {
-        format!("unchanged since {:.8} ({lines} lines)", id)
-    };
+/// The whole 64-character id, because `expand` looks an id up exactly. "unchanged id " + id is
+/// 77 bytes; the line count did not fit beside it and the agent has it from the first read.
+fn dedup_line(cx: &Ctx, id: &str, body: &[u8]) -> String {
+    let msg = format!("{DEDUP_PREFIX}{id}");
     let _ = cx.record(&Measurement {
         plugin: "read",
         kind: "dedup",
@@ -281,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn vfs_crlf_delta_archives_crlf_and_unchanged_is_at_most_13_tokens() {
+    fn vfs_crlf_delta_archives_crlf_and_unchanged_is_at_most_23_tokens() {
         let (cx, mut vfs, dir) = vfs_cx("delta-crlf");
         let old: String = (0..80).map(|i| format!("line{i}\r\n")).collect();
         let new: String = (0..80)
@@ -313,11 +306,33 @@ mod tests {
             read_with(&Ctx::new(&cx), &vfs, Path::new("ws"), "a.txt", "full", None).unwrap();
         assert!(third.contains("unchanged"), "{third}");
         let est = Ctx::new(&cx).estimate(&third, Class::Code);
-        assert!(est <= 13, "{est} tokens for {third}");
+        assert!(est <= 23, "{est} tokens for {third}");
         let again =
             read_with(&Ctx::new(&cx), &vfs, Path::new("ws"), "a.txt", "full", None).unwrap();
         assert_eq!(again, third, "byte-stable unchanged line");
         let _ = first;
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T531: the id the dedup line prints is the one `expand` looks up — the lookup is an exact
+    /// primary-key match, so an eight-character prefix pointed at no row.
+    #[test]
+    fn dedup_reference_expands_to_the_archived_bytes() {
+        let (cx, dir) = cx("dedup-ref");
+        let p = dir.join("a.txt");
+        let text: String = (0..300).map(|i| format!("line{i}\n")).collect();
+        fs::write(&p, &text).unwrap();
+        let path = p.to_str().unwrap();
+        let _ = read(&Ctx::new(&cx), path, "full", None).unwrap();
+        let second = read(&Ctx::new(&cx), path, "full", None).unwrap();
+        assert!(second.len() < 80, "{second}");
+        let id = second.split_whitespace().last().unwrap();
+        assert_eq!(id.len(), 64, "{second}");
+        let cli = crate::expand::run(&cx.config, id, None, None, 0).unwrap();
+        assert_eq!(cli, text.as_bytes());
+        let mcp = crate::expand::fetch(&cx, id).unwrap();
+        assert_eq!(mcp.as_deref(), Some(text.as_bytes()));
+        assert_eq!(cx.store.measurement_count("read").unwrap(), 1);
         let _ = fs::remove_dir_all(dir);
     }
 

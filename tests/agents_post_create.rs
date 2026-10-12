@@ -197,6 +197,41 @@ fn devin_joins_a_foreign_post_setup_list_and_a_fresh_file_goes_away_on_removal()
     assert!(!fresh.exists(".devin/hooks.json"));
 }
 
+/// T627: a comment between rtok's entry and its comma must not leave the file unparseable;
+/// the user's comment survives and only our entry (and one comma) goes.
+const OURS: &str = "( command -v rtok worktree adopt ) || true";
+
+#[test]
+fn cursor_removal_keeps_a_valid_file_when_a_comment_follows_our_entry() {
+    let p = project("pc-cursor-comment");
+    p.write(
+        ".cursor/worktrees.json",
+        &format!("{{\"setup-worktree\": [\"{OURS}\" /*keep*/, \"npm ci\"]}}\n"),
+    );
+    assert!(p.uninstall("cursor").contains("removed"));
+    let got = p.read(".cursor/worktrees.json");
+    assert_eq!(got, "{\"setup-worktree\": [ /*keep*/ \"npm ci\"]}\n");
+    assert_eq!(json(&got)["setup-worktree"], serde_json::json!(["npm ci"]));
+}
+
+#[test]
+fn devin_removal_keeps_a_valid_file_when_a_comment_follows_our_entry() {
+    let p = project("pc-devin-comment");
+    p.write(
+        ".devin/hooks.json",
+        &format!(
+            "{{\"hooks\": {{\"post_setup_worktree\": [{{\"command\": \"{OURS}\"}} // keep\n, {{\"command\": \"x\"}}]}}}}\n"
+        ),
+    );
+    assert!(p.uninstall("devin").contains("removed"));
+    let got = p.read(".devin/hooks.json");
+    assert!(got.contains("// keep"), "{got}");
+    assert_eq!(
+        json(&got)["hooks"]["post_setup_worktree"],
+        serde_json::json!([{"command": "x"}])
+    );
+}
+
 #[test]
 fn kilo_puts_a_marked_block_after_the_shebang_and_removal_restores_the_script() {
     let p = project("pc-kilo");

@@ -88,10 +88,21 @@ fn not_cached(name: &str) -> String {
     format!("not cached: rtok docs fetch {name}")
 }
 
+/// Version a workspace's `llms.txt` is cached under: the canonical cwd after `local:`, so
+/// workspaces sharing one store never see each other's text. Callers still say `local`.
+fn local_version() -> String {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    format!("local:{}", cwd.display())
+}
+
 pub fn docs_resolve(rt: &crate::plugin::Runtime, name: &str) -> Result<String> {
     let _ = ingest_llms(rt);
     if name == "llms" {
-        let cached = rt.store.doc_crate_cached("llms", "local").unwrap_or(false);
+        let cached = rt
+            .store
+            .doc_crate_cached("llms", &local_version())
+            .unwrap_or(false);
         return Ok(json!({"name":"llms","version":"local","cached":cached}).to_string());
     }
     let text = match std::fs::read_to_string(lock_path()) {
@@ -113,8 +124,8 @@ pub fn docs_query(
 ) -> Result<String> {
     let _ = ingest_llms(rt);
     let ver = match version {
-        Some(v) if !v.is_empty() => v.to_string(),
-        _ if name == "llms" => "local".into(),
+        Some(v) if !v.is_empty() && !(name == "llms" && v == "local") => v.to_string(),
+        _ if name == "llms" => local_version(),
         _ => {
             let text = match std::fs::read_to_string(lock_path()) {
                 Ok(t) => t,
@@ -136,7 +147,10 @@ pub fn docs_query(
         .store
         .search_doc_items(name, &ver, query, limit, snippet)?;
     let considered: Vec<i32> = hits.iter().map(|h| h.id).collect();
-    let before_bytes = rt.store.doc_items_docs_len(&considered).unwrap_or(0);
+    // The saving's before side is the full text of everything considered, before snippet and
+    // budget trimming, for bytes and tokens alike.
+    let bodies = rt.store.doc_items_docs(&considered).unwrap_or_default();
+    let before_bytes = bodies.iter().map(|d| d.len() as u64).sum();
     let mut kept = Vec::new();
     for h in &hits {
         let next = json!({"id": h.id, "path": h.path, "kind": h.kind, "snippet": h.snippet});
@@ -151,14 +165,7 @@ pub fn docs_query(
     let text = serde_json::to_string(&kept).unwrap_or_else(|_| "[]".into());
     if !kept.is_empty() {
         let after_bytes = text.len() as u64;
-        let est_before = rt.estimate(
-            &hits
-                .iter()
-                .map(|h| h.snippet.as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-            Class::Prose,
-        );
+        let est_before = rt.estimate(&bodies.join("\n"), Class::Prose);
         let est_after = rt.estimate(&text, Class::Prose);
         let _ = rt.record(&Measurement {
             plugin: "docs",
@@ -187,25 +194,29 @@ pub fn docs_get(rt: &crate::plugin::Runtime, id: i32) -> Result<String> {
     }
 }
 
-/// Split `llms.txt` / `llms-full.txt` on heading lines; crate `llms` version `local`.
+/// Split `llms.txt` / `llms-full.txt` on heading lines into crate `llms`, filed under this
+/// workspace's [`local_version`]. Unchanged bytes touch nothing (ids stay valid); a missing
+/// or empty source drops the workspace's cache so it reports uncached, not stale text.
 fn ingest_llms(rt: &crate::plugin::Runtime) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let path = ["llms-full.txt", "llms.txt"]
+    let version = local_version();
+    let body = ["llms-full.txt", "llms.txt"]
         .iter()
         .map(|n| cwd.join(n))
-        .find(|p| p.is_file());
-    let Some(path) = path else {
+        .find(|p| p.is_file())
+        .map(std::fs::read_to_string)
+        .transpose()?;
+    let items = body.as_deref().map(split_llms).unwrap_or_default();
+    let (Some(body), false) = (body, items.is_empty()) else {
+        if rt.store.doc_crate_cached("llms", &version)? {
+            rt.store.delete_doc_crate("llms", &version)?;
+        }
         return Ok(());
     };
-    let body = std::fs::read_to_string(&path)?;
     let sha = crate::store::hex_sha256(body.as_bytes());
-    let items = split_llms(&body);
-    if items.is_empty() {
-        return Ok(());
-    }
     let now = i64::try_from(crate::log::now()).unwrap_or(0);
     rt.store
-        .replace_doc_crate("llms", "local", &sha, 0, now, &items)?;
+        .sync_doc_crate("llms", &version, &sha, 0, now, &items)?;
     Ok(())
 }
 
@@ -357,20 +368,27 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         rt
     }
 
-    fn with_lock_cwd<T>(lock_text: &str, f: impl FnOnce() -> T) -> T {
-        let _guard = CWD.lock().unwrap();
+    /// A fresh directory holding `files`.
+    fn temp_workspace(files: &[(&str, &str)]) -> PathBuf {
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "rtok-docs-lock-{}-{}",
+            "rtok-docs-ws-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        let _ = std::fs::create_dir_all(&dir);
-        std::fs::write(dir.join("Cargo.lock"), lock_text).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, body) in files {
+            std::fs::write(dir.join(name), body).unwrap();
+        }
+        dir
+    }
+
+    /// `f` with `dir` as the process cwd, which is what scopes the plugin to a workspace.
+    fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
+        let _guard = CWD.lock().unwrap_or_else(|e| e.into_inner());
         let prev = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&dir).unwrap();
+        std::env::set_current_dir(dir).unwrap();
         struct Restore(PathBuf);
         impl Drop for Restore {
             fn drop(&mut self) {
@@ -378,7 +396,12 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             }
         }
         let _restore = Restore(prev);
-        let out = f();
+        f()
+    }
+
+    fn with_lock_cwd<T>(lock_text: &str, f: impl FnOnce() -> T) -> T {
+        let dir = temp_workspace(&[("Cargo.lock", lock_text)]);
+        let out = in_dir(&dir, f);
         let _ = std::fs::remove_dir_all(&dir);
         out
     }
@@ -451,6 +474,157 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             rows.iter().any(|r| r.kind == "query"),
             "query records a Measurement"
         );
+    }
+
+    fn ids_of(out: &str) -> Vec<i64> {
+        serde_json::from_str::<Vec<Value>>(out)
+            .unwrap_or_else(|_| panic!("{out}"))
+            .iter()
+            .map(|h| h["id"].as_i64().unwrap())
+            .collect()
+    }
+
+    /// T549: two workspaces sharing one store each see only their own `llms.txt`; a workspace
+    /// without one sees nothing, and an old unscoped `("llms", "local")` row is nobody's.
+    #[test]
+    fn local_llms_docs_are_scoped_to_their_workspace() {
+        let rt = runtime("docs-ws");
+        let a = temp_workspace(&[("llms.txt", "# Alpha\nMARKER_ALPHA body\n")]);
+        let b = temp_workspace(&[]);
+        rt.store
+            .replace_doc_crate(
+                "llms",
+                "local",
+                "old",
+                0,
+                0,
+                &[("Legacy".into(), "llms".into(), "MARKER_LEGACY".into())],
+            )
+            .unwrap();
+        let query =
+            |dir: &PathBuf, q: &str| in_dir(dir, || docs_query(&rt, "llms", None, q).unwrap());
+        let cached = |dir: &PathBuf| {
+            let out = in_dir(dir, || docs_resolve(&rt, "llms").unwrap());
+            serde_json::from_str::<Value>(&out).unwrap()["cached"]
+                .as_bool()
+                .unwrap()
+        };
+
+        assert_eq!(ids_of(&query(&a, "MARKER_ALPHA")).len(), 1);
+        assert!(cached(&a));
+        assert!(!cached(&b), "B has no llms file");
+        assert_eq!(
+            query(&b, "MARKER_ALPHA"),
+            "not cached: rtok docs fetch llms"
+        );
+        assert_eq!(query(&a, "MARKER_LEGACY"), "[]");
+
+        std::fs::write(b.join("llms.txt"), "# Beta\nMARKER_BETA body\n").unwrap();
+        assert_eq!(query(&b, "MARKER_ALPHA"), "[]");
+        assert_eq!(ids_of(&query(&b, "MARKER_BETA")).len(), 1);
+        assert_eq!(
+            ids_of(&query(&a, "MARKER_ALPHA")).len(),
+            1,
+            "B did not overwrite A"
+        );
+        assert_eq!(query(&a, "MARKER_BETA"), "[]");
+
+        std::fs::remove_file(a.join("llms.txt")).unwrap();
+        assert!(!cached(&a), "a deleted source is no longer served");
+        std::fs::write(a.join("llms.txt"), "# Alpha\nMARKER_AGAIN body\n").unwrap();
+        assert_eq!(ids_of(&query(&a, "MARKER_AGAIN")).len(), 1);
+        for d in [a, b] {
+            let _ = std::fs::remove_dir_all(d);
+        }
+    }
+
+    /// T550: re-ingesting an unchanged `llms.txt` (every resolve/query/fetch does) keeps
+    /// the ids already handed out, even after another crate was cached in between.
+    #[test]
+    fn unchanged_local_docs_keep_their_ids_and_edits_refresh() {
+        let rt = runtime("docs-ids");
+        let ws = temp_workspace(&[("llms.txt", "# Guide\nMARKER_ONE body\n")]);
+        let first = ids_of(&in_dir(&ws, || {
+            docs_query(&rt, "llms", None, "MARKER_ONE").unwrap()
+        }));
+        assert_eq!(first.len(), 1);
+        rt.store
+            .replace_doc_crate(
+                "serde",
+                "1.0.210",
+                "sha",
+                1,
+                0,
+                &[("serde::X".into(), "struct".into(), "other".into())],
+            )
+            .unwrap();
+        in_dir(&ws, || docs_resolve(&rt, "llms").unwrap());
+        let again = ids_of(&in_dir(&ws, || {
+            docs_query(&rt, "llms", None, "MARKER_ONE").unwrap()
+        }));
+        assert_eq!(again, first, "ids survive an unrelated read");
+        let body: Value =
+            serde_json::from_str(&docs_get(&rt, i32::try_from(first[0]).unwrap()).unwrap())
+                .unwrap();
+        assert!(body["docs"].as_str().unwrap().contains("MARKER_ONE"));
+
+        std::fs::write(ws.join("llms.txt"), "# Guide\nMARKER_TWO body\n").unwrap();
+        let q = |m: &str| in_dir(&ws, || docs_query(&rt, "llms", None, m).unwrap());
+        assert_eq!(q("MARKER_ONE"), "[]");
+        assert_eq!(ids_of(&q("MARKER_TWO")).len(), 1, "an edit is searchable");
+        let _ = std::fs::remove_dir_all(ws);
+    }
+
+    /// T551: the saving's before side is the full text of everything the query considered,
+    /// in bytes and in tokens, whatever the snippet length or the output budget keeps.
+    #[test]
+    fn query_measurement_uses_one_full_body_baseline() {
+        let bodies: Vec<String> = (0..3)
+            .map(|i| {
+                format!(
+                    "Deserialize variant {i}. {}",
+                    "long explanation text ".repeat(120)
+                )
+            })
+            .collect();
+        let seed = |rt: &Runtime| {
+            let items: Vec<_> = bodies
+                .iter()
+                .enumerate()
+                .map(|(i, d)| (format!("serde::D{i}"), "trait".to_string(), d.clone()))
+                .collect();
+            rt.store
+                .replace_doc_crate("serde", "1.0.210", "sha", 1, 0, &items)
+                .unwrap();
+        };
+        let all = bodies.join("\n");
+        for max_tokens in [800, 60] {
+            let mut rt = runtime("docs-meas");
+            seed(&rt);
+            rt.config.plugins.docs.snippet_chars = 30;
+            rt.config.plugins.docs.max_tokens = max_tokens;
+            let out = docs_query(&rt, "serde", Some("1.0.210"), "Deserialize").unwrap();
+            assert!(!ids_of(&out).is_empty(), "{out}");
+            let rows = rt.store.list_measurements("docs").unwrap();
+            assert_eq!(rows.len(), 1, "one row per returned query");
+            let r = &rows[0];
+            assert_eq!(u64::try_from(r.before_bytes).unwrap(), all.len() as u64 - 2);
+            assert_eq!(
+                u64::try_from(r.est_before).unwrap(),
+                u64::from(rt.estimate(&all, Class::Prose))
+            );
+            assert_eq!(u64::try_from(r.after_bytes).unwrap(), out.len() as u64);
+            assert_eq!(
+                u64::try_from(r.est_after).unwrap(),
+                u64::from(rt.estimate(&out, Class::Prose))
+            );
+            assert!(r.est_before > r.est_after);
+        }
+        let rt = runtime("docs-meas-none");
+        seed(&rt);
+        let out = docs_query(&rt, "serde", Some("1.0.210"), "absentword").unwrap();
+        assert_eq!(out, "[]");
+        assert!(rt.store.list_measurements("docs").unwrap().is_empty());
     }
 
     #[test]

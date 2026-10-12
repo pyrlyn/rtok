@@ -13,6 +13,8 @@ mod push;
 pub mod resident;
 pub mod types;
 
+use rtok_sys::proc::{Output, ProgressRunner};
+
 use crate::config::Config;
 use crate::plugin::{Ctx, Injection, PreToolDecision, Runtime, SessionStart};
 use crate::plugins::Registry;
@@ -701,18 +703,16 @@ fn defer_session_end(cfg: &Config, event: &str, stdin: &[u8]) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let mut cmd = std::process::Command::new(exe);
-    cmd.args(["hook", "SessionEnd"])
+    let mut deferred = ProgressRunner::quiet(exe, ["hook", "SessionEnd"])
+        .output(Output::Detached)
         .env(DEFERRED_ENV, "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+        .stdin(std::process::Stdio::piped());
     if !cfg.home.as_os_str().is_empty() {
-        cmd.env("RTOK_HOME", &cfg.home);
+        deferred = deferred.env("RTOK_HOME", &cfg.home);
     }
     // As in `otel::export::spawn_child`: the child must not hold the agent's pipes open.
     rtok_sys::stop_inheriting_own_stdio();
-    if let Ok(mut child) = cmd.spawn()
+    if let Ok(mut child) = deferred.spawn()
         && let Some(mut pipe) = child.stdin.take()
     {
         // A SessionEnd payload is a few hundred bytes, well under a pipe buffer: no block.
@@ -2036,6 +2036,30 @@ mod tests {
         assert_eq!(child_row.host_session_id, "agent-sess-2");
     }
 
+    /// T613: the first event a store sees of a session may be a sub-agent's; the main
+    /// window's event after it must find the sub-agent already nested under it.
+    #[test]
+    fn a_sub_agent_event_before_the_main_one_still_nests_under_the_main_row() {
+        let (v, stdin, input, cx) = agent_fixture("agent-sess-late-main");
+        let mut child = v.clone();
+        child["agent_id"] = serde_json::Value::String("sub-1".into());
+        let child_stdin = serde_json::to_vec(&child).unwrap();
+        let child_input: HookInput = serde_json::from_slice(&child_stdin).unwrap();
+        let _ = dispatch(&child_stdin, &child_input, &cx);
+        let _ = dispatch(&stdin, &input, &cx);
+        let _ = dispatch(&child_stdin, &child_input, &cx);
+
+        let host_id = cx.host_id().unwrap();
+        let main = cx.store.main_agent(host_id, &cx.session).unwrap().unwrap();
+        let kids = cx.store.agent_children(&main).unwrap();
+        assert_eq!(kids.len(), 1, "{kids:?}");
+        let rows = cx
+            .store
+            .agents_of_sessions(std::slice::from_ref(&cx.session))
+            .unwrap();
+        assert_eq!(rows.iter().filter(|r| r.parent_id.is_none()).count(), 1);
+    }
+
     #[test]
     fn session_end_ends_the_agent_row() {
         let (v, stdin, input, cx) = agent_fixture("agent-sess-3");
@@ -2185,10 +2209,19 @@ mod tests {
         assert_eq!(out, out2, "byte-stable across two runs of the same session");
     }
 
-    /// T442: SessionStart names the claim in one line and records no measurement of its own.
-    #[test]
-    fn session_start_names_the_claimed_task() {
-        let dir = std::env::temp_dir().join(format!("rtok-claim-hook-{}", std::process::id()));
+    /// A checkout with an origin, a SessionStart event inside it, and the agent that event
+    /// registers.
+    fn claim_fixture(
+        name: &str,
+    ) -> (
+        std::path::PathBuf,
+        Vec<u8>,
+        HookInput,
+        Runtime,
+        String,
+        String,
+    ) {
+        let dir = std::env::temp_dir().join(format!("rtok-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".git")).unwrap();
         std::fs::write(
@@ -2196,7 +2229,7 @@ mod tests {
             "[remote \"origin\"]\n\turl = https://github.com/me/claim-hook.git\n",
         )
         .unwrap();
-        let (stdin, input, mut cx) = session_start_fixture("t442-claim");
+        let (stdin, input, mut cx) = session_start_fixture(name);
         cx.cwd = Some(dir.display().to_string());
         let host = cx.host_id().unwrap();
         let agent = cx
@@ -2204,6 +2237,13 @@ mod tests {
             .register_agent(host, &cx.session, None, cx.cwd.as_deref(), None)
             .unwrap();
         let key = crate::project::project_key(&dir).unwrap();
+        (dir, stdin, input, cx, agent, key)
+    }
+
+    /// T442: SessionStart names the claim in one line and records no measurement of its own.
+    #[test]
+    fn session_start_names_the_claimed_task() {
+        let (dir, stdin, input, cx, agent, key) = claim_fixture("t442-claim");
         cx.store
             .upsert_task_claim(&key, "R4", &agent, "Ship it\nmore")
             .unwrap();
@@ -2215,6 +2255,24 @@ mod tests {
         );
         assert!(!additional_context(&out).contains("more"));
         assert!(cx.store.list_measurements("task_claim").unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T615: claims made in one second name the one made last, and a re-claim moves it to
+    /// the front with its current title.
+    #[test]
+    fn session_start_names_the_latest_claim_made_within_one_second() {
+        let (dir, stdin, input, cx, agent, key) = claim_fixture("t615-claim");
+        let claim =
+            |id: &str, title: &str| cx.store.upsert_task_claim(&key, id, &agent, title).unwrap();
+        claim("R1", "first");
+        claim("R2", "second");
+        let ctx = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(ctx.contains("task R2 second"), "{ctx}");
+        claim("R1", "first, retitled\nmore");
+        let ctx = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(ctx.contains("task R1 first, retitled"), "{ctx}");
+        assert!(!ctx.contains("task R2"), "{ctx}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

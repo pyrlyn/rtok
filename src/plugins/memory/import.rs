@@ -92,16 +92,16 @@ pub fn run(cfg: &Config, path: &Path, dry_run: bool) -> Result<Report> {
             continue;
         }
         let h = sha(&body);
-        if !seen.insert(h) {
-            r.skipped += 1;
-            continue;
-        }
         let key = (row.project.clone(), row.kind.clone(), title.clone());
-        if !keys.insert(key) {
+        // Reserve both only once the line is accepted: a line skipped for its topic must
+        // not make a later, free topic with the same body look like a duplicate.
+        if seen.contains(&h) || keys.contains(&key) {
             r.skipped += 1;
             continue;
         }
         if dry_run {
+            seen.insert(h);
+            keys.insert(key);
             r.inserted += 1;
             continue;
         }
@@ -118,7 +118,11 @@ pub fn run(cfg: &Config, path: &Path, dry_run: bool) -> Result<Report> {
                 superseded_by: row.superseded_by,
                 pinned: row.pinned,
             })? {
-            Some(_) => r.inserted += 1,
+            Some(_) => {
+                seen.insert(h);
+                keys.insert(key);
+                r.inserted += 1;
+            }
             // Lost a race to a concurrent local write between the pre-load above and
             // this statement — the local body stands, same as the in-memory check.
             None => r.skipped += 1,
@@ -235,6 +239,42 @@ mod tests {
             "the local body survives the import untouched"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T538: a line skipped because its topic is taken must not reserve its body hash,
+    /// or an unrelated free topic carrying the same body is skipped for no stored reason.
+    #[test]
+    fn a_skipped_topic_does_not_reserve_its_body_for_a_later_free_topic() {
+        let a = r#"{"kind":"note","title":"A","body":"new","project":"p"}"#;
+        let b = r#"{"kind":"note","title":"B","body":"new","project":"p"}"#;
+        for (name, lines) in [("ab", [a, b]), ("ba", [b, a])] {
+            for dry in [true, false] {
+                let (c, dir) = cfg(&format!("skip-reserve-{name}-{dry}"));
+                let cx = crate::plugin::Runtime::open(c.clone(), "seed").unwrap();
+                cx.store.insert_note(Some("p"), "note", "A", "old").unwrap();
+                drop(cx);
+                let p = dir.join("n.jsonl");
+                fs::write(&p, lines.join("\n") + "\n").unwrap();
+
+                let report = run(&c, &p, dry).unwrap();
+                let want = Report {
+                    inserted: 1,
+                    skipped: 1,
+                    malformed: 0,
+                };
+                assert_eq!(report, want, "{name} dry={dry}");
+                if !dry {
+                    let cx = crate::plugin::Runtime::open(c.clone(), "verify").unwrap();
+                    let mut rows = cx.store.list_notes(Some("p"), true).unwrap();
+                    rows.sort_by(|x, y| x.2.cmp(&y.2));
+                    let got: Vec<_> = rows.iter().map(|r| (r.2.as_str(), r.3.as_str())).collect();
+                    assert_eq!(got, [("A", "old"), ("B", "new")], "{name}");
+                    let again = run(&c, &p, false).unwrap();
+                    assert_eq!(again.inserted, 0, "{name} second import is idempotent");
+                }
+                let _ = fs::remove_dir_all(&dir);
+            }
+        }
     }
 
     #[test]

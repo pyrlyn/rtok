@@ -69,11 +69,7 @@ echo "$jaeger_json" | rg -q 'execute_tool'
 
 grafana_report="$(flush "http://127.0.0.1:${GRAFANA_OTLP}")"
 echo "$grafana_report"
-trace_id="$(printf '%s' "$jaeger_json" | rg -o '"traceID":"[0-9a-f]{32}"' | head -1 | sed 's/.*"//;s/"$//')"
-if [[ -z "$trace_id" ]]; then
-  echo "otel-check: no trace id from Jaeger" >&2
-  exit 1
-fi
+trace_id="$(printf '%s' "$jaeger_json" | python3 "${root}/tools/otel_trace_id.py")"
 if ! curl -fsS "http://127.0.0.1:${GRAFANA_UI}/api/datasources/proxy/uid/tempo/api/traces/${trace_id}" >/dev/null 2>&1; then
   curl -fsS "http://127.0.0.1:${GRAFANA_UI}/api/search?tags=service.name%3Drtok" | rg -q "${trace_id}"
 fi

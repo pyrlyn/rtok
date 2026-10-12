@@ -61,6 +61,9 @@ pub struct Pack {
 }
 
 const OVERVIEW_CHARS: usize = 400;
+const SEPARATOR: &str = "\n---\n";
+/// Estimate used while packing; the final rendering is re-measured, so a coarser
+/// estimator cannot push the returned text past the budget.
 const SEPARATOR_TOKENS: u32 = 1;
 
 struct Slot {
@@ -101,7 +104,7 @@ pub fn pack_notes(
             let Some(text) = tier_text(*id, title, snippet, body.as_deref(), tier) else {
                 continue;
             };
-            let tokens = estimate(&text);
+            let tokens = estimate(&entry_repr(*id, tier, &text));
             if tokens > cap {
                 continue;
             }
@@ -166,7 +169,7 @@ pub fn pack_notes(
         &estimate,
     );
 
-    Pack {
+    let mut pack = Pack {
         entries: slots
             .into_iter()
             .map(|s| PackEntry {
@@ -178,6 +181,21 @@ pub fn pack_notes(
             .collect(),
         used_tokens: used,
         dropped,
+    };
+    // The additive bookkeeping above approximates the estimate of the joined string, so
+    // measure what is actually returned and shed trailing entries until it fits.
+    loop {
+        let measured = if pack.entries.is_empty() {
+            0
+        } else {
+            estimate(&render(&pack))
+        };
+        if measured <= max_tokens {
+            pack.used_tokens = measured;
+            return pack;
+        }
+        pack.entries.pop();
+        pack.dropped += 1;
     }
 }
 
@@ -203,7 +221,7 @@ fn upgrade(
         ) else {
             continue;
         };
-        let tokens = estimate(&text);
+        let tokens = estimate(&entry_repr(slot.id, target, &text));
         if respect_cap && tokens > cap {
             continue;
         }
@@ -252,13 +270,19 @@ fn first_paragraph(body: &str) -> Option<String> {
     Some(out)
 }
 
-/// Stable rendering: `{id}\t{tier}\n{text}` blocks separated by `---`.
+/// One entry as returned to the caller: `{id}\t{tier}\n{text}`. Budgeting measures this
+/// form, not the bare text, so the header counts against `max_tokens`.
+fn entry_repr(id: i32, tier: Tier, text: &str) -> String {
+    format!("{id}\t{}\n{text}", tier.as_str())
+}
+
+/// Stable rendering: entry blocks separated by `---`.
 pub fn render(pack: &Pack) -> String {
     pack.entries
         .iter()
-        .map(|e| format!("{}\t{}\n{}", e.id, e.tier.as_str(), e.text))
+        .map(|e| entry_repr(e.id, e.tier, &e.text))
         .collect::<Vec<_>>()
-        .join("\n---\n")
+        .join(SEPARATOR)
 }
 
 #[cfg(test)]
@@ -348,5 +372,47 @@ mod tests {
         let pack = pack_notes(&hits, |_| Some("body".into()), 10, |_| 11);
         assert!(pack.entries.is_empty());
         assert_eq!(pack.dropped, 1);
+    }
+
+    fn chars4(s: &str) -> u32 {
+        s.chars().count().div_ceil(4) as u32
+    }
+
+    /// T565: the header and separators the caller receives count against the budget.
+    #[test]
+    fn the_returned_text_never_exceeds_max_tokens() {
+        let hits: Vec<_> = (1..=6)
+            .map(|i| {
+                hit(
+                    i,
+                    &format!("title {i} héllo"),
+                    &format!("snippet number {i} ✓"),
+                )
+            })
+            .collect();
+        let body = |id: i32| Some(format!("first para {id}\n\nrest of the body of note {id}"));
+        for max in 1..=60 {
+            let pack = pack_notes(&hits, body, max, chars4);
+            let text = render(&pack);
+            let cost = if pack.entries.is_empty() {
+                0
+            } else {
+                chars4(&text)
+            };
+            assert!(cost <= max, "max {max}: {cost} tokens in {text:?}");
+            assert_eq!(
+                pack.used_tokens, cost,
+                "max {max}: used_tokens is the payload"
+            );
+        }
+    }
+
+    #[test]
+    fn a_budget_too_small_for_one_complete_entry_returns_nothing() {
+        let hits = vec![hit(1, "a", "b")];
+        let pack = pack_notes(&hits, |_| None, 2, chars4);
+        assert!(pack.entries.is_empty());
+        assert_eq!((pack.used_tokens, pack.dropped), (0, 1));
+        assert_eq!(render(&pack), "");
     }
 }

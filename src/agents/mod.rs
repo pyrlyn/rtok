@@ -63,11 +63,13 @@ pub mod windsurf;
 pub mod zcode;
 pub mod zed;
 
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::NO_CHANGES;
 use rtok_plugin_sdk::Surface;
+use rtok_sys::proc::{Batch, ProgressRunner, Unit};
 use serde_json::json;
 use toml_edit::DocumentMut;
 
@@ -856,8 +858,27 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
             .map(String::as_str)
             .collect();
         if !changed.is_empty() {
-            out.push_str(&crate::render::paint(&changed.join("\n")));
-            out.push('\n');
+            let text = changed.join("\n");
+            let shown = if cfg.setup.dry_run {
+                // The step lines carry no path, so the stat row is the host's one config file,
+                // or the host itself when it writes several.
+                let at = match files.as_slice() {
+                    [one] => one.clone(),
+                    _ => std::path::PathBuf::from(format!("{}: {}", v.kind.label(), v.name)),
+                };
+                let shown = if crate::stat_preview::on() {
+                    String::new()
+                } else {
+                    change_preview::paint(&text)
+                };
+                crate::stat_preview::show(&[(at, text)], &shown)
+            } else {
+                change_preview::paint(&text)
+            };
+            if !shown.is_empty() {
+                out.push_str(&shown);
+                out.push('\n');
+            }
         }
     }
     // T278: the `mcp` row becomes one line per surface wherever the host has an entry.
@@ -941,7 +962,12 @@ pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
         }
         cfg.setup.backup = false;
     }
-    let (blocks, changed) = apply_all(cfg, req, &agents, want)?;
+    let mut bar = host_bar(cfg, agents.len());
+    let applied = apply_all(cfg, req, &agents, want, bar.as_mut());
+    if let Some(bar) = bar {
+        bar.finish();
+    }
+    let (blocks, changed) = applied?;
     if changed {
         // Pruned only now: a no-change run deletes its copies, which would cost a generation.
         for bak in &taken {
@@ -966,20 +992,33 @@ pub(crate) fn would_change(cfg: &Config, agent: &'static dyn Agent, req: &Reques
     dry.setup.dry_run = true;
     dry.setup.backup = false;
     let want = |kind: Kind| req.mode == Mode::Remove || wants(kind, req.cli, req.desktop, req.all);
-    let (_, changed) = apply_all(&dry, req, &[agent], want)?;
+    let (_, changed) = apply_all(&dry, req, &[agent], want, None)?;
     Ok(changed)
 }
 
-/// The blocks of every wanted variant, and whether any step changed a file.
+/// The bar over the hosts of one run (T436.4), drawn on a terminal only. A run that may ask
+/// the plugin question draws none: a bar redraws over a prompt on the same terminal and the
+/// wait for the answer reads as a hang (T81). `--yes` and a dry run never ask.
+fn host_bar(cfg: &Config, hosts: usize) -> Option<Batch> {
+    let may_ask = std::io::stdin().is_terminal() && !cfg.setup.yes && !cfg.setup.dry_run;
+    (!may_ask).then(|| ProgressRunner::batch("updating hosts…", hosts as u64, Unit::Items))
+}
+
+/// The blocks of every wanted variant, and whether any step changed a file. `bar` takes one
+/// step per host.
 pub(crate) fn apply_all(
     cfg: &Config,
     req: &Request,
     agents: &[&'static dyn Agent],
     want: impl Fn(Kind) -> bool,
+    mut bar: Option<&mut Batch>,
 ) -> Result<(String, bool)> {
     let mut out = String::new();
     let mut changed = false;
     for &a in agents {
+        if let Some(bar) = bar.as_deref_mut() {
+            bar.step(a.id());
+        }
         let mut done: Option<&'static str> = None;
         let mut any = false;
         for v in a.variants().iter().filter(|v| want(v.kind)) {
@@ -1499,6 +1538,22 @@ pub(crate) fn anthropic_proxy_url(cfg: &crate::config::Config) -> String {
     format!("http://{}:{}", cfg.proxy.bind, cfg.proxy.port)
 }
 
+/// The port of an `http(s)` URL whose *authority* is a loopback host (`localhost`, `127.0.0.0/8`,
+/// `[::1]`); `None` for anything else. Ownership of a proxy URL is read from the parsed
+/// authority, never from loopback-looking text in the path, query or userinfo of a foreign URL.
+pub(crate) fn loopback_port(value: &str) -> Option<u16> {
+    let u = url::Url::parse(value.trim()).ok()?;
+    if !matches!(u.scheme(), "http" | "https") {
+        return None;
+    }
+    let local = match u.host()? {
+        url::Host::Domain(d) => d.eq_ignore_ascii_case("localhost"),
+        url::Host::Ipv4(a) => a.is_loopback(),
+        url::Host::Ipv6(a) => a.is_loopback(),
+    };
+    local.then(|| u.port_or_known_default()).flatten()
+}
+
 pub(crate) fn openai_proxy_url(cfg: &crate::config::Config) -> String {
     format!("http://{}:{}/v1", cfg.proxy.bind, cfg.proxy.port)
 }
@@ -1540,7 +1595,7 @@ pub(crate) fn resolve_rtok_command(
         return "rtok".to_string();
     }
     if let Some(exe) = exe {
-        return dunce::simplified(exe).to_string_lossy().into_owned();
+        return fs_kit::path::simplified(exe).to_string_lossy().into_owned();
     }
     "rtok".to_string()
 }
@@ -1625,10 +1680,10 @@ fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
     };
     // Only the `rtok` that IS this executable: a dev build or a test binary must never link
     // into the `PATH` of a different install.
-    let Ok(exe) = std::fs::canonicalize(exe) else {
+    let Ok(exe) = fs_kit::path::canonicalize(exe) else {
         return LinkOutcome::Nothing;
     };
-    if std::fs::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
+    if fs_kit::path::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
         return LinkOutcome::Nothing;
     }
     let link = dir.join(NAME);
@@ -1648,7 +1703,7 @@ fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
                 return LinkOutcome::Failed;
             };
             let target = dir.join(target);
-            if std::fs::canonicalize(&target).is_ok_and(|t| t == sibling) {
+            if fs_kit::path::canonicalize(&target).is_ok_and(|t| t == sibling) {
                 return LinkOutcome::Current;
             }
             let dangling = !target.exists();
@@ -1690,7 +1745,8 @@ pub(crate) use crate::names::cmd_stem;
 /// True when `bin` names the rtok binary (bare, `.exe`, an absolute path, or the running
 /// executable itself whatever it is called — `cargo test` names it `rtok-<hash>`).
 pub(crate) fn is_rtok_bin(bin: &str) -> bool {
-    if std::env::current_exe().is_ok_and(|e| dunce::simplified(&e).to_string_lossy() == bin) {
+    if std::env::current_exe().is_ok_and(|e| fs_kit::path::simplified(&e).to_string_lossy() == bin)
+    {
         return true;
     }
     cmd_stem(bin).eq_ignore_ascii_case("rtok")
@@ -1800,7 +1856,7 @@ pub(crate) fn resolve_plugin_src(
         return p.clone();
     }
 
-    let real = exe.and_then(|e| dunce::canonicalize(e).ok());
+    let real = exe.and_then(|e| fs_kit::path::canonicalize(e).ok());
     if let Some(p) = real
         .as_deref()
         .and_then(Path::parent)
@@ -1848,6 +1904,15 @@ fn install_prefix(exe: &Path) -> Option<&Path> {
         .flatten()
 }
 
+/// Sort key that puts a `0.10.0` or `v0.10.0` directory after `0.9.0` (SemVer precedence, not
+/// name order). A name that does not parse sorts before every version and falls back to name
+/// order among its kind, so the choice stays deterministic. The newest is last.
+pub(crate) fn version_dir_key(dir: &std::path::Path) -> (Option<semver::Version>, String) {
+    let name = dir.file_name().unwrap_or_default().to_string_lossy();
+    let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
+    (ver, name.into_owned())
+}
+
 /// ketch installs the full package under `<root>/store/rtok/vX.Y.Z/` and only
 /// copies the binary into `<root>/bin/`. Prefer the version that matches this
 /// build; otherwise take the newest store folder that still has `rel`.
@@ -1867,14 +1932,7 @@ fn ketch_store_plugin(
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .map(|e| e.path())
         .collect();
-    // Newest last: by semver (`v0.1.10` > `v0.1.9`); a name that does not parse sorts before
-    // every version and falls back to name order among its kind.
-    let key = |p: &std::path::PathBuf| {
-        let name = p.file_name().unwrap_or_default().to_string_lossy();
-        let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
-        (ver, name.into_owned())
-    };
-    entries.sort_by_cached_key(key);
+    entries.sort_by_cached_key(|p| version_dir_key(p));
     for dir in entries.into_iter().rev() {
         let candidate = join_rel(&dir, rel);
         if candidate.exists() {
@@ -2105,6 +2163,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// T436.4: the bar over a run takes one step per host, so the person sees which host is
+    /// being written. The bar is hidden here; its position still counts the finished hosts.
+    #[test]
+    fn apply_all_steps_the_bar_once_per_host() {
+        rtok_sys::proc::disable_progress();
+        let dir = std::env::temp_dir().join(format!("rtok-host-bar-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cfg = Config::default();
+        cfg.setup.dry_run = true;
+        cfg.setup.backup = false;
+        cfg.setup.cursor.hooks_path = dir.join("hooks.json");
+        cfg.setup.codex.config_path = dir.join("config.toml");
+        cfg.setup.opencode.config_path = dir.join("opencode.json");
+        let hosts: Vec<String> = ["cursor", "codex", "opencode"].map(String::from).into();
+        let req = Request {
+            hosts: hosts.clone(),
+            mode: Mode::Install,
+            cli: false,
+            desktop: false,
+            all: true,
+        };
+        let agents = resolve(&hosts).unwrap();
+        let mut bar = ProgressRunner::batch("updating hosts…", 3, Unit::Items);
+        apply_all(&cfg, &req, &agents, |_| true, Some(&mut bar)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        // The last host is still running: finished hosts are counted when the next one starts.
+        assert_eq!((bar.position(), bar.total()), (2, 3));
+        bar.finish();
+    }
+
     #[test]
     fn apply_carries_the_setup_flags() {
         let mut cfg = Config::default();
@@ -2181,7 +2269,7 @@ mod tests {
             &root.join("no-such-manifest"),
             "0.1.5",
         );
-        assert_eq!(got, dunce::canonicalize(&plugins).unwrap());
+        assert_eq!(got, fs_kit::path::canonicalize(&plugins).unwrap());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2211,8 +2299,8 @@ mod tests {
         std::os::unix::fs::symlink(&exe, &link).unwrap();
         let got = resolve_plugin_src("plugins/cursor", Some(&link), &missing, "0.1.5");
         assert_eq!(
-            dunce::canonicalize(got).unwrap(),
-            dunce::canonicalize(&plugins).unwrap()
+            fs_kit::path::canonicalize(got).unwrap(),
+            fs_kit::path::canonicalize(&plugins).unwrap()
         );
         let _ = fs::remove_dir_all(&root);
     }
@@ -2943,10 +3031,10 @@ mod tests {
     fn hook_client_link_created_then_current() {
         let fx = LinkFx::new("create");
         assert_eq!(fx.run("v1"), LinkOutcome::Linked);
-        let target = std::fs::canonicalize(fx.link()).unwrap();
+        let target = fs_kit::path::canonicalize(fx.link()).unwrap();
         assert_eq!(
             target,
-            std::fs::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
+            fs_kit::path::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
         );
         assert!(bin_on_path("rtok-hook", Some(&fx.path())));
         assert_eq!(fx.run("v1"), LinkOutcome::Current);
@@ -2975,8 +3063,8 @@ mod tests {
         std::fs::remove_file(fx.bin().join("rtok")).unwrap();
         symlink(fx.exe("v2"), fx.bin().join("rtok")).unwrap();
         assert_eq!(fx.run("v2"), LinkOutcome::Relinked);
-        let want = std::fs::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
-        assert_eq!(std::fs::canonicalize(fx.link()).unwrap(), want);
+        let want = fs_kit::path::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
+        assert_eq!(fs_kit::path::canonicalize(fx.link()).unwrap(), want);
     }
 
     #[cfg(unix)]

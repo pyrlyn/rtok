@@ -64,12 +64,12 @@ describe("parseFrame", () => {
       type: "snapshot_error",
       error: "boom",
     });
-    const plan = { items: [], diff: "", refused: [] };
+    const plan = { items: [], diff: "", refused: [], token: "t1" };
     expect(parseFrame(JSON.stringify({ type: "doctorplan", plan }))).toEqual({
       type: "doctorplan",
       plan,
     });
-    const fixed = { text: "ok", code: 0 };
+    const fixed = { text: "ok", code: 0, replan: null };
     expect(parseFrame(JSON.stringify({ type: "doctorfixed", fixed }))).toEqual({
       type: "doctorfixed",
       fixed,

@@ -6,9 +6,11 @@ Project programs and direct packages from the manifests.
 
 | Program | How to install | Why here | Source |
 | --- | --- | --- | --- |
+| sccache | mise (`sccache`, Linux and macOS; `mise.toml` `[env]` makes it the rustc wrapper where installed) | Compiler cache; CI uses a Cloudflare R2 bucket when the `R2_*` secrets exist | https://github.com/mozilla/sccache |
 | mise | brew / curl, then `mise install` | Pinned tool versions | https://github.com/jdx/mise |
 | cargo-cache | mise | `just cache` / `just cache-autoclean` (T17.2); the shared cargo home fills up | https://github.com/matthiaskrgr/cargo-cache |
 | cargo-nextest | global (cargo install) | Parallel test runner | https://github.com/nextest-rs/nextest |
+| cargo-hakari | mise (`cargo:cargo-hakari`) | Keeps the `workspace-hack` crate unified so shared dependencies build once; CI runs `cargo hakari verify` | https://github.com/guppy-rs/guppy |
 | cargo-llvm-cov | mise | `just test-cov` (T301): coverage over the nextest suite; lcov for SonarCloud | https://github.com/taiki-e/cargo-llvm-cov |
 | cargo-fuzz | global (`cargo install cargo-fuzz`) + `rustup toolchain install nightly` | `just fuzz` / `fuzz/README.md`: libFuzzer targets; nightly only for the fuzz build, the pinned toolchain is untouched | https://github.com/rust-fuzz/cargo-fuzz |
 | codeql | mise | `just codeql` (T119): local run of the code scanning in `.github/workflows/codeql.yml` | https://github.com/github/codeql-cli-binaries |
@@ -90,6 +92,7 @@ Project programs and direct packages from the manifests.
 | assert_cmd | local | https://crates.io/crates/assert_cmd | CLI e2e tests |
 | axum | local | https://crates.io/crates/axum | Rust dependency |
 | base64 | local | https://crates.io/crates/base64 | T329.40: the graph page receives a PNG export inside a text frame |
+| change-preview | local | https://crates.io/crates/change-preview | Shared dry-run diff, colour and byte-size rendering (T416.1) |
 | clap | local | https://crates.io/crates/clap | CLI |
 | clap_complete | local | https://crates.io/crates/clap_complete | `rtok completions` shell scripts (T53.2) |
 | clap_mangen | local | https://crates.io/crates/clap_mangen | `rtok man` roff page (T53.2) |
@@ -98,11 +101,12 @@ Project programs and direct packages from the manifests.
 | diesel_migrations | local | https://crates.io/crates/diesel_migrations | Embedded SQLite migrations (T163.4) |
 | divan | local | https://crates.io/crates/divan | Divan benches in benches/ |
 | dotenvy | local | https://crates.io/crates/dotenvy | Rust dependency |
-| dunce | local | https://crates.io/crates/dunce | Canonicalize without Windows UNC prefixes |
+| fs-kit | local | https://github.com/pyrlyn/crates-packages | One entry point for file work: paths without Windows UNC prefixes, atomic writes, tree usage and copy |
 | env_logger | local | https://crates.io/crates/env_logger | T225: `RUST_LOG` debug log on stderr, off by default |
 | figment | local | https://crates.io/crates/figment | Config |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |
 | globset | local | https://crates.io/crates/globset | T329.7: workspace member globs of project references; already in the tree through `ignore` |
+| same-file | local | https://crates.io/crates/same-file | T589: `logs watch` tells a rotated log from the file it was reading by file identity (inode / Windows file index); already in the tree through `ignore` |
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
@@ -120,6 +124,7 @@ Project programs and direct packages from the manifests.
 | notify | local | https://crates.io/crates/notify | Rust dependency |
 | owo-colors | local | https://crates.io/crates/owo-colors | Rust dependency |
 | pathdiff | local | https://crates.io/crates/pathdiff | Relative path between two paths |
+| percent-encoding | local | https://crates.io/crates/percent-encoding | T574: decode percent-escaped SPA asset URL paths |
 | printpdf | local | https://crates.io/crates/printpdf | Rust dependency |
 | proptest | local | https://crates.io/crates/proptest | T331.5: property test that `doctor --fix` leaves every byte outside the removed hook unchanged |
 | portable-pty | local | https://crates.io/crates/portable-pty | T331.7: pseudo-terminal for the `doctor --fix` checklist test (dev-dependency) |
@@ -140,7 +145,6 @@ Project programs and direct packages from the manifests.
 | serde_json | local | https://crates.io/crates/serde_json | JSON |
 | serde-saphyr | local | https://crates.io/crates/serde-saphyr | T329.7: `pnpm-workspace.yaml` of project references; maintained (serde_yaml is deprecated) |
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
-| similar | local | https://crates.io/crates/similar | Rust dependency |
 | subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | thiserror | local | https://crates.io/crates/thiserror | public error enums for `rtok-store` and `rtok-config` |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |

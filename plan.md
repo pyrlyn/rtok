@@ -21,43 +21,33 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T132 | todo | P2 | 2 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T262.3 | todo | P2 | 2 | 0% | |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
-| T275 | in progress | P1 | 4 | 80% | Claude Code / claude-opus-5-5 |
+| T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T276 | in progress | P2 | 5 | 15% | Claude Code / sonnet-5.5 |
-| T276.2 | todo | P2 | 3 | 0% | |
+| T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
 | T276.4 | todo | P2 | 4 | 0% | |
-| T276.5 | todo | P2 | 3 | 0% | |
 | T276.6 | todo | P2 | 3 | 0% | |
-| T277 | in progress | P2 | 5 | 20% | Claude Code / claude-opus-5-5 |
+| T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
-| T283 | in progress | P1 | 3 | 60% | Claude Code / sonnet-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T329 | todo | P2 | 5 | 0% | |
-| T329.50 | todo | P3 | 3 | 0% | |
-| T329.51 | todo | P3 | 2 | 0% | |
-| T329.52 | todo | P3 | 2 | 0% | |
-| T329.53 | todo | P3 | 2 | 0% | |
-| T500 | todo | P3 | 3 | 0% | |
+| T329.50 | in progress | P3 | 3 | 0% | MiMo / mimo |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T378 | todo | P3 | 3 | 0% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 20% | |
+| T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T404 | todo | P3 | 3 | 10% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -73,28 +63,102 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | todo | P3 | 1 | 0% | |
+| T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
-| T416.1 | todo | P1 | 2 | 0% | |
-| T416.2 | todo | P1 | 3 | 0% | |
-| T416.3 | todo | P2 | 3 | 0% | |
-| T416.4 | todo | P2 | 3 | 0% | |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
-| T436.4 | todo | P3 | 2 | 0% | |
+| T436.4 | todo | P3 | 2 | 90% | |
 | T477 | todo | P3 | 3 | 0% | |
+| T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
+| T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
+| T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
+| T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
+| T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
+| T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
+| T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
+| T561 | todo | P3 | 3 | 0% | |
+| T592 | todo | P2 | 3 | 0% | |
+| T620 | todo | P1 | 5 | 0% | |
+| T621 | todo | P2 | 5 | 0% | |
+| T623 | todo | P2 | 5 | 0% | |
 
 
+
+**Source audit (T530).**
+
+T531–T539 are confirmed source defects on `0b14b88e`, filed for implementation rather
+than fixed during this audit. Start with the incorrect-response cases T532/T533, then
+the remaining independent P2 fixes. Each card distinguishes executed function probes
+from source-derived reproduction steps and gives its own implementation/check sequence.
+Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
+overlap and were not copied or reassigned. This is a bounded review of the core data
+paths, not a claim that every bug or host/platform combination has been exhausted.
+
+### T620. Enforce LSP request deadlines during blocking transport reads
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::request](src/plugins/graph/lsp.rs#L461). Its deadline is checked before `read_msg`, but that function performs blocking pipe reads without a deadline. A matching response returns immediately without checking the elapsed deadline. An isolated probe compiled the verbatim request/framing methods against a synthetic subprocess peer: with `ready()` set to 10 ms and the peer delaying its reply by 250 ms, the request still succeeded after 675 ms wall time. A peer that stays silent can leave the call blocked instead of reaching the documented fallback.
+
+[with_session](src/plugins/graph/lsp.rs#L544) holds the shared session mutex through the call; [capability::ask](src/plugins/graph/capability.rs#L197) invokes the server closure synchronously. T376 adds fallback after a returned error, but that does not enforce a deadline on an unread pipe.
+
+Execution plan:
+
+1. Add deterministic fake-peer regressions for no reply, a delayed reply, a partial header/body and intervening notifications. Assert bounded completion and timeout classification, with a timely-response control.
+2. Make framing reads deadline-aware using one transport owner and bounded cancellation. Include writes in the request budget so a peer that stops consuming input cannot bypass the same bound.
+3. On timeout, invalidate or safely resynchronize the session, release locks and reach the existing fallback path. Verify a later request and shutdown cannot be trapped behind the expired request or consume its late response.
+4. Run focused LSP transport, capability/fallback and shutdown tests, then `just check`.
+
+Check: an unresponsive peer cannot hold an LSP request beyond its configured budget plus a bounded cleanup allowance. Executed evidence used extracted production request/framing code, a synthetic peer and a 10 ms timeout shim; real language servers, the full capability dispatcher and silent-peer indefinite waiting were not executed.
+
+### T621. Refresh opened LSP documents after their files change
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::did_open](src/plugins/graph/lsp.rs#L511). The first query reads a file and sends `textDocument/didOpen` with version 1. Subsequent calls return immediately if the URI is already in `opened`, before reading the file again. [with_session](src/plugins/graph/lsp.rs#L544) reuses the same live server for the workspace; the module sends no document-change or close notification. Editing a file between queries therefore leaves the peer with the original open-document text.
+
+The isolated probe opened a temporary file containing `old_symbol`, changed it to `new_symbol`, and called the actual `did_open` implementation again. A synthetic protocol peer reported only one notification, still carrying `old_symbol`. This affects repeated queries in a resident MCP session; restarting a server happens to refresh the initial snapshot. T376's lifecycle/fallback work does not cover edits to an already opened document.
+
+Execution plan:
+
+1. Add a fake-peer test that opens, edits and re-queries one URI in the same session; assert the peer receives the new content before the query. Keep an unchanged-file control.
+2. Track each opened document's content/version and send the appropriate full-content change or close/reopen sequence when it changes, respecting the negotiated synchronization capability. Do not mark a document as synchronized before its notification succeeds.
+3. Cover consecutive edits, Unicode, deletion/read failure and session replacement; ensure query results and source ranges cannot silently refer to the old snapshot.
+4. Run focused document synchronization and repeated graph-query tests, then `just check`.
+
+Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
+
+### T623. Correlate web replies across request timeouts and retries
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
+
+A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+
+Execution plan:
+
+1. Add deterministic timeout/retry tests for two requests with different selections; the late first reply must never resolve the second promise. Include same-project graph/diff and export/import variants sharing this queue.
+2. Add request identifiers to the client/server protocol and echo them in successful and failed answers. Match pending promises by identifier and operation; update generated types and protocol tests together.
+3. Ignore replies for expired requests, isolate reconnect generations and retain bounded pending-state cleanup. Verify timely requests, concurrent requests and connection closure.
+4. Run focused API/protocol and Doctor UI tests, then `just check`.
+
+Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
+
+### T592. Keep late same-second sessions from moving behind the OTel cursor
+
+Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
+
+This is an uncovered case of completed T36.12's same-second delivery guarantee, not another active copy of that task. Its [integration test](tests/otel.rs#L178) uses `s1` then `s2` and checks counts, so the row-identity failure is missed. No claim is made that the backend displays duplicates: the repeated span has a stable ID, but the late session's root span is absent altogether.
+
+Execution plan:
+
+1. Add store and exporter regressions with both sessions already present, a later completion at the watermark second, and lexical ID orders in both directions. Inspect emitted session/span IDs, not just batch lengths or POST counts; the late session must be delivered and the next flush must drain.
+2. Replace the mutable rank/count cursor with durable delivery state that cannot move behind already-exported rows. Prefer a monotonic completion/outbox sequence or explicit acknowledged session identities; a timestamp plus lexical last-ID cursor alone still skips late lower IDs. Keep database access in Store and use Diesel under the existing SQL policy.
+3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
+4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
+
+Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
 Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.
 Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
-### T132. Ship a Haiku scout agent definition with the Claude Code plugin
-`research.md` §17.3(4). Make the cheap path the default one: `plugins/claude/agents/rtok-scout.md` with `model: haiku`, `tools` limited to the rtok MCP `read`, `search`, `outline`, `explore`, `expand`, and a short system prompt — ranged reads only, never a whole file over the outline threshold, answer with `path:line` citations and no file dumps. Verify the plugin `agents/` directory format against the current Claude Code docs first and add the link to the `## Docs` list in `plugins/claude/README.md`.
-Check: `rtok agents install claude` offers the agent file and removal takes it away (host matrix e2e); `tests/host_docs.rs` and `tests/agents_doc.rs` (`RTOK_BLESS=1`) green; T128's per-`agentType` split is the measurement — record `rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent in `research.md` §17 after a dated window.
-Progress (2026-09-24): `plugins/claude/agents/rtok-scout.md` ships with the plugin (`model: haiku`, the five tools under the plugin-scoped names `mcp__plugin_rtok_rtok__<tool>`); unit test on the frontmatter, install/remove e2e in `tests/claude_plugin.rs`. Left: the dated `rtok-scout` vs `Explore`/`general-purpose` read-bytes row in `research.md` §17 once a window of sessions has run with it.
 ### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
 Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
@@ -203,7 +267,7 @@ Execution plan (lands before T277; T277 then moves the core into its crate):
 2. PR A, Claude Code and Desktop: shared MCP core in `src/agents/mcp.rs` (write/remove/status by spec), decision row amending D21, drop `code_serves_mcp` in `apply` and `installed`, Vfs tests (a)-(f) for Claude.
 3. PRs B-D, the other affected hosts in groups of at most 10 files: Copilot and Gemini (`d21_plugin_apply`); Cursor, Codex, VS Code; ZCode, Kimi, Grok. Each deletes that host's MCP branch and adds its table rows to the shared Vfs test.
 4. PR E: `doctor` warning (Fix 5), re-bless `docs/agents.md` and README MCP rows, then the creator-machine Check.
-Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. Left: PR E.
+Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. PR E merged (#483, doctor warning). Command Code, the last host that gated MCP on its plugin, is T275.2 (2026-10-11). Left: the creator-machine Check.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
@@ -292,12 +356,6 @@ Execution plan (after T275, T277 and T279, which touch the same `agents` spawn h
 5. PR 5: delete `with_loader` / `render::loader` / `render::spinner`, turn on the `clippy.toml` ban, contributor docs and `CHANGELOG.md`.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
-### T276.2. `Batch`, `Progress::Callback`, `CargoProgress`, `JsonLines`, Windows shim in `proc`
-
-Split from T276 (migration plan step 1, 2026-10-11, D16): the rest of the runner API from the epic card. `ProgressRunner::batch(label, total, Unit)` and `Batch::step(msg)` (a bar over items with each command's spinner under it), `Progress::Callback`, the `CargoProgress` and `JsonLines` parsers, and the Windows `cmd /C` shim for npm-installed CLIs as a runner option (moved from `spawn_cli` and `mcp_command` when T276.3 uses it). First user: the `rtok worktree gc/clean` bar over worktrees. Depends on T276.1.
-
-Check: batch position/total tests on a hidden target; parser tests on recorded `cargo` output and JSON lines; `just check`.
-
 ### T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
 
 Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cli` / `spawn_cli` / `app_version` and `doctor.rs::spawn_mcp` / `mcp_command` go through `ProgressRunner`; `proc::suspend` replaces the T81 `interactive` switch so `rtok agents install/update/remove` shows step loaders and the plugin question stays readable; `probing MCP server <name>…` with a bar when more than one server. Starts after T275, T277 and T279 land (same spawn helpers). Unblocks T436.4. Depends on T276.1, T276.2.
@@ -309,12 +367,6 @@ Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no 
 Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
 
 Check: the T276 card's Check lines for items 4 and 5; `just check`.
-
-### T276.5. `ProgressRunner` in `graph`, `demon`, `log`, `otel`, hooks and the MCP wrapper
-
-Split from T276 (migration plan step 3, 2026-10-11, D16): `graph/lsp.rs`, `graph/mod.rs`, `graph/watch.rs` (`Capture`, long-lived LSP children through `.spawn()`), `demon.rs` (`Detached` / `Inherit` / `Capture`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). Depends on T276.1.
-
-Check: hook latency budget unchanged (fail open, 10 ms); `just check`.
 
 ### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 
@@ -354,6 +406,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
+Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1. Next: PR 3, the other hosts.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
@@ -449,7 +502,6 @@ Execution plan:
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 Progress (2026-09-28): PRs 1-4 merged (docs: #465, today's behaviour). Open against this card, for the creator: the installed copy's `.rtok-plugin-version` is never read or written (`read_installed` and `VersionFile::write` are unused), so there is no legacy line from it; a missing `claude` on `PATH` prints "already current"; the dry-run reinstall wording differs from step 5; `--source local` fails from a release install; the marketplace source does not read the catalog. Only Claude is wired; Codex, Copilot and Gemini follow.
 
-
 ### T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 
 Creator request 2026-09-27 (T281–T290, D34): every agent working through rtok gets one rtok agent id, visible to the user in the terminal and to the agent over MCP. Hooks see the host's session id (`research.md` §26), but `rtok mcp` is started by the host with only `["mcp"]` and its cwd (`src/mcp.rs:592`, host from `[hook] host`); nothing today tells the MCP process which session it serves. Without that link an agent's MCP calls (`whoami`, `worktree_add`, `agent_send`) cannot be attributed to its agent id. No product code in this task.
@@ -463,24 +515,6 @@ Plan:
 Check: `research.md` §26 gains a dated table host → host version → the MCP process's link to the session (env var name / ppid rule / cwd only / none) → sub-agent behaviour → one MCP process per session yes/no, each row with its source (the probe log or the vendor docs URL). The T283 card is updated with the rule per host.
 
 Execution (2026-09-27): agent sessions may not read their own process environment (blocked by the host's policy), so the live runs are the creator's. (1) Worktree `_worktrees/rtok-t281`. (2) Vendor docs first, per host: which env vars an MCP server process inherits, the hook payload's session field, whether one MCP process serves one session; each fact cited with URL and date. (3) A probe kit in the scratchpad, never committed: an MCP stdio wrapper that logs pid, ppid chain, cwd, the filtered env var names and values, `initialize` params, then execs `rtok mcp`; a hook script that logs the same next to the payload's session field; a one-page run sheet for the creator. (4) `research.md` §26 gets the table from the docs now, with a "probe" column left `pending` until the creator's logs arrive; T283's card gets the rule per host once they do.
-
-### T283. An agent learns its own rtok agent id
-
-Depends on T282 and T281 (the MCP link rule per host) and on T275 (every host's MCP entry is rewritten there; do not collide). An agent must know its id to report it, to claim worktrees and to message others.
-
-Plan:
-1. Worktree `_worktrees/rtok-T283`.
-2. SessionStart (and SubagentStart where the host has it, T262.2) adds one line to the injected context: `rtok agent id: <first 8 hex> (full: <uuid>). Use it with rtok's agent_* and worktree_* MCP tools.` Fixed wording, byte-stable apart from the id, counted in the injection budget; no line when `[agents] enabled = false`.
-3. Env: where the host lets a SessionStart hook export variables to the agent's shell (Claude Code `CLAUDE_ENV_FILE`: confirm in the hooks docs first and cite it), export `RTOK_AGENT_ID`, so `rtok` run from the agent's Bash tool knows its caller. Other hosts: `rtok` resolves the caller by the T281 rule.
-4. MCP: `rtok mcp` resolves its agent at `initialize` with the T281 rule for its host; for hosts without hooks (Zed, Antigravity, Cline, pi, omp, opencode, …) the MCP process registers its own agent row (host from a new `--host <id>` arg that every host's MCP entry passes; update each `register_mcp` call and the host tests after T275 lands). New MCP tool `whoami` → `{id, short, host, host_session, cwd, worktrees: [...]}`.
-5. CLI `rtok agents whoami [--json]` → the same, from `RTOK_AGENT_ID` or the T281 rule; exit 1 with "not inside an agent session" otherwise.
-
-Check: hook fixture test: SessionStart output carries the line and it is identical across two runs but for the id; MCP e2e with a fake client: `initialize` then `tools/call whoami` returns the registered id; a hook-less fake host registers through MCP alone; trycmd for `agents whoami`; `surface_parity`, `config_coverage`, man page; `just check`.
-
-Execution (2026-09-27): two PRs. PR 1, cut on top of T282's branch until #439 merges: the SessionStart line (step 2) inside the injection budget; `RTOK_AGENT_ID` through `CLAUDE_ENV_FILE` (step 3, cited from the Claude Code hooks docs); `rtok agents whoami [--json]` from `RTOK_AGENT_ID` (step 5); tests: hook fixture byte-stable but for the id, `enabled = false` prints nothing, trycmd, `surface_parity`, `config_coverage`, man page. PR 2, after T281's rules and T275's per-host PRs land: `rtok mcp` resolves its agent at `initialize`, `--host <id>` in every host's MCP entry, hook-less hosts register through MCP, MCP tool `whoami`; MCP e2e with a fake client.
-Progress (2026-09-28): PR 1 merged (#449): SessionStart line, `RTOK_AGENT_ID`, `rtok agents whoami` (host session id only in `--json`). Left: PR 2, the MCP link at `initialize` after T281's probe.
-Progress (2026-10-03): PR 2 is split into T283.1 (resolve the link, MCP `whoami`, `rtok mcp --host`), T283.2 (`--host` in every host's MCP entry) and T283.3 (the ancestor-pid rule, which needs the hook wire request to carry a pid). The link rule is derived from `research.md` §26's vendor docs and spawn code; the T281 live probe only confirms it.
-Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 
@@ -821,38 +855,64 @@ Check: fixture repos under `tests/fixtures`, no network:
 - Health: a fully indexed A with LSP and intact links scores 100; with 30% of files pending it drops below 80 with the reason shown; on tree-sitter fallback under `auto` the backend component reads 0.6, and the default `tags` scores 1; a broken link lowers the links component; the scope shows the lowest score; an MCP answer from a scope under 80 includes the health note.
 - Playwright covers the selector, the indicator and its states, link/unlink, project badges, backend tags, both graph levels, export, alerts, compare mode, health rings, 3D and 2D modes, the two-part layout with the read-only live graph and its metric displays, and the list-view fallback; `just check`.
 
-
 ### T329.50. Graph page: running labels with elapsed counters on the live canvas
 
 Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
 
 Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
 
-### T329.51. Graph page: maximise buttons for the two parts
+### T522. `read` and `expand` accept the line ranges agents sent this week
 
-Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
+Found 2026-10-10 in `~/.rtok/errors.log` and the `logs` table, 2026-10-03 through 2026-10-10: 25 `invalid line range` failures, each a different spelling. `parse_range` (`src/expand.rs`) already strips one pair of surrounding quotes (T172) and reads `a, b` as `a-b` (T353). It still rejects a space around `-` (`420 - 640`, five of the 25), a colon (`580:650`), brackets (`[1, 50]`), two numbers separated by a space (`610 614`), an HTML break (`95<br>`, `490<br>-800`), quotes in the middle (`235"-"270`) and an underscore (`1860_1960`).
 
-Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
+Done when: each of those 25 strings parses to the two line numbers in it. A trailing `<br>` with no second number is that one line. A value that is not one or two positive lines still fails with `invalid line range`.
 
-### T329.52. Graph page: metrics collapsed to a strip under 900 px
+Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
 
-Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
+### T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 
-Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
+Found 2026-10-10: 27 `task id must match [a-z0-9]…` errors since 2026-10-06. Every one is an id and words in one argument (`T504 read-hook-same-path`, `M16.5 test toml`, `T330.5.3 junk-stale-worktrees`). `ident` in `src/worktree/add.rs` lower-cases, then rejects the space. Agents pass the id and the slug the way the branch is named, as one string. Nine further adds failed with `already exists: one worktree per task` on a retry of an add that had already landed.
 
-### T329.53. Graph page: count-up animation of the live numbers
+Done when: one argument `T504 read-hook-same-path` plans task `t504` and branch `t504-read-hook-same-path`; spaces in the slug become dashes; a bare id is unchanged. `add` of a path whose branch is already that task returns the existing plan instead of failing. A string that is not an id after the split still fails the existing check.
 
-Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
+Check: `plan` tests for the logged `T504 read-hook-same-path`, `M16.5 test toml` and `M16.3 push.rs through the config module`, and for an existing path of the same task; `just check`.
 
-Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
+### T524. Worktree `--idle` accepts `30m` and `0s`
 
-### T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
+`[agents] idle` defaults to `30m` and is parsed with humantime (`idle_secs` in `crates/rtok-store/src/agents.rs`). `rtok worktree gc --idle` and `clean --idle` go through `parse_since` (`crates/rtok-config/src/since.rs`), which allows only a bare number (days), `d` and `h`. Since 2026-10-04 the log has 19 failures: `1m` (7), `0s` (5), `30m` (3), `1s` (2), `15m`, `10m`. The flag help cites `24h` and `7d`, and agents copy the `30m` they see on agents. The error says `bad --since unit` for a flag that is not `--since`.
 
-D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
+Done when: `--idle` and `--stale-lock` accept the same durations as `[agents] idle` (`30m`, `0s`, `24h`, `7d`). `5x` still errors. The error names the flag that was passed.
 
-Depends on the T329.32 slice (done): the series is `CallsStore::spark(window, now)` in `src/web/calls_store.rs` (a `Spark { span_ms, calls, saved }` of `SPARK_SLOTS` = 30 slots, oldest first; "since open" covers the last 15 minutes, all the buckets keep). The page names the sparklines "calls over the last N min" and "tokens saved over the last N min" (N = `span_ms` in minutes) and puts them on its "calls" and "saved" cards. The "outside scope" mark is the text `outside scope` beside the project of a feed row whose project is not among the scope's project names; the scope is the project the page is drilled into, else the selected one, plus everything its links reach, and with no such project nothing is outside; a call with no project is never outside (the page's rule is `web/src/pages/graph3d/live/scope.ts`; the TUI needs its Rust equivalent over the registry rows, reusing `scopeOf` logic if one exists in Rust). The folded counter applies only in the one-project view when the cap left nodes out (`more` > 0): a call of the last 5 minutes (running or finished, not interrupted, in scope) whose target matches no drawn node counts on the drawn node whose path equals or is a directory prefix of the target (longest first), else on the "+N more" group; the page lists these as `{label} · {n} folded` under "folded calls". `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records the gap: it asserts the TUI pane lacks the wording, so T500 must turn it into a both-surface check.
+Check: a unit test for `30m`, `0s` and `5x`; `just check`.
 
-Check: the sparklines match the store buckets; an outside-scope call is marked; folded targets count on their nearest visible ancestor; `tests/surface_parity.rs` lists each item on both surfaces; `just check`.
+### T525. SubagentStart and PreCompact under the 10 ms hook budget
+
+T428 covers SessionStart. On the live store for 2026-10-03 through 2026-10-10, SessionStart's median is already 3.8 ms (149 of 609 runs over 10 ms; the tail is the quiet-host re-run T428 left open). Two other events miss `[hook] max_ms` on the median. PreToolUse's median is 0.8 ms, so the budget is reachable. About 7,500 `hook … slow` warnings this week are mostly the PreToolUse and PostToolUse tail; that tail is not this task.
+
+| event | n | p50 | p95 | max | over 10 ms | over 1 s |
+| --- | --- | --- | --- | --- | --- | --- |
+| SubagentStart | 758 | 48.6 ms | 760 ms | 3093 ms | 605 | 24 |
+| PreCompact | 189 | 25.7 ms | 206 ms | 2551 ms | 167 | 1 |
+
+Done when: a trace names the work inside SubagentStart and PreCompact. That work is under 10 ms at the median on this store, or the card records why those two events get a higher budget. `tests/latency.rs` covers both.
+
+Check: the latency cases green; five manual runs of each event on the rtok repo print no `slow` warning; `just check`.
+
+### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
+
+T356 stops the graph from indexing `$HOME`. The other tools still run git there. Since 2026-10-05, `worktree_list` failed 8 times with `fatal: not a git repository` (the last on 2026-10-10), and `search` failed 5 times with `no project root: rtok mcp runs in /Users/listepo`. A server launched in the home directory has no repository until the client sends `roots/list` or the caller passes a path.
+
+Done when: with cwd = home and a client root inside a repository, `worktree_list` and `search` use that root. With no root they return an error that says to pass a path or open a project, and the text is not git's `fatal: not a git repository`.
+
+Check: an MCP test with cwd = a non-repo and a `roots/list` root; the no-root error text; `just check`.
+
+### T527. A worktree claim does not stay held by an agent idle for days
+
+On 2026-10-10 the store had 63 open `worktree_claims`. 46 belong to an agent last seen more than a day ago, 31 more than three days, all on the claude host. This week Claude recorded 617 SessionStart and 504 SessionEnd; 427 agents started since 2026-10-03 are still unended and idle over a day. `remove` and `adopt` then refuse with `locked by <reason>; not removed` or `not taken` (`src/worktree/remove.rs`, `src/worktree/claim.rs`) and do not say the holder has been idle. `gc`'s `--stale-lock` (default `7d`) already treats a foreign git lock as abandoned; the store claim does not.
+
+Done when: a claim whose agent has ended, or whose `last_seen` is older than `stale_lock`, does not block `remove` or `adopt`. A claim touched inside the window still refuses, and the refusal says how long ago the holder was seen.
+
+Check: store tests for an ended holder, a holder idle past `stale_lock`, and a holder seen today; `just check`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 
@@ -888,16 +948,6 @@ Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
 5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
 
 Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
-
-### T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
-
-From the Empryo study (idea-only, clean-room; Empryo `trigram.ts`: per-file trigram sets, candidate files = intersection of the query's literal trigrams). `search` (`src/plugins/read/search.rs:92`) walks and scans every file. Gate: I-95 (parallel walk) measures `search` p95 on a large repo first; if it is ≤ 200 ms, close this card with the number.
-
-Plan: per-root trigram posting lists (`file_id` bitmaps, `roaring` only with a `Cargo.toml` justification, else sorted `Vec<u32>`) built in the graph index pass for text files ≤ 1 MB; queries with a literal of ≥ 3 bytes scan only candidate files; regexes without a usable literal take the full scan.
-
-Done when: a literal `search` on a 50k-file repo scans only candidate files and returns the same hits.
-
-Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `search` p95 −50 % on the large repo; index size growth recorded in the card; `just check`.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
@@ -958,6 +1008,10 @@ Done means: each reader runs once on a real file from a machine with that host; 
 
 Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
+Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
+
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (creator decision).
+
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
 From `research.md` §18.2 (T157): every non-interactive reader opens a relative-link worktree, but VS Code, Zed, Cursor and lazygit are untested, so the setting stays opt-in. It is the setting that would have prevented the 18 GB orphaned `graph-perf` worktree.
@@ -965,14 +1019,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T404. Evaluate a local draft model that the cloud model only verifies
-
-Promoted from I-111 (Ivan, 2026-10-04). From `research.md` §16.3 #10: a local model drafts output and the cloud model verifies it, cutting cloud output tokens, which dominate cost on Fable (§2).
-
-Done means: a research pass first — which hosts and APIs allow a pre-filled assistant draft, which local models are fast enough on Apple Silicon, how verification is prompted — recorded in `research.md` with primary sources. Build only if the bench shows cost per passed task falls with the pass rate held; otherwise close with the finding.
-
-Check: the dated `research.md` section; the go/no-go recorded in this card's done entry.
 
 ### T413. More agent hosts: popular agents rtok does not install into yet
 
@@ -1106,7 +1152,6 @@ Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Kn
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
-
 ### T416. Shared `change-preview` crate for dry-run output
 
 Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
@@ -1116,30 +1161,6 @@ The crate renders two kinds of change. A file edit (path, before, after) is a un
 Plan: in `packages/crates` (branch `t1-change-preview`), add the crate's project files (`AGENTS.md`, `plan.md`, `todo.md`, `done.md`, `roadmap.md`, `ideas.md`, `toolchain.md`) and the crate as a workspace member, with unit tests for both modes, the totals and the colour switch; `bump.yml` gains a `package` choice and `release.yml` reads the crate from the tag, so the pipeline that releases `file-backup` releases this crate too; one PR there; then `bump.yml -f package=change-preview` publishes it. The crates.io token must allow publishing the new crate name.
 
 Check: `cargo test` and `cargo clippy -- -D warnings` green in `packages/crates`; the crate is on crates.io.
-
-### T416.1. rtok renders previews through `change-preview`
-
-Replace `render::unified_diff`, `render::file_diff`, `render::paint` and `info::human_bytes` with the crate (call sites: `config/mod.rs`, `config/validate.rs`, `plugins/memory/sync.rs`, `plugins/read/cache.rs`, `doctor/fix.rs`, `agents/mod.rs`, `agents/junk.rs`, `worktree/list.rs`, `worktree/clean.rs`). No output changes: the trycmd and installer tests stay byte-identical. Drop `similar` from `Cargo.toml` if nothing else uses it.
-
-Check: `just check` green with no expected-output file touched.
-
-### T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
-
-`worktree clean`, `worktree gc` and `agents junk clear` keep dry run as the default and gain `--dry-run` (the same thing, said explicitly; conflicts with `--yes`) and `--stat`. Both modes print one `- path  size  N files` line per path plus the totals line, because a removal's line already is its stat; `--stat` is accepted so every preview command takes the same flags. `junk::disk_usage_until` counts files next to bytes; `--json` gains `files`.
-
-Check: trycmd cases for each command in default, `--stat`, `--dry-run --yes` (rejected) and `--json`; `just check` green.
-
-### T416.3. `--stat` on the commands that show a diff
-
-`config init`, `config set`, `memory sync`, `agents install`, `agents uninstall`, `agents update` and `doctor --fix` gain `--stat`: the per-file stat lines and the totals line instead of the diff. The default `--dry-run` diff ends with the same totals line.
-
-Check: trycmd cases for `--dry-run` and `--dry-run --stat` on `config set` and one installer; `surface_parity` and `config_coverage` green; `just check` green.
-
-### T416.4. `--dry-run` for the destructive commands without a preview
-
-`worktree remove` (the worktree path, its branch and its size and file count), `completions install` and `completions uninstall` (the file diff), `graph projects remove` and `graph projects unlink` (the rows that would go). Out of scope, because they are easy to undo or change no files: `memory pin/unpin/retire/revise`, `agents send/status`, `graph projects add/select/link`, `demon *`, `otel flush`.
-
-Check: a test per command that the dry run changes nothing and prints the preview; `just check` green.
 
 ### T428. SessionStart hook back under the 10 ms budget
 
@@ -1171,6 +1192,10 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
 
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
+
+Execution plan (2026-10-12): 1. replace `with_loader("updating host")` in the `agents install/update` path with a per-host spinner through `rtok_sys::proc` progress (T276.1/T276.2); 2. TTY only, nothing on a pipe; 3. non-TTY test, trycmd snapshots unchanged; the manual terminal run stays for the creator.
+
+Progress (2026-10-12): `agents install/update` draw one `ProgressRunner::batch` bar stepped once per host (`src/agents/mod.rs`, `host_bar`), off a TTY and while the plugin question may be asked; `apply_hosts` no longer uses `with_loader`. Tests: `agents::tests::apply_all_steps_the_bar_once_per_host` (fail-first), `tests/agents_update.rs::install_and_update_draw_no_bar_on_a_pipe`; trycmd unchanged. A TTY run with `--yes` or `--dry-run` now shows the bar; the restart wait in `restart.rs` has no indicator until T276.3. Left: the creator's manual run in a terminal (bar per host, cleared before the result lines; no bar over the plugin question without `--yes`).
 
 ### T477. TUI: re-index and remove projects (counterpart of the web actions)
 
@@ -1360,3 +1385,22 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
+
+### T640. File and directory work through `fs-kit`
+
+The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
+
+Plan:
+1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
+2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
+3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
+4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
+5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
+
+Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
+
+### T561. TUI: folded-target counter in a one-project view
+
+Left over from T500. `CallsStore::folded_counters(drawn, more, scope, now)` and the pane's "folded calls" lines (`{label} · {n} folded`) exist, but the TUI has no one-project drill view, so nothing fills `LiveCalls.drawn`/`more` and the counter never shows. Give the TUI a one-project view that supplies the drawn nodes and `more`, then wire it in and drop the `#[cfg(test)]` `set_drawn`.
+
+Check: in the one-project view the pane lists folded targets on their nearest drawn ancestor, else on the "+N more" group; TUI test; `tests/surface_parity.rs`; `just check`.

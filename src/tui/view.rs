@@ -24,6 +24,7 @@ use super::health;
 use super::theme::{self, ACCENT, ERR, OK, WARN};
 use crate::model::{self, PluginPage};
 use crate::store::CallRow;
+use crate::web::calls_store::{ScopeRow, scope_names};
 
 /// One screen: header · [alert] · framed body with the tabs in its top border · footer,
 /// with the `?` overlay on top when it is open (T60.8). The alert row stays up for the
@@ -471,8 +472,19 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     let live = (area.height / 2).min(18);
     let [area, calls] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
-    app.live().render(frame, calls);
     let (rows, state) = app.projects();
+    let scope_rows: Vec<_> = rows
+        .iter()
+        .map(|r| ScopeRow {
+            id: r.id,
+            name: &r.name,
+            selected: r.selected,
+            links: r.links.iter().map(|l| l.0).collect(),
+        })
+        .collect();
+    // The Graph tab has no drill-down, so the scope is the selected project's.
+    app.live()
+        .render(frame, calls, scope_names(&scope_rows, None).as_ref());
     if rows.is_empty() {
         return frame.render_widget(graph_page(app), area);
     }
@@ -639,7 +651,7 @@ fn render_calls(frame: &mut Frame, app: &App, area: Rect) {
         (false, false) => (area, None, None),
     };
     let selected = app.calls_selected();
-    frame.render_widget(calls_table(rows, selected), list);
+    frame.render_widget(calls_table(rows, selected, list.height), list);
     if let Some(area) = detail {
         frame.render_widget(call_detail(&rows[selected], app), area);
     }
@@ -650,26 +662,36 @@ fn render_calls(frame: &mut Frame, app: &App, area: Rect) {
 
 /// The list: one row per call, the selected one as the cursor row, a failed call in
 /// red. Tokens are the linked usage row's four counters summed; a dash says the ledger
-/// carries none there.
-fn calls_table(rows: &[CallRow], selected: usize) -> Table<'static> {
-    let table_rows = rows.iter().enumerate().map(|(i, c)| {
-        let row = Row::new([
-            time_of(c.ts),
-            c.surface.clone(),
-            c.kind.clone(),
-            c.name.clone().unwrap_or_else(|| "-".into()),
-            c.session.clone(),
-            c.ms.map_or_else(|| "-".into(), |ms| format!("{ms:.1}")),
-            model::call_size_label(c),
-        ]);
-        if i == selected {
-            row.style(theme::selected())
-        } else if c.ok == 0 {
-            row.style(Style::new().fg(ERR))
-        } else {
-            row
-        }
-    });
+/// carries none there. `height` is the area's: the table scrolls to the smallest offset that
+/// keeps the cursor row on screen (the Sessions page's rule, T60.10), so a pane that shrinks
+/// the list never hides the cursor (T639).
+fn calls_table(rows: &[CallRow], selected: usize, height: u16) -> Table<'static> {
+    // Borders and the header line take three rows.
+    let visible = usize::from(height.saturating_sub(3)).max(1);
+    let offset = selected.saturating_sub(visible - 1);
+    let table_rows = rows
+        .iter()
+        .enumerate()
+        .skip(offset)
+        .take(visible)
+        .map(|(i, c)| {
+            let row = Row::new([
+                time_of(c.ts),
+                c.surface.clone(),
+                c.kind.clone(),
+                c.name.clone().unwrap_or_else(|| "-".into()),
+                c.session.clone(),
+                c.ms.map_or_else(|| "-".into(), |ms| format!("{ms:.1}")),
+                model::call_size_label(c),
+            ]);
+            if i == selected {
+                row.style(theme::selected())
+            } else if c.ok == 0 {
+                row.style(Style::new().fg(ERR))
+            } else {
+                row
+            }
+        });
     let live = rows.iter().filter(|c| c.kind == "live_passthrough").count();
     let title = if live > 0 {
         format!(
@@ -1581,6 +1603,68 @@ pub(super) mod tests {
     }
 
     /// An empty ledger is an empty page, and its keys do nothing — not a panic.
+    /// T639: the Calls cursor stays on screen walking down and back up a long ledger, with
+    /// and without the detail pane that shortens the list.
+    #[test]
+    fn calls_tab_scrolls_to_keep_the_cursor_visible() {
+        let cfg = config();
+        let mut app = App::new(&cfg);
+        select(&mut app, "calls");
+        app.refresh({
+            let mut snap = model::snapshot(&cfg);
+            snap.calls = (0..40)
+                .map(|n| CallRow {
+                    name: Some(format!("nm{n:03}")),
+                    ..call_row()
+                })
+                .collect();
+            snap
+        });
+        let walk = |app: &mut App, code, n| {
+            for _ in 0..n {
+                app.key(code, KeyModifiers::NONE);
+            }
+        };
+        assert!(screen(&app).contains("nm000"));
+        walk(&mut app, KeyCode::Down, 30);
+        let walked = screen(&app);
+        assert!(walked.contains("nm030"), "the cursor row is on screen");
+        assert!(!walked.contains("nm000"), "the top scrolled off");
+        app.key(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(
+            screen(&app).contains("nm030"),
+            "still visible with the detail pane open"
+        );
+        walk(&mut app, KeyCode::Up, 30);
+        let top = screen(&app);
+        assert!(top.contains("nm000"), "walking back up scrolls back");
+        assert!(!top.contains("nm030"));
+    }
+
+    fn call_row() -> CallRow {
+        CallRow {
+            id: 0,
+            ts: 0,
+            session: "s".into(),
+            surface: "hook".into(),
+            kind: "hook".into(),
+            plugin: None,
+            name: None,
+            parent_id: None,
+            ms: None,
+            ok: 1,
+            error: None,
+            host: None,
+            provider: None,
+            model: None,
+            api: None,
+            input: None,
+            cache_create: None,
+            cache_read: None,
+            output: None,
+        }
+    }
+
     #[test]
     fn calls_keys_do_nothing_on_an_empty_ledger() {
         let mut app = App::new(&config());

@@ -8,6 +8,7 @@
 //! to the tab shell and the two-row layout with the hints line. What a panel asks for and what it
 //! answers is its [`View`].
 
+use std::cell::Cell;
 use std::sync::mpsc;
 
 use crossterm::event::KeyCode;
@@ -93,6 +94,9 @@ pub(super) trait View: Default {
 pub(super) struct Panel<V: View> {
     pub(super) stage: Stage<V::Ask>,
     scroll: u16,
+    /// Width of the result area at the last draw: wrapped rows depend on it, and the keys
+    /// have no frame of their own. Zero until the first draw.
+    width: Cell<u16>,
     view: V,
 }
 
@@ -101,6 +105,7 @@ impl<V: View> Default for Panel<V> {
         Self {
             stage: Stage::Closed,
             scroll: 0,
+            width: Cell::new(0),
             view: V::default(),
         }
     }
@@ -142,13 +147,13 @@ impl<V: View> Panel<V> {
             Stage::Prompt(ask) => self.view.prompt(*ask, code, cfg, background),
             Stage::Running(_) => (code == KeyCode::Esc).then_some(Stage::Closed),
             Stage::Shown(lines) => {
-                let len = lines.len();
+                let last = last_row(lines, self.width.get());
                 match code {
                     KeyCode::Esc => Some(Stage::Closed),
                     _ => {
                         let opened = self.open(code, target);
                         if opened.is_none() {
-                            self.scroll_key(len, code);
+                            self.scroll_key(last, code);
                         }
                         opened
                     }
@@ -167,8 +172,7 @@ impl<V: View> Panel<V> {
         Some(next)
     }
 
-    fn scroll_key(&mut self, len: usize, code: KeyCode) {
-        let last = u16::try_from(len.saturating_sub(1)).unwrap_or(u16::MAX);
+    fn scroll_key(&mut self, last: u16, code: KeyCode) {
         let at = self.scroll;
         self.scroll = match code {
             KeyCode::Up => at.saturating_sub(1),
@@ -205,10 +209,13 @@ impl<V: View> Panel<V> {
         };
         let [text, hints] =
             Layout::vertical([Constraint::Min(0), Constraint::Length(2)]).areas(area);
+        self.width.set(text.width);
+        // A resize can leave the stored offset past the new, longer wrapping.
+        let scroll = self.scroll.min(last_row(&lines, text.width));
         frame.render_widget(
             Paragraph::new(lines)
                 .wrap(Wrap { trim: false })
-                .scroll((self.scroll, 0)),
+                .scroll((scroll, 0)),
             text,
         );
         frame.render_widget(
@@ -219,6 +226,19 @@ impl<V: View> Panel<V> {
     }
 }
 
+/// The last scroll offset: the final rendered row, wrapped to `width`, reaches the top. Before
+/// the first draw (`width` 0) the logical line count stands in.
+fn last_row(lines: &[Line<'static>], width: u16) -> u16 {
+    let rows = if width == 0 {
+        lines.len()
+    } else {
+        Paragraph::new(lines.to_vec())
+            .wrap(Wrap { trim: false })
+            .line_count(width)
+    };
+    u16::try_from(rows.saturating_sub(1)).unwrap_or(u16::MAX)
+}
+
 /// Edits a typed line.
 pub(super) fn edit(input: &mut String, code: KeyCode) {
     match code {
@@ -227,5 +247,103 @@ pub(super) fn edit(input: &mut String, code: KeyCode) {
         }
         KeyCode::Char(c) => input.push(c),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct Probe;
+
+    impl View for Probe {
+        type Ask = ();
+        const LABEL: &'static str = "probe";
+
+        fn open(&mut self, _: KeyCode, _: Option<(i32, &str)>) -> Option<Stage<()>> {
+            None
+        }
+
+        fn prompt(&mut self, _: (), _: KeyCode, _: &Config, _: bool) -> Option<Stage<()>> {
+            None
+        }
+
+        fn prompt_lines(&self, _: ()) -> Vec<Line<'static>> {
+            Vec::new()
+        }
+
+        fn running_lines(&self) -> Vec<Line<'static>> {
+            Vec::new()
+        }
+    }
+
+    fn draw(panel: &Panel<Probe>, width: u16, height: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| {
+                panel.render(frame, frame.area());
+            })
+            .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol().to_string())
+            .collect()
+    }
+
+    fn shown(lines: Vec<Line<'static>>) -> Panel<Probe> {
+        Panel {
+            stage: Stage::Shown(lines),
+            ..Panel::default()
+        }
+    }
+
+    fn press(panel: &mut Panel<Probe>, code: KeyCode, n: usize) {
+        let cfg = crate::testutil::config_file_in(&crate::testutil::tmp_dir("panel"));
+        for _ in 0..n {
+            panel.key(code, None, &cfg, false);
+        }
+    }
+
+    /// T619: one logical line that wraps over many rows is scrolled to its tail.
+    #[test]
+    fn a_wrapped_line_scrolls_to_its_last_rows() {
+        let text = format!("{} TAILMARK", "word ".repeat(60));
+        let mut panel = shown(vec![Line::from(text)]);
+        let first = draw(&panel, 20, 8);
+        assert!(!first.contains("TAILMARK"));
+        press(&mut panel, KeyCode::PageDown, 100);
+        assert!(
+            draw(&panel, 20, 8).contains("TAILMARK"),
+            "the tail is reachable"
+        );
+        press(&mut panel, KeyCode::PageUp, 100);
+        assert_eq!(draw(&panel, 20, 8), first, "and back to the top");
+    }
+
+    #[test]
+    fn unwrapped_lines_keep_their_scroll_range_and_a_resize_clamps_it() {
+        let lines: Vec<_> = (0..30).map(|n| Line::from(format!("line{n:02}"))).collect();
+        let mut panel = shown(lines);
+        draw(&panel, 40, 8);
+        press(&mut panel, KeyCode::Down, 100);
+        assert_eq!(panel.scroll, 29, "the last line reaches the top");
+        press(&mut panel, KeyCode::Home, 1);
+        assert_eq!(panel.scroll, 0);
+
+        let mut panel = shown(vec![Line::from("word ".repeat(40))]);
+        draw(&panel, 10, 8);
+        press(&mut panel, KeyCode::PageDown, 100);
+        let wide = draw(&panel, 200, 8);
+        assert!(
+            wide.contains("word"),
+            "a wider terminal still draws the text: {wide}"
+        );
     }
 }

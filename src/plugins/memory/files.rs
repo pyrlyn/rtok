@@ -52,9 +52,12 @@ fn relative(root: &Path, canon: &Path, raw: &str) -> Option<String> {
 }
 
 /// Strip the `:12`, `:12-30` and `#L12` position suffixes and the sentence punctuation a path
-/// picks up in prose.
+/// picks up in prose. A leading `.` is path syntax (`.env`, `./x`), so only a trailing one is
+/// sentence punctuation.
 fn clean(token: &str) -> &str {
-    let t = token.trim_matches(|c: char| ".:,;!?".contains(c));
+    let t = token
+        .trim_start_matches(|c: char| ":,;!?".contains(c))
+        .trim_end_matches(|c: char| ".:,;!?".contains(c));
     let t = t.split_once("#L").map_or(t, |(head, _)| head);
     match t.split_once(':') {
         Some((head, tail)) if tail.starts_with(|c: char| c.is_ascii_digit()) => head,
@@ -68,7 +71,7 @@ pub(super) fn existing_rels(cx: &Ctx, raw: &[String]) -> Vec<String> {
     let Some(root) = project_root(cx.cwd()) else {
         return Vec::new();
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     let mut out = Vec::new();
     for r in raw {
         if let Some(rel) = relative(&root, &canon, r)
@@ -87,7 +90,7 @@ pub(super) fn prompt_paths(cx: &Ctx, prompt: &str) -> Vec<String> {
     let Some(root) = project_root(cx.cwd()) else {
         return Vec::new();
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     mentioned(&root, &canon, prompt)
 }
 
@@ -131,7 +134,7 @@ pub(super) fn link_note(cx: &Ctx, id: i32, body: &str) {
     let Some(root) = project_root(cx.cwd()) else {
         return;
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     let mut files = mentioned(&root, &canon, body);
     let root_str = root.to_string_lossy();
     for p in crate::plugins::checkpoint::last_paths(cx, &root_str) {
@@ -156,7 +159,7 @@ pub(super) fn recall_hits(cx: &Ctx, prompt: &str, text: Vec<NoteHit>, n: usize) 
     let Some(root) = project_root(cx.cwd()) else {
         return boost(text, Vec::new(), n);
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     let named = mentioned(&root, &canon, prompt);
     let mut files = named.clone();
     for key in cx.read_cache_keys().unwrap_or_default() {
@@ -224,6 +227,34 @@ mod tests {
         );
         let abs = format!("{}/src/proxy/semantic_cache.rs#L9", r.display());
         assert_eq!(mentioned(&r, &r, &abs), vec!["src/proxy/semantic_cache.rs"]);
+        let _ = std::fs::remove_dir_all(&r);
+    }
+
+    /// T566: leading dots are path syntax; only prose punctuation is trimmed, so `.env`
+    /// and `./src/lib.rs` resolve and `.config/file` never degrades to `config/file`.
+    #[test]
+    fn leading_dots_name_hidden_and_dot_relative_files() {
+        let r = root("dots");
+        for f in [".env", "src/lib.rs", ".config/file", "config/file"] {
+            let p = r.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        }
+        let got = |text: &str| mentioned(&r, &r, text);
+        assert_eq!(got("set `.env`."), vec![".env"]);
+        assert_eq!(got("see ./src/lib.rs:12-30, then"), vec!["src/lib.rs"]);
+        assert_eq!(got("in .config/file."), vec![".config/file"]);
+        assert_eq!(got("in config/file#L3!"), vec!["config/file"]);
+        assert_eq!(
+            got("[.env](.env), (.config/file)"),
+            vec![".env", ".config/file"]
+        );
+        // The dot-less sibling is never substituted when only the hidden twin is named.
+        std::fs::remove_file(r.join("config/file")).unwrap();
+        assert_eq!(got(".config/file"), vec![".config/file"]);
+        std::fs::remove_file(r.join(".config/file")).unwrap();
+        assert!(got(".config/file").is_empty());
+        assert!(got("../.env and .../x").is_empty());
         let _ = std::fs::remove_dir_all(&r);
     }
 

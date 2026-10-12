@@ -66,7 +66,8 @@ export interface Api {
     set(request: SetRequest): Promise<void>;
     project(request: ProjectRequest): Promise<void>;
     doctorPlan(selection: Selection): Promise<Plan>;
-    doctorApply(selection: Selection): Promise<Fixed>;
+    // `confirmed` is the token of the plan the user saw; the server writes only that preview.
+    doctorApply(selection: Selection, confirmed: string): Promise<Fixed>;
     junkPlan(): Promise<Cleared>;
     junkApply(paths: string[]): Promise<Cleared>;
     drill(request: DrillRequest): Promise<DrillGraph>;
@@ -324,9 +325,13 @@ export function createApi(
         set: (request) => write({ set: request }),
         project: (request) => write({ project: request }),
         doctorPlan: (selection) =>
-            askDoctor<Plan>("doctorplan", { doctor: { action: "plan", selection } }),
-        doctorApply: (selection) =>
-            askDoctor<Fixed>("doctorfixed", { doctor: { action: "apply", selection } }),
+            askDoctor<Plan>("doctorplan", {
+                doctor: { action: "plan", selection, confirmed: null },
+            }),
+        doctorApply: (selection, confirmed) =>
+            askDoctor<Fixed>("doctorfixed", {
+                doctor: { action: "apply", selection, confirmed },
+            }),
         junkPlan: () =>
             askDoctor<Cleared>(
                 "junkplan",

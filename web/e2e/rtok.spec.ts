@@ -124,11 +124,20 @@ test("doctor apply keeps its spinner until the answer and drops it after", async
   // The e2e store has nothing to fix, so the mocked machine supplies the plan; only the apply
   // is held.
   const release = await interceptSocket(page, (request) => {
-    const doctor = (request as { doctor?: { action: string; selection: Selection } }).doctor;
+    const doctor = (
+      request as { doctor?: { action: string; selection: Selection; confirmed: string | null } }
+    ).doctor;
     if (doctor?.action === "plan")
       return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection)) };
     if (doctor?.action === "apply")
-      return { reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection)), hold: true };
+      return {
+        reply: frame(
+          "doctorfixed",
+          "fixed",
+          machine.apply(doctor.selection, doctor.confirmed ?? ""),
+        ),
+        hold: true,
+      };
     return undefined;
   });
   await page.goto("/#/doctor");
@@ -178,7 +187,8 @@ test("clear safe junk plans without deleting and deletes only on the confirmed m
   await junk.getByRole("button", { name: "Clear safe junk" }).click();
   await junk.getByRole("button", { name: "Clear 2 items" }).click();
   await junk.getByRole("button", { name: "Confirm" }).click();
-  await expect(junk.getByRole("status")).toContainText("Freed");
+  // The section reloads after the apply, so its loading status can sit beside the result.
+  await expect(junk.getByRole("status").filter({ hasText: "Freed" })).toBeVisible();
   expect(stale.some((p) => existsSync(p))).toBe(false);
   const applies = sent.filter((m) => m.junk?.action === "apply");
   expect(applies).toHaveLength(1);
@@ -420,6 +430,31 @@ test("under 900 px the two parts stack and there is no splitter", async ({ page,
   await page.goto("/#/graph");
   await expect(page.getByTestId("graph-live")).toBeVisible();
   await expect(page.getByRole("separator")).toBeHidden();
+});
+
+test("each part of the graph page maximises to fill the page and Escape restores", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live");
+  await expect(live).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise live graph" }).click();
+  // The section, not the picture inside it: the section pads the picture on its own.
+  const fill = await page.getByRole("region", { name: "live graph" }).boundingBox();
+  const view = page.viewportSize();
+  expect(fill?.width).toBeGreaterThan((view?.width ?? 0) - 40);
+  await expect(live).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Maximise live graph" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise explorer" }).click();
+  await expect(live).toHaveCount(0);
+  await page.getByRole("button", { name: "Restore explorer" }).click();
+  await expect(live).toBeVisible();
 });
 
 test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {

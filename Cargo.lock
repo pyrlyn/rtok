@@ -630,6 +630,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "change-preview"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79afe5aba12959b75109736b1d0af509e9863ee57fb5c7d3985a3f0b40edc561"
+dependencies = [
+ "owo-colors",
+ "serde",
+ "similar 3.2.0",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1587,6 +1598,15 @@ checksum = "e246562084dde8ebbcc943b261c406ce4f68e5032ec28029a251a47d6a295500"
 dependencies = [
  "num",
  "num-bigint",
+]
+
+[[package]]
+name = "fs-kit"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce7c1d8e448538e4054724fc0978228824b84b74f499069665cccc99b09a9a1"
+dependencies = [
+ "dunce",
 ]
 
 [[package]]
@@ -4276,14 +4296,15 @@ dependencies = [
  "assert_cmd",
  "axum",
  "base64 0.23.1",
+ "change-preview",
  "clap",
  "clap_complete",
  "clap_mangen",
  "crossterm",
  "divan",
- "dunce",
  "env_logger",
  "figment",
+ "fs-kit",
  "futures-util",
  "globset",
  "httpmock",
@@ -4300,6 +4321,7 @@ dependencies = [
  "notify",
  "owo-colors",
  "pathdiff",
+ "percent-encoding",
  "portable-pty",
  "printpdf",
  "proptest",
@@ -4321,6 +4343,7 @@ dependencies = [
  "rust-embed",
  "rustls",
  "rustls-pemfile",
+ "same-file",
  "schemars",
  "semver",
  "serde",
@@ -4328,7 +4351,6 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "shlex 2.0.1",
- "similar 3.2.0",
  "subtle",
  "tokio",
  "tokio-tungstenite 0.30.0",
@@ -4356,6 +4378,7 @@ dependencies = [
  "uuid",
  "wasmi",
  "webpki-roots",
+ "workspace-hack",
  "zstd",
 ]
 
@@ -4364,8 +4387,10 @@ name = "rtok-agent-sdk"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "fs-kit",
  "rstest",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4373,6 +4398,7 @@ name = "rtok-config"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "change-preview",
  "dotenvy",
  "figment",
  "globset",
@@ -4381,10 +4407,10 @@ dependencies = [
  "rtok-hook",
  "rtok-plugin-sdk",
  "serde",
- "similar 3.2.0",
  "thiserror 2.0.20",
  "toml_edit 0.25.15+spec-1.1.0",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4394,6 +4420,9 @@ version = "0.0.1"
 [[package]]
 name = "rtok-log"
 version = "0.0.1"
+dependencies = [
+ "workspace-hack",
+]
 
 [[package]]
 name = "rtok-mcp"
@@ -4404,6 +4433,7 @@ dependencies = [
  "rtok-agent-sdk",
  "serde_json",
  "toml_edit 0.25.15+spec-1.1.0",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4422,7 +4452,7 @@ dependencies = [
  "anyhow",
  "diesel",
  "diesel_migrations",
- "dunce",
+ "fs-kit",
  "humantime",
  "libsqlite3-sys",
  "proptest",
@@ -4435,6 +4465,7 @@ dependencies = [
  "sha2 0.11.0",
  "thiserror 2.0.20",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4444,7 +4475,9 @@ dependencies = [
  "indicatif",
  "libc",
  "rustix",
+ "serde_json",
  "windows-sys 0.61.2",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6853,6 +6886,76 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "bitflags 2.13.1",
+ "bstr",
+ "bytes",
+ "cc",
+ "chrono",
+ "clap",
+ "clap_builder",
+ "crc32fast",
+ "crossbeam-utils",
+ "either",
+ "errno",
+ "form_urlencoded",
+ "futures-channel",
+ "futures-core",
+ "futures-task",
+ "futures-util",
+ "getrandom 0.4.3",
+ "hashbrown 0.17.1",
+ "hyper",
+ "hyper-util",
+ "indexmap",
+ "jsonc-parser",
+ "libc",
+ "linux-raw-sys",
+ "log",
+ "memchr",
+ "mio",
+ "num-traits",
+ "once_cell",
+ "percent-encoding",
+ "ppv-lite86",
+ "proc-macro2",
+ "quote",
+ "rand 0.9.5",
+ "rand_chacha",
+ "regex-automata",
+ "regex-syntax",
+ "roxmltree 0.21.1",
+ "rust-embed-utils",
+ "rustix",
+ "schemars",
+ "semver",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "serde_spanned 1.1.1",
+ "simd-adler32",
+ "similar 3.2.0",
+ "slab",
+ "smallvec",
+ "strum",
+ "syn 2.0.119",
+ "syn 3.0.4",
+ "tokio",
+ "tokio-util",
+ "toml_datetime 1.1.1+spec-1.1.0",
+ "toml_edit 0.25.15+spec-1.1.0",
+ "toml_parser",
+ "tracing",
+ "winapi",
+ "windows-sys 0.61.2",
+ "winnow 0.7.15",
+ "winnow 1.0.4",
+]
 
 [[package]]
 name = "writeable"

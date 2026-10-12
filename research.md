@@ -1665,6 +1665,31 @@ Caveats: path-level match (no range or sha), parent reads counted over the whole
 4. **A cheap scout by construction.** A shipped agent definition (`model: haiku`, tools limited to rtok MCP `read`/`search`/`outline`/`explore`/`expand`, answer = `path:line` citations) makes the cheap path the default one → T132; measured by T128's per-`agentType` split.
 5. Not pursued: `fork` (parent model, parent-sized context — the opposite of cheap); shrinking the `Agent` result (0.7 %, T59.6 stands). Parked as ideas: sibling cache-prefix sharing (I-89), sibling findings board (I-90), `updatedToolOutput` (I-91).
 
+### 17.4 rtok-scout vs Explore and general-purpose (T132, 2026-10-12)
+
+Command: `rtok stats --since 18d --json` (read-only; rtok 0.15.1, fe170a431). The table view `rtok stats --since 18d` prints the same split. Window: 2026-09-24 (the day `rtok-scout` shipped) to 2026-10-12. `--since` counts back from the run's clock, so the start is the same time of day on 2026-09-24. Store: this machine's `~/.claude/projects`, 77 sessions. Source: `.subagents.by_type` (T128). Per-agent values are floored.
+
+| agentType | Sub-agents | Tool-result B per agent | Native Read B per agent | Re-read B per agent |
+| --- | --- | --- | --- | --- |
+| `Explore` (all models) | 42 | 140,390 | 8,303 | 1,420 |
+| `general-purpose` (all models) | 1,057 | 184,206 | 41,579 | 2,642 |
+| `rtok:rtok-scout` | 2 | 53,342 | 0 | 0 |
+
+Totals behind the averages: `Explore` 5,896,395 tool-result B, 348,757 Read B, 59,665 re-read B. `general-purpose` 194,705,798 / 43,949,032 / 2,792,842. `rtok-scout` 106,685 / 0 / 0.
+
+Haiku-only rows: `Explore | haiku` 6 agents, 89,571 tool-result B and 7,587 Read B per agent. `general-purpose | haiku` 80 agents, 19,734 and 2,542.
+
+Tokens are not split by agentType. The JSON carries usage only for the whole sub-agent tree: input 214,319, cache read 14,492,408,114, cache write 370,826,742, output 2,243,658. A per-type token split would need T128 to add usage per type.
+
+Caveats:
+- `rtok-scout` has 2 sub-agents, too few to compare with 42 or 1,057.
+- Its five tools are MCP (`mcp__plugin_rtok_rtok__*`). The T128 read column counts native `Read` results only, so its 0 B is structural, not a saving. The tool-result column does count MCP output, but it also includes search and outline output.
+- The scout's meta has no model (`-`), so the model split cannot place it.
+- The store is live. The table run differed slightly from the JSON run (`general-purpose | haiku` tool-result 1,580,442 B, tree input 214,341), so rows drift by a few KB between runs.
+- `general-purpose` mixes models (329 opus, 554 sonnet). Compare within one model only.
+
+Verdict: no decision on the default. The two scout sub-agents used 53 KB of tool results each, against 140 KB for `Explore` and 184 KB for `general-purpose`, but n = 2 and the read column cannot see MCP reads. Keep `rtok-scout` as shipped and re-measure once it has a usable sample. T128's split must also count MCP reads per agentType before the read column can compare them.
+
 ## 18. Git worktrees: accumulation, ownership, build artifacts (2026-09-21)
 
 Creator question: worktrees pile up, nobody knows whose they are, names are random, and they fill the disk. Not a token saving — no `Measurement` row and no public number follows from this section.
@@ -2468,9 +2493,9 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 | Host | Reads | Verdict |
 | --- | --- | --- |
 | OpenCode | `message.data` JSON in `opencode.db` | supported |
-| Kilo | `message.data` JSON in `kilo.db` | supported, not run on real data (the local `kilo.db` holds no messages) |
-| Copilot CLI | `modelMetrics` of `session.shutdown` in `session-state/*/events.jsonl` | supported, per session |
-| Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, not run on real data (no chats on this machine) |
+| Kilo | `message.data` JSON in `kilo.db` | supported; the reader runs on the real `kilo.db` (2026-10-12) but that file holds no messages, so a real message row is **unverified** |
+| Copilot CLI | `tokenDetails` (else `usage`) of each `modelMetrics` entry of `session.shutdown` in `session-state/*/events.jsonl` | supported, per session; checked on the one real log (2026-10-12); a resumed session counts its last shutdown only (cumulative per the SDK source, 2026-10-12), not yet seen in a real resumed log |
+| Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, **unverified** on real files (no Gemini CLI and no chats on this machine, 2026-10-12) |
 | Droid | none | `unsupported` |
 | pi | `usage` of entries in `sessions/*/*.jsonl` | supported, matches an independent sum on real files |
 | Kimi Code | `usage.record` lines of `sessions/*/*/agents/*/wire.jsonl` | supported, matches an independent sum on real files |
@@ -2483,19 +2508,22 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 - Sessions live in a SQLite file under the data directory, `${XDG_DATA_HOME}/opencode` (https://github.com/anomalyco/opencode, commit `c42ae0d56b6f86f8df39d451d6d2cfe6414b3928`, `packages/core/src/global.ts`: `path.join(xdgData, "opencode")`). Kilo uses `kilo` the same way (https://github.com/Kilo-Org/kilocode, commit `76bcfd40be616a72f4697b3041565f322245b462`, `packages/core/src/global.ts`) and names its file `kilo.db`, or `kilo-<channel>.db` for a non-stable channel (`packages/opencode/src/storage/db.ts`).
 - The `message` table has `id`, `session_id`, `time_created` (milliseconds) and a JSON `data` column (`packages/core/src/session/sql.ts`). An assistant message's `data` carries `role`, `modelID`, `providerID`, `time.created`, and `tokens` = `{input, output, reasoning, cache: {read, write}}` (`packages/core/src/v1/session.ts`, `Assistant`).
 - `input` already excludes the cache legs and `output` excludes the reasoning tokens: `input = inputTokens - cacheRead - cacheWrite`, `output = outputTokens - reasoningTokens` (`packages/opencode/src/session/session.ts`, `getUsage`, and the same arithmetic in Kilo's `packages/core/src/v1/session.ts`). The reader adds reasoning back into output, as it is billed as output.
+- Checked on this machine on 2026-10-12: Kilo 7.8.1 (`kilo --version`) keeps `~/.local/share/kilo/kilo.db` with 277 sessions, but its `message`, `part` and `session_message` tables hold no rows and the `tokens_*` columns of `session` are all 0, so `rtok agents usage --source logs --host kilo` rightly prints nothing and does not fail. The columns the reader declares (`message.id`, `session_id`, `time_created`, `data`) exist in that schema, and `AssistantMessage.tokens` = `{total?, input, output, reasoning, cache: {read, write}}` is the shape in the host's source (https://github.com/Kilo-Org/kilocode, tag `v7.8.1`, commit `4089197545a01bbc9fa8041c1305b3fb0b0f8e66`, `packages/schema/src/v1/session.ts`). What no file here shows is a real `message.data` row, so that part stays **unverified** (2026-10-12): it needs a machine where Kilo has run a session.
 - This corrects the 2026-09-17 note in `measure::codex` that `opencode.db` carries no token counts. Checked on this machine on 2026-10-03: the sums over `role = 'assistant'` messages (input, cache read, cache write, output + reasoning) match what `rtok agents usage --host opencode` prints for all four legs.
 
 ### 30.2 Copilot CLI
 
 - The config directory is `~/.copilot`, relocated by `COPILOT_HOME`; `session-state/<session id>/events.jsonl` is the session event log (https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference, read 2026-10-03).
 - The SDK's event schema (https://github.com/github/copilot-sdk, commit `5b2d7cdd7da1e5d082ae316a533cbb7584a495c1`, `nodejs/src/generated/session-events.ts`) marks `assistant.usage` (per API call) as ephemeral, "not persisted to the session event log on disk". What is persisted is `session.shutdown.data.modelMetrics[<model>].usage`: `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens?`, totals over the whole run. A session that never shut down cleanly has no totals and is not counted.
-- **Unverified** (no primary text says it): that `inputTokens` includes the cache legs and `outputTokens` includes reasoning. The one real log on this machine has cache reads below `inputTokens` (18.6M against 17.7M), so the reader treats input as inclusive, and its printed totals are exactly that file's `usage` block. The same event's `tokenDetails` block disagrees with `usage` (uncached input 2.10M plus 17.7M cache reads, output 18.9K against 9.8K): the SDK does not say why, and the reader follows `usage`, the block with documented per-field meaning. Also unverified: whether a resumed session writes a second shutdown with run-only or cumulative totals (the reader sums them).
+- Checked on 2026-10-12 against the one real log on this machine (written by Copilot CLI 1.0.80, `session.start.copilotVersion`; 1.0.83 is installed): one `session.shutdown`, one model, no `session.resume`. Its `modelMetrics` entry carries `usage` and a `tokenDetails` block (`input`, `cache_read`, `cache_write`, `output`, each `{tokenCount}`), and the two differ by exactly the seven `session.compaction_complete` events of the log: `tokenDetails.input` (2,096,414) is `inputTokens - cacheReadTokens` (913,181) plus the sum of the compactions' `compactionTokensUsed.inputTokens` (1,183,233), and `tokenDetails.output` (18,945) is `usage.outputTokens` (9,800) plus their `outputTokens` (9,145); the cache legs are equal. So `usage` leaves the compaction requests out, `tokenDetails` is the whole spend (the SDK describes the per-model block only as "Token count details per type" and the session-wide one as "accumulated token counts", https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac`, `nodejs/src/generated/session-events.ts`, `ShutdownModelMetric.tokenDetails`, `ShutdownData.tokenDetails`), and `inputTokens` does include the cache legs (confirmed: the equality only holds if it does). The reader therefore takes `tokenDetails` when it has `input` and `output`, and `usage` otherwise. Before this check it followed `usage` and so left out the compaction input and output.
+- **Unverified, kept 2026-10-12**: whether `outputTokens` includes reasoning (the real log has 0 reasoning tokens). The `outputTokens` of the 1,116 `assistant.message` events add up to 84,327, which matches neither block, and `requests.count` is 158; nothing read explains the gap, so per-message counts are not used.
+- **Confirmed from the SDK source, not yet observed in a real resumed log (2026-10-12)**: a resumed session's later `session.shutdown` carries session-wide cumulative totals, so the reader takes the last shutdown of each `events.jsonl` instead of summing them. Source: https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac` (committed 2026-10-10, checked 2026-10-12), `nodejs/src/generated/session-events.ts`: `ShutdownData.tokenDetails` is "Session-wide per-token-type accumulated token counts"; `ShutdownModelMetric.usage` fields read "across all requests to this model" (`UsageMetricsModelMetricUsage`); `session.usage_checkpoint` is a "Durable session usage checkpoint for reconstructing aggregate accounting on resume" and its `totalNanoAiu` is "Session-wide accumulated nano-AI units cost at checkpoint time". Nothing in the schema says a resume starts a new accounting scope, and `session.resume` (`ResumeData`) carries no usage fields. The checkpoint carries no per-model token legs (only an `@internal` `accountingSnapshot` and cache state), so the reader ignores it. This machine has no resumed log (one `events.jsonl` with a shutdown, no `session.resume` event), so the cumulative behaviour is documentation, not an observed file; it stays to be confirmed on a real resumed session.
 
 ### 30.3 Gemini CLI
 
 - https://github.com/google-gemini/gemini-cli, commit `fb972b2f87fe7d5b06d37eac711490162d98de2c`. `packages/core/src/config/storage.ts`: the project temp directory is `<home>/.gemini/tmp/<project identifier>`, chats are in its `chats/` directory, and `GEMINI_CLI_HOME` replaces the home directory (`packages/core/src/utils/paths.ts`). Sub-agent chats sit in `chats/<parent session id>/`.
 - `packages/core/src/services/chatRecordingService.ts` and `chatRecordingTypes.ts`: a chat is an append-only JSONL log of messages, `$patch` records, `$rewindTo` records and `$set` metadata; a `gemini` message has `id`, `timestamp`, `model` and `tokens` = `{input, output, cached, thoughts?, tool?, total}` where `input` is `promptTokenCount` (which includes `cached`), `output` `candidatesTokenCount`, `thoughts` `thoughtsTokenCount` and `tool` `toolUsePromptTokenCount`. The last record with a given message id wins. An older release wrote one `session-*.json` document with a `messages` array; the CLI migrates it only when the session is opened again.
-- Not run on real files: this machine has no Gemini chats.
+- Not run on real files, **unverified** (kept 2026-10-12): `gemini` is not installed here and `~/.gemini/tmp` is empty, so neither a chat file nor the host's version could be read.
 
 ### 30.4 Droid (Factory)
 
@@ -2505,7 +2533,8 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - https://github.com/earendil-works/pi (the former badlogic/pi-mono), commit `69f0be6f0a6ca1bf66a2a9cf59c821b632e6bca1`, `packages/coding-agent/docs/sessions.md`: sessions are stored under `~/.pi/agent/sessions/`, grouped by working directory; `--session-dir`, `PI_CODING_AGENT_SESSION_DIR` or the `sessionDir` setting moves them. `docs/environment-variables.md` names `PI_CODING_AGENT_DIR` as the agent folder.
 - `docs/session-format.md`: a session is JSONL, one entry per line, each with `id` and an ISO `timestamp`. An assistant `message` carries `provider`, `model` and `usage`; `compaction`, `branch_summary` and `usage` entries carry `usage` themselves, and the doc says they all "contribute to session token and cost totals". `docs/message-types.md`: `usage` is `{input, output, cacheRead, cacheWrite, totalTokens, cost}` and `reasoning`, when present, is already inside `output`, so it is not added again. A `usage` entry with an unknown `kind` is normal usage.
-- Not documented: whether a forked session copies the parent's entries with their ids. The reader counts an entry once by (`id`, `timestamp`) across all files, which is the same result either way. **unverified**
+- Forks: the source at the same commit (`packages/coding-agent/src/core/session-manager.ts`) copies the parent's entries with their `id` and `timestamp` unchanged, in `forkFrom` (every non-header entry written verbatim) and `createBranchedSession` (each entry spread with only `parentId` rewritten, labels aside); the new header gets a new `id` and `parentSession`. So counting an entry once by (`id`, `timestamp`) across files is right. Confirmed from source on 2026-10-12; the 10 real files here include no fork (no `parentSession` key, no repeated entry id), so it is not observed in data.
+- Checked again on 2026-10-12 with pi 0.85.1 (`pi --version`): the same 10 files and 953 usage entries (message types 2,123 `message`, 14 `model_change`, 14 `thinking_level_change`, 10 `session` headers at version 3) still give identical reader and `jq` sums for all four legs. Newer entries add `reasoning` (46 entries) and `cacheWrite1h` (882 entries, always 0) next to the four legs; in all 953 `totalTokens` equals input + output + `cacheRead` + `cacheWrite`, so `reasoning` is inside `output` and is not added again. Whether `cacheWrite1h` is inside `cacheWrite` is **unverified** (kept 2026-10-12): it is 0 in every real entry.
 - Checked on this machine on 2026-10-03: a read-only run of `rtok agents usage --source logs --host pi` against the real `~/.pi/agent/sessions` (10 files, 953 usage entries) and an independent `jq` sum of the same entries give identical totals for all four legs (input 8,063,051; cache read 129,106,459; cache write 0; output 744,047). No file content was copied.
 
 ### 30.6 Kimi Code (T358.4)
@@ -2717,3 +2746,74 @@ Both ideas were last judged before the thinking page and the tool search page of
 - Verdict: **I-85 dropped**, no measured saving left on the traffic we can see.
 
 **Limits.** Signature length is a proxy for billed tokens (two fits, above). The replay assumption is an upper bound for hosts other than Claude Code. The cost model uses list-price ratios, not the invoice. Cursor and Codex sessions are not in the transcripts. Commands: Python 3 scripts reading the transcripts (parent-chain walk, `-I` mode), `sqlite3` on a file copy of `rtok.db` for the empty `usage` table; no change to rtok code.
+
+## 38. Local draft, cloud verify (T404, checked 2026-10-11)
+
+Question (§16.3 #10): can a local model draft output that the cloud model only verifies, so the cloud emits fewer output tokens? Desk research only: no code, no bench, nothing measured here. Primary sources are the vendor pages named in each row, fetched 2026-10-11; "inference" marks a step that follows from those sources but that no page states.
+
+### 38.1 Can a host or proxy hand the cloud model a draft?
+
+| Fact | Source (checked 2026-10-11) |
+| --- | --- |
+| Anthropic Messages API: a last message with role `assistant` is a **prefill** and the answer continues from it, but "on models that don't support prefill" such a request returns 400. | https://platform.claude.com/docs/en/api/messages, `messages` parameter |
+| Prefill is **not supported on Claude 4.6 and later models** (and Mythos Preview). A prefilled last assistant message returns 400 `invalid_request_error`: "This model does not support assistant message prefill. The conversation must end with a user message." Suggested replacements: structured outputs, system-prompt instructions, `output_config.format`. | https://platform.claude.com/docs/en/api/errors, "Prefill not supported" |
+| The current models on the pricing page (Fable 5.1, Mythos 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5) are all later than 4.6, so **prefill is unavailable on every current Claude model**. Inference from the two rows above plus the model list in the migration index (https://platform.claude.com/docs/en/about-claude/models/migration-guide). | same |
+| OpenAI Predicted Outputs: `prediction` parameter on Chat Completions, only `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`; unsupported with `tools`, `max_completion_tokens`, `n` > 1, `logprobs`. Predicted tokens absent from the final answer "are still charged at completion token rates", so a bad draft raises the bill. | https://developers.openai.com/api/docs/guides/predicted-outputs |
+| Gemini text-generation guide: no prefill, speculative-decoding or predicted-output feature documented (absence on that page only, not a statement that none exists). | https://ai.google.dev/gemini-api/docs/text-generation |
+| Claude Code, Codex and other hosts as injection points: not researched from their own docs here. Inference: a proxy only rewrites a request the host built, so on a current Claude model it cannot append an assistant prefill (400 above), and on OpenAI it cannot attach `prediction` to a request that carries `tools`, which every coding-agent turn does. | inference |
+
+Consequence: the "pre-filled draft" mechanism that makes draft-and-verify cheap is gone on Anthropic and unusable with tools on OpenAI. What remains is to put the draft in the **user** turn and ask the model to confirm or correct it.
+
+### 38.2 Is there a draft worth sending? Where the output tokens go
+
+§2 and §16.3 #1 already measured this workload: 96 % of assistant output is tool input (the code and edit arguments the model writes), and `new_string` is 2.2x `old_string`. A local draft would have to be that new code. Prefill-style text continuation cannot carry a `tool_use` block in any case (inference: prefill is text-only in the API reference above), so only a user-turn draft is possible, and the cloud model then has to re-emit the accepted draft as its own tool call: **an accepted draft still costs the full output tokens of the tool call**. Confirming "yes" saves nothing when the useful output is the edit itself. The saving exists only for prose answers the model could end with "accepted as written", and §2 puts the cost in tool input, not prose.
+
+### 38.3 Local draft speed (Apple Silicon)
+
+Generation speed is memory-bandwidth bound. Source: llama.cpp's own benchmark thread, LLaMA 7B (6.74 B parameters), tg128, batch 1, build 8e672ef (https://github.com/ggml-org/llama.cpp/discussions/4167, checked 2026-10-11):
+
+| Chip | Q4_0 | Q8_0 | F16 |
+| --- | --- | --- | --- |
+| M3 Max 40 GPU cores (400 GB/s) | 66.3 t/s | 42.8 | 25.1 |
+| M4 Max 40 GPU cores (546 GB/s) | 83.1 t/s | 54.1 | 31.6 |
+| M3 Ultra 80 cores (800 GB/s) | 92.1 t/s | 63.9 | 39.8 |
+
+So a 7 B model at Q4 drafts about 65 to 90 tokens/s on a Max-class chip; that is fast enough that speed is not the blocker. The numbers are a 2023-era base model on a plain generation test: they say nothing about draft **quality** for code against current Claude models. No coding pass rate for any local model was found or measured. MLX also ships speculative decoding (`--draft-model`, `--num-draft-tokens`, default 3; same tokenizer required: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/generate.py), but that is a local-only trick where the *big* model is also local; it does not apply to a cloud verifier, which exposes no draft-token interface in the pages above.
+
+### 38.4 What verification costs
+
+Prices per MTok (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-11; OpenAI: https://developers.openai.com/api/docs/pricing, same date): Fable 5.1 input $10, output $50, cache read $0.25; OpenAI gpt-5 input $1.25, output $10. Output is 5x input on Fable 5.1 (§2 p_out = 5 p_in) and 8x on gpt-5.
+
+Idealised model (inference, not measured). A task has D output tokens when written by the cloud model alone: cost = D x p_out. With a draft in the user turn: the draft is fresh input (no cache hit, it was never seen), so D x p_in; the model answers with the verdict V (small); on reject it writes the D tokens itself, probability 1 - a. Cost = D p_in + V p_out + (1 - a) D p_out. Break-even at p_out = 5 p_in is a > 0.2 + V/D with zero thinking tokens and an accept that costs only V. If the accepted draft must be re-emitted as a tool call (37.2), the accept path also costs D p_out and the saving is **zero or negative** (the draft input is pure extra cost). Adding the reasoning tokens a thinking model spends checking a draft, and the extra turns of a rejected draft, raises the required `a` further; the sources give no figure for either, so none is claimed.
+
+Also: wrong-draft anchoring (the verifier accepts plausible code it would not have written) is a quality risk; no primary source measures it for these models, so it stays unquantified.
+
+### 38.5 Verdict
+
+**Close T404 with this finding; do not build.** (1) The one API mechanism built for this, assistant prefill, is removed on every current Claude model, and OpenAI's equivalent excludes tool calls, so a proxy cannot inject a draft where it matters. (2) The output that dominates cost is tool-call input, which prefill could not carry and which the cloud model must re-emit even after accepting a draft. (3) Local drafting speed is adequate (about 65 to 90 t/s for 7 B at Q4 on Max-class chips), but speed was never the constraint.
+
+Reopen only if a bench could show **cost per passed task falling with the pass rate held**: that needs a host path that lets a verifier accept a draft without re-emitting it (for example a new prefill-like or edit-by-reference API, or a draft delivered as a tool result the model can apply by id), plus a local model whose measured accept rate `a` on this workload clears the break-even in 37.4 with thinking tokens included. Neither exists in the sources checked today. Reliability: every row above is a vendor page or the repository's own file, fetched 2026-10-11; the llama.cpp thread is community-run but primary for its own numbers. No blog or forum fact is used. The break-even is arithmetic on published prices, not a measurement.
+
+
+## 39. `search` latency on large repositories (T378 gate, measured 2026-10-12)
+
+Question: is `search` p95 above 200 ms on a large repository, the gate that decides whether T378 (trigram prefilter) is built? `search` is `src/plugins/read/search.rs::search`: a single-threaded `ignore::WalkBuilder` walk, each file read and run through the regex line by line, early exit at `plugins.read.search_max` hits (50 by default). No divan bench covers `search` (`benches/` has `graph.rs` only), and the CLI has no `search` command, so the timing drives the same function through `rtok mcp` over stdio.
+
+Setup: `rtok 0.17.0`, `cargo build --release --bin rtok` at commit `bf88f07e2` (branch `c23b5-work`), Apple M3 Max, 16 cores, 64 GiB, macOS arm64. One long-lived `rtok mcp` process per root (as a host runs it), one discarded warm-up call per query, then 20 timed `tools/call search` round trips (25 on stator), wall time per call with `time.perf_counter`, p50/p95 by linear interpolation. The 1-minute load average was about 20 during the runs (other agents on the machine), so absolute numbers are pessimistic and noisy. Script: scratchpad `bench_search.py` (not committed).
+
+No local repository has 50k files: the largest tracked trees are `apps/stator` (1 995 files by `git ls-files`), `apps/weft` (1 941), `apps/rtok` (1 624) and `apps/rtok-flakes` (1 563). So two roots were timed. "Real" is `apps/stator` as is. "Large" is a scratchpad tree of 66 493 regular files, 3.0 GB, built from the `git ls-files` content of eight local repositories (stator, weft, rtok-flakes, translate, slint-bindings, rtok, runa, ketch), seven `cp -c -R` copies of it. It is synthetic (duplicated content, tracked `.gitignore` files still apply), so it measures walk plus scan cost per file, not a real monorepo.
+
+| Root | Query | Hits | Runs | p50 | p95 | max |
+| --- | --- | --- | --- | --- | --- | --- |
+| stator, 1 995 files | `the` | 50 (cap) | 25 | 2.9 ms | 3.3 ms | 3.4 ms |
+| stator | `TODO` | 11 | 25 | 122.7 ms | 151.9 ms | 159.8 ms |
+| stator | `unwrap_or_default` | 0 | 25 | 120.9 ms | 156.6 ms | 189.7 ms |
+| stator | `zzqxnotfound_9f3a` (absent) | 0 | 25 | 117.5 ms | 130.2 ms | 131.5 ms |
+| large, 66 493 files | `the` | 50 (cap) | 20 | 1.5 ms | 1.9 ms | 1.9 ms |
+| large | `TODO` | 50 (cap) | 20 | 7.7 ms | 10.7 ms | 13.7 ms |
+| large | `unwrap_or_default` | 50 (cap) | 20 | 124.1 ms | 136.8 ms | 145.4 ms |
+| large | `zzqxnotfound_9f3a` (absent) | 0 | 20 | 18 397 ms | 30 379 ms | 33 937 ms |
+
+Reading: a query that finds `cap` hits early stops the walk and stays far under 200 ms on any size. A query with few or no hits reads every file: about 120 ms on a 2 000-file repository (inside the gate), 15-34 s on 66 000 files (about 150x over the gate), roughly linear in files and bytes. Command: `python3 -I bench_search.py target/release/rtok <root> 20 'the' 'TODO' 'unwrap_or_default' 'zzqxnotfound_9f3a'`, run from the scratchpad.
+
+**Gate verdict (2026-10-12): not met, T378 stays open.** On the real repositories available (about 2 000 files) the absent-literal p95 is 130-157 ms, so p95 is at most 200 ms and the card's close-with-number clause would apply there. On a 66k-file tree the worst case (a literal with no or few hits) is p95 30 s, far above 200 ms. The card's own target is a 50k-file repository, so the gate resolves to "p95 > 200 ms": the prefilter is justified for that size, but the evidence for it is a synthetic tree, and I-95 (parallel walk) has not shipped, so the before/after Check the card names is still missing. The creator decides whether to build T378 on this number, run a real 50k-file repository first, or close the card at the 2 000-file scale.

@@ -298,6 +298,9 @@ fn with_restart(
     let mut to_reopen: Vec<(String, PathBuf)> = Vec::new();
     if !no_restart {
         let agents = super::resolve(&req.hosts)?;
+        // Plan every host before closing any: a failing `would_change` returns early, and an app
+        // closed by then would stay closed (T629).
+        let mut plan = Vec::new();
         for &agent in &agents {
             let target = agent
                 .variants()
@@ -309,7 +312,9 @@ fn with_restart(
             if target.is_none() && bin.is_none() {
                 continue;
             }
-            let changed = would_change(cfg, agent)?;
+            plan.push((agent, target, bin, would_change(cfg, agent)?));
+        }
+        for (agent, target, bin, changed) in plan {
             if let Some((name, path)) = target
                 && changed
             {
@@ -589,6 +594,74 @@ mod tests {
             ["quit:Windsurf".to_string(), "open:Windsurf".to_string()]
         );
         assert!(err.to_string().contains("disk full"), "{err:#}");
+    }
+
+    fn req_hosts(hosts: &[&str]) -> Request {
+        Request {
+            hosts: hosts.iter().map(|h| h.to_string()).collect(),
+            ..req("windsurf")
+        }
+    }
+
+    /// T629: a host that cannot be planned must be found out before any app is closed, or the
+    /// apps closed so far stay closed when the error returns early.
+    #[test]
+    fn a_failing_preflight_on_any_host_closes_nothing_and_writes_nothing() {
+        let hosts = ["windsurf", "cursor", "devin"];
+        for bad in hosts {
+            let procs = FakeProcs::running_names(&["Windsurf", "Cursor", "Devin"]);
+            let wrote = RefCell::new(false);
+            let err = with_restart(
+                &mut Config::default(),
+                &req_hosts(&hosts),
+                false,
+                &procs,
+                |_, a| {
+                    if a.id() == bad {
+                        anyhow::bail!("cannot read {bad} config")
+                    }
+                    Ok(true)
+                },
+                |_| {
+                    *wrote.borrow_mut() = true;
+                    Ok(String::new())
+                },
+            )
+            .unwrap_err();
+            assert!(err.to_string().contains(bad), "{err:#}");
+            assert!(procs.calls.borrow().is_empty(), "{bad}: {:?}", procs.calls);
+            assert!(!*wrote.borrow(), "{bad}: the write must not run");
+        }
+    }
+
+    /// T629 control: with every host planned, each running app is closed, the write runs once,
+    /// then each is reopened.
+    #[test]
+    fn two_running_desktop_hosts_are_both_closed_then_both_reopened() {
+        let procs = FakeProcs::running_names(&["Windsurf", "Cursor"]);
+        with_restart(
+            &mut Config::default(),
+            &req_hosts(&["windsurf", "cursor"]),
+            false,
+            &procs,
+            |_, _| Ok(true),
+            |_| {
+                procs.calls.borrow_mut().push("write".into());
+                Ok(String::new())
+            },
+        )
+        .unwrap();
+        let calls = procs.calls.borrow();
+        assert_eq!(calls.len(), 5, "{calls:?}");
+        assert!(
+            calls[..2].iter().all(|c| c.starts_with("quit:")),
+            "{calls:?}"
+        );
+        assert_eq!(calls[2], "write");
+        assert!(
+            calls[3..].iter().all(|c| c.starts_with("open:")),
+            "{calls:?}"
+        );
     }
 
     #[test]

@@ -68,15 +68,24 @@ fn the_release_job_builds_the_spa_before_cargo() {
     );
 }
 
-/// CI builds the SPA before the tests that read it, so they see the SPA and not the placeholder.
+/// CI builds the SPA before it archives the test binaries that embed it, so the shards that run
+/// them see the SPA and not the placeholder.
 #[test]
 fn ci_builds_the_spa_before_the_test_suite() {
     let ci = read(".github/workflows/ci.yml");
-    let spa = ci
-        .find("just spa-install spa-build")
+    let archive = ci
+        .find("run: mise exec -- cargo nextest archive")
+        .expect("ci archives the test binaries");
+    let job = ci[..archive]
+        .rfind("\n  build-tests:")
+        .expect("the build-tests job archives them");
+    let spa = ci[..archive]
+        .rfind("just spa-install spa-build")
         .expect("ci builds the SPA");
-    let test = ci.find("- run: just test").expect("ci runs the tests");
-    assert!(spa < test, "ci.yml builds the SPA after the tests");
+    assert!(
+        spa > job,
+        "build-tests archives the tests without building the SPA first"
+    );
 }
 
 /// `release.yml` is generated from `dist-workspace.toml` + `build-setup.yml`

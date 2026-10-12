@@ -128,6 +128,10 @@ pub struct DoctorRequest {
     pub action: DoctorAction,
     #[serde(default)]
     pub selection: Selection,
+    /// For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with
+    /// one the files no longer produce, nothing is written and a fresh plan comes back.
+    #[serde(default)]
+    pub confirmed: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]

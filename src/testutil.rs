@@ -21,6 +21,16 @@ pub fn tmp_dir(tag: &str) -> PathBuf {
     dir
 }
 
+/// An absolute path from a Unix-style spelling: unchanged on Unix, `C:` plus backslashes on
+/// Windows, where `/repo` has a root but no drive and is not absolute.
+pub fn native_abs(unix: &str) -> String {
+    if cfg!(windows) {
+        format!("C:{}", unix.replace('/', "\\"))
+    } else {
+        unix.to_string()
+    }
+}
+
 /// Default config with the DB, the archive and the log under a fresh [`tmp_dir`].
 pub fn config(tag: &str) -> (Config, PathBuf) {
     let dir = tmp_dir(tag);

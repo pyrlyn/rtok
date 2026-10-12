@@ -408,8 +408,22 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let sc = &state.cfg.plugins.proxy.semantic_cache;
     // A lane that does not use the cache neither reads nor fills it (T385.2).
     let cache_lane = req_lane.policy(&state.cfg.proxy.lanes).semantic_cache;
-    // Who asked (T323): part of the cache key on lookup and, below, on store.
-    let caller = semantic_cache::caller_identity(&headers);
+    // The target is resolved before the lookup (T533): lanes can have their own upstream, and
+    // an answer cached for one must not be served for a request bound for another.
+    let target = match join_upstream(
+        state.upstream_for(req_lane, wire, &path, &headers),
+        &path,
+        query.as_deref(),
+    ) {
+        Ok(u) => u,
+        Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
+    };
+    // Who asked (T323) and where it goes (T533): part of the cache key on lookup and, below,
+    // on store.
+    let caller = semantic_cache::cache_scope(&headers, method.as_str(), &target);
+    // Where a Batch results file lives (T583): the batch or file id is in the path, and the
+    // query holds nothing that identifies the results.
+    let results_scope = target.split('?').next().unwrap_or_default().to_string();
     if sc.enabled
         && cache_lane
         && !plain
@@ -427,15 +441,6 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
             return cache_response(state, Some(wire), recorded, &request_body, start, &hit);
         }
     }
-
-    let target = match join_upstream(
-        state.upstream_for(req_lane, wire, &path, &headers),
-        &path,
-        query.as_deref(),
-    ) {
-        Ok(u) => u,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
-    };
 
     let mut rb = state.client_for(req_lane).request(method.clone(), target);
     // The client's `accept-encoding` is not honoured by this build: reqwest is linked
@@ -542,7 +547,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     // Batch results are read only after they were forwarded (T385.4), and only when asked.
     let results = (state.cfg.proxy.batch.parse_results && status.is_success())
         .then(|| batch_results::source(req_lane, &method, &path))
-        .flatten();
+        .flatten()
+        .map(|source| (source, results_scope));
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(TEE_CHANNEL_CHUNKS);
     let recorder = state.clone();
     let body_stream = upstream.bytes_stream();
@@ -1083,7 +1089,7 @@ fn finish(
     response_total_bytes: usize,
     complete: bool,
     caller: Option<&str>,
-    results: Option<batch_results::Source>,
+    results: Option<(batch_results::Source, String)>,
 ) {
     let Some(r) = recorded else { return };
     let session = r.session.clone();
@@ -1163,13 +1169,14 @@ fn finish(
             );
         }
         None => {
-            if let Some(source) = results
+            if let Some((source, scope)) = results
                 && let Err(e) = batch_results::record(
                     &state.store,
                     &session,
                     r.call_id,
                     r.model.as_deref(),
                     source,
+                    &scope,
                     response_body,
                 )
             {
