@@ -8,6 +8,7 @@
 //! wrong types, and out-of-range values with `file:line`. `set` writes the user file
 //! through `toml_edit` so comments survive. Figment does not write files.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -236,7 +237,12 @@ fn reveal_assignment(text: &str, table: Option<&str>, leaf: &str) -> String {
     let mut current: Option<String> = None;
     let mut revealed = false;
     let mut out = String::with_capacity(text.len());
-    for line in text.split_inclusive('\n') {
+    let payload = string_payload_lines(text);
+    for (n, line) in text.split_inclusive('\n').enumerate() {
+        if payload.contains(&n) {
+            out.push_str(line);
+            continue;
+        }
         let raw = line.trim_end_matches(['\r', '\n']);
         let trimmed = raw.trim();
         if let Some(header) = table_header(trimmed) {
@@ -266,7 +272,11 @@ fn reveal_assignment(text: &str, table: Option<&str>, leaf: &str) -> String {
 
 fn live_key_present(text: &str, table: Option<&str>, leaf: &str) -> bool {
     let mut current: Option<String> = None;
-    for line in text.lines() {
+    let payload = string_payload_lines(text);
+    for (n, line) in text.lines().enumerate() {
+        if payload.contains(&n) {
+            continue;
+        }
         let trimmed = line.trim();
         if let Some(header) = table_header(trimmed) {
             current = Some(header);
@@ -288,6 +298,43 @@ fn live_key_present(text: &str, table: Option<&str>, leaf: &str) -> bool {
         }
     }
     false
+}
+
+/// Zero-based lines that begin inside a multi-line string value. The line scans above read
+/// raw text, so a payload line shaped like `[proxy]` or `# port = 12` would pass for document
+/// syntax and be rewritten. The parser knows where each string really ends (T595).
+fn string_payload_lines(text: &str) -> HashSet<usize> {
+    let mut lines = HashSet::new();
+    // Unparsable text is refused by the caller right after; nothing to protect then.
+    let Ok(doc) = text.parse::<toml_edit::Document<String>>() else {
+        return lines;
+    };
+    let line_at = |off: usize| text[..off.min(text.len())].matches('\n').count();
+    let mut mark = |span: Option<std::ops::Range<usize>>| {
+        if let Some(span) = span {
+            lines.extend(line_at(span.start) + 1..=line_at(span.end.saturating_sub(1)));
+        }
+    };
+    fn walk(item: &Item, mark: &mut dyn FnMut(Option<std::ops::Range<usize>>)) {
+        match item {
+            Item::Value(v) => walk_value(v, mark),
+            Item::Table(t) => t.iter().for_each(|(_, i)| walk(i, mark)),
+            Item::ArrayOfTables(a) => a
+                .iter()
+                .for_each(|t| t.iter().for_each(|(_, i)| walk(i, mark))),
+            Item::None => {}
+        }
+    }
+    fn walk_value(v: &TomlValue, mark: &mut dyn FnMut(Option<std::ops::Range<usize>>)) {
+        match v {
+            TomlValue::String(f) => mark(f.span()),
+            TomlValue::Array(a) => a.iter().for_each(|v| walk_value(v, mark)),
+            TomlValue::InlineTable(t) => t.iter().for_each(|(_, v)| walk_value(v, mark)),
+            _ => {}
+        }
+    }
+    walk(doc.as_item(), &mut mark);
+    lines
 }
 
 fn table_header(trimmed: &str) -> Option<String> {
@@ -940,6 +987,41 @@ mod tests {
         assert!(
             errs[0].starts_with("c.toml:2: plugins.read.allow_paths"),
             "{errs:?}"
+        );
+    }
+
+    /// T595: header-shaped and assignment-shaped lines inside a multi-line string are payload.
+    /// Setting another key changes that key only and leaves the string's bytes alone.
+    #[test]
+    fn set_leaves_multiline_string_payloads_untouched() {
+        for quote in ["'''", "\"\"\""] {
+            for eol in ["\n", "\r\n"] {
+                let home = tmp("payload");
+                let (path, _) = Config::init_maybe(&home, None, false, false).unwrap();
+                let payload = format!("{quote}\n[proxy]\n# port = 12\n# [x] = 1\n{quote}");
+                let body = format!("[otel]\nservice_name = {payload}\n[proxy]\n# port = 8790\n");
+                let payload = payload.replace('\n', eol);
+                std::fs::write(&path, body.replace('\n', eol)).unwrap();
+                set(&home, "proxy.port", "9000", false).unwrap();
+                let after = std::fs::read_to_string(&path).unwrap();
+                // toml_edit renders its own header and key line ends, so only the payload's
+                // bytes (the string's value) are compared across line-ending styles.
+                assert!(after.contains(&payload), "{quote:?} {eol:?}: {after:?}");
+                assert!(after.contains("port = 9000"), "{after:?}");
+                assert!(!after.contains("\nport = 12"), "{after:?}");
+                let _ = std::fs::remove_dir_all(&home);
+            }
+        }
+    }
+
+    /// T595: both line scans skip payload lines, including those of a string inside an array.
+    #[test]
+    fn payload_lines_are_skipped_by_both_scans() {
+        let text = "[a]\nk = [\"\"\"\n[proxy]\nport = 1\n\"\"\"]\n";
+        assert!(!live_key_present(text, Some("proxy"), "port"));
+        assert_eq!(
+            reveal_assignment("[a]\nk = \'\'\'\n[p]\n# q = 1\n\'\'\'\n", Some("p"), "q"),
+            "[a]\nk = \'\'\'\n[p]\n# q = 1\n\'\'\'\n"
         );
     }
 
