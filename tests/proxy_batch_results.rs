@@ -211,6 +211,40 @@ async fn openai_file_content_with_results_becomes_usage_rows_and_a_batch_call() 
     task.abort();
 }
 
+/// T583.2: an OpenAI output file downloaded twice is one set of billed requests; another output
+/// file with the same `custom_id`s is new work.
+#[tokio::test]
+async fn refetching_an_openai_output_file_does_not_count_it_twice() {
+    let up = MockServer::start();
+    serve(&up, "/v1/files/file-out/content", 200, OPENAI_JSONL);
+    serve(&up, "/v1/files/file-out2/content", 200, OPENAI_JSONL);
+    let (addr, state, task) = proxy_server("batch-results-openai-replay", |cfg| {
+        cfg.proxy.openai_upstream = up.base_url();
+        cfg.proxy.upstream = up.base_url();
+        cfg.proxy.batch.parse_results = true;
+    })
+    .await;
+    for _ in 0..2 {
+        let (_, body) = fetch(&addr, "/v1/files/file-out/content").await;
+        assert_eq!(body, OPENAI_JSONL, "a replay is forwarded as is too");
+    }
+    settle_calls(&state.store, "api_request:batch", 2).await;
+    assert_eq!(
+        usage_rows(&state.store, 2).await.len(),
+        2,
+        "replay double-counted"
+    );
+
+    fetch(&addr, "/v1/files/file-out2/content").await;
+    settle_calls(&state.store, "api_request:batch", 3).await;
+    assert_eq!(
+        usage_rows(&state.store, 4).await.len(),
+        4,
+        "another output file is new work"
+    );
+    task.abort();
+}
+
 #[tokio::test]
 async fn an_ordinary_file_download_stays_a_files_call_without_rows() {
     let up = MockServer::start();

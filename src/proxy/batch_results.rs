@@ -35,8 +35,9 @@ pub enum Source {
     /// `custom_id`, which is only unique inside its batch; `None` when the path has no id.
     Batch { id: Option<String> },
     /// OpenAI `/v1/files/{id}/content`: any file download takes this path, so only the lines
-    /// found in it say the call was a Batch output.
-    File,
+    /// found in it say the call was a Batch output. `id` is the output file, which scopes each
+    /// line's `custom_id` (unique per batch); `None` when the path has no id.
+    File { id: Option<String> },
 }
 
 /// Whether a successful `GET path` on `lane` is worth reading as a results file.
@@ -45,15 +46,19 @@ pub fn source(lane: Lane, method: &Method, path: &str) -> Option<Source> {
         return None;
     }
     match lane {
-        Lane::Batch if path.ends_with("/results") => Some(Source::Batch { id: batch_id(path) }),
-        Lane::Files if path.ends_with("/content") => Some(Source::File),
+        Lane::Batch if path.ends_with("/results") => Some(Source::Batch {
+            id: path_id(path, "/results"),
+        }),
+        Lane::Files if path.ends_with("/content") => Some(Source::File {
+            id: path_id(path, "/content"),
+        }),
         _ => None,
     }
 }
 
-/// The `{id}` of `…/batches/{id}/results`.
-fn batch_id(path: &str) -> Option<String> {
-    let id = path.strip_suffix("/results")?.rsplit('/').next()?;
+/// The `{id}` of `…/batches/{id}/results` or `…/files/{id}/content`.
+fn path_id(path: &str, suffix: &str) -> Option<String> {
+    let id = path.strip_suffix(suffix)?.rsplit('/').next()?;
     (!id.is_empty()).then(|| id.to_string())
 }
 
@@ -88,19 +93,24 @@ pub fn record(
         })
         .collect();
     let written = store.insert_usage_rows(session, call_id, &rows)?;
-    if source == Source::File {
+    if matches!(source, Source::File { .. }) {
         store.set_call_kind(call_id, Lane::Batch.kind())?;
     }
     Ok(written)
 }
 
 /// The provider-scoped identity of one result, `None` when the source or line has none (a
-/// legacy-shaped row nothing can dedupe against). Batch ids hold no `/`, so the parts cannot run
-/// into each other.
+/// legacy-shaped row nothing can dedupe against). Batch and file ids hold no `/`, so the parts
+/// cannot run into each other. An OpenAI output file is keyed by file id, not by the line's
+/// chat/responses wire, which a replay reads identically anyway.
 fn result_key(source: &Source, r: &ResultUsage) -> Option<String> {
-    match (source, r.custom_id.as_deref()) {
-        (Source::Batch { id: Some(batch) }, Some(custom_id)) if r.api == API_ANTHROPIC => {
-            Some(format!("{API_ANTHROPIC}/{batch}/{custom_id}"))
+    let line = r.custom_id.as_deref()?;
+    match source {
+        Source::Batch { id: Some(batch) } if r.api == API_ANTHROPIC => {
+            Some(format!("{API_ANTHROPIC}/{batch}/{line}"))
+        }
+        Source::File { id: Some(file) } if r.api != API_ANTHROPIC => {
+            Some(format!("openai/{file}/{line}"))
         }
         _ => None,
     }
@@ -110,7 +120,8 @@ fn result_key(source: &Source, r: &ResultUsage) -> Option<String> {
 /// parser belongs to, and the four disjoint counters.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ResultUsage {
-    /// The line's `custom_id`, set for Anthropic results; OpenAI identity is T583.2.
+    /// The line's identity inside its batch or output file: Anthropic's `custom_id`, OpenAI's
+    /// `custom_id` (unique per batch) or, failing that, its `batch_req_` line `id`.
     pub custom_id: Option<String>,
     pub model: Option<String>,
     pub api: &'static str,
@@ -155,7 +166,10 @@ fn line_usage(line: &Value) -> Option<ResultUsage> {
         } else {
             (&OPENAI_CHAT, API_OPENAI_CHAT)
         };
-    found(None, wire, api, body, body)
+    let id = ["custom_id", "id"]
+        .iter()
+        .find_map(|k| line.get(k).and_then(Value::as_str));
+    found(id, wire, api, body, body)
 }
 
 fn found(
@@ -312,7 +326,7 @@ mod tests {
                 id: Some("msgbatch_1".into())
             }
         );
-        assert_eq!(batch_id("/results"), None);
+        assert_eq!(path_id("/results", "/results"), None);
     }
 
     #[test]
@@ -353,6 +367,77 @@ mod tests {
         assert_eq!(totals(&store), (2, 107, 107));
     }
 
+    fn openai_line(custom_id: &str, input: i64) -> Value {
+        json!({"id":format!("batch_req_{custom_id}"),"custom_id":custom_id,"error":null,
+            "response":{"status_code":200,"body":{"object":"chat.completion","model":"gpt-5",
+            "usage":{"prompt_tokens":input,"completion_tokens":1}}}})
+    }
+
+    fn file(id: &str) -> Source {
+        source(
+            Lane::Files,
+            &Method::GET,
+            &format!("/v1/files/{id}/content"),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn the_output_file_id_comes_from_the_content_path() {
+        assert_eq!(
+            file("file-out"),
+            Source::File {
+                id: Some("file-out".into())
+            }
+        );
+        assert_eq!(path_id("/content", "/content"), None);
+    }
+
+    #[test]
+    fn replaying_an_output_file_adds_nothing_and_a_distinct_file_or_result_does() {
+        let store = Store::open_in_memory().unwrap();
+        let body = jsonl(&[openai_line("a", 100), openai_line("b", 7)]);
+        let rec = |source| record(&store, "s", call(&store), None, source, &body).unwrap();
+        assert_eq!(rec(file("f1")), 2);
+        assert_eq!(totals(&store), (2, 107, 107));
+        assert_eq!(rec(file("f1")), 0, "the same file is not billed twice");
+        assert_eq!(totals(&store), (2, 107, 107));
+        assert_eq!(
+            rec(file("f2")),
+            2,
+            "the same custom_ids in another file count"
+        );
+        assert_eq!(totals(&store), (4, 214, 214));
+    }
+
+    #[test]
+    fn a_longer_output_file_download_tops_up_only_the_results_it_adds() {
+        let store = Store::open_in_memory().unwrap();
+        let full = jsonl(&[openai_line("a", 100), openai_line("b", 7)]);
+        // A download cut inside the second line: the first line and the torn tail.
+        let cut = &full[..full.len() - 20];
+        assert_eq!(
+            record(&store, "s", call(&store), None, file("f1"), cut).unwrap(),
+            1
+        );
+        assert_eq!(
+            record(&store, "s", call(&store), None, file("f1"), &full).unwrap(),
+            1
+        );
+        assert_eq!(totals(&store), (2, 107, 107));
+    }
+
+    #[test]
+    fn an_openai_line_without_custom_id_is_keyed_by_its_line_id() {
+        let store = Store::open_in_memory().unwrap();
+        let mut line = openai_line("a", 5);
+        line.as_object_mut().unwrap().remove("custom_id");
+        let body = jsonl(&[line]);
+        record(&store, "s", call(&store), None, file("f1"), &body).unwrap();
+        record(&store, "s", call(&store), None, file("f1"), &body).unwrap();
+        assert_eq!(store.count_usage().unwrap(), 1);
+    }
+
     #[test]
     fn results_without_an_identity_are_still_appended() {
         let store = Store::open_in_memory().unwrap();
@@ -360,14 +445,37 @@ mod tests {
         let no_id = Source::Batch { id: None };
         record(&store, "s", call(&store), None, no_id.clone(), &body).unwrap();
         record(&store, "s", call(&store), None, no_id, &body).unwrap();
-        // OpenAI lines carry no key until T583.2.
-        let openai = jsonl(&[
-            json!({"id":"r1","custom_id":"a","response":{"status_code":200,
-            "body":{"object":"chat.completion","model":"gpt-5",
-                    "usage":{"prompt_tokens":5,"completion_tokens":1}}}}),
-        ]);
-        record(&store, "s", call(&store), None, Source::File, &openai).unwrap();
-        record(&store, "s", call(&store), None, Source::File, &openai).unwrap();
-        assert_eq!(store.count_usage().unwrap(), 4);
+        // No file id in the path, or neither `custom_id` nor `id` on the line: nothing to key.
+        let openai = jsonl(&[openai_line("a", 5)]);
+        let no_file = Source::File { id: None };
+        record(&store, "s", call(&store), None, no_file.clone(), &openai).unwrap();
+        record(&store, "s", call(&store), None, no_file, &openai).unwrap();
+        let mut anonymous = openai_line("a", 5);
+        let obj = anonymous.as_object_mut().unwrap();
+        obj.remove("custom_id");
+        obj.remove("id");
+        let anonymous = jsonl(&[anonymous]);
+        record(&store, "s", call(&store), None, file("f1"), &anonymous).unwrap();
+        record(&store, "s", call(&store), None, file("f1"), &anonymous).unwrap();
+        assert_eq!(store.count_usage().unwrap(), 6);
+    }
+
+    /// Rows written before keys existed stay valid next to keyed ones: both are summed, and
+    /// a keyed download never collapses into a keyless row.
+    #[test]
+    fn legacy_keyless_rows_still_aggregate_beside_keyed_ones() {
+        let store = Store::open_in_memory().unwrap();
+        let call_id = call(&store);
+        let legacy = NewUsage {
+            key: None,
+            model: Some("gpt-5"),
+            api: API_OPENAI_CHAT,
+            legs: [100, 0, 0, 1],
+        };
+        store.insert_usage_rows("s", call_id, &[legacy]).unwrap();
+        let body = jsonl(&[openai_line("a", 100)]);
+        record(&store, "s", call(&store), None, file("f1"), &body).unwrap();
+        record(&store, "s", call(&store), None, file("f1"), &body).unwrap();
+        assert_eq!(totals(&store), (2, 200, 200));
     }
 }
