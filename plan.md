@@ -80,6 +80,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
 | T623 | todo | P2 | 5 | 0% | |
+| T644 | todo | P2 | 3 | 0% | |
 
 
 
@@ -1401,3 +1402,9 @@ Plan:
 5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
 
 Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
+
+### T644. Tests remove the temp dirs they create
+
+The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
+
+Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, and a full `just test` run adds no `rtok-*` entry to `$TMPDIR`.
