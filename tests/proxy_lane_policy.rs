@@ -368,6 +368,52 @@ async fn cached_responses_are_scoped_to_the_upstream_target() {
     task.abort();
 }
 
+/// T584: a streamed reply that ends inside a multibyte character still records the usage and
+/// tier its complete `message_start` event carried, and the client gets the bytes unchanged.
+#[tokio::test]
+async fn a_stream_cut_inside_a_character_keeps_its_earlier_usage() {
+    let start = json!({"type": "message_start", "message": {"usage": {
+        "input_tokens": 100, "output_tokens": 1, "service_tier": "standard"}}});
+    let mut stream = format!("event: message_start\ndata: {start}\n\n").into_bytes();
+    stream.extend_from_slice(b"data: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"\xc3");
+    let server = MockServer::start();
+    let reply = stream.clone();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/messages");
+        then.status(200)
+            .header("content-type", "text/event-stream")
+            .body(reply);
+    });
+    let (addr, state, task) = proxy_server("lane-policy-utf8-tail", |cfg| {
+        cfg.proxy.upstream = server.base_url();
+    })
+    .await;
+    let body = json!({"model": "claude-test", "max_tokens": 8, "metadata": {"user_id": SESSION},
+        "messages": [{"role": "user", "content": "hi"}]});
+    let resp = reqwest::Client::new()
+        .post(format!("http://{addr}/v1/messages"))
+        .header("content-type", "application/json")
+        .body(body.to_string())
+        .send()
+        .await
+        .expect("request through the proxy");
+    assert_eq!(
+        resp.bytes().await.expect("body").as_ref(),
+        stream.as_slice()
+    );
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let rows = loop {
+        let rows = state.store.usage_rows(SESSION).expect("usage rows");
+        if !rows.is_empty() {
+            break rows;
+        }
+        assert!(tokio::time::Instant::now() < deadline, "no usage row");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    };
+    assert_eq!((rows[0].input, rows[0].output), (100, 1), "{rows:?}");
+    task.abort();
+}
+
 #[tokio::test]
 async fn a_lane_timeout_bounds_only_that_lane() {
     let server = MockServer::start();

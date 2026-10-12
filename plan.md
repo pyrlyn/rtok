@@ -118,7 +118,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T580 | todo | P2 | 2 | 0% | |
 | T581 | todo | P2 | 2 | 0% | |
 | T583 | todo | P2 | 3 | 0% | |
-| T584 | todo | P2 | 2 | 0% | |
 | T586 | todo | P2 | 3 | 0% | |
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
@@ -579,18 +578,6 @@ Execution plan:
 4. Verify lane/model/pricing aggregates remain unchanged on replay but grow for distinct results and jobs. Define compatibility for older rows lacking result identity without guessing which historical entries represent the same request.
 
 Check: downloading existing results cannot inflate provider-token totals or estimated Batch costs; distinct billed requests still count independently, and `just check` passes. The probe used actual Batch record/parse functions with a plain-append Store fixture matching the source INSERT semantics; Diesel, HTTP and provider integration were source-traced, not executed.
-
-### T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
-
-Confirmed with actual wire parsers: [usage_from_response](src/proxy/wire.rs#L370) and [service_tier_from_response](src/proxy/wire.rs#L395) validate the entire captured buffer as UTF-8 before reading any events. A complete Anthropic message_start containing input_tokens=100 and service_tier=standard is lost when a later content delta ends after only the first byte of a multibyte character. Both parsers return None; the same prefix cut before that character and the full-body control preserve the earlier values. [The tee](src/proxy/mod.rs#L558) retains arbitrary byte prefixes on a capture cap, upstream error or client disconnect. [finish](src/proxy/mod.rs#L1082) then records an all-zero usage row and omits the tier despite having a complete earlier usage event. T323's acknowledged capture limit and no-partial-cache rule do not require discarding complete events already retained; T326 covers terminal provider events, not this decoding failure.
-
-Execution plan:
-
-1. Add parser regressions with a complete usage/tier event followed by each possible split within a multibyte SSE data character. Compare full response, ASCII-safe incomplete tail, malformed later line and no-usage controls.
-2. Decode complete SSE events independently from captured bytes, retaining valid preceding events while ignoring an incomplete trailing event. Share framing between usage and service-tier extraction; do not make incomplete ordinary JSON responses valid or invent missing usage counters.
-3. Add a mock streaming regression ending after a split UTF-8 chunk, plus a small configurable capture-limit fixture. Verify retained counters/tier reach the store, missing final output counters remain explicitly partial, original response bytes are forwarded unchanged and truncated responses still cannot enter the semantic cache.
-
-Check: a damaged or incomplete trailing SSE event cannot erase earlier complete usage/tier events, genuinely absent counters remain unknown, and `just check` passes. The isolated probe exercised actual wire/Anthropic extraction functions with synthetic byte prefixes; transport cancellation, the 256 MiB cap and store persistence were source-traced rather than exercised end to end.
 
 ### T586. Resolve local relative remotes before deriving project identity
 
