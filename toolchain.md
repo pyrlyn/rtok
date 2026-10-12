@@ -106,6 +106,7 @@ Project programs and direct packages from the manifests.
 | figment | local | https://crates.io/crates/figment | Config |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |
 | globset | local | https://crates.io/crates/globset | T329.7: workspace member globs of project references; already in the tree through `ignore` |
+| same-file | local | https://crates.io/crates/same-file | T589: `logs watch` tells a rotated log from the file it was reading by file identity (inode / Windows file index); already in the tree through `ignore`
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
