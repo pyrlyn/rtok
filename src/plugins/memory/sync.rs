@@ -25,7 +25,20 @@ pub fn has_block(text: &str) -> bool {
     matches!(block_range(text), Ok(Some(_)))
 }
 
+/// The guard digest is per destination file: the basename alone made `a/CLAUDE.md` and
+/// `b/CLAUDE.md` overwrite and delete each other's protection. The parent is resolved even
+/// when the file does not exist yet, so a first sync and a later one agree on the key.
 fn kv_key(path: &Path) -> String {
+    let identity = match (path.parent(), path.file_name()) {
+        (Some(dir), Some(name)) => crate::fs::canon(dir).join(name),
+        _ => crate::fs::canon(path),
+    };
+    format!("memory.sync.sha:{}", identity.display())
+}
+
+/// Pre-T563 key, shared by every file of the same name. Read-only fallback: a digest only
+/// vouches for a block whose bytes it matches, so it cannot trust unrelated content.
+fn legacy_kv_key(path: &Path) -> String {
     format!(
         "memory.sync.sha:{}",
         path.file_name().unwrap_or_default().to_string_lossy()
@@ -119,7 +132,10 @@ pub fn run(
     let before = std::fs::read_to_string(&path).unwrap_or_default();
     let cx = crate::plugin::Runtime::open(cfg.clone(), "memory")?;
     let key = kv_key(&path);
-    let stored = cx.store.kv_get(&key)?;
+    let stored = match cx.store.kv_get(&key)? {
+        Some(sha) => Some(sha),
+        None => cx.store.kv_get(&legacy_kv_key(&path))?,
+    };
     let budget = budget.unwrap_or(cfg.plugins.memory.sync_tokens);
     let estimate = |s: &str| tokens::estimate(s, Class::Prose, &cfg.estimator);
     let new_block = if remove {
@@ -253,6 +269,88 @@ mod tests {
         assert!(block.contains("2 newer"), "{block}");
         assert!(!block.contains("1 older"), "{block}");
         assert!(est(&block) <= 65, "{} {block}", est(&block));
+    }
+
+    fn seed_note(cfg: &Config, title: &str) {
+        let cx = crate::plugin::Runtime::open(cfg.clone(), "seed").unwrap();
+        let project = std::env::current_dir()
+            .ok()
+            .and_then(|d| super::super::project_name(&d));
+        cx.store
+            .insert_note(project.as_deref(), "note", title, "body")
+            .unwrap();
+    }
+
+    fn sync(cfg: &Config, file: &Path, remove: bool, force: bool) -> Result<()> {
+        run(cfg, file.to_path_buf(), None, false, remove, force)
+    }
+
+    /// T563: the guard digest was keyed by basename, so syncing `b/CLAUDE.md` replaced
+    /// `a/CLAUDE.md`'s digest and an unchanged `a` then failed as hand-edited.
+    #[test]
+    fn each_destination_keeps_its_own_hand_edit_guard() {
+        let (c, dir) = crate::testutil::config("t563-sync-key");
+        let (a, b) = (dir.join("a/CLAUDE.md"), dir.join("b/CLAUDE.md"));
+        for f in [&a, &b] {
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, "# host\n").unwrap();
+        }
+        seed_note(&c, "one");
+        sync(&c, &a, false, false).unwrap();
+        seed_note(&c, "two");
+        sync(&c, &b, false, false).unwrap();
+        sync(&c, &a, false, false).expect("a is unchanged since its own sync");
+        sync(&c, &b, true, false).unwrap();
+        seed_note(&c, "three");
+        sync(&c, &a, false, false).expect("removing b must not drop a's guard");
+
+        let edited = std::fs::read_to_string(&a).unwrap().replace("one", "hand");
+        std::fs::write(&a, edited).unwrap();
+        let err = sync(&c, &a, false, false).unwrap_err();
+        assert!(err.to_string().contains("--force"), "{err}");
+        sync(&c, &a, false, true).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T563: two spellings of one file share a key (symlinked directory here).
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_spelling_of_the_same_file_shares_its_guard() {
+        let (c, dir) = crate::testutil::config("t563-sync-alias");
+        std::fs::create_dir_all(dir.join("real")).unwrap();
+        std::os::unix::fs::symlink(dir.join("real"), dir.join("alias")).unwrap();
+        std::fs::write(dir.join("real/CLAUDE.md"), "# host\n").unwrap();
+        seed_note(&c, "one");
+        sync(&c, &dir.join("real/CLAUDE.md"), false, false).unwrap();
+        seed_note(&c, "two");
+        sync(&c, &dir.join("alias/CLAUDE.md"), false, false).expect("same file, same guard");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T563: a digest left under the old basename key still vouches for a block it matches.
+    #[test]
+    fn a_legacy_basename_digest_is_read_but_never_trusted_blindly() {
+        let (c, dir) = crate::testutil::config("t563-sync-legacy");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\n").unwrap();
+        seed_note(&c, "one");
+        sync(&c, &f, false, false).unwrap();
+        let block = std::fs::read_to_string(&f).unwrap();
+        let cx = crate::plugin::Runtime::open(c.clone(), "legacy").unwrap();
+        cx.store.kv_delete(&kv_key(&f)).unwrap();
+        cx.store
+            .kv_set(
+                &legacy_kv_key(&f),
+                &crate::store::hex_sha256(
+                    block.trim_start_matches("# host\n").trim_end().as_bytes(),
+                ),
+            )
+            .unwrap();
+        drop(cx);
+        sync(&c, &f, false, false).expect("legacy digest matches the untouched block");
+        std::fs::write(&f, block.replace("one", "hand")).unwrap();
+        assert!(sync(&c, &f, false, false).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
