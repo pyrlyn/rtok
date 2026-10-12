@@ -155,7 +155,9 @@ pub fn run(
     } else {
         std::env::current_dir()?.join(&file)
     };
-    let before = std::fs::read_to_string(&path).unwrap_or_default();
+    // Only an absent file starts empty: reading a damaged one as empty would back it up and
+    // overwrite every byte outside the managed block.
+    let before = fs_kit::read::text_or_empty(&path)?;
     let cx = crate::plugin::Runtime::open(cfg.clone(), "memory")?;
     let key = kv_key(&path);
     let stored = match cx.store.kv_get(&key)? {
@@ -429,6 +431,125 @@ mod tests {
             "# host\nkeep",
             "no generated tail: {left:?}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn digest(cfg: &Config, file: &Path) -> Option<String> {
+        let cx = crate::plugin::Runtime::open(cfg.clone(), "probe").unwrap();
+        cx.store.kv_get(&kv_key(file)).unwrap()
+    }
+
+    fn tree(dir: &Path) -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap().flatten() {
+                out.push(e.path());
+                if e.path().is_dir() {
+                    stack.push(e.path());
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// T562: an unreadable host file must abort every mode before anything is rendered,
+    /// backed up, written or recorded; reading it as empty replaced the whole file.
+    fn assert_read_failure_changes_nothing(c: &Config, dir: &Path, f: &Path, before: &[u8]) {
+        let digest_before = digest(c, f);
+        let tree_before = tree(dir);
+        for (dry, remove, force) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+            (true, true, true),
+        ] {
+            let err = run(c, f.to_path_buf(), None, dry, remove, force).unwrap_err();
+            assert!(
+                err.to_string().contains("CLAUDE.md"),
+                "dry={dry} remove={remove} force={force}: {err:#}"
+            );
+            assert_eq!(std::fs::read(f).unwrap(), before, "host bytes changed");
+            assert_eq!(digest(c, f), digest_before, "digest changed");
+            assert_eq!(tree(dir), tree_before, "backup or stray file created");
+        }
+    }
+
+    #[test]
+    fn a_non_utf8_host_file_aborts_sync_without_touching_anything() {
+        let (c, dir) = crate::testutil::config("t562-non-utf8");
+        let f = dir.join("CLAUDE.md");
+        let mut bytes = b"# host\nkeep this outside text\n".to_vec();
+        bytes.extend_from_slice(b"bad \xff byte\n");
+        std::fs::write(&f, &bytes).unwrap();
+        seed_note(&c, "one");
+        assert_read_failure_changes_nothing(&c, &dir, &f, &bytes);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_non_utf8_host_file_keeps_an_existing_digest() {
+        let (c, dir) = crate::testutil::config("t562-non-utf8-digest");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\n").unwrap();
+        seed_note(&c, "one");
+        sync(&c, &f, false, false).unwrap();
+        assert!(digest(&c, &f).is_some());
+        let mut bytes = std::fs::read(&f).unwrap();
+        bytes.push(0xff);
+        std::fs::write(&f, &bytes).unwrap();
+        assert_read_failure_changes_nothing(&c, &dir, &f, &bytes);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_host_file_aborts_sync_without_touching_anything() {
+        use std::os::unix::fs::PermissionsExt;
+        let (c, dir) = crate::testutil::config("t562-unreadable");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\nkeep\n").unwrap();
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&f).is_ok() {
+            // Root ignores the mode bits, so the fixture cannot produce a read failure.
+            std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        seed_note(&c, "one");
+        let digest_before = digest(&c, &f);
+        let tree_before = tree(&dir);
+        for (dry, remove, force) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            let err = run(&c, f.clone(), None, dry, remove, force).unwrap_err();
+            assert!(err.to_string().contains("CLAUDE.md"), "{err:#}");
+            assert_eq!(digest(&c, &f), digest_before);
+            assert_eq!(tree(&dir), tree_before);
+        }
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "# host\nkeep\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_host_file_is_still_created() {
+        let (c, dir) = crate::testutil::config("t562-missing");
+        let f = dir.join("CLAUDE.md");
+        seed_note(&c, "one");
+        sync(&c, &f, true, false).expect("removing from a missing file is a no-op");
+        assert!(!f.exists());
+        run(&c, f.clone(), None, true, false, false).unwrap();
+        assert!(!f.exists(), "dry-run must not create the file");
+        sync(&c, &f, false, false).unwrap();
+        let got = std::fs::read_to_string(&f).unwrap();
+        assert!(got.starts_with(START) && got.contains("one"), "{got}");
+        assert!(digest(&c, &f).is_some());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

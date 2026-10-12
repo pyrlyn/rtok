@@ -63,11 +63,13 @@ pub mod windsurf;
 pub mod zcode;
 pub mod zed;
 
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::NO_CHANGES;
 use rtok_plugin_sdk::Surface;
+use rtok_sys::proc::{Batch, ProgressRunner, Unit};
 use serde_json::json;
 use toml_edit::DocumentMut;
 
@@ -960,7 +962,12 @@ pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
         }
         cfg.setup.backup = false;
     }
-    let (blocks, changed) = apply_all(cfg, req, &agents, want)?;
+    let mut bar = host_bar(cfg, agents.len());
+    let applied = apply_all(cfg, req, &agents, want, bar.as_mut());
+    if let Some(bar) = bar {
+        bar.finish();
+    }
+    let (blocks, changed) = applied?;
     if changed {
         // Pruned only now: a no-change run deletes its copies, which would cost a generation.
         for bak in &taken {
@@ -985,20 +992,33 @@ pub(crate) fn would_change(cfg: &Config, agent: &'static dyn Agent, req: &Reques
     dry.setup.dry_run = true;
     dry.setup.backup = false;
     let want = |kind: Kind| req.mode == Mode::Remove || wants(kind, req.cli, req.desktop, req.all);
-    let (_, changed) = apply_all(&dry, req, &[agent], want)?;
+    let (_, changed) = apply_all(&dry, req, &[agent], want, None)?;
     Ok(changed)
 }
 
-/// The blocks of every wanted variant, and whether any step changed a file.
+/// The bar over the hosts of one run (T436.4), drawn on a terminal only. A run that may ask
+/// the plugin question draws none: a bar redraws over a prompt on the same terminal and the
+/// wait for the answer reads as a hang (T81). `--yes` and a dry run never ask.
+fn host_bar(cfg: &Config, hosts: usize) -> Option<Batch> {
+    let may_ask = std::io::stdin().is_terminal() && !cfg.setup.yes && !cfg.setup.dry_run;
+    (!may_ask).then(|| ProgressRunner::batch("updating hosts…", hosts as u64, Unit::Items))
+}
+
+/// The blocks of every wanted variant, and whether any step changed a file. `bar` takes one
+/// step per host.
 pub(crate) fn apply_all(
     cfg: &Config,
     req: &Request,
     agents: &[&'static dyn Agent],
     want: impl Fn(Kind) -> bool,
+    mut bar: Option<&mut Batch>,
 ) -> Result<(String, bool)> {
     let mut out = String::new();
     let mut changed = false;
     for &a in agents {
+        if let Some(bar) = bar.as_deref_mut() {
+            bar.step(a.id());
+        }
         let mut done: Option<&'static str> = None;
         let mut any = false;
         for v in a.variants().iter().filter(|v| want(v.kind)) {
@@ -2141,6 +2161,36 @@ mod tests {
         );
         assert_eq!(fallback, pi_skill);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// T436.4: the bar over a run takes one step per host, so the person sees which host is
+    /// being written. The bar is hidden here; its position still counts the finished hosts.
+    #[test]
+    fn apply_all_steps_the_bar_once_per_host() {
+        rtok_sys::proc::disable_progress();
+        let dir = std::env::temp_dir().join(format!("rtok-host-bar-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cfg = Config::default();
+        cfg.setup.dry_run = true;
+        cfg.setup.backup = false;
+        cfg.setup.cursor.hooks_path = dir.join("hooks.json");
+        cfg.setup.codex.config_path = dir.join("config.toml");
+        cfg.setup.opencode.config_path = dir.join("opencode.json");
+        let hosts: Vec<String> = ["cursor", "codex", "opencode"].map(String::from).into();
+        let req = Request {
+            hosts: hosts.clone(),
+            mode: Mode::Install,
+            cli: false,
+            desktop: false,
+            all: true,
+        };
+        let agents = resolve(&hosts).unwrap();
+        let mut bar = ProgressRunner::batch("updating hosts…", 3, Unit::Items);
+        apply_all(&cfg, &req, &agents, |_| true, Some(&mut bar)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        // The last host is still running: finished hosts are counted when the next one starts.
+        assert_eq!((bar.position(), bar.total()), (2, 3));
+        bar.finish();
     }
 
     #[test]

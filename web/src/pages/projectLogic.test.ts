@@ -36,6 +36,22 @@ describe("project reducers", () => {
     expect(linksOf(next, 2)).toEqual([1]);
   });
 
+  test("reindex settles a project, and remove writes only once confirmed", () => {
+    const stale = [
+      project(1, "rtok", { state: "stale" }),
+      project(2, "ketch", { state: "failed" }),
+    ];
+    const next = applyProject(stale, { action: "reindex", project: "2" });
+    expect(next.map((p) => p.state)).toEqual(["stale", "ok"]);
+    expect(applyProject(rows(), { action: "remove", project: "2", confirmed: false })).toEqual(
+      rows(),
+    );
+    const linked = applyProject(rows(), { action: "link", from: "1", to: "2", both: false });
+    const gone = applyProject(linked, { action: "remove", project: "2", confirmed: true });
+    expect(gone.map((p) => p.id)).toEqual([1, 3]);
+    expect(linksOf(gone, 1)).toEqual([]);
+  });
+
   test("an unknown target changes nothing", () => {
     const next = applyProject(rows(), { action: "link", from: "1", to: "99", both: false });
     expect(linksOf(next, 1)).toEqual([]);

@@ -167,6 +167,28 @@ mod tests {
         assert_eq!((rows[1].input, rows[1].output), (1, 2));
     }
 
+    /// pi 0.85.1 writes `reasoning` and `cacheWrite1h` next to the four legs, and its own
+    /// `totalTokens` is input + output + both cache legs, so neither extra key is added again.
+    #[test]
+    fn reasoning_and_the_one_hour_cache_key_of_a_real_entry_are_not_added_again() {
+        let u = json!({"input":10,"output":50,"reasoning":20,"cacheRead":100,"cacheWrite":0,
+            "cacheWrite1h":0,"totalTokens":160,"cost":{"total":0.0}});
+        let text = [
+            json!({"type":"session","version":3,"id":"sess-1","timestamp":"2024-12-03T14:00:00.000Z",
+                "cwd":"/p"})
+            .to_string(),
+            assistant("a1", "2024-12-03T14:00:02.000Z", u),
+        ]
+        .join("\n");
+        let rows = run(&text);
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        assert_eq!(
+            (r.input, r.cache_create, r.cache_read, r.output),
+            (10, 0, 100, 50)
+        );
+    }
+
     #[test]
     fn an_entry_copied_into_a_forked_session_counts_once() {
         let line = assistant(
