@@ -96,21 +96,42 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
             continue;
         };
         let tool = v.get("tool_name").and_then(|t| t.as_str()).unwrap_or("");
+        let cwd = v.get("cwd").and_then(|c| c.as_str()).unwrap_or(".");
+        let input = v.get("tool_input");
+        let mut note = |path: String| {
+            *seen.entry(path.clone()).or_insert_with(|| {
+                touched.push((path, cwd.to_string(), Vec::new()));
+                touched.len() - 1
+            })
+        };
+        if tool == "apply_patch" {
+            // Codex edits files through one patch text and has no `Read` tool (research.md
+            // section 40), so the paths come out of the patch headers.
+            let patch = input
+                .and_then(|i| i.get("command"))
+                .and_then(|c| c.as_str());
+            for path in patch.map(patch_paths).unwrap_or_default() {
+                let path = match std::path::Path::new(&path).is_absolute() {
+                    true => path,
+                    false => std::path::Path::new(cwd)
+                        .join(&path)
+                        .to_string_lossy()
+                        .into_owned(),
+                };
+                note(path);
+            }
+            continue;
+        }
         if !matches!(tool, "Read" | "Edit" | "Write") {
             continue;
         }
-        let input = v.get("tool_input");
         let Some(path) = input
             .and_then(|i| i.get("file_path").or_else(|| i.get("path")))
             .and_then(|p| p.as_str())
         else {
             continue;
         };
-        let at = *seen.entry(path.to_string()).or_insert_with(|| {
-            let cwd = v.get("cwd").and_then(|c| c.as_str()).unwrap_or(".");
-            touched.push((path.to_string(), cwd.to_string(), Vec::new()));
-            touched.len() - 1
-        });
+        let at = note(path.to_string());
         let int = |k: &str| input.and_then(|i| i.get(k)).and_then(|n| n.as_i64());
         let touch = match tool {
             "Read" if int("offset").is_some() || int("limit").is_some() => {
@@ -135,6 +156,23 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
             ranges: symbol_ranges(cx, &cwd, &path, &touches),
             path,
         })
+        .collect()
+}
+
+/// The file paths a Codex `apply_patch` text names (`*** Add File:`, `*** Update File:`,
+/// `*** Delete File:` and `*** Move to:` headers), in order.
+fn patch_paths(patch: &str) -> Vec<String> {
+    const HEADERS: [&str; 4] = [
+        "*** Add File: ",
+        "*** Update File: ",
+        "*** Delete File: ",
+        "*** Move to: ",
+    ];
+    patch
+        .lines()
+        .filter_map(|l| HEADERS.iter().find_map(|h| l.strip_prefix(h)))
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
         .collect()
 }
 
@@ -394,6 +432,37 @@ mod tests {
         assert!(
             tight.contains(&lib) && !tight.contains("1-4 alpha"),
             "{tight}"
+        );
+    }
+
+    /// T262.3: Codex has no `Read`/`Edit` tool, only `apply_patch` whose text names the files.
+    #[test]
+    fn apply_patch_headers_enter_the_ledger_relative_paths_under_the_cwd() {
+        let cx = crate::plugin::Runtime::in_memory("t262-3-patch").unwrap();
+        let patch = "*** Begin Patch\n*** Add File: new.txt\n+hi\n*** Update File: src/a.rs\n\
+                     *** Move to: src/b.rs\n@@\n-x\n+y\n*** Delete File: /abs/old.rs\n*** End Patch\n";
+        touch_at(
+            &cx,
+            "/repo",
+            "apply_patch",
+            serde_json::json!({"command": patch}),
+        );
+        let text = build_brief(&Ctx::new(&cx), 300, "").unwrap();
+        for path in [
+            "/repo/new.txt",
+            "/repo/src/a.rs",
+            "/repo/src/b.rs",
+            "/abs/old.rs",
+        ] {
+            assert!(text.lines().any(|l| l == path), "{path} in\n{text}");
+        }
+    }
+
+    #[test]
+    fn patch_paths_ignores_everything_but_the_file_headers() {
+        assert_eq!(
+            patch_paths("*** Update File: a b.rs\n+*** Add File: not-a-header\n*** Add File: \n"),
+            ["a b.rs"]
         );
     }
 

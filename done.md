@@ -1490,6 +1490,12 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
 
+### T262.3. Codex: spawn brief on `SubagentStart`
+
+`research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
+
+Result (2026-10-12): `hook_events.rs` gains the Codex `SubagentStart` row and widens `PreToolUse` to `Bash|apply_patch`; the installer and `plugins/codex/hooks/hooks.json` both register them as `rtok hook <event> --host codex`. The existing `SubagentStart` answer (`hookSpecificOutput.additionalContext`) is what Codex reads, confirmed live on codex-cli 0.162.1 (`research.md` §40), so no new output adapter was needed. Codex has no `Read` tool and edits through `apply_patch`, so the memory plugin's `ledger()` reads the `*** Add/Update/Delete File:` and `*** Move to:` headers of the patch text (paths relative to the session `cwd`). Tests: `ledger()` over a patch, `codex_subagent_start_brief_lists_the_files_a_patch_touched` (a patch call, then the live `SubagentStart` fixture). Not verified live: the `apply_patch` hook payload (the fake-model run never offered that tool; the docs' `tool_input.command` shape is assumed).
+
 ### T262.4. Copilot CLI: spawn brief on `subagentStart`
 
 `research.md` §23: Copilot CLI's `subagentStart` prepends `additionalContext` to the subagent's prompt (not for the built-in general-purpose agent). Add it to `plugins/copilot/hooks/hooks.json` and the Copilot installer, and map Copilot's payload to rtok's `SubagentStart`. Unblocked by T262.5: call rows keep the host-adapted input, so Copilot reads reach `ledger()`.

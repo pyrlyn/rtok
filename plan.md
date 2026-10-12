@@ -23,7 +23,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T131 | todo | P2 | 3 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T262.3 | todo | P2 | 2 | 0% | |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
@@ -161,14 +160,6 @@ Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured
 Check: `research.md` §18 gains the hook payloads and a dated table (cold vs seeded: seconds, bytes); T159's card is corrected against the recorded payloads; seeding gets a follow-up task or an `ideas.md` entry from the numbers; no file under `src/` changes.
 
 Execution (2026-09-27): (1) a probe kit in the session scratchpad (never committed), like T281, that logs `WorktreeCreate`/`WorktreeRemove` payloads and returns a `_worktrees/` path; the creator runs it with `claude --worktree`, a sub-agent `isolation: worktree` and the desktop app. The documented payload fields go into `research.md` §18.3 now, with sources. (2) Seeded (`cp -c -R target`) and cold worktrees of this repo: wall time of `just check` and physical disk delta (`df` before/after, not `du`). The cold run only happens with ≥ 30 GiB free; otherwise the row says so. Result: a dated row in `research.md` §18.4.
-
-### T262.3. Codex: spawn brief on `SubagentStart`
-
-`research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
-
-Blocked until T645 lands (found 2026-09-24 while claiming): the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`), and rtok installs no `PreToolUse` hook for Codex before T645. Codex names file edits `apply_patch` and has no `Read` tool, so the ledger must read those rows too.
-
-Check: a Codex `SubagentStart` payload through `rtok hook` returns the brief in Codex's shape (test); `just check` green.
 
 ### T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 
