@@ -302,6 +302,12 @@ pub trait Archive {
         Ok(None)
     }
 
+    /// The compressor's summary of `archive_id` for compressor `version` (T385.9.1), if one was
+    /// stored. Default `Ok(None)`: a host without a summary cache just shows the extractive view.
+    fn archive_summary(&self, _archive_id: &str, _version: &str) -> Result<Option<String>> {
+        Ok(None)
+    }
+
     /// This session's archived tool results still in the live window, newest first
     /// (T58.2): `(archive_id, tool, bytes)`. Lets `checkpoint::attach_ids` read through the
     /// host's own connection instead of opening a second `Store` (T203). Default
