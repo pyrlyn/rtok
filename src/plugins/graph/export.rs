@@ -345,32 +345,41 @@ pub fn collect(rt: &Runtime, scope: &[Member], q: &Query) -> Result<Export> {
     })
 }
 
-/// Home, the user name and absolute roots out. The user name is the home directory's last
-/// segment: it is what a path under `/Users/<name>` gives away, and a folder of that name inside
-/// the project would read as the person too.
-fn redact(e: &mut Export, home: Option<&Path>) {
-    let user = home.and_then(Path::file_name).and_then(|n| n.to_str());
+/// How one string is redacted: home becomes `~` and the user name `<user>`. Every copy of a name
+/// goes through it, so the payload and a file name made from it cannot disagree.
+fn redactor(home: Option<&Path>) -> impl Fn(&str) -> String {
+    let user = home
+        .and_then(Path::file_name)
+        .and_then(|n| n.to_str())
+        .map(str::to_string);
     // Only a whole path component is home: `/Users/al` must not turn `/Users/alice` into `~ice`.
     let home = home
         .and_then(Path::to_str)
         .filter(|h| h.len() > 1)
         .and_then(|h| regex::Regex::new(&format!(r"{}([/\\\s]|$)", regex::escape(h))).ok());
     // Both separators on every platform: an export made on one system is read on another.
-    let text = |s: &str| {
+    move |s: &str| {
         let s = home
             .as_ref()
             .map_or_else(|| s.to_string(), |h| h.replace_all(s, "~$1").into_owned());
         s.split_inclusive(['/', '\\'])
             .map(|piece| {
                 let seg = piece.trim_end_matches(['/', '\\']);
-                if Some(seg) == user {
+                if Some(seg) == user.as_deref() {
                     format!("<user>{}", &piece[seg.len()..])
                 } else {
                     piece.to_string()
                 }
             })
             .collect::<String>()
-    };
+    }
+}
+
+/// Home, the user name and absolute roots out. The user name is the home directory's last
+/// segment: it is what a path under `/Users/<name>` gives away, and a folder of that name inside
+/// the project would read as the person too.
+fn redact(e: &mut Export, home: Option<&Path>) {
+    let text = redactor(home);
     for p in &mut e.projects {
         let root = text(&p.root);
         p.root = match Path::new(&root)
@@ -405,6 +414,8 @@ fn redact(e: &mut Export, home: Option<&Path>) {
         }
     }
     e.meta.notes = e.meta.notes.iter().map(|n| text(n)).collect();
+    // Scope entries are project names, which `collect` copies from the same registry rows.
+    e.meta.scope = e.meta.scope.iter().map(|n| text(n)).collect();
     e.meta.redacted = true;
 }
 
@@ -584,16 +595,21 @@ pub fn page_file(rt: &Runtime, r: &ExportRequest) -> Result<ExportFile> {
         (_, Level::Symbols) => "symbols",
         _ => "overview",
     };
-    let slug: String = scope[0]
-        .name
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect();
     Ok(ExportFile {
-        name: format!("rtok-graph-{slug}-{level}.{ext}"),
+        name: download_name(&scope[0].name, level, ext, std::env::home_dir().as_deref()),
         mime: mime.into(),
         data: base64::engine::general_purpose::STANDARD.encode(bytes),
     })
+}
+
+/// The name a download is offered under. It is built from the redacted project name, as the file
+/// itself is, so a project named after the user does not put the user name back.
+fn download_name(project: &str, level: &str, ext: &str, home: Option<&Path>) -> String {
+    let slug: String = redactor(home)(project)
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    format!("rtok-graph-{slug}-{level}.{ext}")
 }
 
 /// MCP `graph_export`: JSON, always redacted, compact. Past `max_tokens` it archives like any
@@ -803,6 +819,27 @@ mod tests {
         assert!(
             !text.contains("alice") && !text.contains("/Volumes"),
             "{text}"
+        );
+    }
+
+    /// T571: a project named after the user is hidden in every copy of its name: the project
+    /// row, the scope list the images title themselves with, and the suggested download name.
+    #[test]
+    fn a_project_named_after_the_user_is_hidden_in_scope_and_download_name() {
+        let home = Path::new("/Users/alice");
+        let mut e = bare("/Users/alice/work/alice");
+        e.projects[0].name = "alice".into();
+        e.meta.scope = vec!["alice".into(), "other".into()];
+        redact(&mut e, Some(home));
+        assert_eq!(e.projects[0].name, "<user>");
+        assert_eq!(e.meta.scope, ["<user>", "other"]);
+        let text = serde_json::to_string(&e).unwrap();
+        assert!(!text.contains("alice"), "{text}");
+        let name = download_name("alice", "overview", "json", Some(home));
+        assert!(!name.contains("alice"), "{name}");
+        assert_eq!(
+            download_name("other", "focus", "png", Some(home)),
+            "rtok-graph-other-focus.png"
         );
     }
 
