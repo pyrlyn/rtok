@@ -31,9 +31,6 @@
 - T385.3.1. `rtok bench` settings suite: per-setting on/off arms from config overlays, dry-run table, offline test
 - T385.3.2. Live runs and one dated `research.md` row per setting (creator spend)
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
-- T385.9.1. `Compressor` trait, async worker on the `internal` lane and per-archive-id cache
-- T385.9.2. First compressor backend (LLMLingua-class or ACON-style)
-- T385.9.3. Gate P28 run: must-keep fixture plus bench vs v0.1 lossless
 - T394. Run the paid live benches and record them
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files

@@ -52,9 +52,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385.3.1 | todo | P1 | 3 | 0% | |
 | T385.3.2 | todo | P1 | 2 | 0% | |
 | T385.9 | todo | P3 | 5 | 10% | |
-| T385.9.1 | todo | P3 | 4 | 0% | |
-| T385.9.2 | todo | P3 | 4 | 0% | |
-| T385.9.3 | todo | P3 | 3 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 20% | |
@@ -2306,24 +2303,7 @@ optimization.md §3.3. An LLMLingua-class compressor (arXiv 2403.12968; ACON arX
 
 Check: Gate P28 — the must-keep fixture survives, the bench beats v0.1 lossless on cost per passed task; `just check`.
 
-Execution plan:
-
-1. Creator decides go/no-go on the 3.3-5.2 % ceiling and the backend runtime.
-2. If go: T385.9.1 in `src/proxy/` (lane policy in `lane.rs`), cache table through Diesel; T385.9.2 behind a feature flag; T385.9.3 reuses `tests/fixtures/p28_must_keep.toml` and `tests/p28_must_keep.rs`.
-
-Needs the creator: go/no-go. T385.8 (done) measured a ceiling of 3.3-5.2 % of input tokens (6.54 % eligible, 98.4 % cache hit, tokens not dollars) so Gate P28 is not shown to clear, and the Gate needs the paid bench (T385.3/T394).
-
-### T385.9.1. `Compressor` trait, async worker on the `internal` lane and per-archive-id cache
-
-Done means: a `Compressor` trait and an async worker in `src/proxy/` (lane policy in `lane.rs`) with a per-archive-id cache table through Diesel; the agent lane never waits and the original stays expandable. Starts only after the creator says go (see the card).
-
-### T385.9.2. First compressor backend (LLMLingua-class or ACON-style)
-
-Depends on T385.9.1. The backend runtime is a dependency decision for the creator. Done means: one backend behind a feature flag.
-
-### T385.9.3. Gate P28 run: must-keep fixture plus bench vs v0.1 lossless
-
-Depends on T385.9.2. Done means: Gate P28 run with `tests/fixtures/p28_must_keep.toml` and `tests/p28_must_keep.rs` plus the paid bench against v0.1 lossless; the result recorded.
+Subtasks T385.9.1-T385.9.3 and the creator's decision of 2026-10-11 (build behind a flag that is off by default) live on PR #994's branch.
 
 ### T394. Run the paid live benches and record them
 
