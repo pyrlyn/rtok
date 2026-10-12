@@ -86,6 +86,7 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "kiro",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -788,6 +789,7 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        kiro: SetupKiro = SetupKiro::default(),
     }
 }
 
@@ -939,6 +941,11 @@ section! {
         dir: PathBuf = p("~/.codebuddy"),
         workbuddy_dir: PathBuf = p("~/.workbuddy"),
     }
+}
+
+section! {
+    /// `[setup.kiro]` — Kiro IDE and CLI user-level MCP file (T413.4).
+    SetupKiro { mcp_path: PathBuf = p("~/.kiro/settings/mcp.json") }
 }
 
 section! {
@@ -1668,6 +1675,7 @@ impl Config {
             setup.qwen.dir,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
+            setup.kiro.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

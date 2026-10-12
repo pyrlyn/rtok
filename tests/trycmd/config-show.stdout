@@ -280,6 +280,7 @@ setup.grok.config_path = ~/.grok/config.toml
 setup.hook_timeout_s = 5
 setup.kilo.config_path = ~/.config/kilo/kilo.json
 setup.kimi.config_path = ~/.kimi-code/config.toml
+setup.kiro.mcp_path = ~/.kiro/settings/mcp.json
 setup.mcp = true
 setup.mimo.config_path = ~/.config/mimocode/mimocode.json
 setup.modes = []

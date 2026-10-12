@@ -8717,6 +8717,17 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+
+Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
+
+Done: `src/agents/kiro/` with two variants, `Kiro CLI` (`kiro-cli` on PATH) and `Kiro IDE` (`/Applications/Kiro.app`, `~/Applications/Kiro.app`; other OS paths unverified, not probed). Both edit one file, `~/.kiro/settings/mcp.json`, through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON); `shared()` is true, so a plain install writes it once and lists the IDE as the CLI's sibling. `[setup.kiro] mcp_path` moves the file. Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (no caches documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: the hooks page states no exit-code or output-to-context rules for command hooks. Research with sources and the 2026-10-12 check date in `research.md` section 32.4; two doc pages disagree on the global path (`settings/mcp.json` vs `~/.kiro/mcp.json`) and the CLI-reads-the-same-file point is unverified, both recorded there. Tests: `kiro` unit tests (dry run, idempotent round trip, foreign servers kept, shared-file variants, apply twice), `agents_install` matrix row, `kiro_keeps_the_real_mcp_json`, `EXPECTED_VARIANTS` (CLI and IDE), `host_docs`, `agents_doc`. Per-host check: Kiro is not installed here (no `kiro-cli`, no `~/.kiro`), so no manual `--dry-run`.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.

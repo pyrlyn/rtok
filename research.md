@@ -2576,6 +2576,17 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
 
+### 32.4 Kiro IDE and CLI (T413.4, checked 2026-10-12)
+
+- MCP files: `~/.kiro/settings/mcp.json` (user, "applies globally across all workspaces") and `.kiro/settings/mcp.json` (workspace); both merged, workspace wins. Loading priority on the same page: agent config (`mcpServers` field of the agent JSON, no path given), workspace file, global file. https://kiro.dev/docs/mcp/configuration/
+- Stdio entry: `mcpServers.<name>` with `command` (required), `args`, `env`, `disabled`, `autoApprove`, `disabledTools`. Same page. rtok writes `{command, args}` only.
+- Surfaces: the configuration page and https://kiro.dev/docs/mcp/ carry IDE, CLI and Web tabs, but the fetched text has the file paths under the IDE tab only and states no per-surface path; the page has a Windows note for "Kiro CLI V2" about how stdio commands launch. So the CLI is taken to read the same two files, **unverified** against the CLI itself.
+- Conflict: https://kiro.dev/docs/mcp/registry/ lists "Global: ~/.kiro/mcp.json" and "Workspace: .kiro/mcp.json" for the same scopes. The configuration page is the reference for the file format, so the installer uses `settings/mcp.json`; `[setup.kiro] mcp_path` redirects it. The old `/docs/cli/mcp/` pages are redirects to the unified pages.
+- CLI: binary `kiro-cli`, install `curl -fsSL https://cli.kiro.dev/install | bash`. https://kiro.dev/docs/cli/ . The page names no config directory and no `mcp add` syntax.
+- IDE app: the installation page says to "drag Kiro from Applications to the Trash", so the macOS bundle is `/Applications/Kiro.app` (bundle id not documented); no Windows or Linux install folder is named, so only macOS paths are probed. https://kiro.dev/docs/getting-started/installation/
+- Hooks: JSON files in `.kiro/hooks/` (project) and, for CLI V3, `~/.kiro/hooks/`; each has `version: "v1"` and a `hooks` array of `{name, trigger, matcher, action: {type, command | prompt}, timeout (default 60), enabled}`; triggers named include `PostFileSave`, `PreToolUse`, `PostToolUse`, `Stop`. The command receives session context as JSON on stdin. The page states no exit-code rules and no way for command output to reach the agent's context. https://kiro.dev/docs/hooks/ . Hooks stay `Support::No`.
+- No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

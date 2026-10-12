@@ -50,7 +50,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
-| T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
@@ -1046,14 +1045,6 @@ Check: every sub-task below is closed in `done.md` with its per-host check.
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: primary Factory docs for the MCP entry and any hook file; write only documented keys; `src/agents/droid/` plus the host matrix.
-
-### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
-
-Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: vendor docs for IDE and CLI config paths; one variant per documented file; share a helper if the JSON matches an existing host.
 
 ### T413.5. `rtok agents install amp` — Amp
 
