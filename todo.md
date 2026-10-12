@@ -1,5 +1,5 @@
 - T592. Keep late same-second sessions from moving behind the OTel cursor
-- T623. Correlate web replies across request timeouts and retries
+- T623.2. Match `/ws` replies to their request by `req` in the web client
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
@@ -12,7 +12,6 @@
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
 - T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
-- T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
 - T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
@@ -37,7 +36,6 @@
 - T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.9. `rtok agents install junie` — JetBrains Junie
-- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 - T413.11. `rtok agents install crush` — Crush
 - T413.13. `rtok agents install trae` — Trae
 - T413.14. `rtok agents install openhands` — OpenHands
