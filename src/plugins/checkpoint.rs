@@ -249,15 +249,19 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
 /// A raw JSONL line that cannot contribute anything [`extract_lines_with`] keeps.
 ///
 /// `file_path` and the three error spellings survive JSON string escaping unchanged, so
-/// checking for them is a safe superset of what the tree walk would find. A `"type":"user"`
-/// record is only interesting through [`user_prompt`]/[`skill_body`], and both read only
-/// through [`user_text`]: a bare string `message.content`, or an array with a
-/// `"type":"text"` block. Neither reads a `tool_result` block (marked by `"tool_use_id"`),
-/// which is the shape that dominates a real transcript's bytes — a large Bash/Read result is
-/// echoed back as a `user` turn, not typed by anyone — so that is the one case this filter
-/// excludes. `skill_body` also needs `"isMeta":true` and `"sourceToolUseID"`, both specific
-/// enough that a false hit in ordinary transcript text is effectively impossible, so a line
-/// carrying both is always let through.
+/// checking for them is a safe superset of what the tree walk would find. A `user` record
+/// is only interesting through [`user_prompt`]/[`skill_body`], and both read only through
+/// [`user_text`]: a bare string `message.content`, or an array with a `text` block. The one
+/// shape that is provably neither is a bare tool-result echo — a `tool_result` block marked
+/// by `"tool_use_id"`, with no `text` block and no string `content` beside it — and it dominates a real transcript's bytes (a
+/// large Bash/Read result is echoed back as a `user` turn, not typed by anyone), so that is
+/// the one case this filter excludes. `skill_body` also needs `"isMeta":true` and
+/// `"sourceToolUseID"`, so a line carrying both is always let through.
+///
+/// Every marker is matched as a key/value pair with optional JSON whitespace between, in
+/// any key order, and a line that escapes an ASCII letter (`\u0065`) is always let through:
+/// a field name or value could be spelled that way, and the filter must never be the reason
+/// a valid record loses its content. Ambiguity goes to the structural parser.
 ///
 /// `prefilter_is_a_true_superset_on_fixtures_and_a_large_transcript` (below) checks this
 /// claim empirically — with the filter on and off — rather than trusting it to this comment.
@@ -266,24 +270,47 @@ fn worth_parsing(line: &str) -> bool {
         || line.contains("error")
         || line.contains("Error")
         || line.contains("ERROR")
+        || escapes_a_letter(line)
     {
         return true;
     }
     // T375: a `rm` in a Bash call names no `file_path`, and a Write result is what tells a
     // created file from an overwritten one.
-    if line.contains("\"type\":\"create\"")
+    if has_pair(line, "\"type\"", "\"create\"")
         || line.contains("File created successfully")
-        || (line.contains("\"name\":\"Bash\"") && line.contains("rm"))
+        || (has_pair(line, "\"name\"", "\"Bash\"") && line.contains("rm"))
     {
         return true;
     }
-    if !line.contains("\"type\":\"user\"") {
+    if !has_pair(line, "\"type\"", "\"user\"") {
         return false;
     }
-    if line.contains("\"isMeta\":true") && line.contains("\"sourceToolUseID\"") {
+    if has_pair(line, "\"isMeta\"", "true") && line.contains("\"sourceToolUseID\"") {
         return true;
     }
     !line.contains("\"tool_use_id\"")
+        || !has_pair(line, "\"type\"", "\"tool_result\"")
+        || has_pair(line, "\"type\"", "\"text\"")
+}
+
+/// `key` followed by `:` and `value`, with JSON whitespace allowed around the colon.
+fn has_pair(line: &str, key: &str, value: &str) -> bool {
+    line.match_indices(key).any(|(i, _)| {
+        line[i + key.len()..]
+            .trim_start()
+            .strip_prefix(':')
+            .is_some_and(|rest| rest.trim_start().starts_with(value))
+    })
+}
+
+/// A `\u00XX` escape of an ASCII letter or `_`: no writer emits one, but a parser decodes
+/// it, so it can hide any token [`worth_parsing`] looks for. ANSI `\u001b` is not one.
+fn escapes_a_letter(line: &str) -> bool {
+    line.match_indices("\\u00").any(|(i, _)| {
+        line.as_bytes()
+            .get(i + 4)
+            .is_some_and(|d| matches!(d, b'4'..=b'7'))
+    })
 }
 
 /// A skill body the host injected: a `user` record flagged `isMeta` with a
@@ -1235,6 +1262,48 @@ mod tests {
             ["src/a.rs", "src/b.rs", "docs/d.md"]
         );
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// T552: the same record spelled with JSON whitespace, reordered keys, a typed text block
+    /// next to a tool result, or an escaped field name extracts exactly what the compact
+    /// form does; the prefilter only skips what it can prove is a bare tool-result echo.
+    #[test]
+    fn prefilter_is_formatting_independent() {
+        let spellings = [
+            r#"{"type":"user","message":{"content":"ship the patch"}}"#,
+            r#"{"type": "user", "message": {"content": "ship the patch"}}"#,
+            r#"{"message":{"content":"ship the patch"},"type" : "user"}"#,
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":"ship the patch"}]}}"#,
+            r#"{"type": "user", "message": {"content": [{"tool_use_id": "t1", "type": "tool_result", "content": "ok"}, {"text": "ship the patch", "type": "text"}]}}"#,
+            r#"{"typ\u0065":"user","message":{"content":"ship the patch"}}"#,
+            r#"{"type":"user","message":{"content":"ship the patch"},"tool_use_id":"t1"}"#,
+        ];
+        for line in spellings {
+            let filtered = extract_lines_with(line.as_bytes().lines(), true);
+            assert_eq!(filtered.prompts, ["ship the patch"], "{line}");
+            assert_eq!(
+                filtered,
+                extract_lines_with(line.as_bytes().lines(), false),
+                "{line}"
+            );
+        }
+        let changes = [
+            r#"{"type": "assistant", "cwd": "/r", "message": {"content": [{"type": "tool_use", "id": "t6", "name": "Bash", "input": {"command": "rm src/gone.rs"}}]}}"#,
+            r#"{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t4", "content": "File created successfully at: /r/src/new.rs"}]}, "toolUseResult": {"type": "create"}}"#,
+        ];
+        for line in changes {
+            assert!(worth_parsing(line), "{line}");
+        }
+        // Host-written text stays excluded however it is spelled.
+        let host = r#"{"type": "user", "isMeta": true, "message": {"content": "Your response above was cut off."}}"#;
+        assert!(extract(host).prompts.is_empty());
+        // The point of the filter: a bare tool-result echo is still skipped, spaced or not.
+        for echo in [
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t","content":"ls output"}]}}"#,
+            r#"{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t", "content": "ls output"}]}}"#,
+        ] {
+            assert!(!worth_parsing(echo), "{echo}");
+        }
     }
 
     /// T375: the change lines the prefilter must keep are the same ones the full parse reads.
