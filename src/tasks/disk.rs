@@ -92,12 +92,21 @@ impl DiskAdapter {
         for entry in entries {
             let path = entry?.path();
             // Only `<id> - <slug>.md` is ours; a README or notes beside the tasks stay theirs.
-            if file_id(&path).is_none() {
+            let Some(name_id) = file_id(&path) else {
                 continue;
-            }
+            };
             let text = std::fs::read_to_string(&path)
                 .with_context(|| format!("disk tasks: {}", path.display()))?;
             let task = parse(&text).with_context(|| format!("disk tasks: {}", path.display()))?;
+            // `place` writes under the front-matter id, so a copied file with a foreign id
+            // would overwrite that task's file; reject it before any mutation.
+            if task.id != name_id {
+                bail!(
+                    "disk tasks: {}: file name says {name_id} but the front matter says {}",
+                    path.display(),
+                    task.id
+                );
+            }
             out.push((path, task));
         }
         Ok(out)
@@ -486,6 +495,74 @@ mod tests {
         std::fs::write(dir.join("R3 - broken.md"), "no front matter\n").unwrap();
         let err = disk.list(&Filter::default()).unwrap_err();
         assert!(format!("{err:#}").contains("R3 - broken.md"), "{err:#}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_whose_front_matter_id_differs_from_its_name_is_rejected_untouched() {
+        let dir = tmp("identity");
+        let disk = DiskAdapter::new(dir.clone());
+        disk.create(&new("target"), &id("R2")).unwrap();
+        let copy = dir.join("R1 - copy.md");
+        std::fs::write(
+            &copy,
+            "---\nid: R2\ntitle: target\nstatus: open\ncreated_at: 1\nupdated_at: 2\n---\n\nCopied body\n",
+        )
+        .unwrap();
+        let target = dir.join("R2 - target.md");
+        let before = (
+            std::fs::read(&copy).unwrap(),
+            std::fs::read(&target).unwrap(),
+        );
+
+        for err in [
+            disk.get(&id("R1")).unwrap_err(),
+            disk.list(&Filter::default()).unwrap_err(),
+            disk.write_status(&id("R1"), Status::InProgress)
+                .unwrap_err(),
+            disk.save(&Task::open(id("R1"), "x", "", 0)).unwrap_err(),
+        ] {
+            let msg = format!("{err:#}");
+            assert!(
+                msg.contains("R1 - copy.md") && msg.contains("R1") && msg.contains("R2"),
+                "{msg}"
+            );
+        }
+        assert_eq!(
+            before,
+            (
+                std::fs::read(&copy).unwrap(),
+                std::fs::read(&target).unwrap()
+            )
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_mismatch_in_done_is_rejected_and_a_lower_case_name_still_matches() {
+        let dir = tmp("identity-done");
+        std::fs::create_dir_all(dir.join("done")).unwrap();
+        std::fs::write(
+            dir.join("done/R3 - a.md"),
+            "---\nid: R4\ntitle: a\nstatus: done\ncreated_at: 1\nupdated_at: 2\n---\n",
+        )
+        .unwrap();
+        let disk = DiskAdapter::new(dir.clone());
+        let err = disk
+            .list(&Filter {
+                all: true,
+                ..Filter::default()
+            })
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("R3 - a.md"), "{err:#}");
+        std::fs::remove_file(dir.join("done/R3 - a.md")).unwrap();
+
+        std::fs::write(
+            dir.join("r5 - b.md"),
+            "---\nid: R5\ntitle: b\nstatus: open\ncreated_at: 1\nupdated_at: 2\n---\n",
+        )
+        .unwrap();
+        assert!(disk.get(&id("R5")).unwrap().is_some());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
