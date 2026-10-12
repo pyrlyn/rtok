@@ -329,6 +329,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.copilot.dir | ~/.copilot | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |
+| setup.droid.mcp_path | ~/.factory/mcp.json | default |
 | setup.dry_run | false | default |
 | setup.force | false | default |
 | setup.gemini.dir | ~/.gemini | default |
@@ -445,7 +446,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-399 keys.
+400 keys.
 
 ## Doctor
 
@@ -654,6 +655,11 @@ agents
     mcp     not installed
     proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
     plugin  not installed (--yes)
+  droid (cli)
+    hooks   not supported: Droid documents hooks, but rtok has no checked mapping of its tool names and PreToolUse output yet
+    mcp     not installed
+    proxy   not supported: Droid has no single model base-URL setting; each customModels entry carries its own baseUrl
+    plugin  not supported: Droid plugins install into its own cache through `droid plugin install`; rtok ships no Droid plugin
   junie (cli)
     hooks   not supported: Junie documents only a SessionStart hook, and rtok's hooks need tool-use events
     mcp     not installed
