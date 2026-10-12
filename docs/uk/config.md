@@ -447,6 +447,8 @@ workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: ті самі 
 config_path   = "~/.config/goose/config.yaml"  # Goose CLI and Desktop: extensions.rtok; Windows: %APPDATA%/Block/goose/config/config.yaml; GOOSE_PATH_ROOT: <root>/config/config.yaml
 [setup.droid]
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: користувацький файл MCP-серверів (mcpServers)
+[setup.kiro]
+mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)

@@ -88,6 +88,7 @@ pub const HOSTS: &[&str] = &[
     "codebuddy",
     "goose",
     "droid",
+    "kiro",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -792,6 +793,7 @@ section! {
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
         goose: SetupGoose = SetupGoose::default(),
         droid: SetupDroid = SetupDroid::default(),
+        kiro: SetupKiro = SetupKiro::default(),
     }
 }
 
@@ -954,6 +956,11 @@ section! {
 section! {
     /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
     SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
+}
+
+section! {
+    /// `[setup.kiro]` — Kiro IDE and CLI user-level MCP file (T413.4).
+    SetupKiro { mcp_path: PathBuf = p("~/.kiro/settings/mcp.json") }
 }
 
 section! {
@@ -1709,6 +1716,7 @@ impl Config {
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
             setup.droid.mcp_path,
+            setup.kiro.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
