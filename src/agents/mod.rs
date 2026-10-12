@@ -1559,7 +1559,7 @@ pub(crate) fn resolve_rtok_command(
         return "rtok".to_string();
     }
     if let Some(exe) = exe {
-        return dunce::simplified(exe).to_string_lossy().into_owned();
+        return fs_kit::path::simplified(exe).to_string_lossy().into_owned();
     }
     "rtok".to_string()
 }
@@ -1644,10 +1644,10 @@ fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
     };
     // Only the `rtok` that IS this executable: a dev build or a test binary must never link
     // into the `PATH` of a different install.
-    let Ok(exe) = std::fs::canonicalize(exe) else {
+    let Ok(exe) = fs_kit::path::canonicalize(exe) else {
         return LinkOutcome::Nothing;
     };
-    if std::fs::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
+    if fs_kit::path::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
         return LinkOutcome::Nothing;
     }
     let link = dir.join(NAME);
@@ -1667,7 +1667,7 @@ fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
                 return LinkOutcome::Failed;
             };
             let target = dir.join(target);
-            if std::fs::canonicalize(&target).is_ok_and(|t| t == sibling) {
+            if fs_kit::path::canonicalize(&target).is_ok_and(|t| t == sibling) {
                 return LinkOutcome::Current;
             }
             let dangling = !target.exists();
@@ -1709,7 +1709,8 @@ pub(crate) use crate::names::cmd_stem;
 /// True when `bin` names the rtok binary (bare, `.exe`, an absolute path, or the running
 /// executable itself whatever it is called — `cargo test` names it `rtok-<hash>`).
 pub(crate) fn is_rtok_bin(bin: &str) -> bool {
-    if std::env::current_exe().is_ok_and(|e| dunce::simplified(&e).to_string_lossy() == bin) {
+    if std::env::current_exe().is_ok_and(|e| fs_kit::path::simplified(&e).to_string_lossy() == bin)
+    {
         return true;
     }
     cmd_stem(bin).eq_ignore_ascii_case("rtok")
@@ -1819,7 +1820,7 @@ pub(crate) fn resolve_plugin_src(
         return p.clone();
     }
 
-    let real = exe.and_then(|e| dunce::canonicalize(e).ok());
+    let real = exe.and_then(|e| fs_kit::path::canonicalize(e).ok());
     if let Some(p) = real
         .as_deref()
         .and_then(Path::parent)
@@ -2200,7 +2201,7 @@ mod tests {
             &root.join("no-such-manifest"),
             "0.1.5",
         );
-        assert_eq!(got, dunce::canonicalize(&plugins).unwrap());
+        assert_eq!(got, fs_kit::path::canonicalize(&plugins).unwrap());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2230,8 +2231,8 @@ mod tests {
         std::os::unix::fs::symlink(&exe, &link).unwrap();
         let got = resolve_plugin_src("plugins/cursor", Some(&link), &missing, "0.1.5");
         assert_eq!(
-            dunce::canonicalize(got).unwrap(),
-            dunce::canonicalize(&plugins).unwrap()
+            fs_kit::path::canonicalize(got).unwrap(),
+            fs_kit::path::canonicalize(&plugins).unwrap()
         );
         let _ = fs::remove_dir_all(&root);
     }
@@ -2962,10 +2963,10 @@ mod tests {
     fn hook_client_link_created_then_current() {
         let fx = LinkFx::new("create");
         assert_eq!(fx.run("v1"), LinkOutcome::Linked);
-        let target = std::fs::canonicalize(fx.link()).unwrap();
+        let target = fs_kit::path::canonicalize(fx.link()).unwrap();
         assert_eq!(
             target,
-            std::fs::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
+            fs_kit::path::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
         );
         assert!(bin_on_path("rtok-hook", Some(&fx.path())));
         assert_eq!(fx.run("v1"), LinkOutcome::Current);
@@ -2994,8 +2995,8 @@ mod tests {
         std::fs::remove_file(fx.bin().join("rtok")).unwrap();
         symlink(fx.exe("v2"), fx.bin().join("rtok")).unwrap();
         assert_eq!(fx.run("v2"), LinkOutcome::Relinked);
-        let want = std::fs::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
-        assert_eq!(std::fs::canonicalize(fx.link()).unwrap(), want);
+        let want = fs_kit::path::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
+        assert_eq!(fs_kit::path::canonicalize(fx.link()).unwrap(), want);
     }
 
     #[cfg(unix)]

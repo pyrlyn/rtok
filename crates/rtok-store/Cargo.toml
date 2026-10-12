@@ -22,12 +22,13 @@ libsqlite3-sys = { version = "0.38", features = ["bundled"] } # FTS5 in the SQLi
 serde = { workspace = true }
 serde_json = { workspace = true } # hook session fields and the idf cache
 sha2 = { workspace = true } # call_io archive checksums
-dunce = { workspace = true } # canonicalize without Windows UNC prefixes
+fs-kit = { workspace = true } # path identity shared with the host
 regex = { workspace = true } # request-body noise the store strips before saving
 schemars = { workspace = true } # JSON Schema on project Origin and LinkKind
 humantime = { workspace = true } # [agents] idle parsing
 uuid = { workspace = true } # agent ids
 thiserror = { workspace = true } # the store's public error enum
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 proptest = "1" # property test that request-body cleaning is idempotent

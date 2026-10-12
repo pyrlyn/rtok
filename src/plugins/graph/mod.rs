@@ -1323,8 +1323,8 @@ fn rel_of(root: &Path, path: &str) -> String {
     let path = path.replace('\\', "/");
     let path = path.strip_prefix("./").unwrap_or(&path);
     match (
-        dunce::canonicalize(root.join(path)),
-        dunce::canonicalize(root),
+        fs_kit::path::canonicalize(root.join(path)),
+        fs_kit::path::canonicalize(root),
     ) {
         (Ok(abs), Ok(root)) => abs
             .strip_prefix(root)

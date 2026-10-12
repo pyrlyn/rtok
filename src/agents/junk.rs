@@ -458,7 +458,7 @@ fn symlink_target(path: &Path) -> Option<PathBuf> {
     let meta = std::fs::symlink_metadata(path).ok()?;
     meta.file_type()
         .is_symlink()
-        .then(|| dunce::canonicalize(path).ok())
+        .then(|| fs_kit::path::canonicalize(path).ok())
         .flatten()
 }
 

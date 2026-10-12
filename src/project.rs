@@ -410,7 +410,7 @@ mod tests {
         fn scratch(tag: &str) -> PathBuf {
             let base = std::env::temp_dir().join(format!("rtok-pk-{tag}-{}", std::process::id()));
             std::fs::create_dir_all(&base).unwrap();
-            dunce::canonicalize(base).unwrap()
+            fs_kit::path::canonicalize(base).unwrap()
         }
 
         fn seed(base: &Path) -> PathBuf {

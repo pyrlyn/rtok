@@ -120,7 +120,7 @@ impl DiskAdapter {
     fn write(&self, dir: &Path, task: &Task) -> Result<PathBuf> {
         std::fs::create_dir_all(dir).with_context(|| format!("disk tasks: {}", dir.display()))?;
         let path = dir.join(file_name(&task.id, &task.title));
-        rtok_agent_sdk::write_atomic(&path, &render(task)?)?;
+        fs_kit::write::atomic(&path, render(task)?)?;
         Ok(path)
     }
 
