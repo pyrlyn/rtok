@@ -243,6 +243,33 @@ mod tests {
         }
     }
 
+    /// The web draws the same operations (T436): the same stems in the same order, because the
+    /// first stem a verb contains decides its icon. The check lives here, not in vitest, since the
+    /// shared half of the table is in the `operation_icons` crate, which only Rust can see.
+    #[test]
+    fn the_web_list_names_the_operations_of_the_cli_table() {
+        let ts = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("web/src/ui/operations.ts"),
+        )
+        .expect("web/src/ui/operations.ts");
+        let table = ts
+            .split_once("export const OPERATION_ICONS")
+            .and_then(|(_, rest)| rest.split_once("\n];"))
+            .map(|(table, _)| table)
+            .expect("OPERATION_ICONS table in operations.ts");
+        let web: Vec<&str> = table
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("[\"")?.split_once('"'))
+            .map(|(stem, _)| stem)
+            .collect();
+        let cli: Vec<&str> = operation_icons::OPERATION_ICONS
+            .iter()
+            .chain(OWN_ICONS)
+            .map(|(stem, _)| *stem)
+            .collect();
+        assert_eq!(web, cli);
+    }
+
     /// The text after the icon starts in one column for every icon, even a narrower one.
     #[test]
     fn the_text_after_an_icon_starts_in_one_column() {
