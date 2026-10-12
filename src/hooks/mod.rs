@@ -2053,7 +2053,10 @@ mod tests {
         let main = cx.store.main_agent(host_id, &cx.session).unwrap().unwrap();
         let kids = cx.store.agent_children(&main).unwrap();
         assert_eq!(kids.len(), 1, "{kids:?}");
-        let rows = cx.store.agents_of_sessions(&[cx.session.clone()]).unwrap();
+        let rows = cx
+            .store
+            .agents_of_sessions(std::slice::from_ref(&cx.session))
+            .unwrap();
         assert_eq!(rows.iter().filter(|r| r.parent_id.is_none()).count(), 1);
     }
 
