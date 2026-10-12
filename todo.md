@@ -39,7 +39,6 @@
 - T586. Resolve local relative remotes before deriving project identity
 - T587. Let an explicit report --format md override configuration
 - T589. Track log generations without using their first line as identity
-- T590. Preserve filesystem semantics for parent segments after symlinks
 - T592. Keep late same-second sessions from moving behind the OTel cursor
 - T594. Validate structured config types before persisting edits
 - T595. Keep commented-default discovery outside TOML string payloads

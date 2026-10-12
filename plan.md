@@ -121,7 +121,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T586 | todo | P2 | 3 | 0% | |
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
-| T590 | todo | P2 | 3 | 0% | |
 | T592 | todo | P2 | 3 | 0% | |
 | T594 | todo | P2 | 3 | 0% | |
 | T595 | todo | P2 | 3 | 0% | |
@@ -1112,19 +1111,6 @@ Execution plan:
 4. Exercise watch integration with a scratch rotating writer and rerun the existing rotation/first-screen tests on supported platforms.
 
 Check: retained generations neither lose nor replay complete rows in either fixture, existing follow ordering remains intact, and `just check` passes. The offline probe compiled actual Follow and whole-line functions with local scratch files; full CLI/watch scheduling was source-traced, not executed.
-
-### T590. Preserve filesystem semantics for parent segments after symlinks
-
-Confirmed in [resolve_with](src/plugins/read/mod.rs#L205): the request is lexically normalized before filesystem canonicalization at lines 218–224. With `root/link -> root/a/nested`, both `root/a/target.txt` and `root/target.txt` present and containing different text, native lookup of `link/../target.txt` reads `root/a/target.txt`, but rtok resolves and reads `root/target.txt`. Both targets are inside the allowed root; this is a wrong-file result, not a demonstrated root escape. Read, search and tree share this resolver. T56's Vfs/symlink-escape coverage and T430's Windows path identity do not cover parent traversal through an existing symlink.
-
-Execution plan:
-
-1. Add a fixture with distinct target contents and an in-root directory symlink followed by `..`; compare relative and absolute requests with native filesystem lookup. Keep a direct-path control.
-2. Preserve symlink-sensitive traversal when resolving an existing request instead of collapsing parent components first. Apply the root guard to the actual resolved target and return a path naming that same target; handle missing paths explicitly without weakening confinement.
-3. Cover allowed extra/dynamic roots, symlinks leaving a root, parent segments after those links, missing components and multiple links. Align the Vfs adapter with the host contract and retain Windows prefix/case coverage.
-4. Add representative read/search/tree integration checks proving both selected content and root rejection, then rerun existing root-guard and path tests.
-
-Check: existing paths identify the same file as native lookup, outside-root targets remain rejected, and `just check` passes. The Unix scratch probe compiled actual resolve/normalize functions with a standard filesystem adapter, equivalent Unix prefix checks and inactive dynamic roots; full MCP and Windows behavior were not executed.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

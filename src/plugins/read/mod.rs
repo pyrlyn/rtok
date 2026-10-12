@@ -20,7 +20,9 @@ use rtok_plugin_sdk::{
 // `ReadFs` and the lexical `normalize` live at crate level since T154: `project` needs them
 // with this plugin compiled out.
 pub use crate::fs;
+#[cfg(test)]
 use crate::fs::normalize;
+use crate::fs::normalize_following;
 
 pub mod cache;
 pub mod hook;
@@ -221,9 +223,9 @@ pub(crate) fn resolve_with(
         .map(|r| fs.canonicalize(&r).unwrap_or(r))
         .collect();
     let abs = if path.is_absolute() {
-        normalize(Path::new("/"), path)
+        normalize_following(fs, Path::new("/"), path)
     } else {
-        normalize(&roots[0], path)
+        normalize_following(fs, &roots[0], path)
     };
     // Lexical allow, then (when the path exists) reject symlink escapes past the root.
     let check = fs.canonicalize(&abs).unwrap_or_else(|| abs.clone());
@@ -479,6 +481,57 @@ pub(crate) mod tests {
         }
         #[cfg(not(unix))]
         let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T590: `..` after a symlink is the parent of the link's target, as a native lookup
+    /// reads it — not the link's own parent. The guard judges that target, and a path that
+    /// does not exist yet follows the same rule.
+    #[cfg(unix)]
+    #[test]
+    fn parent_segments_after_a_symlink_follow_the_target() {
+        let (cx, dir) = cx("t590-parent");
+        let root = crate::fs::canon(&dir);
+        let nested = root.join("a/nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(root.join("a/target.txt"), "from a\n").unwrap();
+        fs::write(root.join("target.txt"), "from root\n").unwrap();
+        fs::write(root.join("only-in-root.txt"), "root only\n").unwrap();
+        std::os::unix::fs::symlink(&nested, root.join("link")).unwrap();
+        let read_at = |p: &str| read(&Ctx::new(&cx), p, "full", None);
+        let abs = |p: &str| root.join(p).to_string_lossy().into_owned();
+
+        // The same file native lookup reads, relative to the process cwd or absolute.
+        let native = fs::read_to_string(root.join("link/../target.txt")).unwrap();
+        assert_eq!(native, "from a\n");
+        let got = resolve(&root, Path::new("link/../target.txt"), &[]).unwrap();
+        assert_eq!(fs::read_to_string(&got).unwrap(), native);
+        assert_eq!(read_at(&abs("link/../target.txt")).unwrap(), "1:from a");
+        // Controls: a plain `..` and a direct path keep their meaning.
+        // (Same bytes as the read above, so the session answers with the dedup line.)
+        assert!(
+            read_at(&abs("a/nested/../target.txt"))
+                .unwrap()
+                .starts_with(cache::DEDUP_PREFIX)
+        );
+        assert_eq!(read_at(&abs("target.txt")).unwrap(), "1:from root");
+        // A name that exists only beside the link must not be found through it.
+        assert!(read_at(&abs("link/../only-in-root.txt")).is_err());
+        let missing = resolve(&root, Path::new("link/../only-in-root.txt"), &[]).unwrap();
+        assert!(missing.starts_with(root.join("a")), "{missing:?}");
+
+        // A link inside the root to a directory outside it: its parent is outside too.
+        let outside = crate::fs::canon(&dir)
+            .parent()
+            .unwrap()
+            .join(format!("rtok-t590-outside-{}", std::process::id()));
+        fs::create_dir_all(outside.join("deep")).unwrap();
+        fs::write(outside.join("secret.txt"), "secret\n").unwrap();
+        fs::write(root.join("secret.txt"), "inside\n").unwrap();
+        std::os::unix::fs::symlink(outside.join("deep"), root.join("out")).unwrap();
+        let err = resolve(&root, Path::new("out/../secret.txt"), &[]).unwrap_err();
+        let _ = fs::remove_dir_all(&outside);
+        assert!(err.to_string().contains("outside cwd"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
 
