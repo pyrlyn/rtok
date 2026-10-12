@@ -13,6 +13,8 @@ mod push;
 pub mod resident;
 pub mod types;
 
+use rtok_sys::proc::{Output, ProgressRunner};
+
 use crate::config::Config;
 use crate::plugin::{Ctx, Injection, PreToolDecision, Runtime, SessionStart};
 use crate::plugins::Registry;
@@ -701,18 +703,16 @@ fn defer_session_end(cfg: &Config, event: &str, stdin: &[u8]) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let mut cmd = std::process::Command::new(exe);
-    cmd.args(["hook", "SessionEnd"])
+    let mut deferred = ProgressRunner::quiet(exe, ["hook", "SessionEnd"])
+        .output(Output::Detached)
         .env(DEFERRED_ENV, "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+        .stdin(std::process::Stdio::piped());
     if !cfg.home.as_os_str().is_empty() {
-        cmd.env("RTOK_HOME", &cfg.home);
+        deferred = deferred.env("RTOK_HOME", &cfg.home);
     }
     // As in `otel::export::spawn_child`: the child must not hold the agent's pipes open.
     rtok_sys::stop_inheriting_own_stdio();
-    if let Ok(mut child) = cmd.spawn()
+    if let Ok(mut child) = deferred.spawn()
         && let Some(mut pipe) = child.stdin.take()
     {
         // A SessionEnd payload is a few hundred bytes, well under a pipe buffer: no block.

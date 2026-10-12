@@ -12,15 +12,17 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::ExitStatus;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use clap::ValueEnum;
+use rtok_sys::proc::{Output, ProgressRunner};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -186,15 +188,9 @@ pub fn start(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> Res
             eprintln!("{}", style::warn(&msg));
             crate::log::append(cfg, "warn", "demon", service.as_str(), &msg);
         }
-        let mut cmd = Command::new(&exe);
-        if let Some(c) = config_file {
-            cmd.arg("--config").arg(c);
-        }
-        let child = cmd
-            .args(["demon", "supervise", service.as_str()])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+        let argv = argv_with_config(config_file, ["demon", "supervise", service.as_str()]);
+        let child = ProgressRunner::quiet(&exe, argv)
+            .output(Output::Detached)
             .spawn()
             .with_context(|| format!("spawn supervisor for {service}"))?;
         let started = format!("{service} started (supervisor {})", child.id());
@@ -310,6 +306,20 @@ pub fn upgrade(cfg: &Config, config_file: Option<&Path>) -> Result<()> {
     }
 }
 
+/// `rtok [--config <file>] <rest>`: the service reads the file the operator started the demon
+/// with, not whatever the default config resolves to.
+fn argv_with_config<'a>(
+    config_file: Option<&Path>,
+    rest: impl IntoIterator<Item = &'a str>,
+) -> Vec<OsString> {
+    let mut argv = Vec::new();
+    if let Some(c) = config_file {
+        argv.extend(["--config".into(), c.as_os_str().to_owned()]);
+    }
+    argv.extend(rest.into_iter().map(OsString::from));
+    argv
+}
+
 /// The path `start` should spawn: `current_exe` after an in-place replace can be the
 /// deleted inode, while the same path on disk already holds the new file.
 fn on_disk_exe() -> Result<PathBuf> {
@@ -323,18 +333,18 @@ fn on_disk_exe() -> Result<PathBuf> {
 
 fn replace_binary() -> Result<()> {
     if let Some(cmd) = std::env::var_os("RTOK_UPDATE_CMD") {
-        return run_replace(Command::new(cmd));
+        return run_replace(ProgressRunner::quiet(cmd, std::iter::empty::<&str>()));
     }
-    match Command::new("ketch")
-        .args(["upgrade", "rtok", "--yes"])
-        .status()
-    {
+    match upgrade_run(ProgressRunner::quiet("ketch", ["upgrade", "rtok", "--yes"])) {
         Ok(st) if st.success() => return Ok(()),
         Ok(st) => anyhow::bail!("ketch upgrade rtok failed ({st})"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
-    match Command::new("rtok-update").status() {
+    match upgrade_run(ProgressRunner::quiet(
+        "rtok-update",
+        std::iter::empty::<&str>(),
+    )) {
         Ok(st) if st.success() => Ok(()),
         Ok(st) => anyhow::bail!("rtok-update failed ({st})"),
         Err(_) => anyhow::bail!(
@@ -343,8 +353,16 @@ fn replace_binary() -> Result<()> {
     }
 }
 
-fn run_replace(mut cmd: Command) -> Result<()> {
-    let st = cmd.status()?;
+/// The updater owns the terminal and prints its own progress, so it gets no spinner of ours.
+fn upgrade_run(updater: ProgressRunner) -> std::io::Result<ExitStatus> {
+    updater
+        .output(Output::Inherit)
+        .run()
+        .map(|done| done.status)
+}
+
+fn run_replace(updater: ProgressRunner) -> Result<()> {
+    let st = upgrade_run(updater)?;
     if st.success() {
         Ok(())
     } else {
@@ -526,17 +544,13 @@ pub fn supervise(cfg: &Config, config_file: Option<&Path>, service: Service) -> 
         // the T24.0 sink instead is what makes rotation possible at all.
         let mut log_cfg = cfg.clone();
         log_cfg.log.path = file(cfg, service, "log");
-        let mut cmd = Command::new(&exe);
-        if let Some(c) = config_file {
-            cmd.arg("--config").arg(c);
-        }
-        let mut child = cmd
-            .args(service.args())
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .with_context(|| format!("spawn {service}"))?;
+        let mut child = ProgressRunner::quiet(
+            &exe,
+            argv_with_config(config_file, service.args().iter().copied()),
+        )
+        .output(Output::Capture)
+        .spawn()
+        .with_context(|| format!("spawn {service}"))?;
         // Two reader threads only forward lines over a channel; the main thread is the sole
         // writer, so two streams landing on the same file are never a rotate/append race.
         let (tx, rx) = mpsc::channel();
@@ -611,9 +625,8 @@ fn boot_time() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
         // `{ sec = 1700000000, usec = 0 } Tue Nov 14 ...`
-        let out = Command::new("sysctl")
-            .args(["-n", "kern.boottime"])
-            .output()
+        let out = ProgressRunner::quiet("sysctl", ["-n", "kern.boottime"])
+            .run()
             .ok()?;
         let s = String::from_utf8_lossy(&out.stdout);
         let rest = s.split_once("sec = ")?.1;

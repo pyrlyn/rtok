@@ -282,7 +282,7 @@ fn graph_one(
     } else {
         cmd.args(["--allowedTools", "Read,Grep,Glob"]);
     }
-    let Some(out) = run_bounded(&mut cmd, Duration::from_secs(cfg.bench.timeout_s.max(1))) else {
+    let Some(out) = run_bounded(cmd, Duration::from_secs(cfg.bench.timeout_s.max(1))) else {
         return z;
     };
     let v: Value = serde_json::from_slice(&out).unwrap_or(Value::Null);
@@ -388,46 +388,22 @@ fn one(prompt: &str, settings: &Path, timeout_s: u64) -> (u64, u64, u64, f64) {
         "--settings",
         &settings.display().to_string(),
     ]);
-    let Some(out) = run_bounded(&mut cmd, Duration::from_secs(timeout_s.max(1))) else {
+    let Some(out) = run_bounded(cmd, Duration::from_secs(timeout_s.max(1))) else {
         return (0, 0, 0, 0.0);
     };
     parse_usage(&out)
 }
 
-/// How often [`run_bounded`] checks whether the child has exited.
-const POLL: Duration = Duration::from_millis(20);
+/// Most stdout kept from one run; a run's JSON result is a few KiB, so a flood is a runaway.
+const MAX_OUTPUT: u64 = 8 << 20;
 
 /// Run `cmd` and collect its stdout, killing it once `timeout` has passed. `None` when it
-/// could not be spawned, exited badly, or was killed.
-fn run_bounded(cmd: &mut Command, timeout: Duration) -> Option<Vec<u8>> {
-    let mut child = cmd
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
-    // Drain while polling: a child that fills the pipe (64 KiB) before exiting would
-    // otherwise block on write, never exit, and be scored as a timeout.
-    let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = std::io::Read::read_to_end(&mut stdout, &mut buf);
-        buf
-    });
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break None;
-            }
-            Ok(None) => std::thread::sleep(POLL),
-            Err(_) => break None,
-        }
-    };
-    let out = reader.join().ok()?;
-    status?.success().then_some(out)
+/// could not be spawned, exited badly, or was killed. After the child exits only a finite
+/// drain of its pipe follows (`proc::capture`), so a descendant holding stdout open cannot
+/// stall the bench.
+fn run_bounded(cmd: Command, timeout: Duration) -> Option<Vec<u8>> {
+    let done = crate::proc::capture_capped(cmd, Some(timeout), Some(MAX_OUTPUT)).ok()?;
+    (done.code == Some(0)).then_some(done.stdout)
 }
 
 fn parse_usage(bytes: &[u8]) -> (u64, u64, u64, f64) {
@@ -511,7 +487,7 @@ mod tests {
         let mut slow = Command::new("sleep");
         slow.arg("30");
         let start = Instant::now();
-        assert!(run_bounded(&mut slow, Duration::from_millis(150)).is_none());
+        assert!(run_bounded(slow, Duration::from_millis(150)).is_none());
         assert!(
             start.elapsed() < Duration::from_secs(10),
             "killed, not waited out"
@@ -522,7 +498,7 @@ mod tests {
     fn a_finished_run_hands_back_its_output() {
         let mut quick = Command::new("sh");
         quick.arg("-c").arg("printf hello");
-        let out = run_bounded(&mut quick, Duration::from_secs(30)).expect("runs");
+        let out = run_bounded(quick, Duration::from_secs(30)).expect("runs");
         assert_eq!(out, b"hello");
     }
 
@@ -531,7 +507,30 @@ mod tests {
     fn a_run_past_the_pipe_buffer_is_drained_not_timed_out() {
         let mut big = Command::new("sh");
         big.arg("-c").arg("head -c 300000 /dev/zero");
-        let out = run_bounded(&mut big, Duration::from_secs(10)).expect("runs");
+        let out = run_bounded(big, Duration::from_secs(10)).expect("runs");
         assert_eq!(out.len(), 300_000);
+    }
+
+    /// T638: a descendant that outlives the child keeps the pipe open; the drain after the
+    /// child's exit is finite, so the bench neither stalls nor loses the child's output.
+    #[test]
+    fn a_descendant_holding_the_pipe_does_not_stall_the_bench() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg("sleep 5 & printf parent; exit 0");
+        let start = Instant::now();
+        let out = run_bounded(cmd, Duration::from_millis(100)).expect("child exited cleanly");
+        assert_eq!(out, b"parent");
+        assert!(
+            start.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_failing_run_is_not_a_result() {
+        let mut bad = Command::new("sh");
+        bad.arg("-c").arg("printf partial; exit 3");
+        assert!(run_bounded(bad, Duration::from_secs(30)).is_none());
     }
 }
