@@ -2613,6 +2613,15 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - IDE app: the installation page says to "drag Kiro from Applications to the Trash", so the macOS bundle is `/Applications/Kiro.app` (bundle id not documented); no Windows or Linux install folder is named, so only macOS paths are probed. https://kiro.dev/docs/getting-started/installation/
 - Hooks: JSON files in `.kiro/hooks/` (project) and, for CLI V3, `~/.kiro/hooks/`; each has `version: "v1"` and a `hooks` array of `{name, trigger, matcher, action: {type, command | prompt}, timeout (default 60), enabled}`; triggers named include `PostFileSave`, `PreToolUse`, `PostToolUse`, `Stop`. The command receives session context as JSON on stdin. The page states no exit-code rules and no way for command output to reach the agent's context. https://kiro.dev/docs/hooks/ . Hooks stay `Support::No`.
 - No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
+- Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
+
+### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
+
+Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.
+
+- Succession: "Kiro CLI is the next update of the Q CLI"; staying on Q Developer CLI means "new features and fixes will only be available for Kiro CLI". The page gives no end-of-support date for the Q CLI. Kiro CLI was available from 2025-11-17, and auto-update users were moved to it on 2025-11-24. https://kiro.dev/docs/upgrade-guides/migrating-from-q/ (page updated 2026-08-04)
+- MCP file: the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` and skips servers that conflict. Kiro CLI does not modify existing `.amazonq` folders, keeps reading project `.amazonq` configuration, and prefers `.kiro` when both exist. Same page. T413.4 should treat `~/.kiro/settings/mcp.json` as the user MCP file and write nothing to `.amazonq`.
+- Q Developer IDE plugins: no primary source checked, so no IDE variant. Third-party posts about their end of support are leads only (unverified).
 
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
