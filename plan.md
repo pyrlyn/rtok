@@ -135,7 +135,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
 | T590 | todo | P2 | 3 | 0% | |
-| T592 | in progress | P2 | 4 | 5% | Claude Code / claude-sonnet-5-5 |
 | T594 | todo | P2 | 3 | 0% | |
 | T595 | todo | P2 | 3 | 0% | |
 | T597 | todo | P1 | 3 | 0% | |
@@ -1230,21 +1229,6 @@ Execution plan:
 4. Verify real and dry-run edits propose the same safe result, with dry-run writing nothing; rerun existing comment-preservation tests and `just check`.
 
 Check: arbitrary valid TOML string content cannot be modified by setting an unrelated key. The actual setter changed the fixture service name from `[proxy]\n# port = 12\n` to `[proxy]\nport = 12\n`; the requested port and ordinary-default control both became 9000. Only scratch configuration files were used.
-
-### T592. Keep late same-second sessions from moving behind the OTel cursor
-
-Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
-
-This is an uncovered case of completed T36.12's same-second delivery guarantee, not another active copy of that task. Its [integration test](tests/otel.rs#L178) uses `s1` then `s2` and checks counts, so the row-identity failure is missed. No claim is made that the backend displays duplicates: the repeated span has a stable ID, but the late session's root span is absent altogether.
-
-Execution plan:
-
-1. Add store and exporter regressions with both sessions already present, a later completion at the watermark second, and lexical ID orders in both directions. Inspect emitted session/span IDs, not just batch lengths or POST counts; the late session must be delivered and the next flush must drain.
-2. Replace the mutable rank/count cursor with durable delivery state that cannot move behind already-exported rows. Prefer a monotonic completion/outbox sequence or explicit acknowledged session identities; a timestamp plus lexical last-ID cursor alone still skips late lower IDs. Keep database access in Store and use Diesel under the existing SQL policy.
-3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
-4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
-
-Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
 
 ### T589. Track log generations without using their first line as identity
 
