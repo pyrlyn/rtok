@@ -287,6 +287,12 @@ mod tests {
         assert_eq!(canonical_url(url).as_deref(), Some(key));
     }
 
+    /// The fixtures name Unix-style paths; on Windows a joined path keeps the `/` of its base
+    /// and gets `\` for the rest, so only the separator differs from the expectation.
+    fn slashed(key: Option<String>) -> Option<String> {
+        key.map(|k| k.replace('\\', "/"))
+    }
+
     /// A checkout `<dir>/checkout` whose `origin` is spelled `url`; `remote` also exists as a
     /// directory beside it when `remote_exists`.
     fn local_remote_fixture(vfs: &mut Vfs, dir: &str, url: &str, remote_exists: bool) {
@@ -306,7 +312,7 @@ mod tests {
         let mut vfs = Vfs::new();
         local_remote_fixture(&mut vfs, "/a", "../remote.git", exists);
         local_remote_fixture(&mut vfs, "/b", "../remote.git", exists);
-        let key = |dir: &str| project_key_with(&vfs, Path::new(dir));
+        let key = |dir: &str| slashed(project_key_with(&vfs, Path::new(dir)));
         assert_eq!(key("/a/checkout").as_deref(), Some("/a/remote"));
         assert_eq!(key("/b/checkout").as_deref(), Some("/b/remote"));
     }
@@ -326,7 +332,7 @@ mod tests {
         vfs.write("/a/checkout/.git/worktrees/wt/commondir", "../..\n");
         vfs.write("/wt/.git", "gitdir: /a/checkout/.git/worktrees/wt\n");
         let main = project_key_with(&vfs, Path::new("/a/checkout/src"));
-        assert_eq!(main.as_deref(), Some("/a/remote"));
+        assert_eq!(slashed(main.clone()).as_deref(), Some("/a/remote"));
         assert_eq!(project_key_with(&vfs, Path::new("/wt")), main);
     }
 
@@ -350,7 +356,7 @@ mod tests {
         let mut vfs = Vfs::new();
         local_remote_fixture(&mut vfs, "/a", "../Remote With Space.git", false);
         assert_eq!(
-            project_key_with(&vfs, Path::new("/a/checkout")).as_deref(),
+            slashed(project_key_with(&vfs, Path::new("/a/checkout"))).as_deref(),
             Some("/a/Remote With Space")
         );
     }
