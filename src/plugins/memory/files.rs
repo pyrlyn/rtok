@@ -68,7 +68,7 @@ pub(super) fn existing_rels(cx: &Ctx, raw: &[String]) -> Vec<String> {
     let Some(root) = project_root(cx.cwd()) else {
         return Vec::new();
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     let mut out = Vec::new();
     for r in raw {
         if let Some(rel) = relative(&root, &canon, r)
@@ -87,7 +87,7 @@ pub(super) fn prompt_paths(cx: &Ctx, prompt: &str) -> Vec<String> {
     let Some(root) = project_root(cx.cwd()) else {
         return Vec::new();
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     mentioned(&root, &canon, prompt)
 }
 
@@ -131,7 +131,7 @@ pub(super) fn link_note(cx: &Ctx, id: i32, body: &str) {
     let Some(root) = project_root(cx.cwd()) else {
         return;
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     let mut files = mentioned(&root, &canon, body);
     let root_str = root.to_string_lossy();
     for p in crate::plugins::checkpoint::last_paths(cx, &root_str) {
@@ -156,7 +156,7 @@ pub(super) fn recall_hits(cx: &Ctx, prompt: &str, text: Vec<NoteHit>, n: usize) 
     let Some(root) = project_root(cx.cwd()) else {
         return boost(text, Vec::new(), n);
     };
-    let canon = dunce::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    let canon = fs_kit::path::canonicalize(&root).unwrap_or_else(|_| root.clone());
     let named = mentioned(&root, &canon, prompt);
     let mut files = named.clone();
     for key in cx.read_cache_keys().unwrap_or_default() {

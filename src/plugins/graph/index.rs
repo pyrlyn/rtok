@@ -49,11 +49,11 @@ fn changed_abs(root: &Path, event_path: &Path) -> PathBuf {
     } else {
         root.join(event_path)
     };
-    dunce::canonicalize(&raw).unwrap_or_else(|_| {
+    fs_kit::path::canonicalize(&raw).unwrap_or_else(|_| {
         let name = event_path.file_name();
         event_path
             .parent()
-            .and_then(|p| dunce::canonicalize(p).ok())
+            .and_then(|p| fs_kit::path::canonicalize(p).ok())
             .and_then(|p| name.map(|n| p.join(n)))
             .unwrap_or(raw)
     })
@@ -106,7 +106,7 @@ pub fn run_with(
 ) -> Result<Report> {
     // T356: the one choke point for the CLI, the MCP tools, the watcher and `ensure`.
     crate::plugins::read::walk_root_ok(root)?;
-    let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let rk = canon(&root);
     let graph_cfg = cx.plugin_config::<crate::config::Graph>("graph");
     let current_fp = extractor_fingerprint(&graph_cfg.extensions);
@@ -226,7 +226,7 @@ fn run_changed_with(
     pb: &indicatif::ProgressBar,
 ) -> Result<Report> {
     crate::plugins::read::walk_root_ok(root)?;
-    let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let rk = canon(&root);
     let mut report = Report::default();
     let graph_cfg = cx.plugin_config::<crate::config::Graph>("graph");

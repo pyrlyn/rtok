@@ -354,7 +354,7 @@ pub(crate) mod tests {
         let (cx, dir) = cx("file-errors");
         let cx = Ctx::new(&cx);
         // Canonical: a missing path is only matched lexically against the canonical root.
-        let canon = dir.canonicalize().unwrap();
+        let canon = fs_kit::path::canonicalize(&dir).unwrap();
         let missing = canon.join("nope.rs");
         let missing = missing.to_str().unwrap();
         // The io wording is the OS's own (Windows: "The system cannot find …", "Access is
@@ -598,7 +598,7 @@ pub(crate) mod tests {
         let _ = fs::remove_dir_all(&base);
         let proj = base.join("Proj");
         fs::create_dir_all(&proj).unwrap();
-        let disk = dunce::canonicalize(&proj).unwrap();
+        let disk = fs_kit::path::canonicalize(&proj).unwrap();
         let mut alt = disk.clone();
         if let Some(name) = alt.file_name().map(|n| n.to_string_lossy().into_owned()) {
             let flipped: String = name

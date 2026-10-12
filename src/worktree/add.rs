@@ -41,9 +41,9 @@ fn ident(what: &str, raw: &str) -> Result<String> {
 /// Symlinks resolved through the deepest ancestor that exists, the rest appended: a root
 /// that does not exist yet still has to be judged by where it would land.
 fn resolved(path: &Path) -> PathBuf {
-    // `dunce`: std canonicalize's `\\?\` prefix makes `starts_with` miss the temp dir.
+    // Not std canonicalize: its `\\?\` prefix makes `starts_with` miss the temp dir.
     let real = |a: &Path| {
-        let canon = dunce::canonicalize(a).ok()?;
+        let canon = fs_kit::path::canonicalize(a).ok()?;
         let rel = path.strip_prefix(a).ok()?;
         Some(canon.join(rel))
     };

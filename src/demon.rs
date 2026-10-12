@@ -105,8 +105,10 @@ fn read(cfg: &Config, service: Service) -> Option<State> {
 /// the supervisor rewrites it on every restart, and a half-written file parses as "not running".
 fn write(cfg: &Config, st: &State) -> Result<()> {
     let path = file(cfg, st.service, "json");
-    rtok_agent_sdk::write_atomic(&path, &serde_json::to_string_pretty(st)?)
-        .with_context(|| path.display().to_string())
+    Ok(fs_kit::write::atomic(
+        &path,
+        serde_json::to_string_pretty(st)?,
+    )?)
 }
 
 /// The process table as the verbs see it: liveness, signals, the boot time and the pause

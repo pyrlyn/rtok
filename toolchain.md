@@ -101,7 +101,7 @@ Project programs and direct packages from the manifests.
 | diesel_migrations | local | https://crates.io/crates/diesel_migrations | Embedded SQLite migrations (T163.4) |
 | divan | local | https://crates.io/crates/divan | Divan benches in benches/ |
 | dotenvy | local | https://crates.io/crates/dotenvy | Rust dependency |
-| dunce | local | https://crates.io/crates/dunce | Canonicalize without Windows UNC prefixes |
+| fs-kit | local | https://github.com/pyrlyn/crates-packages | One entry point for file work: paths without Windows UNC prefixes, atomic writes, tree usage and copy |
 | env_logger | local | https://crates.io/crates/env_logger | T225: `RUST_LOG` debug log on stderr, off by default |
 | figment | local | https://crates.io/crates/figment | Config |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |

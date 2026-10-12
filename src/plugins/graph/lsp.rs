@@ -291,7 +291,7 @@ fn percent_decode_path(s: &str) -> String {
 fn file_uri(p: &Path) -> String {
     // LSP wants RFC 8089 `file:///C:/…` on Windows. `.display()` keeps
     // backslashes and omits the third slash, which rust-analyzer rejects.
-    let path = dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let path = fs_kit::path::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let s = percent_encode_path(&path.to_string_lossy().replace('\\', "/"));
     if s.starts_with('/') {
         format!("file://{s}")
@@ -407,7 +407,7 @@ impl Session {
             stdin,
             stdout,
             next_id: 1,
-            root: dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
+            root: fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
             opened: HashSet::new(),
             err_path,
         };
