@@ -856,11 +856,12 @@ mod tests {
         let view = adapted(
             "preToolUse",
             "view",
-            Value::String(r#"{"path":"a.rs"}"#.into()),
+            Value::String(r#"{"path":"/repo/a.rs"}"#.into()),
         );
         let key =
             crate::plugins::guard::cache_key("Read", view.tool_input.as_ref().unwrap(), None, None);
-        assert_eq!(key.as_deref(), Some("read\ta.rs"));
+        // Absolute: since T556 a relative path without a cwd has no guard identity.
+        assert_eq!(key.as_deref(), Some("read\t/repo/a.rs"));
 
         // Fail open: anything that is not a JSON object arrives untouched.
         for raw in ["{\"command\":", "42", "\"x\"", ""] {
