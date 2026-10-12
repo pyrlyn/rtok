@@ -51,7 +51,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
-| T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
@@ -1054,14 +1053,6 @@ Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` 
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: vendor docs for IDE and CLI config paths; one variant per documented file; share a helper if the JSON matches an existing host.
-
-### T413.5. `rtok agents install amp` — Amp
-
-Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
 
 ### T413.6. `rtok agents install goose` — Goose
 

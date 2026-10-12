@@ -86,6 +86,7 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "amp",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -788,6 +789,7 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        amp: SetupAmp = SetupAmp::default(),
     }
 }
 
@@ -939,6 +941,12 @@ section! {
         dir: PathBuf = p("~/.codebuddy"),
         workbuddy_dir: PathBuf = p("~/.workbuddy"),
     }
+}
+
+section! {
+    /// `[setup.amp]` — Amp (Sourcegraph) user settings file (`amp.mcpServers`, T413.5);
+    /// `settings.jsonc` is used when it is the only one.
+    SetupAmp { settings_path: PathBuf = p("~/.config/amp/settings.json") }
 }
 
 section! {
@@ -1668,6 +1676,7 @@ impl Config {
             setup.qwen.dir,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
+            setup.amp.settings_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

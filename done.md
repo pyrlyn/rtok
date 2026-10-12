@@ -8717,6 +8717,17 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.5. `rtok agents install amp` — Amp
+
+Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
+
+Done: `src/agents/amp/` (one CLI variant, `amp` on PATH): `amp.mcpServers.rtok = {command, args}` in `~/.config/amp/settings.json`, edited as JSONC through `jsonc::upsert_entry` / `remove_entry` so comments survive, `[setup.amp] settings_path` moves the file; a lone `settings.jsonc` is edited in place through the new `jsonc::lone_sibling`, which `mimo`'s `.jsonc` rule now calls too (one body, mimo's output unchanged). Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS`, docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Amp has no shell hook events; `amp.url` is Amp's own server; the documented plugin API (`.ts`/`.js` in `~/.config/amp/plugins`, `tool.call` / `tool.result`) needs an rtok plugin unit under `plugins/` (D21) and Amp's tool names, neither of which exist yet. Research with sources and the 2026-10-12 check date in `research.md` section 32.5. Tests: `amp` unit tests (dry run, dotted-key entry with foreign settings and comments kept, lone `.jsonc`, idempotent apply twice), `agents_install` matrix row, `amp_keeps_the_real_mcp_json` (foreign server kept), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`, mimo's existing `.jsonc` test for the shared helper. Per-host check: `amp` is not on PATH here (`~/.config/amp` holds only `AGENTS.md` and `plugins`), so no manual `--dry-run`.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.

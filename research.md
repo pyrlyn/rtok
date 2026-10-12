@@ -2576,6 +2576,15 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
 
+### 32.5 Amp (T413.5, checked 2026-10-12)
+
+- User settings: `~/.config/amp/settings.json` or `settings.jsonc` (macOS and Linux; `%USERPROFILE%\.config\amp\` on Windows); workspace: the nearest `.amp/settings.json` or `.jsonc`, searched upward to the repository root; workspace settings override user settings. `--settings-file <path>` swaps the user file; no environment variable for the config directory is documented. https://ampcode.com/docs/cli/settings
+- MCP: key `amp.mcpServers` (a dotted property name), stdio entry `{command, args}`, no `type`. User-level servers need no approval; workspace servers do (`amp mcp approve`). The page does not say which file `amp mcp add` writes. https://ampcode.com/docs/customize/mcp
+- Plugins: `.ts` / `.js` single files or `<name>/index.ts` in `.amp/plugins/` (project) or `$XDG_CONFIG_HOME/amp/plugins/` / `~/.config/amp/plugins/` (system); the entry default-exports `function (amp: PluginAPI)` and registers with `amp.on(event, handler)`; they run under Bun. Events: `session.start`, `tool.call` (returns `allow`, `reject-and-continue`, `modify`, `synthesize`, `error`), `tool.result`, `agent.start` (can add a message), `agent.end`, `changes.prompt`. https://ampcode.com/docs/customize/plugins and https://ampcode.com/docs/plugin-api (first 100000 characters read). rtok's OpenCode-shaped plugin (`plugins/opencode/rtok.ts`) targets another event API and Amp's tool names are not in the pages read, so no Amp plugin is linked: `plugin` stays `Support::No` until a plugin unit exists under `plugins/` (D21).
+- Hooks: no shell hook events appear in the settings or plugin pages; the plugin events above are in-process handlers. `hooks` stays `Support::No`.
+- `amp.url` and `amp.proxy` appear only as keys a workspace-managed document must not set because they could cut the client off from "the server that provides the settings"; `amp.url` is Amp's own server, not a model-provider base URL. Proxy stays `Support::No`. https://ampcode.com/docs/cli/settings
+- Binary: `amp`. No desktop app is documented, so one CLI variant.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

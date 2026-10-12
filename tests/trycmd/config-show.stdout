@@ -258,6 +258,7 @@ report.format = md
 report.out = 
 report.since = 30d
 setup.aider.config_path = ~/.aider.conf.yml
+setup.amp.settings_path = ~/.config/amp/settings.json
 setup.antigravity.cli_plugins_path = ~/.gemini/antigravity-cli/plugins
 setup.antigravity.plugins_path = ~/.gemini/config/plugins
 setup.backup = true

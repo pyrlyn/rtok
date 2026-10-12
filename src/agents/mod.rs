@@ -13,6 +13,7 @@
 //! `rtok agents list` and `rtok doctor` read the same files back through the same contract.
 
 pub mod aider;
+pub mod amp;
 pub mod antigravity;
 pub mod claude;
 pub mod cline;
@@ -110,6 +111,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "roo" => Some(&roo::Roo),
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
+        "amp" => Some(&amp::Amp),
         _ => None,
     }
 }
