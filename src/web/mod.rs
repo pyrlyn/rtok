@@ -163,13 +163,17 @@ pub fn serve_blocking(cfg: Config) -> Result<()> {
     rt.block_on(serve(cfg))
 }
 
-pub async fn serve(cfg: Config) -> Result<()> {
+pub async fn serve(mut cfg: Config) -> Result<()> {
     let addr: SocketAddr = format!("{}:{}", cfg.web.host, cfg.web.port)
         .parse()
         .with_context(|| format!("dashboard bind {}:{}", cfg.web.host, cfg.web.port))?;
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
+    // T641: with port 0 the kernel picks the port, and only the bound address tells a caller
+    // (the e2e helpers) where to connect, so the startup line and `/health` name that one.
+    let addr = listener.local_addr().context("bound address")?;
+    cfg.web.port = addr.port();
     eprintln!("rtok web http://{addr}  (ws://{addr}/ws)");
     crate::log::append(
         &cfg,

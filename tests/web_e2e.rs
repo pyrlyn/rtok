@@ -9,6 +9,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::ffi::OsStr;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -31,11 +32,10 @@ impl Drop for Web {
     }
 }
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("free port")
-        .port()
+/// The `host:port` in `rtok web`'s startup line, `rtok web http://<addr>  (ws://<addr>/ws)`.
+fn bound_addr(line: &str) -> Option<String> {
+    let rest = line.strip_prefix("rtok web http://")?;
+    rest.split_whitespace().next().map(str::to_owned)
 }
 
 /// `rtok web` with `HOME`/`RTOK_HOME` in a temp dir, so the snapshot never reads this
@@ -49,9 +49,10 @@ async fn start_with(label: &str, dist: Option<&OsStr>) -> Web {
     let home = std::env::temp_dir().join(format!("rtok-web-e2e-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("home");
-    let port = free_port().to_string();
+    // Port 0: the kernel picks the port when `rtok web` binds and the startup line names it. A
+    // port probed here and handed over can be taken by a parallel test in between.
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rtok"));
-    cmd.args(["web", "--host", "127.0.0.1", "--port", &port])
+    cmd.args(["web", "--host", "127.0.0.1", "--port", "0"])
         .env("RTOK_HOME", &home)
         .env("HOME", &home)
         .env_remove("RTOK_WEB_DIST");
@@ -60,17 +61,30 @@ async fn start_with(label: &str, dist: Option<&OsStr>) -> Web {
     }
     // `home` is the cwd, so nothing here (no `web/dist`, no `dist/` beside the binary) can feed
     // the page except what the binary embeds.
-    let child = cmd
+    let mut child = cmd
         .current_dir(&home)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .expect("spawn rtok web");
-    let web = Web {
+    let stderr = child.stderr.take().expect("stderr");
+    let (tx, rx) = std::sync::mpsc::channel();
+    // Drains past the startup line too: a full pipe would block the server's next write.
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if let Some(addr) = bound_addr(&line) {
+                let _ = tx.send(addr);
+            }
+        }
+    });
+    let mut web = Web {
         child,
-        addr: format!("127.0.0.1:{port}"),
+        addr: String::new(),
         home,
     };
+    web.addr = rx
+        .recv_timeout(Duration::from_secs(20))
+        .expect("rtok web never printed its address");
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         if let Ok(r) = reqwest::get(format!("http://{}/health", web.addr)).await
@@ -99,6 +113,28 @@ fn asset_url(html: &str, ext: &str) -> String {
         .find(|url| url.ends_with(ext))
         .unwrap_or_else(|| panic!("no {ext} asset in the page"))
         .to_string()
+}
+
+/// T641: `--port 0` lets the kernel pick the port at bind time, so parallel servers never race
+/// for a probed one; the startup line and `/health` name the port actually bound, not 0.
+#[tokio::test]
+async fn port_zero_reports_the_bound_port() {
+    let web = start("port0").await;
+    let port: u16 = web
+        .addr
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.parse().ok())
+        .expect("port in the startup line");
+    assert_ne!(port, 0);
+    let health = reqwest::get(format!("http://{}/health", web.addr))
+        .await
+        .expect("health")
+        .text()
+        .await
+        .expect("body");
+    let health: Value = serde_json::from_str(&health).expect("json");
+    assert_eq!(health["port"], port, "{health}");
 }
 
 #[tokio::test]
