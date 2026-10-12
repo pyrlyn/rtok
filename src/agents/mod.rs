@@ -1518,6 +1518,22 @@ pub(crate) fn anthropic_proxy_url(cfg: &crate::config::Config) -> String {
     format!("http://{}:{}", cfg.proxy.bind, cfg.proxy.port)
 }
 
+/// The port of an `http(s)` URL whose *authority* is a loopback host (`localhost`, `127.0.0.0/8`,
+/// `[::1]`); `None` for anything else. Ownership of a proxy URL is read from the parsed
+/// authority, never from loopback-looking text in the path, query or userinfo of a foreign URL.
+pub(crate) fn loopback_port(value: &str) -> Option<u16> {
+    let u = url::Url::parse(value.trim()).ok()?;
+    if !matches!(u.scheme(), "http" | "https") {
+        return None;
+    }
+    let local = match u.host()? {
+        url::Host::Domain(d) => d.eq_ignore_ascii_case("localhost"),
+        url::Host::Ipv4(a) => a.is_loopback(),
+        url::Host::Ipv6(a) => a.is_loopback(),
+    };
+    local.then(|| u.port_or_known_default()).flatten()
+}
+
 pub(crate) fn openai_proxy_url(cfg: &crate::config::Config) -> String {
     format!("http://{}:{}/v1", cfg.proxy.bind, cfg.proxy.port)
 }
