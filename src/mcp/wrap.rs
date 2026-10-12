@@ -203,9 +203,14 @@ fn note_call(pending: &Pending, v: &Value) {
     }
 }
 
-/// The tool name when `frame` answers a noted `tools/call`; the id is forgotten either way.
+/// The tool name when `frame` answers a noted `tools/call`; the id is forgotten once a response carries it.
 fn take_call(pending: &Pending, frame: &[u8]) -> Option<String> {
     let v: Value = serde_json::from_slice(frame).ok()?;
+    // A server-initiated request or notification carries `method`; its id lives in the
+    // server's own namespace and must not consume the client's pending call.
+    if v.get("method").is_some() {
+        return None;
+    }
     let id = v.get("id")?.to_string();
     pending.lock().ok()?.remove(&id)
 }
@@ -450,6 +455,36 @@ mod tests {
             Some("grep")
         );
         assert_eq!(take_call(&pending, br#"{"id":7,"result":{}}"#), None);
+    }
+
+    #[test]
+    fn server_requests_do_not_consume_client_pending_calls() {
+        let pending: Pending = Arc::default();
+        note_call(
+            &pending,
+            &serde_json::json!({"id":7,"method":"tools/call","params":{"name":"grep"}}),
+        );
+        let server_requests: [&[u8]; 3] = [
+            br#"{"id":7,"method":"sampling/createMessage","params":{}}"#,
+            br#"{"id":"7","method":"roots/list"}"#,
+            br#"{"method":"notifications/progress","params":{"id":7}}"#,
+        ];
+        for frame in server_requests {
+            assert_eq!(take_call(&pending, frame), None);
+        }
+        assert_eq!(
+            take_call(&pending, br#"{"id":7,"result":{}}"#).as_deref(),
+            Some("grep")
+        );
+        note_call(
+            &pending,
+            &serde_json::json!({"id":9,"method":"tools/call","params":{"name":"find"}}),
+        );
+        assert_eq!(
+            take_call(&pending, br#"{"id":9,"error":{"code":-1,"message":"x"}}"#).as_deref(),
+            Some("find")
+        );
+        assert_eq!(take_call(&pending, br#"{"id":9,"result":{}}"#), None);
     }
 
     #[test]
