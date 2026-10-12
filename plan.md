@@ -58,7 +58,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
@@ -757,14 +756,6 @@ Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
-
-### T413.14. `rtok agents install openhands` — OpenHands
-
-OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
 
 ### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 

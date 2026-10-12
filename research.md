@@ -2603,6 +2603,17 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
 - No Desktop app is documented, so there is one CLI variant.
 
+### 32.14 OpenHands (T413.14, checked 2026-10-12)
+
+OpenHands CLI. All facts are from the vendor's docs (docs.openhands.dev), fetched 2026-10-12.
+
+- User-level MCP file: `~/.openhands/mcp.json` ("Configuration File Location"; `openhands mcp add|remove|enable|disable` edit it), https://docs.openhands.dev/openhands/usage/cli/mcp-servers. `openhands mcp list|get` read it.
+- Format: top-level `mcpServers`, each server keyed by name with `command`, `args`, `env` for a stdio server (the page links the FastMCP configuration format); the examples carry no `type` for stdio, so the entry is the `{command, args}` shape `register_stdio_mcp` writes.
+- A running conversation does not pick up a changed file; the page says to restart the conversation to load new configurations, so setup does not restart anything.
+- Hooks: `.openhands/hooks.json` in the repository root, events `PreToolUse`, `PostToolUse` and others, `snake_case` keys, https://docs.openhands.dev/openhands/usage/customization/hooks. The page names no user-level hooks file, so hooks stay `Support::No` and a project file is never written (it belongs to the project).
+- Install: `uv tool install openhands --python 3.12`, or `curl -fsSL https://install.openhands.dev/install.sh | sh` for an executable binary; both put an `openhands` command on PATH, https://docs.openhands.dev/openhands/usage/cli/installation. Detection is the `openhands` binary; no `--version` flag is relied on.
+- A model endpoint setting and a plugin format for rtok were not checked, so proxy and plugin stay `Support::No`.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

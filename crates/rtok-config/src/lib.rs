@@ -87,6 +87,7 @@ pub const HOSTS: &[&str] = &[
     "qwen",
     "codebuddy",
     "droid",
+    "openhands",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -790,6 +791,7 @@ section! {
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
         droid: SetupDroid = SetupDroid::default(),
+        openhands: SetupOpenhands = SetupOpenhands::default(),
     }
 }
 
@@ -946,6 +948,11 @@ section! {
 section! {
     /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
     SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
+}
+
+section! {
+    /// `[setup.openhands]` — OpenHands's user-level MCP file (T413.14).
+    SetupOpenhands { mcp_path: PathBuf = p("~/.openhands/mcp.json") }
 }
 
 section! {
@@ -1700,6 +1707,7 @@ impl Config {
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
             setup.droid.mcp_path,
+            setup.openhands.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

@@ -60,6 +60,7 @@ pub mod skill;
 pub mod task_list;
 pub mod usage;
 pub mod vscode;
+pub mod openhands;
 pub mod windsurf;
 pub mod zcode;
 pub mod zed;
@@ -112,6 +113,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
         "droid" => Some(&droid::Droid),
+        "openhands" => Some(&openhands::OpenHands),
         _ => None,
     }
 }

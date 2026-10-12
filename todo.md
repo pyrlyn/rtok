@@ -41,7 +41,6 @@
 - T413.11. `rtok agents install crush` — Crush
 - T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
-- T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
