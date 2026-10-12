@@ -451,6 +451,9 @@ _rtok() {
             rtok__subcmd__graph__subcmd__help__subcmd__projects,link)
                 cmd="rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__link"
                 ;;
+            rtok__subcmd__graph__subcmd__help__subcmd__projects,reindex)
+                cmd="rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__reindex"
+                ;;
             rtok__subcmd__graph__subcmd__help__subcmd__projects,remove)
                 cmd="rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__remove"
                 ;;
@@ -469,6 +472,9 @@ _rtok() {
             rtok__subcmd__graph__subcmd__projects,link)
                 cmd="rtok__subcmd__graph__subcmd__projects__subcmd__link"
                 ;;
+            rtok__subcmd__graph__subcmd__projects,reindex)
+                cmd="rtok__subcmd__graph__subcmd__projects__subcmd__reindex"
+                ;;
             rtok__subcmd__graph__subcmd__projects,remove)
                 cmd="rtok__subcmd__graph__subcmd__projects__subcmd__remove"
                 ;;
@@ -486,6 +492,9 @@ _rtok() {
                 ;;
             rtok__subcmd__graph__subcmd__projects__subcmd__help,link)
                 cmd="rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__link"
+                ;;
+            rtok__subcmd__graph__subcmd__projects__subcmd__help,reindex)
+                cmd="rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__reindex"
                 ;;
             rtok__subcmd__graph__subcmd__projects__subcmd__help,remove)
                 cmd="rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__remove"
@@ -741,6 +750,9 @@ _rtok() {
                 ;;
             rtok__subcmd__help__subcmd__graph__subcmd__projects,link)
                 cmd="rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__link"
+                ;;
+            rtok__subcmd__help__subcmd__graph__subcmd__projects,reindex)
+                cmd="rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__reindex"
                 ;;
             rtok__subcmd__help__subcmd__graph__subcmd__projects,remove)
                 cmd="rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__remove"
@@ -3176,7 +3188,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__help__subcmd__projects)
-            opts="add select link unlink remove"
+            opts="add select link unlink reindex remove"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3204,6 +3216,20 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__link)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__graph__subcmd__help__subcmd__projects__subcmd__reindex)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -3340,7 +3366,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__projects)
-            opts="-h --json --config --help add select link unlink remove help"
+            opts="-h --json --config --help add select link unlink reindex remove help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3376,7 +3402,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__projects__subcmd__help)
-            opts="add select link unlink remove help"
+            opts="add select link unlink reindex remove help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3418,6 +3444,20 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__link)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__graph__subcmd__projects__subcmd__help__subcmd__reindex)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -3488,6 +3528,24 @@ _rtok() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__graph__subcmd__projects__subcmd__reindex)
+            opts="-h --json --config --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -4470,7 +4528,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__help__subcmd__graph__subcmd__projects)
-            opts="add select link unlink remove"
+            opts="add select link unlink reindex remove"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -4498,6 +4556,20 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__link)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rtok__subcmd__help__subcmd__graph__subcmd__projects__subcmd__reindex)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 5 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

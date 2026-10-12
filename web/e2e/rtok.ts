@@ -190,6 +190,15 @@ export class Rtok {
     return row.id;
   }
 
+  /** Every registered project as `graph projects --json` lists it, the CLI's view of the registry. */
+  projects() {
+    return JSON.parse(this.run(["graph", "projects", "--json"], "")) as {
+      id: number;
+      root: string;
+      state: string;
+    }[];
+  }
+
   /** The page draws the index, so a project must be indexed after each edit. */
   indexProject(id: number) {
     this.run(["graph", "index", "--project", String(id)], "");
