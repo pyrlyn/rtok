@@ -40,6 +40,9 @@
 - T620 `lsp.rs`: a `Session` never reads or writes the server's pipes on the caller's thread. A reader
   and a writer thread own them; `request` waits on a channel for `lsp_timeout_ms`, and expiry kills and
   reaps the server so it respawns clean. Do not add a blocking pipe call to `Session`.
+- T621 `lsp.rs`: the server keeps the text it was sent and ignores the disk, so `did_open` re-reads the
+  file and sends `didChange` (or close + open) when it differs, and `with_session` re-syncs every open
+  document before each query. Never record a document as sent before its notification is queued.
 - `drill.rs` (T329.14) answers the graph page's level 2 over `/ws` (`{"graph": ...}`); it reads the
   `symbol_graph.rs` scans only, so a name defined in more than 3 files draws no edge.
 - `events.rs` (T329.15) writes the start, progress and end events of an MCP graph call to `graph_events`

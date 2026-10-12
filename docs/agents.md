@@ -54,6 +54,7 @@ After an rtok upgrade, `rtok agents update` brings every installed host up to da
 | [`qwen`](https://github.com/pyrlyn/rtok/blob/main/src/agents/qwen/README.md) | Qwen Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | CodeBuddy Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | WorkBuddy | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
+| [`droid`](https://github.com/pyrlyn/rtok/blob/main/src/agents/droid/README.md) | Factory Droid | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`amp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/amp/README.md) | Amp | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 

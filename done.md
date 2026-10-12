@@ -788,6 +788,28 @@ Status: done 2026-10-12
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T621. Refresh opened LSP documents after their files change
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [Session::did_open](src/plugins/graph/lsp.rs#L511). The first query reads a file and sends `textDocument/didOpen` with version 1. Subsequent calls return immediately if the URI is already in `opened`, before reading the file again. [with_session](src/plugins/graph/lsp.rs#L544) reuses the same live server for the workspace; the module sends no document-change or close notification. Editing a file between queries therefore leaves the peer with the original open-document text.
+
+The isolated probe opened a temporary file containing `old_symbol`, changed it to `new_symbol`, and called the actual `did_open` implementation again. A synthetic protocol peer reported only one notification, still carrying `old_symbol`. This affects repeated queries in a resident MCP session; restarting a server happens to refresh the initial snapshot. T376's lifecycle/fallback work does not cover edits to an already opened document.
+
+Execution plan:
+
+1. Add a fake-peer test that opens, edits and re-queries one URI in the same session; assert the peer receives the new content before the query. Keep an unchanged-file control.
+2. Track each opened document's content/version and send the appropriate full-content change or close/reopen sequence when it changes, respecting the negotiated synchronization capability. Do not mark a document as synchronized before its notification succeeds.
+3. Cover consecutive edits, Unicode, deletion/read failure and session replacement; ensure query results and source ranges cannot silently refer to the old snapshot.
+4. Run focused document synchronization and repeated graph-query tests, then `just check`.
+
+Claimed design (single PR, well under 500 code lines): `opened` becomes a map of URI to the last text sent and its version. `initialize`'s `textDocumentSync` kind is kept on the session. `did_open` re-reads the file: unchanged is a no-op; changed sends a full-content `didChange` (version + 1) when the server syncs, else `didClose` + `didOpen`; a file that can no longer be read is closed and forgotten. State is recorded only after the notification is queued. `with_session` refreshes every already-open document before each call, so `workspace/symbol` and positions never come from an old snapshot. Tests use a recording `sh` peer (`cat` into a file), first run against the old `did_open` to prove they fail.
+
+Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
+
+Result: `Session::did_open` in `src/plugins/graph/lsp.rs` keeps each open document's last text and version and re-reads the file on every call: unchanged is a no-op, changed sends a full-content `didChange` (version + 1) when `initialize` advertised change sync (`sync_kind`), otherwise `didClose` plus `didOpen`; a file that is gone or unreadable is closed and forgotten. A document is recorded only after its notification is queued. `with_session` calls `refresh_open` before every query, so documents opened by an earlier query are re-synced too and `workspace/symbol` positions never come from an old snapshot; a replaced session starts with no open documents. A recording `sh` peer covers edit, close-and-reopen, unchanged control, consecutive Unicode edits, deletion and re-creation, `refresh_open` and a failed notification; seven failed against the old `did_open` and pass now; `just check`.
+Status: done 2026-10-12
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T377. `impact` renders a budgeted blast radius: grouped by file, depth-ranked, with a cut line
 
 From the Empryo study (idea-only, clean-room). `impact` past `plugins.graph.impact_tokens` (default 1500) groups the BFS result by file, orders files by (depth asc, stored T370 file rank, ref count desc), prints `path (N refs, depth d)` with the first 3 lines per file and stops at the budget with `+K files, M refs not shown — impact <name> --all`. The budget covers the finished answer (ambiguity banner and marks, other-definitions and co-change lines come off it first). `--all` (CLI) / `all` (MCP) and `impact_tokens = 0` keep the flat listing; a listing that fits is unchanged; the LSP backend is unchanged; in a multi-project scope the order falls back to depth then ref count. A cut records a `Measurement` (kind `impact`).
@@ -8754,6 +8776,12 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
+
+### T413.3. `rtok agents install droid` — Factory Droid
+
+`rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
+
+Done: `src/agents/droid/` (one CLI variant, `droid` on PATH): `mcpServers.rtok` in `~/.factory/mcp.json` through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON), `[setup.droid] mcp_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (nothing about Droid's caches is documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Factory documents hooks (`research.md` section 32.3) but no tool-name list or `PreToolUse` rewrite output to build the mapping from, so a hooks task has to verify both; `customModels` carry a `baseUrl` each; the plugin needs a `plugins/droid` unit (D21). Research with sources and the 2026-10-12 check date in `research.md` section 32.3. Tests: `droid` unit tests (dry run, idempotent round trip, foreign servers kept, apply twice), `agents_install` matrix row, `droid_keeps_the_real_mcp_json` (foreign server kept byte-for-byte), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`. Per-host check: `droid` is not installed here, so no manual `--dry-run`.
 
 ### T413.5. `rtok agents install amp` — Amp
 

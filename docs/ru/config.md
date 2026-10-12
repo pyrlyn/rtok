@@ -442,6 +442,8 @@ dir           = "~/.qwen"                    # settings.json (hooks, mcpServers)
 [setup.codebuddy]
 dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (hooks), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR moves it
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
+[setup.droid]
+mcp_path      = "~/.factory/mcp.json"        # Factory Droid: пользовательский файл MCP-серверов (mcpServers)
 [setup.amp]
 settings_path = "~/.config/amp/settings.json"    # Amp: user settings; amp.mcpServers holds MCP servers (settings.jsonc if it is the only one)
 

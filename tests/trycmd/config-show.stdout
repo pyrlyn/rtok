@@ -283,6 +283,7 @@ setup.commandcode.dir = ~/.commandcode
 setup.copilot.dir = ~/.copilot
 setup.cursor.hooks_path = ~/.cursor/hooks.json
 setup.devin.config_path = ~/.config/devin/config.json
+setup.droid.mcp_path = ~/.factory/mcp.json
 setup.dry_run = false
 setup.force = false
 setup.gemini.dir = ~/.gemini
