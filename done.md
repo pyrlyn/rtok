@@ -2244,24 +2244,6 @@ Check: the dated `research.md` section; the go/no-go recorded in this card's don
 
 Result: closed with the finding, nothing built (`research.md` §38, sources checked 2026-10-11). Claude 4.6+ rejects a prefilled assistant message; OpenAI Predicted Outputs is unsupported with `tools`; 96 % of output is tool-call input, which a text draft cannot carry; the break-even needs an accept rate above 0.2 plus the verdict cost. Reopen only if a bench can show cost per passed task falling with the pass rate held. Not covered: Claude Code and Codex request paths, Ollama, any measured local-model pass rate.
 
-### T329.51. Graph page: maximise buttons for the two parts
-
-Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
-
-Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
-
-### T329.52. Graph page: metrics collapsed to a strip under 900 px
-
-Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
-
-Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
-
-### T329.53. Graph page: count-up animation of the live numbers
-
-Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
-
-Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
-
 ### T500. TUI: live calls extras (sparklines, outside-scope mark; folded-target counter moved to T561)
 
 D27 counterpart of T329.32 (creator 2026-10-10). The `rtok tui` live calls pane (`src/tui/live_calls.rs`) gains what fits a terminal: sparklines of the store buckets for the selected window, the "outside scope" mark on a call that crosses out of the scope, and, where the pane names call targets, the nearest-visible-ancestor counter for targets folded into a "+N more" group. Maximise, the collapsed strip and count-up stay web-only. Depends on T329.32 for the data and the wording.
@@ -3762,6 +3744,40 @@ Sparklines: `CallsStore::spark(window, now)` (`src/web/calls_store.rs`) spreads 
 Check: `a_sparkline_spreads_the_buckets_over_equal_slots_and_adds_up_to_the_window` (slots sum to the window's calls and saved tokens), `scope.test.ts`, `lit.test.ts` (outside scope lights nothing, folded counters), `live.test.tsx` (sparklines named for the span, the pill, the "+N more" counter on the 600-file project), stories `OutsideScope`, `Sparklines`, `FoldedCalls` (axe). `tests/surface_parity.rs::live_extras_are_on_the_page_and_wait_for_the_tui` records that the TUI pane waits for T500.
 
 Check result (2026-10-10): `just check` green, nextest `Summary [227.799s] 3301 tests run: 3301 passed (1 slow), 8 skipped`; `just spa-typecheck` clean; `just spa-test` 48 files, 427 tests passed; `just js` oxlint and oxfmt clean; `just spa-stories` 34 files, 228 tests passed; `just spa-e2e` 30 passed, 2 failed (`a 500-call burst leaves the page responsive` timed out in `rtok mcp` and `Compare against a saved export` hit the 30 s test timeout, both with load average about 20 and neither touching the code of this change).
+
+### T329.51. Graph page: maximise buttons for the two parts
+
+Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
+
+Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
+
+Result: `live/Maximise.tsx` (`useMaximised`, `MaximisablePart`) gives each part a pressed `Chip` ("Maximise explorer" / "Restore live graph"); a maximised part is a fixed overlay over the page rather than a remounted tree, so the explorer keeps its zoom and layout, and Escape restores unless something else already used it. The choice is deliberately not remembered, so a page never opens with a hidden part. Landed on main with #993 (`1839ad321`); the earlier branch version (`cdab19cb5`, a remembered `MAX_KEY` in `Split.tsx`) was dropped in the merge. Covered by `Maximise.test.tsx`, the `Split` story `Maximised` (axe) and a Playwright case.
+
+### T329.50. Graph page: running labels with elapsed counters on the live canvas
+
+Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
+
+Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
+
+Plan: (1) a label layer in the 2D and 3D live canvases fed by the running calls the metrics list already has (tool name, start time); (2) elapsed counter ticking off one shared timer, fade a few seconds after the call ends, "+N more" labels the node holding the count, none outside the scope; (3) Vitest, stories with axe, a Playwright case; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
+Result: each running call on the graph page's live canvas has a small floating label on its node in 2D and 3D with the tool name and a seconds counter on the page's one-second clock. A finished call keeps its label with its duration for 4 s and fades after 2 s; the fade is off under `prefers-reduced-motion`. A call folded into "+N more" labels the node that holds the count; calls outside the scope or beyond the 8 accents get none. One `aria-hidden` HTML overlay serves both views through `ViewApi.screenOf`; `seconds`/`millis` moved into `pages/format.ts`. Covered by Vitest (`lit`, `RunningLabels`, `live`), axe stories in dark, light and at phone width, and Playwright cases for 2D and 3D.
+
+### T329.52. Graph page: metrics collapsed to a strip under 900 px
+
+Left over from T329.32. On screens narrower than 900 px the live part stacks below the explorer and its metrics collapse to a one-line strip (running, calls, saved) that expands to the full cards. Web-only.
+
+Check: under 900 px the metrics show as a strip that expands and collapses; at 900 px and above nothing changes; Vitest, stories (axe) and Playwright at 375 px; `just check`.
+
+Result: `live/MetricsFold.tsx` shows running, calls and saved as one disclosure button (`aria-expanded`, `aria-controls`, "More" / "Less") under 900 px and keeps the full cards in the DOM, hidden by CSS, so the 900 px breakpoint is one media query with no resize listener; from 900 px up nothing changes. Landed on main with #993 (`1839ad321`); the branch's own strip (`bf1c181f7`: `MetricsStrip` with `useMinWidth` and a conditional render of the cards) was dropped in the merge as a duplicate. Covered by `MetricsFold.test.tsx`, the `MetricsFold` story (axe) and `e2e/metrics-fold.spec.ts`.
+
+### T329.53. Graph page: count-up animation of the live numbers
+
+Left over from T329.32. The numbers of the live cards count up to their new value over a short time and jump straight to it under `prefers-reduced-motion`; the final value is always the server's total, and an assistive-technology reader sees the final value only. Web-only.
+
+Check: a number counts up on a new frame and lands on the server's value; with `prefers-reduced-motion` it jumps; Vitest, stories (axe); `just check`.
+
+Result: `web/src/ui/CountUp.tsx` (`useCountUp`, `CountUp`) eases a figure to its new value over 600 ms, draws the first value as is, jumps under `prefers-reduced-motion` and lands on the server's value itself on the last frame; while it moves the changing text is `aria-hidden` and the final figure sits in an `sr-only` span. Landed on main with #993 (`1839ad321`); the branch's copy in `live/CountUp.tsx` (`dce2e9e38`) was dropped in the merge as a duplicate. Covered by `CountUp.test.tsx` and `CountUp.stories.tsx` (axe).
 
 ## T480 — TUI: live graph calls panel
 
@@ -9280,6 +9296,30 @@ Result: `[proxy.routing]` (`enabled`, default `false`) holds one rule per lane, 
 Status: done 2026-10-11
 
 Model: Claude Code / claude-sonnet-5-5
+
+### T385.9.1. P28 compressor client on the `internal` lane and the summary cache
+
+Part of T385.9 (`docs/research/optimization.md` §3.3, `docs/llm-soft-compression.md`). A compressor client that sends one summarisation request for an archived tool result through the proxy's own `internal` lane (so the spend is tagged and T385.10 routing applies), with the compressor prompt kept as data. Summaries are stored next to the archive row, keyed by archive id and compressor version, through Diesel (a new migration; check every open branch for the next free number). A code-aware guard copies the must-keep spans (identifiers, paths, numbers, error codes; the kinds in `tests/fixtures/p28_must_keep.toml`) and rejects a summary that drops one. Config lives in the one config module, `enabled = false` by default.
+
+Done when: with the flag off nothing calls a model and no row is written; with it on and a mock upstream, a summary is stored once per archive id and version and read back; a summary that drops a must-keep span is rejected and not stored; an upstream error stores nothing and is warned, never fatal; `just check`.
+
+Check: mock-upstream tests for store, reuse, guard rejection and upstream failure; the must-keep fixture test; `just check`.
+
+Plan: (1) config section and types; (2) migration + Diesel model and store API for summaries; (3) must-keep span extraction shared with `tests/p28_must_keep.rs` (no second parser) and the guard; (4) client over the `internal` lane with a mock upstream in tests; docs en/ru/uk.
+
+Result: `[plugins.compress.llm]` (`enabled = false` by default) configures a compressor client that posts one summarisation request per archived tool result to the proxy's own `internal` lane; the prompt is data in `src/plugins/compress/prompt.toml`. Summaries live in the Diesel table `archive_summaries` (migration `0049`), keyed by archive id and version (prompt hash + model); the first writer wins and `purge_archive` drops them too. The must-keep guard (`must_keep.rs`) shares its span kinds with `tests/p28_must_keep.rs` and rejects a summary that loses a span (53 of 54 fixture spans extracted; floor 95%). Covered by `tests/compress_llm.rs` (mock upstream: store, reuse, guard rejection, upstream failure) and `tests/p28_must_keep.rs`.
+
+### T385.9.2. P28 asynchronous compression and summaries in the live zone, behind a flag
+
+Part of T385.9, after T385.9.1. When a tool result enters the archive and is eligible (outside `keep_turns`, above `min_tokens`, logs and prose before diffs and source), compression is queued off the hot path; a request never waits on it. From the next turn on, the proxy's live-zone view of that result is the cached summary plus the archive id instead of the extractive view, byte-stable across turns so the prompt cache survives; no summary yet means the extractive view (fail open). `expand <id>` still returns the original.
+
+Done when: flag off → proxy bytes identical to today; flag on → the second turn carries the summary and the third turn's prefix is byte-identical to the second; a slow mock compressor never delays a request; `expand` recovers the original; `just check`.
+
+Check: replay byte-stability, flag-off identity, slow-upstream latency and `expand` tests; `just check`.
+
+Plan: (1) eligibility and a background queue fed from the archive write path; (2) the live-zone rewrite reads the cached summary, else the extractive view; (3) tests with a slow mock compressor and a two-turn replay; docs en/ru/uk.
+
+Result: with the flag on, the compress plugin offers archive ids without a summary to a background queue (`src/plugins/compress/queue.rs`: one try per id per process, `max_in_flight` cap) that calls the compressor with the agent request's credentials. From the next request on, an archived block outside the live zone becomes `summary + expand(<id>)` when that is shorter than the archive pointer; a stored summary never changes, so the prefix stays byte-stable, and a missing summary keeps the extractive view. With the flag off `ProxyState.summaries` is `None` and the proxy's bytes are unchanged. Covered by `tests/compress_live.rs` (flag off makes no call; a failing compressor gives byte-identical bodies; the summary lands on the next turn with a byte-identical prefix and one job per id; a 4 s compressor never delays a request) and documented in `docs/llm-soft-compression.md` §8. The live Gate P28 bench is T385.9.3.
 
 ### T240. Golden files for rule families without one
 
