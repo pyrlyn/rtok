@@ -135,6 +135,16 @@ pub(crate) fn pragma_auto_vacuum_incremental(conn: &mut SqliteConnection) -> Que
     exec_pragma(conn, "PRAGMA auto_vacuum = INCREMENTAL")
 }
 
+/// T646: `sqlite_stat1` rows for `symbols`. With none, the planner served `ORDER BY path` from
+/// `symbols_root_path (root=?)` — every row of the root — instead of seeking
+/// `symbols_root_name`. The sampled form (SQLite's `analysis_limit`) keeps an index pass on a
+/// large store cheap and still tells the planner that `root` alone is not selective.
+/// No DSL form for either statement.
+pub(crate) fn analyze_symbols(conn: &mut SqliteConnection) -> QueryResult<()> {
+    exec_pragma(conn, "PRAGMA analysis_limit = 1000")?;
+    exec_pragma(conn, "ANALYZE symbols")
+}
+
 /// A row of `PRAGMA incremental_vacuum`: one per freed page, no columns.
 #[derive(QueryableByName)]
 struct FreedPage {}

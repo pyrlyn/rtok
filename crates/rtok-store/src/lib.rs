@@ -144,6 +144,8 @@ pub struct Store {
     wait: LockWait,
     /// `[core] store_raw` (T431): save request bodies verbatim instead of cleaned.
     store_raw: std::sync::atomic::AtomicBool,
+    /// The last parsed graph IDF cache (T646).
+    idf_memo: Mutex<Option<symbols::IdfMemo>>,
 }
 
 /// How long one connection waits on another process's lock (T178).
