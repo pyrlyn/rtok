@@ -10,7 +10,7 @@
 //! All I/O goes through [`Fs`], so a test plugs in an in-memory map instead of the real disk
 //! (this PR's own test does exactly that). The disk-backed `Fs` a host installer uses lands
 //! with the first host (T277 PR 2) and must write atomically and back up before every change,
-//! the same contract `rtok_agent_sdk::write_atomic` / `backup` already give real files.
+//! the same contract `fs_kit::write::atomic` / `rtok_agent_sdk::backup` already give real files.
 
 use std::path::Path;
 

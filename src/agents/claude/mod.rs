@@ -846,7 +846,11 @@ pub fn desktop_path() -> PathBuf {
 /// does not spawn there: write the absolute binary (Claude Desktop, ZCode).
 pub(super) fn desktop_command() -> String {
     std::env::current_exe()
-        .map(|exe| dunce::simplified(&exe).to_string_lossy().into_owned())
+        .map(|exe| {
+            fs_kit::path::simplified(&exe)
+                .to_string_lossy()
+                .into_owned()
+        })
         .unwrap_or_else(|_| super::rtok_command())
 }
 

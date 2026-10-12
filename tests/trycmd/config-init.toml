@@ -571,7 +571,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 555 insertions(+)
+1 file changed, 566 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

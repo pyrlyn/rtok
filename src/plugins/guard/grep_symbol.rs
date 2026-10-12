@@ -95,7 +95,7 @@ fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<Strin
     let under = match scope.map(str::trim).filter(|p| !p.is_empty()) {
         None => String::new(),
         Some(p) => {
-            let abs = dunce::canonicalize(cwd.join(p)).ok()?;
+            let abs = fs_kit::path::canonicalize(cwd.join(p)).ok()?;
             let rel = abs.strip_prefix(root).ok()?;
             if !abs.is_dir() {
                 return None;

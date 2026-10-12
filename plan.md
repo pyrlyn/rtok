@@ -66,13 +66,20 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | todo | P3 | 1 | 0% | |
+| T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
 | T436.4 | todo | P3 | 2 | 0% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
+| T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
+| T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
+| T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
+| T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
+| T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
+| T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
+| T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T531 | todo | P2 | 2 | 0% | |
 | T532 | todo | P1 | 3 | 0% | |
 | T533 | todo | P1 | 3 | 0% | |
@@ -2014,6 +2021,59 @@ Split from T520. No documented config path for MiMo Desktop (early access); a th
 
 Check: with a probe result in hand, `rtok agents list` shows a MiMo Desktop variant detected from its app, install writes the config the probe found, tests cover it; `just check`.
 
+### T522. `read` and `expand` accept the line ranges agents sent this week
+
+Found 2026-10-10 in `~/.rtok/errors.log` and the `logs` table, 2026-10-03 through 2026-10-10: 25 `invalid line range` failures, each a different spelling. `parse_range` (`src/expand.rs`) already strips one pair of surrounding quotes (T172) and reads `a, b` as `a-b` (T353). It still rejects a space around `-` (`420 - 640`, five of the 25), a colon (`580:650`), brackets (`[1, 50]`), two numbers separated by a space (`610 614`), an HTML break (`95<br>`, `490<br>-800`), quotes in the middle (`235"-"270`) and an underscore (`1860_1960`).
+
+Done when: each of those 25 strings parses to the two line numbers in it. A trailing `<br>` with no second number is that one line. A value that is not one or two positive lines still fails with `invalid line range`.
+
+Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
+
+### T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
+
+Found 2026-10-10: 27 `task id must match [a-z0-9]…` errors since 2026-10-06. Every one is an id and words in one argument (`T504 read-hook-same-path`, `M16.5 test toml`, `T330.5.3 junk-stale-worktrees`). `ident` in `src/worktree/add.rs` lower-cases, then rejects the space. Agents pass the id and the slug the way the branch is named, as one string. Nine further adds failed with `already exists: one worktree per task` on a retry of an add that had already landed.
+
+Done when: one argument `T504 read-hook-same-path` plans task `t504` and branch `t504-read-hook-same-path`; spaces in the slug become dashes; a bare id is unchanged. `add` of a path whose branch is already that task returns the existing plan instead of failing. A string that is not an id after the split still fails the existing check.
+
+Check: `plan` tests for the logged `T504 read-hook-same-path`, `M16.5 test toml` and `M16.3 push.rs through the config module`, and for an existing path of the same task; `just check`.
+
+### T524. Worktree `--idle` accepts `30m` and `0s`
+
+`[agents] idle` defaults to `30m` and is parsed with humantime (`idle_secs` in `crates/rtok-store/src/agents.rs`). `rtok worktree gc --idle` and `clean --idle` go through `parse_since` (`crates/rtok-config/src/since.rs`), which allows only a bare number (days), `d` and `h`. Since 2026-10-04 the log has 19 failures: `1m` (7), `0s` (5), `30m` (3), `1s` (2), `15m`, `10m`. The flag help cites `24h` and `7d`, and agents copy the `30m` they see on agents. The error says `bad --since unit` for a flag that is not `--since`.
+
+Done when: `--idle` and `--stale-lock` accept the same durations as `[agents] idle` (`30m`, `0s`, `24h`, `7d`). `5x` still errors. The error names the flag that was passed.
+
+Check: a unit test for `30m`, `0s` and `5x`; `just check`.
+
+### T525. SubagentStart and PreCompact under the 10 ms hook budget
+
+T428 covers SessionStart. On the live store for 2026-10-03 through 2026-10-10, SessionStart's median is already 3.8 ms (149 of 609 runs over 10 ms; the tail is the quiet-host re-run T428 left open). Two other events miss `[hook] max_ms` on the median. PreToolUse's median is 0.8 ms, so the budget is reachable. About 7,500 `hook … slow` warnings this week are mostly the PreToolUse and PostToolUse tail; that tail is not this task.
+
+| event | n | p50 | p95 | max | over 10 ms | over 1 s |
+| --- | --- | --- | --- | --- | --- | --- |
+| SubagentStart | 758 | 48.6 ms | 760 ms | 3093 ms | 605 | 24 |
+| PreCompact | 189 | 25.7 ms | 206 ms | 2551 ms | 167 | 1 |
+
+Done when: a trace names the work inside SubagentStart and PreCompact. That work is under 10 ms at the median on this store, or the card records why those two events get a higher budget. `tests/latency.rs` covers both.
+
+Check: the latency cases green; five manual runs of each event on the rtok repo print no `slow` warning; `just check`.
+
+### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
+
+T356 stops the graph from indexing `$HOME`. The other tools still run git there. Since 2026-10-05, `worktree_list` failed 8 times with `fatal: not a git repository` (the last on 2026-10-10), and `search` failed 5 times with `no project root: rtok mcp runs in /Users/listepo`. A server launched in the home directory has no repository until the client sends `roots/list` or the caller passes a path.
+
+Done when: with cwd = home and a client root inside a repository, `worktree_list` and `search` use that root. With no root they return an error that says to pass a path or open a project, and the text is not git's `fatal: not a git repository`.
+
+Check: an MCP test with cwd = a non-repo and a `roots/list` root; the no-root error text; `just check`.
+
+### T527. A worktree claim does not stay held by an agent idle for days
+
+On 2026-10-10 the store had 63 open `worktree_claims`. 46 belong to an agent last seen more than a day ago, 31 more than three days, all on the claude host. This week Claude recorded 617 SessionStart and 504 SessionEnd; 427 agents started since 2026-10-03 are still unended and idle over a day. `remove` and `adopt` then refuse with `locked by <reason>; not removed` or `not taken` (`src/worktree/remove.rs`, `src/worktree/claim.rs`) and do not say the holder has been idle. `gc`'s `--stale-lock` (default `7d`) already treats a foreign git lock as abandoned; the store claim does not.
+
+Done when: a claim whose agent has ended, or whose `last_seen` is older than `stale_lock`, does not block `remove` or `adopt`. A claim touched inside the window still refuses, and the refusal says how long ago the holder was seen.
+
+Check: store tests for an ended holder, a holder idle past `stale_lock`, and a holder seen today; `just check`.
+
 ### T356. Never index `$HOME` or `/` as a graph root
 
 Found 2026-10-02 (T352 research): `symbols` holds 617,319 rows (~120 MB plus indexes) under the root `/Users/listepo` — `.config/amp/plugins`, `.cursor/extensions`, `.grok/bundled`, `go/pkg/mod`, `.motive/node_modules`. The graph root is the `rtok mcp` process cwd (`std::env::current_dir()` in `src/plugins/graph/mod.rs`), so a server launched in the home directory (no `roots/list` answer yet, or a host without roots) walks the whole home on its first `symbol`/`callers`/`explore` call, and the rows never leave: `delete_symbols_missing` runs only when that same root is re-indexed.
@@ -2495,6 +2555,19 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
+
+### T640. File and directory work through `fs-kit`
+
+The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
+
+Plan:
+1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
+2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
+3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
+4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
+5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
+
+Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
 
 ### T561. TUI: folded-target counter in a one-project view
 
