@@ -630,6 +630,7 @@ fn payload(v: &Value) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::native_abs;
     use rtok_plugin_sdk::Ctx;
     use serde_json::json;
 
@@ -920,8 +921,8 @@ mod tests {
     fn two_identical_reads_second_denies_naming_archive() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/Users/dev/proj/src/main.rs"});
-        let other = json!({"file_path": "/Users/dev/proj/src/lib.rs"});
+        let path = json!({"file_path": native_abs("/Users/dev/proj/src/main.rs")});
+        let other = json!({"file_path": native_abs("/Users/dev/proj/src/lib.rs")});
         let read = PreToolUse {
             tool_name: "Read",
             tool_input: &path,
@@ -959,7 +960,7 @@ mod tests {
     fn deny_measurement_before_bytes_and_est_before_match_the_avoided_payload() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/Users/dev/proj/src/inventory.rs"});
+        let path = json!({"file_path": native_abs("/Users/dev/proj/src/inventory.rs")});
         let read = PreToolUse {
             tool_name: "Read",
             tool_input: &path,
@@ -1003,7 +1004,7 @@ mod tests {
     fn post_tool_over_cap_skips_archive_and_the_repeat_is_allowed() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/Users/dev/proj/src/big.rs"});
+        let path = json!({"file_path": native_abs("/Users/dev/proj/src/big.rs")});
         let read = PreToolUse {
             tool_name: "Read",
             tool_input: &path,
@@ -1039,7 +1040,7 @@ mod tests {
     fn edit_clears_guard_read_so_the_next_read_is_allowed() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/proj/src/main.rs"});
+        let path = json!({"file_path": native_abs("/proj/src/main.rs")});
         let resp = json!({"content": "fn main() {}"});
         assert!(
             g.post_tool(
@@ -1099,22 +1100,28 @@ mod tests {
     fn relative_read_is_keyed_by_its_cwd() {
         let mut cx = setup();
         let rel = json!({"file_path": "file.txt"});
-        cx.cwd = Some("/A".to_string());
+        cx.cwd = Some(native_abs("/A"));
         done(&cx, "Read", &rel);
         assert!(read_at(&cx, &rel));
-        cx.cwd = Some("/B".to_string());
+        cx.cwd = Some(native_abs("/B"));
         assert!(!read_at(&cx, &rel), "another directory's file.txt");
-        cx.cwd = Some("/A".to_string());
+        cx.cwd = Some(native_abs("/A"));
         assert!(read_at(&cx, &rel));
         assert!(read_at(&cx, &json!({"file_path": "./file.txt"})));
-        assert!(read_at(&cx, &json!({"file_path": "/A/file.txt"})));
+        assert!(read_at(
+            &cx,
+            &json!({"file_path": native_abs("/A/file.txt")})
+        ));
         // No cwd, no identity for a relative path: never cached.
         cx.cwd = None;
         assert!(!read_at(&cx, &rel));
         assert_eq!(cache_key("Read", &rel, None, None), None);
         // `..` cannot be resolved without the file system.
-        let up = json!({"file_path": "/A/x/../file.txt"});
-        assert_eq!(cache_key("Read", &up, None, Some("/A")), None);
+        let up = json!({"file_path": native_abs("/A/x/../file.txt")});
+        assert_eq!(
+            cache_key("Read", &up, None, Some(native_abs("/A").as_str())),
+            None
+        );
     }
 
     /// T556: every spelling of a path invalidates together, slices included; other files keep
@@ -1122,7 +1129,7 @@ mod tests {
     #[test]
     fn edit_through_an_alias_invalidates_every_spelling() {
         let mut cx = setup();
-        cx.cwd = Some("/A".to_string());
+        cx.cwd = Some(native_abs("/A"));
         let rel = json!({"file_path": "./file.txt"});
         let slice = json!({"file_path": "file.txt", "offset": 10, "limit": 5});
         let other = json!({"file_path": "other.txt"});
@@ -1130,14 +1137,18 @@ mod tests {
             done(&cx, "Read", i);
             assert!(read_at(&cx, i));
         }
-        done(&cx, "Edit", &json!({"file_path": "/A/file.txt"}));
+        done(
+            &cx,
+            "Edit",
+            &json!({"file_path": native_abs("/A/file.txt")}),
+        );
         assert!(!read_at(&cx, &rel));
         assert!(!read_at(&cx, &slice));
         assert!(read_at(&cx, &other), "unrelated file keeps its cache");
         // A relative edit with no cwd cannot name its file: drop every read.
         cx.cwd = None;
         done(&cx, "Edit", &json!({"file_path": "other.txt"}));
-        cx.cwd = Some("/A".to_string());
+        cx.cwd = Some(native_abs("/A"));
         assert!(!read_at(&cx, &other));
     }
 
@@ -1145,7 +1156,7 @@ mod tests {
     fn missing_archive_fails_open() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/proj/gone.rs"});
+        let path = json!({"file_path": native_abs("/proj/gone.rs")});
         let resp = json!({"content": "old"});
         assert!(
             g.post_tool(
@@ -1177,7 +1188,7 @@ mod tests {
     fn a_sub_agent_window_scopes_the_read_cache() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/proj/p.rs"});
+        let path = json!({"file_path": native_abs("/proj/p.rs")});
         let resp = json!({"content": "body"});
         let read = PreToolUse {
             tool_name: "Read",
@@ -1270,7 +1281,7 @@ mod tests {
         let g = Guard;
         let resp = json!({"content": "fn main() {}"});
         for key in ["path", "file_path"] {
-            let input = json!({ key: "/Users/dev/proj/src/main.rs" });
+            let input = json!({ key: native_abs("/Users/dev/proj/src/main.rs") });
             assert!(
                 g.post_tool(
                     &PostToolUse {
@@ -1303,7 +1314,7 @@ mod tests {
     fn bash_mutation_allows_the_next_read() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/proj/src/main.rs"});
+        let path = json!({"file_path": native_abs("/proj/src/main.rs")});
         let resp = json!({"content": "fn main() {}"});
         let post = |name: &'static str, input: &Value| {
             assert!(
@@ -1341,7 +1352,7 @@ mod tests {
         c.plugins.read.enabled = false;
         let cx = crate::plugin::Runtime::open(c, "guard-edit-noread").unwrap();
         let g = Guard;
-        let path = json!({"file_path": "/proj/src/main.rs"});
+        let path = json!({"file_path": native_abs("/proj/src/main.rs")});
         let resp = json!({"content": "fn main() {}"});
         for name in ["Read", "Edit"] {
             assert!(
@@ -1465,20 +1476,21 @@ mod tests {
     #[test]
     fn read_slices_get_distinct_keys() {
         let k = |v: Value| cache_key("Read", &v, None, None).unwrap();
-        let plain = k(json!({"file_path": "/f"}));
-        assert_eq!(plain, "read\t/f");
-        let a = k(json!({"file_path": "/f", "offset": 1, "limit": 50}));
-        let b = k(json!({"file_path": "/f", "offset": 300, "limit": 50}));
+        let (f, pdf) = (native_abs("/f"), native_abs("/f.pdf"));
+        let plain = k(json!({"file_path": f}));
+        assert_eq!(plain, format!("read\t{f}"));
+        let a = k(json!({"file_path": f, "offset": 1, "limit": 50}));
+        let b = k(json!({"file_path": f, "offset": 300, "limit": 50}));
         assert_ne!(a, b);
         assert_ne!(a, plain);
-        assert_eq!(a, k(json!({"file_path": "/f", "offset": 1, "limit": 50})));
+        assert_eq!(a, k(json!({"file_path": f, "offset": 1, "limit": 50})));
         assert!(
-            a.starts_with("read\t/f\t"),
+            a.starts_with(&format!("read\t{f}\t")),
             "prefix clear must reach slices"
         );
         assert_ne!(
-            k(json!({"file_path": "/f.pdf", "pages": "1-3"})),
-            k(json!({"file_path": "/f.pdf", "pages": "4-6"}))
+            k(json!({"file_path": pdf, "pages": "1-3"})),
+            k(json!({"file_path": pdf, "pages": "4-6"}))
         );
     }
 
@@ -1563,7 +1575,7 @@ mod tests {
     #[test]
     fn a_disguised_writer_invalidates_an_earlier_read() {
         let sh = Shell::new();
-        let read = json!({"file_path": "/r/input"});
+        let read = json!({"file_path": native_abs("/r/input")});
         done(&sh.cx, "Read", &read);
         assert!(read_at(&sh.cx, &read));
         sh.ran("sed 'w output' input");
@@ -1663,7 +1675,7 @@ mod tests {
     fn agent_wrap_matches_the_inner_command_and_keeps_other_keys() {
         let cx = setup();
         let g = Guard;
-        let path = json!({"file_path": "/proj/src/main.rs"});
+        let path = json!({"file_path": native_abs("/proj/src/main.rs")});
         let read = PreToolUse {
             tool_name: "Read",
             tool_input: &path,
