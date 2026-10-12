@@ -6,9 +6,11 @@ Project programs and direct packages from the manifests.
 
 | Program | How to install | Why here | Source |
 | --- | --- | --- | --- |
+| sccache | mise (`sccache`, Linux and macOS; `mise.toml` `[env]` makes it the rustc wrapper where installed) | Compiler cache; CI uses a Cloudflare R2 bucket when the `R2_*` secrets exist | https://github.com/mozilla/sccache |
 | mise | brew / curl, then `mise install` | Pinned tool versions | https://github.com/jdx/mise |
 | cargo-cache | mise | `just cache` / `just cache-autoclean` (T17.2); the shared cargo home fills up | https://github.com/matthiaskrgr/cargo-cache |
 | cargo-nextest | global (cargo install) | Parallel test runner | https://github.com/nextest-rs/nextest |
+| cargo-hakari | mise (`cargo:cargo-hakari`) | Keeps the `workspace-hack` crate unified so shared dependencies build once; CI runs `cargo hakari verify` | https://github.com/guppy-rs/guppy |
 | cargo-llvm-cov | mise | `just test-cov` (T301): coverage over the nextest suite; lcov for SonarCloud | https://github.com/taiki-e/cargo-llvm-cov |
 | cargo-fuzz | global (`cargo install cargo-fuzz`) + `rustup toolchain install nightly` | `just fuzz` / `fuzz/README.md`: libFuzzer targets; nightly only for the fuzz build, the pinned toolchain is untouched | https://github.com/rust-fuzz/cargo-fuzz |
 | codeql | mise | `just codeql` (T119): local run of the code scanning in `.github/workflows/codeql.yml` | https://github.com/github/codeql-cli-binaries |
