@@ -224,6 +224,35 @@ fn ladder_fixtures() -> Vec<LadderFix> {
     ]
 }
 
+/// `fence_bodies` splits on raw triple backticks, so it cannot judge a four-backtick block.
+/// This oracle is the block's literal text: whatever the fixture holds must come back verbatim.
+#[test]
+fn compress_keeps_longer_fences_and_identifier_suffixes_exact() {
+    const OUTER: &str =
+        "````md\nSure! Example:\n```rs\nlet the = 1;\n```\nThe really exact content\n````";
+    const NAMES: [&str; 4] = ["foo_a", "/tmp/a", "item1a", "src/the"];
+    let raw = format!(
+        "Sure! The docs are really wrong about {}.\n{OUTER}\nUpdate the example.",
+        NAMES.join(", ")
+    );
+    for intensity in [
+        CaveIntensity::Lite,
+        CaveIntensity::Full,
+        CaveIntensity::Ultra,
+    ] {
+        let ours = compress_prose(&raw, intensity);
+        assert!(ours.contains(OUTER), "{intensity:?}: fence changed\n{ours}");
+        for name in NAMES {
+            assert!(ours.contains(name), "{intensity:?}: lost {name} in {ours}");
+        }
+    }
+    let full = compress_prose(&raw, CaveIntensity::Full);
+    assert!(
+        est(&full) < est(&raw),
+        "prose outside the fence still compresses: {full}"
+    );
+}
+
 #[test]
 fn compress_beats_weak_caveman_and_identity() {
     let fixtures = prose_fixtures();
