@@ -129,9 +129,13 @@ impl Store {
             return Ok(Vec::new());
         }
         let mut conn = self.lock()?;
-        let mut q = observation_files::table
-            .inner_join(observations::table)
+        // A subquery, not a join: an observation linked to several of `paths` is one row, so
+        // LIMIT counts observations rather than links.
+        let linked = observation_files::table
             .filter(observation_files::path.eq_any(paths))
+            .select(observation_files::observation_id);
+        let mut q = observations::table
+            .filter(observations::id.eq_any(linked))
             .order(observations::id.desc())
             .limit(i64::from(limit.max(1)))
             .select((

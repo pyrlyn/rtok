@@ -1160,3 +1160,42 @@ fn an_observation_call_key_holds_past_the_narrative_window() {
     store.set_observation_ts("s", 0).unwrap();
     assert!(insert(None).is_some(), "keyless rows never collide");
 }
+
+/// T617: an observation linked to several queried files counts once, so the limit is in
+/// observations and an older distinct hit is not starved by a newer multi-file one.
+#[test]
+fn file_linked_observations_are_distinct_before_the_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let add = |project: Option<&str>, dedup: &str, files: &[&str]| {
+        let files: Vec<String> = files.iter().map(|f| (*f).to_string()).collect();
+        store
+            .insert_observation(&rtok_plugin_sdk::NewObservation {
+                session_id: "s",
+                project,
+                obs_type: "file_read",
+                title: "t",
+                narrative: dedup,
+                dedup,
+                files: &files,
+            })
+            .unwrap()
+            .unwrap()
+    };
+    let older = add(Some("p"), "older", &["a.rs"]);
+    let newer = add(Some("p"), "newer", &["a.rs", "b.rs"]);
+    let other = add(Some("q"), "other", &["a.rs", "b.rs"]);
+    let paths = ["a.rs".to_string(), "b.rs".to_string()];
+    let ids = |project, paths: &[String], limit| -> Vec<i32> {
+        store
+            .observations_for_files(project, paths, limit)
+            .unwrap()
+            .iter()
+            .map(|h| h.id)
+            .collect()
+    };
+    assert_eq!(ids(Some("p"), &paths, 2), vec![newer, older]);
+    assert_eq!(ids(Some("p"), &paths[..1], 5), vec![newer, older]);
+    assert_eq!(ids(Some("p"), &paths[1..], 5), vec![newer]);
+    assert_eq!(ids(Some("q"), &paths, 5), vec![other]);
+    assert!(ids(Some("p"), &[], 5).is_empty());
+}
