@@ -261,6 +261,9 @@ fn strip_words(text: &str, words: &[&str]) -> String {
     let keep: std::collections::HashSet<&str> = KEEP_WORDS.iter().copied().collect();
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
+    // The character before the current one in the *input*, so the left boundary is judged
+    // like the right one and never from text this pass already edited.
+    let mut prev: Option<char> = None;
     while let Some(c) = chars.next() {
         if c.is_ascii_alphabetic() {
             let mut word = String::new();
@@ -273,21 +276,30 @@ fn strip_words(text: &str, words: &[&str]) -> String {
                 }
             }
             let lower = word.to_ascii_lowercase();
-            // A word glued to a dot, dash, slash or digit is part of an identifier or a path
-            // (`a.txt`, `a-b`, `a/b`, `item1`), not an article: dropping it turned
-            // `Edit a.txt` into `Edit .txt`.
-            let glued = chars
-                .peek()
-                .is_some_and(|c| matches!(c, '.' | '-' | '_' | '/' | '\\') || c.is_ascii_digit());
+            // A word glued to a dot, dash, slash, digit or non-ASCII letter on either side is
+            // part of an identifier or a path (`a.txt`, `a-b`, `a/b`, `item1`, `foo_a`,
+            // `/tmp/a`, `item1a`), not an article: dropping it turned `Edit a.txt` into
+            // `Edit .txt` and `foo_a` into `foo_`.
+            let glued =
+                prev.is_some_and(is_name_glue) || chars.peek().copied().is_some_and(is_name_glue);
             if glued || keep.contains(lower.as_str()) || !drop.contains(lower.as_str()) {
                 out.push_str(&word);
             }
             // else: drop the word
+            prev = word.chars().last();
         } else {
             out.push(c);
+            prev = Some(c);
         }
     }
     out
+}
+
+/// True for a character that joins a word to a neighbouring name or path.
+fn is_name_glue(c: char) -> bool {
+    matches!(c, '.' | '-' | '_' | '/' | '\\')
+        || c.is_ascii_digit()
+        || !c.is_ascii() && c.is_alphanumeric()
 }
 
 fn cleanup_ws_segment(s: &str, preserve_start: bool, preserve_end: bool) -> String {
@@ -425,6 +437,52 @@ mod tests {
         assert_eq!(
             compress_prose("Edit the file", CaveIntensity::Full),
             "Edit file"
+        );
+    }
+
+    /// A word glued to a name on its *left* (`foo_a`, `/tmp/a`, `item1a`) is part of that name:
+    /// only the right-hand glue used to be checked, so `foo_a` came back as `foo_`.
+    #[test]
+    fn a_suffix_inside_a_name_is_kept() {
+        for intensity in [
+            CaveIntensity::Lite,
+            CaveIntensity::Full,
+            CaveIntensity::Ultra,
+        ] {
+            for name in [
+                "foo_a",
+                "foo_the",
+                "/tmp/a",
+                "C:\\tmp\\the",
+                "item1a",
+                "v2an",
+                "x-a",
+                "x.the",
+                "_a_",
+                "naïvea",
+                "a_b",
+                "1_a_2",
+            ] {
+                let input = format!("Edit {name} now");
+                let out = compress_prose(&input, intensity);
+                assert!(out.contains(name), "{intensity:?}: {input} → {out}");
+            }
+        }
+        assert_eq!(
+            compress_prose("Edit the file and a test", CaveIntensity::Ultra),
+            "Edit file and test"
+        );
+        assert_eq!(
+            compress_prose("foo_a is really the one", CaveIntensity::Full),
+            "foo_a is one"
+        );
+    }
+
+    #[test]
+    fn a_suffix_name_next_to_code_is_kept() {
+        assert_eq!(
+            compress_prose("Use `x` then foo_a, and the `y`.", CaveIntensity::Full),
+            "Use `x` then foo_a, and `y`."
         );
     }
 
