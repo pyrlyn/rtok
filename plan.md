@@ -53,7 +53,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -72,7 +71,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T592 | todo | P2 | 3 | 0% | |
 
 
 
@@ -86,20 +84,6 @@ Existing tasks, including uncommitted T522–T527 in the shared checkout, were c
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
 
-### T592. Keep late same-second sessions from moving behind the OTel cursor
-
-Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
-
-This is an uncovered case of completed T36.12's same-second delivery guarantee, not another active copy of that task. Its [integration test](tests/otel.rs#L178) uses `s1` then `s2` and checks counts, so the row-identity failure is missed. No claim is made that the backend displays duplicates: the repeated span has a stable ID, but the late session's root span is absent altogether.
-
-Execution plan:
-
-1. Add store and exporter regressions with both sessions already present, a later completion at the watermark second, and lexical ID orders in both directions. Inspect emitted session/span IDs, not just batch lengths or POST counts; the late session must be delivered and the next flush must drain.
-2. Replace the mutable rank/count cursor with durable delivery state that cannot move behind already-exported rows. Prefer a monotonic completion/outbox sequence or explicit acknowledged session identities; a timestamp plus lexical last-ID cursor alone still skips late lower IDs. Keep database access in Store and use Diesel under the existing SQL policy.
-3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
-4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
-
-Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
@@ -131,7 +115,7 @@ Execution (2026-09-27): (1) a probe kit in the session scratchpad (never committ
 
 `research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
 
-Blocked (found 2026-09-24 while claiming): the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`), and rtok installs no `PreToolUse` hook for Codex (only `PreCompact`/`PostCompact`), so a Codex brief would always be empty. Needs Codex `PreToolUse` wiring first (idea I-88), which the creator has not approved.
+Unblocked by T645 (done 2026-10-12): Codex `PreToolUse` is wired. Found 2026-09-24 while claiming: the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`); Codex names file edits `apply_patch` and has no `Read` tool, so the ledger must read those rows too.
 
 Check: a Codex `SubagentStart` payload through `rtok hook` returns the brief in Codex's shape (test); `just check` green.
 
@@ -702,14 +686,6 @@ Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
-
-### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
-
-Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: AWS docs first. If the CLI is the Kiro CLI, close into T413.4 with the citation. Otherwise an MCP installer for the documented file only.
 
 ### T413.11. `rtok agents install crush` — Crush
 

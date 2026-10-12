@@ -1,4 +1,3 @@
-- T592. Keep late same-second sessions from moving behind the OTel cursor
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
@@ -35,7 +34,6 @@
 - T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.9. `rtok agents install junie` — JetBrains Junie
-- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 - T413.11. `rtok agents install crush` — Crush
 - T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae

@@ -226,6 +226,48 @@ fn migration_0047_numbers_old_claims_in_their_old_order() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// T592: sessions that ended before `end_seq` existed are numbered in (ended_at, id) order,
+/// and the old per-second mark resumes in front of its whole second, replaying rather than
+/// guessing which tied sessions were posted.
+#[test]
+fn migration_0050_numbers_ended_sessions_and_rewinds_the_old_mark() {
+    let (dir, mut conn) = db_before_migration("0050");
+    let db = dir.join("rtok.db");
+    for (id, ended) in [
+        ("a", Some(100_i64)),
+        ("b", Some(200)),
+        ("c", Some(200)),
+        ("d", Some(300)),
+        ("e", None),
+    ] {
+        diesel::insert_into(schema::sessions::table)
+            .values((
+                schema::sessions::id.eq(id),
+                schema::sessions::ended_at.eq(ended),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    for (stream, mark) in [("sessions", 200_i64), ("sessions_tail", 1)] {
+        diesel::insert_into(schema::otel_export::table)
+            .values((
+                schema::otel_export::stream.eq(stream),
+                schema::otel_export::mark.eq(mark),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    drop(conn);
+    let store = Store::open(&db).unwrap();
+    assert_eq!(store.otel_mark("sessions_seq").unwrap(), 1);
+    assert_eq!(store.otel_mark("sessions").unwrap(), 0);
+    assert_eq!(store.otel_mark("sessions_tail").unwrap(), 0);
+    let pending = store.sessions_pending_export(1, 10).unwrap();
+    let got: Vec<_> = pending.iter().map(|(n, s)| (*n, s.id.as_str())).collect();
+    assert_eq!(got, [(2, "b"), (3, "c"), (4, "d")]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn upsert_same_title_with_a_new_body_keeps_the_old_body_in_history() {
     let store = Store::open_in_memory().unwrap();
