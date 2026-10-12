@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, type SpawnSyncReturns, spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -20,6 +20,9 @@ const BIN = process.env["RTOK_BIN"] ?? resolve(import.meta.dirname, "../../targe
 const SAFE_PATH = "/usr/bin:/bin";
 const SEED_TIMEOUT_MS = 30_000;
 const HEALTH_TIMEOUT_MS = 20_000;
+// Not `os.tmpdir()`: on a Mac that per-user dir collects tens of thousands of entries, and under
+// this suite's load realpath(3) on a home there stalled for seconds, past the seed timeout (T643).
+const HOME_BASE = process.platform === "win32" ? tmpdir() : "/tmp";
 
 const freePort = () =>
   new Promise<number>((done, fail) => {
@@ -33,6 +36,25 @@ const freePort = () =>
       });
     });
   });
+
+/** Why a `spawnSync` run failed, or `undefined` when it exited 0. */
+export function failure(what: string, out: SpawnSyncReturns<string>, timeoutMs: number) {
+  // A null status is a kill (spawnSync's own timeout included), never an exit code.
+  if (out.error || out.signal) {
+    const timedOut = (out.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+    const why = timedOut
+      ? `timed out after ${timeoutMs / 1000} s`
+      : (out.error?.message ?? `killed by ${out.signal}`);
+    return `${what} ${why}: ${out.stderr}`;
+  }
+  if (out.status !== 0) return `${what} exited ${out.status}: ${out.stderr}`;
+  return undefined;
+}
+
+/** Where `Rtok.create` makes its throwaway home. */
+export function makeHome() {
+  return mkdtempSync(join(HOME_BASE, "rtok-spa-e2e-"));
+}
 
 /**
  * One real `rtok web` process on a throwaway store. `HOME` and `RTOK_HOME` both point at a
@@ -49,7 +71,7 @@ export class Rtok {
   ) {}
 
   static async create(): Promise<Rtok> {
-    const home = mkdtempSync(join(tmpdir(), "rtok-spa-e2e-"));
+    const home = makeHome();
     const rtok = new Rtok(home, await freePort());
     try {
       rtok.seed();
@@ -85,9 +107,8 @@ export class Rtok {
       timeout: SEED_TIMEOUT_MS,
       encoding: "utf8",
     });
-    if (out.status !== 0) {
-      throw new Error(`rtok ${args.join(" ")} exited ${out.status}: ${out.stderr}`);
-    }
+    const failed = failure(`rtok ${args.join(" ")}`, out, SEED_TIMEOUT_MS);
+    if (failed) throw new Error(failed);
     return out.stdout;
   }
 
