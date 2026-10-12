@@ -1,7 +1,7 @@
 - T592. Keep late same-second sessions from moving behind the OTel cursor
 - T620. Enforce LSP request deadlines during blocking transport reads
 - T621. Refresh opened LSP documents after their files change
-- T623. Correlate web replies across request timeouts and retries
+- T623.2. Match `/ws` replies to their request by `req` in the web client
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share

@@ -79,7 +79,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T592 | todo | P2 | 3 | 0% | |
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
-| T623 | todo | P2 | 5 | 0% | |
+| T623.2 | todo | P2 | 3 | 0% | |
 
 
 
@@ -123,20 +123,17 @@ Execution plan:
 
 Check: a second query after a saved edit uses the current document text without restarting the MCP process. Executed evidence compiled the production document-open/framing methods against a synthetic peer; actual language-server analysis and full MCP integration were not run.
 
-### T623. Correlate web replies across request timeouts and retries
+### T623.2. Match `/ws` replies to their request by `req` in the web client
 
-Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
-
-A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+Second half of T623; needs T623.1. The client sends a fresh `req` with every doctor/junk/graph/diff/export/import request and resolves a pending promise only for the frame carrying its `req`.
 
 Execution plan:
 
-1. Add deterministic timeout/retry tests for two requests with different selections; the late first reply must never resolve the second promise. Include same-project graph/diff and export/import variants sharing this queue.
-2. Add request identifiers to the client/server protocol and echo them in successful and failed answers. Match pending promises by identifier and operation; update generated types and protocol tests together.
-3. Ignore replies for expired requests, isolate reconnect generations and retain bounded pending-state cleanup. Verify timely requests, concurrent requests and connection closure.
-4. Run focused API/protocol and Doctor UI tests, then `just check`.
+1. `web/src/api/query.tsx`: replace the kind/key match in `settleDoctor` with the `req` match, ignore replies for expired or unknown requests, fail only the request a `message` frame names (a `message` without `req` still fails every request in flight), keep a counter that survives reconnects so an old socket's late frame cannot match.
+2. `web/src/api/ws.ts` `parseFrame` keeps `req`; `sample.ts`, `sampleDrill/Diff/Export.ts` and `web/e2e/rtok.spec.ts` echo it.
+3. Tests: fake-clock timeout/retry with two different selections (plan A times out, plan B sent, late A frame must not resolve B), same-project graph/diff and export/import variants, concurrent requests, connection closure; focused Doctor UI tests. Run `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
 
-Check: every resolved promise receives only its own request's answer, including after a timeout. Executed evidence used extracted production API code with a fake query cache, clock and connection; no full browser/server integration was run.
+Check: every resolved promise receives only its own request's answer, including after a timeout, and `just check` passes.
 
 ### T592. Keep late same-second sessions from moving behind the OTel cursor
 

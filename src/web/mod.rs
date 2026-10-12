@@ -417,9 +417,17 @@ fn calls_subscription(text: &str) -> Option<bool> {
     }
 }
 
+/// The answer to one client message, if it has one. A request that carries `req` gets it back on
+/// whatever answers it, a refusal included, so a page with several requests in flight (or one that
+/// gave up on a slow request) never reads a late answer as the reply to a newer one (T623).
 fn inbound(state: &DashState, text: &str) -> Option<String> {
     let v: Value = serde_json::from_str(text).ok()?;
-    let set = match ClientMessage::deserialize(&v) {
+    let req = v.get("req").and_then(Value::as_u64);
+    answer(state, &v).map(|reply| protocol::tag_reply(reply, req))
+}
+
+fn answer(state: &DashState, v: &Value) -> Option<String> {
+    let set = match ClientMessage::deserialize(v) {
         Ok(ClientMessage::Expand { expand: id }) => {
             let cfg = state
                 .cfg
