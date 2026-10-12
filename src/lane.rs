@@ -7,6 +7,8 @@
 //! The proxy classifies a request into a lane and records that lane's kind.
 //! The store, `measure` and `otel` read the same strings back. The strings
 //! live here so those readers do not depend on the proxy.
+//! The lane request header lives here for the same reason: the P28 compressor tags its calls
+//! without depending on the proxy.
 
 /// Agent lane. Existing rows and reports already use the bare name.
 pub const KIND_AGENT: &str = "api_request";
@@ -27,3 +29,6 @@ pub fn is_api_request(kind: &str) -> bool {
 pub fn lane_of_kind(kind: &str) -> &str {
     kind.strip_prefix("api_request:").unwrap_or("agent")
 }
+
+/// Request header naming the lane; the proxy strips it before the request goes upstream.
+pub const HEADER: &str = "x-rtok-lane";

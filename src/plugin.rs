@@ -451,6 +451,12 @@ impl Archive for Runtime {
         }
     }
 
+    fn archive_summary(&self, archive_id: &str, version: &str) -> Result<Option<String>> {
+        self.store
+            .archive_summary(archive_id, version)
+            .map_err(Into::into)
+    }
+
     fn session_live_archives(&self, session: &str) -> Result<Vec<(String, String, i64)>> {
         self.store
             .session_live_archives(session)

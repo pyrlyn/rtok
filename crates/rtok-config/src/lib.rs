@@ -1359,6 +1359,30 @@ section! {
     /// `[plugins.compress]`
     Compress {
         enabled: bool = true,
+        llm: CompressLlm = CompressLlm::default(),
+    }
+}
+
+section! {
+    /// `[plugins.compress.llm]` — P28 compressor (T385.9), off by default. Summarises an
+    /// archived tool result through the proxy's own `internal` lane and shows the cached summary
+    /// in place of the extractive view; the original stays under `expand <id>`.
+    CompressLlm {
+        enabled: bool = false,
+        /// Where the compressor posts; empty = this proxy (`proxy.bind:proxy.port`), so the
+        /// call is tagged `internal` and `[proxy.routing.internal]` applies.
+        url: String = String::new(),
+        model: String = s("claude-haiku-4-5"),
+        /// Larger archived results are left to the extractive view.
+        max_input_bytes: u64 = 65536,
+        max_output_tokens: u32 = 512,
+        /// More must-keep spans than this and the result is left to the extractive view.
+        max_spans: u32 = 64,
+        /// Compressor calls in flight at once.
+        max_in_flight: u32 = 2,
+        timeout_s: u64 = 60,
+        /// Also summarise diffs and source code; off, only logs and prose are.
+        code: bool = false,
     }
 }
 
