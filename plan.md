@@ -54,7 +54,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -725,14 +724,6 @@ Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
-
-### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
-
-Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: AWS docs first. If the CLI is the Kiro CLI, close into T413.4 with the citation. Otherwise an MCP installer for the documented file only.
 
 ### T413.11. `rtok agents install crush` — Crush
 

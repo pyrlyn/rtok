@@ -8788,6 +8788,17 @@ Check: the T413 per-host check (step 5) for this host.
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
 
+### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
+
+Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
+
+Done: closed into T413.4 without code. Kiro's own migration guide says "Kiro CLI is the next update of the Q CLI", that new features and fixes ship only in Kiro CLI, and that the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` (https://kiro.dev/docs/upgrade-guides/migrating-from-q/, page updated 2026-08-04, checked 2026-10-12). A separate `amazonq` host would write a file Kiro CLI already copies, so T413.4 owns the CLI. Facts recorded in `research.md` §32.10.
+
+Check: nothing to run; docs-only change.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.

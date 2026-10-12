@@ -37,7 +37,6 @@
 - T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.9. `rtok agents install junie` — JetBrains Junie
-- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 - T413.11. `rtok agents install crush` — Crush
 - T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
