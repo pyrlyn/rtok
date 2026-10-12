@@ -127,41 +127,51 @@ impl Store {
     ) -> Result<usize> {
         let mut conn = self.lock()?;
         conn.transaction(|conn| {
-            diesel::delete(
-                doc_items::table
-                    .filter(doc_items::crate_name.eq(name))
-                    .filter(doc_items::version.eq(version)),
-            )
-            .execute(conn)?;
-            diesel::delete(
-                doc_crates::table
-                    .filter(doc_crates::name.eq(name))
-                    .filter(doc_crates::version.eq(version)),
-            )
-            .execute(conn)?;
-            diesel::insert_into(doc_crates::table)
-                .values((
-                    doc_crates::name.eq(name),
-                    doc_crates::version.eq(version),
-                    doc_crates::sha256.eq(sha256),
-                    doc_crates::format_version.eq(format_version),
-                    doc_crates::fetched_unix.eq(fetched_unix),
-                ))
-                .execute(conn)?;
-            let mut n = 0usize;
-            for (path, kind, docs) in items {
-                diesel::insert_into(doc_items::table)
-                    .values((
-                        doc_items::crate_name.eq(name),
-                        doc_items::version.eq(version),
-                        doc_items::path.eq(path),
-                        doc_items::kind.eq(kind),
-                        doc_items::docs.eq(docs),
-                    ))
-                    .execute(conn)?;
-                n += 1;
+            Ok(replace_in(
+                conn,
+                name,
+                version,
+                sha256,
+                format_version,
+                fetched_unix,
+                items,
+            )?)
+        })
+    }
+
+    /// [`Self::replace_doc_crate`] unless the cached row already carries `sha256`: then
+    /// nothing is touched, so item ids (and the FTS rows behind them) stay valid for
+    /// `docs_get`. The compare and the write share one write transaction, so two
+    /// concurrent ingests of the same bytes cannot both rewrite. `None` = unchanged.
+    pub fn sync_doc_crate(
+        &self,
+        name: &str,
+        version: &str,
+        sha256: &str,
+        format_version: i32,
+        fetched_unix: i64,
+        items: &[(String, String, String)],
+    ) -> Result<Option<usize>> {
+        let mut conn = self.lock()?;
+        conn.immediate_transaction(|conn| {
+            let cached: Option<String> = doc_crates::table
+                .filter(doc_crates::name.eq(name))
+                .filter(doc_crates::version.eq(version))
+                .select(doc_crates::sha256)
+                .first(conn)
+                .optional()?;
+            if cached.as_deref() == Some(sha256) {
+                return Ok(None);
             }
-            Ok(n)
+            Ok(Some(replace_in(
+                conn,
+                name,
+                version,
+                sha256,
+                format_version,
+                fetched_unix,
+                items,
+            )?))
         })
     }
 
@@ -169,19 +179,57 @@ impl Store {
     pub fn delete_doc_crate(&self, name: &str, version: &str) -> Result<()> {
         let mut conn = self.lock()?;
         conn.transaction(|conn| {
-            diesel::delete(
-                doc_items::table
-                    .filter(doc_items::crate_name.eq(name))
-                    .filter(doc_items::version.eq(version)),
-            )
-            .execute(conn)?;
-            diesel::delete(
-                doc_crates::table
-                    .filter(doc_crates::name.eq(name))
-                    .filter(doc_crates::version.eq(version)),
-            )
-            .execute(conn)?;
+            delete_in(conn, name, version)?;
             Ok(())
         })
     }
+}
+
+fn delete_in(conn: &mut SqliteConnection, name: &str, version: &str) -> QueryResult<()> {
+    diesel::delete(
+        doc_items::table
+            .filter(doc_items::crate_name.eq(name))
+            .filter(doc_items::version.eq(version)),
+    )
+    .execute(conn)?;
+    diesel::delete(
+        doc_crates::table
+            .filter(doc_crates::name.eq(name))
+            .filter(doc_crates::version.eq(version)),
+    )
+    .execute(conn)?;
+    Ok(())
+}
+
+fn replace_in(
+    conn: &mut SqliteConnection,
+    name: &str,
+    version: &str,
+    sha256: &str,
+    format_version: i32,
+    fetched_unix: i64,
+    items: &[(String, String, String)],
+) -> QueryResult<usize> {
+    delete_in(conn, name, version)?;
+    diesel::insert_into(doc_crates::table)
+        .values((
+            doc_crates::name.eq(name),
+            doc_crates::version.eq(version),
+            doc_crates::sha256.eq(sha256),
+            doc_crates::format_version.eq(format_version),
+            doc_crates::fetched_unix.eq(fetched_unix),
+        ))
+        .execute(conn)?;
+    for (path, kind, docs) in items {
+        diesel::insert_into(doc_items::table)
+            .values((
+                doc_items::crate_name.eq(name),
+                doc_items::version.eq(version),
+                doc_items::path.eq(path),
+                doc_items::kind.eq(kind),
+                doc_items::docs.eq(docs),
+            ))
+            .execute(conn)?;
+    }
+    Ok(items.len())
 }

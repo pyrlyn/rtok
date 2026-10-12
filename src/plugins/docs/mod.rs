@@ -195,7 +195,7 @@ pub fn docs_get(rt: &crate::plugin::Runtime, id: i32) -> Result<String> {
 }
 
 /// Split `llms.txt` / `llms-full.txt` on heading lines into crate `llms`, filed under this
-/// workspace's [`local_version`]. A missing
+/// workspace's [`local_version`]. Unchanged bytes touch nothing (ids stay valid); a missing
 /// or empty source drops the workspace's cache so it reports uncached, not stale text.
 fn ingest_llms(rt: &crate::plugin::Runtime) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -216,7 +216,7 @@ fn ingest_llms(rt: &crate::plugin::Runtime) -> Result<()> {
     let sha = crate::store::hex_sha256(body.as_bytes());
     let now = i64::try_from(crate::log::now()).unwrap_or(0);
     rt.store
-        .replace_doc_crate("llms", &version, &sha, 0, now, &items)?;
+        .sync_doc_crate("llms", &version, &sha, 0, now, &items)?;
     Ok(())
 }
 
@@ -536,6 +536,43 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         for d in [a, b] {
             let _ = std::fs::remove_dir_all(d);
         }
+    }
+
+    /// T550: re-ingesting an unchanged `llms.txt` (every resolve/query/fetch does) keeps
+    /// the ids already handed out, even after another crate was cached in between.
+    #[test]
+    fn unchanged_local_docs_keep_their_ids_and_edits_refresh() {
+        let rt = runtime("docs-ids");
+        let ws = temp_workspace(&[("llms.txt", "# Guide\nMARKER_ONE body\n")]);
+        let first = ids_of(&in_dir(&ws, || {
+            docs_query(&rt, "llms", None, "MARKER_ONE").unwrap()
+        }));
+        assert_eq!(first.len(), 1);
+        rt.store
+            .replace_doc_crate(
+                "serde",
+                "1.0.210",
+                "sha",
+                1,
+                0,
+                &[("serde::X".into(), "struct".into(), "other".into())],
+            )
+            .unwrap();
+        in_dir(&ws, || docs_resolve(&rt, "llms").unwrap());
+        let again = ids_of(&in_dir(&ws, || {
+            docs_query(&rt, "llms", None, "MARKER_ONE").unwrap()
+        }));
+        assert_eq!(again, first, "ids survive an unrelated read");
+        let body: Value =
+            serde_json::from_str(&docs_get(&rt, i32::try_from(first[0]).unwrap()).unwrap())
+                .unwrap();
+        assert!(body["docs"].as_str().unwrap().contains("MARKER_ONE"));
+
+        std::fs::write(ws.join("llms.txt"), "# Guide\nMARKER_TWO body\n").unwrap();
+        let q = |m: &str| in_dir(&ws, || docs_query(&rt, "llms", None, m).unwrap());
+        assert_eq!(q("MARKER_ONE"), "[]");
+        assert_eq!(ids_of(&q("MARKER_TWO")).len(), 1, "an edit is searchable");
+        let _ = std::fs::remove_dir_all(ws);
     }
 
     /// T551: the saving's before side is the full text of everything the query considered,
