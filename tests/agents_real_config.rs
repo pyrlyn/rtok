@@ -127,6 +127,8 @@ const HOSTS: &[Host] = &[
     Host {
         id: "amp",
         files: &[".config/amp/settings.json"],
+        id: "warp",
+        files: &[".warp/.mcp.json"],
     },
 ];
 
@@ -236,6 +238,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".factory/mcp.json"
         | ".kiro/settings/mcp.json"
         | ".junie/mcp/mcp.json"
+        | ".warp/.mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -373,6 +376,7 @@ real_config_round_trip! {
     kiro_keeps_the_real_mcp_json => "kiro",
     junie_keeps_the_real_mcp_json => "junie",
     amp_keeps_the_real_mcp_json => "amp",
+    warp_keeps_the_real_mcp_json => "warp",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

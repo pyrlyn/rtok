@@ -355,6 +355,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |
 | setup.vscode.insiders_user_dir |  | default |
+| setup.warp.mcp_path | ~/.warp/.mcp.json | default |
 | setup.windsurf.config_path | ~/.codeium/windsurf/mcp_config.json | default |
 | setup.yes | false | default |
 | setup.zcode.config_path | ~/.zcode/cli/config.json | default |

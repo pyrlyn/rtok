@@ -72,6 +72,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".factory",
         ".kiro/settings",
         ".config/amp",
+        ".warp",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -115,6 +116,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n\
               [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n\
               [setup.amp]\nsettings_path = \"{h}/.config/amp/settings.json\"\n"
+              [setup.warp]\nmcp_path = \"{h}/.warp/.mcp.json\"\n"
         ),
     )
     .unwrap();
