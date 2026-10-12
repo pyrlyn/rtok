@@ -201,10 +201,10 @@ fn walk(host: &str) -> Result<Shape, String> {
     }
     Ok(Shape {
         // The root comes from `$HOME` as spelled (`/var/…` on macOS, not `/private/var/…`);
-        // dunce: the server reports paths without the `\\?\` prefix std adds on Windows.
+        // fs-kit: the server reports paths without the `\\?\` prefix std adds on Windows.
         path: path
             .strip_prefix(&tmp)
-            .or_else(|_| path.strip_prefix(dunce::canonicalize(&tmp).unwrap()))
+            .or_else(|_| path.strip_prefix(fs_kit::path::canonicalize(&tmp).unwrap()))
             .unwrap()
             .display()
             .to_string()

@@ -243,7 +243,7 @@ pub fn uninstall(shell: Shell, places: &Places) -> Result<Vec<String>> {
         let profile = places.ps_profile();
         let old = read(&profile)?;
         if let Some(kept) = profile_without(&old, &source_line(&script)) {
-            rtok_agent_sdk::write_atomic(&profile, &kept)?;
+            fs_kit::write::atomic(&profile, &kept)?;
             lines.push(format!("updated {}", profile.display()));
         }
     }
@@ -251,22 +251,16 @@ pub fn uninstall(shell: Shell, places: &Places) -> Result<Vec<String>> {
 }
 
 fn read(path: &Path) -> Result<String> {
-    match std::fs::read_to_string(path) {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(e).with_context(|| format!("read {}", path.display())),
-    }
+    Ok(fs_kit::read::text_or_empty(path)?)
 }
 
 fn write_if_changed(path: &Path, body: &str) -> Result<String> {
-    if read(path)? == body {
-        return Ok(format!("unchanged {}", path.display()));
-    }
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    }
-    rtok_agent_sdk::write_atomic(path, body)?;
-    Ok(format!("wrote {}", path.display()))
+    let verb = if fs_kit::write::if_changed(path, body)? {
+        "wrote"
+    } else {
+        "unchanged"
+    };
+    Ok(format!("{verb} {}", path.display()))
 }
 
 #[cfg(test)]

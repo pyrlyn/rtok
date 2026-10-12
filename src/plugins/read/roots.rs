@@ -98,7 +98,7 @@ mod tests {
         for d in [&main, &other] {
             std::fs::create_dir_all(d).unwrap();
         }
-        let base = dunce::canonicalize(&base).unwrap();
+        let base = fs_kit::path::canonicalize(&base).unwrap();
         let (main, other) = (base.join("main"), base.join("other"));
         git(&main, &["init", "-q"]);
         std::fs::write(main.join("a.txt"), "a\n").unwrap();
@@ -116,7 +116,7 @@ mod tests {
         let (base, main, wt, other) = repo("list");
         let listed: Vec<PathBuf> = worktrees(&main)
             .iter()
-            .map(|p| dunce::canonicalize(p).unwrap())
+            .map(|p| fs_kit::path::canonicalize(p).unwrap())
             .collect();
         assert!(listed.contains(&wt) && listed.contains(&main), "{listed:?}");
         assert!(!listed.contains(&other));

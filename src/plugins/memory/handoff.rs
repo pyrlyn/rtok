@@ -145,7 +145,7 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
 /// when the index has definitions for it and an `Edit` must be located.
 fn symbol_ranges(cx: &Ctx, cwd: &str, path: &str, touches: &[Touch]) -> Vec<(i32, i32, String)> {
     let canon = |p: &std::path::Path| {
-        dunce::canonicalize(p)
+        fs_kit::path::canonicalize(p)
             .unwrap_or_else(|_| p.to_path_buf())
             .to_string_lossy()
             .replace('\\', "/")
@@ -207,7 +207,7 @@ fn symbol_ranges(cx: &Ctx, cwd: &str, path: &str, touches: &[Touch]) -> Vec<(i32
 /// Mirrors `plugins::read::cache::key(path, "full", None)` without depending on that
 /// (optional) feature — see [`ledger`].
 fn last_full_read_id(cx: &Ctx, path: &str) -> Option<String> {
-    let abs = dunce::canonicalize(path).ok()?;
+    let abs = fs_kit::path::canonicalize(path).ok()?;
     let key = format!("{}\tfull\t", abs.to_string_lossy());
     cx.get_read_cache(&key).ok().flatten()?.0
 }

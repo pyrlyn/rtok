@@ -25,7 +25,7 @@ fn strip_prefix_ci(path: &Path, prefix: &Path) -> Option<PathBuf> {
     crate::fs::strip_prefix(path, prefix)
 }
 
-/// Canonical walk base: `dunce::canonicalize(cwd)`, or `cwd` when it does not
+/// Canonical walk base: `fs_kit::path::canonicalize(cwd)`, or `cwd` when it does not
 /// exist. `search`/`tree` compute this once per call (T59.2) — `display_rel`
 /// takes the base instead of paying the syscalls per hit or row.
 fn canonical_base_with(fs: &impl super::fs::ReadFs, cwd: &Path) -> PathBuf {

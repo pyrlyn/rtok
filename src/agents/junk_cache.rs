@@ -70,14 +70,14 @@ pub struct Ctx {
 impl Ctx {
     pub fn new(cwd: &Path, idle: Duration, now: SystemTime) -> Self {
         Self {
-            cwd: cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf()),
+            cwd: fs_kit::path::canon(cwd),
             policy: Policy { idle, now },
         }
     }
 }
 
 pub(super) fn real(p: &Path) -> PathBuf {
-    p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
+    fs_kit::path::canon(p)
 }
 
 pub(super) fn is_symlink(p: &Path) -> bool {

@@ -17,8 +17,8 @@ use rtok::store::{Origin, Project, Store};
 /// A scratch home (with a config turning the key off when `on` is false) and a project
 /// directory inside it.
 fn scene(name: &str, on: bool) -> (PathBuf, PathBuf) {
-    // `dunce`, as the store spells roots: no `\\?\` prefix on Windows.
-    let tmp = dunce::canonicalize(rtok::testutil::tmp_dir(name)).unwrap();
+    // `fs_kit::path`, as the store spells roots: no `\\?\` prefix on Windows.
+    let tmp = fs_kit::path::canonicalize(rtok::testutil::tmp_dir(name)).unwrap();
     std::fs::create_dir_all(tmp.join(".rtok")).unwrap();
     if !on {
         let off = "[plugins.graph]\nauto_add_projects = false\n";
@@ -139,7 +139,7 @@ fn worktrees_made_or_adopted_register_named_by_branch_only_when_on() {
         assert_eq!(named, want.map(|(o, n)| (o, n.to_string())));
         let roots: Vec<_> = got.iter().map(|p| PathBuf::from(&p.root)).collect();
         assert!(
-            roots.contains(&dunce::canonicalize(&added).unwrap()),
+            roots.contains(&fs_kit::path::canonicalize(&added).unwrap()),
             "{roots:?}"
         );
     }
